@@ -25,6 +25,7 @@ import type {
   EmailBallot,
   EmailBallotResponse,
   ForensicsReport,
+  ImportMeetingAttendeesResponse,
   ProxyAuthorization,
   ProxyAuthorizationCreate,
   ProxyVoteCreate,
@@ -214,6 +215,14 @@ export const electionService = {
    */
   async removeAttendee(electionId: string, userId: string): Promise<void> {
     await api.delete(`/elections/${electionId}/attendees/${userId}`);
+  },
+
+  /**
+   * Import attendees from the linked meeting into the election
+   */
+  async importMeetingAttendees(electionId: string): Promise<ImportMeetingAttendeesResponse> {
+    const response = await api.post<ImportMeetingAttendeesResponse>(`/elections/${electionId}/import-meeting-attendees`);
+    return response.data;
   },
 
   /**

@@ -14,11 +14,13 @@ from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.election import Candidate, Election, ElectionStatus, Vote
+from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import User
 from app.schemas.election import (
     AttendeeCheckIn,
@@ -38,6 +40,7 @@ from app.schemas.election import (
     ElectionDeleteResponse,
     EligibilityRosterResponse,
     ElectionListResponse,
+    ImportMeetingAttendeesResponse,
     ElectionReportResponse,
     ElectionResponse,
     ElectionResults,
@@ -91,6 +94,33 @@ def _ballot_vote_rate_limit(
     )
 
 
+async def _load_meeting_for_election(
+    db: AsyncSession, election: Election
+) -> None:
+    """Eagerly load the meeting relationship if not already loaded."""
+    if election.meeting_id and not election.meeting:
+        result = await db.execute(
+            select(Meeting).where(Meeting.id == election.meeting_id)
+        )
+        election.meeting = result.scalar_one_or_none()
+
+
+async def _build_election_response(
+    db: AsyncSession, election: Election
+) -> ElectionResponse:
+    """Build an ElectionResponse with meeting details populated."""
+    await _load_meeting_for_election(db, election)
+    response = ElectionResponse.model_validate(election)
+    if election.meeting:
+        response.meeting_title = election.meeting.title
+        response.meeting_type = (
+            election.meeting.meeting_type.value
+            if hasattr(election.meeting.meeting_type, "value")
+            else election.meeting.meeting_type
+        )
+    return response
+
+
 # ============================================
 # Election Endpoints
 # ============================================
@@ -139,8 +169,20 @@ async def list_elections(
         )
         vote_counts_map = dict(vote_counts_result.all())
 
+    # Batch-fetch meeting titles for elections linked to meetings
+    meeting_ids = [e.meeting_id for e in elections if e.meeting_id]
+    meeting_map: dict = {}
+    if meeting_ids:
+        meetings_result = await db.execute(
+            select(Meeting.id, Meeting.title, Meeting.meeting_date)
+            .where(Meeting.id.in_(meeting_ids))
+        )
+        for mid, mtitle, mdate in meetings_result.all():
+            meeting_map[mid] = {"title": mtitle, "meeting_date": mdate}
+
     response_elections = []
     for election in elections:
+        meeting_info = meeting_map.get(election.meeting_id, {})
         response_elections.append(
             ElectionListResponse(
                 id=election.id,
@@ -151,6 +193,9 @@ async def list_elections(
                 status=election.status.value,
                 positions=election.positions,
                 total_votes=vote_counts_map.get(election.id, 0),
+                meeting_id=election.meeting_id,
+                meeting_title=meeting_info.get("title"),
+                meeting_date=meeting_info.get("meeting_date"),
             )
         )
 
@@ -216,7 +261,7 @@ async def create_election(
         user_id=str(current_user.id),
     )
 
-    return new_election
+    return await _build_election_response(db, new_election)
 
 
 # ============================================
@@ -577,7 +622,7 @@ async def get_election(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    return election
+    return await _build_election_response(db, election)
 
 
 @router.patch("/{election_id}", response_model=ElectionResponse)
@@ -748,7 +793,7 @@ async def update_election(
         user_id=str(current_user.id),
     )
 
-    return election
+    return await _build_election_response(db, election)
 
 
 @router.delete("/{election_id}", response_model=ElectionDeleteResponse)
@@ -878,7 +923,7 @@ async def open_election(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
-    return election
+    return await _build_election_response(db, election)
 
 
 @router.post("/{election_id}/close", response_model=ElectionResponse)
@@ -906,7 +951,7 @@ async def close_election(
         )
         raise HTTPException(status_code=status_code, detail=error)
 
-    return election
+    return await _build_election_response(db, election)
 
 
 @router.post("/{election_id}/rollback", response_model=ElectionRollbackResponse)
@@ -1791,6 +1836,116 @@ async def remove_attendee(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return {"success": True, "message": "Attendee removed"}
+
+
+@router.post(
+    "/{election_id}/import-meeting-attendees",
+    response_model=ImportMeetingAttendeesResponse,
+)
+async def import_meeting_attendees(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Import attendees from the linked meeting into the election attendance list.
+
+    Copies present members from the meeting's attendance records into the
+    election's attendees JSON. Members already checked in are skipped.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    election = await service.get_election(
+        election_id, current_user.organization_id
+    )
+
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+
+    if not election.meeting_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Election is not linked to a meeting",
+        )
+
+    # Fetch meeting attendees who were present
+    meeting_attendees_result = await db.execute(
+        select(MeetingAttendee)
+        .options(selectinload(MeetingAttendee.user))
+        .where(MeetingAttendee.meeting_id == election.meeting_id)
+        .where(MeetingAttendee.present.is_(True))
+    )
+    meeting_attendees = meeting_attendees_result.scalars().all()
+
+    if not meeting_attendees:
+        return ImportMeetingAttendeesResponse(
+            success=True,
+            imported=0,
+            skipped=0,
+            total_attendees=len(election.attendees or []),
+            message="No present attendees found in the linked meeting",
+        )
+
+    current_attendees = copy.deepcopy(election.attendees or [])
+    existing_user_ids = {a["user_id"] for a in current_attendees}
+
+    imported = 0
+    skipped = 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for ma in meeting_attendees:
+        user_id = str(ma.user_id)
+        if user_id in existing_user_ids:
+            skipped += 1
+            continue
+
+        user_name = "Unknown"
+        if ma.user:
+            user_name = (
+                f"{ma.user.first_name} {ma.user.last_name}".strip()
+                or ma.user.email
+            )
+
+        current_attendees.append({
+            "user_id": user_id,
+            "name": user_name,
+            "checked_in_at": now_iso,
+            "checked_in_by": str(current_user.id),
+        })
+        imported += 1
+
+    election.attendees = current_attendees
+    election.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_attendees_imported",
+        event_category="elections",
+        severity="info",
+        event_data={
+            "election_id": str(election_id),
+            "meeting_id": election.meeting_id,
+            "imported": imported,
+            "skipped": skipped,
+        },
+        user_id=str(current_user.id),
+    )
+
+    return ImportMeetingAttendeesResponse(
+        success=True,
+        imported=imported,
+        skipped=skipped,
+        total_attendees=len(current_attendees),
+        message=(
+            f"Imported {imported} attendee{'s' if imported != 1 else ''} "
+            f"from meeting ({skipped} already present)"
+        ),
+    )
 
 
 # ==================== Voter Eligibility Overrides ====================

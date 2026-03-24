@@ -296,6 +296,8 @@ class ElectionResponse(UTCResponseBase):
     position_eligibility: Optional[Dict[str, PositionEligibility]] = None
     meeting_date: Optional[datetime] = None
     meeting_id: Optional[UUID] = None
+    meeting_title: Optional[str] = None
+    meeting_type: Optional[str] = None
     event_id: Optional[UUID] = None
     attendees: Optional[List[Dict[str, Any]]] = None
     start_date: datetime
@@ -348,6 +350,9 @@ class ElectionListResponse(UTCResponseBase):
     status: str
     positions: Optional[List[str]] = None
     total_votes: Optional[int] = None
+    meeting_id: Optional[UUID] = None
+    meeting_title: Optional[str] = None
+    meeting_date: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -628,6 +633,16 @@ class AttendeeCheckInResponse(BaseModel):
     attendee: AttendeeRecord
     message: str
     total_attendees: int
+
+
+class ImportMeetingAttendeesResponse(BaseModel):
+    """Response after importing attendees from a linked meeting"""
+
+    success: bool
+    imported: int
+    skipped: int
+    total_attendees: int
+    message: str
 
 
 # Ballot Template Schemas
