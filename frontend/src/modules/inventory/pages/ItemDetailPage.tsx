@@ -315,6 +315,8 @@ const ItemDetailPage: React.FC = () => {
           <Field label="Tracking" value={item.tracking_type === 'individual' ? 'Individual' : 'Pool'} />
           <Field label="Status" value={item.status.replace('_', ' ')} />
           <Field label="Condition" value={labelFor(item.condition)} />
+          {item.barcode && <Field label="Barcode" value={item.barcode} />}
+          {item.asset_tag && <Field label="Asset Tag" value={item.asset_tag} />}
           <Field label="Description" value={item.description || '--'} />
           {item.notes && <Field label="Notes" value={item.notes} />}
         </Card>
@@ -332,8 +334,6 @@ const ItemDetailPage: React.FC = () => {
             <Field label="Serial Number" value={item.serial_number || '--'} />
             <Field label="Model Number" value={item.model_number || '--'} />
             <Field label="Manufacturer" value={item.manufacturer || '--'} />
-            <Field label="Asset Tag" value={item.asset_tag || '--'} />
-            <Field label="Barcode" value={item.barcode || '--'} />
           </Card>
         )}
 
