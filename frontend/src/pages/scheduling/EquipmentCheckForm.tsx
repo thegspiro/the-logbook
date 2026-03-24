@@ -177,7 +177,58 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const [pendingQueueCount, setPendingQueueCount] = useState(0);
   const syncingRef = useRef(false);
 
-  const compartments = template.compartments;
+  // --------------------------------------------------------------------------
+  // Resolve sub-compartments: merge children inline under their parent
+  // --------------------------------------------------------------------------
+
+  const compartments = useMemo(() => {
+    const raw = template.compartments;
+    const childIds = new Set<string>();
+
+    // Identify all compartments that are children of another
+    for (const c of raw) {
+      if (c.parentCompartmentId) {
+        childIds.add(c.id);
+      }
+    }
+
+    // Build resolved list: for each top-level compartment, append child
+    // compartment items with a synthetic header item as a sub-heading
+    const resolved: CheckTemplateCompartment[] = [];
+    for (const comp of raw) {
+      if (childIds.has(comp.id)) continue; // skip children at top level
+
+      // Find children of this compartment, preserving their sort order
+      const children = raw.filter((c) => c.parentCompartmentId === comp.id);
+      if (children.length === 0) {
+        resolved.push(comp);
+        continue;
+      }
+
+      // Merge: parent items first, then each child as sub-heading + its items
+      const mergedItems: CheckTemplateItem[] = [...comp.items];
+      for (const child of children) {
+        // Inject a synthetic header to label the sub-compartment
+        const subHeader: CheckTemplateItem = {
+          id: `subheader-${child.id}`,
+          compartmentId: comp.id,
+          name: child.name,
+          sortOrder: mergedItems.length,
+          checkType: 'header',
+          isRequired: false,
+          hasExpiration: false,
+          expirationWarningDays: 0,
+        };
+        if (child.description) subHeader.description = child.description;
+        mergedItems.push(subHeader);
+        mergedItems.push(...child.items);
+      }
+
+      resolved.push({ ...comp, items: mergedItems });
+    }
+
+    return resolved;
+  }, [template.compartments]);
 
   // --------------------------------------------------------------------------
   // Offline queue sync — drain pending checks when connectivity returns
