@@ -265,8 +265,7 @@ const NotificationsPage: React.FC = () => {
   // Batch management: mark all as read (#76)
   const handleMarkAllRead = async () => {
     try {
-      const unreadLogs = logs.filter((l) => !l.read);
-      await Promise.all(unreadLogs.map((l) => notificationsService.markAsRead(l.id)));
+      await notificationsService.markAllLogsRead();
       setLogs((prev) => prev.map((l) => ({ ...l, read: true })));
     } catch {
       setError('Failed to mark all as read');

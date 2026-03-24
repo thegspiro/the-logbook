@@ -49,6 +49,11 @@ export const notificationsService = {
     return response.data;
   },
 
+  async markAllLogsRead(): Promise<{ marked_read: number }> {
+    const response = await api.post<{ marked_read: number }>('/notifications/logs/read-all');
+    return response.data;
+  },
+
   async getSummary(): Promise<NotificationsSummary> {
     const response = await api.get<NotificationsSummary>('/notifications/summary');
     return response.data;
