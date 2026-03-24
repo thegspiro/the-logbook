@@ -30,7 +30,8 @@ class ConnectionManager:
         self._listener_task: Optional[asyncio.Task] = None
 
     async def connect(self, websocket: WebSocket, organization_id: str):
-        await websocket.accept()
+        if websocket.client_state.name == "CONNECTING":
+            await websocket.accept()
         if organization_id not in self._connections:
             self._connections[organization_id] = set()
         self._connections[organization_id].add(websocket)
