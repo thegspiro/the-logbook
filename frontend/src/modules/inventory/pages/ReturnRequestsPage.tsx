@@ -31,7 +31,7 @@ const ReturnRequestsPage: React.FC = () => (
         </div>
       </div>
 
-      <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" /></div>}>
+      <Suspense fallback={<div className="flex justify-center py-12" role="status" aria-live="polite"><Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" /></div>}>
         <ReturnRequestsPanel />
       </Suspense>
     </div>

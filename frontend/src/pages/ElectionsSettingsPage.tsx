@@ -107,7 +107,7 @@ export const ElectionsSettingsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="flex items-center justify-center min-h-[60vh]" role="status" aria-live="polite">
         <Loader2 className="h-8 w-8 animate-spin text-theme-text-muted" />
       </div>
     );

@@ -288,7 +288,7 @@ export const GrantOpportunitiesPage: React.FC = () => {
         </h2>
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
             <Loader2 className="h-8 w-8 animate-spin text-red-500" />
           </div>
         ) : filteredOpportunities.length === 0 ? (

@@ -234,7 +234,7 @@ const SkillsTestingTemplatesTab: React.FC = () => {
 
       {/* Templates Table */}
       {templatesLoading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-12" role="status" aria-live="polite">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
         </div>
       ) : filteredTemplates.length === 0 ? (

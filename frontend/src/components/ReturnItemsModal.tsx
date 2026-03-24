@@ -275,7 +275,7 @@ export const ReturnItemsModal: React.FC<ReturnItemsModalProps> = ({
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
             <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted mr-2" />
             <span className="text-sm text-theme-text-muted">Loading inventory...</span>
           </div>

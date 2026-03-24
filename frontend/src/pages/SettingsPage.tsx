@@ -500,7 +500,7 @@ export const SettingsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
         <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );
@@ -1059,7 +1059,7 @@ export const SettingsPage: React.FC = () => {
 
             {/* Rank list */}
             {ranksLoading ? (
-              <div className="flex justify-center py-8">
+              <div className="flex justify-center py-8" role="status" aria-live="polite">
                 <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
               </div>
             ) : ranks.length === 0 ? (

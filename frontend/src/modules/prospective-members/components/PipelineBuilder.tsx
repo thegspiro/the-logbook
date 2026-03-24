@@ -366,7 +366,7 @@ export const PipelineBuilder: React.FC<PipelineBuilderProps> = ({
 
       {/* Saving indicator */}
       {isSaving && (
-        <div className="flex items-center gap-2 mt-3 text-sm text-theme-text-muted">
+        <div className="flex items-center gap-2 mt-3 text-sm text-theme-text-muted" role="status" aria-live="polite">
           <Loader2 className="w-4 h-4 animate-spin" />
           Saving order...
         </div>

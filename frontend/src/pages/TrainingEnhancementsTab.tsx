@@ -80,7 +80,7 @@ const RecertificationSection: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex justify-center py-12" role="status" aria-live="polite">
         <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );
@@ -203,7 +203,7 @@ const CompetencySection: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex justify-center py-12" role="status" aria-live="polite">
         <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );
@@ -287,7 +287,7 @@ const InstructorsSection: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex justify-center py-12" role="status" aria-live="polite">
         <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );
@@ -418,7 +418,7 @@ const MultiAgencySection: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
+      <div className="flex justify-center py-12" role="status" aria-live="polite">
         <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );

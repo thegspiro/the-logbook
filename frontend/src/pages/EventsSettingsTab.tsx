@@ -440,7 +440,7 @@ const EventsSettingsTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="min-h-[50vh] flex items-center justify-center" role="status" aria-live="polite">
         <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );
@@ -449,7 +449,7 @@ const EventsSettingsTab: React.FC = () => {
   if (error || !settings) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error || 'Failed to load settings.'}</p>
           <button
             onClick={() => void fetchSettings()}

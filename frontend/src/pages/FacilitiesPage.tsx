@@ -241,7 +241,7 @@ export default function FacilitiesPage() {
 
           {/* Facility Grid */}
           {isLoading ? (
-            <div className="flex items-center justify-center py-20">
+            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
             </div>
           ) : filtered.length === 0 ? (
@@ -377,18 +377,22 @@ export default function FacilitiesPage() {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
+                <label htmlFor="facility-name" className="block text-sm font-medium text-theme-text-secondary mb-1">Name *</label>
                 <input
+                  id="facility-name"
                   type="text"
                   value={newFacility.name}
                   onChange={(e) => setNewFacility(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="e.g., Station 1"
                   className={inputCls}
+                  required
+                  aria-required="true"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Facility Number</label>
+                <label htmlFor="facility-number" className="block text-sm font-medium text-theme-text-secondary mb-1">Facility Number</label>
                 <input
+                  id="facility-number"
                   type="text"
                   value={newFacility.facility_number}
                   onChange={(e) => setNewFacility(prev => ({ ...prev, facility_number: e.target.value }))}
@@ -397,8 +401,9 @@ export default function FacilitiesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Address</label>
+                <label htmlFor="facility-address" className="block text-sm font-medium text-theme-text-secondary mb-1">Address</label>
                 <input
+                  id="facility-address"
                   type="text"
                   value={newFacility.address_line1}
                   onChange={(e) => setNewFacility(prev => ({ ...prev, address_line1: e.target.value }))}
@@ -408,33 +413,34 @@ export default function FacilitiesPage() {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">City</label>
-                  <input type="text" value={newFacility.city} onChange={(e) => setNewFacility(prev => ({ ...prev, city: e.target.value }))} className={inputCls} />
+                  <label htmlFor="facility-city" className="block text-sm font-medium text-theme-text-secondary mb-1">City</label>
+                  <input id="facility-city" type="text" value={newFacility.city} onChange={(e) => setNewFacility(prev => ({ ...prev, city: e.target.value }))} className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">State</label>
-                  <input type="text" value={newFacility.state} onChange={(e) => setNewFacility(prev => ({ ...prev, state: e.target.value }))} className={inputCls} />
+                  <label htmlFor="facility-state" className="block text-sm font-medium text-theme-text-secondary mb-1">State</label>
+                  <input id="facility-state" type="text" value={newFacility.state} onChange={(e) => setNewFacility(prev => ({ ...prev, state: e.target.value }))} className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Zip</label>
-                  <input type="text" value={newFacility.zip_code} onChange={(e) => setNewFacility(prev => ({ ...prev, zip_code: e.target.value }))} className={inputCls} />
+                  <label htmlFor="facility-zip" className="block text-sm font-medium text-theme-text-secondary mb-1">Zip</label>
+                  <input id="facility-zip" type="text" value={newFacility.zip_code} onChange={(e) => setNewFacility(prev => ({ ...prev, zip_code: e.target.value }))} className={inputCls} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Phone</label>
-                  <input type="tel" value={newFacility.phone} onChange={(e) => setNewFacility(prev => ({ ...prev, phone: e.target.value }))} placeholder="(555) 123-4567" className={inputCls} />
+                  <label htmlFor="facility-phone" className="block text-sm font-medium text-theme-text-secondary mb-1">Phone</label>
+                  <input id="facility-phone" type="tel" value={newFacility.phone} onChange={(e) => setNewFacility(prev => ({ ...prev, phone: e.target.value }))} placeholder="(555) 123-4567" className={inputCls} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Email</label>
-                  <input type="email" value={newFacility.email} onChange={(e) => setNewFacility(prev => ({ ...prev, email: e.target.value }))} placeholder="station@example.com" className={inputCls} />
+                  <label htmlFor="facility-email" className="block text-sm font-medium text-theme-text-secondary mb-1">Email</label>
+                  <input id="facility-email" type="email" value={newFacility.email} onChange={(e) => setNewFacility(prev => ({ ...prev, email: e.target.value }))} placeholder="station@example.com" className={inputCls} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {facilityTypes.length > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Type</label>
+                    <label htmlFor="facility-type" className="block text-sm font-medium text-theme-text-secondary mb-1">Type</label>
                     <select
+                      id="facility-type"
                       value={newFacility.facility_type_id}
                       onChange={(e) => setNewFacility(prev => ({ ...prev, facility_type_id: e.target.value }))}
                       className={inputCls}
@@ -448,8 +454,9 @@ export default function FacilitiesPage() {
                 )}
                 {facilityStatuses.length > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-theme-text-secondary mb-1">Status</label>
+                    <label htmlFor="facility-status" className="block text-sm font-medium text-theme-text-secondary mb-1">Status</label>
                     <select
+                      id="facility-status"
                       value={newFacility.status_id}
                       onChange={(e) => setNewFacility(prev => ({ ...prev, status_id: e.target.value }))}
                       className={inputCls}
@@ -463,8 +470,9 @@ export default function FacilitiesPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
+                <label htmlFor="facility-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">Notes</label>
                 <textarea
+                  id="facility-notes"
                   value={newFacility.notes}
                   onChange={(e) => setNewFacility(prev => ({ ...prev, notes: e.target.value }))}
                   rows={3}

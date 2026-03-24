@@ -36,7 +36,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" role="status" aria-label="Loading" />
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" role="status" aria-live="polite" aria-label="Loading" />
           <p className="mt-4 text-theme-text-secondary" aria-live="polite">Loading...</p>
         </div>
       </div>
@@ -49,7 +49,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" role="status" aria-label="Loading" />
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600" role="status" aria-live="polite" aria-label="Loading" />
           <p className="mt-4 text-theme-text-secondary" aria-live="polite">Loading...</p>
         </div>
       </div>

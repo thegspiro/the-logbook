@@ -457,7 +457,7 @@ export const EventForm: React.FC<EventFormProps> = ({
   return (
     <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-8">
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
@@ -650,7 +650,7 @@ export const EventForm: React.FC<EventFormProps> = ({
 
         {/* Conflict Warning */}
         {conflicts.length > 0 && (
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4" role="status">
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4" role="status" aria-live="polite">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0" />
               <div>

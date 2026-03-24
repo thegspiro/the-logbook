@@ -214,7 +214,7 @@ export const MedicalScreeningPage: React.FC = () => {
 
       {/* Loading */}
       {isLoading && (
-        <div className="flex items-center justify-center py-12">
+        <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
           <Loader2 className="text-theme-text-muted h-8 w-8 animate-spin" />
         </div>
       )}

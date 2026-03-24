@@ -116,7 +116,7 @@ const EventRequestStatusPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center">
+      <div className="min-h-screen bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to flex items-center justify-center" role="status" aria-live="polite">
         <Loader2 className="w-8 h-8 animate-spin text-theme-accent-red" />
       </div>
     );

@@ -92,7 +92,7 @@ export const EventEditPage: React.FC = () => {
   if (error && !event) {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
             onClick={() => navigate('/events')}
@@ -170,7 +170,7 @@ export const EventEditPage: React.FC = () => {
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           </div>
         )}

@@ -1220,7 +1220,7 @@ const Dashboard: React.FC = () => {
                   {signupExpandedId === shift.id && (
                     <div className="mt-2 pt-2 border-t border-theme-surface-border">
                       {loadingEligibility ? (
-                        <div className="flex items-center justify-center py-2">
+                        <div className="flex items-center justify-center py-2" role="status" aria-live="polite">
                           <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
                         </div>
                       ) : dashboardEligiblePositions.length === 0 ? (

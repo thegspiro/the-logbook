@@ -1180,7 +1180,7 @@ export const PipelineSettingsPage: React.FC = () => {
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               {isLoadingTemplates ? (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
                   <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" aria-hidden="true" />
                 </div>
               ) : templates.length === 0 ? (

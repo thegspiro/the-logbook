@@ -167,7 +167,7 @@ export const StartSkillTestPage: React.FC = () => {
                 />
               </div>
               {templatesLoading ? (
-                <div className="flex justify-center py-4">
+                <div className="flex justify-center py-4" role="status" aria-live="polite">
                   <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-red-500" />
                 </div>
               ) : (
@@ -273,7 +273,7 @@ export const StartSkillTestPage: React.FC = () => {
                 />
               </div>
               {membersLoading ? (
-                <div className="flex justify-center py-4">
+                <div className="flex justify-center py-4" role="status" aria-live="polite">
                   <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-red-500" />
                 </div>
               ) : memberSearch.length < MIN_SEARCH_CHARS ? (

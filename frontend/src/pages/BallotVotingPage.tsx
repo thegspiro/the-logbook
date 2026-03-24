@@ -312,7 +312,8 @@ export const BallotVotingPage: React.FC = () => {
                 </div>
 
                 {/* Voting Options */}
-                <div className="px-6 py-4 space-y-3">
+                <fieldset className="px-6 py-4 space-y-3">
+                  <legend className="sr-only">Voting options for {item.title}</legend>
                   {isApprovalType ? (
                     <>
                       {/* Approve */}
@@ -409,7 +410,7 @@ export const BallotVotingPage: React.FC = () => {
                     />
                     <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
                   </label>
-                </div>
+                </fieldset>
               </div>
             );
           })}

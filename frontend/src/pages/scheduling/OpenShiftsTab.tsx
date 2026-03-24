@@ -138,7 +138,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20" role="status">
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
           <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
           <span className="sr-only">Loading open shifts…</span>
         </div>

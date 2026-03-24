@@ -1068,7 +1068,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </div>
 
               {loading ? (
-                <div className="flex items-center justify-center py-8">
+                <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
                   <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
                 </div>
               ) : activeAssignments.length === 0 ? (
@@ -1134,7 +1134,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       className={inputCls}
                     />
                     {pending.loadingMembers ? (
-                      <div className="flex items-center gap-2 mt-2 text-xs text-theme-text-muted">
+                      <div className="flex items-center gap-2 mt-2 text-xs text-theme-text-muted" role="status" aria-live="polite">
                         <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" /> Loading members...
                       </div>
                     ) : (

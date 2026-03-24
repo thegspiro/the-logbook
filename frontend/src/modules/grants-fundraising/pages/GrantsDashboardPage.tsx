@@ -134,7 +134,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
 // =============================================================================
 
 const DashboardSkeleton: React.FC = () => (
-  <div className="space-y-6" aria-label="Loading dashboard" role="status">
+  <div className="space-y-6" aria-label="Loading dashboard" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
 
     {/* KPI Row 1 */}

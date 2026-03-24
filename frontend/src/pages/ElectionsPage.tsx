@@ -286,7 +286,7 @@ export const ElectionsPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+        <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
         </div>
       )}
@@ -443,7 +443,7 @@ export const ElectionsPage: React.FC = () => {
 
             <form onSubmit={(e) => { void handleCreateElection(e); }} className="px-6 py-4">
               {createError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
                   <p className="text-sm text-red-700 dark:text-red-300">{createError}</p>
                 </div>
               )}

@@ -604,7 +604,7 @@ export const EventDetailPage: React.FC = () => {
   if (error || !event) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error || 'Event not found'}</p>
           <button
             onClick={() => navigate('/events')}
@@ -1355,7 +1355,7 @@ export const EventDetailPage: React.FC = () => {
                   <h3 id="rsvp-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">RSVP for {event.title}</h3>
 
                   {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
                       <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
@@ -1512,7 +1512,7 @@ export const EventDetailPage: React.FC = () => {
                   </div>
 
                   {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
                       <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
@@ -1606,7 +1606,7 @@ export const EventDetailPage: React.FC = () => {
                   </div>
 
                   {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
                       <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
@@ -1881,7 +1881,7 @@ export const EventDetailPage: React.FC = () => {
                   </p>
 
                   {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
                       <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}
@@ -1980,7 +1980,7 @@ export const EventDetailPage: React.FC = () => {
                   <p className="text-sm text-theme-text-muted mb-4">{editingRsvp.user_name}</p>
 
                   {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert">
+                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
                       <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
                     </div>
                   )}

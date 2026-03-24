@@ -281,7 +281,7 @@ const GrantsReportsPage: React.FC = () => {
       {activeTab === 'grants' && (
         <section>
           {isLoadingGrants ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
               <Loader2 className="h-6 w-6 animate-spin text-red-500" />
             </div>
           ) : grantReport ? (
@@ -418,7 +418,7 @@ const GrantsReportsPage: React.FC = () => {
       {activeTab === 'fundraising' && (
         <section>
           {isLoadingFundraising ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
               <Loader2 className="h-6 w-6 animate-spin text-red-500" />
             </div>
           ) : fundraisingReport ? (

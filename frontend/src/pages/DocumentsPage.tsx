@@ -232,7 +232,7 @@ const DocumentsPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
+        <div className="flex flex-col items-center space-y-4" role="status" aria-live="polite">
           <Loader2 className="w-10 h-10 text-amber-700 dark:text-amber-400 animate-spin" />
           <p className="text-theme-text-secondary text-sm">Loading documents...</p>
         </div>
@@ -394,7 +394,7 @@ const DocumentsPage: React.FC = () => {
         {selectedFolder && (
           <>
             {documentsLoading ? (
-              <div className="card p-12 text-center">
+              <div className="card p-12 text-center" role="status" aria-live="polite">
                 <Loader2 className="w-10 h-10 text-amber-700 dark:text-amber-400 animate-spin mx-auto mb-4" />
                 <p className="text-theme-text-secondary text-sm">Loading documents...</p>
               </div>

@@ -142,7 +142,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
       {expanded && (
         <div className="border-t border-theme-surface-border pt-3 mt-1">
           {loadingIssuances ? (
-            <div className="flex justify-center py-3"><Loader2 size={18} className="animate-spin text-theme-text-muted" /></div>
+            <div className="flex justify-center py-3" role="status" aria-live="polite"><Loader2 size={18} className="animate-spin text-theme-text-muted" /></div>
           ) : issuances.length === 0 ? (
             <p className="text-sm text-theme-text-muted text-center py-2">No active issuances</p>
           ) : (
@@ -464,7 +464,7 @@ const PoolItemsPage: React.FC = () => {
 
       {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-16">
+        <div className="flex justify-center py-16" role="status" aria-live="polite">
           <Loader2 size={28} className="animate-spin text-theme-text-muted" />
         </div>
       ) : filtered.length === 0 ? (

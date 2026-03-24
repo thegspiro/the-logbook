@@ -407,7 +407,7 @@ export const MinutesDetailPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-5xl mx-auto px-4 py-8">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-300">{error || 'Minutes not found'}</p>
           </div>
         </div>

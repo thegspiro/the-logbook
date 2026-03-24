@@ -134,7 +134,7 @@ export const DeleteMemberModal: React.FC<DeleteMemberModalProps> = ({
 
       {/* Loading State */}
       {loadingImpact && (
-        <div className="flex items-center justify-center py-8">
+        <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
           <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
           <span className="ml-2 text-sm text-theme-text-muted">Loading impact assessment...</span>
         </div>

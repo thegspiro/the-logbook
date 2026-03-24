@@ -51,8 +51,7 @@ export const ErrorAlert: React.FC<ErrorAlertProps> = ({
   return (
     <div
       className={`bg-red-500/10 border border-red-500/50 rounded-lg p-4 ${className}`}
-      role="alert"
-      aria-live="polite"
+      role="alert" aria-live="assertive"
     >
       <div className="flex items-start gap-3">
         {/* Error Icon */}

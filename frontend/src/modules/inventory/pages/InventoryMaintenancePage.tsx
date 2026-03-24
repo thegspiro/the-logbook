@@ -218,7 +218,7 @@ const InventoryMaintenancePage: React.FC = () => {
 
       {/* Tab Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
       ) : activeTab === 'due' ? (
         allDueItems.length === 0 ? (
           <div className="text-center py-16">
@@ -299,7 +299,7 @@ const InventoryMaintenancePage: React.FC = () => {
           <p className="text-theme-text-muted">Select an item from the Due Items tab to view its maintenance history.</p>
         </div>
       ) : historyLoading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
       ) : history.length === 0 ? (
         <div className="text-center py-16">
           <Wrench className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
@@ -383,17 +383,19 @@ const InventoryMaintenancePage: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={labelCls}>Result (for inspections)</label>
-              <div className="flex items-center gap-4 mt-1">
-                <label className="flex items-center gap-1.5 text-sm text-theme-text-primary cursor-pointer">
-                  <input type="radio" name="passed" checked={formData.passed} onChange={() => setField('passed', true)} />
-                  <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Passed
-                </label>
-                <label className="flex items-center gap-1.5 text-sm text-theme-text-primary cursor-pointer">
-                  <input type="radio" name="passed" checked={!formData.passed} onChange={() => setField('passed', false)} />
-                  <XCircle className="w-4 h-4 text-red-500" /> Failed
-                </label>
-              </div>
+              <fieldset>
+                <legend className={labelCls}>Result (for inspections)</legend>
+                <div className="flex items-center gap-4 mt-1">
+                  <label className="flex items-center gap-1.5 text-sm text-theme-text-primary cursor-pointer">
+                    <input type="radio" name="passed" checked={formData.passed} onChange={() => setField('passed', true)} />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" aria-hidden="true" /> Passed
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm text-theme-text-primary cursor-pointer">
+                    <input type="radio" name="passed" checked={!formData.passed} onChange={() => setField('passed', false)} />
+                    <XCircle className="w-4 h-4 text-red-500" aria-hidden="true" /> Failed
+                  </label>
+                </div>
+              </fieldset>
             </div>
             <div>
               <label className={labelCls}>Condition After</label>

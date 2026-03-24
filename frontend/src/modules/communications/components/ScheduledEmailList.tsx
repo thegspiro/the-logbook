@@ -56,7 +56,7 @@ const ScheduledEmailList: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-8">
+      <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
         <RefreshCw className="h-5 w-5 animate-spin text-theme-text-secondary" />
         <span className="ml-2 text-sm text-theme-text-secondary">
           Loading scheduled emails...

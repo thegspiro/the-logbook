@@ -379,8 +379,7 @@ const FormRenderer = ({
         <div
           ref={errorSummaryRef}
           tabIndex={-1}
-          role="alert"
-          aria-live="assertive"
+          role="alert" aria-live="assertive"
           className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30"
         >
           <div className="flex items-center gap-2 mb-2">

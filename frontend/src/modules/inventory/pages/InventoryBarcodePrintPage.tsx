@@ -426,7 +426,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen" role="status" aria-live="polite">
         <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
         <span className="ml-2 text-theme-text-secondary">Loading items...</span>
       </div>

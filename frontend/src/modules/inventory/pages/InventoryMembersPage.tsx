@@ -242,7 +242,7 @@ const InventoryMembersPage: React.FC = () => {
 
       {/* Body */}
       {loading ? (
-        <div className="card-secondary p-12 text-center">
+        <div className="card-secondary p-12 text-center" role="status" aria-live="polite">
           <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted mx-auto mb-3" />
           <p className="text-theme-text-secondary text-sm">Loading members...</p>
         </div>
@@ -311,7 +311,7 @@ const InventoryMembersPage: React.FC = () => {
                 {isExpanded && (
                   <div className="border-t border-theme-surface-border bg-theme-surface-secondary px-4 py-4">
                     {detailLoading ? (
-                      <div className="flex items-center justify-center py-6">
+                      <div className="flex items-center justify-center py-6" role="status" aria-live="polite">
                         <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted mr-2" />
                         <span className="text-sm text-theme-text-muted">Loading inventory details...</span>
                       </div>

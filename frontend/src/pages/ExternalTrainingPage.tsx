@@ -147,7 +147,7 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
         ) : (
           <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
             {error && (
-              <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded-sm" role="alert">
+              <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded-sm" role="alert" aria-live="assertive">
                 {error}
               </div>
             )}
@@ -452,7 +452,7 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
       </div>
 
       {provider.connection_error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4" role="alert">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4" role="alert" aria-live="assertive">
           <p className="text-xs text-red-700 dark:text-red-400">Connection Error:</p>
           <p className="text-sm text-red-700 dark:text-red-300">{provider.connection_error}</p>
         </div>
@@ -604,7 +604,7 @@ const EditProviderModal: React.FC<EditProviderModalProps> = ({ isOpen, provider,
 
         <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded-sm" role="alert">
+            <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-3 rounded-sm" role="alert" aria-live="assertive">
               {error}
             </div>
           )}
