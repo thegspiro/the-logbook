@@ -36,6 +36,8 @@ import { formatDate } from '../utils/dateFormatting';
 interface MemberHoursRecord {
   user_id: string;
   email: string;
+  first_name: string;
+  last_name: string;
   shift_count: number;
   total_minutes: number;
   total_hours: number;
