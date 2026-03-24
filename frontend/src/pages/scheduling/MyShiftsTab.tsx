@@ -248,7 +248,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20" role="status" aria-label="Loading shifts">
+      <div className="flex items-center justify-center py-20" role="status" aria-live="polite" aria-label="Loading shifts">
         <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
         <span className="sr-only">Loading your shifts…</span>
       </div>

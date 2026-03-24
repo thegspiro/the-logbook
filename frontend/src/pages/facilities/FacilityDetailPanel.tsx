@@ -410,7 +410,7 @@ export default function FacilityDetailPanel({
         {activeDetailTab && (
           <div className="space-y-3">
             {isLoadingSub ? (
-              <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
+              <div className="flex justify-center py-6" role="status" aria-live="polite"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
             ) : activeDetailTab === 'rooms' ? (
               /* Rooms */
               <>

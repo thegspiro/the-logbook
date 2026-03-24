@@ -422,7 +422,7 @@ const EventRequestsTab: React.FC = () => {
   if (loading && requests.length === 0) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-center items-center h-64">
+        <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
           <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
         </div>
       </div>
@@ -432,7 +432,7 @@ const EventRequestsTab: React.FC = () => {
   if (error) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+        <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button
             onClick={() => void fetchRequests()}
@@ -572,7 +572,7 @@ const EventRequestsTab: React.FC = () => {
                   {isExpanded && (
                     <div className="border-t border-theme-surface-border p-4 bg-theme-surface-secondary">
                       {detailLoading ? (
-                        <div className="flex justify-center py-8">
+                        <div className="flex justify-center py-8" role="status" aria-live="polite">
                           <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
                         </div>
                       ) : expandedDetail ? (

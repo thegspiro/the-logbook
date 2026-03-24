@@ -143,7 +143,7 @@ const QuickLinkCard: React.FC<QuickLinkProps> = ({
 // =============================================================================
 
 const DashboardSkeleton: React.FC = () => (
-  <div className="space-y-6" aria-label="Loading dashboard" role="status">
+  <div className="space-y-6" aria-label="Loading dashboard" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {Array.from({ length: 4 }).map((_, i) => (

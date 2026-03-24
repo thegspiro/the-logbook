@@ -376,14 +376,14 @@ const StorageAreasPage: React.FC = () => {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
       ) : !isShowingSearch && !selectedRoomId ? (
         <div className="text-center py-16 card-secondary">
           <Package className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />
           <p className="text-theme-text-muted">Select a facility and room above to view storage areas.</p>
         </div>
       ) : displayLoading ? (
-        <div className="flex items-center justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-16" role="status" aria-live="polite"><Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" /></div>
       ) : displayTree.length === 0 ? (
         <div className="text-center py-16 card-secondary">
           <Box className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />

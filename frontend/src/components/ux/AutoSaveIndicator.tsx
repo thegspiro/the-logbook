@@ -40,8 +40,7 @@ export const AutoSaveIndicator: React.FC<AutoSaveIndicatorProps> = ({
   return (
     <div
       className={`inline-flex items-center gap-1.5 text-xs ${config.color} ${className}`}
-      role="status"
-      aria-live="polite"
+      role="status" aria-live="polite"
     >
       <Icon className={`w-3.5 h-3.5 ${status === 'saving' ? 'animate-spin' : ''}`} />
       <span>{config.text}</span>

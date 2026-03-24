@@ -615,7 +615,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {activeTab === 'active' && (
         <>
           {(isLoading || isLoadingPipeline || isLoadingPipelines) && !applicants.length ? (
-            <div className="flex items-center justify-center py-20">
+            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : !currentPipeline ? (
@@ -778,7 +778,7 @@ export const ProspectiveMembersPage: React.FC = () => {
           )}
 
           {isLoadingInactive ? (
-            <div className="flex items-center justify-center py-20">
+            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : inactiveApplicants.length === 0 ? (
@@ -927,7 +927,7 @@ export const ProspectiveMembersPage: React.FC = () => {
       {activeTab === 'withdrawn' && (
         <div>
           {isLoadingWithdrawn ? (
-            <div className="flex items-center justify-center py-20">
+            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="w-8 h-8 animate-spin text-red-700 dark:text-red-500" />
             </div>
           ) : withdrawnApplicants.length === 0 ? (

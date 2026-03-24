@@ -139,7 +139,7 @@ const ActionItemsPage: React.FC = () => {
 
       {/* Content */}
       {loading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-12" role="status" aria-live="polite">
           <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
         </div>
       ) : error ? (

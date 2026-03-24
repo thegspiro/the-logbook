@@ -638,7 +638,7 @@ const FormsPage: React.FC = () => {
 
         {/* Error Banner */}
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6" role="alert">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mb-6" role="alert" aria-live="assertive">
             <div className="flex items-center space-x-2">
               <AlertCircle className="w-5 h-5 text-red-700 dark:text-red-400 shrink-0" aria-hidden="true" />
               <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
@@ -721,7 +721,7 @@ const FormsPage: React.FC = () => {
         {activeTab === 'forms' && (
           <>
             {loading ? (
-              <div className="card p-12 text-center">
+              <div className="card p-12 text-center" role="status" aria-live="polite">
                 <RefreshCw className="w-8 h-8 text-theme-text-muted mx-auto mb-3 animate-spin" aria-hidden="true" />
                 <p className="text-theme-text-secondary" role="status" aria-live="polite">Loading forms...</p>
               </div>

@@ -408,7 +408,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
       </p>
 
       {loadingRules ? (
-        <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4">
+        <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4" role="status" aria-live="polite">
           <Loader2 className="w-4 h-4 animate-spin" /> Loading notification
           rules...
         </div>
@@ -466,7 +466,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         </p>
 
         {loadingDecline ? (
-          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
+          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2" role="status" aria-live="polite">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading settings...
           </div>
         ) : (
@@ -827,7 +827,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
         </p>
 
         {loadingEquipAlerts ? (
-          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
+          <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2" role="status" aria-live="polite">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading settings...
           </div>
         ) : (

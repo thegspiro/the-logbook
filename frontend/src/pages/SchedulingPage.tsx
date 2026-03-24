@@ -216,7 +216,7 @@ const ADMIN_LINKS: {
 ];
 
 const TabLoadingFallback = () => (
-  <div className="flex items-center justify-center py-20">
+  <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
     <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
   </div>
 );
@@ -663,7 +663,7 @@ const SchedulingPage: React.FC = () => {
 
             {/* Loading State */}
             {loading && (
-              <div className="card mb-8 p-12 text-center">
+              <div className="card mb-8 p-12 text-center" role="status" aria-live="polite">
                 <Loader2 className="w-8 h-8 text-violet-700 dark:text-violet-400 mx-auto mb-3 animate-spin" />
                 <p className="text-theme-text-secondary">Loading shifts...</p>
               </div>

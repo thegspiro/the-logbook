@@ -58,7 +58,7 @@ const FormSection: React.FC<FormSectionProps> = ({
 
       {/* Existing event request forms */}
       {loadingForms ? (
-        <div className="flex items-center gap-2 text-theme-text-muted text-sm py-4">
+        <div className="flex items-center gap-2 text-theme-text-muted text-sm py-4" role="status" aria-live="polite">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading event request forms...
         </div>

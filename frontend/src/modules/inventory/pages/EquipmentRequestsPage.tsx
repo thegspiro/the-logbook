@@ -110,7 +110,7 @@ const EquipmentRequestsPage: React.FC = () => {
 
         {/* Requests list */}
         {loading ? (
-          <div className="flex justify-center py-12">
+          <div className="flex justify-center py-12" role="status" aria-live="polite">
             <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
           </div>
         ) : requests.length === 0 ? (

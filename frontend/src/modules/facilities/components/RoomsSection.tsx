@@ -273,7 +273,7 @@ export default function RoomsSection({ facilityId }: Props) {
 
         {/* Rooms List */}
         {isLoading ? (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-8" role="status" aria-live="polite">
             <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
           </div>
         ) : rooms.length === 0 ? (

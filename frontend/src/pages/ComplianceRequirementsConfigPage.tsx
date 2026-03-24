@@ -370,7 +370,7 @@ export default function ComplianceRequirementsConfigPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[400px] items-center justify-center">
+      <div className="flex min-h-[400px] items-center justify-center" role="status" aria-live="polite">
         <RefreshCw className="h-8 w-8 animate-spin text-theme-text-secondary" />
       </div>
     );

@@ -41,7 +41,7 @@ const statusBadge = (status: string) => {
     case 'passed':
     case 'pass':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400" role="status">
+        <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400" role="status" aria-live="polite">
           <CheckCircle className="h-3 w-3" aria-hidden="true" />
           Passed
         </span>
@@ -49,7 +49,7 @@ const statusBadge = (status: string) => {
     case 'failed':
     case 'fail':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400" role="status">
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400" role="status" aria-live="polite">
           <XCircle className="h-3 w-3" aria-hidden="true" />
           Failed
         </span>
@@ -57,14 +57,14 @@ const statusBadge = (status: string) => {
     case 'in_progress':
     case 'incomplete':
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" role="status">
+        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" role="status" aria-live="polite">
           <AlertCircle className="h-3 w-3" aria-hidden="true" />
           In Progress
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary" role="status">
+        <span className="inline-flex items-center gap-1 rounded-full bg-theme-surface-secondary px-2 py-0.5 text-xs font-medium text-theme-text-secondary" role="status" aria-live="polite">
           <Clock className="h-3 w-3" aria-hidden="true" />
           Not Started
         </span>
@@ -201,7 +201,7 @@ export const MyChecklistsPage: React.FC = () => {
     return (
       <Suspense
         fallback={
-          <div className="flex items-center justify-center py-12">
+          <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
             <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
           </div>
         }
@@ -335,7 +335,7 @@ export const MyChecklistsPage: React.FC = () => {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
             <Loader2 className="h-5 w-5 animate-spin text-theme-text-muted" />
             <span className="ml-2 text-sm text-theme-text-muted">Loading checklists...</span>
           </div>
@@ -464,7 +464,7 @@ export const MyChecklistsPage: React.FC = () => {
             </div>
 
             {historyLoading ? (
-              <div className="flex items-center justify-center py-6">
+              <div className="flex items-center justify-center py-6" role="status" aria-live="polite">
                 <Loader2 className="h-5 w-5 animate-spin text-theme-text-muted" />
                 <span className="ml-2 text-sm text-theme-text-muted">Loading history...</span>
               </div>

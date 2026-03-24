@@ -590,7 +590,7 @@ export const InterviewPage: React.FC = () => {
   // Loading state
   if (isLoadingApplicant || !currentApplicant) {
     return (
-      <div className="flex h-64 items-center justify-center">
+      <div className="flex h-64 items-center justify-center" role="status" aria-live="polite">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
       </div>
     );
@@ -713,7 +713,7 @@ export const InterviewPage: React.FC = () => {
             </h3>
 
             {isLoadingInterviews ? (
-              <div className="flex h-32 items-center justify-center">
+              <div className="flex h-32 items-center justify-center" role="status" aria-live="polite">
                 <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
               </div>
             ) : interviews.length === 0 ? (

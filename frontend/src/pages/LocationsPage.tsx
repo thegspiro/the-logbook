@@ -1143,7 +1143,7 @@ export default function LocationsPage() {
 
       {/* Station List */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
       ) : stations.length === 0 && !rooms.has('__other__') ? (
         <div className="text-center py-20">
           <Building2 className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />

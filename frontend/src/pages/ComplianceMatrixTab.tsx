@@ -44,7 +44,7 @@ const ComplianceMatrixTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
         <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
       </div>
     );

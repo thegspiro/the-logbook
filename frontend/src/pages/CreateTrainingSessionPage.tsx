@@ -663,7 +663,8 @@ const CreateTrainingSessionPage: React.FC = () => {
                   <AlertCircle className="w-5 h-5 text-blue-700 mt-0.5 mr-3 shrink-0" />
                   <div className="flex-1">
                     <p className="text-blue-700 font-semibold mb-2">Course Selection</p>
-                    <div className="space-y-3">
+                    <fieldset className="space-y-3">
+                      <legend className="sr-only">Course selection method</legend>
                       <label className="flex items-center space-x-3 cursor-pointer">
                         <input
                           type="radio"
@@ -682,7 +683,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                         />
                         <span className="text-theme-text-secondary text-sm">Use existing course template</span>
                       </label>
-                    </div>
+                    </fieldset>
                   </div>
                 </div>
               </div>

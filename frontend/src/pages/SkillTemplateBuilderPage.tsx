@@ -532,7 +532,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
   if (templateLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
         <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-red-500" />
       </div>
     );
@@ -579,7 +579,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
 
         {/* Validation Errors */}
         {validationErrors.length > 0 && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
             <div className="flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
               <div>
@@ -595,7 +595,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         )}
 
         {storeError && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-300">{storeError}</p>
           </div>
         )}

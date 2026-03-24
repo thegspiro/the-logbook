@@ -646,7 +646,7 @@ export const ShiftReportsTab: React.FC = () => {
               />
             </div>
             {loadingMembers ? (
-              <div className="flex items-center gap-2 mt-2 text-sm text-theme-text-muted">
+              <div className="flex items-center gap-2 mt-2 text-sm text-theme-text-muted" role="status" aria-live="polite">
                 <Loader2 className="w-4 h-4 animate-spin" /> Loading members...
               </div>
             ) : (
@@ -841,7 +841,7 @@ export const ShiftReportsTab: React.FC = () => {
       {viewMode !== 'create' && (
         <>
           {loading ? (
-            <div className="flex items-center justify-center py-20">
+            <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
             </div>
           ) : reports.length === 0 ? (

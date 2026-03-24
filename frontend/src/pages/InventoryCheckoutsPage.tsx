@@ -125,7 +125,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4" role="status">
+        <div className="flex flex-col items-center space-y-4" role="status" aria-live="polite">
           <RefreshCw className="w-10 h-10 text-theme-text-muted animate-spin" aria-hidden="true" />
           <p className="text-theme-text-secondary text-sm">Loading checkouts...</p>
         </div>
@@ -160,7 +160,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
 
         {/* Error */}
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
             <p className="text-red-700 dark:text-red-300 text-sm">{error}</p>
           </div>
         )}

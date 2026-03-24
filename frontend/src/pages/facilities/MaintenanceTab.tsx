@@ -194,7 +194,7 @@ export default function MaintenanceTab({ facilities, filterFacilityId, onClearFi
 
       {/* Records List */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite"><Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" /></div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20">
           <Wrench className="w-12 h-12 text-theme-text-muted mx-auto mb-3" />

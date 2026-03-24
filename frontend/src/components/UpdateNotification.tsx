@@ -17,7 +17,7 @@ export const UpdateNotification: React.FC = () => {
 
   return (
     <div
-      role="alert"
+      role="alert" aria-live="assertive"
       className="bg-blue-600 text-white px-4 py-2 flex items-center justify-center gap-3 text-sm relative z-50"
     >
       <RefreshCw className="w-4 h-4 shrink-0" aria-hidden="true" />

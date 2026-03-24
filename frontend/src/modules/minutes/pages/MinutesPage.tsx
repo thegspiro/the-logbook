@@ -280,7 +280,7 @@ const MinutesPage: React.FC = () => {
 
       {/* Loading State */}
       {loading && (
-        <div className="card p-12 text-center">
+        <div className="card p-12 text-center" role="status" aria-live="polite">
           <Loader2 className="w-10 h-10 text-cyan-700 mx-auto mb-4 animate-spin" />
           <p className="text-theme-text-secondary">Loading meetings...</p>
         </div>
@@ -405,7 +405,7 @@ const MinutesPage: React.FC = () => {
                       Attendance Waivers
                     </h4>
                     {loadingWaivers === meeting.id ? (
-                      <div className="flex items-center gap-2 py-3 text-theme-text-muted text-sm">
+                      <div className="flex items-center gap-2 py-3 text-theme-text-muted text-sm" role="status" aria-live="polite">
                         <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                         Loading waivers...
                       </div>

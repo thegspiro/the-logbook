@@ -36,7 +36,7 @@ const ResultBadge: React.FC<{ result: string }> = ({ result }) => {
   };
 
   return (
-    <span role="status" className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[result] ?? styles['incomplete']}`}>
+    <span role="status" aria-live="polite" className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[result] ?? styles['incomplete']}`}>
       {result.replace('_', ' ')}
     </span>
   );
@@ -223,7 +223,7 @@ export const SkillsTestingPage: React.FC = () => {
         {activeTab === 'available' && (
           <>
             {templatesLoading ? (
-              <div className="flex justify-center py-12" role="status">
+              <div className="flex justify-center py-12" role="status" aria-live="polite">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" aria-hidden="true" />
                 <span className="sr-only">Loading...</span>
               </div>
@@ -255,7 +255,7 @@ export const SkillsTestingPage: React.FC = () => {
         {activeTab === 'history' && (
           <>
             {testsLoading ? (
-              <div className="flex justify-center py-12" role="status">
+              <div className="flex justify-center py-12" role="status" aria-live="polite">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" aria-hidden="true" />
                 <span className="sr-only">Loading...</span>
               </div>

@@ -580,7 +580,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       <div className="drawer-panel">
         {/* Loading */}
         {isLoadingApplicant && (
-          <div className="flex-1 flex items-center justify-center">
+          <div className="flex-1 flex items-center justify-center" role="status" aria-live="polite">
             <Loader2 className="w-8 h-8 animate-spin text-red-500" />
           </div>
         )}
@@ -918,7 +918,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     Election Package
                   </h3>
                   {isLoadingElectionPackage ? (
-                    <div className="flex items-center justify-center py-4">
+                    <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
                       <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
                     </div>
                   ) : currentElectionPackage ? (
@@ -1050,7 +1050,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                           ) : (
                             <div className="space-y-2">
                               {isLoadingDraftElections ? (
-                                <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+                                <div className="flex items-center gap-2 text-xs text-theme-text-muted" role="status" aria-live="polite">
                                   <Loader2 className="w-3 h-3 animate-spin" />
                                   Loading draft elections...
                                 </div>
@@ -1182,7 +1182,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     </div>
                     <div className="max-h-48 overflow-y-auto">
                       {isLoadingUpcoming ? (
-                        <div className="flex items-center justify-center py-4">
+                        <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
                           <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
                         </div>
                       ) : (() => {
@@ -1234,7 +1234,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
                 {/* Linked events list */}
                 {isLoadingLinkedEvents ? (
-                  <div className="flex items-center justify-center py-3">
+                  <div className="flex items-center justify-center py-3" role="status" aria-live="polite">
                     <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
                   </div>
                 ) : linkedEvents.length === 0 ? (
@@ -1651,7 +1651,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                 {showActivityLog && (
                   <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
                     {isLoadingActivity ? (
-                      <div className="flex items-center justify-center py-4">
+                      <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
                         <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
                       </div>
                     ) : activityLog.length === 0 ? (

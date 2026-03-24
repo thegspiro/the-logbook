@@ -199,7 +199,7 @@ const VariantGroupsPage: React.FC = () => {
 
       {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
           <RefreshCw className="w-8 h-8 animate-spin text-theme-text-muted" />
         </div>
       ) : groups.length === 0 ? (

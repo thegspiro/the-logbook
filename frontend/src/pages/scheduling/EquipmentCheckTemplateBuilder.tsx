@@ -1487,7 +1487,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
+      <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
         <Loader2 className="h-8 w-8 animate-spin text-theme-text-muted" />
       </div>
     );

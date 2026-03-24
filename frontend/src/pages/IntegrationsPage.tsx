@@ -360,8 +360,9 @@ const IntegrationsPage: React.FC = () => {
         return (
           <div className="space-y-3">
             <div>
-              <label className={labelClass}>NWS Zone ID</label>
+              <label htmlFor="nws-zone-id" className={labelClass}>NWS Zone ID</label>
               <input
+                id="nws-zone-id"
                 type="text"
                 value={zoneId}
                 onChange={(e) => setZoneId(e.target.value.toUpperCase())}
@@ -380,12 +381,12 @@ const IntegrationsPage: React.FC = () => {
         return (
           <div className="space-y-3">
             <div>
-              <label className={labelClass}>State Code</label>
-              <input type="text" value={stateCode} onChange={(e) => setStateCode(e.target.value.toUpperCase())} placeholder="NY" maxLength={2} className={inputClass} />
+              <label htmlFor="nfirs-state-code" className={labelClass}>State Code</label>
+              <input id="nfirs-state-code" type="text" value={stateCode} onChange={(e) => setStateCode(e.target.value.toUpperCase())} placeholder="NY" maxLength={2} className={inputClass} />
             </div>
             <div>
-              <label className={labelClass}>Fire Department ID (FDID)</label>
-              <input type="text" value={fdid} onChange={(e) => setFdid(e.target.value)} placeholder="12345" className={inputClass} />
+              <label htmlFor="nfirs-fdid" className={labelClass}>Fire Department ID (FDID)</label>
+              <input id="nfirs-fdid" type="text" value={fdid} onChange={(e) => setFdid(e.target.value)} placeholder="12345" className={inputClass} />
               <p className="text-xs text-theme-text-muted mt-1">Your state-assigned FDID for NFIRS reporting.</p>
             </div>
           </div>
@@ -395,12 +396,12 @@ const IntegrationsPage: React.FC = () => {
         return (
           <div className="space-y-3">
             <div>
-              <label className={labelClass}>State Code</label>
-              <input type="text" value={stateCode} onChange={(e) => setStateCode(e.target.value.toUpperCase())} placeholder="NY" maxLength={2} className={inputClass} />
+              <label htmlFor="nemsis-state-code" className={labelClass}>State Code</label>
+              <input id="nemsis-state-code" type="text" value={stateCode} onChange={(e) => setStateCode(e.target.value.toUpperCase())} placeholder="NY" maxLength={2} className={inputClass} />
             </div>
             <div>
-              <label className={labelClass}>State-Assigned Agency ID</label>
-              <input type="text" value={agencyId} onChange={(e) => setAgencyId(e.target.value)} placeholder="A12345" className={inputClass} />
+              <label htmlFor="nemsis-agency-id" className={labelClass}>State-Assigned Agency ID</label>
+              <input id="nemsis-agency-id" type="text" value={agencyId} onChange={(e) => setAgencyId(e.target.value)} placeholder="A12345" className={inputClass} />
             </div>
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
               <p className="text-amber-700 dark:text-amber-400 text-xs">
@@ -414,12 +415,12 @@ const IntegrationsPage: React.FC = () => {
         return (
           <div className="space-y-3">
             <div>
-              <label className={labelClass}>Webhook URL</label>
-              <input type="url" value={genericWebhookUrl} onChange={(e) => setGenericWebhookUrl(e.target.value)} placeholder="https://example.com/webhook" className={inputClass} />
+              <label htmlFor="webhook-url" className={labelClass}>Webhook URL</label>
+              <input id="webhook-url" type="url" value={genericWebhookUrl} onChange={(e) => setGenericWebhookUrl(e.target.value)} placeholder="https://example.com/webhook" className={inputClass} />
             </div>
             <div>
-              <label className={labelClass}>Secret (optional)</label>
-              <input type="password" value={genericWebhookSecret} onChange={(e) => setGenericWebhookSecret(e.target.value)} placeholder="HMAC signing secret" className={inputClass} />
+              <label htmlFor="webhook-secret" className={labelClass}>Secret (optional)</label>
+              <input id="webhook-secret" type="password" value={genericWebhookSecret} onChange={(e) => setGenericWebhookSecret(e.target.value)} placeholder="HMAC signing secret" className={inputClass} />
               <p className="text-xs text-theme-text-muted mt-1">Used for HMAC-SHA256 signature in X-Webhook-Signature header.</p>
             </div>
           </div>
@@ -429,8 +430,8 @@ const IntegrationsPage: React.FC = () => {
         return (
           <div className="space-y-3">
             <div>
-              <label className={labelClass}>Import Format</label>
-              <select value={importFormat} onChange={(e) => setImportFormat(e.target.value)} className={inputClass}>
+              <label htmlFor="epcr-import-format" className={labelClass}>Import Format</label>
+              <select id="epcr-import-format" value={importFormat} onChange={(e) => setImportFormat(e.target.value)} className={inputClass}>
                 <option value="csv">CSV (any vendor)</option>
                 <option value="nemsis_xml">NEMSIS 3.5 XML</option>
               </select>
@@ -458,7 +459,7 @@ const IntegrationsPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
         <Loader2 className="w-8 h-8 text-theme-text-primary animate-spin" />
       </div>
     );

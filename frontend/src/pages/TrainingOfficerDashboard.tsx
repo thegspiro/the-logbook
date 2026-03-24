@@ -239,7 +239,7 @@ const TrainingOfficerDashboard: React.FC = () => {
       <div className="min-h-screen">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="flex items-center justify-center h-64">
-            <div className="flex items-center space-x-3 text-theme-text-primary">
+            <div className="flex items-center space-x-3 text-theme-text-primary" role="status" aria-live="polite">
               <RefreshCw className="w-6 h-6 animate-spin" />
               <span>Loading training dashboard...</span>
             </div>

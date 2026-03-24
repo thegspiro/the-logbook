@@ -241,7 +241,7 @@ export const LoginPage: React.FC = () => {
                 disabled={isLoading}
               />
               {formErrors.username && (
-                <p id="username-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.username}</p>
+                <p id="username-error" className="mt-1 text-sm text-red-600" role="alert" aria-live="assertive">{formErrors.username}</p>
               )}
             </div>
             <div>
@@ -265,7 +265,7 @@ export const LoginPage: React.FC = () => {
                 disabled={isLoading}
               />
               {formErrors.password && (
-                <p id="password-error" className="mt-1 text-sm text-red-600" role="alert">{formErrors.password}</p>
+                <p id="password-error" className="mt-1 text-sm text-red-600" role="alert" aria-live="assertive">{formErrors.password}</p>
               )}
             </div>
           </div>

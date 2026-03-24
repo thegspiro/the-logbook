@@ -181,7 +181,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-theme-text-muted">
+      <div className="flex items-center justify-center py-12 text-theme-text-muted" role="status" aria-live="polite">
         <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading compliance data...
       </div>
     );
@@ -406,7 +406,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-theme-text-muted">
+        <div className="flex items-center justify-center py-12 text-theme-text-muted" role="status" aria-live="polite">
           <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading failures...
         </div>
       ) : !data || data.items.length === 0 ? (
@@ -588,7 +588,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
           <p className="text-sm">Select a template and item to view trend data.</p>
         </div>
       ) : loading ? (
-        <div className="flex items-center justify-center py-12 text-theme-text-muted">
+        <div className="flex items-center justify-center py-12 text-theme-text-muted" role="status" aria-live="polite">
           <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading trend data...
         </div>
       ) : trendData ? (

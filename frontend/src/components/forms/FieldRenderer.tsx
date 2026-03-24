@@ -422,7 +422,8 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
 
       case FieldType.RADIO:
         return (
-          <div className="space-y-2">
+          <fieldset className="space-y-2">
+            <legend className="sr-only">{field.label}</legend>
             {field.options?.map((opt) => (
               <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -437,7 +438,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
                 <span className={radioTextClass}>{opt.label}</span>
               </label>
             ))}
-          </div>
+          </fieldset>
         );
 
       case FieldType.MEMBER_LOOKUP:
@@ -601,7 +602,7 @@ const FieldRenderer = ({ field, value, onChange, onBlur, theme = 'dark', disable
         <p className={`text-xs mb-2 ${sectionSubClass}`}>{field.help_text}</p>
       )}
       {renderInput()}
-      {error && <p id={errorId} className="text-xs text-red-700 dark:text-red-400 mt-1" role="alert">{error}</p>}
+      {error && <p id={errorId} className="text-xs text-red-700 dark:text-red-400 mt-1" role="alert" aria-live="assertive">{error}</p>}
     </div>
   );
 };

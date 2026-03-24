@@ -123,7 +123,7 @@ const HourTrackingSection: React.FC<HourTrackingSectionProps> = ({ settings }) =
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
         <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
       </div>
     );

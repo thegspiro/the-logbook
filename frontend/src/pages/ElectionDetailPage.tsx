@@ -510,7 +510,7 @@ export const ElectionDetailPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-300">{error || 'Election not found'}</p>
           </div>
         </div>
@@ -1426,7 +1426,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {sendEmailError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
                   <p className="text-sm text-red-700 dark:text-red-300">{sendEmailError}</p>
                 </div>
               )}
@@ -1535,7 +1535,7 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
 
               {remindError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
                   <p className="text-sm text-red-700 dark:text-red-300">{remindError}</p>
                 </div>
               )}
@@ -1601,7 +1601,7 @@ export const ElectionDetailPage: React.FC = () => {
             <div className="px-6 py-4">
               {/* Critical warning for non-draft elections */}
               {!isDraft && (
-                <div className="bg-red-500/10 border-l-4 border-red-600 p-4 mb-4" role="alert">
+                <div className="bg-red-500/10 border-l-4 border-red-600 p-4 mb-4" role="alert" aria-live="assertive">
                   <div className="flex">
                     <div className="shrink-0">
                       <svg className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -1635,7 +1635,7 @@ export const ElectionDetailPage: React.FC = () => {
               )}
 
               {deleteError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
                   <p className="text-sm text-red-700 dark:text-red-300">{deleteError}</p>
                 </div>
               )}
@@ -1724,7 +1724,7 @@ export const ElectionDetailPage: React.FC = () => {
 
             <div className="px-6 py-4">
               {extendError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
                   <p className="text-sm text-red-700 dark:text-red-300">{extendError}</p>
                 </div>
               )}
@@ -1881,7 +1881,8 @@ export const ElectionDetailPage: React.FC = () => {
                       </div>
 
                       {/* Voting Options (disabled/preview) */}
-                      <div className="px-6 py-4 space-y-3">
+                      <fieldset className="px-6 py-4 space-y-3">
+                        <legend className="sr-only">Voting options for {item.title}</legend>
                         {isApprovalType ? (
                           <>
                             {/* Show linked candidates/prospective members for approval items */}
@@ -1901,11 +1902,11 @@ export const ElectionDetailPage: React.FC = () => {
                               </div>
                             )}
                             <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                              <input type="radio" disabled className="w-4 h-4 text-green-600" />
+                              <input type="radio" disabled className="w-4 h-4 text-green-600" aria-label="Approve" />
                               <span className="font-medium text-theme-text-primary">Approve</span>
                             </div>
                             <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                              <input type="radio" disabled className="w-4 h-4 text-red-600" />
+                              <input type="radio" disabled className="w-4 h-4 text-red-600" aria-label="Deny" />
                               <span className="font-medium text-theme-text-primary">Deny</span>
                             </div>
                           </>
@@ -1914,7 +1915,7 @@ export const ElectionDetailPage: React.FC = () => {
                             {itemCandidates.length > 0 ? (
                               itemCandidates.map((candidate) => (
                                 <div key={candidate.id} className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                                  <input type="radio" disabled className="w-4 h-4 text-blue-600" />
+                                  <input type="radio" disabled className="w-4 h-4 text-blue-600" aria-label={candidate.name} />
                                   <div>
                                     <span className="font-medium text-theme-text-primary">{candidate.name}</span>
                                     {candidate.statement && (
@@ -1934,7 +1935,7 @@ export const ElectionDetailPage: React.FC = () => {
                         {election.allow_write_ins && (
                           <div className="p-3 rounded-lg border border-theme-surface-border">
                             <div className="flex items-center gap-3">
-                              <input type="radio" disabled className="w-4 h-4 text-purple-600" />
+                              <input type="radio" disabled className="w-4 h-4 text-purple-600" aria-label="Write-in" />
                               <span className="font-medium text-theme-text-primary">Write-in</span>
                             </div>
                             <input
@@ -1947,10 +1948,10 @@ export const ElectionDetailPage: React.FC = () => {
                         )}
 
                         <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                          <input type="radio" disabled className="w-4 h-4 text-theme-text-muted" />
+                          <input type="radio" disabled className="w-4 h-4 text-theme-text-muted" aria-label="Abstain" />
                           <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
                         </div>
-                      </div>
+                      </fieldset>
 
                       {/* Item metadata for admin */}
                       <div className="px-6 py-2 bg-theme-surface-secondary border-t border-theme-surface-border flex flex-wrap gap-2">
@@ -2091,7 +2092,7 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
 
               {rollbackError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert">
+                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
                   <p className="text-sm text-red-700 dark:text-red-300">{rollbackError}</p>
                 </div>
               )}

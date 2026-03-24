@@ -1261,7 +1261,7 @@ export const BallotBuilder: React.FC<BallotBuilderProps> = ({
 
       {/* Saving indicator */}
       {saving && (
-        <div className="flex items-center gap-2 mt-3 text-xs text-theme-text-muted">
+        <div className="flex items-center gap-2 mt-3 text-xs text-theme-text-muted" role="status" aria-live="polite">
           <Loader2 className="h-3 w-3 animate-spin" />
           Saving...
         </div>

@@ -209,7 +209,8 @@ const PublicFormPage = () => {
 
       case FieldType.RADIO:
         return (
-          <div className="space-y-2">
+          <fieldset className="space-y-2">
+            <legend className="sr-only">{field.label}</legend>
             {field.options?.map((opt) => (
               <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -223,7 +224,7 @@ const PublicFormPage = () => {
                 <span className="text-theme-text-secondary">{opt.label}</span>
               </label>
             ))}
-          </div>
+          </fieldset>
         );
 
       case FieldType.CHECKBOX:

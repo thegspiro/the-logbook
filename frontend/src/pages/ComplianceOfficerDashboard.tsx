@@ -646,28 +646,28 @@ const AttestationsSection: React.FC = () => {
         <form onSubmit={(e) => { void handleSubmit(e); }} className="card p-6 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>Period Type</label>
-              <select name="period_type" className={inputClass} required>
+              <label htmlFor="attestation-period-type" className={labelClass}>Period Type</label>
+              <select id="attestation-period-type" name="period_type" className={inputClass} required aria-required="true">
                 <option value="annual">Annual</option>
                 <option value="quarterly">Quarterly</option>
               </select>
             </div>
             <div>
-              <label className={labelClass}>Year</label>
-              <input type="number" name="period_year" defaultValue={new Date().getFullYear()} className={inputClass} required />
+              <label htmlFor="attestation-year" className={labelClass}>Year</label>
+              <input id="attestation-year" type="number" name="period_year" defaultValue={new Date().getFullYear()} className={inputClass} required aria-required="true" />
             </div>
             <div>
-              <label className={labelClass}>Compliance %</label>
-              <input type="number" name="compliance_percentage" min="0" max="100" step="0.1" className={inputClass} required />
+              <label htmlFor="attestation-compliance-pct" className={labelClass}>Compliance %</label>
+              <input id="attestation-compliance-pct" type="number" name="compliance_percentage" min="0" max="100" step="0.1" className={inputClass} required aria-required="true" />
             </div>
           </div>
           <div>
-            <label className={labelClass}>Areas Reviewed (comma-separated)</label>
-            <input type="text" name="areas_reviewed" placeholder="Training records, Certifications, ISO compliance, NFPA 1401" className={inputClass} />
+            <label htmlFor="attestation-areas" className={labelClass}>Areas Reviewed (comma-separated)</label>
+            <input id="attestation-areas" type="text" name="areas_reviewed" placeholder="Training records, Certifications, ISO compliance, NFPA 1401" className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>Notes</label>
-            <textarea name="notes" rows={3} className={inputClass} placeholder="Observations, exceptions, recommendations..." />
+            <label htmlFor="attestation-notes" className={labelClass}>Notes</label>
+            <textarea id="attestation-notes" name="notes" rows={3} className={inputClass} placeholder="Observations, exceptions, recommendations..." />
           </div>
           <button type="submit" disabled={submitting} className="btn-success text-sm flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
@@ -827,7 +827,7 @@ const ForecastSection: React.FC = () => {
 // ============================================
 
 const LoadingSpinner: React.FC = () => (
-  <div role="status" className="flex justify-center items-center h-64">
+  <div role="status" aria-live="polite" className="flex justify-center items-center h-64">
     <Loader2 className="h-8 w-8 text-theme-text-muted animate-spin" />
   </div>
 );

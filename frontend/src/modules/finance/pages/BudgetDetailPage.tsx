@@ -141,7 +141,7 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({
 // =============================================================================
 
 const DetailSkeleton: React.FC = () => (
-  <div className="space-y-6" aria-label="Loading budget details" role="status">
+  <div className="space-y-6" aria-label="Loading budget details" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
     <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">
       <div className="mb-4 flex items-center gap-3">

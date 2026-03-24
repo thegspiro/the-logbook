@@ -181,7 +181,7 @@ export default function ContactsSection({ facilityId }: Props) {
         )}
 
         {isLoading ? (
-          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
+          <div className="flex justify-center py-8" role="status" aria-live="polite"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
         ) : contacts.length === 0 ? (
           <div className="text-center py-8">
             <Users className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />

@@ -921,7 +921,8 @@ const OrganizationSetup: React.FC = () => {
 
                 <div className="space-y-3">
                   {/* Identifier Type Selection */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <fieldset className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <legend className="sr-only">Identifier type</legend>
                     {[
                       {
                         value: 'fdid',
@@ -965,7 +966,7 @@ const OrganizationSetup: React.FC = () => {
                         </span>
                       </label>
                     ))}
-                  </div>
+                  </fieldset>
 
                   {/* Show input based on selection */}
                   {formData.identifierType === 'fdid' && (

@@ -27,7 +27,7 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
     <div className="text-center">
       <div
         className={`inline-block animate-spin rounded-full ${sizeClasses[size]} border-red-600`}
-        role="status"
+        role="status" aria-live="polite"
         aria-label="Loading"
       />
       {message && (

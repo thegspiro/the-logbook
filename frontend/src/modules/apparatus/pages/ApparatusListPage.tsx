@@ -291,7 +291,7 @@ export const ApparatusListPage: React.FC = () => {
 
         {/* Apparatus Table */}
         {isLoading ? (
-          <div className="card p-12 text-center">
+          <div className="card p-12 text-center" role="status" aria-live="polite">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p className="text-theme-text-secondary">Loading apparatus...</p>
           </div>

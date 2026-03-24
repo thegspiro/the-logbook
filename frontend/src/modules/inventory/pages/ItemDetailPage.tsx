@@ -224,7 +224,7 @@ const ItemDetailPage: React.FC = () => {
   /* ---------- loading / error ------------------------------------- */
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24">
+      <div className="flex items-center justify-center py-24" role="status" aria-live="polite">
         <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />
       </div>
     );
@@ -440,7 +440,7 @@ const ItemDetailPage: React.FC = () => {
 
         <div className="mt-4 min-h-[120px]">
           {tabLoading ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
               <Loader2 className="w-6 h-6 animate-spin text-theme-text-muted" />
             </div>
           ) : (

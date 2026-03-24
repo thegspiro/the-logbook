@@ -225,7 +225,7 @@ export const EventAnalyticsPage: React.FC = () => {
         <Breadcrumbs />
         <div
           className="bg-red-500/10 border border-red-500/30 rounded-lg p-4"
-          role="alert"
+          role="alert" aria-live="assertive"
         >
           <p className="text-red-700 dark:text-red-300">{error}</p>
           <button

@@ -67,7 +67,7 @@ export const SkeletonPage: React.FC<{ rows?: number; showStats?: boolean }> = ({
   rows = 5,
   showStats = true,
 }) => (
-  <div className="space-y-6" aria-label="Loading content" role="status">
+  <div className="space-y-6" aria-label="Loading content" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
     {showStats && (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -91,7 +91,7 @@ export const SkeletonPage: React.FC<{ rows?: number; showStats?: boolean }> = ({
 
 /** Skeleton for event card grid */
 export const SkeletonCardGrid: React.FC<{ count?: number }> = ({ count = 6 }) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="status">
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" role="status" aria-live="polite">
     <span className="sr-only">Loading...</span>
     {Array.from({ length: count }).map((_, i) => (
       <SkeletonCard key={i} />

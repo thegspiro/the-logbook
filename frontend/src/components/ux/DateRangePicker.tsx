@@ -55,7 +55,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             type="date"
             value={startDate}
             onChange={(e) => onChange(e.target.value, endDate)}
-            className="px-2 py-1.5 bg-transparent text-sm text-theme-text-primary focus:outline-hidden"
+            className="px-2 py-1.5 bg-transparent text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm"
             aria-label="Start date"
           />
           <span className="text-theme-text-muted text-sm">&ndash;</span>
@@ -63,7 +63,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             type="date"
             value={endDate}
             onChange={(e) => onChange(startDate, e.target.value)}
-            className="px-2 py-1.5 bg-transparent text-sm text-theme-text-primary focus:outline-hidden"
+            className="px-2 py-1.5 bg-transparent text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm"
             aria-label="End date"
           />
           {hasValue && (

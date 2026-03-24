@@ -276,7 +276,7 @@ export const MemberAdminEditPage: React.FC = () => {
     return (
       <div className="min-h-screen">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-400">{error || 'Member not found.'}</p>
             <Link
               to="/members/admin"
@@ -316,14 +316,14 @@ export const MemberAdminEditPage: React.FC = () => {
 
         {/* Success Message */}
         {successMessage && (
-          <div className="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg p-4" role="status">
+          <div className="mb-6 bg-green-500/10 border border-green-500/30 rounded-lg p-4" role="status" aria-live="polite">
             <p className="text-sm text-green-700 dark:text-green-400">{successMessage}</p>
           </div>
         )}
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert">
+          <div className="mb-6 bg-red-500/10 border border-red-500/30 rounded-lg p-4" role="alert" aria-live="assertive">
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         )}

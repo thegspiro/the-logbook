@@ -82,7 +82,7 @@ const FormSkeleton: React.FC = () => (
   <div
     className="space-y-6"
     aria-label="Loading expense report form"
-    role="status"
+    role="status" aria-live="polite"
   >
     <span className="sr-only">Loading...</span>
     <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6">

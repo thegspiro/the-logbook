@@ -54,7 +54,7 @@ const inputCls =
   "w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500";
 
 const LazyFallback = () => (
-  <div className="flex items-center justify-center py-8">
+  <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
     <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
   </div>
 );
@@ -361,7 +361,7 @@ export const PatternsTab: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20" role="status">
+      <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
         <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" aria-hidden="true" />
         <span className="sr-only">Loading shift patterns…</span>
       </div>
