@@ -1156,9 +1156,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     if (item.checkType === 'header') {
       return (
         <div key={item.id} className="pt-3 first:pt-0">
-          <div className="flex items-center gap-2 border-b border-theme-surface-border pb-2">
-            <Type className="h-4 w-4 text-purple-500 flex-shrink-0" />
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
+          <div className="border-b border-theme-surface-border pb-2">
+            <h3 className="text-sm font-bold text-theme-text-primary">
               {item.name}
             </h3>
           </div>
