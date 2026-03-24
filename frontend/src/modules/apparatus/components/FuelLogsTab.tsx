@@ -5,27 +5,24 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Fuel } from 'lucide-react';
 import type { ApparatusFuelLog } from '../types';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 
 interface FuelLogsTabProps {
-  id: string;
   fuelLogs: ApparatusFuelLog[];
   loadingTab: boolean;
   timezone: string;
+  onAdd?: () => void;
 }
 
 export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({
-  id,
   fuelLogs,
   loadingTab,
   timezone,
+  onAdd,
 }) => {
-  const navigate = useNavigate();
-
   return (
     <div className="card p-6">
       <div className="flex items-center justify-between mb-6">
@@ -33,12 +30,14 @@ export const FuelLogsTab: React.FC<FuelLogsTabProps> = ({
           <Fuel className="w-5 h-5" />
           Fuel Logs
         </h2>
-        <button
-          onClick={() => navigate(`/apparatus/${id}/fuel/new`)}
-          className="btn-primary text-sm"
-        >
-          Add Fuel Log
-        </button>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="btn-primary text-sm"
+          >
+            Add Fuel Log
+          </button>
+        )}
       </div>
       {loadingTab ? (
         <div className="text-center py-8">

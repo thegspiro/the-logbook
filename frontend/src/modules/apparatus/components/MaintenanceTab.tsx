@@ -6,27 +6,24 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Wrench } from 'lucide-react';
 import type { ApparatusMaintenance } from '../types';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { formatDate } from '../../../utils/dateFormatting';
 
 interface MaintenanceTabProps {
-  id: string;
   maintenanceRecords: ApparatusMaintenance[];
   loadingTab: boolean;
   timezone: string;
+  onAdd?: () => void;
 }
 
 export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
-  id,
   maintenanceRecords,
   loadingTab,
   timezone,
+  onAdd,
 }) => {
-  const navigate = useNavigate();
-
   return (
     <div className="card p-6">
       <div className="flex items-center justify-between mb-6">
@@ -34,12 +31,14 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
           <Wrench className="w-5 h-5" />
           Maintenance Records
         </h2>
-        <button
-          onClick={() => navigate(`/apparatus/${id}/maintenance/new`)}
-          className="btn-primary text-sm"
-        >
-          Add Record
-        </button>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="btn-primary text-sm"
+          >
+            Add Record
+          </button>
+        )}
       </div>
       {loadingTab ? (
         <div className="text-center py-8">

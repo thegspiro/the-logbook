@@ -5,26 +5,23 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Users } from 'lucide-react';
 import type { ApparatusOperator } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 
 interface OperatorsTabProps {
-  id: string;
   operators: ApparatusOperator[];
   loadingTab: boolean;
   timezone: string;
+  onAdd?: () => void;
 }
 
 export const OperatorsTab: React.FC<OperatorsTabProps> = ({
-  id,
   operators,
   loadingTab,
   timezone,
+  onAdd,
 }) => {
-  const navigate = useNavigate();
-
   return (
     <div className="card p-6">
       <div className="flex items-center justify-between mb-6">
@@ -32,12 +29,14 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
           <Users className="w-5 h-5" />
           Certified Operators
         </h2>
-        <button
-          onClick={() => navigate(`/apparatus/${id}/operators/new`)}
-          className="btn-primary text-sm"
-        >
-          Add Operator
-        </button>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="btn-primary text-sm"
+          >
+            Add Operator
+          </button>
+        )}
       </div>
       {loadingTab ? (
         <div className="text-center py-8">
