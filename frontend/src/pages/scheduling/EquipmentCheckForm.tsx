@@ -1285,41 +1285,75 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Render: Compartment Overview Grid
   // --------------------------------------------------------------------------
 
-  const renderOverview = () => (
-    <div className="space-y-4">
-      <div className={`grid grid-cols-1 gap-3 ${previewMode ? '' : 'sm:grid-cols-2'}`}>
-        {compartments.map((comp, idx) => {
-          const status = getCompartmentStatus(comp, results);
-          const checkable = comp.items.filter((i) => i.checkType !== 'header');
-          const checked = checkable.filter((i) => {
-            const r = results[i.id];
-            return r && r.status !== 'not_checked';
-          }).length;
+  const renderOverview = () => {
+    // Group compartments into sections: each section is optionally preceded by a header
+    const sections: { header?: typeof compartments[number]; items: { comp: typeof compartments[number]; idx: number }[] }[] = [];
+    let currentSection: typeof sections[number] = { items: [] };
 
-          return (
-            <button
-              key={comp.id}
-              type="button"
-              onClick={() => setActiveCompartment(idx)}
-              className={`rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] min-h-[100px] ${STATUS_COLORS[status]}`}
-              aria-label={`${comp.name}, ${checked} of ${checkable.length} checked${status === 'complete' ? ', complete' : status === 'has_failures' ? ', has failures' : ''}`}
-            >
-              <p className="font-medium text-sm leading-tight">
-                {comp.name}
-              </p>
-              <p className="text-xs mt-1 opacity-75">
-                {checked}/{checkable.length} checked
-              </p>
-              {status === 'complete' && (
-                <CheckCircle className="h-5 w-5 mt-2" aria-hidden="true" />
+    compartments.forEach((comp, idx) => {
+      if (comp.isHeader) {
+        // Push the current section if it has items, then start a new one
+        if (currentSection.items.length > 0 || currentSection.header) {
+          sections.push(currentSection);
+        }
+        currentSection = { header: comp, items: [] };
+      } else {
+        currentSection.items.push({ comp, idx });
+      }
+    });
+    if (currentSection.items.length > 0 || currentSection.header) {
+      sections.push(currentSection);
+    }
+
+    return (
+    <div className="space-y-4">
+      {sections.map((section, sIdx) => (
+        <div key={section.header?.id ?? `section-${sIdx}`} className="space-y-3">
+          {section.header && (
+            <div className="border-b-2 border-purple-300 dark:border-purple-700 pb-1 pt-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-400">
+                {section.header.name}
+              </h3>
+              {section.header.description && (
+                <p className="text-[10px] text-purple-500/70 mt-0.5">{section.header.description}</p>
               )}
-              {status === 'has_failures' && (
-                <AlertTriangle className="h-5 w-5 mt-2" aria-hidden="true" />
-              )}
-            </button>
-          );
-        })}
-      </div>
+            </div>
+          )}
+          <div className={`grid grid-cols-1 gap-3 ${previewMode ? '' : 'sm:grid-cols-2'}`}>
+            {section.items.map(({ comp, idx }) => {
+              const status = getCompartmentStatus(comp, results);
+              const checkable = comp.items.filter((i) => i.checkType !== 'header');
+              const checked = checkable.filter((i) => {
+                const r = results[i.id];
+                return r && r.status !== 'not_checked';
+              }).length;
+
+              return (
+                <button
+                  key={comp.id}
+                  type="button"
+                  onClick={() => setActiveCompartment(idx)}
+                  className={`rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] min-h-[100px] ${STATUS_COLORS[status]}`}
+                  aria-label={`${comp.name}, ${checked} of ${checkable.length} checked${status === 'complete' ? ', complete' : status === 'has_failures' ? ', has failures' : ''}`}
+                >
+                  <p className="font-medium text-sm leading-tight">
+                    {comp.name}
+                  </p>
+                  <p className="text-xs mt-1 opacity-75">
+                    {checked}/{checkable.length} checked
+                  </p>
+                  {status === 'complete' && (
+                    <CheckCircle className="h-5 w-5 mt-2" aria-hidden="true" />
+                  )}
+                  {status === 'has_failures' && (
+                    <AlertTriangle className="h-5 w-5 mt-2" aria-hidden="true" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
 
       {/* Overall notes + submit (hidden in preview mode) */}
       {!previewMode && (
@@ -1371,6 +1405,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       )}
     </div>
   );
+  };
 
   // --------------------------------------------------------------------------
   // Render: Compartment Detail View
@@ -1401,11 +1436,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() =>
-                setActiveCompartment(
-                  idx > 0 ? idx - 1 : compartments.length - 1,
-                )
-              }
+              onClick={() => {
+                let prev = idx - 1;
+                while (prev >= 0 && compartments[prev]?.isHeader) prev--;
+                setActiveCompartment(prev >= 0 ? prev : compartments.length - 1);
+              }}
               className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label="Previous compartment"
             >
@@ -1419,6 +1454,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               aria-label="Jump to compartment"
             >
               {compartments.map((c, i) => {
+                if (c.isHeader) return null;
                 const st = getCompartmentStatus(c, results);
                 const prefix = st === 'complete' ? '\u2713 ' : st === 'has_failures' ? '\u2717 ' : '';
                 return (
@@ -1430,11 +1466,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             </select>
             <button
               type="button"
-              onClick={() =>
-                setActiveCompartment(
-                  idx < compartments.length - 1 ? idx + 1 : 0,
-                )
-              }
+              onClick={() => {
+                let next = idx + 1;
+                while (next < compartments.length && compartments[next]?.isHeader) next++;
+                setActiveCompartment(next < compartments.length ? next : 0);
+              }}
               className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               aria-label="Next compartment"
             >
@@ -1484,8 +1520,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         {/* Bottom nav — previous/next compartment with names and status */}
         {(() => {
-          const prevComp = idx > 0 ? compartments[idx - 1] : undefined;
-          const nextComp = idx < compartments.length - 1 ? compartments[idx + 1] : undefined;
+          let prevIdx = idx - 1;
+          while (prevIdx >= 0 && compartments[prevIdx]?.isHeader) prevIdx--;
+          let nextIdx = idx + 1;
+          while (nextIdx < compartments.length && compartments[nextIdx]?.isHeader) nextIdx++;
+          const prevComp = prevIdx >= 0 ? compartments[prevIdx] : undefined;
+          const nextComp = nextIdx < compartments.length ? compartments[nextIdx] : undefined;
           const prevStatus = prevComp ? getCompartmentStatus(prevComp, results).replace('_', ' ') : '';
           const nextStatus = nextComp ? getCompartmentStatus(nextComp, results).replace('_', ' ') : '';
 
@@ -1495,7 +1535,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {prevComp ? (
               <button
                 type="button"
-                onClick={() => setActiveCompartment(idx - 1)}
+                onClick={() => setActiveCompartment(prevIdx)}
                 className="w-full text-left rounded-lg px-3 py-2.5 hover:bg-theme-surface-secondary transition-colors min-h-[56px]"
               >
                 <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Previous compartment</span>
@@ -1521,7 +1561,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {nextComp ? (
               <button
                 type="button"
-                onClick={() => setActiveCompartment(idx + 1)}
+                onClick={() => setActiveCompartment(nextIdx)}
                 className="w-full text-right rounded-lg px-3 py-2.5 hover:bg-theme-surface-secondary transition-colors min-h-[56px]"
               >
                 <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Next compartment</span>

@@ -1986,6 +1986,7 @@ class CheckTemplateCompartment(Base):
     description = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0, nullable=False)
     image_url = Column(String(500), nullable=True)
+    is_header = Column(Boolean, default=False, nullable=False)
     parent_compartment_id = Column(
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
