@@ -17,6 +17,7 @@ export const CheckType = {
   LEVEL: "level",
   DATE_LOT: "date_lot",
   READING: "reading",
+  TEXT: "text",
   HEADER: "header",
 } as const;
 export type CheckType = (typeof CheckType)[keyof typeof CheckType];
@@ -36,6 +37,7 @@ export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
   level: "Level",
   date_lot: "Date / Lot",
   reading: "Reading",
+  text: "Text",
   header: "Section Header",
 };
 
@@ -122,6 +124,7 @@ export interface CheckTemplateCompartment {
   description?: string;
   sortOrder: number;
   imageUrl?: string;
+  isHeader?: boolean;
   parentCompartmentId?: string;
   items: CheckTemplateItem[];
   createdAt?: string;
@@ -133,6 +136,7 @@ export interface CheckTemplateCompartmentCreate {
   description?: string | undefined;
   sort_order?: number | undefined;
   image_url?: string | undefined;
+  is_header?: boolean | undefined;
   parent_compartment_id?: string | undefined;
   items?: CheckTemplateItemCreate[] | undefined;
 }
@@ -142,6 +146,7 @@ export interface CheckTemplateCompartmentUpdate {
   description?: string | undefined;
   sort_order?: number | undefined;
   image_url?: string | undefined;
+  is_header?: boolean | undefined;
   parent_compartment_id?: string | undefined;
 }
 

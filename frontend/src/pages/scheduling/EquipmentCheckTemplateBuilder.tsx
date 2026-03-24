@@ -112,6 +112,7 @@ const CHECK_TYPES = [
   { value: 'level', label: 'Level' },
   { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
+  { value: 'text', label: 'Text' },
   { value: 'header', label: 'Section Header' },
 ] as const;
 
@@ -135,6 +136,7 @@ const CHECK_TYPE_HELP: Record<string, string> = {
   level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
   date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
   reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
+  text: 'Free-form text response. Good for notes, observations, VIN numbers, or any open-ended input.',
   header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
 
@@ -710,6 +712,7 @@ interface CompartmentFormState {
   name: string;
   description: string;
   imageUrl: string;
+  isHeader: boolean;
   parentCompartmentId: string;
   items: ItemFormState[];
 }
@@ -719,6 +722,7 @@ function emptyCompartment(): CompartmentFormState {
     name: '',
     description: '',
     imageUrl: '',
+    isHeader: false,
     parentCompartmentId: '',
     items: [],
   };
@@ -887,6 +891,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           name: c.name,
           description: c.description ?? '',
           imageUrl: c.imageUrl ?? '',
+          isHeader: c.isHeader ?? false,
           parentCompartmentId: c.parentCompartmentId ?? '',
           items: (c.items ?? []).map((item) => ({
             id: item.id,
@@ -991,6 +996,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         name: created.name,
         description: created.description ?? '',
         imageUrl: created.imageUrl ?? '',
+        isHeader: false,
         parentCompartmentId: created.parentCompartmentId ?? '',
         items: [],
       };
@@ -999,6 +1005,40 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       toast.success('Compartment added');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to add compartment'));
+    }
+  };
+
+  const addSectionHeader = async () => {
+    if (!templateId) {
+      const comp: CompartmentFormState = {
+        ...emptyCompartment(),
+        name: 'Section Header',
+        isHeader: true,
+      };
+      setCompartments((prev) => [...prev, comp]);
+      return;
+    }
+
+    try {
+      const payload: CheckTemplateCompartmentCreate = {
+        name: 'Section Header',
+        sort_order: compartments.length,
+        is_header: true,
+      };
+      const created = await schedulingService.addCompartment(templateId, payload);
+      const comp: CompartmentFormState = {
+        id: created.id,
+        name: created.name,
+        description: created.description ?? '',
+        imageUrl: created.imageUrl ?? '',
+        isHeader: true,
+        parentCompartmentId: created.parentCompartmentId ?? '',
+        items: [],
+      };
+      setCompartments((prev) => [...prev, comp]);
+      toast.success('Section header added');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add section header'));
     }
   };
 
@@ -1048,6 +1088,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       name: `${comp.name} (copy)`,
       description: comp.description,
       imageUrl: comp.imageUrl,
+      isHeader: comp.isHeader,
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
     };
@@ -1754,6 +1795,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           description: c.description.trim() || undefined,
           sort_order: idx,
           image_url: c.imageUrl.trim() || undefined,
+          is_header: c.isHeader || undefined,
           parent_compartment_id: c.parentCompartmentId || undefined,
           items: c.items.map((item, itemIdx) => ({
             name: item.name || 'Untitled Item',
@@ -1802,6 +1844,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 name: comp.name || undefined,
                 description: comp.description.trim() || undefined,
                 image_url: comp.imageUrl.trim() || undefined,
+                is_header: comp.isHeader,
                 parent_compartment_id: comp.parentCompartmentId || undefined,
               }),
             );
@@ -1908,6 +1951,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         name: comp.name,
         description: '',
         imageUrl: '',
+        isHeader: false,
         parentCompartmentId: '',
         items: comp.items.map((item) => ({
           ...emptyItem(),
@@ -1968,6 +2012,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       compartments: compartments.map((c) => ({
         name: c.name,
         description: c.description,
+        isHeader: c.isHeader || undefined,
         items: c.items.map((item) => ({
           name: item.name,
           description: item.description,
@@ -2014,6 +2059,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           compartments?: Array<{
             name: string;
             description?: string;
+            isHeader?: boolean;
             items?: Array<Record<string, unknown>>;
           }>;
         };
@@ -2033,6 +2079,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           name: c.name || 'Untitled',
           description: c.description ?? '',
           imageUrl: '',
+          isHeader: Boolean(c.isHeader),
           parentCompartmentId: '',
           items: (c.items ?? []).map((item) => ({
             ...emptyItem(),
@@ -2114,6 +2161,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ...(c.description ? { description: c.description } : {}),
         sortOrder: cIdx,
         ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
+        ...(c.isHeader ? { isHeader: true } : {}),
         ...(c.parentCompartmentId ? { parentCompartmentId: c.parentCompartmentId } : {}),
         items: c.items.map((item, iIdx): CheckTemplateItem => ({
           id: item.id ?? `preview-item-${cIdx}-${iIdx}`,
@@ -2143,14 +2191,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const stats = useMemo(() => {
-    const allItems = compartments.flatMap((c) => c.items);
+    const realCompartments = compartments.filter((c) => !c.isHeader);
+    const allItems = realCompartments.flatMap((c) => c.items);
     const totalItems = allItems.length;
     const requiredItems = allItems.filter((i) => i.isRequired).length;
     const withExpiration = allItems.filter((i) => i.hasExpiration).length;
     const namedItems = allItems.filter((i) => i.name.trim()).length;
-    const namedCompartments = compartments.filter((c) => c.name.trim()).length;
+    const namedCompartments = realCompartments.filter((c) => c.name.trim()).length;
     return {
-      compartmentCount: compartments.length,
+      compartmentCount: realCompartments.length,
       totalItems,
       requiredItems,
       withExpiration,
@@ -2647,6 +2696,78 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   ) => {
     const key = comp.id ?? `comp-${idx}`;
     const isExpanded = expandedCompartments.has(key);
+
+    // Section header compartment — simplified visual divider
+    if (comp.isHeader) {
+      return (
+        <div
+          key={key}
+          ref={sortableRef}
+          style={sortableStyle}
+          {...(sortableAttributes ?? {})}
+          className="rounded-lg border-2 border-dashed border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-900/10 overflow-hidden"
+        >
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-3">
+            <button
+              type="button"
+              className="p-0.5 text-purple-400 cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+              aria-label="Drag to reorder section"
+              {...(dragHandleProps ?? {})}
+            >
+              <GripVertical className="h-5 w-5" />
+            </button>
+
+            <Type className="h-4 w-4 text-purple-500 flex-shrink-0" />
+
+            <input
+              type="text"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none text-purple-700 dark:text-purple-400 font-semibold uppercase text-sm tracking-wide placeholder:normal-case placeholder:font-normal placeholder:text-purple-400/60"
+              placeholder="Section heading..."
+              value={comp.name}
+              onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
+            />
+
+            <span className="rounded-full bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 flex-shrink-0">
+              Section
+            </span>
+
+            <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => moveCompartment(idx, 'up')}
+                disabled={idx === 0}
+                className="p-1 text-purple-400 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/20 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Move section up"
+              >
+                <ChevronUp className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => moveCompartment(idx, 'down')}
+                disabled={idx === compartments.length - 1}
+                className="p-1 text-purple-400 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/20 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Move section down"
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteCompartment(idx)}
+                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                aria-label="Delete section header"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          {comp.description && (
+            <div className="px-4 pb-2 -mt-1">
+              <p className="text-xs text-purple-500/70">{comp.description}</p>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div
@@ -3304,6 +3425,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   Load Vehicle Preset
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => void addSectionHeader()}
+                className="flex items-center gap-1.5 rounded-md border border-dashed border-purple-400 dark:border-purple-600 px-3 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+              >
+                <Type className="h-4 w-4" />
+                Add Section
+              </button>
               <button
                 type="button"
                 onClick={() => void addCompartment()}
