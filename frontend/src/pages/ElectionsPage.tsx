@@ -9,9 +9,10 @@ import { Link } from 'react-router-dom';
 import { electionService, eventService, meetingsService, ranksService } from '../services/api';
 import type { MeetingRecord, OperationalRankResponse } from '../services/api';
 import type { EventListItem } from '../types/event';
-import type { ElectionListItem, ElectionCreate, VotingMethod, VictoryCondition } from '../types/election';
+import type { ElectionListItem, ElectionCreate } from '../types/election';
+import type { VotingMethod, VictoryCondition } from '../constants/enums';
 import { useAuthStore } from '../stores/authStore';
-import { ElectionStatus, VoteType } from '../constants/enums';
+import { ElectionStatus, VotingMethod as VM, VictoryCondition as VC, RunoffType } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
@@ -39,10 +40,10 @@ export const ElectionsPage: React.FC = () => {
     allow_write_ins: false,
     max_votes_per_position: 1,
     results_visible_immediately: false,
-    voting_method: 'simple_majority',
-    victory_condition: 'most_votes',
+    voting_method: VM.SIMPLE_MAJORITY,
+    victory_condition: VC.MOST_VOTES,
     enable_runoffs: false,
-    runoff_type: 'top_two',
+    runoff_type: RunoffType.TOP_TWO,
     max_runoff_rounds: 3,
   });
   const [positionInput, setPositionInput] = useState('');
@@ -195,10 +196,10 @@ export const ElectionsPage: React.FC = () => {
         allow_write_ins: false,
         max_votes_per_position: 1,
         results_visible_immediately: false,
-        voting_method: 'simple_majority',
-        victory_condition: 'most_votes',
+        voting_method: VM.SIMPLE_MAJORITY,
+        victory_condition: VC.MOST_VOTES,
         enable_runoffs: false,
-        runoff_type: 'top_two',
+        runoff_type: RunoffType.TOP_TWO,
         max_runoff_rounds: 3,
       });
       setPositionInput('');
@@ -700,8 +701,8 @@ export const ElectionsPage: React.FC = () => {
                     value={`${formData.voting_method}|${formData.victory_condition}`}
                     onChange={(e) => {
                       const parts = e.target.value.split('|');
-                      const method = (parts[0] ?? 'simple_majority') as VotingMethod;
-                      const condition = (parts[1] ?? 'most_votes') as VictoryCondition;
+                      const method = (parts[0] ?? VM.SIMPLE_MAJORITY) as VotingMethod;
+                      const condition = (parts[1] ?? VC.MOST_VOTES) as VictoryCondition;
                       setFormData({ ...formData, voting_method: method, victory_condition: condition, victory_percentage: undefined, victory_threshold: undefined });
                     }}
                     className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-white focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
@@ -714,21 +715,21 @@ export const ElectionsPage: React.FC = () => {
                     <option value="simple_majority|threshold">Custom Threshold</option>
                   </select>
                   <p className="mt-1 text-xs text-theme-text-muted">
-                    {formData.voting_method === 'ranked_choice'
+                    {formData.voting_method === VM.RANKED_CHOICE
                       ? 'Voters rank candidates in order of preference. Lowest-ranked candidates are eliminated until one has a majority.'
-                      : formData.voting_method === VoteType.APPROVAL
+                      : formData.voting_method === VM.APPROVAL
                       ? 'Voters approve or disapprove each candidate. The candidate with the most approvals wins.'
-                      : formData.victory_condition === 'majority'
+                      : formData.victory_condition === VC.MAJORITY
                       ? 'Each voter picks one candidate. Winner must receive more than 50% of the votes.'
-                      : formData.victory_condition === 'supermajority'
+                      : formData.victory_condition === VC.SUPERMAJORITY
                       ? 'Each voter picks one candidate. Winner must receive at least 2/3 of the votes.'
-                      : formData.victory_condition === 'threshold'
+                      : formData.victory_condition === VC.THRESHOLD
                       ? 'Each voter picks one candidate. Winner must meet the custom threshold you set below.'
                       : 'Each voter picks one candidate. The candidate with the most votes wins, even without a majority.'}
                   </p>
                 </div>
 
-                {formData.victory_condition === 'threshold' && (
+                {formData.victory_condition === VC.THRESHOLD && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="election-num-threshold" className="block text-sm font-medium text-theme-text-primary">
@@ -767,7 +768,7 @@ export const ElectionsPage: React.FC = () => {
                   </div>
                 )}
 
-                {formData.victory_condition === 'supermajority' && (
+                {formData.victory_condition === VC.SUPERMAJORITY && (
                   <div>
                     <label htmlFor="election-supermajority-pct" className="block text-sm font-medium text-theme-text-primary">
                       Supermajority Percentage (default: 67%)

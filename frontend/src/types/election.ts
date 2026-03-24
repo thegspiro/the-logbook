@@ -2,9 +2,23 @@
  * Election Type Definitions
  */
 
-// Import enum type from the canonical source and re-export
-import type { ElectionStatus } from '../constants/enums';
-export type { ElectionStatus };
+// Import enum types from the canonical source and re-export
+import type {
+  ElectionStatus,
+  VotingMethod,
+  VictoryCondition,
+  BallotChoice,
+  RunoffType,
+  QuorumType,
+} from '../constants/enums';
+export type {
+  ElectionStatus,
+  VotingMethod,
+  VictoryCondition,
+  BallotChoice,
+  RunoffType,
+  QuorumType,
+};
 
 export interface BallotItem {
   id: string;
@@ -28,8 +42,7 @@ export interface PositionEligibility {
   min_votes_required?: number;
 }
 
-export type VotingMethod = 'simple_majority' | 'ranked_choice' | 'approval' | 'supermajority';
-export type VictoryCondition = 'most_votes' | 'majority' | 'supermajority' | 'threshold';
+// VotingMethod and VictoryCondition are now defined in constants/enums.ts
 
 export interface Election {
   id: string;

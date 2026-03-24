@@ -13,19 +13,20 @@ import toast from 'react-hot-toast';
 import { electionService } from '../services/api';
 import type { ElectionSettings, ElectionListItem } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
+import { VotingMethod as VM, VictoryCondition as VC } from '../constants/enums';
 
 const VOTING_METHOD_OPTIONS = [
-  { value: 'simple_majority', label: 'Simple Majority' },
-  { value: 'ranked_choice', label: 'Ranked Choice (IRV)' },
-  { value: 'approval', label: 'Approval Voting' },
-  { value: 'supermajority', label: 'Supermajority' },
+  { value: VM.SIMPLE_MAJORITY, label: 'Simple Majority' },
+  { value: VM.RANKED_CHOICE, label: 'Ranked Choice (IRV)' },
+  { value: VM.APPROVAL, label: 'Approval Voting' },
+  { value: VM.SUPERMAJORITY, label: 'Supermajority' },
 ] as const;
 
 const VICTORY_CONDITION_OPTIONS = [
-  { value: 'most_votes', label: 'Most Votes (Plurality)' },
-  { value: 'majority', label: 'Majority (>50%)' },
-  { value: 'supermajority', label: 'Supermajority' },
-  { value: 'threshold', label: 'Threshold' },
+  { value: VC.MOST_VOTES, label: 'Most Votes (Plurality)' },
+  { value: VC.MAJORITY, label: 'Majority (>50%)' },
+  { value: VC.SUPERMAJORITY, label: 'Supermajority' },
+  { value: VC.THRESHOLD, label: 'Threshold' },
 ] as const;
 
 const QUORUM_TYPE_OPTIONS = [
@@ -151,7 +152,7 @@ export const ElectionsSettingsPage: React.FC = () => {
               <label className={labelClass}>Default Voting Method</label>
               <select
                 className={selectClass}
-                value={settings.default_voting_method ?? 'simple_majority'}
+                value={settings.default_voting_method ?? VM.SIMPLE_MAJORITY}
                 onChange={(e) => updateField('default_voting_method', e.target.value as ElectionSettings['default_voting_method'])}
               >
                 {VOTING_METHOD_OPTIONS.map((opt) => (
@@ -164,7 +165,7 @@ export const ElectionsSettingsPage: React.FC = () => {
               <label className={labelClass}>Default Victory Condition</label>
               <select
                 className={selectClass}
-                value={settings.default_victory_condition ?? 'most_votes'}
+                value={settings.default_victory_condition ?? VC.MOST_VOTES}
                 onChange={(e) => updateField('default_victory_condition', e.target.value as ElectionSettings['default_victory_condition'])}
               >
                 {VICTORY_CONDITION_OPTIONS.map((opt) => (
@@ -173,8 +174,8 @@ export const ElectionsSettingsPage: React.FC = () => {
               </select>
             </div>
 
-            {(settings.default_victory_condition === 'supermajority' ||
-              settings.default_victory_condition === 'threshold') && (
+            {(settings.default_victory_condition === VC.SUPERMAJORITY ||
+              settings.default_victory_condition === VC.THRESHOLD) && (
               <div>
                 <label className={labelClass}>Default Victory Percentage</label>
                 <input

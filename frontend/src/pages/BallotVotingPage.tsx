@@ -27,6 +27,7 @@ import type {
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
+import { BallotChoice } from '../constants/enums';
 import { VoteType } from '../constants/enums';
 import { useTimezone } from '../hooks/useTimezone';
 
@@ -74,7 +75,7 @@ export const BallotVotingPage: React.FC = () => {
       // Initialize choices with 'abstain' for all ballot items
       const initialChoices: Record<string, ItemChoice> = {};
       for (const item of electionData.ballot_items || []) {
-        initialChoices[item.id] = { choice: 'abstain', write_in_name: '' };
+        initialChoices[item.id] = { choice: BallotChoice.ABSTAIN, write_in_name: '' };
       }
       setChoices(initialChoices);
     } catch (err: unknown) {
@@ -113,7 +114,7 @@ export const BallotVotingPage: React.FC = () => {
   const handleSubmitBallot = () => {
     // Validate write-ins have names
     for (const [itemId, itemChoice] of Object.entries(choices)) {
-      if (itemChoice.choice === 'write_in' && !itemChoice.write_in_name.trim()) {
+      if (itemChoice.choice === BallotChoice.WRITE_IN && !itemChoice.write_in_name.trim()) {
         const item = (election?.ballot_items || []).find((i) => i.id === itemId);
         setError(`Please enter a name for your write-in on: ${item?.title || itemId}`);
         return;
@@ -134,7 +135,7 @@ export const BallotVotingPage: React.FC = () => {
       const votes: BallotItemVote[] = Object.entries(choices).map(([itemId, itemChoice]) => ({
         ballot_item_id: itemId,
         choice: itemChoice.choice,
-        write_in_name: itemChoice.choice === 'write_in' ? itemChoice.write_in_name.trim() : undefined,
+        write_in_name: itemChoice.choice === BallotChoice.WRITE_IN ? itemChoice.write_in_name.trim() : undefined,
       }));
 
       const result = await electionService.submitBallot(token, votes);
@@ -155,13 +156,13 @@ export const BallotVotingPage: React.FC = () => {
     if (!itemChoice) return 'Abstain';
 
     switch (itemChoice.choice) {
-      case 'approve':
+      case BallotChoice.APPROVE:
         return 'Approve';
-      case 'deny':
+      case BallotChoice.DENY:
         return 'Deny';
-      case 'abstain':
+      case BallotChoice.ABSTAIN:
         return 'Abstain (No Vote)';
-      case 'write_in':
+      case BallotChoice.WRITE_IN:
         return `Write-in: ${itemChoice.write_in_name || '(empty)'}`;
       default: {
         // Candidate UUID
@@ -319,8 +320,8 @@ export const BallotVotingPage: React.FC = () => {
                         <input
                           type="radio"
                           name={`item-${item.id}`}
-                          checked={itemChoice?.choice === 'approve'}
-                          onChange={() => updateChoice(item.id, 'approve')}
+                          checked={itemChoice?.choice === BallotChoice.APPROVE}
+                          onChange={() => updateChoice(item.id, BallotChoice.APPROVE)}
                           className="w-4 h-4 text-green-600 focus:ring-theme-focus-ring"
                         />
                         <span className="font-medium text-theme-text-primary">Approve</span>
@@ -331,8 +332,8 @@ export const BallotVotingPage: React.FC = () => {
                         <input
                           type="radio"
                           name={`item-${item.id}`}
-                          checked={itemChoice?.choice === 'deny'}
-                          onChange={() => updateChoice(item.id, 'deny')}
+                          checked={itemChoice?.choice === BallotChoice.DENY}
+                          onChange={() => updateChoice(item.id, BallotChoice.DENY)}
                           className="w-4 h-4 text-blue-600 focus:ring-theme-focus-ring"
                         />
                         <span className="font-medium text-theme-text-primary">Deny</span>
@@ -368,7 +369,7 @@ export const BallotVotingPage: React.FC = () => {
                   {election.allow_write_ins && (
                     <div
                       className={`p-3 rounded-lg border transition-colors ${
-                        itemChoice?.choice === 'write_in'
+                        itemChoice?.choice === BallotChoice.WRITE_IN
                           ? 'border-purple-300 bg-purple-50 dark:border-purple-500/30 dark:bg-purple-500/10'
                           : 'border-theme-surface-border hover:bg-purple-50 dark:hover:bg-purple-500/10 hover:border-purple-300'
                       }`}
@@ -377,13 +378,13 @@ export const BallotVotingPage: React.FC = () => {
                         <input
                           type="radio"
                           name={`item-${item.id}`}
-                          checked={itemChoice?.choice === 'write_in'}
-                          onChange={() => updateChoice(item.id, 'write_in')}
+                          checked={itemChoice?.choice === BallotChoice.WRITE_IN}
+                          onChange={() => updateChoice(item.id, BallotChoice.WRITE_IN)}
                           className="w-4 h-4 text-purple-600 focus:ring-theme-focus-ring"
                         />
                         <span className="font-medium text-theme-text-primary">Write-in</span>
                       </label>
-                      {itemChoice?.choice === 'write_in' && (
+                      {itemChoice?.choice === BallotChoice.WRITE_IN && (
                         <input
                           type="text"
                           value={itemChoice.write_in_name}
@@ -402,8 +403,8 @@ export const BallotVotingPage: React.FC = () => {
                     <input
                       type="radio"
                       name={`item-${item.id}`}
-                      checked={itemChoice?.choice === 'abstain'}
-                      onChange={() => updateChoice(item.id, 'abstain')}
+                      checked={itemChoice?.choice === BallotChoice.ABSTAIN}
+                      onChange={() => updateChoice(item.id, BallotChoice.ABSTAIN)}
                       className="w-4 h-4 text-theme-text-muted focus:ring-theme-focus-ring"
                     />
                     <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
@@ -456,7 +457,7 @@ export const BallotVotingPage: React.FC = () => {
               <div className="space-y-4">
                 {ballotItems.map((item, index) => {
                   const label = getChoiceLabel(item.id);
-                  const isAbstain = choices[item.id]?.choice === 'abstain';
+                  const isAbstain = choices[item.id]?.choice === BallotChoice.ABSTAIN;
 
                   return (
                     <div
@@ -474,9 +475,9 @@ export const BallotVotingPage: React.FC = () => {
                           className={`text-sm mt-0.5 font-semibold ${
                             isAbstain
                               ? 'text-theme-text-muted'
-                              : choices[item.id]?.choice === 'approve'
+                              : choices[item.id]?.choice === BallotChoice.APPROVE
                                 ? 'text-green-700'
-                                : choices[item.id]?.choice === 'deny'
+                                : choices[item.id]?.choice === BallotChoice.DENY
                                   ? 'text-red-700'
                                   : 'text-blue-700'
                           }`}
