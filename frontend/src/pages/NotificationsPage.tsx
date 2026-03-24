@@ -105,6 +105,8 @@ function formatCategory(category: string): string {
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
+const INBOX_PAGE_SIZE = 20;
+
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -144,8 +146,6 @@ const NotificationsPage: React.FC = () => {
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-
-  const INBOX_PAGE_SIZE = 20;
 
   // Fetch user inbox on mount and when showRead filter changes
   useEffect(() => {
