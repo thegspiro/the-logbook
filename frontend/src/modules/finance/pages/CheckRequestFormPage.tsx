@@ -13,6 +13,7 @@ import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { Skeleton } from '@/components/ux/Skeleton';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import type { CheckRequest } from '../types';
 
@@ -106,6 +107,7 @@ const CheckRequestFormPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs />
       <button
         type="button"
         onClick={() => navigate('/finance/check-requests')}

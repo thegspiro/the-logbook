@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useFacilitiesStore } from '../store/facilitiesStore';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import OverviewSection from '../components/OverviewSection';
 import RoomsSection from '../components/RoomsSection';
 import SystemsSection from '../components/SystemsSection';
@@ -126,6 +127,7 @@ export default function FacilityDetailPage() {
 
   return (
     <div className="space-y-0">
+      <Breadcrumbs />
       {/* Top Bar */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">

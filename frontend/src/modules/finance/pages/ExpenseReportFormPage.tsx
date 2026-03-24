@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { ExpenseType } from '../types';
 import type { ExpenseReport } from '../types';
 
@@ -236,11 +237,11 @@ const ExpenseReportFormPage: React.FC = () => {
       <div className="space-y-6">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/finance/expenses')}
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          Back to Expense Reports
         </button>
         <FormSkeleton />
       </div>
@@ -249,14 +250,15 @@ const ExpenseReportFormPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs />
       {/* Back link */}
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/finance/expenses')}
         className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back
+        Back to Expense Reports
       </button>
 
       {/* Header */}
@@ -441,7 +443,7 @@ const ExpenseReportFormPage: React.FC = () => {
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/finance/expenses')}
             className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
           >
             Cancel

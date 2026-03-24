@@ -38,6 +38,7 @@ import {
   apparatusEquipmentService,
 } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 
 type TabType = 'overview' | 'maintenance' | 'fuel' | 'operators' | 'equipment' | 'documents';
 
@@ -176,6 +177,9 @@ export const ApparatusDetailPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-theme-bg">
+      <div className="max-w-7xl mx-auto px-6 pt-6">
+        <Breadcrumbs />
+      </div>
       {/* Header */}
       <ApparatusDetailHeader
         currentApparatus={currentApparatus}

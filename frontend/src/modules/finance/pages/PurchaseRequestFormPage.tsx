@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { purchaseRequestService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { PurchaseRequestPriority } from '../types';
 import type { PurchaseRequest } from '../types';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
@@ -209,11 +210,11 @@ const PurchaseRequestFormPage: React.FC = () => {
       <div className="space-y-6">
         <button
           type="button"
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/finance/purchase-requests')}
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back
+          Back to Purchase Requests
         </button>
         <FormSkeleton />
       </div>
@@ -222,14 +223,15 @@ const PurchaseRequestFormPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs />
       {/* Back link */}
       <button
         type="button"
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/finance/purchase-requests')}
         className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back
+        Back to Purchase Requests
       </button>
 
       {/* Header */}
@@ -361,7 +363,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         <div className="mt-6 flex items-center justify-end gap-3 border-t border-theme-surface-border pt-6">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/finance/purchase-requests')}
             className="rounded-lg border border-theme-surface-border px-4 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover"
           >
             Cancel

@@ -602,10 +602,10 @@ export const MemberProfilePage: React.FC = () => {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/members')}
             className="text-sm text-theme-text-muted hover:text-theme-text-secondary mb-4 flex items-center gap-1"
           >
-            &larr; Back
+            &larr; Back to Members
           </button>
 
           <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">

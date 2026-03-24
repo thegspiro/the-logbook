@@ -26,6 +26,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { purchaseRequestService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { formatCurrency } from '@/utils/currencyFormatting';
@@ -265,6 +266,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
   if (isLoading && !pr) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Link
           to="/finance/purchase-requests"
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
@@ -280,6 +282,7 @@ const PurchaseRequestDetailPage: React.FC = () => {
   if (!pr) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Link
           to="/finance/purchase-requests"
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"

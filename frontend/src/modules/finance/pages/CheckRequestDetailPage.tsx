@@ -22,6 +22,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { checkRequestService } from '../services/api';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { formatCurrency } from '@/utils/currencyFormatting';
@@ -128,6 +129,7 @@ const CheckRequestDetailPage: React.FC = () => {
   if (isLoading && !cr) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Link
           to="/finance/check-requests"
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
@@ -143,6 +145,7 @@ const CheckRequestDetailPage: React.FC = () => {
   if (!cr) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Link
           to="/finance/check-requests"
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
@@ -167,6 +170,7 @@ const CheckRequestDetailPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs />
       <Link
         to="/finance/check-requests"
         className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
