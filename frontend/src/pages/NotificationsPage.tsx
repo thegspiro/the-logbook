@@ -37,6 +37,7 @@ import type {
   NotificationsSummary,
 } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useNotificationCountStore } from '../hooks/useNotificationCount';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -112,16 +113,23 @@ const NotificationsPage: React.FC = () => {
   const canView = checkPermission('notifications.view');
   const tz = useTimezone();
 
+  // Shared notification count store
+  const myUnreadCount = useNotificationCountStore((s) => s.unreadCount);
+  const decrementGlobalUnread = useNotificationCountStore((s) => s.decrement);
+  const clearGlobalUnread = useNotificationCountStore((s) => s.clear);
+
   // Data states
   const [rules, setRules] = useState<NotificationRuleRecord[]>([]);
   const [logs, setLogs] = useState<NotificationLogRecord[]>([]);
   const [summary, setSummary] = useState<NotificationsSummary | null>(null);
   const [myNotifications, setMyNotifications] = useState<NotificationLogRecord[]>([]);
-  const [myUnreadCount, setMyUnreadCount] = useState(0);
+  const [inboxTotal, setInboxTotal] = useState(0);
 
   // UI states
   const [loading, setLoading] = useState(true);
   const [loadingInbox, setLoadingInbox] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [showRead, setShowRead] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,17 +145,19 @@ const NotificationsPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Fetch user inbox on mount
+  const INBOX_PAGE_SIZE = 20;
+
+  // Fetch user inbox on mount and when showRead filter changes
   useEffect(() => {
     const fetchInbox = async () => {
       setLoadingInbox(true);
       try {
-        const [data, countData] = await Promise.all([
-          notificationsService.getMyNotifications({ include_read: true, limit: 50 }),
-          notificationsService.getMyUnreadCount(),
-        ]);
+        const data = await notificationsService.getMyNotifications({
+          include_read: showRead,
+          limit: INBOX_PAGE_SIZE,
+        });
         setMyNotifications(data.logs || []);
-        setMyUnreadCount(countData.unread_count);
+        setInboxTotal(data.total);
       } catch {
         // Inbox is always available to authenticated users
       } finally {
@@ -155,7 +165,7 @@ const NotificationsPage: React.FC = () => {
       }
     };
     void fetchInbox();
-  }, []);
+  }, [showRead]);
 
   // Fetch admin data on mount (only if user has permission)
   useEffect(() => {
@@ -269,7 +279,7 @@ const NotificationsPage: React.FC = () => {
       setMyNotifications((prev) =>
         prev.map((n) => (n.id === logId ? { ...n, read: true } : n)),
       );
-      setMyUnreadCount((prev) => Math.max(0, prev - 1));
+      decrementGlobalUnread();
     } catch {
       setError('Failed to mark notification as read');
     }
@@ -279,9 +289,26 @@ const NotificationsPage: React.FC = () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
       setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      setMyUnreadCount(0);
+      clearGlobalUnread();
     } catch {
       setError('Failed to mark all as read');
+    }
+  };
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const data = await notificationsService.getMyNotifications({
+        include_read: showRead,
+        skip: myNotifications.length,
+        limit: INBOX_PAGE_SIZE,
+      });
+      setMyNotifications((prev) => [...prev, ...(data.logs || [])]);
+      setInboxTotal(data.total);
+    } catch {
+      setError('Failed to load more notifications');
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -428,9 +455,20 @@ const NotificationsPage: React.FC = () => {
         {activeTab === 'inbox' && (
           <div role="tabpanel">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-theme-text-muted text-sm">
-                {myUnreadCount > 0 ? `${myUnreadCount} unread` : 'All caught up'}
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-theme-text-muted text-sm">
+                  {myUnreadCount > 0 ? `${myUnreadCount} unread` : 'All caught up'}
+                </p>
+                <label className="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={showRead}
+                    onChange={(e) => setShowRead(e.target.checked)}
+                    className="rounded border-theme-surface-border"
+                  />
+                  Show read
+                </label>
+              </div>
               {myUnreadCount > 0 && (
                 <button
                   onClick={() => { void handleMarkAllInboxRead(); }}
@@ -453,9 +491,13 @@ const NotificationsPage: React.FC = () => {
             ) : myNotifications.length === 0 ? (
               <div className="card p-12 text-center">
                 <Inbox className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
-                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Notifications</h3>
+                <h3 className="text-theme-text-primary text-xl font-bold mb-2">
+                  {showRead ? 'No Notifications' : 'No Unread Notifications'}
+                </h3>
                 <p className="text-theme-text-secondary">
-                  You&apos;re all caught up. New notifications will appear here.
+                  {showRead
+                    ? "You're all caught up. New notifications will appear here."
+                    : 'All notifications have been read.'}
                 </p>
               </div>
             ) : (
@@ -510,6 +552,24 @@ const NotificationsPage: React.FC = () => {
                     </div>
                   </button>
                 ))}
+                {myNotifications.length < inboxTotal && (
+                  <div className="pt-2 text-center">
+                    <button
+                      onClick={() => { void handleLoadMore(); }}
+                      disabled={loadingMore}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+                    >
+                      {loadingMore ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        `Load more (${inboxTotal - myNotifications.length} remaining)`
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
