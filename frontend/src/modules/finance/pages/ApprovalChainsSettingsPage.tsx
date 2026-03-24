@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useFinanceStore } from '../store/financeStore';
 import { SkeletonPage } from '@/components/ux/Skeleton';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { EmptyState } from '@/components/ux/EmptyState';
 import {
   ApprovalEntityType,
@@ -295,6 +296,7 @@ const ApprovalChainsSettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <Breadcrumbs />
       {/* Back link */}
       <Link
         to="/finance/settings"

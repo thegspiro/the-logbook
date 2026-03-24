@@ -12,6 +12,7 @@ import { useFinanceStore } from '../store/financeStore';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import type { Budget } from '../types';
 
 // =============================================================================
@@ -206,6 +207,7 @@ const BudgetDetailPage: React.FC = () => {
   if (isLoading && !budget) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Link
           to="/finance/budgets"
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
@@ -221,6 +223,7 @@ const BudgetDetailPage: React.FC = () => {
   if (!budget) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Link
           to="/finance/budgets"
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"

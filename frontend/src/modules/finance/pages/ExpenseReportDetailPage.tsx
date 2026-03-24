@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 import { useFinanceStore } from '../store/financeStore';
 import { Skeleton } from '@/components/ux/Skeleton';
 import { EmptyState } from '@/components/ux/EmptyState';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { formatCurrency } from '@/utils/currencyFormatting';
@@ -102,6 +103,7 @@ const ExpenseReportDetailPage: React.FC = () => {
   if (isLoading && !er) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Link
           to="/finance/expenses"
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"
@@ -117,6 +119,7 @@ const ExpenseReportDetailPage: React.FC = () => {
   if (!er) {
     return (
       <div className="space-y-6">
+        <Breadcrumbs />
         <Link
           to="/finance/expenses"
           className="inline-flex items-center gap-2 text-sm text-theme-text-secondary hover:text-theme-text-primary"

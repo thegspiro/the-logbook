@@ -51,6 +51,7 @@ import {
 import { useGrantsStore } from '../store/grantsStore';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
+import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { useTimezone } from '../../../hooks/useTimezone';
 
 // =============================================================================
@@ -479,6 +480,7 @@ export const GrantDetailPage: React.FC = () => {
       {/* ================================================================== */}
       <div className="border-b border-theme-surface-border bg-theme-surface">
         <div className="mx-auto max-w-7xl px-6 py-6">
+          <Breadcrumbs />
           {/* Back link */}
           <button
             type="button"

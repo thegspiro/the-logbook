@@ -178,10 +178,10 @@ export const MemberAuditHistoryPage: React.FC = () => {
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(`/members/admin/edit/${userId}`)}
             className="mt-4 text-sm text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1"
           >
-            &larr; Go back
+            &larr; Back to Member Edit
           </button>
         </div>
       </div>
