@@ -1132,7 +1132,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 select(Shift)
                 .where(Shift.organization_id == str(org.id))
                 .where(Shift.start_time.isnot(None))
-                .where(Shift.start_time > now)
+                .where(Shift.start_time >= now)
                 .where(Shift.start_time <= lookahead_end)
             )
             shifts = list(shifts_result.scalars().all())

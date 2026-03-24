@@ -1502,6 +1502,15 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(assignment)
+
+            org_id = organization_id or assignment.organization_id
+            if org_id:
+                await self._notify_shift_confirmed(
+                    assignment=assignment,
+                    organization_id=org_id,
+                )
+                await self.db.commit()
+
             return assignment, None
         except Exception as e:
             await self.db.rollback()
@@ -1819,6 +1828,262 @@ class SchedulingService:
         except Exception as e:
             logger.warning(f"Shift assignment notification failed: {e}")
 
+    async def _notify_swap_request(
+        self,
+        swap_request: ShiftSwapRequest,
+        organization_id: UUID,
+    ) -> None:
+        """Notify the target user (or shift officer) about a new swap request."""
+        from loguru import logger
+
+        try:
+            from app.core.utils import generate_uuid
+            from app.models.notification import NotificationLog
+
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            # Load requesting user name
+            req_result = await self.db.execute(
+                select(User).where(
+                    User.id == str(swap_request.requesting_user_id)
+                )
+            )
+            req_user = req_result.scalar_one_or_none()
+            req_name = "A member"
+            if req_user:
+                first = req_user.first_name or ""
+                last = req_user.last_name or ""
+                req_name = f"{first} {last}".strip() or "A member"
+
+            # Load offering shift date
+            shift_result = await self.db.execute(
+                select(Shift).where(
+                    Shift.id == str(swap_request.offering_shift_id)
+                )
+            )
+            offering_shift = shift_result.scalar_one_or_none()
+            shift_date_str = (
+                offering_shift.shift_date.isoformat()
+                if offering_shift and offering_shift.shift_date
+                else "unknown date"
+            )
+
+            recipient_ids: set[str] = set()
+
+            # Notify target user if specified
+            if swap_request.target_user_id:
+                recipient_ids.add(str(swap_request.target_user_id))
+            elif offering_shift and offering_shift.shift_officer_id:
+                # Open request — notify the shift officer
+                recipient_ids.add(str(offering_shift.shift_officer_id))
+
+            recipient_ids.discard(str(swap_request.requesting_user_id))
+            if not recipient_ids:
+                return
+
+            message = (
+                f"{req_name} has requested a shift swap "
+                f"for the {shift_date_str} shift. "
+                f"Please review and respond."
+            )
+
+            for rid in recipient_ids:
+                notif = NotificationLog(
+                    id=generate_uuid(),
+                    organization_id=str(organization_id),
+                    recipient_id=rid,
+                    channel="in_app",
+                    category="shift_swap",
+                    subject="Shift Swap Request",
+                    message=message,
+                    action_url="/scheduling",
+                    delivered=True,
+                )
+                self.db.add(notif)
+            await self.db.flush()
+
+        except Exception as e:
+            logger.warning(f"Swap request notification failed: {e}")
+
+    async def _notify_swap_reviewed(
+        self,
+        swap_request: ShiftSwapRequest,
+        organization_id: UUID,
+        status: SwapRequestStatus,
+    ) -> None:
+        """Notify the requesting user about swap approval/denial."""
+        from loguru import logger
+
+        try:
+            from app.core.utils import generate_uuid
+            from app.models.notification import NotificationLog
+
+            status_label = (
+                "approved" if status == SwapRequestStatus.APPROVED
+                else "denied"
+            )
+
+            shift_result = await self.db.execute(
+                select(Shift).where(
+                    Shift.id == str(swap_request.offering_shift_id)
+                )
+            )
+            offering_shift = shift_result.scalar_one_or_none()
+            shift_date_str = (
+                offering_shift.shift_date.isoformat()
+                if offering_shift and offering_shift.shift_date
+                else "unknown date"
+            )
+
+            message = (
+                f"Your shift swap request for the {shift_date_str} "
+                f"shift has been {status_label}."
+            )
+
+            notif = NotificationLog(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                recipient_id=str(swap_request.requesting_user_id),
+                channel="in_app",
+                category="shift_swap",
+                subject=f"Swap Request {status_label.title()}",
+                message=message,
+                action_url="/scheduling",
+                delivered=True,
+            )
+            self.db.add(notif)
+            await self.db.flush()
+
+        except Exception as e:
+            logger.warning(f"Swap review notification failed: {e}")
+
+    async def _notify_shift_confirmed(
+        self,
+        assignment: ShiftAssignment,
+        organization_id: UUID,
+    ) -> None:
+        """Notify the shift officer when a member confirms their assignment."""
+        from loguru import logger
+
+        try:
+            from app.core.utils import generate_uuid
+            from app.models.notification import NotificationLog
+
+            shift_result = await self.db.execute(
+                select(Shift).where(
+                    Shift.id == str(assignment.shift_id)
+                )
+            )
+            shift = shift_result.scalar_one_or_none()
+            if not shift or not shift.shift_officer_id:
+                return
+
+            # Don't notify the officer about their own confirmation
+            if str(shift.shift_officer_id) == str(assignment.user_id):
+                return
+
+            user_result = await self.db.execute(
+                select(User).where(User.id == str(assignment.user_id))
+            )
+            user = user_result.scalar_one_or_none()
+            user_name = "A member"
+            if user:
+                first = user.first_name or ""
+                last = user.last_name or ""
+                user_name = f"{first} {last}".strip() or "A member"
+
+            shift_date_str = (
+                shift.shift_date.isoformat()
+                if shift.shift_date
+                else "unknown date"
+            )
+            position_label = str(assignment.position or "")
+
+            message = (
+                f"{user_name} has confirmed the "
+                f"{position_label} position "
+                f"on the {shift_date_str} shift."
+            )
+
+            notif = NotificationLog(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                recipient_id=str(shift.shift_officer_id),
+                channel="in_app",
+                category="shift_confirmation",
+                subject="Shift Assignment Confirmed",
+                message=message,
+                action_url="/scheduling",
+                delivered=True,
+            )
+            self.db.add(notif)
+            await self.db.flush()
+
+        except Exception as e:
+            logger.warning(f"Shift confirmation notification failed: {e}")
+
+    async def _notify_time_off_reviewed(
+        self,
+        time_off: ShiftTimeOff,
+        organization_id: UUID,
+        status: TimeOffStatus,
+    ) -> None:
+        """Notify the member about their time-off request decision."""
+        from loguru import logger
+
+        try:
+            from app.core.utils import generate_uuid
+            from app.models.notification import NotificationLog
+
+            if not time_off.user_id:
+                return
+
+            status_label = (
+                "approved" if status == TimeOffStatus.APPROVED
+                else "denied"
+            )
+
+            start_str = (
+                time_off.start_date.isoformat()
+                if time_off.start_date
+                else "unknown"
+            )
+            end_str = (
+                time_off.end_date.isoformat()
+                if time_off.end_date
+                else "unknown"
+            )
+
+            message = (
+                f"Your time-off request for "
+                f"{start_str} to {end_str} "
+                f"has been {status_label}."
+            )
+
+            notif = NotificationLog(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                recipient_id=str(time_off.user_id),
+                channel="in_app",
+                category="time_off",
+                subject=f"Time-Off Request {status_label.title()}",
+                message=message,
+                action_url="/scheduling",
+                delivered=True,
+            )
+            self.db.add(notif)
+            await self.db.flush()
+
+        except Exception as e:
+            logger.warning(f"Time-off review notification failed: {e}")
+
     # ============================================
     # Shift Swap Request Management
     # ============================================
@@ -1836,6 +2101,13 @@ class SchedulingService:
             self.db.add(swap_request)
             await self.db.commit()
             await self.db.refresh(swap_request)
+
+            await self._notify_swap_request(
+                swap_request=swap_request,
+                organization_id=organization_id,
+            )
+            await self.db.commit()
+
             return swap_request, None
         except Exception as e:
             await self.db.rollback()
@@ -1947,6 +2219,14 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(swap_request)
+
+            await self._notify_swap_reviewed(
+                swap_request=swap_request,
+                organization_id=organization_id,
+                status=status,
+            )
+            await self.db.commit()
+
             return swap_request, None
         except Exception as e:
             await self.db.rollback()
@@ -2084,6 +2364,14 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(time_off)
+
+            await self._notify_time_off_reviewed(
+                time_off=time_off,
+                organization_id=organization_id,
+                status=status,
+            )
+            await self.db.commit()
+
             return time_off, None
         except Exception as e:
             await self.db.rollback()
