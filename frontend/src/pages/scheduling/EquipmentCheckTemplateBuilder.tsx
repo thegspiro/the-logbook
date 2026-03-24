@@ -2404,29 +2404,60 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* Preview Modal */}
+      {/* Preview Modal — mobile device frame */}
       {showPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="relative mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-theme-surface shadow-xl">
-            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
-              <h2 className="text-lg font-semibold text-theme-text-primary">Check Preview</h2>
-              <button
-                type="button"
-                onClick={() => setShowPreview(false)}
-                className="rounded-lg p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
-                <p className="text-xs text-blue-700 dark:text-blue-400">
-                  This is a preview of how the check will appear to members during their shift.
-                  Inputs are interactive for demonstration but nothing will be submitted.
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative flex flex-col items-center gap-3">
+            {/* Close button outside the phone frame */}
+            <button
+              type="button"
+              onClick={() => setShowPreview(false)}
+              className="absolute -top-2 -right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-theme-surface text-theme-text-muted shadow-lg hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              aria-label="Close preview"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Phone frame */}
+            <div className="relative w-[375px] max-w-[90vw] rounded-[2.5rem] border-[6px] border-gray-800 dark:border-gray-600 bg-theme-surface shadow-2xl overflow-hidden">
+              {/* Phone notch */}
+              <div className="relative h-7 bg-gray-800 dark:bg-gray-600 flex items-end justify-center">
+                <div className="w-28 h-5 rounded-b-2xl bg-gray-800 dark:bg-gray-600" />
               </div>
-              <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+
+              {/* Phone status bar */}
+              <div className="flex items-center justify-between px-6 py-1 bg-theme-surface text-[10px] text-theme-text-muted">
+                <span>9:41</span>
+                <div className="flex items-center gap-1">
+                  <span>5G</span>
+                  <div className="w-6 h-2.5 rounded-sm border border-theme-text-muted relative">
+                    <div className="absolute inset-0.5 bg-theme-text-muted rounded-[1px]" style={{ width: '75%' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable content area */}
+              <div className="overflow-y-auto bg-theme-surface" style={{ height: 'min(70vh, 640px)' }}>
+                <div className="px-1 pb-4">
+                  <div className="mb-3 mx-3 mt-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                    <p className="text-[10px] text-blue-700 dark:text-blue-400">
+                      Preview — inputs are interactive but nothing will be submitted.
+                    </p>
+                  </div>
+                  <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+                </div>
+              </div>
+
+              {/* Phone home indicator bar */}
+              <div className="flex justify-center py-2 bg-theme-surface">
+                <div className="w-32 h-1 rounded-full bg-gray-800/30 dark:bg-gray-400/30" />
+              </div>
             </div>
+
+            {/* Label */}
+            <p className="text-xs text-gray-400 text-center">
+              Mobile preview — most members will complete checks on their phone
+            </p>
           </div>
         </div>
       )}

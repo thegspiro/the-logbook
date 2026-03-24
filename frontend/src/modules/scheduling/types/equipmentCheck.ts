@@ -298,6 +298,15 @@ export interface CheckItemHistory {
   checkedAt?: string;
 }
 
+export interface LastCheckItemResult {
+  status: string;
+  quantity_found?: number;
+  level_reading?: number;
+  serial_number?: string;
+  lot_number?: string;
+  notes?: string;
+}
+
 // ─── Report Types ────────────────────────────────────────────────────────────
 
 export interface ApparatusComplianceRecord {

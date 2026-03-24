@@ -41,6 +41,7 @@ import type {
   CheckItemResultSubmit,
   ShiftEquipmentCheckCreate,
   CheckType,
+  LastCheckItemResult,
 } from '../../modules/scheduling/types/equipmentCheck';
 import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
 
@@ -155,6 +156,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
   const [submitting, setSubmitting] = useState(false);
   const [overallNotes, setOverallNotes] = useState('');
+  const [lastCheckData, setLastCheckData] = useState<Record<string, LastCheckItemResult> | null>(null);
   const photoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const compartments = template.compartments;
@@ -309,6 +311,62 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       // Storage full — ignore
     }
   }, [results, overallNotes, draftKey, previewMode]);
+
+  // --------------------------------------------------------------------------
+  // Pre-populate from last check for this apparatus
+  // --------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (previewMode) return;
+    let cancelled = false;
+    schedulingService
+      .getLastCheckResults(template.id, template.apparatusId)
+      .then((data) => {
+        if (cancelled) return;
+        setLastCheckData(data);
+        // Only pre-populate if the user hasn't started filling in yet (no draft)
+        if (Object.keys(results).length > 0) return;
+        const seed: Record<string, ItemResult> = {};
+        for (const comp of compartments) {
+          for (const item of comp.items) {
+            const prev = data[item.id];
+            if (!prev) continue;
+            if (item.checkType === 'quantity' && prev.quantity_found != null) {
+              const required = item.requiredQuantity ?? item.expectedQuantity;
+              seed[item.id] = {
+                status:
+                  required != null
+                    ? prev.quantity_found >= required
+                      ? 'pass'
+                      : 'fail'
+                    : 'pass',
+                quantityFound: prev.quantity_found,
+              };
+            } else if (
+              (item.checkType === 'level' || item.checkType === 'reading') &&
+              prev.level_reading != null
+            ) {
+              const belowMin =
+                item.checkType === 'level' &&
+                item.minLevel != null &&
+                prev.level_reading < item.minLevel;
+              seed[item.id] = {
+                status: belowMin ? 'fail' : 'pass',
+                levelReading: prev.level_reading,
+              };
+            }
+          }
+        }
+        if (Object.keys(seed).length > 0) {
+          setResults(seed);
+        }
+      })
+      .catch(() => {
+        // Non-critical — form works fine without previous data
+      });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template.id, template.apparatusId, previewMode]);
 
   // --------------------------------------------------------------------------
   // Unsaved changes warning
@@ -607,6 +665,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const currentQty = result?.quantityFound ?? 0;
         const isAtPar = required != null && currentQty >= required;
         const hasBeenSet = result?.quantityFound != null;
+        const prevQty = lastCheckData?.[item.id]?.quantity_found;
 
         const setQuantity = (qty: number) => {
           const clamped = Math.max(0, qty);
@@ -623,10 +682,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
         return (
           <div className="flex items-center justify-between gap-3">
-            <div className="text-xs min-w-0">
+            <div className="text-xs min-w-0 space-y-0.5">
               {required != null && (
-                <span className={hasBeenSet ? (isAtPar ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-500 font-medium') : 'text-theme-text-muted'}>
+                <span className={`block ${hasBeenSet ? (isAtPar ? 'text-green-600 dark:text-green-400 font-medium' : 'text-red-500 font-medium') : 'text-theme-text-muted'}`}>
                   {hasBeenSet ? currentQty : '—'}/{required} Each
+                </span>
+              )}
+              {prevQty != null && (
+                <span className="block text-[10px] text-theme-text-muted">
+                  Last: {prevQty}
                 </span>
               )}
             </div>
