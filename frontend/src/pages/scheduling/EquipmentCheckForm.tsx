@@ -18,7 +18,6 @@ import {
   ChevronRight,
   AlertTriangle,
   Clock,
-  Image as ImageIcon,
   MessageSquare,
   Loader2,
   ArrowLeft,
@@ -32,9 +31,20 @@ import {
   Minus,
   Plus,
   Type,
+  WifiOff,
+  RefreshCw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import {
+  enqueueCheck,
+  listPendingChecks,
+  dequeueCheck,
+  markRetry,
+  pendingCount as getPendingCount,
+  type SyncStatus,
+} from '../../utils/offlineQueue';
 import type {
   EquipmentCheckTemplate,
   CheckTemplateCompartment,
@@ -162,7 +172,86 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const [lastCheckData, setLastCheckData] = useState<Record<string, LastCheckItemResult> | null>(null);
   const photoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  const isOnline = useOnlineStatus();
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const [pendingQueueCount, setPendingQueueCount] = useState(0);
+  const syncingRef = useRef(false);
+
   const compartments = template.compartments;
+
+  // --------------------------------------------------------------------------
+  // Offline queue sync — drain pending checks when connectivity returns
+  // --------------------------------------------------------------------------
+
+  const syncPendingChecks = useCallback(async () => {
+    if (syncingRef.current || !navigator.onLine) return;
+    syncingRef.current = true;
+    setSyncStatus('syncing');
+
+    try {
+      const pending = await listPendingChecks();
+      let failed = 0;
+
+      for (const entry of pending) {
+        try {
+          const record = await schedulingService.submitEquipmentCheck(
+            entry.shiftId,
+            entry.payload,
+          );
+
+          // Upload queued photos
+          const photosByItem = new Map<string, Array<{ blob: Blob; fileName: string }>>();
+          for (const photo of entry.photos) {
+            const arr = photosByItem.get(photo.itemId) ?? [];
+            arr.push({ blob: photo.blob, fileName: photo.fileName });
+            photosByItem.set(photo.itemId, arr);
+          }
+          for (const [itemId, photos] of photosByItem) {
+            const files = photos.map(
+              (p) => new File([p.blob], p.fileName, { type: p.blob.type }),
+            );
+            try {
+              await schedulingService.uploadCheckItemPhotos(record.id, itemId, files);
+            } catch {
+              // Photo upload failure is non-fatal
+            }
+          }
+
+          await dequeueCheck(entry.id);
+        } catch {
+          failed++;
+          await markRetry(entry.id);
+        }
+      }
+
+      const remaining = await getPendingCount();
+      setPendingQueueCount(remaining);
+      setSyncStatus(failed > 0 ? 'error' : 'idle');
+
+      if (pending.length > 0 && failed === 0) {
+        toast.success(`Synced ${pending.length} queued check(s)`);
+      } else if (failed > 0) {
+        toast.error(`${failed} check(s) failed to sync — will retry`);
+      }
+    } catch {
+      setSyncStatus('error');
+    } finally {
+      syncingRef.current = false;
+    }
+  }, []);
+
+  // Auto-sync when coming online
+  useEffect(() => {
+    if (isOnline && !previewMode) {
+      void syncPendingChecks();
+    }
+  }, [isOnline, previewMode, syncPendingChecks]);
+
+  // Load pending count on mount
+  useEffect(() => {
+    if (previewMode) return;
+    void getPendingCount().then(setPendingQueueCount).catch(() => {});
+  }, [previewMode]);
 
   // --------------------------------------------------------------------------
   // Progress
@@ -523,6 +612,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         notes: overallNotes || undefined,
       };
 
+      // Offline: queue for later sync
+      if (!navigator.onLine) {
+        await enqueueCheck(shiftId, payload, itemsWithPhotos);
+        const count = await getPendingCount();
+        setPendingQueueCount(count);
+        try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+        toast.success('Check saved offline — will sync when connected');
+        onComplete?.();
+        return;
+      }
+
       const checkResult =
         await schedulingService.submitEquipmentCheck(shiftId, payload);
 
@@ -549,7 +649,52 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       toast.success('Equipment check submitted successfully');
       onComplete?.();
     } catch {
-      toast.error('Failed to submit equipment check');
+      // Network error during submit — fall back to offline queue
+      try {
+        const fallbackItems: CheckItemResultSubmit[] = [];
+        const fallbackPhotos: { itemId: string; files: File[] }[] = [];
+        for (const compartment of compartments) {
+          for (const item of compartment.items) {
+            if (item.checkType === 'header') continue;
+            const result = results[item.id];
+            if (result?.photoFiles && result.photoFiles.length > 0) {
+              fallbackPhotos.push({ itemId: item.id, files: result.photoFiles });
+            }
+            fallbackItems.push({
+              template_item_id: item.id,
+              compartment_name: compartment.name,
+              item_name: item.name,
+              check_type: item.checkType,
+              status: result?.status || 'not_checked',
+              quantity_found: result?.quantityFound,
+              required_quantity: item.requiredQuantity ?? item.expectedQuantity,
+              level_reading: result?.levelReading,
+              level_unit: item.levelUnit || undefined,
+              serial_number: result?.serialNumber || undefined,
+              lot_number: result?.lotNumber || undefined,
+              serial_found: result?.serialFound || undefined,
+              lot_found: result?.lotFound || undefined,
+              is_expired: item.hasExpiration && item.expirationDate ? new Date(item.expirationDate) < new Date() : false,
+              expiration_date: item.expirationDate || undefined,
+              notes: result?.notes || undefined,
+            });
+          }
+        }
+        const fallbackPayload: ShiftEquipmentCheckCreate = {
+          template_id: template.id,
+          check_timing: template.checkTiming,
+          items: fallbackItems,
+          notes: overallNotes || undefined,
+        };
+        await enqueueCheck(shiftId, fallbackPayload, fallbackPhotos);
+        const count = await getPendingCount();
+        setPendingQueueCount(count);
+        try { localStorage.removeItem(draftKey); } catch { /* ignore */ }
+        toast.success('Connection lost — check queued for sync');
+        onComplete?.();
+      } catch {
+        toast.error('Failed to submit equipment check');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1018,9 +1163,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <span className="text-[10px] text-theme-text-muted">
                   {CHECK_TYPE_LABELS[item.checkType] ?? item.checkType}
                 </span>
-                {item.imageUrl && (
-                  <ImageIcon className="h-3 w-3 text-theme-text-muted" />
-                )}
+              </div>
+            )}
+            {item.imageUrl && (
+              <div className="mt-2">
+                <img
+                  src={item.imageUrl}
+                  alt={`Reference: ${item.name}`}
+                  className="rounded-md border border-theme-surface-border max-h-28 w-auto object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(item.imageUrl, '_blank', 'noopener');
+                  }}
+                  loading="lazy"
+                />
               </div>
             )}
           </div>
@@ -1191,12 +1347,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {submitting ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Submitting...
+                {isOnline ? 'Submitting...' : 'Saving offline...'}
               </>
             ) : (
               <>
-                <CheckCircle className="h-4 w-4" />
-                Submit Report
+                {isOnline ? (
+                  <CheckCircle className="h-4 w-4" />
+                ) : (
+                  <WifiOff className="h-4 w-4" />
+                )}
+                {isOnline ? 'Submit Report' : 'Save Offline'}
               </>
             )}
           </button>
@@ -1399,6 +1559,39 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   return (
     <div className="mx-auto max-w-lg space-y-4 pb-12 px-3">
+      {/* Offline banner */}
+      {!isOnline && !previewMode && (
+        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-800 dark:text-yellow-300">
+          <WifiOff className="h-4 w-4 flex-shrink-0" />
+          <span className="flex-1">You&apos;re offline. Checks will be saved locally and synced when connected.</span>
+        </div>
+      )}
+
+      {/* Pending sync indicator */}
+      {pendingQueueCount > 0 && !previewMode && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-800 dark:text-blue-300">
+          <span className="flex items-center gap-2">
+            {syncStatus === 'syncing' ? (
+              <RefreshCw className="h-4 w-4 animate-spin flex-shrink-0" />
+            ) : (
+              <Clock className="h-4 w-4 flex-shrink-0" />
+            )}
+            {syncStatus === 'syncing'
+              ? 'Syncing queued checks…'
+              : `${pendingQueueCount} check(s) waiting to sync`}
+          </span>
+          {isOnline && syncStatus !== 'syncing' && (
+            <button
+              type="button"
+              onClick={() => void syncPendingChecks()}
+              className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              Sync now
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Header */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
