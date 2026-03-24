@@ -38,6 +38,8 @@ import {
   Download,
   Upload,
   ArrowRightLeft,
+  List,
+  Package,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -548,6 +550,107 @@ const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
   },
 };
 
+// Pre-built equipment kit presets for quick-adding groups of related items
+interface EquipmentPreset {
+  label: string;
+  items: { name: string; checkType: CheckType }[];
+}
+
+const EQUIPMENT_PRESETS: Record<string, EquipmentPreset> = {
+  scba: {
+    label: 'SCBA Kit',
+    items: [
+      { name: 'SCBA pack & harness', checkType: 'functional' },
+      { name: 'SCBA mask (face piece)', checkType: 'present' },
+      { name: 'SCBA cylinder pressure', checkType: 'level' },
+      { name: 'SCBA regulator', checkType: 'functional' },
+      { name: 'PASS device activates', checkType: 'functional' },
+      { name: 'Spare SCBA cylinder', checkType: 'present' },
+    ],
+  },
+  aed: {
+    label: 'AED / Defibrillator',
+    items: [
+      { name: 'AED unit powers on', checkType: 'functional' },
+      { name: 'AED pads (adult)', checkType: 'date_lot' },
+      { name: 'AED pads (pediatric)', checkType: 'date_lot' },
+      { name: 'AED battery level', checkType: 'level' },
+    ],
+  },
+  vitals: {
+    label: 'Basic Vitals Set',
+    items: [
+      { name: 'Blood pressure cuff (adult)', checkType: 'present' },
+      { name: 'Blood pressure cuff (pediatric)', checkType: 'present' },
+      { name: 'Stethoscope', checkType: 'present' },
+      { name: 'Pulse oximeter', checkType: 'functional' },
+      { name: 'Glucometer & test strips', checkType: 'date_lot' },
+      { name: 'Thermometer', checkType: 'functional' },
+    ],
+  },
+  airway: {
+    label: 'Airway Management',
+    items: [
+      { name: 'BVM (adult)', checkType: 'present' },
+      { name: 'BVM (pediatric)', checkType: 'present' },
+      { name: 'OPA set', checkType: 'present' },
+      { name: 'NPA set', checkType: 'present' },
+      { name: 'Suction unit', checkType: 'functional' },
+      { name: 'Oxygen regulator', checkType: 'functional' },
+      { name: 'Oxygen cylinder pressure', checkType: 'level' },
+      { name: 'Non-rebreather masks', checkType: 'quantity' },
+      { name: 'Nasal cannulas', checkType: 'quantity' },
+    ],
+  },
+  ppe: {
+    label: 'PPE / Turnout Gear',
+    items: [
+      { name: 'Helmet & face shield', checkType: 'pass_fail' },
+      { name: 'Turnout coat', checkType: 'pass_fail' },
+      { name: 'Turnout pants', checkType: 'pass_fail' },
+      { name: 'Boots', checkType: 'pass_fail' },
+      { name: 'Gloves (structural)', checkType: 'pass_fail' },
+      { name: 'Hood / balaclava', checkType: 'pass_fail' },
+    ],
+  },
+  hose: {
+    label: 'Hose & Nozzles',
+    items: [
+      { name: 'Attack line (1.75")', checkType: 'pass_fail' },
+      { name: 'Supply line (5")', checkType: 'pass_fail' },
+      { name: 'Backup line (2.5")', checkType: 'pass_fail' },
+      { name: 'Nozzle (combination)', checkType: 'functional' },
+      { name: 'Nozzle (smooth bore)', checkType: 'present' },
+      { name: 'Wye / gated valve', checkType: 'present' },
+      { name: 'Spanner wrenches', checkType: 'present' },
+    ],
+  },
+  firstaid: {
+    label: 'First Aid / Trauma',
+    items: [
+      { name: 'Trauma shears', checkType: 'present' },
+      { name: 'Tourniquets', checkType: 'quantity' },
+      { name: 'Hemostatic gauze', checkType: 'date_lot' },
+      { name: 'Chest seals', checkType: 'date_lot' },
+      { name: 'Gauze / bandages', checkType: 'quantity' },
+      { name: 'Splint set', checkType: 'present' },
+      { name: 'Cervical collars', checkType: 'quantity' },
+      { name: 'Backboard & straps', checkType: 'present' },
+    ],
+  },
+  lighting: {
+    label: 'Lighting & Electrical',
+    items: [
+      { name: 'Scene lights', checkType: 'functional' },
+      { name: 'Portable spotlight', checkType: 'functional' },
+      { name: 'Flashlights', checkType: 'quantity' },
+      { name: 'Light tower', checkType: 'functional' },
+      { name: 'Extension cords', checkType: 'present' },
+      { name: 'Power strip / adapter', checkType: 'present' },
+    ],
+  },
+};
+
 const inputClass = 'form-input';
 
 const selectClass = 'form-input';
@@ -963,47 +1066,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Item helpers
   // ---------------------------------------------------------------------------
 
-  const addItem = async (compartmentIdx: number) => {
-    const comp = compartments[compartmentIdx];
-    if (!comp) return;
-
-    if (comp.id) {
-      try {
-        const payload: CheckTemplateItemCreate = {
-          name: 'New Item',
-          sort_order: comp.items.length,
-        };
-        const created = await schedulingService.addCheckItem(comp.id, payload);
-        const item: ItemFormState = {
-          id: created.id,
-          name: created.name,
-          description: created.description ?? '',
-          checkType: created.checkType,
-          isRequired: created.isRequired,
-          requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
-          expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
-          minLevel: created.minLevel != null ? String(created.minLevel) : '',
-          levelUnit: created.levelUnit ?? '',
-          serialNumber: created.serialNumber ?? '',
-          lotNumber: created.lotNumber ?? '',
-          hasExpiration: created.hasExpiration,
-          expirationDate: created.expirationDate ?? '',
-          expirationWarningDays: String(created.expirationWarningDays ?? 30),
-          imageUrl: created.imageUrl ?? '',
-        };
-        updateCompartmentField(compartmentIdx, { items: [...comp.items, item] });
-        toast.success('Item added');
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to add item'));
-      }
-    } else {
-      // Unsaved compartment — add locally
-      updateCompartmentField(compartmentIdx, {
-        items: [...comp.items, emptyItem()],
-      });
-    }
-  };
-
   const addHeader = async (compartmentIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
@@ -1278,6 +1340,270 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     updateCompartmentField(compartmentIdx, { items: remaining });
     setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
     toast.success(`Deleted ${count} item${count !== 1 ? 's' : ''}`);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Quick-add: type a name + Enter to instantly add an item
+  // ---------------------------------------------------------------------------
+
+  const [quickAddValues, setQuickAddValues] = useState<Record<string, string>>({});
+  const [bulkPasteMode, setBulkPasteMode] = useState<Record<string, boolean>>({});
+  const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
+  const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
+
+  const handleQuickAdd = async (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const name = (quickAddValues[key] ?? '').trim();
+    if (!name) return;
+
+    if (comp.id) {
+      try {
+        const payload: CheckTemplateItemCreate = {
+          name,
+          sort_order: comp.items.length,
+        };
+        const created = await schedulingService.addCheckItem(comp.id, payload);
+        const item: ItemFormState = {
+          id: created.id,
+          name: created.name,
+          description: created.description ?? '',
+          checkType: created.checkType,
+          isRequired: created.isRequired,
+          requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+          expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+          minLevel: created.minLevel != null ? String(created.minLevel) : '',
+          levelUnit: created.levelUnit ?? '',
+          serialNumber: created.serialNumber ?? '',
+          lotNumber: created.lotNumber ?? '',
+          hasExpiration: created.hasExpiration,
+          expirationDate: created.expirationDate ?? '',
+          expirationWarningDays: String(created.expirationWarningDays ?? 30),
+          imageUrl: created.imageUrl ?? '',
+        };
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, item] });
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add item'));
+        return;
+      }
+    } else {
+      updateCompartmentField(compartmentIdx, {
+        items: [...comp.items, { ...emptyItem(), name }],
+      });
+    }
+    setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
+  };
+
+  const handleBulkPaste = async (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const text = (bulkPasteValues[key] ?? '').trim();
+    if (!text) return;
+
+    const names = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (names.length === 0) return;
+
+    if (comp.id) {
+      try {
+        const newItems: ItemFormState[] = [];
+        for (let i = 0; i < names.length; i++) {
+          const itemName = names[i];
+          if (!itemName) continue;
+          const payload: CheckTemplateItemCreate = {
+            name: itemName,
+            sort_order: comp.items.length + i,
+          };
+          const created = await schedulingService.addCheckItem(comp.id, payload);
+          newItems.push({
+            id: created.id,
+            name: created.name,
+            description: created.description ?? '',
+            checkType: created.checkType,
+            isRequired: created.isRequired,
+            requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+            expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+            minLevel: created.minLevel != null ? String(created.minLevel) : '',
+            levelUnit: created.levelUnit ?? '',
+            serialNumber: created.serialNumber ?? '',
+            lotNumber: created.lotNumber ?? '',
+            hasExpiration: created.hasExpiration,
+            expirationDate: created.expirationDate ?? '',
+            expirationWarningDays: String(created.expirationWarningDays ?? 30),
+            imageUrl: created.imageUrl ?? '',
+          });
+        }
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add items'));
+        return;
+      }
+    } else {
+      const newItems = names.map((n) => ({ ...emptyItem(), name: n }));
+      updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+    }
+
+    setBulkPasteValues((prev) => ({ ...prev, [key]: '' }));
+    setBulkPasteMode((prev) => ({ ...prev, [key]: false }));
+    toast.success(`Added ${names.length} item${names.length !== 1 ? 's' : ''}`);
+  };
+
+  const addEquipmentPreset = async (compartmentIdx: number, presetKey: string) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const preset = EQUIPMENT_PRESETS[presetKey];
+    if (!preset) return;
+
+    const key = getCompKey(compartmentIdx);
+
+    if (comp.id) {
+      try {
+        const newItems: ItemFormState[] = [];
+        // Add a header for the preset group
+        const headerPayload: CheckTemplateItemCreate = {
+          name: preset.label,
+          sort_order: comp.items.length,
+          check_type: 'header',
+          is_required: false,
+        };
+        const headerCreated = await schedulingService.addCheckItem(comp.id, headerPayload);
+        newItems.push({
+          id: headerCreated.id,
+          name: headerCreated.name,
+          description: '',
+          checkType: 'header',
+          isRequired: false,
+          requiredQuantity: '',
+          expectedQuantity: '',
+          minLevel: '',
+          levelUnit: '',
+          serialNumber: '',
+          lotNumber: '',
+          hasExpiration: false,
+          expirationDate: '',
+          expirationWarningDays: '30',
+          imageUrl: '',
+        });
+
+        for (let i = 0; i < preset.items.length; i++) {
+          const presetItem = preset.items[i];
+          if (!presetItem) continue;
+          const payload: CheckTemplateItemCreate = {
+            name: presetItem.name,
+            sort_order: comp.items.length + 1 + i,
+            check_type: presetItem.checkType,
+          };
+          const created = await schedulingService.addCheckItem(comp.id, payload);
+          newItems.push({
+            id: created.id,
+            name: created.name,
+            description: created.description ?? '',
+            checkType: created.checkType,
+            isRequired: created.isRequired,
+            requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+            expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+            minLevel: created.minLevel != null ? String(created.minLevel) : '',
+            levelUnit: created.levelUnit ?? '',
+            serialNumber: created.serialNumber ?? '',
+            lotNumber: created.lotNumber ?? '',
+            hasExpiration: created.hasExpiration,
+            expirationDate: created.expirationDate ?? '',
+            expirationWarningDays: String(created.expirationWarningDays ?? 30),
+            imageUrl: created.imageUrl ?? '',
+          });
+        }
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add preset items'));
+        return;
+      }
+    } else {
+      const headerItem: ItemFormState = {
+        ...emptyItem(),
+        name: preset.label,
+        checkType: 'header',
+        isRequired: false,
+      };
+      const newItems = preset.items.map((pi) => ({
+        ...emptyItem(),
+        name: pi.name,
+        checkType: pi.checkType,
+      }));
+      updateCompartmentField(compartmentIdx, {
+        items: [...comp.items, headerItem, ...newItems],
+      });
+    }
+
+    setShowEquipmentPresets((prev) => ({ ...prev, [key]: false }));
+    toast.success(`Added ${preset.label} (${preset.items.length} items)`);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Bulk edit: change check type or toggle required for selected items
+  // ---------------------------------------------------------------------------
+
+  const bulkSetCheckType = (compartmentIdx: number, checkType: CheckType) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const selected = selectedItems[key];
+    if (!selected || selected.size === 0) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const c = next[compartmentIdx];
+      if (!c) return prev;
+      const items = c.items.map((item, i) => {
+        if (!selected.has(i)) return item;
+        return { ...item, checkType };
+      });
+      next[compartmentIdx] = { ...c, items };
+      return next;
+    });
+
+    // Auto-save persisted items
+    if (isEditing) {
+      for (const itemIdx of selected) {
+        const item = comp.items[itemIdx];
+        if (item?.id) {
+          scheduleAutoSaveItem(item.id, { check_type: checkType });
+        }
+      }
+    }
+    markDirty();
+    toast.success(`Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${CHECK_TYPES.find((ct) => ct.value === checkType)?.label ?? checkType}`);
+  };
+
+  const bulkToggleRequired = (compartmentIdx: number, required: boolean) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const selected = selectedItems[key];
+    if (!selected || selected.size === 0) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const c = next[compartmentIdx];
+      if (!c) return prev;
+      const items = c.items.map((item, i) => {
+        if (!selected.has(i)) return item;
+        return { ...item, isRequired: required };
+      });
+      next[compartmentIdx] = { ...c, items };
+      return next;
+    });
+
+    if (isEditing) {
+      for (const itemIdx of selected) {
+        const item = comp.items[itemIdx];
+        if (item?.id) {
+          scheduleAutoSaveItem(item.id, { is_required: required });
+        }
+      }
+    }
+    markDirty();
+    toast.success(`Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${required ? 'required' : 'optional'}`);
   };
 
   // ---------------------------------------------------------------------------
@@ -2495,15 +2821,49 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <h4 className="text-sm font-semibold text-theme-text-primary">Check Items</h4>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {/* Bulk selection controls */}
                   {comp.items.length > 0 && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       {getSelectedCount(idx) > 0 ? (
                         <>
                           <span className="text-xs text-blue-600 dark:text-blue-400 font-medium mr-1">
                             {getSelectedCount(idx)} selected
                           </span>
+                          {/* Bulk edit: set check type */}
+                          <select
+                            className="rounded-md border border-blue-300 dark:border-blue-700 bg-theme-surface px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400"
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                bulkSetCheckType(idx, e.target.value as CheckType);
+                              }
+                            }}
+                          >
+                            <option value="" disabled>Set type...</option>
+                            {CHECK_TYPES.map((ct) => (
+                              <option key={ct.value} value={ct.value}>{ct.label}</option>
+                            ))}
+                          </select>
+                          {/* Bulk edit: toggle required */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const compKey = getCompKey(idx);
+                              const selected = selectedItems[compKey];
+                              const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
+                              bulkToggleRequired(idx, !allRequired);
+                            }}
+                            className="flex items-center gap-1 rounded-md border border-blue-300 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                            title="Toggle required status for selected items"
+                          >
+                            {(() => {
+                              const compKey = getCompKey(idx);
+                              const selected = selectedItems[compKey];
+                              const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
+                              return allRequired ? 'Set Optional' : 'Set Required';
+                            })()}
+                          </button>
                           <button
                             type="button"
                             onClick={() => void deleteSelectedItems(idx)}
@@ -2536,11 +2896,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   )}
                   <button
                     type="button"
-                    onClick={() => void addItem(idx)}
-                    className="flex items-center gap-1 rounded-md border border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:border-blue-500 hover:text-blue-600 transition-colors"
+                    onClick={() => {
+                      const compKey = getCompKey(idx);
+                      setShowEquipmentPresets((prev) => ({ ...prev, [compKey]: !prev[compKey] }));
+                    }}
+                    className="flex items-center gap-1 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors"
+                    title="Add a pre-built equipment kit"
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Item
+                    <Package className="h-3.5 w-3.5" />
+                    Add Kit
                   </button>
                   <button
                     type="button"
@@ -2548,14 +2912,45 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     className="flex items-center gap-1 rounded-md border border-dashed border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-muted hover:border-purple-500 hover:text-purple-600 transition-colors"
                   >
                     <Type className="h-3.5 w-3.5" />
-                    Add Header
+                    Header
                   </button>
                 </div>
               </div>
 
+              {/* Equipment Preset Picker */}
+              {(showEquipmentPresets[getCompKey(idx)] ?? false) && (
+                <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-theme-text-primary">Add equipment kit:</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowEquipmentPresets((prev) => ({ ...prev, [getCompKey(idx)]: false }))}
+                      className="p-0.5 text-theme-text-muted hover:text-theme-text-primary"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                    {Object.entries(EQUIPMENT_PRESETS).map(([presetKey, preset]) => (
+                      <button
+                        key={presetKey}
+                        type="button"
+                        onClick={() => void addEquipmentPreset(idx, presetKey)}
+                        className="rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary hover:border-green-500/40 hover:bg-green-500/10 transition-colors text-left"
+                      >
+                        <span className="font-medium">{preset.label}</span>
+                        <span className="block text-[10px] text-theme-text-muted">
+                          {preset.items.length} items
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {comp.items.length === 0 && (
                 <p className="text-sm text-theme-text-muted italic py-2">
-                  No items yet. Click &ldquo;Add Item&rdquo; to start building this compartment&apos;s checklist.
+                  No items yet. Type a name below and press Enter, or use &ldquo;Add Kit&rdquo; for pre-built groups.
                 </p>
               )}
 
@@ -2582,6 +2977,88 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   ))}
                 </SortableContext>
               </DndContext>
+
+              {/* Quick-add bar */}
+              {(() => {
+                const compKey = getCompKey(idx);
+                const isBulkPaste = bulkPasteMode[compKey] ?? false;
+
+                return (
+                  <div className="mt-2 rounded-md border border-dashed border-theme-surface-border bg-theme-surface-secondary/30 p-2">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] font-medium text-theme-text-muted uppercase tracking-wide">
+                        {isBulkPaste ? 'Bulk Add' : 'Quick Add'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setBulkPasteMode((prev) => ({ ...prev, [compKey]: !isBulkPaste }))}
+                        className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+                          isBulkPaste
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                            : 'text-theme-text-muted hover:text-theme-text-secondary'
+                        }`}
+                        title={isBulkPaste ? 'Switch to single add' : 'Switch to bulk paste (one item per line)'}
+                      >
+                        <List className="h-3 w-3" />
+                        {isBulkPaste ? 'Single' : 'Bulk'}
+                      </button>
+                    </div>
+                    {isBulkPaste ? (
+                      <div className="space-y-1.5">
+                        <textarea
+                          className="form-input text-sm"
+                          rows={4}
+                          placeholder="Paste item names here, one per line&#10;e.g.&#10;Flashlight&#10;Radio&#10;First aid kit"
+                          value={bulkPasteValues[compKey] ?? ''}
+                          onChange={(e) => setBulkPasteValues((prev) => ({ ...prev, [compKey]: e.target.value }))}
+                        />
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-theme-text-muted">
+                            {(() => {
+                              const lines = (bulkPasteValues[compKey] ?? '').split('\n').filter((l) => l.trim()).length;
+                              return lines > 0 ? `${lines} item${lines !== 1 ? 's' : ''} to add` : 'Paste a list';
+                            })()}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleBulkPaste(idx)}
+                            disabled={(bulkPasteValues[compKey] ?? '').trim().length === 0}
+                            className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add All
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          className="form-input text-sm flex-1"
+                          placeholder="Type item name and press Enter..."
+                          value={quickAddValues[compKey] ?? ''}
+                          onChange={(e) => setQuickAddValues((prev) => ({ ...prev, [compKey]: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void handleQuickAdd(idx);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleQuickAdd(idx)}
+                          disabled={!(quickAddValues[compKey] ?? '').trim()}
+                          className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40 transition-colors flex-shrink-0"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
