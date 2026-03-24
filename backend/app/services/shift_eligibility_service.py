@@ -3,11 +3,11 @@ Shift Position Eligibility Service
 
 Determines which shift positions a member is eligible to sign up for
 based on their rank, completed training programs, org-wide open
-positions, and membership type.
+positions, membership type, and EVOC certification levels.
 """
 
 import copy
-from typing import List, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +20,7 @@ from app.models.training import (
     TrainingProgram,
 )
 from app.models.user import Organization, User
+from app.services.evoc_level_service import EvocLevelService
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -231,3 +232,46 @@ class ShiftEligibilityService:
         await self.db.refresh(org)
 
         return (org.settings or {}).get("scheduling", {})
+
+    # ------------------------------------------------------------------
+    # EVOC-aware driver eligibility (soft warnings)
+    # ------------------------------------------------------------------
+
+    async def get_driver_assignment_warnings(
+        self,
+        user_id: str,
+        shift_id: str,
+        organization_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Check EVOC eligibility for a driver assignment on a shift.
+
+        If the shift has an apparatus_id and the user is being assigned
+        as a driver, checks whether the user holds the required EVOC
+        level. Returns a list of warning dicts (empty if no issues).
+
+        This is a soft check — warnings do not block assignment.
+        """
+        shift = await self._get_shift(shift_id, organization_id)
+        if not shift:
+            return []
+
+        apparatus_id = getattr(shift, "apparatus_id", None)
+        if not apparatus_id:
+            return []
+
+        evoc_service = EvocLevelService(self.db)
+        result = await evoc_service.check_driver_evoc_eligibility(
+            user_id=user_id,
+            apparatus_id=apparatus_id,
+            organization_id=organization_id,
+        )
+
+        warnings: List[Dict[str, Any]] = []
+        if not result["eligible"] and result["warning"]:
+            warnings.append({
+                "type": "evoc_mismatch",
+                "message": result["warning"],
+                "severity": "warning",
+            })
+
+        return warnings

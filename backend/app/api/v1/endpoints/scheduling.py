@@ -797,7 +797,12 @@ async def create_assignment(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.assign")),
 ):
-    """Create a shift assignment"""
+    """Create a shift assignment.
+
+    When assigning a driver position, EVOC eligibility is checked and
+    any warnings are returned in the ``evoc_warnings`` field. These are
+    soft warnings — they do not block the assignment.
+    """
     service = SchedulingService(db)
     assignment_data = assignment.model_dump(exclude_none=True)
     result, error = await service.create_assignment(
@@ -808,7 +813,22 @@ async def create_assignment(
             status_code=400, detail=_safe_detail("Unable to create assignment.", error)
         )
     enriched = await service.enrich_assignments([result])
-    return enriched[0]
+    response = enriched[0]
+
+    # Soft EVOC warning for driver assignments
+    position = assignment_data.get("position", "")
+    if position == "driver":
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+        eligibility_svc = ShiftEligibilityService(db)
+        evoc_warnings = await eligibility_svc.get_driver_assignment_warnings(
+            user_id=str(assignment_data.get("user_id", "")),
+            shift_id=str(shift_id),
+            organization_id=str(current_user.organization_id),
+        )
+        if evoc_warnings:
+            response["evoc_warnings"] = evoc_warnings
+
+    return response
 
 
 @router.patch("/assignments/{assignment_id}", response_model=ShiftAssignmentResponse)

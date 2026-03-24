@@ -38,6 +38,10 @@ import type {
   ApparatusEquipmentUpdate,
   ApparatusPhoto,
   ApparatusDocument,
+  EvocLevel,
+  EvocLevelCreate,
+  EvocLevelUpdate,
+  EvocEligibilityCheck,
 } from '../types';
 
 const api = createApiClient();
@@ -438,6 +442,47 @@ export const apparatusDocumentService = {
   },
 };
 
+// =============================================================================
+// EVOC Levels
+// =============================================================================
+
+export const evocLevelService = {
+  async getLevels(params?: { activeOnly?: boolean }): Promise<EvocLevel[]> {
+    const response = await api.get<EvocLevel[]>('/apparatus/evoc-levels', {
+      params: {
+        active_only: params?.activeOnly ?? true,
+      },
+    });
+    return response.data;
+  },
+
+  async getLevel(levelId: string): Promise<EvocLevel> {
+    const response = await api.get<EvocLevel>(`/apparatus/evoc-levels/${levelId}`);
+    return response.data;
+  },
+
+  async createLevel(data: EvocLevelCreate): Promise<EvocLevel> {
+    const response = await api.post<EvocLevel>('/apparatus/evoc-levels', data);
+    return response.data;
+  },
+
+  async updateLevel(levelId: string, data: EvocLevelUpdate): Promise<EvocLevel> {
+    const response = await api.patch<EvocLevel>(`/apparatus/evoc-levels/${levelId}`, data);
+    return response.data;
+  },
+
+  async deleteLevel(levelId: string): Promise<void> {
+    await api.delete(`/apparatus/evoc-levels/${levelId}`);
+  },
+
+  async checkEligibility(apparatusId: string, userId: string): Promise<EvocEligibilityCheck> {
+    const response = await api.get<EvocEligibilityCheck>(
+      `/apparatus/evoc-check/${apparatusId}/${userId}`
+    );
+    return response.data;
+  },
+};
+
 // Export all services
 export default {
   types: apparatusTypeService,
@@ -451,4 +496,5 @@ export default {
   equipment: apparatusEquipmentService,
   photos: apparatusPhotoService,
   documents: apparatusDocumentService,
+  evocLevels: evocLevelService,
 };

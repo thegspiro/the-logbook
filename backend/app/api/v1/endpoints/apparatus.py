@@ -14,7 +14,7 @@ from app.api.dependencies import PaginationParams, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
-from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Apparatus; Custom Fields; Maintenance; Fuel; Operators; Equipment; Photos & Documents; NFPA Compliance; Report Configs; Service Providers; Components; Component Notes; Service Report
+from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Apparatus; Custom Fields; Maintenance; Fuel; Operators; Equipment; Photos & Documents; NFPA Compliance; Report Configs; Service Providers; Components; Component Notes; Service Report; EVOC Levels
     ApparatusArchive,
     ApparatusComponentCreate,
     ApparatusComponentNoteCreate,
@@ -68,11 +68,15 @@ from app.schemas.apparatus import (  # Apparatus Type; Apparatus Status; Main Ap
     ApparatusTypeResponse,
     ApparatusTypeUpdate,
     ApparatusUpdate,
+    EvocLevelCreate,
+    EvocLevelResponse,
+    EvocLevelUpdate,
     PaginatedApparatusList,
 )
 from app.schemas.documents import FoldersListResponse
 from app.services.apparatus_service import ApparatusService
 from app.services.documents_service import DocumentsService
+from app.services.evoc_level_service import EvocLevelService
 
 router = APIRouter()
 
@@ -2759,4 +2763,210 @@ async def get_apparatus_folders(
             for f in sub_folders
         ],
         "total": len(sub_folders),
+    }
+
+
+# ============================================================================
+# EVOC Level Endpoints
+# ============================================================================
+
+
+@router.get(
+    "/evoc-levels",
+    response_model=list[EvocLevelResponse],
+    tags=["EVOC Levels"],
+)
+async def list_evoc_levels(
+    active_only: bool = Query(True, description="Only show active levels"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
+):
+    """
+    List EVOC certification levels for the organization
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = EvocLevelService(db)
+    return await service.list_levels(
+        organization_id=current_user.organization_id,
+        active_only=active_only,
+    )
+
+
+@router.post(
+    "/evoc-levels",
+    response_model=EvocLevelResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["EVOC Levels"],
+)
+async def create_evoc_level(
+    data: EvocLevelCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Create an EVOC certification level
+
+    **Authentication required**
+    **Permissions required:** apparatus.manage
+    """
+    service = EvocLevelService(db)
+    try:
+        return await service.create_level(
+            data=data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
+
+@router.get(
+    "/evoc-levels/{level_id}",
+    response_model=EvocLevelResponse,
+    tags=["EVOC Levels"],
+)
+async def get_evoc_level(
+    level_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "apparatus.manage")
+    ),
+):
+    """
+    Get a specific EVOC level
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or apparatus.manage
+    """
+    service = EvocLevelService(db)
+    level = await service.get_level(
+        level_id=level_id,
+        organization_id=current_user.organization_id,
+    )
+    if not level:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="EVOC level not found",
+        )
+    return level
+
+
+@router.patch(
+    "/evoc-levels/{level_id}",
+    response_model=EvocLevelResponse,
+    tags=["EVOC Levels"],
+)
+async def update_evoc_level(
+    level_id: str,
+    data: EvocLevelUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Update an EVOC certification level
+
+    **Authentication required**
+    **Permissions required:** apparatus.manage
+    """
+    service = EvocLevelService(db)
+    try:
+        level = await service.update_level(
+            level_id=level_id,
+            data=data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
+    if not level:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="EVOC level not found",
+        )
+    return level
+
+
+@router.delete(
+    "/evoc-levels/{level_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["EVOC Levels"],
+)
+async def delete_evoc_level(
+    level_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("apparatus.manage")),
+):
+    """
+    Delete an EVOC certification level
+
+    **Authentication required**
+    **Permissions required:** apparatus.manage
+    """
+    service = EvocLevelService(db)
+    try:
+        deleted = await service.delete_level(
+            level_id=level_id,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="EVOC level not found",
+        )
+
+
+@router.get(
+    "/evoc-check/{apparatus_id}/{user_id}",
+    tags=["EVOC Levels"],
+)
+async def check_evoc_eligibility(
+    apparatus_id: str,
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("apparatus.view", "scheduling.view")
+    ),
+):
+    """
+    Check if a user meets the EVOC requirement for an apparatus.
+
+    Returns eligibility status and any warning messages.
+
+    **Authentication required**
+    **Permissions required:** apparatus.view or scheduling.view
+    """
+    service = EvocLevelService(db)
+    result = await service.check_driver_evoc_eligibility(
+        user_id=user_id,
+        apparatus_id=apparatus_id,
+        organization_id=current_user.organization_id,
+    )
+    return {
+        "eligible": result["eligible"],
+        "warning": result["warning"],
+        "requiredLevel": {
+            "id": result["required_level"].id,
+            "levelNumber": result["required_level"].level_number,
+            "name": result["required_level"].name,
+        } if result["required_level"] else None,
+        "userLevel": {
+            "id": result["user_level"].id,
+            "levelNumber": result["user_level"].level_number,
+            "name": result["user_level"].name,
+        } if result["user_level"] else None,
     }
