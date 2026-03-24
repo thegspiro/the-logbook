@@ -6,13 +6,19 @@ import { MemberIdScannerModal } from './MemberIdScannerModal';
 // Mock html5-qrcode
 const mockStart = vi.fn().mockResolvedValue(undefined);
 const mockStop = vi.fn().mockResolvedValue(undefined);
+const mockGetCameras = vi.fn().mockResolvedValue([
+  { id: 'cam-1', label: 'Front Camera' },
+]);
 vi.mock('html5-qrcode', async (importOriginal) => {
   const actual = await importOriginal<typeof import('html5-qrcode')>();
   return {
     ...actual,
-    Html5Qrcode: vi.fn().mockImplementation(function () {
-      return { start: mockStart, stop: mockStop };
-    }),
+    Html5Qrcode: Object.assign(
+      vi.fn().mockImplementation(function () {
+        return { start: mockStart, stop: mockStop };
+      }),
+      { getCameras: (...args: unknown[]) => mockGetCameras(...args) as unknown },
+    ),
   };
 });
 
@@ -64,6 +70,9 @@ describe('MemberIdScannerModal', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetCameras.mockResolvedValue([
+      { id: 'cam-1', label: 'Front Camera' },
+    ]);
   });
 
   it('should not render when closed', () => {
@@ -118,35 +127,44 @@ describe('MemberIdScannerModal', () => {
   it('should auto-start the scanner when opened', async () => {
     render(<MemberIdScannerModal {...defaultProps} />);
 
-    // The start is delayed by 100ms via setTimeout in the component
     await waitFor(() => {
-      expect(mockStart).toHaveBeenCalled();
+      expect(mockGetCameras).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(mockStart).toHaveBeenCalledWith(
+        'cam-1',
+        expect.any(Object),
+        expect.any(Function),
+        expect.any(Function),
+      );
     });
   });
 
-  it('should fall back to user-facing camera when environment camera fails', async () => {
-    mockStart
-      .mockRejectedValueOnce(new Error('No environment camera'))
-      .mockResolvedValueOnce(undefined);
+  it('should prefer back camera when available', async () => {
+    mockGetCameras.mockResolvedValue([
+      { id: 'cam-front', label: 'Front Camera' },
+      { id: 'cam-back', label: 'Back Camera' },
+    ]);
 
     render(<MemberIdScannerModal {...defaultProps} />);
 
     await waitFor(() => {
-      expect(mockStart).toHaveBeenCalledTimes(2);
+      expect(mockStart).toHaveBeenCalledWith(
+        'cam-back',
+        expect.any(Object),
+        expect.any(Function),
+        expect.any(Function),
+      );
     });
-    expect(mockStart).toHaveBeenNthCalledWith(
-      1,
-      { facingMode: 'environment' },
-      expect.any(Object),
-      expect.any(Function),
-      expect.any(Function),
-    );
-    expect(mockStart).toHaveBeenNthCalledWith(
-      2,
-      { facingMode: 'user' },
-      expect.any(Object),
-      expect.any(Function),
-      expect.any(Function),
-    );
+  });
+
+  it('should show error when no cameras are found', async () => {
+    mockGetCameras.mockResolvedValue([]);
+
+    render(<MemberIdScannerModal {...defaultProps} />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/No cameras found/i)).toBeInTheDocument();
+    });
   });
 });
