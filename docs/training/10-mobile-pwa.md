@@ -308,4 +308,40 @@ Camera scanning (QR codes, barcodes, member IDs) now works on desktop browsers i
 
 ---
 
+## Camera Scanning Improvements (2026-03-24)
+
+### Camera Error Handling
+
+Camera scanning across the app now provides **specific error messages** instead of generic failures:
+
+| Error | Message |
+|-------|---------|
+| Camera permission denied | "Camera permission denied. Please allow camera access in your browser settings." |
+| No camera available | "No camera detected on this device." |
+| Camera in use by another app | "Camera is in use by another application." |
+
+Error messages **stay visible** until you dismiss them (no auto-dismiss), giving you time to read and act on the message.
+
+> **Screenshot needed:**
+> _[Screenshot of the MemberScanPage on a mobile device showing a camera error banner: "Camera permission denied. Please allow camera access in your browser settings." with a "Try Again" button and manual entry field below]_
+
+### Inventory Scan Modal
+
+The `InventoryScanModal` now uses `getErrorMessage()` for consistent, specific error display. On desktop browsers where the camera fails, the manual barcode/serial number input field is always available as a fallback.
+
+> **Edge case:** On iOS Safari, camera access requires the page to be served over HTTPS. If your department uses HTTP for local network access, camera scanning will not work — use the manual entry fallback.
+
+### Notification Badges on Mobile
+
+The notification unread count badge is now visible on both mobile and desktop:
+
+- **Top navigation**: Bell icon with red badge count
+- **Side navigation**: Notifications link with badge count
+- **Smart polling**: Polling pauses when the app/tab is in the background, preserving battery
+
+> **Screenshot needed:**
+> _[Screenshot of the mobile top navigation bar showing the hamburger menu, page title, and bell icon with a red "3" badge]_
+
+---
+
 **Previous:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | **Next:** Return to [Training Guide Index](./README.md)

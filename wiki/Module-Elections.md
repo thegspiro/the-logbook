@@ -98,6 +98,7 @@ GET    /api/v1/elections/{id}/proxy-votes      # Get proxy authorizations
 POST   /api/v1/elections/{id}/proxy-votes      # Authorize proxy vote
 GET    /api/v1/elections/settings               # Get election settings (proxy voting config)
 PATCH  /api/v1/elections/settings               # Update election settings
+GET    /api/v1/elections/{id}/eligibility-roster  # Full eligibility breakdown for secretary
 ```
 
 ---
@@ -138,6 +139,50 @@ POST   /api/v1/elections/{id}/send-report-email      # Email election results re
 | Eligibility summary email | Sent only to the user who triggered ballot dispatch |
 | No eligible voters found | Descriptive error instead of false success with 0 recipients |
 | Concurrent vote attempts | Database-level locking prevents double-voting race conditions |
+
+---
+
+## Recent Improvements (2026-03-24)
+
+### Secretary Workflow, Eligibility Roster, Enums & Result Publishing
+
+- **Tabbed election detail workflow**: New `ElectionWorkflowTabs` component replaces monolithic detail page. Dynamic tabs based on election status: Ballot, Candidates, Eligibility, Overrides, Proxies (always visible when not cancelled), Attendance (draft/open), Cast Vote (open), Results (closed/published). WAI-ARIA Tabs pattern with roving tabindex
+- **Eligibility roster**: New secretary tool (`EligibilityRoster` component) showing all active members with per-ballot-item eligibility. Color-coded rows: green (eligible), red (ineligible), blue (override), muted (voted). Search + filter buttons (All, Eligible, Ineligible, Already Voted, Has Override). Expandable per-member detail rows with keyboard navigation (Enter/Space)
+- **Publish results panel**: `PublishResultsPanel` with one-click visibility toggle (`aria-pressed`), status overview (vote count, turnout %), and "Send Report" button for emailing results. Color-coded: green border (closed), blue border (open)
+- **Runoff chain visualization**: `RunoffChain` component showing multi-stage elections as horizontal timeline. Each node: title, status, vote count, status icon. Current election highlighted with `aria-current="page"`. Builds chain by walking `parent_election_id`
+- **Election summary cards**: 4-column dashboard on elections list page: Active Elections (green), Need Attention (amber, draft + expired), Completed (blue), Total Votes Cast (purple). Responsive 2→4 column grid
+- **Election enums in constants**: `VotingMethod`, `VictoryCondition`, `BallotChoice`, `RunoffType`, `QuorumType` moved to `constants/enums.ts`. 50+ string literals replaced across 10+ frontend files
+- **Backend validator deduplication**: 8 field validators consolidated into `_validate_choice()` helper. `VALID_QUORUM_TYPES` extracted as constant
+- **Event type filter removed**: Elections can now link to any event type (not just business meetings)
+- **Department email generation**: Auto-generates department email on prospect election/transfer. Four format patterns. Collision handling with numeric suffix. Personal email preserved
+
+### New API Endpoints (2026-03-24)
+
+```
+GET    /api/v1/elections/{id}/eligibility-roster    # Full member eligibility breakdown for secretary
+```
+
+### New Frontend Components (2026-03-24)
+
+| Component | Purpose |
+|-----------|---------|
+| `ElectionWorkflowTabs` | Tabbed navigation with dynamic tab visibility based on election status |
+| `EligibilityRoster` | Secretary eligibility dashboard with search, filter, per-member detail |
+| `PublishResultsPanel` | Post-election result publishing and report email |
+| `RunoffChain` | Multi-stage election timeline visualization |
+| `ElectionSummaryCards` | Dashboard metrics cards on elections list page |
+
+### Edge Cases (2026-03-24)
+
+| Scenario | Behavior |
+|----------|----------|
+| Election linked to non-business-meeting event | Now allowed (event type filter removed) |
+| Department email collision | Appends numeric suffix (john.smith2@dept.org) |
+| Cancelled election tabs | Only Ballot tab visible |
+| Results tab auto-select | Navigates to Results when election is closed |
+| Runoff chain for standalone election | Shows single-node chain |
+| Eligibility roster with 0 members | Empty state with message |
+| Secretary override on ineligible member | Blue row with override badge, eligible for all items |
 
 ---
 

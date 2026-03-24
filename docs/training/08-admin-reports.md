@@ -908,4 +908,93 @@ This replaces the previous single text input that was harder to use on mobile an
 
 ---
 
+## Notifications Overhaul (2026-03-24)
+
+### Unread Notification Badges
+
+The bell icon in the top navigation bar and the Notifications link in the side navigation now show an **unread count badge**. The badge updates automatically via smart polling — polling pauses when the browser tab is hidden and refetches immediately when you return to the tab.
+
+> **Screenshot needed:**
+> _[Screenshot of the top navigation bar showing the bell icon with a red badge showing "5" (unread count), next to the user avatar and settings gear]_
+
+> **Screenshot needed:**
+> _[Screenshot of the side navigation panel showing the "Notifications" link with a small red badge showing "3" next to it]_
+
+### Batch Mark All as Read
+
+A new **"Mark All Read"** button on the Notifications inbox clears all unread notifications in a single action. This uses a dedicated batch endpoint (`POST /notifications/logs/read-all`) for efficiency.
+
+> **Screenshot needed:**
+> _[Screenshot of the Notifications inbox page showing the "Mark All Read" button at the top right of the notification list, with several unread notifications (bold text) below]_
+
+### Read/Unread Filter and Pagination
+
+The Notifications inbox now includes:
+
+- **"Show read" toggle** to filter between unread-only and all notifications
+- **"Load More" pagination** — notifications load 20 at a time with a "Load More" button at the bottom
+
+> **Screenshot needed:**
+> _[Screenshot of the Notifications inbox showing the "Show read" toggle switch at the top, a list of 20 notifications with some read (lighter text) and some unread (bold), and a "Load More" button at the bottom]_
+
+### Dashboard Notification Fixes
+
+- **Clear All** now actually removes all dashboard notifications (fixed: previously cleared notifications reappeared on page navigation)
+- **Clickable notifications** — clicking a notification on the dashboard navigates to the `action_url` if set, or to the Notifications inbox if not
+- **View All link** now navigates to `/notifications?tab=inbox` instead of the bare `/notifications` route
+
+> **Edge case:** The dashboard fetches only unread notifications. Cleared notifications do not reappear because the fetch now uses `include_read: false`.
+
+### Smart Polling
+
+Notification count polling uses the **Page Visibility API**:
+
+| Tab State | Polling Behavior |
+|-----------|-----------------|
+| Visible (active tab) | Polls at regular interval |
+| Hidden (background tab) | Polling pauses completely |
+| Tab becomes visible again | Immediately refetches |
+
+This reduces unnecessary API calls and battery drain on mobile devices.
+
+## WCAG Accessibility Improvements (2026-03-24)
+
+### Color Contrast Fixes
+
+75 components across the application received light-mode color contrast fixes to meet **WCAG AA** standards (4.5:1 minimum contrast ratio). The pattern:
+
+- **Before:** `text-red-400` (fails WCAG AA in light mode, ~1.8:1 contrast)
+- **After:** `text-red-700 dark:text-red-400` (passes WCAG AA in both modes)
+
+Dark mode appearance is **unchanged** — only light mode received adjustments.
+
+> **Screenshot needed:**
+> _[Screenshot comparison: left shows a status badge with light red text on white background (low contrast, before fix), right shows the same badge with darker red text on white background (high contrast, after fix)]_
+
+### Form Accessibility
+
+- **Label associations**: ~24 form inputs now have proper `htmlFor`/`id` associations so clicking the label focuses the input
+- **Required fields**: `aria-required="true"` added to required form fields
+- **Radio button groups**: Wrapped in `<fieldset>` with `<legend>` across 7 components (elections, forms, training, inventory, onboarding)
+
+### Live Regions
+
+- `aria-live="assertive"` added to ~52 `role="alert"` elements so screen readers announce error messages immediately
+- `role="status" aria-live="polite"` added to loading spinner containers
+
+### Color Contrast Utility
+
+A new shared utility (`utils/colorContrast.ts`) provides WCAG-compliant color functions used across the app:
+
+| Function | Purpose |
+|----------|---------|
+| `relativeLuminance()` | WCAG 2.x luminance calculation |
+| `contrastRatio()` | Compare two colors for contrast |
+| `accessibleTextColor()` | Iteratively adjust text color until 4.5:1 met |
+| `colorCardStyle()` | Generate accessible card styling from hex color |
+
+> **Edge case:** In high-contrast mode, theme variables override to target WCAG AAA (7:1 ratio) where possible.
+
+---
+
 **Previous:** [Documents & Forms](./07-documents-forms.md) | **Next:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)

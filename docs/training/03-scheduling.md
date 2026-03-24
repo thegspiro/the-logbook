@@ -838,4 +838,131 @@ This affects:
 
 ---
 
+## Bulk Actions, Staffing Visualization & Shift Notifications (2026-03-24)
+
+### Bulk Confirm/Decline on My Shifts
+
+When you have 2 or more pending shift assignments, checkboxes appear on each pending shift card. You can:
+
+1. **Select individual shifts** by tapping checkboxes
+2. **Select All** using the toggle at the top of the pending section
+3. **Confirm All** or **Decline All** using the bulk action buttons
+
+The UI updates immediately (optimistic update). If the API call fails for any shift, that shift reverts to its previous state and a toast notification shows the error.
+
+> **Screenshot needed:**
+> _[Screenshot of the My Shifts tab showing 3 pending shift cards with checkboxes selected, the "Select All" toggle enabled, and the "Confirm All" / "Decline All" bulk action buttons visible in the action bar above]_
+
+> **Edge case:** If you select 5 shifts and "Confirm All" but one fails (e.g., shift was cancelled by an officer), that one reverts to pending while the other 4 remain confirmed.
+
+### Inline Approve/Deny on Requests
+
+Swap and time-off request cards now show **Approve** and **Deny** buttons directly on the card, without needing to open a modal. A "+ Notes" link is still available to open the review modal if you want to add reviewer comments.
+
+> **Screenshot needed:**
+> _[Screenshot of the Requests tab showing a swap request card with inline "Approve" (green) and "Deny" (red) buttons, and a "+ Notes" link below them]_
+
+### Staffing Status on Shift Cards
+
+Shift cards now show staffing status at a glance:
+
+| Visual | Meaning |
+|--------|---------|
+| Green CheckCircle2 icon | Shift is fully staffed |
+| Green background in crew info | All positions filled |
+| Amber background in crew info | Below minimum staffing |
+| Staffing ratio (e.g., "4/4") | Filled / required positions |
+| Green tint on shift card | Overrides template color when fully staffed |
+| Amber tint on shift card | Overrides template color when understaffed |
+
+> **Screenshot needed:**
+> _[Screenshot of the weekly calendar view showing three shift cards: one with green tint and CheckCircle2 (fully staffed, 4/4), one with amber tint (understaffed, 2/4), and one with template color (no min staffing configured)]_
+
+### Position-First Assignment Flow
+
+The crew board in the shift detail panel now uses a position-first workflow:
+
+1. **Position dropdown** appears first (defaults to the first open slot)
+2. **Member search** appears below
+3. Click **Assign** to complete
+
+You can also click the **"Assign"** button directly on an open slot in the crew board to pre-fill the position.
+
+**Bulk Assignment:** When 2+ positions are unfilled, a **"Fill All Open"** button appears. This shows a compact form with one member dropdown per open position, letting you fill all positions at once.
+
+> **Screenshot needed:**
+> _[Screenshot of the ShiftDetailPanel crew board showing two filled positions (with member names and green badges), one open slot with an "Assign" button, and the "Fill All Open" button at the bottom]_
+
+> **Edge case:** Members on leave, with approved time-off covering the shift date, or already assigned to the shift are automatically excluded from the member dropdown.
+
+### Required/Optional Position Toggle
+
+In the shift template editor, each crew position now has a **required/optional toggle**:
+
+- **Required** (violet badge) — the position must be filled for minimum staffing
+- **Optional** (muted) — position is available but not counted toward minimum staffing
+
+> **Screenshot needed:**
+> _[Screenshot of the ShiftTemplatesPage position editor showing 4 positions: "Officer" and "Driver" with violet required badges, "Firefighter" with a muted optional badge, and the toggle switch next to each]_
+
+> **Edge case:** Existing templates with bare string positions (created before this update) default to `required=true` automatically.
+
+### Shift Assignment Notifications
+
+When an officer assigns you to a shift, you now receive:
+
+- **In-app notification** with the shift date, time (in your organization's timezone), and position
+- **Optional email notification** (if enabled by your department)
+
+Officers can configure these in **Settings > Scheduling > Notifications > Shift Assignment Alerts**.
+
+> **Screenshot needed:**
+> _[Screenshot of the SchedulingNotificationsPanel showing the "Shift Assignment Alerts" section with toggles for "Notify on assignment" (enabled), "Send email" (enabled), and a CC email input field]_
+
+### Start-of-Shift Reminders
+
+A scheduled task runs every 30 minutes to send reminders to members assigned to upcoming shifts:
+
+- Reminders include the shift time, position, apparatus, and a list of equipment checklists to complete
+- Configurable lookahead window (default: 2 hours before shift start)
+- Optional email in addition to in-app notification
+
+Department settings for reminders are under **Settings > Scheduling > Notifications > Start-of-Shift Reminders**.
+
+> **Screenshot needed:**
+> _[Screenshot of the SchedulingNotificationsPanel showing the "Start-of-Shift Reminders" section with toggles for "Enable reminders" (enabled), a "Lookahead" dropdown set to "2 hours", "Send email" (disabled), and a CC email field]_
+
+> **Edge case:** A shift that has already started is skipped. Reminders are sent only once per shift (tracked via `activities.start_reminder_sent`).
+
+### Selected Shift Highlight
+
+When you open a shift's detail panel, the corresponding shift card on the calendar is highlighted with a **violet ring**. This helps you see which shift you're viewing, especially in dense calendar views.
+
+### Additional UX Improvements (2026-03-24)
+
+- **Collapsible shift creation**: The shift creation form now shows only Start Date and End Date initially. Custom Times, Apparatus, Officer, and Notes are hidden behind an "Additional Options" disclosure section
+- **Searchable template dropdown**: When your department has more than 5 templates, a search field appears in the template dropdown
+- **Open/Specific swap selector**: Two-card radio buttons instead of a single dropdown for selecting swap type
+- **Time-off conflict warning**: An amber banner appears on the shift detail if you have approved time-off covering the shift dates
+- **Notification history link**: An "Alerts" link on the My Shifts tab shows your scheduling-related notifications
+- **Equipment check status**: Badge counts (pass/fail/in-progress/pending) appear next to the equipment check header on shift detail, with action hints like "Start check → Go to Checklists tab"
+- **Mobile note truncation**: Shift notes on calendar cards show 2 lines with ellipsis instead of 1 line
+- **Mobile touch targets**: All action buttons increased to 44px minimum (WCAG standard)
+
+### Bug Fixes (2026-03-24)
+
+| Issue | Solution |
+|-------|----------|
+| Shift overlap false positive — night shift flagged as conflicting with next day's open shift | Open-ended shifts now restricted to same date; no cross-day false positives |
+| Shift notifications showing UTC time (e.g., "22:00" instead of "18:00 Eastern") | Times converted to org timezone before formatting |
+| All shifts appearing as indigo on calendar despite custom template colors | Color parsing fixed — extracts hour from time portion, not full ISO string |
+| Clearing shift notes causes 422 error | Empty notes converted to `undefined` via `\|\|` instead of `??` |
+| "Fill pattern" 422 error on shift generation | Removed redundant `pattern_id` from request body |
+| Member hours report showing empty data | Now queries `ShiftAssignment` instead of `ShiftAttendance` (clock-in records) |
+| Member hours report missing names | `first_name` and `last_name` added to report schema |
+| Dark mode buttons hard to read | Added proper `dark:` color variants on all interactive elements |
+| Shift card text unreadable against colored background in dark mode | WCAG AA contrast calculation dynamically adjusts text color |
+
+---
+
 **Previous:** [Training & Certification](./02-training.md) | **Next:** [Events & Meetings](./04-events-meetings.md)

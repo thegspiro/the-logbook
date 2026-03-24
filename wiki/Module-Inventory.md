@@ -334,6 +334,34 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 
 ---
 
+## Recent Changes (2026-03-24)
+
+### Storage Areas, Barcode Backfill, Item Detail & WebSocket Fix
+
+- **Storage area items display**: Storage Areas page now shows actual inventory items assigned to each area with expandable inline panels. Items display name, serial number, status, and condition with direct links to item detail pages
+- **Storage area item link fix**: Item links from storage areas navigate to `/inventory/items/{id}` instead of incorrectly routing to dashboard
+- **Storage area name resolution**: Item detail page resolves and displays the storage area name instead of raw ID
+- **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback when empty, instead of hiding fields entirely
+- **Barcode backfill**: Items created before auto-generation lazily receive barcodes (`INV-XXXXXXXX` format) on first fetch via `inventory_service.py`. No migration needed
+- **Admin items page improvements**: InventoryItemsPage readability and display bug fixes
+- **WebSocket double-accept fix**: Guard `client_state` check before `accept()` in `websocket_manager.py` to prevent `RuntimeError` when early auth accept causes second accept call
+- **Equipment check template builder fix**: Removed `useBlocker` from `useUnsavedChanges` hook (incompatible with BrowserRouter). `beforeunload` handler retained for browser close/refresh
+- **Camera error handling**: `InventoryScanModal` uses `getErrorMessage()` instead of generic string. Errors stay visible (no auto-dismiss)
+
+### Edge Cases (2026-03-24)
+
+| Scenario | Behavior |
+|----------|----------|
+| Item created before barcode auto-generation | Barcode lazily generated on first fetch (`INV-XXXXXXXX`) |
+| Storage area with no items | Shows empty state message in expandable panel |
+| Item with no barcode or asset tag | Fields display `--` placeholder (always visible) |
+| WebSocket connection already accepted | Guard prevents second `accept()` call |
+| Template builder navigation with unsaved changes | `beforeunload` fires on browser close; no in-app blocking (BrowserRouter limitation) |
+| Storage area item link clicked | Navigates to `/inventory/items/{id}` (fixed from dashboard) |
+| Camera permission denied on desktop | Error message displayed; manual text entry available |
+
+---
+
 ## Recent Changes (2026-03-22)
 
 ### Admin Hub Redesign, Kits & Variant Groups Pages, Barcode Printing

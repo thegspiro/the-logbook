@@ -551,4 +551,79 @@ The **Member Lifecycle Management** page (found under Members Admin) consolidate
 
 ---
 
+## Department Email Generation, Username Safety & Default Roles (2026-03-24)
+
+### Department Email Generation
+
+When a prospect is elected to full membership (transferred from the prospective pipeline), the system can now **automatically generate a department email address** (e.g., `john.smith@firedept.org`).
+
+**Configuration** (Settings > Organization > Department Email):
+
+| Setting | Description |
+|---------|-------------|
+| **Enabled** | Toggle department email generation on/off |
+| **Domain** | Your department's email domain (e.g., `firedept.org`) |
+| **Format** | Choose from 4 patterns (see below) |
+
+**Email Format Patterns:**
+
+| Format | Example |
+|--------|---------|
+| `first.last` | john.smith@firedept.org |
+| `flast` (first initial + last) | jsmith@firedept.org |
+| `firstlast` | johnsmith@firedept.org |
+| `last.first` | smith.john@firedept.org |
+
+> **Screenshot needed:**
+> _[Screenshot of the Organization Settings page showing the "Department Email" section with an enabled toggle, domain field showing "firedept.org", and a format dropdown set to "first.last"]_
+
+The prospect's **personal email** is preserved in the `personal_email` field on their user profile, so you always have a way to contact them outside the department system.
+
+> **Edge case:** If the generated email already exists (e.g., two members named John Smith), the system automatically appends a numeric suffix: `john.smith2@firedept.org`, `john.smith3@firedept.org`, etc.
+
+> **Edge case:** If department email generation is disabled in settings, the prospect's personal email becomes their primary account email.
+
+### Username Collision Handling
+
+When members are created (via admin, self-registration, or prospect transfer), the system now generates unique usernames automatically:
+
+- First attempt: `jsmith` (first initial + last name)
+- If taken: `jsmith1`, `jsmith2`, etc.
+
+This prevents registration failures when multiple members share similar names.
+
+> **Edge case:** Manually provided usernames are also validated for uniqueness. If you enter a username that already exists, you'll receive an error asking you to choose a different one.
+
+### Default Member Role
+
+All new members — whether created by an admin, self-registered, or transferred from the prospective pipeline — now receive the **"member" role** automatically. This ensures every member has baseline permissions from day one without requiring manual role assignment.
+
+### Password Security on Creation
+
+All member creation paths now set `password_changed_at` to the creation time, ensuring HIPAA password age checks work correctly from day one. Self-registered users additionally have `must_change_password=True`, forcing a password change on first login.
+
+### Membership ID Auto-Generation
+
+Membership IDs are now auto-generated when a member is created or transferred. Additional safety features:
+
+- When a member is archived (soft-deleted), their membership number is preserved in `previous_membership_number`
+- When a member is reactivated, their previous membership number is automatically restored
+- The active membership number column is NULLed on archive so the number can be reassigned if needed
+
+> **Screenshot needed:**
+> _[Screenshot of a member profile showing the auto-generated Membership ID field (e.g., "2026-0042") in the member details section, with the field marked as read-only]_
+
+> **Edge case:** If a member is archived and then a new member is assigned their old number, reactivating the archived member will generate a new number instead of conflicting.
+
+### Troubleshooting Additions (2026-03-24)
+
+| Issue | Solution |
+|-------|----------|
+| Department email shows collision error | System auto-resolves by appending numeric suffix. If issue persists, check for deleted users with the same email. |
+| Username "already exists" on admin create | Choose a different username or let the system auto-generate one. |
+| New member has no permissions | All members now get the "member" role automatically. If still no access, verify the role exists in Settings > Roles. |
+| Member reactivated but old membership number not restored | Number is restored only if no other active member has been assigned that number since archival. |
+
+---
+
 **Previous:** [Getting Started](./00-getting-started.md) | **Next:** [Training & Certification](./02-training.md)
