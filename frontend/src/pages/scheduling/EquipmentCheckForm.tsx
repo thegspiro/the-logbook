@@ -688,7 +688,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   {hasBeenSet ? currentQty : '—'}/{required} Each
                 </span>
               )}
-              {prevQty != null && (
+              {prevQty != null && hasBeenSet && currentQty !== prevQty && (
                 <span className="block text-[10px] text-theme-text-muted">
                   Last: {prevQty}
                 </span>
