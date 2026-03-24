@@ -801,6 +801,11 @@ class TrainingSessionService:
                         if training_session.course_id
                         else None
                     ),
+                    category_id=(
+                        str(training_session.category_id)
+                        if training_session.category_id
+                        else None
+                    ),
                     course_name=training_session.course_name,
                     course_code=(
                         training_session.course.code

@@ -18,6 +18,7 @@ from app.models.training import (
     ProgramPhase,
     ProgramRequirement,
     ProgramStructureType,
+    RecertificationPathway,
     RequirementFrequency,
     RequirementSource,
     RequirementType,
@@ -98,6 +99,31 @@ DEFAULT_CATEGORIES = [
                 "code": "EMS-PEDI",
                 "description": "Pediatric emergency care",
                 "sort_order": 4,
+            },
+            # Virginia NCCR areas (National Continued Competency Requirements)
+            {
+                "name": "Airway, Respiration & Ventilation",
+                "code": "NCCR-AIRWAY",
+                "description": "NCCR Area 11/16: Airway management, respiration assessment, and ventilation techniques",
+                "sort_order": 5,
+            },
+            {
+                "name": "Cardiovascular",
+                "code": "NCCR-CARDIO",
+                "description": "NCCR Area 12/17: Cardiovascular assessment, ECG interpretation, and cardiac emergencies",
+                "sort_order": 6,
+            },
+            {
+                "name": "Medical",
+                "code": "NCCR-MEDICAL",
+                "description": "NCCR Area 14/19: Medical emergencies including toxicology, endocrine, and neurological",
+                "sort_order": 7,
+            },
+            {
+                "name": "Operations",
+                "code": "NCCR-OPS",
+                "description": "NCCR Area 15/20: EMS operations, incident management, triage, and mass casualty",
+                "sort_order": 8,
             },
         ],
     },
@@ -1518,6 +1544,213 @@ async def seed_pipeline_templates(
     return program_ids
 
 
+# ============================================
+# Virginia EMS Recertification Standards
+# ============================================
+# Based on VDH Office of EMS Form TR-64 (Revised June 2024)
+# "2016 | 2025 BLS & ALS Recertification Requirements"
+# Hours shown are for "On or after October 1, 2023" column.
+
+VIRGINIA_RECERT_STANDARDS = [
+    {
+        "name": "Virginia BLS - EMR Recertification",
+        "description": (
+            "Virginia Dept. of Health Office of EMS recertification "
+            "requirements for Emergency Medical Responder (EMR). "
+            "Form TR-64, BLS Certified/Recertified, Column A."
+        ),
+        "renewal_type": "hours",
+        "required_hours": 16.0,
+        "new_expiration_months": 48,
+        "renewal_window_days": 180,
+        "grace_period_days": 90,
+        "category_hours": [
+            {"code": "NCCR-AIRWAY", "hours": 1.5, "label": "Airway, Respiration & Ventilation"},
+            {"code": "NCCR-CARDIO", "hours": 2.0, "label": "Cardiovascular"},
+            {"code": "EMS-TRAUMA", "hours": 1.0, "label": "Trauma"},
+            {"code": "NCCR-MEDICAL", "hours": 2.5, "label": "Medical"},
+            {"code": "NCCR-OPS", "hours": 1.0, "label": "Operations"},
+        ],
+        "nccr_hours": 8.0,
+        "lccr_iccr_hours": 8.0,
+    },
+    {
+        "name": "Virginia BLS - EMT Recertification",
+        "description": (
+            "Virginia Dept. of Health Office of EMS recertification "
+            "requirements for Emergency Medical Technician (EMT). "
+            "Form TR-64, BLS Certified/Recertified, Column B."
+        ),
+        "renewal_type": "hours",
+        "required_hours": 40.0,
+        "new_expiration_months": 48,
+        "renewal_window_days": 180,
+        "grace_period_days": 90,
+        "category_hours": [
+            {"code": "NCCR-AIRWAY", "hours": 4.0, "label": "Airway, Respiration & Ventilation"},
+            {"code": "NCCR-CARDIO", "hours": 5.0, "label": "Cardiovascular"},
+            {"code": "EMS-TRAUMA", "hours": 3.0, "label": "Trauma"},
+            {"code": "NCCR-MEDICAL", "hours": 6.0, "label": "Medical"},
+            {"code": "NCCR-OPS", "hours": 2.0, "label": "Operations"},
+        ],
+        "nccr_hours": 20.0,
+        "lccr_iccr_hours": 20.0,
+    },
+    {
+        "name": "Virginia ALS - AEMT Recertification",
+        "description": (
+            "Virginia Dept. of Health Office of EMS recertification "
+            "requirements for Advanced EMT (AEMT). "
+            "Form TR-64, ALS Certified/Recertified, Column C."
+        ),
+        "renewal_type": "hours",
+        "required_hours": 50.0,
+        "new_expiration_months": 48,
+        "renewal_window_days": 180,
+        "grace_period_days": 90,
+        "category_hours": [
+            {"code": "NCCR-AIRWAY", "hours": 5.0, "label": "Airway, Respiration & Ventilation"},
+            {"code": "NCCR-CARDIO", "hours": 6.0, "label": "Cardiovascular"},
+            {"code": "EMS-TRAUMA", "hours": 4.0, "label": "Trauma"},
+            {"code": "NCCR-MEDICAL", "hours": 7.0, "label": "Medical"},
+            {"code": "NCCR-OPS", "hours": 3.0, "label": "Operations"},
+        ],
+        "nccr_hours": 25.0,
+        "lccr_iccr_hours": 25.0,
+    },
+    {
+        "name": "Virginia ALS - Intermediate Recertification",
+        "description": (
+            "Virginia Dept. of Health Office of EMS recertification "
+            "requirements for Intermediate level. "
+            "Form TR-64, ALS Certified/Recertified, Column I."
+        ),
+        "renewal_type": "hours",
+        "required_hours": 55.0,
+        "new_expiration_months": 48,
+        "renewal_window_days": 180,
+        "grace_period_days": 90,
+        "category_hours": [
+            {"code": "NCCR-AIRWAY", "hours": 5.5, "label": "Airway, Respiration & Ventilation"},
+            {"code": "NCCR-CARDIO", "hours": 6.5, "label": "Cardiovascular"},
+            {"code": "EMS-TRAUMA", "hours": 4.5, "label": "Trauma"},
+            {"code": "NCCR-MEDICAL", "hours": 7.5, "label": "Medical"},
+            {"code": "NCCR-OPS", "hours": 4.0, "label": "Operations"},
+        ],
+        "nccr_hours": 28.0,
+        "lccr_iccr_hours": 27.0,
+    },
+    {
+        "name": "Virginia ALS - Paramedic Recertification",
+        "description": (
+            "Virginia Dept. of Health Office of EMS recertification "
+            "requirements for Paramedic. "
+            "Form TR-64, ALS Certified/Recertified, Column E."
+        ),
+        "renewal_type": "hours",
+        "required_hours": 60.0,
+        "new_expiration_months": 48,
+        "renewal_window_days": 180,
+        "grace_period_days": 90,
+        "category_hours": [
+            {"code": "NCCR-AIRWAY", "hours": 6.0, "label": "Airway, Respiration & Ventilation"},
+            {"code": "NCCR-CARDIO", "hours": 7.0, "label": "Cardiovascular"},
+            {"code": "EMS-TRAUMA", "hours": 5.0, "label": "Trauma"},
+            {"code": "NCCR-MEDICAL", "hours": 8.0, "label": "Medical"},
+            {"code": "NCCR-OPS", "hours": 4.0, "label": "Operations"},
+        ],
+        "nccr_hours": 30.0,
+        "lccr_iccr_hours": 30.0,
+    },
+]
+
+
+async def seed_virginia_recertification(
+    db: AsyncSession,
+    organization_id: str,
+    created_by: str,
+    category_map: Dict[str, str],
+) -> List[str]:
+    """
+    Seed Virginia EMS recertification pathways as a sample state standard.
+
+    Creates RecertificationPathway records with category-specific hour
+    requirements matching Virginia's NCCR areas from Form TR-64.
+
+    Args:
+        db: Async database session
+        organization_id: Organization to create pathways for
+        created_by: User ID of the creator
+        category_map: Dictionary mapping category codes to their IDs
+
+    Returns:
+        List of created pathway IDs
+    """
+    logger.info(
+        f"Seeding Virginia recertification standards for organization {organization_id}"
+    )
+    pathway_ids: List[str] = []
+
+    for standard in VIRGINIA_RECERT_STANDARDS:
+        # Check if pathway already exists
+        result = await db.execute(
+            select(RecertificationPathway).where(
+                RecertificationPathway.organization_id == organization_id,
+                RecertificationPathway.name == standard["name"],
+            )
+        )
+        existing = result.scalar_one_or_none()
+
+        if existing:
+            logger.info(
+                f"Recertification pathway already exists: {standard['name']}"
+            )
+            pathway_ids.append(existing.id)
+            continue
+
+        # Resolve category codes to IDs for hour requirements
+        category_hour_reqs = []
+        for cat_hours in standard["category_hours"]:
+            cat_id = category_map.get(cat_hours["code"])
+            if cat_id:
+                category_hour_reqs.append({
+                    "category_id": cat_id,
+                    "hours": cat_hours["hours"],
+                    "label": cat_hours["label"],
+                })
+            else:
+                logger.warning(
+                    f"Category code {cat_hours['code']} not found in category map"
+                )
+
+        pathway_id = generate_uuid()
+        pathway = RecertificationPathway(
+            id=pathway_id,
+            organization_id=organization_id,
+            name=standard["name"],
+            description=standard["description"],
+            renewal_type=standard["renewal_type"],
+            required_hours=standard["required_hours"],
+            category_hour_requirements=category_hour_reqs,
+            renewal_window_days=standard["renewal_window_days"],
+            grace_period_days=standard["grace_period_days"],
+            new_expiration_months=standard["new_expiration_months"],
+            auto_create_record=True,
+            active=True,
+            created_by=created_by,
+        )
+        db.add(pathway)
+        pathway_ids.append(pathway_id)
+        logger.info(f"Created recertification pathway: {standard['name']}")
+
+    await db.commit()
+    logger.info(
+        f"Virginia recertification standards seeded successfully "
+        f"({len(pathway_ids)} pathways)"
+    )
+    return pathway_ids
+
+
 async def seed_training_data(
     db: AsyncSession,
     organization_id: str,
@@ -1555,10 +1788,16 @@ async def seed_training_data(
     # 4. Seed pipeline templates (programs with phases, requirements, milestones)
     pipeline_ids = await seed_pipeline_templates(db, organization_id, created_by)
 
+    # 5. Seed Virginia EMS recertification standards as a sample state standard
+    recert_ids = await seed_virginia_recertification(
+        db, organization_id, created_by, category_map
+    )
+
     logger.info("Training data seeding completed!")
     return {
         "category_map": category_map,
         "course_ids": course_ids,
         "requirement_ids": requirement_ids,
         "pipeline_ids": pipeline_ids,
+        "recertification_pathway_ids": recert_ids,
     }
