@@ -173,6 +173,17 @@ async def list_logs(
     }
 
 
+@router.post("/logs/read-all")
+async def mark_all_logs_read(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("notifications.manage")),
+):
+    """Mark all notification logs as read for the organization."""
+    service = NotificationsService(db)
+    count = await service.mark_all_logs_read(current_user.organization_id)
+    return {"marked_read": count}
+
+
 @router.post("/logs/{log_id}/read", response_model=NotificationLogResponse)
 async def mark_notification_read(
     log_id: UUID,

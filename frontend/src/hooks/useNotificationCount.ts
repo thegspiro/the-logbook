@@ -20,8 +20,9 @@ export const useNotificationCountStore = create<NotificationCountState>((set) =>
 
 /**
  * Polls the unread notification count every 60 seconds.
- * Mount this once in a layout-level component; other consumers
- * can read `useNotificationCountStore` directly.
+ * Pauses when the browser tab is hidden and refetches immediately
+ * when the tab becomes visible again. Mount once in a layout-level
+ * component; other consumers read `useNotificationCountStore` directly.
  */
 export function useNotificationPoller() {
   const setUnreadCount = useNotificationCountStore((s) => s.setUnreadCount);
@@ -36,13 +37,37 @@ export function useNotificationPoller() {
     }
   }, [setUnreadCount]);
 
+  const startPolling = useCallback(() => {
+    if (intervalRef.current) return;
+    intervalRef.current = setInterval(() => { void fetchCount(); }, POLL_INTERVAL_MS);
+  }, [fetchCount]);
+
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     void fetchCount();
-    intervalRef.current = setInterval(() => { void fetchCount(); }, POLL_INTERVAL_MS);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
+    startPolling();
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        void fetchCount();
+        startPolling();
+      }
     };
-  }, [fetchCount]);
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [fetchCount, startPolling, stopPolling]);
 
   return fetchCount;
 }

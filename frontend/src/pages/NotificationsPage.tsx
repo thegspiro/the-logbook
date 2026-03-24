@@ -105,6 +105,8 @@ function formatCategory(category: string): string {
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
+const INBOX_PAGE_SIZE = 20;
+
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -144,8 +146,6 @@ const NotificationsPage: React.FC = () => {
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-
-  const INBOX_PAGE_SIZE = 20;
 
   // Fetch user inbox on mount and when showRead filter changes
   useEffect(() => {
@@ -265,8 +265,7 @@ const NotificationsPage: React.FC = () => {
   // Batch management: mark all as read (#76)
   const handleMarkAllRead = async () => {
     try {
-      const unreadLogs = logs.filter((l) => !l.read);
-      await Promise.all(unreadLogs.map((l) => notificationsService.markAsRead(l.id)));
+      await notificationsService.markAllLogsRead();
       setLogs((prev) => prev.map((l) => ({ ...l, read: true })));
     } catch {
       setError('Failed to mark all as read');
@@ -521,7 +520,7 @@ const NotificationsPage: React.FC = () => {
                         <p className={`text-sm truncate ${notification.read ? 'text-theme-text-muted' : 'font-semibold text-theme-text-primary'}`}>
                           {notification.subject || 'Notification'}
                         </p>
-                        <p className="text-xs text-theme-text-muted mt-1 line-clamp-2">
+                        <p className="text-xs text-theme-text-muted mt-1 whitespace-pre-line">
                           {notification.message || ''}
                         </p>
                         {notification.category && (

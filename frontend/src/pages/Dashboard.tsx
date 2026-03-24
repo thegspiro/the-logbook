@@ -248,7 +248,7 @@ const Dashboard: React.FC = () => {
   const loadNotifications = async () => {
     try {
       const [data, countData] = await Promise.all([
-        notificationsService.getMyNotifications({ limit: 10 }),
+        notificationsService.getMyNotifications({ include_read: false, limit: 10 }),
         notificationsService.getMyUnreadCount(),
       ]);
       setNotifications(data.logs || []);
@@ -440,9 +440,7 @@ const Dashboard: React.FC = () => {
   const markNotificationRead = async (logId: string) => {
     try {
       await notificationsService.markMyNotificationRead(logId);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === logId ? { ...n, read: true } : n)),
-      );
+      setNotifications((prev) => prev.filter((n) => n.id !== logId));
       decrementUnread();
     } catch {
       toast.error("Failed to mark notification as read");
@@ -452,7 +450,7 @@ const Dashboard: React.FC = () => {
   const markAllNotificationsRead = async () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setNotifications([]);
       clearUnread();
       toast.success("All notifications marked as read");
     } catch {
@@ -460,9 +458,9 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const clearNotification = async (e: React.MouseEvent, logId: string) => {
+  const dismissNotification = (e: React.MouseEvent, logId: string) => {
     e.stopPropagation();
-    await markNotificationRead(logId);
+    void markNotificationRead(logId);
   };
 
   const formatShiftDate = (dateStr: string) => {
@@ -1045,17 +1043,13 @@ const Dashboard: React.FC = () => {
                   <button
                     key={notification.id}
                     onClick={() => {
-                      if (!notification.read)
-                        void markNotificationRead(notification.id);
-                      // Only navigate to relative/internal paths to prevent open redirect
+                      void markNotificationRead(notification.id);
                       if (notification.action_url && notification.action_url.startsWith('/'))
                         navigate(notification.action_url);
+                      else
+                        navigate("/notifications?tab=inbox");
                     }}
-                    className={`w-full text-left p-2.5 sm:p-3 rounded-lg transition-colors ${
-                      notification.read
-                        ? "bg-theme-surface-secondary text-theme-text-muted"
-                        : "bg-blue-500/10 border border-blue-500/20 text-theme-text-primary"
-                    }`}
+                    className="w-full text-left p-2.5 sm:p-3 rounded-lg transition-colors bg-blue-500/10 border border-blue-500/20 text-theme-text-primary"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
@@ -1073,17 +1067,13 @@ const Dashboard: React.FC = () => {
                         >
                           {formatRelativeTime(notification.sent_at)}
                         </span>
-                        {!notification.read ? (
-                          <button
-                            onClick={(e) => void clearNotification(e, notification.id)}
-                            className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
-                            title="Dismiss"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        ) : notification.action_url ? (
-                          <ChevronRight className="w-3.5 h-3.5 text-theme-text-muted ml-1 hidden sm:block" />
-                        ) : null}
+                        <button
+                          onClick={(e) => dismissNotification(e, notification.id)}
+                          className="ml-1 p-2 -mr-1 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                          title="Dismiss"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   </button>

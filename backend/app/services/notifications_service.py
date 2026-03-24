@@ -272,6 +272,24 @@ class NotificationsService:
         await self.db.commit()
         return len(logs)
 
+    async def mark_all_logs_read(self, organization_id: UUID) -> int:
+        """Mark all unread notification logs as read for an organization.
+
+        Returns the number of logs marked as read.
+        """
+        now = datetime.now(timezone.utc)
+        result = await self.db.execute(
+            select(NotificationLog)
+            .where(NotificationLog.organization_id == str(organization_id))
+            .where(NotificationLog.read == False)  # noqa: E712
+        )
+        logs = list(result.scalars().all())
+        for log in logs:
+            log.read = True
+            log.read_at = now
+        await self.db.commit()
+        return len(logs)
+
     async def mark_as_read(
         self, log_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
