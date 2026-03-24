@@ -31,6 +31,7 @@ import {
   Camera,
   Minus,
   Plus,
+  Type,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -94,11 +95,12 @@ function getCompartmentStatus(
   compartment: CheckTemplateCompartment,
   results: Record<string, ItemResult>,
 ): 'complete' | 'has_failures' | 'in_progress' | 'not_started' {
-  if (compartment.items.length === 0) return 'complete';
+  const checkable = compartment.items.filter((i) => i.checkType !== 'header');
+  if (checkable.length === 0) return 'complete';
 
   let checked = 0;
   let failed = 0;
-  for (const item of compartment.items) {
+  for (const item of checkable) {
     const result = results[item.id];
     if (result && result.status !== 'not_checked') {
       checked++;
@@ -107,7 +109,7 @@ function getCompartmentStatus(
   }
 
   if (checked === 0) return 'not_started';
-  if (checked === compartment.items.length) {
+  if (checked === checkable.length) {
     return failed > 0 ? 'has_failures' : 'complete';
   }
   return 'in_progress';
@@ -132,6 +134,7 @@ const CHECK_TYPE_ICONS: Partial<Record<CheckType, React.ElementType>> = {
   level: Gauge,
   date_lot: Calendar,
   reading: Hash,
+  header: Type,
 };
 
 // ============================================================================
@@ -170,15 +173,20 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     [compartments],
   );
 
-  const totalItems = allItems.length;
-  const checkedItems = allItems.filter((item) => {
+  const checkableItems = useMemo(
+    () => allItems.filter((item) => item.checkType !== 'header'),
+    [allItems],
+  );
+
+  const totalItems = checkableItems.length;
+  const checkedItems = checkableItems.filter((item) => {
     const result = results[item.id];
     return result && result.status !== 'not_checked';
   }).length;
   const progressPercent =
     totalItems > 0 ? Math.round((checkedItems / totalItems) * 100) : 0;
 
-  const allRequiredChecked = allItems
+  const allRequiredChecked = checkableItems
     .filter((item) => item.isRequired)
     .every((item) => {
       const result = results[item.id];
@@ -427,6 +435,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       setResults((prev) => {
         const next = { ...prev };
         for (const item of compartment.items) {
+          if (item.checkType === 'header') continue;
           const expStatus = getExpirationStatus(item);
           if (expStatus === 'expired') continue;
           const existing = next[item.id];
@@ -468,6 +477,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const items: CheckItemResultSubmit[] = [];
       for (const compartment of compartments) {
         for (const item of compartment.items) {
+          if (item.checkType === 'header') continue;
           const result = results[item.id];
 
           // Detect serial/lot updates for date_lot items
@@ -934,6 +944,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           </div>
         );
 
+      case 'header':
+        return null;
+
       default:
         return passFailButtons;
     }
@@ -944,6 +957,24 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const renderCheckItem = (item: CheckTemplateItem) => {
+    if (item.checkType === 'header') {
+      return (
+        <div key={item.id} className="pt-3 first:pt-0">
+          <div className="flex items-center gap-2 border-b border-theme-surface-border pb-2">
+            <Type className="h-4 w-4 text-purple-500 flex-shrink-0" />
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-purple-700 dark:text-purple-400">
+              {item.name}
+            </h3>
+          </div>
+          {item.description && (
+            <p className="mt-1 text-[11px] text-theme-text-muted">
+              {item.description}
+            </p>
+          )}
+        </div>
+      );
+    }
+
     const result = results[item.id];
     const effectiveStatus = result?.status ?? 'not_checked';
     const showNotesField = expandedNotes.has(item.id);
@@ -1103,7 +1134,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {compartments.map((comp, idx) => {
           const status = getCompartmentStatus(comp, results);
-          const checked = comp.items.filter((i) => {
+          const checkable = comp.items.filter((i) => i.checkType !== 'header');
+          const checked = checkable.filter((i) => {
             const r = results[i.id];
             return r && r.status !== 'not_checked';
           }).length;
@@ -1114,13 +1146,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               type="button"
               onClick={() => setActiveCompartment(idx)}
               className={`rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] min-h-[100px] ${STATUS_COLORS[status]}`}
-              aria-label={`${comp.name}, ${checked} of ${comp.items.length} checked${status === 'complete' ? ', complete' : status === 'has_failures' ? ', has failures' : ''}`}
+              aria-label={`${comp.name}, ${checked} of ${checkable.length} checked${status === 'complete' ? ', complete' : status === 'has_failures' ? ', has failures' : ''}`}
             >
               <p className="font-medium text-sm leading-tight">
                 {comp.name}
               </p>
               <p className="text-xs mt-1 opacity-75">
-                {checked}/{comp.items.length} checked
+                {checked}/{checkable.length} checked
               </p>
               {status === 'complete' && (
                 <CheckCircle className="h-5 w-5 mt-2" aria-hidden="true" />
@@ -1188,7 +1220,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const comp = compartments[idx];
     if (!comp) return null;
 
-    const checked = comp.items.filter((i) => {
+    const checkable = comp.items.filter((i) => i.checkType !== 'header');
+    const checked = checkable.filter((i) => {
       const r = results[i.id];
       return r && r.status !== 'not_checked';
     }).length;
@@ -1261,12 +1294,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               </p>
             )}
             <p className="text-xs text-theme-text-muted mt-1">
-              {checked}/{comp.items.length} items checked
+              {checked}/{checkable.length} items checked
             </p>
           </div>
 
           {/* Pass All / Set All to Par button */}
-          {!previewMode && checked < comp.items.length && (
+          {!previewMode && checked < checkable.length && (
             <button
               type="button"
               onClick={() => passAllInCompartment(comp)}

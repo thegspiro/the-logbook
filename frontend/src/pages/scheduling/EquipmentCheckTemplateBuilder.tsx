@@ -33,6 +33,7 @@ import {
   Hash,
   CheckSquare,
   Square,
+  Type,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -105,6 +106,7 @@ const CHECK_TYPES = [
   { value: 'level', label: 'Level' },
   { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
+  { value: 'header', label: 'Section Header' },
 ] as const;
 
 const LEVEL_UNIT_PRESETS = [
@@ -127,6 +129,7 @@ const CHECK_TYPE_HELP: Record<string, string> = {
   level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
   date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
   reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
+  header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
 
 // Pre-built vehicle check compartment templates by apparatus type
@@ -766,6 +769,51 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       // Unsaved compartment — add locally
       updateCompartmentField(compartmentIdx, {
         items: [...comp.items, emptyItem()],
+      });
+    }
+  };
+
+  const addHeader = async (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+
+    if (comp.id) {
+      try {
+        const payload: CheckTemplateItemCreate = {
+          name: 'Section Header',
+          sort_order: comp.items.length,
+          check_type: 'header',
+          is_required: false,
+        };
+        const created = await schedulingService.addCheckItem(comp.id, payload);
+        const item: ItemFormState = {
+          id: created.id,
+          name: created.name,
+          description: created.description ?? '',
+          checkType: 'header',
+          isRequired: false,
+          requiredQuantity: '',
+          expectedQuantity: '',
+          minLevel: '',
+          levelUnit: '',
+          serialNumber: '',
+          lotNumber: '',
+          hasExpiration: false,
+          expirationDate: '',
+          expirationWarningDays: '30',
+          imageUrl: '',
+        };
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, item] });
+        toast.success('Header added');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add header'));
+      }
+    } else {
+      updateCompartmentField(compartmentIdx, {
+        items: [
+          ...comp.items,
+          { ...emptyItem(), name: 'Section Header', checkType: 'header', isRequired: false },
+        ],
       });
     }
   };
@@ -1512,13 +1560,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const isInlineEditing = inlineEditKey === itemKey;
     const itemCount = totalItems ?? compartments[compIdx]?.items.length ?? 0;
 
+    const isHeader = item.checkType === 'header';
+
     return (
       <div
         key={itemKey}
         className={`rounded-md border overflow-hidden transition-colors ${
           isSelected
             ? 'border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-900/10'
-            : 'border-theme-surface-border bg-theme-surface'
+            : isHeader
+              ? 'border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-900/10'
+              : 'border-theme-surface-border bg-theme-surface'
         }`}
       >
         {/* Compact row — always visible */}
@@ -1564,6 +1616,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
           </button>
 
+          {isHeader && <Type className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />}
+
           {/* Inline editable name */}
           {isInlineEditing ? (
             <input
@@ -1583,17 +1637,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             />
           ) : (
             <span
-              className={`flex-1 text-sm truncate ${item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
+              className={`flex-1 text-sm truncate ${isHeader ? 'text-purple-700 dark:text-purple-400 font-semibold uppercase text-xs tracking-wide' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
               onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
               title="Double-click to rename"
             >
-              {item.name.trim() || 'Untitled Item'}
+              {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
             </span>
           )}
 
           {/* Badges */}
           <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
-            <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted">
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${isHeader ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
               {checkTypeLabel}
             </span>
             {item.isRequired && (
@@ -1648,31 +1702,32 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Expanded form — visible on click */}
         {isItemExpanded && (
-          <div className="border-t border-theme-surface-border px-3 py-3 space-y-3">
+          <div className={`border-t px-3 py-3 space-y-3 ${isHeader ? 'border-purple-200 dark:border-purple-800' : 'border-theme-surface-border'}`}>
             {/* Name + Description */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={labelClass}>Name</label>
+                <label className={labelClass}>{isHeader ? 'Header Title' : 'Name'}</label>
                 <input
                   type="text"
                   className={inputClass}
-                  placeholder="Item name"
+                  placeholder={isHeader ? 'e.g. Medical Supplies' : 'Item name'}
                   value={item.name}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
                 />
               </div>
               <div>
-                <label className={labelClass}>Description</label>
+                <label className={labelClass}>{isHeader ? 'Subtitle' : 'Description'}</label>
                 <input
                   type="text"
                   className={inputClass}
-                  placeholder="Optional description"
+                  placeholder={isHeader ? 'Optional subtitle shown below the header' : 'Optional description'}
                   value={item.description}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
                 />
               </div>
             </div>
 
+            {!isHeader && (<>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Check Type */}
               <div>
@@ -1803,6 +1858,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </>
               )}
             </div>
+            </>)}
           </div>
         )}
       </div>
@@ -2051,6 +2107,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add Item
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void addHeader(idx)}
+                    className="flex items-center gap-1 rounded-md border border-dashed border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-muted hover:border-purple-500 hover:text-purple-600 transition-colors"
+                  >
+                    <Type className="h-3.5 w-3.5" />
+                    Add Header
                   </button>
                 </div>
               </div>

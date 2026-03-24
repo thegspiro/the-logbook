@@ -17,6 +17,7 @@ export const CheckType = {
   LEVEL: "level",
   DATE_LOT: "date_lot",
   READING: "reading",
+  HEADER: "header",
 } as const;
 export type CheckType = (typeof CheckType)[keyof typeof CheckType];
 
@@ -35,6 +36,7 @@ export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
   level: "Level",
   date_lot: "Date / Lot",
   reading: "Reading",
+  header: "Section Header",
 };
 
 export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
