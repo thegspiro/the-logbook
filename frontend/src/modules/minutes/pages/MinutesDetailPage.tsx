@@ -17,7 +17,10 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { eventService } from '../../../services/api';
+import { electionService } from '../../../services/electionService';
 import { minutesService } from '../services/api';
+import type { ElectionListItem } from '../../../types/election';
+import { getStatusBadgeClass } from '../../../utils/electionHelpers';
 import { useAuthStore } from '../../../stores/authStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
@@ -99,6 +102,7 @@ export const MinutesDetailPage: React.FC = () => {
 
   // Linked event
   const [linkedEvent, setLinkedEvent] = useState<EventDetail | null>(null);
+  const [linkedElections, setLinkedElections] = useState<ElectionListItem[]>([]);
   const [showLinkEventModal, setShowLinkEventModal] = useState(false);
   const [availableEvents, setAvailableEvents] = useState<EventListItem[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
@@ -134,6 +138,17 @@ export const MinutesDetailPage: React.FC = () => {
       setLinkedEvent(null);
     }
   }, [minutes?.event_id]);
+
+  // Fetch elections linked to this meeting record
+  useEffect(() => {
+    if (minutesId) {
+      electionService.getElectionsByMeeting(minutesId)
+        .then(elections => setLinkedElections(elections))
+        .catch(() => setLinkedElections([]));
+    } else {
+      setLinkedElections([]);
+    }
+  }, [minutesId]);
 
   const isEditable = minutes && (minutes.status === 'draft' || minutes.status === 'rejected');
 
@@ -493,6 +508,35 @@ export const MinutesDetailPage: React.FC = () => {
               </p>
             )
           )}
+        </div>
+      )}
+
+      {/* Linked Elections */}
+      {linkedElections.length > 0 && (
+        <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-4 mb-6">
+          <h3 className="text-sm font-medium text-theme-text-secondary mb-3">Linked Elections</h3>
+          <div className="space-y-2">
+            {linkedElections.map((election) => (
+              <Link
+                key={election.id}
+                to={`/elections/${election.id}`}
+                className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-theme-text-primary truncate">{election.title}</p>
+                  <p className="text-xs text-theme-text-muted mt-0.5">
+                    {election.election_type.replace(/_/g, ' ')}
+                    {election.positions && election.positions.length > 0
+                      ? ` · ${election.positions.join(', ')}`
+                      : ''}
+                  </p>
+                </div>
+                <span className={`ml-3 shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(election.status)}`}>
+                  {election.status}
+                </span>
+              </Link>
+            ))}
+          </div>
         </div>
       )}
 

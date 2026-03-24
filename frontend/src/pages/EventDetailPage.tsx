@@ -9,6 +9,9 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { AxiosError } from 'axios';
 import { eventService, meetingsService } from '../services/api';
+import { electionService } from '../services/electionService';
+import type { ElectionListItem } from '../types/election';
+import { getStatusBadgeClass } from '../utils/electionHelpers';
 import type { Event, EventListItem, RSVP, RSVPStatus, EventStats, RSVPHistory } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -80,6 +83,7 @@ export const EventDetailPage: React.FC = () => {
   const [sendingNotification, setSendingNotification] = useState(false);
   const [showNotifyConfirm, setShowNotifyConfirm] = useState(false);
   const [lastNotification, setLastNotification] = useState<{ type: string; target: string; recipients: number; sentAt: string } | null>(null);
+  const [linkedElections, setLinkedElections] = useState<ElectionListItem[]>([]);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const reminderMenuRef = useRef<HTMLDivElement>(null);
 
@@ -104,6 +108,7 @@ export const EventDetailPage: React.FC = () => {
   useEffect(() => {
     if (eventId) {
       void fetchEvent();
+      void fetchLinkedElections();
       if (canManage) {
         void fetchRSVPs();
         void fetchStats();
@@ -126,6 +131,16 @@ export const EventDetailPage: React.FC = () => {
       setError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to load event');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLinkedElections = async () => {
+    if (!eventId) return;
+    try {
+      const elections = await electionService.getElectionsByEvent(eventId);
+      setLinkedElections(elections);
+    } catch {
+      setLinkedElections([]);
     }
   };
 
@@ -1144,6 +1159,35 @@ export const EventDetailPage: React.FC = () => {
               eventId={event.id}
               getAttachmentDownloadUrl={(eid, aid) => eventService.getAttachmentDownloadUrl(eid, aid)}
             />
+          )}
+
+          {/* Linked Elections */}
+          {linkedElections.length > 0 && (
+            <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
+              <h2 className="text-lg font-medium text-theme-text-primary mb-4">Linked Elections</h2>
+              <div className="space-y-3">
+                {linkedElections.map((election) => (
+                  <Link
+                    key={election.id}
+                    to={`/elections/${election.id}`}
+                    className="flex items-center justify-between p-3 rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-theme-text-primary truncate">{election.title}</p>
+                      <p className="text-xs text-theme-text-muted mt-0.5">
+                        {election.election_type.replace(/_/g, ' ')}
+                        {election.positions && election.positions.length > 0
+                          ? ` · ${election.positions.join(', ')}`
+                          : ''}
+                      </p>
+                    </div>
+                    <span className={`ml-3 shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(election.status)}`}>
+                      {election.status}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
           )}
 
           {/* User's RSVP Status */}
