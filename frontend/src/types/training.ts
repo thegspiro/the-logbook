@@ -264,6 +264,8 @@ export interface TrainingRecord {
   passed?: boolean;
   instructor?: string;
   location?: string;
+  location_id?: string;
+  apparatus_id?: string;
   external_provider_id?: string;
   external_record_id?: string;
   notes?: string;
@@ -321,6 +323,8 @@ export interface TrainingRecordUpdate {
   location?: string | undefined;
   notes?: string;
   attachments?: string[];
+  rank_at_completion?: string | undefined;
+  station_at_completion?: string | undefined;
 }
 
 // Bulk Training Record Creation
@@ -329,6 +333,7 @@ export interface BulkTrainingRecordEntry {
   course_name: string;
   course_code?: string;
   course_id?: string;
+  category_id?: string;
   training_type?: string;
   completion_date?: string;
   expiration_date?: string;

@@ -207,6 +207,8 @@ class TrainingRecordUpdate(BaseModel):
     location: Optional[str] = Field(None, max_length=255)
     notes: Optional[str] = None
     attachments: Optional[List[str]] = None
+    rank_at_completion: Optional[str] = Field(None, max_length=100)
+    station_at_completion: Optional[str] = Field(None, max_length=100)
 
 
 class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
@@ -216,6 +218,8 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     organization_id: UUID
     user_id: UUID
     course_id: Optional[UUID] = None
+    location_id: Optional[UUID] = None
+    apparatus_id: Optional[UUID] = None
     external_provider_id: Optional[UUID] = None
     external_record_id: Optional[str] = None
     created_at: datetime
@@ -836,6 +840,7 @@ class BulkTrainingRecordEntry(BaseModel):
     course_name: str = Field(..., min_length=1, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
     course_id: Optional[UUID] = None
+    category_id: Optional[UUID] = None
     training_type: str = "continuing_education"
     completion_date: Optional[date] = None
     expiration_date: Optional[date] = None
