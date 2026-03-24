@@ -869,6 +869,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Apparatus options for the dropdown
+  const [apparatusOptions, setApparatusOptions] = useState<Array<{ id?: string; name: string; unit_number?: string; apparatus_type: string }>>([]);
+
+  useEffect(() => {
+    const loadApparatusOptions = async () => {
+      try {
+        const result = await schedulingService.getApparatusOptions();
+        setApparatusOptions(result.options);
+      } catch {
+        // Non-critical — dropdown will just be empty
+      }
+    };
+    void loadApparatusOptions();
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Load existing template
   // ---------------------------------------------------------------------------
@@ -2465,7 +2480,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isSelected
             ? 'border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-900/10'
             : isHeader
-              ? 'border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-900/10'
+              ? 'border-theme-surface-border bg-theme-surface'
               : 'border-theme-surface-border bg-theme-surface'
         }`}
       >
@@ -2512,7 +2527,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
           </button>
 
-          {isHeader && <Type className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />}
+          {isHeader && <Type className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" />}
 
           {/* Inline editable name */}
           {isInlineEditing ? (
@@ -2533,7 +2548,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             />
           ) : (
             <span
-              className={`flex-1 text-sm truncate ${isHeader ? 'text-purple-700 dark:text-purple-400 font-semibold uppercase text-xs tracking-wide' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
+              className={`flex-1 text-sm truncate ${isHeader ? 'text-theme-text-primary font-bold' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
               onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
               title="Double-click to rename"
             >
@@ -2552,7 +2567,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           {/* Badges */}
           <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${isHeader ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
+            <span className="rounded-full px-2 py-0.5 text-[10px] font-medium bg-theme-surface-secondary text-theme-text-muted">
               {checkTypeLabel}
             </span>
             {item.isRequired && (
@@ -2630,7 +2645,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Expanded form — visible on click */}
         {isItemExpanded && (
-          <div className={`border-t px-3 py-3 space-y-3 ${isHeader ? 'border-purple-200 dark:border-purple-800' : 'border-theme-surface-border'}`}>
+          <div className="border-t border-theme-surface-border px-3 py-3 space-y-3">
             {/* Name + Description */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -2834,29 +2849,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           ref={sortableRef}
           style={sortableStyle}
           {...(sortableAttributes ?? {})}
-          className="rounded-lg border-2 border-dashed border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-900/10 overflow-hidden"
+          className="rounded-lg border border-theme-surface-border bg-theme-surface overflow-hidden"
         >
           <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-3">
             <button
               type="button"
-              className="p-0.5 text-purple-400 cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+              className="p-0.5 text-theme-text-muted cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
               aria-label="Drag to reorder section"
               {...(dragHandleProps ?? {})}
             >
               <GripVertical className="h-5 w-5" />
             </button>
 
-            <Type className="h-4 w-4 text-purple-500 flex-shrink-0" />
+            <Type className="h-4 w-4 text-theme-text-muted flex-shrink-0" />
 
             <input
               type="text"
-              className="flex-1 min-w-0 bg-transparent border-none outline-none text-purple-700 dark:text-purple-400 font-semibold uppercase text-sm tracking-wide placeholder:normal-case placeholder:font-normal placeholder:text-purple-400/60"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none text-theme-text-primary font-bold text-sm placeholder:font-normal placeholder:text-theme-text-muted"
               placeholder="Section heading..."
               value={comp.name}
               onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
             />
 
-            <span className="rounded-full bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 flex-shrink-0">
+            <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted flex-shrink-0">
               Section
             </span>
 
@@ -2865,7 +2880,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 onClick={() => moveCompartment(idx, 'up')}
                 disabled={idx === 0}
-                className="p-1 text-purple-400 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/20 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 aria-label="Move section up"
               >
                 <ChevronUp className="h-4 w-4" aria-hidden="true" />
@@ -2874,7 +2889,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 onClick={() => moveCompartment(idx, 'down')}
                 disabled={idx === compartments.length - 1}
-                className="p-1 text-purple-400 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/20 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 aria-label="Move section down"
               >
                 <ChevronDown className="h-4 w-4" aria-hidden="true" />
@@ -2891,7 +2906,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
           {comp.description && (
             <div className="px-4 pb-2 -mt-1">
-              <p className="text-xs text-purple-500/70">{comp.description}</p>
+              <p className="text-xs text-theme-text-muted">{comp.description}</p>
             </div>
           )}
         </div>
@@ -3159,7 +3174,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void addHeader(idx)}
-                    className="flex items-center gap-1 rounded-md border border-dashed border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-muted hover:border-purple-500 hover:text-purple-600 transition-colors"
+                    className="flex items-center gap-1 rounded-md border border-dashed border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-muted hover:border-theme-text-primary hover:text-theme-text-primary transition-colors"
                   >
                     <Type className="h-3.5 w-3.5" />
                     Header
@@ -3390,10 +3405,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </select>
       </div>
 
-      {/* Apparatus ID */}
+      {/* Specific Apparatus */}
       <div>
-        <label className={labelClass}>Specific Apparatus ID</label>
-        <input type="text" className={inputClass} placeholder="Leave blank for all of type" value={form.apparatusId} onChange={(e) => updateForm({ apparatusId: e.target.value })} />
+        <label className={labelClass}>Specific Apparatus</label>
+        <select
+          className={selectClass}
+          value={form.apparatusId}
+          onChange={(e) => updateForm({ apparatusId: e.target.value })}
+        >
+          <option value="">All of type (default)</option>
+          {apparatusOptions
+            .filter((a) => !form.apparatusType || a.apparatus_type === form.apparatusType)
+            .filter((a) => a.id)
+            .map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.unit_number ? `${a.unit_number} — ${a.name}` : a.name}
+              </option>
+            ))}
+        </select>
+        <p className="mt-1 text-xs text-theme-text-muted">
+          Leave as &quot;All of type&quot; to use this template as the default for all {form.apparatusType || 'apparatus'} units
+        </p>
       </div>
 
       {/* Active toggle */}
@@ -3595,7 +3627,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void addSectionHeader()}
-                className="flex items-center gap-1.5 rounded-md border border-dashed border-purple-400 dark:border-purple-600 px-3 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+                className="flex items-center gap-1.5 rounded-md border border-dashed border-theme-surface-border px-3 py-2 text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary transition-colors"
               >
                 <Type className="h-4 w-4" />
                 Add Section
