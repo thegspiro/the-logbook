@@ -1363,7 +1363,7 @@ const Dashboard: React.FC = () => {
               Recent Activity
             </h3>
             <button
-              onClick={() => navigate("/notifications")}
+              onClick={() => navigate("/notifications?tab=inbox")}
               className="text-xs text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 py-2 pl-2"
             >
               View All <ChevronRight className="w-3 h-3" />
