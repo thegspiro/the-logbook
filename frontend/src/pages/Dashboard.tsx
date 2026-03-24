@@ -248,7 +248,7 @@ const Dashboard: React.FC = () => {
   const loadNotifications = async () => {
     try {
       const [data, countData] = await Promise.all([
-        notificationsService.getMyNotifications({ limit: 10 }),
+        notificationsService.getMyNotifications({ include_read: false, limit: 10 }),
         notificationsService.getMyUnreadCount(),
       ]);
       setNotifications(data.logs || []);
@@ -440,9 +440,7 @@ const Dashboard: React.FC = () => {
   const markNotificationRead = async (logId: string) => {
     try {
       await notificationsService.markMyNotificationRead(logId);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === logId ? { ...n, read: true } : n)),
-      );
+      setNotifications((prev) => prev.filter((n) => n.id !== logId));
       decrementUnread();
     } catch {
       toast.error("Failed to mark notification as read");
@@ -452,7 +450,7 @@ const Dashboard: React.FC = () => {
   const markAllNotificationsRead = async () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setNotifications([]);
       clearUnread();
       toast.success("All notifications marked as read");
     } catch {
