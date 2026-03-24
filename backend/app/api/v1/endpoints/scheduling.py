@@ -1684,7 +1684,7 @@ async def update_eligibility_settings(
             open_positions=data.open_positions,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     return SchedulingEligibilitySettingsResponse(
         excluded_membership_types=result.get(
