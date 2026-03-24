@@ -94,6 +94,7 @@ export interface CheckTemplateItemCreate {
 export interface CheckTemplateItemUpdate {
   name?: string | undefined;
   description?: string | undefined;
+  compartment_id?: string | undefined;
   sort_order?: number | undefined;
   check_type?: string | undefined;
   is_required?: boolean | undefined;

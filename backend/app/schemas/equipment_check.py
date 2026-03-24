@@ -44,6 +44,7 @@ class CheckTemplateItemUpdate(BaseModel):
 
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
+    compartment_id: Optional[str] = None
     sort_order: Optional[int] = None
     check_type: Optional[str] = Field(None, max_length=30)
     is_required: Optional[bool] = None

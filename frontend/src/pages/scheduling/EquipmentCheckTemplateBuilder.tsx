@@ -34,6 +34,10 @@ import {
   CheckSquare,
   Square,
   Type,
+  Pencil,
+  Download,
+  Upload,
+  ArrowRightLeft,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -272,6 +276,231 @@ const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
           { name: 'Patient compartment lights', checkType: 'functional' },
           { name: 'Sharps container level', checkType: 'pass_fail' },
           { name: 'Compartment clean & sanitized', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  tanker: {
+    label: 'Tanker / Water Tender',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Water Tank & Pump',
+        items: [
+          { name: 'Tank water level', checkType: 'level' },
+          { name: 'Pump engages properly', checkType: 'functional' },
+          { name: 'Pump gauges operational', checkType: 'functional' },
+          { name: 'Dump valves / portable tank connections', checkType: 'functional' },
+          { name: 'Foam concentrate level', checkType: 'level' },
+          { name: 'Drain & fill valves closed', checkType: 'pass_fail' },
+          { name: 'Hose connections & fittings', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission (all gears)', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  rescue: {
+    label: 'Rescue / Heavy Rescue',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+          { name: 'Scene lighting / light tower', checkType: 'functional' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Extrication Equipment',
+        items: [
+          { name: 'Hydraulic spreaders', checkType: 'functional' },
+          { name: 'Hydraulic cutters', checkType: 'functional' },
+          { name: 'Hydraulic rams', checkType: 'functional' },
+          { name: 'Hydraulic power unit oil level', checkType: 'level' },
+          { name: 'Hydraulic hoses & fittings', checkType: 'pass_fail' },
+          { name: 'Cribbing blocks', checkType: 'quantity' },
+          { name: 'Step chocks / stabilization struts', checkType: 'present' },
+          { name: 'Hand tools (pry bars, axes, etc.)', checkType: 'present' },
+        ],
+      },
+      {
+        name: 'Power Tools & Equipment',
+        items: [
+          { name: 'Generator starts & runs', checkType: 'functional' },
+          { name: 'Generator fuel level', checkType: 'level' },
+          { name: 'Reciprocating / circular saw', checkType: 'functional' },
+          { name: 'Ventilation fan (PPV)', checkType: 'functional' },
+          { name: 'Air bags / lifting equipment', checkType: 'present' },
+          { name: 'Rope & rigging gear', checkType: 'present' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  brush: {
+    label: 'Brush / Wildland',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body / skid plate damage', checkType: 'pass_fail' },
+          { name: '4WD / AWD engagement', checkType: 'functional' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Water Tank & Pump',
+        items: [
+          { name: 'Tank water level', checkType: 'level' },
+          { name: 'Pump engages / prime', checkType: 'functional' },
+          { name: 'Booster reel hose condition', checkType: 'pass_fail' },
+          { name: 'Nozzle(s) present & operational', checkType: 'present' },
+          { name: 'Foam system (if equipped)', checkType: 'functional' },
+        ],
+      },
+      {
+        name: 'Wildland Equipment',
+        items: [
+          { name: 'Hand tools (Pulaski, McLeod, shovel)', checkType: 'quantity' },
+          { name: 'Drip torches', checkType: 'present' },
+          { name: 'Fire shelters', checkType: 'quantity' },
+          { name: 'Portable radio(s)', checkType: 'quantity' },
+          { name: 'Chain saw & fuel', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  boat: {
+    label: 'Boat / Watercraft',
+    compartments: [
+      {
+        name: 'Hull & Exterior',
+        items: [
+          { name: 'Hull integrity / damage', checkType: 'pass_fail' },
+          { name: 'Navigation lights', checkType: 'functional' },
+          { name: 'Emergency strobe / blue light', checkType: 'functional' },
+          { name: 'Trailer lights & tongue hitch', checkType: 'functional' },
+          { name: 'Drain plug installed', checkType: 'present' },
+        ],
+      },
+      {
+        name: 'Engine & Motor',
+        items: [
+          { name: 'Engine oil level', checkType: 'level' },
+          { name: 'Fuel level', checkType: 'level' },
+          { name: 'Engine starts & runs', checkType: 'functional' },
+          { name: 'Steering & throttle response', checkType: 'functional' },
+          { name: 'Kill switch / lanyard', checkType: 'present' },
+          { name: 'Propeller condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Safety Equipment',
+        items: [
+          { name: 'PFDs / life jackets', checkType: 'quantity' },
+          { name: 'Throw bag / ring buoy', checkType: 'present' },
+          { name: 'First aid kit', checkType: 'present' },
+          { name: 'Fire extinguisher', checkType: 'present' },
+          { name: 'Anchor & line', checkType: 'present' },
+          { name: 'Paddle / oar', checkType: 'present' },
+          { name: 'VHF marine radio', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  utility: {
+    label: 'Utility / Command',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Command & Communication',
+        items: [
+          { name: 'Mobile radio(s)', checkType: 'functional' },
+          { name: 'MDT / laptop & charger', checkType: 'functional' },
+          { name: 'Accountability system / tags', checkType: 'present' },
+          { name: 'Command board / ICS forms', checkType: 'present' },
+          { name: 'Vest (IC, Safety, etc.)', checkType: 'present' },
         ],
       },
       {
@@ -525,6 +754,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   // Auto-save debounce timer for item edits
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---------------------------------------------------------------------------
   // Load existing template
@@ -560,9 +791,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             description: item.description ?? '',
             checkType: item.checkType,
             isRequired: item.isRequired,
-            requiredQuantity: item.requiredQuantity != null ? String(item.requiredQuantity) : '',
-            expectedQuantity: item.expectedQuantity != null ? String(item.expectedQuantity) : '',
-            minLevel: item.minLevel != null ? String(item.minLevel) : '',
+            requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
+            expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
+            minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
             levelUnit: item.levelUnit ?? '',
             serialNumber: item.serialNumber ?? '',
             lotNumber: item.lotNumber ?? '',
@@ -913,6 +1144,45 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     markDirty();
   };
 
+  const moveItemToCompartment = async (
+    fromCompIdx: number,
+    itemIdx: number,
+    toCompIdx: number,
+  ) => {
+    if (fromCompIdx === toCompIdx) return;
+    const fromComp = compartments[fromCompIdx];
+    const toComp = compartments[toCompIdx];
+    if (!fromComp || !toComp) return;
+
+    const item = fromComp.items[itemIdx];
+    if (!item) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const src = next[fromCompIdx];
+      const dst = next[toCompIdx];
+      if (!src || !dst) return prev;
+      const srcItems = src.items.filter((_, i) => i !== itemIdx);
+      const dstItems = [...dst.items, item];
+      next[fromCompIdx] = { ...src, items: srcItems };
+      next[toCompIdx] = { ...dst, items: dstItems };
+      return next;
+    });
+
+    if (isEditing && item.id && toComp.id) {
+      try {
+        await schedulingService.updateCheckItem(item.id, {
+          compartment_id: toComp.id,
+          sort_order: toComp.items.length,
+        });
+      } catch {
+        toast.error('Failed to move item on server');
+      }
+    }
+    markDirty();
+    toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
+  };
+
   // ---------------------------------------------------------------------------
   // Move compartment up/down
   // ---------------------------------------------------------------------------
@@ -1047,10 +1317,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
+      if (autoSaveFadeRef.current) {
+        clearTimeout(autoSaveFadeRef.current);
+      }
+      setAutoSaveStatus('saving');
       autoSaveTimerRef.current = setTimeout(() => {
-        void schedulingService.updateCheckItem(itemId, patch).catch(() => {
-          // Silent — user can still manually save
-        });
+        void schedulingService
+          .updateCheckItem(itemId, patch)
+          .then(() => {
+            setAutoSaveStatus('saved');
+            autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000);
+          })
+          .catch(() => {
+            setAutoSaveStatus('error');
+            autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), 4000);
+          });
       }, 1500);
     },
     [isEditing],
@@ -1119,7 +1400,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }
         if (item.hasExpiration && !item.expirationDate.trim()) {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
-          break;
+        }
+        if (item.checkType === 'quantity' && !item.requiredQuantity && !item.expectedQuantity) {
+          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no required or expected quantity.`);
+        }
+        if (item.checkType === 'level' && !item.minLevel) {
+          warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
+        }
+        if (item.checkType === 'date_lot' && !item.serialNumber && !item.lotNumber) {
+          warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
         }
       }
     }
@@ -1337,6 +1626,119 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     } finally {
       setCloning(false);
     }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Template Export / Import
+  // ---------------------------------------------------------------------------
+
+  const exportTemplateJson = () => {
+    const data = {
+      name: form.name,
+      description: form.description,
+      checkTiming: form.checkTiming,
+      templateType: form.templateType,
+      apparatusType: form.apparatusType,
+      compartments: compartments.map((c) => ({
+        name: c.name,
+        description: c.description,
+        items: c.items.map((item) => ({
+          name: item.name,
+          description: item.description,
+          checkType: item.checkType,
+          isRequired: item.isRequired,
+          requiredQuantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+          expectedQuantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+          minLevel: item.minLevel ? Number(item.minLevel) : undefined,
+          levelUnit: item.levelUnit || undefined,
+          serialNumber: item.serialNumber || undefined,
+          lotNumber: item.lotNumber || undefined,
+          hasExpiration: item.hasExpiration,
+          expirationDate: item.expirationDate || undefined,
+          expirationWarningDays: item.expirationWarningDays ? Number(item.expirationWarningDays) : 30,
+          imageUrl: item.imageUrl || undefined,
+        })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(form.name || 'template').replace(/\s+/g, '_').toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Template exported');
+  };
+
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const handleImportTemplate = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string) as {
+          name?: string;
+          description?: string;
+          checkTiming?: string;
+          templateType?: string;
+          apparatusType?: string;
+          compartments?: Array<{
+            name: string;
+            description?: string;
+            items?: Array<Record<string, unknown>>;
+          }>;
+        };
+
+        if (!data.compartments || !Array.isArray(data.compartments)) {
+          toast.error('Invalid template file: missing compartments');
+          return;
+        }
+
+        if (compartments.length > 0) {
+          if (!window.confirm('Importing will replace all current compartments. Continue?')) return;
+        }
+
+        if (data.name) setForm((prev) => ({ ...prev, name: data.name ?? prev.name, description: data.description ?? prev.description }));
+
+        const imported: CompartmentFormState[] = data.compartments.map((c) => ({
+          name: c.name || 'Untitled',
+          description: c.description ?? '',
+          imageUrl: '',
+          parentCompartmentId: '',
+          items: (c.items ?? []).map((item) => ({
+            ...emptyItem(),
+            name: (item.name as string) || '',
+            description: (item.description as string) ?? '',
+            checkType: ((item.checkType as string) || 'pass_fail') as CheckType,
+            isRequired: Boolean(item.isRequired),
+            requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
+            expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
+            minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
+            levelUnit: (item.levelUnit as string) ?? '',
+            serialNumber: (item.serialNumber as string) ?? '',
+            lotNumber: (item.lotNumber as string) ?? '',
+            hasExpiration: Boolean(item.hasExpiration),
+            expirationDate: (item.expirationDate as string) ?? '',
+            expirationWarningDays: item.expirationWarningDays != null ? String(Number(item.expirationWarningDays)) : '30',
+            imageUrl: (item.imageUrl as string) ?? '',
+          })),
+        }));
+
+        setCompartments(imported);
+        const expanded = new Set<string>();
+        imported.forEach((_, i) => expanded.add(`comp-${i}`));
+        setExpandedCompartments(expanded);
+        markDirty();
+        toast.success(`Imported ${imported.length} compartment(s)`);
+      } catch {
+        toast.error('Failed to parse template file');
+      }
+    };
+    reader.readAsText(file);
+    if (importFileRef.current) importFileRef.current.value = '';
   };
 
   // ---------------------------------------------------------------------------
@@ -1575,7 +1977,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       >
         {/* Compact row — always visible */}
         <div
-          className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 sm:px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
+          className="group/item flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 sm:px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
           onClick={() => toggleItemExpanded(itemKey)}
         >
           {/* Bulk selection checkbox */}
@@ -1645,6 +2047,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </span>
           )}
 
+          <button
+            type="button"
+            className="p-0.5 flex-shrink-0 text-theme-text-muted hover:text-blue-600 opacity-0 group-hover/item:opacity-100 transition-opacity"
+            onClick={(e) => { e.stopPropagation(); startInlineEdit(itemKey, item.name, e); }}
+            aria-label={`Rename ${item.name.trim() || 'item'}`}
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+
           {/* Badges */}
           <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
             <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${isHeader ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
@@ -1689,6 +2100,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             >
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
+            {compartments.length > 1 && (
+              <div className="relative p-1 text-theme-text-muted hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors">
+                <ArrowRightLeft className="h-3.5 w-3.5 pointer-events-none" aria-hidden="true" />
+                <select
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  value=""
+                  onChange={(e) => {
+                    const targetIdx = Number(e.target.value);
+                    if (!Number.isNaN(targetIdx)) {
+                      void moveItemToCompartment(compIdx, itemIdx, targetIdx);
+                    }
+                    e.target.value = '';
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Move ${item.name || 'item'} to another compartment`}
+                >
+                  <option value="" disabled>Move to…</option>
+                  {compartments.map((c, ci) => ci !== compIdx ? (
+                    <option key={ci} value={ci}>{c.name || `Compartment ${ci + 1}`}</option>
+                  ) : null)}
+                </select>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => void deleteItem(compIdx, itemIdx)}
@@ -2287,6 +2721,34 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           )}
           <button
             type="button"
+            onClick={exportTemplateJson}
+            disabled={compartments.length === 0}
+            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+            title="Export template as JSON"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => importFileRef.current?.click()}
+              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              title="Import template from JSON"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="hidden sm:inline">Import</span>
+            </button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImportTemplate}
+            />
+          </div>
+          <button
+            type="button"
             onClick={() => setShowPreview(true)}
             disabled={compartments.length === 0}
             className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
@@ -2452,6 +2914,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               )}
             </div>
             <div className="flex items-center gap-2">
+              {autoSaveStatus === 'saving' && (
+                <span className="flex items-center gap-1 text-xs text-blue-500 animate-pulse">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Saving…
+                </span>
+              )}
+              {autoSaveStatus === 'saved' && (
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Saved
+                </span>
+              )}
+              {autoSaveStatus === 'error' && (
+                <span className="flex items-center gap-1 text-xs text-red-500">
+                  <AlertTriangle className="h-3 w-3" />
+                  Save failed
+                </span>
+              )}
               {stats.completeness < 100 && (
                 <span className="text-xs text-yellow-600 dark:text-yellow-400">
                   {stats.completeness}% items named
