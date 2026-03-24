@@ -352,13 +352,101 @@ const InventoryBarcodePrintPage: React.FC = () => {
       toast.error('Barcodes are still rendering. Please wait a moment.');
       return;
     }
-    const svgs = document.querySelectorAll('.barcode-label svg');
+    const container = document.querySelector('.barcode-labels-container');
+    if (!container) {
+      toast.error('Label container not found.');
+      return;
+    }
+    const svgs = container.querySelectorAll('.barcode-label svg');
     const emptyCount = Array.from(svgs).filter(svg => !svg.innerHTML || svg.innerHTML.trim().length < 20).length;
     if (emptyCount > 0 && emptyCount === svgs.length) {
       toast.error('No barcodes rendered. Check that items have barcode, asset tag, or serial number values.');
       return;
     }
-    window.print();
+
+    // Iframe-based printing: Chrome reliably applies @page size when it's
+    // part of a static document parsed at load time, rather than injected
+    // dynamically into the current page.
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.top = '-10000px';
+    iframe.style.left = '-10000px';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    if (!iframeDoc) {
+      document.body.removeChild(iframe);
+      toast.error('Could not create print frame.');
+      return;
+    }
+
+    const labelsHtml = container.innerHTML;
+    const containerStyle = container.getAttribute('style') || '';
+
+    iframeDoc.open();
+    iframeDoc.write(`<!DOCTYPE html>
+<html>
+<head>
+<style>
+  @page {
+    size: ${preset.pageWidth} ${preset.pageHeight};
+    margin: ${isThermal ? '0' : '0.5in 0.19in'};
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: white; }
+  .barcode-labels-container { padding: 0; margin: 0; }
+  .barcode-label {
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  .barcode-label svg {
+    display: block !important;
+    visibility: visible !important;
+    max-width: 100% !important;
+    height: auto !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  .barcode-label svg rect,
+  .barcode-label svg g rect {
+    fill: #000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  ${isThermal ? `
+    .barcode-label { page-break-after: always; }
+    .barcode-label:last-child { page-break-after: auto; }
+  ` : ''}
+</style>
+</head>
+<body>
+  <div class="barcode-labels-container" style="${containerStyle.replace(/"/g, '&quot;')}">${labelsHtml}</div>
+</body>
+</html>`);
+    iframeDoc.close();
+
+    let printed = false;
+    const triggerPrint = () => {
+      if (printed) return;
+      printed = true;
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+      }, 1000);
+    };
+
+    iframe.onload = triggerPrint;
+    // document.write + close can complete synchronously, firing
+    // readyState=complete before onload is wired up
+    if (iframeDoc.readyState === 'complete') {
+      triggerPrint();
+    }
   };
 
   const handleDownloadPdf = async () => {
