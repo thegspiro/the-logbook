@@ -611,6 +611,8 @@ class MemberHoursReport(BaseModel):
 
     user_id: UUID
     email: str
+    first_name: str = ""
+    last_name: str = ""
     shift_count: int
     total_minutes: int
     total_hours: float
