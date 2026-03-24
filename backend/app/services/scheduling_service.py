@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1266,12 +1266,20 @@ class SchedulingService:
                     .where(Shift.shift_date.between(date_lo, date_hi))
                 )
                 # Check time overlap: other shift starts before this one ends
-                # AND other shift ends after this one starts
+                # AND other shift ends after this one starts.
+                # When the other shift has no end_time, restrict the match to
+                # the same shift_date so open-ended shifts are not treated as
+                # infinitely long (which caused false positives across UTC
+                # date boundaries).
                 if shift.end_time:
                     overlap_query = overlap_query.where(
                         Shift.start_time < shift.end_time,
                         or_(
-                            Shift.end_time.is_(None), Shift.end_time > shift.start_time
+                            and_(
+                                Shift.end_time.is_(None),
+                                Shift.shift_date == shift.shift_date,
+                            ),
+                            Shift.end_time > shift.start_time,
                         ),
                     )
                 else:
