@@ -129,6 +129,8 @@ async def _build_election_response(
 @router.get("", response_model=list[ElectionListResponse])
 async def list_elections(
     status_filter: str | None = None,
+    event_id: str | None = None,
+    meeting_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("elections.view")),
 ):
@@ -151,6 +153,12 @@ async def list_elections(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid status: {status_filter}",
             )
+
+    if event_id:
+        query = query.where(Election.event_id == event_id)
+
+    if meeting_id:
+        query = query.where(Election.meeting_id == meeting_id)
 
     query = query.order_by(Election.start_date.desc())
 

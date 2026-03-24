@@ -49,6 +49,20 @@ export const electionService = {
     return response.data;
   },
 
+  async getElectionsByEvent(eventId: string): Promise<ElectionListItem[]> {
+    const response = await api.get<ElectionListItem[]>('/elections', {
+      params: { event_id: eventId },
+    });
+    return response.data;
+  },
+
+  async getElectionsByMeeting(meetingId: string): Promise<ElectionListItem[]> {
+    const response = await api.get<ElectionListItem[]>('/elections', {
+      params: { meeting_id: meetingId },
+    });
+    return response.data;
+  },
+
   /**
    * Get a specific election
    */
