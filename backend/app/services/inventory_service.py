@@ -78,6 +78,16 @@ class InventoryService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _ensure_barcode(self, item: "InventoryItem") -> None:
+        """Lazily backfill a barcode for items created before auto-generation."""
+        if item.barcode:
+            return
+        from app.core.utils import generate_uuid as _gen
+
+        item.barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
+        await self.db.commit()
+        await self.db.refresh(item)
+
     # ------------------------------------------------------------------
     # Notification helper
     # ------------------------------------------------------------------
@@ -417,7 +427,17 @@ class InventoryService:
 
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
-        items = result.scalars().all()
+        items = list(result.scalars().all())
+
+        missing = [i for i in items if not i.barcode]
+        if missing:
+            from app.core.utils import generate_uuid as _gen
+
+            for item in missing:
+                item.barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
+            await self.db.commit()
+            for item in missing:
+                await self.db.refresh(item)
 
         return items, total
 
@@ -437,7 +457,10 @@ class InventoryService:
                 selectinload(InventoryItem.assignment_history),
             )
         )
-        return result.scalar_one_or_none()
+        item = result.scalar_one_or_none()
+        if item:
+            await self._ensure_barcode(item)
+        return item
 
     async def _get_item_locked(
         self, item_id: UUID, organization_id: UUID

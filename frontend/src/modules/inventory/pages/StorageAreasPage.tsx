@@ -98,7 +98,7 @@ const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
         const statusStyle = getStatusStyle(item.status);
         const condColor = getConditionColor(item.condition);
         return (
-          <Link key={item.id} to={`/inventory/${item.id}`}
+          <Link key={item.id} to={`/inventory/items/${item.id}`}
             className="flex items-center gap-2 py-1.5 px-3 hover:bg-theme-surface-hover rounded-r-lg transition-colors group/item">
             <Package className="w-3.5 h-3.5 text-theme-text-muted shrink-0" />
             <span className="text-sm text-theme-text-primary truncate flex-1 min-w-0">
