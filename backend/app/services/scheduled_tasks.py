@@ -354,11 +354,12 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     log = NotificationLog(
                         id=generate_uuid(),
                         organization_id=item.organization_id,
-                        user_id=item.assigned_to,
+                        recipient_id=item.assigned_to,
                         channel="in_app",
                         category="action_items",
                         subject=f"Action item {urgency}: {item.description[:80]}",
-                        body=f"Your action item is {urgency}. Description: {item.description}",
+                        message=f"Your action item is {urgency}. Description: {item.description}",
+                        delivered=True,
                     )
                     db.add(log)
                     total_reminders += 1
@@ -402,11 +403,12 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                         organization_id=(
                             item.minutes.organization_id if item.minutes else None
                         ),
-                        user_id=item.assignee_id,
+                        recipient_id=item.assignee_id,
                         channel="in_app",
                         category="action_items",
                         subject=f"Action item {urgency}: {item.description[:80]}",
-                        body=f"Your action item is {urgency}. Description: {item.description}",
+                        message=f"Your action item is {urgency}. Description: {item.description}",
+                        delivered=True,
                     )
                     db.add(log)
                     total_reminders += 1
@@ -635,6 +637,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     f"{_format_relative_time(event.start_datetime, now)}."
                                 ),
                                 expires_at=expires_at,
+                                delivered=True,
                             )
                             db.add(in_app_log)
                             org_reminders += 1
@@ -801,6 +804,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                         subject=subject,
                         message=message,
                         action_url=event_url,
+                        delivered=True,
                     )
                     db.add(in_app_log)
                     org_notifications += 1
@@ -985,6 +989,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         subject=subject,
                         message=message,
                         action_url="/scheduling",
+                        delivered=True,
                     )
                     db.add(in_app_log)
                     org_notifications += 1
@@ -1127,7 +1132,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 select(Shift)
                 .where(Shift.organization_id == str(org.id))
                 .where(Shift.start_time.isnot(None))
-                .where(Shift.start_time > now)
+                .where(Shift.start_time >= now)
                 .where(Shift.start_time <= lookahead_end)
             )
             shifts = list(shifts_result.scalars().all())
@@ -1248,6 +1253,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             subject=subject,
                             message=message,
                             action_url="/scheduling",
+                            delivered=True,
                         )
                         db.add(notif)
                         org_notifications += 1
@@ -2339,6 +2345,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                             f"({pattern_label}) ends on {series_end_str} "
                             f"with {remaining} occurrence(s) remaining."
                         ),
+                        delivered=True,
                     )
                     db.add(in_app_log)
                     org_reminders += 1

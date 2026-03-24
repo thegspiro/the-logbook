@@ -2073,6 +2073,7 @@ class CheckTemplateCompartment(Base):
     description = Column(Text, nullable=True)
     sort_order = Column(Integer, default=0, nullable=False)
     image_url = Column(String(500), nullable=True)
+    is_header = Column(Boolean, default=False, nullable=False)
     parent_compartment_id = Column(
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="SET NULL"),
@@ -2138,7 +2139,7 @@ class CheckTemplateItem(Base):
     sort_order = Column(Integer, default=0, nullable=False)
     check_type = Column(
         String(30), nullable=False, default="pass_fail"
-    )  # pass_fail, present, functional, quantity, level, date_lot, reading
+    )  # pass_fail, present, functional, quantity, level, date_lot, reading, text
     is_required = Column(Boolean, default=False, nullable=False)
     required_quantity = Column(Integer, nullable=True)
     expected_quantity = Column(Integer, nullable=True)

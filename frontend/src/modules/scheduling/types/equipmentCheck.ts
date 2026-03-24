@@ -17,6 +17,8 @@ export const CheckType = {
   LEVEL: "level",
   DATE_LOT: "date_lot",
   READING: "reading",
+  TEXT: "text",
+  HEADER: "header",
 } as const;
 export type CheckType = (typeof CheckType)[keyof typeof CheckType];
 
@@ -35,6 +37,8 @@ export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
   level: "Level",
   date_lot: "Date / Lot",
   reading: "Reading",
+  text: "Text",
+  header: "Section Header",
 };
 
 export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
@@ -92,6 +96,7 @@ export interface CheckTemplateItemCreate {
 export interface CheckTemplateItemUpdate {
   name?: string | undefined;
   description?: string | undefined;
+  compartment_id?: string | undefined;
   sort_order?: number | undefined;
   check_type?: string | undefined;
   is_required?: boolean | undefined;
@@ -119,6 +124,7 @@ export interface CheckTemplateCompartment {
   description?: string;
   sortOrder: number;
   imageUrl?: string;
+  isHeader?: boolean;
   parentCompartmentId?: string;
   items: CheckTemplateItem[];
   createdAt?: string;
@@ -130,6 +136,7 @@ export interface CheckTemplateCompartmentCreate {
   description?: string | undefined;
   sort_order?: number | undefined;
   image_url?: string | undefined;
+  is_header?: boolean | undefined;
   parent_compartment_id?: string | undefined;
   items?: CheckTemplateItemCreate[] | undefined;
 }
@@ -139,6 +146,7 @@ export interface CheckTemplateCompartmentUpdate {
   description?: string | undefined;
   sort_order?: number | undefined;
   image_url?: string | undefined;
+  is_header?: boolean | undefined;
   parent_compartment_id?: string | undefined;
 }
 
@@ -296,6 +304,15 @@ export interface CheckItemHistory {
   notes?: string;
   checkedByName?: string;
   checkedAt?: string;
+}
+
+export interface LastCheckItemResult {
+  status: string;
+  quantity_found?: number;
+  level_reading?: number;
+  serial_number?: string;
+  lot_number?: string;
+  notes?: string;
 }
 
 // ─── Report Types ────────────────────────────────────────────────────────────

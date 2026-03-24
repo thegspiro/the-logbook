@@ -55,6 +55,8 @@ export interface Election {
   position_eligibility?: { [position: string]: PositionEligibility };
   meeting_date?: string;
   meeting_id?: string;
+  meeting_title?: string;
+  meeting_type?: string;
   event_id?: string;
   attendees?: Attendee[];
   start_date: string;
@@ -97,6 +99,9 @@ export interface ElectionListItem {
   status: ElectionStatus;
   positions?: string[];
   total_votes?: number;
+  meeting_id?: string;
+  meeting_title?: string;
+  meeting_date?: string;
 }
 
 export interface ElectionCreate {
@@ -369,6 +374,14 @@ export interface AttendeeCheckInResponse {
   attendee: Attendee;
   message: string;
   total_attendees: number;
+}
+
+export interface ImportMeetingAttendeesResponse {
+  success: boolean;
+  imported: number;
+  skipped: number;
+  total_attendees: number;
+  message: string;
 }
 
 // Ballot template types

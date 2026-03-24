@@ -44,6 +44,7 @@ class CheckTemplateItemUpdate(BaseModel):
 
     name: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
+    compartment_id: Optional[str] = None
     sort_order: Optional[int] = None
     check_type: Optional[str] = Field(None, max_length=30)
     is_required: Optional[bool] = None
@@ -103,6 +104,7 @@ class CheckTemplateCompartmentCreate(BaseModel):
     description: Optional[str] = None
     sort_order: int = 0
     image_url: Optional[str] = Field(None, max_length=500)
+    is_header: bool = False
     parent_compartment_id: Optional[str] = None
     items: Optional[List[CheckTemplateItemCreate]] = None
 
@@ -114,6 +116,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     description: Optional[str] = None
     sort_order: Optional[int] = None
     image_url: Optional[str] = Field(None, max_length=500)
+    is_header: Optional[bool] = None
     parent_compartment_id: Optional[str] = None
 
 
@@ -132,6 +135,7 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     description: Optional[str] = None
     sort_order: int
     image_url: Optional[str] = None
+    is_header: bool = False
     parent_compartment_id: Optional[str] = None
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None

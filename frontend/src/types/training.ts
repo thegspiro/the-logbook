@@ -41,14 +41,15 @@ export type DueDateType =
  */
 export interface TrainingSession {
   id: string;
-  event_id: string;  // Links to Event table
-  course_id?: string;  // Links to TrainingCourse if using existing course
+  organization_id?: string;
+  event_id: string;
+  course_id?: string;
 
   // Category and program linkage
-  category_id?: string;     // Training category (Fire, EMS, Hazmat, etc.)
-  program_id?: string;      // Training program (Recruit School, Driver Training, etc.)
-  phase_id?: string;        // Program phase
-  requirement_id?: string;  // Specific requirement this satisfies
+  category_id?: string;
+  program_id?: string;
+  phase_id?: string;
+  requirement_id?: string;
 
   // Training-specific details
   course_name: string;
@@ -56,12 +57,27 @@ export interface TrainingSession {
   training_type: TrainingType;
   credit_hours: number;
   instructor?: string;
+  instructor_id?: string;
+  co_instructors?: string[];
+  apparatus_id?: string;
   max_participants?: number;
 
   // Certification details
-  certification_number_prefix?: string;  // Will append member ID
+  issues_certification?: boolean;
+  certification_number_prefix?: string;
   issuing_agency?: string;
   expiration_months?: number;
+
+  // Auto-completion & approval settings
+  auto_create_records?: boolean;
+  require_completion_confirmation?: boolean;
+  approval_required?: boolean;
+  approval_deadline_days?: number;
+
+  // Finalization status
+  is_finalized?: boolean;
+  finalized_at?: string;
+  finalized_by?: string;
 
   // Requirements
   prerequisites?: string[];
@@ -231,6 +247,7 @@ export interface TrainingRecord {
   organization_id: string;
   user_id: string;
   course_id?: string;
+  category_id?: string;
   course_name: string;
   course_code?: string;
   training_type: TrainingType;
@@ -247,6 +264,10 @@ export interface TrainingRecord {
   passed?: boolean;
   instructor?: string;
   location?: string;
+  location_id?: string;
+  apparatus_id?: string;
+  external_provider_id?: string;
+  external_record_id?: string;
   notes?: string;
   attachments?: string[];
   rank_at_completion?: string;
@@ -259,6 +280,7 @@ export interface TrainingRecord {
 export interface TrainingRecordCreate {
   user_id: string;
   course_id?: string;
+  category_id?: string;
   course_name: string;
   course_code?: string;
   training_type: TrainingType;
@@ -285,6 +307,7 @@ export interface TrainingRecordUpdate {
   course_name?: string;
   course_code?: string;
   training_type?: TrainingType;
+  category_id?: string | undefined;
   scheduled_date?: string;
   completion_date?: string;
   expiration_date?: string | undefined;
@@ -300,6 +323,8 @@ export interface TrainingRecordUpdate {
   location?: string | undefined;
   notes?: string;
   attachments?: string[];
+  rank_at_completion?: string | undefined;
+  station_at_completion?: string | undefined;
 }
 
 // Bulk Training Record Creation
@@ -308,6 +333,7 @@ export interface BulkTrainingRecordEntry {
   course_name: string;
   course_code?: string;
   course_id?: string;
+  category_id?: string;
   training_type?: string;
   completion_date?: string;
   expiration_date?: string;
@@ -371,24 +397,36 @@ export interface TrainingRequirement {
   requirement_type: RequirementType;
   source: RequirementSource;
   registry_name?: string;
+  registry_code?: string;
+  is_editable?: boolean;
   training_type?: TrainingType;
+  // Requirement quantities (field used depends on requirement_type)
   required_hours?: number;
   required_courses?: string[];
+  required_shifts?: number;
+  required_calls?: number;
+  required_call_types?: string[];
+  required_skills?: string[];
+  checklist_items?: string[];
+  passing_score?: number;
+  max_attempts?: number;
   frequency: RequirementFrequency;
   year?: number;
   applies_to_all: boolean;
   required_roles?: string[];
-  required_membership_types?: string[];  // e.g. ["active", "administrative", "probationary"]
+  required_positions?: string[];
+  required_membership_types?: string[];
   start_date?: string;
   due_date?: string;
+  time_limit_days?: number;
   // Due date calculation fields
   due_date_type: DueDateType;
-  rolling_period_months?: number;  // For rolling due dates: months between required completions
-  period_start_month?: number;     // For calendar period: month the period starts (1-12)
-  period_start_day?: number;       // For calendar period: day the period starts (1-31)
-  period_end_month?: number;       // For calendar period: month the period ends (1-12)
-  period_end_day?: number;         // For calendar period: day the period ends (1-31)
-  category_ids?: string[];         // Training categories that satisfy this requirement
+  rolling_period_months?: number;
+  period_start_month?: number;
+  period_start_day?: number;
+  period_end_month?: number;
+  period_end_day?: number;
+  category_ids?: string[];
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -399,16 +437,29 @@ export interface TrainingRequirementCreate {
   name: string;
   description?: string | undefined;
   requirement_type: RequirementType;
+  source?: RequirementSource | undefined;
+  registry_name?: string | undefined;
+  registry_code?: string | undefined;
+  is_editable?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | undefined;
   required_courses?: string[] | undefined;
+  required_shifts?: number | undefined;
+  required_calls?: number | undefined;
+  required_call_types?: string[] | undefined;
+  required_skills?: string[] | undefined;
+  checklist_items?: string[] | undefined;
+  passing_score?: number | undefined;
+  max_attempts?: number | undefined;
   frequency: RequirementFrequency;
   year?: number | undefined;
   applies_to_all?: boolean | undefined;
   required_roles?: string[] | undefined;
+  required_positions?: string[] | undefined;
   required_membership_types?: string[] | undefined;
   start_date?: string | undefined;
   due_date?: string | undefined;
+  time_limit_days?: number | undefined;
   // Due date calculation fields
   due_date_type?: DueDateType | undefined;
   rolling_period_months?: number | undefined;
@@ -423,16 +474,29 @@ export interface TrainingRequirementUpdate {
   name?: string;
   description?: string | undefined;
   requirement_type?: RequirementType;
+  source?: RequirementSource | undefined;
+  registry_name?: string | undefined;
+  registry_code?: string | undefined;
+  is_editable?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | undefined;
   required_courses?: string[] | undefined;
+  required_shifts?: number | undefined;
+  required_calls?: number | undefined;
+  required_call_types?: string[] | undefined;
+  required_skills?: string[] | undefined;
+  checklist_items?: string[] | undefined;
+  passing_score?: number | undefined;
+  max_attempts?: number | undefined;
   frequency?: RequirementFrequency;
   year?: number | undefined;
   applies_to_all?: boolean | undefined;
   required_roles?: string[] | undefined;
+  required_positions?: string[] | undefined;
   required_membership_types?: string[] | undefined;
   start_date?: string | undefined;
   due_date?: string | undefined;
+  time_limit_days?: number | undefined;
   // Due date calculation fields
   due_date_type?: DueDateType | undefined;
   rolling_period_months?: number | undefined;
@@ -504,64 +568,13 @@ export type EnrollmentStatus = 'active' | 'completed' | 'expired' | 'on_hold' | 
 
 export type RequirementProgressStatus = 'not_started' | 'in_progress' | 'completed' | 'verified' | 'waived';
 
-// Enhanced Training Requirement (with all requirement types)
-export interface TrainingRequirementEnhanced {
-  id: string;
-  organization_id: string;
-  name: string;
-  description?: string;
-  requirement_type: RequirementType;
-  source: RequirementSource;
-  registry_name?: string;
-  registry_code?: string;
-  is_editable: boolean;
+/**
+ * TrainingRequirementEnhanced is now unified with TrainingRequirement,
+ * which includes all requirement type fields (shifts, calls, skills, etc.).
+ */
+export type TrainingRequirementEnhanced = TrainingRequirement;
 
-  // Different requirement quantities
-  training_type?: TrainingType;
-  required_hours?: number;
-  required_courses?: string[];
-  required_shifts?: number;
-  required_calls?: number;
-  required_call_types?: string[];
-  required_skills?: string[];
-  checklist_items?: string[];
-
-  frequency: RequirementFrequency;
-  time_limit_days?: number;
-  applies_to_all: boolean;
-  required_positions?: string[];
-  required_roles?: string[];
-
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-  created_by?: string;
-}
-
-export interface TrainingRequirementEnhancedCreate {
-  name: string;
-  description?: string | undefined;
-  requirement_type: RequirementType;
-  source?: RequirementSource | undefined;
-  registry_name?: string | undefined;
-  registry_code?: string | undefined;
-  is_editable?: boolean | undefined;
-  training_type?: TrainingType | undefined;
-  required_hours?: number | undefined;
-  required_courses?: string[] | undefined;
-  required_shifts?: number | undefined;
-  required_calls?: number | undefined;
-  required_call_types?: string[] | undefined;
-  required_skills?: string[] | undefined;
-  checklist_items?: string[] | undefined;
-  passing_score?: number | undefined;
-  max_attempts?: number | undefined;
-  frequency: RequirementFrequency;
-  time_limit_days?: number | undefined;
-  applies_to_all?: boolean | undefined;
-  required_positions?: string[] | undefined;
-  required_roles?: string[] | undefined;
-}
+export type TrainingRequirementEnhancedCreate = TrainingRequirementCreate;
 
 // Training Program
 export interface TrainingProgram {

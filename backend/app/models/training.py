@@ -280,6 +280,14 @@ class TrainingRecord(Base):
         index=True,
     )
 
+    # Training category for recertification tracking (e.g., NCCR areas)
+    category_id = Column(
+        String(36),
+        ForeignKey("training_categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Training Details
     course_name = Column(
         String(255), nullable=False
@@ -334,6 +342,17 @@ class TrainingRecord(Base):
     rank_at_completion = Column(String(100), nullable=True)
     station_at_completion = Column(String(100), nullable=True)
 
+    # External training provider linkage (populated by provider imports)
+    external_provider_id = Column(
+        String(36),
+        ForeignKey("external_training_providers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    external_record_id = Column(
+        String(255), nullable=True
+    )  # Provider's unique ID for this record
+
     # Additional Information
     notes = Column(Text)
     attachments = Column(JSON)  # List of file URLs or references
@@ -356,13 +375,19 @@ class TrainingRecord(Base):
 
     # Relationships
     course = relationship("TrainingCourse", back_populates="training_records")
+    category = relationship("TrainingCategory", foreign_keys=[category_id])
     location_obj = relationship("Location", foreign_keys=[location_id])
+    external_provider = relationship(
+        "ExternalTrainingProvider", foreign_keys=[external_provider_id]
+    )
 
     __table_args__ = (
         Index("idx_record_user_status", "user_id", "status"),
         Index("idx_record_completion", "completion_date"),
         Index("idx_record_expiration", "expiration_date"),
         Index("idx_record_location", "location_id"),
+        Index("idx_record_category", "category_id"),
+        Index("idx_record_external", "external_provider_id", "external_record_id"),
     )
 
     def __repr__(self):

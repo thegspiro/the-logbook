@@ -755,6 +755,62 @@ class EquipmentCheckService:
         return list(result.scalars().all())
 
     # ------------------------------------------------------------------
+    # Last Check Results (for pre-populating new checks)
+    # ------------------------------------------------------------------
+
+    async def get_last_check_results(
+        self,
+        template_id: str,
+        organization_id: str,
+        apparatus_id: Optional[str] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        """Return item results from the most recent completed check for a
+        given template and (optionally) apparatus.  The response is keyed by
+        ``template_item_id`` so the frontend can map values back onto the
+        current template items."""
+
+        filters = [
+            ShiftEquipmentCheck.template_id == template_id,
+            ShiftEquipmentCheck.organization_id == organization_id,
+            ShiftEquipmentCheck.overall_status.in_(["pass", "fail"]),
+        ]
+        if apparatus_id:
+            filters.append(ShiftEquipmentCheck.apparatus_id == apparatus_id)
+
+        latest_check = (
+            await self.db.execute(
+                select(ShiftEquipmentCheck)
+                .where(*filters)
+                .order_by(ShiftEquipmentCheck.checked_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if not latest_check:
+            return {}
+
+        items_result = await self.db.execute(
+            select(ShiftEquipmentCheckItem).where(
+                ShiftEquipmentCheckItem.check_id == latest_check.id,
+            )
+        )
+
+        results: Dict[str, Dict[str, Any]] = {}
+        for item in items_result.scalars().all():
+            if not item.template_item_id:
+                continue
+            results[item.template_item_id] = {
+                "status": item.status,
+                "quantity_found": item.quantity_found,
+                "level_reading": item.level_reading,
+                "serial_number": item.serial_number,
+                "lot_number": item.lot_number,
+                "notes": item.notes,
+            }
+
+        return results
+
+    # ------------------------------------------------------------------
     # Item History
     # ------------------------------------------------------------------
 
@@ -1155,6 +1211,7 @@ class EquipmentCheckService:
                     subject="Equipment Check Failed",
                     message=message,
                     action_url=(f"/scheduling/shifts/{shift.id}"),
+                    delivered=True,
                 )
                 self.db.add(notif)
             await self.db.flush()

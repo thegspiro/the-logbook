@@ -795,6 +795,48 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
     logger.info("Fast-path database initialization complete")
 
 
+def _wait_for_mysql(engine, startup_status):
+    """Block until MySQL accepts connections, with exponential backoff.
+
+    The async database_manager.connect() has its own retry loop, but the
+    sync engine used for Alembic migrations is a separate connection.
+    Without retries here a slow MySQL start (common in Docker) crashes
+    the entire application on startup.
+    """
+    import time as _wait_time
+
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+
+    max_retries = settings.DB_CONNECT_RETRIES
+    retry_delay = settings.DB_CONNECT_RETRY_DELAY
+    max_delay = settings.DB_CONNECT_RETRY_MAX_DELAY
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return
+        except OperationalError as err:
+            if attempt == max_retries:
+                logger.error(
+                    f"Could not connect to MySQL after {max_retries} attempts. "
+                    f"Last error: {err}"
+                )
+                raise
+            logger.warning(
+                f"MySQL not ready (attempt {attempt}/{max_retries}): {err}. "
+                f"Retrying in {retry_delay}s..."
+            )
+            startup_status.set_phase(
+                "migrations",
+                f"Waiting for MySQL (attempt {attempt}/{max_retries})...",
+                "MySQL is not yet accepting connections. Retrying with backoff.",
+            )
+            _wait_time.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, max_delay)
+
+
 def run_migrations():
     """
     Run Alembic migrations to ensure database schema is up to date.
@@ -932,41 +974,15 @@ def run_migrations():
             return
     # NullPool avoids connection pool overhead during DDL-heavy initialization.
     # Matches Alembic's own env.py strategy (pool is discarded after migrations).
-    engine = create_engine(settings.SYNC_DATABASE_URL, poolclass=NullPool)
+    # connect_args mirrors the async engine's timeout so a hung MySQL fails
+    # fast instead of blocking the worker indefinitely.
+    engine = create_engine(
+        settings.SYNC_DATABASE_URL,
+        poolclass=NullPool,
+        connect_args={"connect_timeout": settings.DB_CONNECT_TIMEOUT},
+    )
 
-    # Wait for MySQL to be reachable before proceeding. The async
-    # database_manager.connect() has its own retry loop, but the sync engine
-    # used here for Alembic migrations is separate and needs its own retries.
-    # Without this, a slow MySQL start (common in Docker) crashes the app.
-    import time as _wait_time
-
-    _max_retries = settings.DB_CONNECT_RETRIES
-    _retry_delay = settings.DB_CONNECT_RETRY_DELAY
-    _max_delay = settings.DB_CONNECT_RETRY_MAX_DELAY
-
-    for _conn_attempt in range(1, _max_retries + 1):
-        try:
-            with engine.connect() as _test_conn:
-                _test_conn.execute(text("SELECT 1"))
-            break
-        except OperationalError as _conn_err:
-            if _conn_attempt == _max_retries:
-                logger.error(
-                    f"Could not connect to MySQL after {_max_retries} attempts. "
-                    f"Last error: {_conn_err}"
-                )
-                raise
-            logger.warning(
-                f"MySQL not ready (attempt {_conn_attempt}/{_max_retries}): {_conn_err}. "
-                f"Retrying in {_retry_delay}s..."
-            )
-            startup_status.set_phase(
-                "migrations",
-                f"Waiting for MySQL (attempt {_conn_attempt}/{_max_retries})...",
-                "MySQL is not yet accepting connections. Retrying with backoff.",
-            )
-            _wait_time.sleep(_retry_delay)
-            _retry_delay = min(_retry_delay * 2, _max_delay)
+    _wait_for_mysql(engine, startup_status)
 
     # Determine current database revision
     current_rev = None
@@ -1038,7 +1054,7 @@ def run_migrations():
                 row = result.fetchone()
                 if row:
                     current_rev = row[0]
-        except (OperationalError, ProgrammingError):
+        except ProgrammingError:
             logger.debug(
                 "Could not re-read alembic_version after acquiring lock", exc_info=True
             )

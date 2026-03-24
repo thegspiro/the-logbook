@@ -33,6 +33,13 @@ import {
   Hash,
   CheckSquare,
   Square,
+  Type,
+  Pencil,
+  Download,
+  Upload,
+  ArrowRightLeft,
+  List,
+  Package,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -105,6 +112,8 @@ const CHECK_TYPES = [
   { value: 'level', label: 'Level' },
   { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
+  { value: 'text', label: 'Text' },
+  { value: 'header', label: 'Section Header' },
 ] as const;
 
 const LEVEL_UNIT_PRESETS = [
@@ -127,6 +136,8 @@ const CHECK_TYPE_HELP: Record<string, string> = {
   level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
   date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
   reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
+  text: 'Free-form text response. Good for notes, observations, VIN numbers, or any open-ended input.',
+  header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
 
 // Pre-built vehicle check compartment templates by apparatus type
@@ -282,6 +293,231 @@ const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
       },
     ],
   },
+  tanker: {
+    label: 'Tanker / Water Tender',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+          { name: 'Belts & hoses condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Water Tank & Pump',
+        items: [
+          { name: 'Tank water level', checkType: 'level' },
+          { name: 'Pump engages properly', checkType: 'functional' },
+          { name: 'Pump gauges operational', checkType: 'functional' },
+          { name: 'Dump valves / portable tank connections', checkType: 'functional' },
+          { name: 'Foam concentrate level', checkType: 'level' },
+          { name: 'Drain & fill valves closed', checkType: 'pass_fail' },
+          { name: 'Hose connections & fittings', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission (all gears)', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  rescue: {
+    label: 'Rescue / Heavy Rescue',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+          { name: 'Scene lighting / light tower', checkType: 'functional' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Extrication Equipment',
+        items: [
+          { name: 'Hydraulic spreaders', checkType: 'functional' },
+          { name: 'Hydraulic cutters', checkType: 'functional' },
+          { name: 'Hydraulic rams', checkType: 'functional' },
+          { name: 'Hydraulic power unit oil level', checkType: 'level' },
+          { name: 'Hydraulic hoses & fittings', checkType: 'pass_fail' },
+          { name: 'Cribbing blocks', checkType: 'quantity' },
+          { name: 'Step chocks / stabilization struts', checkType: 'present' },
+          { name: 'Hand tools (pry bars, axes, etc.)', checkType: 'present' },
+        ],
+      },
+      {
+        name: 'Power Tools & Equipment',
+        items: [
+          { name: 'Generator starts & runs', checkType: 'functional' },
+          { name: 'Generator fuel level', checkType: 'level' },
+          { name: 'Reciprocating / circular saw', checkType: 'functional' },
+          { name: 'Ventilation fan (PPV)', checkType: 'functional' },
+          { name: 'Air bags / lifting equipment', checkType: 'present' },
+          { name: 'Rope & rigging gear', checkType: 'present' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  brush: {
+    label: 'Brush / Wildland',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body / skid plate damage', checkType: 'pass_fail' },
+          { name: '4WD / AWD engagement', checkType: 'functional' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Water Tank & Pump',
+        items: [
+          { name: 'Tank water level', checkType: 'level' },
+          { name: 'Pump engages / prime', checkType: 'functional' },
+          { name: 'Booster reel hose condition', checkType: 'pass_fail' },
+          { name: 'Nozzle(s) present & operational', checkType: 'present' },
+          { name: 'Foam system (if equipped)', checkType: 'functional' },
+        ],
+      },
+      {
+        name: 'Wildland Equipment',
+        items: [
+          { name: 'Hand tools (Pulaski, McLeod, shovel)', checkType: 'quantity' },
+          { name: 'Drip torches', checkType: 'present' },
+          { name: 'Fire shelters', checkType: 'quantity' },
+          { name: 'Portable radio(s)', checkType: 'quantity' },
+          { name: 'Chain saw & fuel', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  boat: {
+    label: 'Boat / Watercraft',
+    compartments: [
+      {
+        name: 'Hull & Exterior',
+        items: [
+          { name: 'Hull integrity / damage', checkType: 'pass_fail' },
+          { name: 'Navigation lights', checkType: 'functional' },
+          { name: 'Emergency strobe / blue light', checkType: 'functional' },
+          { name: 'Trailer lights & tongue hitch', checkType: 'functional' },
+          { name: 'Drain plug installed', checkType: 'present' },
+        ],
+      },
+      {
+        name: 'Engine & Motor',
+        items: [
+          { name: 'Engine oil level', checkType: 'level' },
+          { name: 'Fuel level', checkType: 'level' },
+          { name: 'Engine starts & runs', checkType: 'functional' },
+          { name: 'Steering & throttle response', checkType: 'functional' },
+          { name: 'Kill switch / lanyard', checkType: 'present' },
+          { name: 'Propeller condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Safety Equipment',
+        items: [
+          { name: 'PFDs / life jackets', checkType: 'quantity' },
+          { name: 'Throw bag / ring buoy', checkType: 'present' },
+          { name: 'First aid kit', checkType: 'present' },
+          { name: 'Fire extinguisher', checkType: 'present' },
+          { name: 'Anchor & line', checkType: 'present' },
+          { name: 'Paddle / oar', checkType: 'present' },
+          { name: 'VHF marine radio', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
+  utility: {
+    label: 'Utility / Command',
+    compartments: [
+      {
+        name: 'Cab & Exterior',
+        items: [
+          { name: 'Lights & emergency warning system', checkType: 'functional' },
+          { name: 'Siren / horn', checkType: 'functional' },
+          { name: 'Mirrors', checkType: 'functional' },
+          { name: 'Tire condition & pressure', checkType: 'pass_fail' },
+          { name: 'Body damage / fluid leaks', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Engine Compartment',
+        items: [
+          { name: 'Oil level', checkType: 'level' },
+          { name: 'Coolant level', checkType: 'level' },
+          { name: 'Battery condition', checkType: 'pass_fail' },
+        ],
+      },
+      {
+        name: 'Command & Communication',
+        items: [
+          { name: 'Mobile radio(s)', checkType: 'functional' },
+          { name: 'MDT / laptop & charger', checkType: 'functional' },
+          { name: 'Accountability system / tags', checkType: 'present' },
+          { name: 'Command board / ICS forms', checkType: 'present' },
+          { name: 'Vest (IC, Safety, etc.)', checkType: 'present' },
+        ],
+      },
+      {
+        name: 'Brakes & Drivetrain',
+        items: [
+          { name: 'Service brakes', checkType: 'functional' },
+          { name: 'Parking brake', checkType: 'functional' },
+          { name: 'Transmission', checkType: 'functional' },
+          { name: 'Steering responsiveness', checkType: 'functional' },
+        ],
+      },
+    ],
+  },
   generic: {
     label: 'Generic Vehicle',
     compartments: [
@@ -312,6 +548,107 @@ const VEHICLE_PRESETS: Record<string, VehiclePreset> = {
           { name: 'Steering responsiveness', checkType: 'functional' },
         ],
       },
+    ],
+  },
+};
+
+// Pre-built equipment kit presets for quick-adding groups of related items
+interface EquipmentPreset {
+  label: string;
+  items: { name: string; checkType: CheckType }[];
+}
+
+const EQUIPMENT_PRESETS: Record<string, EquipmentPreset> = {
+  scba: {
+    label: 'SCBA Kit',
+    items: [
+      { name: 'SCBA pack & harness', checkType: 'functional' },
+      { name: 'SCBA mask (face piece)', checkType: 'present' },
+      { name: 'SCBA cylinder pressure', checkType: 'level' },
+      { name: 'SCBA regulator', checkType: 'functional' },
+      { name: 'PASS device activates', checkType: 'functional' },
+      { name: 'Spare SCBA cylinder', checkType: 'present' },
+    ],
+  },
+  aed: {
+    label: 'AED / Defibrillator',
+    items: [
+      { name: 'AED unit powers on', checkType: 'functional' },
+      { name: 'AED pads (adult)', checkType: 'date_lot' },
+      { name: 'AED pads (pediatric)', checkType: 'date_lot' },
+      { name: 'AED battery level', checkType: 'level' },
+    ],
+  },
+  vitals: {
+    label: 'Basic Vitals Set',
+    items: [
+      { name: 'Blood pressure cuff (adult)', checkType: 'present' },
+      { name: 'Blood pressure cuff (pediatric)', checkType: 'present' },
+      { name: 'Stethoscope', checkType: 'present' },
+      { name: 'Pulse oximeter', checkType: 'functional' },
+      { name: 'Glucometer & test strips', checkType: 'date_lot' },
+      { name: 'Thermometer', checkType: 'functional' },
+    ],
+  },
+  airway: {
+    label: 'Airway Management',
+    items: [
+      { name: 'BVM (adult)', checkType: 'present' },
+      { name: 'BVM (pediatric)', checkType: 'present' },
+      { name: 'OPA set', checkType: 'present' },
+      { name: 'NPA set', checkType: 'present' },
+      { name: 'Suction unit', checkType: 'functional' },
+      { name: 'Oxygen regulator', checkType: 'functional' },
+      { name: 'Oxygen cylinder pressure', checkType: 'level' },
+      { name: 'Non-rebreather masks', checkType: 'quantity' },
+      { name: 'Nasal cannulas', checkType: 'quantity' },
+    ],
+  },
+  ppe: {
+    label: 'PPE / Turnout Gear',
+    items: [
+      { name: 'Helmet & face shield', checkType: 'pass_fail' },
+      { name: 'Turnout coat', checkType: 'pass_fail' },
+      { name: 'Turnout pants', checkType: 'pass_fail' },
+      { name: 'Boots', checkType: 'pass_fail' },
+      { name: 'Gloves (structural)', checkType: 'pass_fail' },
+      { name: 'Hood / balaclava', checkType: 'pass_fail' },
+    ],
+  },
+  hose: {
+    label: 'Hose & Nozzles',
+    items: [
+      { name: 'Attack line (1.75")', checkType: 'pass_fail' },
+      { name: 'Supply line (5")', checkType: 'pass_fail' },
+      { name: 'Backup line (2.5")', checkType: 'pass_fail' },
+      { name: 'Nozzle (combination)', checkType: 'functional' },
+      { name: 'Nozzle (smooth bore)', checkType: 'present' },
+      { name: 'Wye / gated valve', checkType: 'present' },
+      { name: 'Spanner wrenches', checkType: 'present' },
+    ],
+  },
+  firstaid: {
+    label: 'First Aid / Trauma',
+    items: [
+      { name: 'Trauma shears', checkType: 'present' },
+      { name: 'Tourniquets', checkType: 'quantity' },
+      { name: 'Hemostatic gauze', checkType: 'date_lot' },
+      { name: 'Chest seals', checkType: 'date_lot' },
+      { name: 'Gauze / bandages', checkType: 'quantity' },
+      { name: 'Splint set', checkType: 'present' },
+      { name: 'Cervical collars', checkType: 'quantity' },
+      { name: 'Backboard & straps', checkType: 'present' },
+    ],
+  },
+  lighting: {
+    label: 'Lighting & Electrical',
+    items: [
+      { name: 'Scene lights', checkType: 'functional' },
+      { name: 'Portable spotlight', checkType: 'functional' },
+      { name: 'Flashlights', checkType: 'quantity' },
+      { name: 'Light tower', checkType: 'functional' },
+      { name: 'Extension cords', checkType: 'present' },
+      { name: 'Power strip / adapter', checkType: 'present' },
     ],
   },
 };
@@ -375,6 +712,7 @@ interface CompartmentFormState {
   name: string;
   description: string;
   imageUrl: string;
+  isHeader: boolean;
   parentCompartmentId: string;
   items: ItemFormState[];
 }
@@ -384,6 +722,7 @@ function emptyCompartment(): CompartmentFormState {
     name: '',
     description: '',
     imageUrl: '',
+    isHeader: false,
     parentCompartmentId: '',
     items: [],
   };
@@ -522,6 +861,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   // Auto-save debounce timer for item edits
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ---------------------------------------------------------------------------
   // Load existing template
@@ -550,6 +891,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           name: c.name,
           description: c.description ?? '',
           imageUrl: c.imageUrl ?? '',
+          isHeader: c.isHeader ?? false,
           parentCompartmentId: c.parentCompartmentId ?? '',
           items: (c.items ?? []).map((item) => ({
             id: item.id,
@@ -557,9 +899,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             description: item.description ?? '',
             checkType: item.checkType,
             isRequired: item.isRequired,
-            requiredQuantity: item.requiredQuantity != null ? String(item.requiredQuantity) : '',
-            expectedQuantity: item.expectedQuantity != null ? String(item.expectedQuantity) : '',
-            minLevel: item.minLevel != null ? String(item.minLevel) : '',
+            requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
+            expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
+            minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
             levelUnit: item.levelUnit ?? '',
             serialNumber: item.serialNumber ?? '',
             lotNumber: item.lotNumber ?? '',
@@ -654,6 +996,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         name: created.name,
         description: created.description ?? '',
         imageUrl: created.imageUrl ?? '',
+        isHeader: false,
         parentCompartmentId: created.parentCompartmentId ?? '',
         items: [],
       };
@@ -662,6 +1005,40 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       toast.success('Compartment added');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to add compartment'));
+    }
+  };
+
+  const addSectionHeader = async () => {
+    if (!templateId) {
+      const comp: CompartmentFormState = {
+        ...emptyCompartment(),
+        name: 'Section Header',
+        isHeader: true,
+      };
+      setCompartments((prev) => [...prev, comp]);
+      return;
+    }
+
+    try {
+      const payload: CheckTemplateCompartmentCreate = {
+        name: 'Section Header',
+        sort_order: compartments.length,
+        is_header: true,
+      };
+      const created = await schedulingService.addCompartment(templateId, payload);
+      const comp: CompartmentFormState = {
+        id: created.id,
+        name: created.name,
+        description: created.description ?? '',
+        imageUrl: created.imageUrl ?? '',
+        isHeader: true,
+        parentCompartmentId: created.parentCompartmentId ?? '',
+        items: [],
+      };
+      setCompartments((prev) => [...prev, comp]);
+      toast.success('Section header added');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add section header'));
     }
   };
 
@@ -711,6 +1088,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       name: `${comp.name} (copy)`,
       description: comp.description,
       imageUrl: comp.imageUrl,
+      isHeader: comp.isHeader,
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
     };
@@ -729,43 +1107,47 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Item helpers
   // ---------------------------------------------------------------------------
 
-  const addItem = async (compartmentIdx: number) => {
+  const addHeader = async (compartmentIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
 
     if (comp.id) {
       try {
         const payload: CheckTemplateItemCreate = {
-          name: 'New Item',
+          name: 'Section Header',
           sort_order: comp.items.length,
+          check_type: 'header',
+          is_required: false,
         };
         const created = await schedulingService.addCheckItem(comp.id, payload);
         const item: ItemFormState = {
           id: created.id,
           name: created.name,
           description: created.description ?? '',
-          checkType: created.checkType,
-          isRequired: created.isRequired,
-          requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
-          expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
-          minLevel: created.minLevel != null ? String(created.minLevel) : '',
-          levelUnit: created.levelUnit ?? '',
-          serialNumber: created.serialNumber ?? '',
-          lotNumber: created.lotNumber ?? '',
-          hasExpiration: created.hasExpiration,
-          expirationDate: created.expirationDate ?? '',
-          expirationWarningDays: String(created.expirationWarningDays ?? 30),
-          imageUrl: created.imageUrl ?? '',
+          checkType: 'header',
+          isRequired: false,
+          requiredQuantity: '',
+          expectedQuantity: '',
+          minLevel: '',
+          levelUnit: '',
+          serialNumber: '',
+          lotNumber: '',
+          hasExpiration: false,
+          expirationDate: '',
+          expirationWarningDays: '30',
+          imageUrl: '',
         };
         updateCompartmentField(compartmentIdx, { items: [...comp.items, item] });
-        toast.success('Item added');
+        toast.success('Header added');
       } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to add item'));
+        toast.error(getErrorMessage(err, 'Failed to add header'));
       }
     } else {
-      // Unsaved compartment — add locally
       updateCompartmentField(compartmentIdx, {
-        items: [...comp.items, emptyItem()],
+        items: [
+          ...comp.items,
+          { ...emptyItem(), name: 'Section Header', checkType: 'header', isRequired: false },
+        ],
       });
     }
   };
@@ -863,6 +1245,45 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     markDirty();
+  };
+
+  const moveItemToCompartment = async (
+    fromCompIdx: number,
+    itemIdx: number,
+    toCompIdx: number,
+  ) => {
+    if (fromCompIdx === toCompIdx) return;
+    const fromComp = compartments[fromCompIdx];
+    const toComp = compartments[toCompIdx];
+    if (!fromComp || !toComp) return;
+
+    const item = fromComp.items[itemIdx];
+    if (!item) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const src = next[fromCompIdx];
+      const dst = next[toCompIdx];
+      if (!src || !dst) return prev;
+      const srcItems = src.items.filter((_, i) => i !== itemIdx);
+      const dstItems = [...dst.items, item];
+      next[fromCompIdx] = { ...src, items: srcItems };
+      next[toCompIdx] = { ...dst, items: dstItems };
+      return next;
+    });
+
+    if (isEditing && item.id && toComp.id) {
+      try {
+        await schedulingService.updateCheckItem(item.id, {
+          compartment_id: toComp.id,
+          sort_order: toComp.items.length,
+        });
+      } catch {
+        toast.error('Failed to move item on server');
+      }
+    }
+    markDirty();
+    toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
   };
 
   // ---------------------------------------------------------------------------
@@ -963,6 +1384,270 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   };
 
   // ---------------------------------------------------------------------------
+  // Quick-add: type a name + Enter to instantly add an item
+  // ---------------------------------------------------------------------------
+
+  const [quickAddValues, setQuickAddValues] = useState<Record<string, string>>({});
+  const [bulkPasteMode, setBulkPasteMode] = useState<Record<string, boolean>>({});
+  const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
+  const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
+
+  const handleQuickAdd = async (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const name = (quickAddValues[key] ?? '').trim();
+    if (!name) return;
+
+    if (comp.id) {
+      try {
+        const payload: CheckTemplateItemCreate = {
+          name,
+          sort_order: comp.items.length,
+        };
+        const created = await schedulingService.addCheckItem(comp.id, payload);
+        const item: ItemFormState = {
+          id: created.id,
+          name: created.name,
+          description: created.description ?? '',
+          checkType: created.checkType,
+          isRequired: created.isRequired,
+          requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+          expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+          minLevel: created.minLevel != null ? String(created.minLevel) : '',
+          levelUnit: created.levelUnit ?? '',
+          serialNumber: created.serialNumber ?? '',
+          lotNumber: created.lotNumber ?? '',
+          hasExpiration: created.hasExpiration,
+          expirationDate: created.expirationDate ?? '',
+          expirationWarningDays: String(created.expirationWarningDays ?? 30),
+          imageUrl: created.imageUrl ?? '',
+        };
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, item] });
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add item'));
+        return;
+      }
+    } else {
+      updateCompartmentField(compartmentIdx, {
+        items: [...comp.items, { ...emptyItem(), name }],
+      });
+    }
+    setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
+  };
+
+  const handleBulkPaste = async (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const text = (bulkPasteValues[key] ?? '').trim();
+    if (!text) return;
+
+    const names = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (names.length === 0) return;
+
+    if (comp.id) {
+      try {
+        const newItems: ItemFormState[] = [];
+        for (let i = 0; i < names.length; i++) {
+          const itemName = names[i];
+          if (!itemName) continue;
+          const payload: CheckTemplateItemCreate = {
+            name: itemName,
+            sort_order: comp.items.length + i,
+          };
+          const created = await schedulingService.addCheckItem(comp.id, payload);
+          newItems.push({
+            id: created.id,
+            name: created.name,
+            description: created.description ?? '',
+            checkType: created.checkType,
+            isRequired: created.isRequired,
+            requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+            expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+            minLevel: created.minLevel != null ? String(created.minLevel) : '',
+            levelUnit: created.levelUnit ?? '',
+            serialNumber: created.serialNumber ?? '',
+            lotNumber: created.lotNumber ?? '',
+            hasExpiration: created.hasExpiration,
+            expirationDate: created.expirationDate ?? '',
+            expirationWarningDays: String(created.expirationWarningDays ?? 30),
+            imageUrl: created.imageUrl ?? '',
+          });
+        }
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add items'));
+        return;
+      }
+    } else {
+      const newItems = names.map((n) => ({ ...emptyItem(), name: n }));
+      updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+    }
+
+    setBulkPasteValues((prev) => ({ ...prev, [key]: '' }));
+    setBulkPasteMode((prev) => ({ ...prev, [key]: false }));
+    toast.success(`Added ${names.length} item${names.length !== 1 ? 's' : ''}`);
+  };
+
+  const addEquipmentPreset = async (compartmentIdx: number, presetKey: string) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const preset = EQUIPMENT_PRESETS[presetKey];
+    if (!preset) return;
+
+    const key = getCompKey(compartmentIdx);
+
+    if (comp.id) {
+      try {
+        const newItems: ItemFormState[] = [];
+        // Add a header for the preset group
+        const headerPayload: CheckTemplateItemCreate = {
+          name: preset.label,
+          sort_order: comp.items.length,
+          check_type: 'header',
+          is_required: false,
+        };
+        const headerCreated = await schedulingService.addCheckItem(comp.id, headerPayload);
+        newItems.push({
+          id: headerCreated.id,
+          name: headerCreated.name,
+          description: '',
+          checkType: 'header',
+          isRequired: false,
+          requiredQuantity: '',
+          expectedQuantity: '',
+          minLevel: '',
+          levelUnit: '',
+          serialNumber: '',
+          lotNumber: '',
+          hasExpiration: false,
+          expirationDate: '',
+          expirationWarningDays: '30',
+          imageUrl: '',
+        });
+
+        for (let i = 0; i < preset.items.length; i++) {
+          const presetItem = preset.items[i];
+          if (!presetItem) continue;
+          const payload: CheckTemplateItemCreate = {
+            name: presetItem.name,
+            sort_order: comp.items.length + 1 + i,
+            check_type: presetItem.checkType,
+          };
+          const created = await schedulingService.addCheckItem(comp.id, payload);
+          newItems.push({
+            id: created.id,
+            name: created.name,
+            description: created.description ?? '',
+            checkType: created.checkType,
+            isRequired: created.isRequired,
+            requiredQuantity: created.requiredQuantity != null ? String(created.requiredQuantity) : '',
+            expectedQuantity: created.expectedQuantity != null ? String(created.expectedQuantity) : '',
+            minLevel: created.minLevel != null ? String(created.minLevel) : '',
+            levelUnit: created.levelUnit ?? '',
+            serialNumber: created.serialNumber ?? '',
+            lotNumber: created.lotNumber ?? '',
+            hasExpiration: created.hasExpiration,
+            expirationDate: created.expirationDate ?? '',
+            expirationWarningDays: String(created.expirationWarningDays ?? 30),
+            imageUrl: created.imageUrl ?? '',
+          });
+        }
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add preset items'));
+        return;
+      }
+    } else {
+      const headerItem: ItemFormState = {
+        ...emptyItem(),
+        name: preset.label,
+        checkType: 'header',
+        isRequired: false,
+      };
+      const newItems = preset.items.map((pi) => ({
+        ...emptyItem(),
+        name: pi.name,
+        checkType: pi.checkType,
+      }));
+      updateCompartmentField(compartmentIdx, {
+        items: [...comp.items, headerItem, ...newItems],
+      });
+    }
+
+    setShowEquipmentPresets((prev) => ({ ...prev, [key]: false }));
+    toast.success(`Added ${preset.label} (${preset.items.length} items)`);
+  };
+
+  // ---------------------------------------------------------------------------
+  // Bulk edit: change check type or toggle required for selected items
+  // ---------------------------------------------------------------------------
+
+  const bulkSetCheckType = (compartmentIdx: number, checkType: CheckType) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const selected = selectedItems[key];
+    if (!selected || selected.size === 0) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const c = next[compartmentIdx];
+      if (!c) return prev;
+      const items = c.items.map((item, i) => {
+        if (!selected.has(i)) return item;
+        return { ...item, checkType };
+      });
+      next[compartmentIdx] = { ...c, items };
+      return next;
+    });
+
+    // Auto-save persisted items
+    if (isEditing) {
+      for (const itemIdx of selected) {
+        const item = comp.items[itemIdx];
+        if (item?.id) {
+          scheduleAutoSaveItem(item.id, { check_type: checkType });
+        }
+      }
+    }
+    markDirty();
+    toast.success(`Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${CHECK_TYPES.find((ct) => ct.value === checkType)?.label ?? checkType}`);
+  };
+
+  const bulkToggleRequired = (compartmentIdx: number, required: boolean) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+    const key = getCompKey(compartmentIdx);
+    const selected = selectedItems[key];
+    if (!selected || selected.size === 0) return;
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const c = next[compartmentIdx];
+      if (!c) return prev;
+      const items = c.items.map((item, i) => {
+        if (!selected.has(i)) return item;
+        return { ...item, isRequired: required };
+      });
+      next[compartmentIdx] = { ...c, items };
+      return next;
+    });
+
+    if (isEditing) {
+      for (const itemIdx of selected) {
+        const item = comp.items[itemIdx];
+        if (item?.id) {
+          scheduleAutoSaveItem(item.id, { is_required: required });
+        }
+      }
+    }
+    markDirty();
+    toast.success(`Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${required ? 'required' : 'optional'}`);
+  };
+
+  // ---------------------------------------------------------------------------
   // Inline rename helpers
   // ---------------------------------------------------------------------------
 
@@ -999,10 +1684,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
+      if (autoSaveFadeRef.current) {
+        clearTimeout(autoSaveFadeRef.current);
+      }
+      setAutoSaveStatus('saving');
       autoSaveTimerRef.current = setTimeout(() => {
-        void schedulingService.updateCheckItem(itemId, patch).catch(() => {
-          // Silent — user can still manually save
-        });
+        void schedulingService
+          .updateCheckItem(itemId, patch)
+          .then(() => {
+            setAutoSaveStatus('saved');
+            autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000);
+          })
+          .catch(() => {
+            setAutoSaveStatus('error');
+            autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), 4000);
+          });
       }, 1500);
     },
     [isEditing],
@@ -1071,7 +1767,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }
         if (item.hasExpiration && !item.expirationDate.trim()) {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
-          break;
+        }
+        if (item.checkType === 'quantity' && !item.requiredQuantity && !item.expectedQuantity) {
+          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no required or expected quantity.`);
+        }
+        if (item.checkType === 'level' && !item.minLevel) {
+          warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
+        }
+        if (item.checkType === 'date_lot' && !item.serialNumber && !item.lotNumber) {
+          warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
         }
       }
     }
@@ -1091,6 +1795,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           description: c.description.trim() || undefined,
           sort_order: idx,
           image_url: c.imageUrl.trim() || undefined,
+          is_header: c.isHeader || undefined,
           parent_compartment_id: c.parentCompartmentId || undefined,
           items: c.items.map((item, itemIdx) => ({
             name: item.name || 'Untitled Item',
@@ -1139,6 +1844,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 name: comp.name || undefined,
                 description: comp.description.trim() || undefined,
                 image_url: comp.imageUrl.trim() || undefined,
+                is_header: comp.isHeader,
                 parent_compartment_id: comp.parentCompartmentId || undefined,
               }),
             );
@@ -1245,6 +1951,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         name: comp.name,
         description: '',
         imageUrl: '',
+        isHeader: false,
         parentCompartmentId: '',
         items: comp.items.map((item) => ({
           ...emptyItem(),
@@ -1289,6 +1996,122 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     } finally {
       setCloning(false);
     }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Template Export / Import
+  // ---------------------------------------------------------------------------
+
+  const exportTemplateJson = () => {
+    const data = {
+      name: form.name,
+      description: form.description,
+      checkTiming: form.checkTiming,
+      templateType: form.templateType,
+      apparatusType: form.apparatusType,
+      compartments: compartments.map((c) => ({
+        name: c.name,
+        description: c.description,
+        isHeader: c.isHeader || undefined,
+        items: c.items.map((item) => ({
+          name: item.name,
+          description: item.description,
+          checkType: item.checkType,
+          isRequired: item.isRequired,
+          requiredQuantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+          expectedQuantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+          minLevel: item.minLevel ? Number(item.minLevel) : undefined,
+          levelUnit: item.levelUnit || undefined,
+          serialNumber: item.serialNumber || undefined,
+          lotNumber: item.lotNumber || undefined,
+          hasExpiration: item.hasExpiration,
+          expirationDate: item.expirationDate || undefined,
+          expirationWarningDays: item.expirationWarningDays ? Number(item.expirationWarningDays) : 30,
+          imageUrl: item.imageUrl || undefined,
+        })),
+      })),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(form.name || 'template').replace(/\s+/g, '_').toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('Template exported');
+  };
+
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const handleImportTemplate = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target?.result as string) as {
+          name?: string;
+          description?: string;
+          checkTiming?: string;
+          templateType?: string;
+          apparatusType?: string;
+          compartments?: Array<{
+            name: string;
+            description?: string;
+            isHeader?: boolean;
+            items?: Array<Record<string, unknown>>;
+          }>;
+        };
+
+        if (!data.compartments || !Array.isArray(data.compartments)) {
+          toast.error('Invalid template file: missing compartments');
+          return;
+        }
+
+        if (compartments.length > 0) {
+          if (!window.confirm('Importing will replace all current compartments. Continue?')) return;
+        }
+
+        if (data.name) setForm((prev) => ({ ...prev, name: data.name ?? prev.name, description: data.description ?? prev.description }));
+
+        const imported: CompartmentFormState[] = data.compartments.map((c) => ({
+          name: c.name || 'Untitled',
+          description: c.description ?? '',
+          imageUrl: '',
+          isHeader: Boolean(c.isHeader),
+          parentCompartmentId: '',
+          items: (c.items ?? []).map((item) => ({
+            ...emptyItem(),
+            name: (item.name as string) || '',
+            description: (item.description as string) ?? '',
+            checkType: ((item.checkType as string) || 'pass_fail') as CheckType,
+            isRequired: Boolean(item.isRequired),
+            requiredQuantity: item.requiredQuantity != null ? String(Number(item.requiredQuantity)) : '',
+            expectedQuantity: item.expectedQuantity != null ? String(Number(item.expectedQuantity)) : '',
+            minLevel: item.minLevel != null ? String(Number(item.minLevel)) : '',
+            levelUnit: (item.levelUnit as string) ?? '',
+            serialNumber: (item.serialNumber as string) ?? '',
+            lotNumber: (item.lotNumber as string) ?? '',
+            hasExpiration: Boolean(item.hasExpiration),
+            expirationDate: (item.expirationDate as string) ?? '',
+            expirationWarningDays: item.expirationWarningDays != null ? String(Number(item.expirationWarningDays)) : '30',
+            imageUrl: (item.imageUrl as string) ?? '',
+          })),
+        }));
+
+        setCompartments(imported);
+        const expanded = new Set<string>();
+        imported.forEach((_, i) => expanded.add(`comp-${i}`));
+        setExpandedCompartments(expanded);
+        markDirty();
+        toast.success(`Imported ${imported.length} compartment(s)`);
+      } catch {
+        toast.error('Failed to parse template file');
+      }
+    };
+    reader.readAsText(file);
+    if (importFileRef.current) importFileRef.current.value = '';
   };
 
   // ---------------------------------------------------------------------------
@@ -1338,6 +2161,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ...(c.description ? { description: c.description } : {}),
         sortOrder: cIdx,
         ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
+        ...(c.isHeader ? { isHeader: true } : {}),
         ...(c.parentCompartmentId ? { parentCompartmentId: c.parentCompartmentId } : {}),
         items: c.items.map((item, iIdx): CheckTemplateItem => ({
           id: item.id ?? `preview-item-${cIdx}-${iIdx}`,
@@ -1367,14 +2191,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const stats = useMemo(() => {
-    const allItems = compartments.flatMap((c) => c.items);
+    const realCompartments = compartments.filter((c) => !c.isHeader);
+    const allItems = realCompartments.flatMap((c) => c.items);
     const totalItems = allItems.length;
     const requiredItems = allItems.filter((i) => i.isRequired).length;
     const withExpiration = allItems.filter((i) => i.hasExpiration).length;
     const namedItems = allItems.filter((i) => i.name.trim()).length;
-    const namedCompartments = compartments.filter((c) => c.name.trim()).length;
+    const namedCompartments = realCompartments.filter((c) => c.name.trim()).length;
     return {
-      compartmentCount: compartments.length,
+      compartmentCount: realCompartments.length,
       totalItems,
       requiredItems,
       withExpiration,
@@ -1512,18 +2337,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const isInlineEditing = inlineEditKey === itemKey;
     const itemCount = totalItems ?? compartments[compIdx]?.items.length ?? 0;
 
+    const isHeader = item.checkType === 'header';
+
     return (
       <div
         key={itemKey}
         className={`rounded-md border overflow-hidden transition-colors ${
           isSelected
             ? 'border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-900/10'
-            : 'border-theme-surface-border bg-theme-surface'
+            : isHeader
+              ? 'border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-900/10'
+              : 'border-theme-surface-border bg-theme-surface'
         }`}
       >
         {/* Compact row — always visible */}
         <div
-          className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 sm:px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
+          className="group/item flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 sm:px-3 py-2 cursor-pointer hover:bg-theme-surface-secondary/50 transition-colors"
           onClick={() => toggleItemExpanded(itemKey)}
         >
           {/* Bulk selection checkbox */}
@@ -1564,6 +2393,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
           </button>
 
+          {isHeader && <Type className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />}
+
           {/* Inline editable name */}
           {isInlineEditing ? (
             <input
@@ -1583,17 +2414,26 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             />
           ) : (
             <span
-              className={`flex-1 text-sm truncate ${item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
+              className={`flex-1 text-sm truncate ${isHeader ? 'text-purple-700 dark:text-purple-400 font-semibold uppercase text-xs tracking-wide' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
               onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
               title="Double-click to rename"
             >
-              {item.name.trim() || 'Untitled Item'}
+              {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
             </span>
           )}
 
+          <button
+            type="button"
+            className="p-0.5 flex-shrink-0 text-theme-text-muted hover:text-blue-600 opacity-0 group-hover/item:opacity-100 transition-opacity"
+            onClick={(e) => { e.stopPropagation(); startInlineEdit(itemKey, item.name, e); }}
+            aria-label={`Rename ${item.name.trim() || 'item'}`}
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+
           {/* Badges */}
           <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
-            <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted">
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${isHeader ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
               {checkTypeLabel}
             </span>
             {item.isRequired && (
@@ -1635,6 +2475,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             >
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
+            {compartments.length > 1 && (
+              <div className="relative p-1 text-theme-text-muted hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors">
+                <ArrowRightLeft className="h-3.5 w-3.5 pointer-events-none" aria-hidden="true" />
+                <select
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  value=""
+                  onChange={(e) => {
+                    const targetIdx = Number(e.target.value);
+                    if (!Number.isNaN(targetIdx)) {
+                      void moveItemToCompartment(compIdx, itemIdx, targetIdx);
+                    }
+                    e.target.value = '';
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Move ${item.name || 'item'} to another compartment`}
+                >
+                  <option value="" disabled>Move to…</option>
+                  {compartments.map((c, ci) => ci !== compIdx ? (
+                    <option key={ci} value={ci}>{c.name || `Compartment ${ci + 1}`}</option>
+                  ) : null)}
+                </select>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => void deleteItem(compIdx, itemIdx)}
@@ -1648,31 +2511,32 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Expanded form — visible on click */}
         {isItemExpanded && (
-          <div className="border-t border-theme-surface-border px-3 py-3 space-y-3">
+          <div className={`border-t px-3 py-3 space-y-3 ${isHeader ? 'border-purple-200 dark:border-purple-800' : 'border-theme-surface-border'}`}>
             {/* Name + Description */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={labelClass}>Name</label>
+                <label className={labelClass}>{isHeader ? 'Header Title' : 'Name'}</label>
                 <input
                   type="text"
                   className={inputClass}
-                  placeholder="Item name"
+                  placeholder={isHeader ? 'e.g. Medical Supplies' : 'Item name'}
                   value={item.name}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
                 />
               </div>
               <div>
-                <label className={labelClass}>Description</label>
+                <label className={labelClass}>{isHeader ? 'Subtitle' : 'Description'}</label>
                 <input
                   type="text"
                   className={inputClass}
-                  placeholder="Optional description"
+                  placeholder={isHeader ? 'Optional subtitle shown below the header' : 'Optional description'}
                   value={item.description}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
                 />
               </div>
             </div>
 
+            {!isHeader && (<>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Check Type */}
               <div>
@@ -1803,6 +2667,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </>
               )}
             </div>
+            </>)}
           </div>
         )}
       </div>
@@ -1831,6 +2696,78 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   ) => {
     const key = comp.id ?? `comp-${idx}`;
     const isExpanded = expandedCompartments.has(key);
+
+    // Section header compartment — simplified visual divider
+    if (comp.isHeader) {
+      return (
+        <div
+          key={key}
+          ref={sortableRef}
+          style={sortableStyle}
+          {...(sortableAttributes ?? {})}
+          className="rounded-lg border-2 border-dashed border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-900/10 overflow-hidden"
+        >
+          <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-3">
+            <button
+              type="button"
+              className="p-0.5 text-purple-400 cursor-grab active:cursor-grabbing touch-none flex-shrink-0"
+              aria-label="Drag to reorder section"
+              {...(dragHandleProps ?? {})}
+            >
+              <GripVertical className="h-5 w-5" />
+            </button>
+
+            <Type className="h-4 w-4 text-purple-500 flex-shrink-0" />
+
+            <input
+              type="text"
+              className="flex-1 min-w-0 bg-transparent border-none outline-none text-purple-700 dark:text-purple-400 font-semibold uppercase text-sm tracking-wide placeholder:normal-case placeholder:font-normal placeholder:text-purple-400/60"
+              placeholder="Section heading..."
+              value={comp.name}
+              onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
+            />
+
+            <span className="rounded-full bg-purple-100 dark:bg-purple-900/30 px-2 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 flex-shrink-0">
+              Section
+            </span>
+
+            <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => moveCompartment(idx, 'up')}
+                disabled={idx === 0}
+                className="p-1 text-purple-400 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/20 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Move section up"
+              >
+                <ChevronUp className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => moveCompartment(idx, 'down')}
+                disabled={idx === compartments.length - 1}
+                className="p-1 text-purple-400 hover:text-purple-600 hover:bg-purple-100 dark:hover:bg-purple-900/20 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Move section down"
+              >
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteCompartment(idx)}
+                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                aria-label="Delete section header"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          {comp.description && (
+            <div className="px-4 pb-2 -mt-1">
+              <p className="text-xs text-purple-500/70">{comp.description}</p>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div
@@ -2005,15 +2942,49 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <h4 className="text-sm font-semibold text-theme-text-primary">Check Items</h4>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {/* Bulk selection controls */}
                   {comp.items.length > 0 && (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       {getSelectedCount(idx) > 0 ? (
                         <>
                           <span className="text-xs text-blue-600 dark:text-blue-400 font-medium mr-1">
                             {getSelectedCount(idx)} selected
                           </span>
+                          {/* Bulk edit: set check type */}
+                          <select
+                            className="rounded-md border border-blue-300 dark:border-blue-700 bg-theme-surface px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400"
+                            value=""
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                bulkSetCheckType(idx, e.target.value as CheckType);
+                              }
+                            }}
+                          >
+                            <option value="" disabled>Set type...</option>
+                            {CHECK_TYPES.map((ct) => (
+                              <option key={ct.value} value={ct.value}>{ct.label}</option>
+                            ))}
+                          </select>
+                          {/* Bulk edit: toggle required */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const compKey = getCompKey(idx);
+                              const selected = selectedItems[compKey];
+                              const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
+                              bulkToggleRequired(idx, !allRequired);
+                            }}
+                            className="flex items-center gap-1 rounded-md border border-blue-300 dark:border-blue-700 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                            title="Toggle required status for selected items"
+                          >
+                            {(() => {
+                              const compKey = getCompKey(idx);
+                              const selected = selectedItems[compKey];
+                              const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
+                              return allRequired ? 'Set Optional' : 'Set Required';
+                            })()}
+                          </button>
                           <button
                             type="button"
                             onClick={() => void deleteSelectedItems(idx)}
@@ -2046,18 +3017,61 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   )}
                   <button
                     type="button"
-                    onClick={() => void addItem(idx)}
-                    className="flex items-center gap-1 rounded-md border border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:border-blue-500 hover:text-blue-600 transition-colors"
+                    onClick={() => {
+                      const compKey = getCompKey(idx);
+                      setShowEquipmentPresets((prev) => ({ ...prev, [compKey]: !prev[compKey] }));
+                    }}
+                    className="flex items-center gap-1 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors"
+                    title="Add a pre-built equipment kit"
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Item
+                    <Package className="h-3.5 w-3.5" />
+                    Add Kit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void addHeader(idx)}
+                    className="flex items-center gap-1 rounded-md border border-dashed border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-muted hover:border-purple-500 hover:text-purple-600 transition-colors"
+                  >
+                    <Type className="h-3.5 w-3.5" />
+                    Header
                   </button>
                 </div>
               </div>
 
+              {/* Equipment Preset Picker */}
+              {(showEquipmentPresets[getCompKey(idx)] ?? false) && (
+                <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-medium text-theme-text-primary">Add equipment kit:</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowEquipmentPresets((prev) => ({ ...prev, [getCompKey(idx)]: false }))}
+                      className="p-0.5 text-theme-text-muted hover:text-theme-text-primary"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                    {Object.entries(EQUIPMENT_PRESETS).map(([presetKey, preset]) => (
+                      <button
+                        key={presetKey}
+                        type="button"
+                        onClick={() => void addEquipmentPreset(idx, presetKey)}
+                        className="rounded-md border border-theme-surface-border bg-theme-surface px-2 py-1.5 text-xs text-theme-text-primary hover:border-green-500/40 hover:bg-green-500/10 transition-colors text-left"
+                      >
+                        <span className="font-medium">{preset.label}</span>
+                        <span className="block text-[10px] text-theme-text-muted">
+                          {preset.items.length} items
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {comp.items.length === 0 && (
                 <p className="text-sm text-theme-text-muted italic py-2">
-                  No items yet. Click &ldquo;Add Item&rdquo; to start building this compartment&apos;s checklist.
+                  No items yet. Type a name below and press Enter, or use &ldquo;Add Kit&rdquo; for pre-built groups.
                 </p>
               )}
 
@@ -2084,6 +3098,88 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   ))}
                 </SortableContext>
               </DndContext>
+
+              {/* Quick-add bar */}
+              {(() => {
+                const compKey = getCompKey(idx);
+                const isBulkPaste = bulkPasteMode[compKey] ?? false;
+
+                return (
+                  <div className="mt-2 rounded-md border border-dashed border-theme-surface-border bg-theme-surface-secondary/30 p-2">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-[10px] font-medium text-theme-text-muted uppercase tracking-wide">
+                        {isBulkPaste ? 'Bulk Add' : 'Quick Add'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setBulkPasteMode((prev) => ({ ...prev, [compKey]: !isBulkPaste }))}
+                        className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${
+                          isBulkPaste
+                            ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
+                            : 'text-theme-text-muted hover:text-theme-text-secondary'
+                        }`}
+                        title={isBulkPaste ? 'Switch to single add' : 'Switch to bulk paste (one item per line)'}
+                      >
+                        <List className="h-3 w-3" />
+                        {isBulkPaste ? 'Single' : 'Bulk'}
+                      </button>
+                    </div>
+                    {isBulkPaste ? (
+                      <div className="space-y-1.5">
+                        <textarea
+                          className="form-input text-sm"
+                          rows={4}
+                          placeholder="Paste item names here, one per line&#10;e.g.&#10;Flashlight&#10;Radio&#10;First aid kit"
+                          value={bulkPasteValues[compKey] ?? ''}
+                          onChange={(e) => setBulkPasteValues((prev) => ({ ...prev, [compKey]: e.target.value }))}
+                        />
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-theme-text-muted">
+                            {(() => {
+                              const lines = (bulkPasteValues[compKey] ?? '').split('\n').filter((l) => l.trim()).length;
+                              return lines > 0 ? `${lines} item${lines !== 1 ? 's' : ''} to add` : 'Paste a list';
+                            })()}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleBulkPaste(idx)}
+                            disabled={(bulkPasteValues[compKey] ?? '').trim().length === 0}
+                            className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add All
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          className="form-input text-sm flex-1"
+                          placeholder="Type item name and press Enter..."
+                          value={quickAddValues[compKey] ?? ''}
+                          onChange={(e) => setQuickAddValues((prev) => ({ ...prev, [compKey]: e.target.value }))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void handleQuickAdd(idx);
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleQuickAdd(idx)}
+                          disabled={!(quickAddValues[compKey] ?? '').trim()}
+                          className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-40 transition-colors flex-shrink-0"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -2223,6 +3319,34 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           )}
           <button
             type="button"
+            onClick={exportTemplateJson}
+            disabled={compartments.length === 0}
+            className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
+            title="Export template as JSON"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => importFileRef.current?.click()}
+              className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              title="Import template from JSON"
+            >
+              <Upload className="h-4 w-4" />
+              <span className="hidden sm:inline">Import</span>
+            </button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImportTemplate}
+            />
+          </div>
+          <button
+            type="button"
             onClick={() => setShowPreview(true)}
             disabled={compartments.length === 0}
             className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2 text-sm font-medium text-theme-text-primary hover:bg-theme-surface-secondary disabled:opacity-50 transition-colors"
@@ -2301,6 +3425,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   Load Vehicle Preset
                 </button>
               )}
+              <button
+                type="button"
+                onClick={() => void addSectionHeader()}
+                className="flex items-center gap-1.5 rounded-md border border-dashed border-purple-400 dark:border-purple-600 px-3 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+              >
+                <Type className="h-4 w-4" />
+                Add Section
+              </button>
               <button
                 type="button"
                 onClick={() => void addCompartment()}
@@ -2388,6 +3520,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               )}
             </div>
             <div className="flex items-center gap-2">
+              {autoSaveStatus === 'saving' && (
+                <span className="flex items-center gap-1 text-xs text-blue-500 animate-pulse">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Saving…
+                </span>
+              )}
+              {autoSaveStatus === 'saved' && (
+                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Saved
+                </span>
+              )}
+              {autoSaveStatus === 'error' && (
+                <span className="flex items-center gap-1 text-xs text-red-500">
+                  <AlertTriangle className="h-3 w-3" />
+                  Save failed
+                </span>
+              )}
               {stats.completeness < 100 && (
                 <span className="text-xs text-yellow-600 dark:text-yellow-400">
                   {stats.completeness}% items named
@@ -2404,29 +3554,60 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* Preview Modal */}
+      {/* Preview Modal — mobile device frame */}
       {showPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="relative mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-theme-surface shadow-xl">
-            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
-              <h2 className="text-lg font-semibold text-theme-text-primary">Check Preview</h2>
-              <button
-                type="button"
-                onClick={() => setShowPreview(false)}
-                className="rounded-lg p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
-                <p className="text-xs text-blue-700 dark:text-blue-400">
-                  This is a preview of how the check will appear to members during their shift.
-                  Inputs are interactive for demonstration but nothing will be submitted.
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative flex flex-col items-center gap-3">
+            {/* Close button outside the phone frame */}
+            <button
+              type="button"
+              onClick={() => setShowPreview(false)}
+              className="absolute -top-2 -right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-theme-surface text-theme-text-muted shadow-lg hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              aria-label="Close preview"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Phone frame */}
+            <div className="relative w-[375px] max-w-[90vw] rounded-[2.5rem] border-[6px] border-gray-800 dark:border-gray-600 bg-theme-surface shadow-2xl overflow-hidden">
+              {/* Phone notch */}
+              <div className="relative h-7 bg-gray-800 dark:bg-gray-600 flex items-end justify-center">
+                <div className="w-28 h-5 rounded-b-2xl bg-gray-800 dark:bg-gray-600" />
               </div>
-              <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+
+              {/* Phone status bar */}
+              <div className="flex items-center justify-between px-6 py-1 bg-theme-surface text-[10px] text-theme-text-muted">
+                <span>9:41</span>
+                <div className="flex items-center gap-1">
+                  <span>5G</span>
+                  <div className="w-6 h-2.5 rounded-sm border border-theme-text-muted relative">
+                    <div className="absolute inset-0.5 bg-theme-text-muted rounded-[1px]" style={{ width: '75%' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable content area */}
+              <div className="overflow-y-auto bg-theme-surface" style={{ height: 'min(70vh, 640px)' }}>
+                <div className="px-1 pb-4">
+                  <div className="mb-3 mx-3 mt-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                    <p className="text-[10px] text-blue-700 dark:text-blue-400">
+                      Preview — inputs are interactive but nothing will be submitted.
+                    </p>
+                  </div>
+                  <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+                </div>
+              </div>
+
+              {/* Phone home indicator bar */}
+              <div className="flex justify-center py-2 bg-theme-surface">
+                <div className="w-32 h-1 rounded-full bg-gray-800/30 dark:bg-gray-400/30" />
+              </div>
             </div>
+
+            {/* Label */}
+            <p className="text-xs text-gray-400 text-center">
+              Mobile preview — most members will complete checks on their phone
+            </p>
           </div>
         </div>
       )}
