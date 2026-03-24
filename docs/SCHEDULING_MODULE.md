@@ -646,4 +646,128 @@ All scanner consumers (InventoryScanModal, MemberIdScannerModal, MemberScanPage)
 
 ---
 
-*Last Updated: March 22, 2026*
+## Bulk Actions, Staffing Visualization, Notifications & Bug Fixes (2026-03-24)
+
+### New API Endpoint
+
+```
+GET /api/v1/scheduling/shifts/{id}/unavailable-members
+```
+
+Returns consolidated list of user IDs that cannot be assigned to a shift (members on leave, with approved time-off, or already assigned). Requires `scheduling.assign` permission. Used by ShiftDetailPanel to filter assignment dropdowns.
+
+### Shift Assignment Notifications
+
+Two notification pathways added:
+
+**1. Assignment Notification** — triggered when a member is assigned to a shift via `_notify_shift_assignment()`:
+- In-app notification with shift date, time, and position
+- Optional email notification
+- Times displayed in org timezone (not UTC)
+- Settings stored in `org.settings.scheduling_assignment`
+
+**2. Start-of-Shift Reminder** — scheduled task `run_shift_reminders()` runs every 30 minutes:
+- Finds shifts starting within configurable lookahead window (default 2 hours)
+- Sends in-app notification (and optional email) to assigned members
+- Includes list of start-of-shift equipment checklists for the apparatus
+- Marks shifts with `activities.start_reminder_sent = True` to avoid duplicates
+- Settings stored in `org.settings.shift_reminders`:
+  - `enabled` (bool, default True)
+  - `lookahead_hours` (int, default 2)
+  - `send_email` (bool, default False)
+  - `cc_emails` (list[str], default [])
+
+### Template Position Required/Optional Toggle
+
+Template positions changed from `string[]` to structured `PositionEntry[]`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `position` | String | Position name (e.g., "officer", "driver") |
+| `required` | Boolean | Whether the position must be filled for minimum staffing |
+
+Backward-compatible: bare strings in existing templates default to `required=true`. Frontend shows violet badge for required positions and muted for optional. Section renamed from "Required Positions" to "Crew Positions".
+
+### Staffing Status Visualization
+
+Shift cards and the crew info box now display staffing status:
+
+| State | Visual |
+|-------|--------|
+| Fully staffed | Green CheckCircle2 icon on card, green background in crew box, ratio "4/4" |
+| Understaffed | Amber background in crew box, amber open position count, ratio "2/4" |
+| Staffing-based tints | Green tint overrides template color when full; amber when short |
+
+The text color on shift cards with custom hex colors now passes WCAG AA contrast checks (4.5:1 minimum). Functions in `utils/colorContrast.ts`:
+- `relativeLuminance()` — WCAG 2.x luminance formula
+- `contrastRatio()` — compares two luminance values
+- `accessibleTextColor()` — iteratively adjusts until target contrast reached
+
+### Bulk Actions
+
+**My Shifts Tab:**
+- Checkboxes on pending shift cards when 2+ pending assignments exist
+- "Select All" toggle + "Confirm All" / "Decline All" action bar
+- Optimistic UI: assignments update immediately, revert on API failure
+
+**Requests Tab:**
+- Inline "Approve" and "Deny" buttons directly on request cards
+- "+ Notes" link opens review modal for reviewer comments
+- Applied to both swap requests and time-off requests
+
+**ShiftDetailPanel:**
+- "Fill All Open" bulk assignment button when 2+ positions unfilled
+- Position-first assignment flow: position dropdown first, member search below
+- "Assign" button on open crew board slots pre-fills position
+- After assignment, form resets position to next open slot
+
+### UX Improvements
+
+- **Selected shift highlight**: Violet ring on currently viewed shift across all calendar views
+- **Collapsible additional options**: Shift creation form shows Start/End Date first; Custom Times, Apparatus, Officer, Notes in collapsible section
+- **Searchable template dropdown**: Search input appears when >5 templates, filters by name/apparatus/category
+- **Open/Specific swap selector**: Two-card radio buttons replace dropdown
+- **Time-off conflict warning**: Amber banner listing conflicting shifts
+- **Notification history link**: "Alerts" link on My Shifts tab filtered to `schedule_change` trigger type
+- **Equipment check inline status**: Badge counts (pass/fail/in-progress/pending), action hints
+- **Mobile note truncation**: 2-line `line-clamp-2` with ellipsis
+- **Mobile touch targets**: 44px minimum (WCAG standard) on action buttons
+
+### Bug Fixes (2026-03-24)
+
+| Bug | Root Cause | Fix |
+|-----|-----------|-----|
+| Shift overlap false positives across UTC date boundaries | Open-ended shifts (no `end_time`) treated as infinitely long | Restrict to same `shift_date`: `and_(Shift.end_time.is_(None), Shift.shift_date == shift.shift_date)` |
+| Shift assignment/reminder times in UTC | `_notify_shift_assignment()` and `run_shift_reminders()` used raw UTC times | Convert to org timezone via `pytz` before formatting |
+| All shifts defaulting to indigo color | `getShiftTemplateColor()` parsed full ISO string (`"2026-03-24T14:00:00"` → 2026) | Extract time after "T" split: `shift.start_time.split("T")[1]?.split(":")[0]` |
+| Empty notes causing 422 | `editingNotesValue ?? undefined` passes empty string | Changed to `editingNotesValue \|\| undefined` |
+| Pattern generation 422 | `GenerateShiftsRequest` required `pattern_id` in body (already URL param) | Removed field from schema |
+| Member hours report empty | Queried `ShiftAttendance` (clock-in only) | Changed to `ShiftAssignment` joined with `Shift` |
+| Member hours report type mismatch | Endpoint returned flat array; frontend expected wrapped object | Wrapped in `{ members, period_start, period_end, total_members }` |
+| Missing first_name/last_name in report | `MemberHoursReport` schema lacked fields | Added to both Pydantic schema and TS type |
+| Dark mode poor contrast on scheduling buttons | Interactive elements missing `dark:` modifiers | Added `dark:text-*-400`, `dark:hover:bg-*-*/20` variants |
+| Shift card text unreadable in dark mode | `hexColorStyle()` set text to raw hex against 10% opacity bg | WCAG AA contrast calculation with iterative adjustment |
+
+### Code Quality
+
+- Consolidated `ShiftDetailPanel.tsx` from 33 to 23 useState hooks (11 async-pending booleans grouped into `pending` state object)
+- Extracted `INACTIVE_ASSIGNMENT_STATUSES` constant (replaces 3 inline `[DECLINED, CANCELLED]` lists)
+- Deduplicated shift enrichment via `_enrich_shift_dict()` method
+- Typed `getMyChecklists()` return as `ActiveChecklistRecord[]`
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Bulk confirm with API failure on one shift | Optimistic UI reverts failed assignment; others remain confirmed |
+| Template with bare string positions (pre-migration) | Defaults to `required=true` (backward-compatible) |
+| Shift with no `end_time` on different date | No longer falsely overlaps; restricted to same `shift_date` |
+| Reminder for shift that already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave in assignment dropdown | Filtered out via unavailable-members endpoint |
+| Dark mode with light template color (e.g., #FFD700) | Text auto-darkened to maintain WCAG AA 4.5:1 contrast |
+| Notes field cleared to empty | Converted to `undefined` to prevent backend 422 |
+
+---
+
+*Last Updated: March 24, 2026*

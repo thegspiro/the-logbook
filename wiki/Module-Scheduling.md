@@ -64,6 +64,7 @@ POST   /api/v1/scheduling/swap-requests      # Request swap
 POST   /api/v1/scheduling/time-off-requests  # Request time off
 GET    /api/v1/scheduling/reports/*           # Scheduling reports
 GET    /api/v1/scheduling/apparatus          # List basic apparatus
+GET    /api/v1/scheduling/shifts/{id}/unavailable-members  # Unavailable user IDs for assignment filtering
 ```
 
 ---
@@ -111,6 +112,48 @@ GET    /api/v1/scheduling/apparatus          # List basic apparatus
 - **Dashboard fix**: Shows all organization shifts instead of only user-assigned shifts
 - **Time string handling**: `formatTime()` handles bare time strings from backend
 - **EMS renamed to EMT**: Position label updated across all files
+
+---
+
+## Recent Improvements (2026-03-24)
+
+### Bulk Actions, Staffing Visualization & Shift Notifications
+
+- **Bulk confirm/decline**: Checkboxes on pending shift cards with "Select All", "Confirm All", "Decline All" buttons. Optimistic UI with rollback on failure
+- **Inline approve/deny on Requests**: Direct "Approve"/"Deny" buttons on swap and time-off request cards without modal
+- **Staffing status visualization**: Green CheckCircle2 on fully staffed shift cards. Staffing ratio ("4/4") in crew info box. Green/amber color tints override template colors
+- **Position-first assignment flow**: Position dropdown first in crew board, "Assign" button on open slots, "Fill All Open" bulk assignment
+- **Unavailable member filtering**: New `GET /scheduling/shifts/{id}/unavailable-members` endpoint. Members on leave, with time-off, or already assigned removed from dropdowns
+- **Required/Optional position toggle**: Template positions changed from `string[]` to `{position, required}[]`. Violet badge for required, muted for optional
+- **Shift assignment notifications**: In-app + optional email on member assignment. Settings in Scheduling Notifications Panel
+- **Start-of-shift reminders**: Scheduled task (30-min interval) with configurable lookahead. Includes equipment checklist list. Settings: `org.settings.shift_reminders`
+- **Selected shift highlight**: Violet ring on current shift across all calendar views
+- **Collapsible shift creation**: Start/End Date first; additional options behind disclosure
+- **Searchable template dropdown**: Search input for >5 templates, filters by name/apparatus/category
+- **Equipment check inline status**: Badge counts and action hints on shift detail
+- **WCAG AA text contrast**: Shift card colors pass 4.5:1 contrast via `colorContrast.ts` utility
+- **Mobile touch targets**: 44px minimum on action buttons (WCAG standard)
+
+### Bug Fixes (2026-03-24)
+
+- **Shift overlap false positives**: Open-ended shifts restricted to same `shift_date`
+- **UTC in notifications**: Assignment/reminder times now display in org timezone
+- **Shift color parsing**: Extracts hour from time portion, not full ISO string
+- **Notes 422 error**: Empty notes coerced to `undefined` via `||`
+- **Pattern generation 422**: Removed redundant `pattern_id` from request body
+- **Member hours report**: Queries `ShiftAssignment` instead of `ShiftAttendance`; added `first_name`/`last_name`
+- **Dark mode contrast**: Added `dark:` variants on all interactive elements
+
+### Edge Cases (2026-03-24)
+
+| Scenario | Behavior |
+|----------|----------|
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Defaults to `required=true` (backward-compatible) |
+| Open-ended shift on different date | No false overlap; restricted to same date |
+| Reminder for already-started shift | Skipped |
+| Member on leave in assignment dropdown | Filtered out |
+| Dark mode with light template color | Text auto-adjusted for WCAG AA contrast |
 
 ---
 

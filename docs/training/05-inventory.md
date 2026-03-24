@@ -1210,4 +1210,60 @@ Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop brow
 
 ---
 
+## Storage Areas, Barcode Backfill & Item Detail Improvements (2026-03-24)
+
+### Storage Area Items Display
+
+The Storage Areas page now shows the **actual inventory items** assigned to each storage area, not just item counts. Each storage area has an expandable panel that reveals:
+
+- Item name, serial number, status, and condition
+- Direct links to each item's detail page
+
+> **Screenshot needed:**
+> _[Screenshot of the Storage Areas page showing an expanded storage area panel with 3 items listed — each row showing item name, serial number (e.g., "SN-12345"), a green "Good" condition badge, and a clickable link icon]_
+
+> **Edge case:** Storage areas with no items show an empty state message. Items without serial numbers display the item name and barcode instead.
+
+### Barcode and Asset Tag Always Visible
+
+The item detail page now **always shows** barcode and asset tag fields, displaying `--` as a placeholder when no value is set. Previously, these fields were hidden when empty, making it unclear whether the item had been assigned a barcode.
+
+> **Screenshot needed:**
+> _[Screenshot of an item detail page sidebar showing the barcode field with a Code128 barcode image, the asset tag field showing "AT-2024-001", and below them a second item with barcode showing "--" and asset tag showing "--"]_
+
+### Barcode Backfill
+
+Items created before the barcode auto-generation feature was added will **automatically receive a barcode** (in `INV-XXXXXXXX` format) the next time they are viewed or fetched via the API. No manual action or database migration is required.
+
+> **Edge case:** The backfill happens lazily on fetch — if you export a CSV of all items, items that haven't been individually viewed yet may still show empty barcodes. Viewing the item detail page triggers the backfill.
+
+### Equipment Check Template Builder Fix
+
+The equipment check template builder no longer crashes when editing templates. The issue was caused by an incompatible browser navigation blocker. The "unsaved changes" warning still appears when you close or refresh the browser tab, but in-app navigation no longer triggers a crash.
+
+### Camera Error Handling
+
+- **InventoryScanModal**: Error messages from camera failures now show specific details (e.g., "Camera permission denied" instead of "An error occurred")
+- **Errors stay visible**: Camera error messages no longer auto-dismiss, giving you time to read and act on them
+
+> **Screenshot needed:**
+> _[Screenshot of the InventoryScanModal showing a camera error message: "Camera permission denied. Please allow camera access in your browser settings." with a "Try Again" button below]_
+
+### WebSocket Reliability
+
+Fixed an intermittent error where the real-time inventory updates WebSocket connection would fail with a "connection already accepted" error. This affected users who had the inventory page open for extended periods.
+
+### Edge Cases (2026-03-24)
+
+| Scenario | Behavior |
+|----------|----------|
+| Item created before barcode auto-generation | Barcode lazily generated on first fetch |
+| Storage area with no items | Shows empty state message |
+| Item with no barcode or asset tag | Fields display `--` placeholder (always visible) |
+| Template builder back navigation | No crash; `beforeunload` still fires on browser close |
+| Camera permission denied | Specific error message; manual entry available |
+| Storage area item link clicked | Navigates to `/inventory/items/{id}` (fixed from dashboard) |
+
+---
+
 **Previous:** [Events & Meetings](./04-events-meetings.md) | **Next:** [Apparatus & Facilities](./06-apparatus-facilities.md)

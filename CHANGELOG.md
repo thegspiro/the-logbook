@@ -7,6 +7,216 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduling — Bulk Actions, Staffing Visualization, Notifications & Bug Fixes (2026-03-24)
+
+- **Bulk confirm/decline on My Shifts**: When 2+ pending shift assignments exist, checkboxes appear on each shift card with "Select All" toggle, "Confirm All", and "Decline All" bulk action buttons. Optimistic UI updates with rollback on failure
+- **Inline approve/deny on Requests tab**: Swap and time-off request cards now show direct "Approve" and "Deny" buttons without opening a modal. "+ Notes" link opens the review modal for comments
+- **Staffing status visualization**: Shift cards display green CheckCircle2 icon when fully staffed. Crew info box shows staffing ratio (e.g., "4/4") with green/amber background. Staffing-based color tints override template colors (green for fully staffed, amber for understaffed)
+- **Position-first assignment flow**: ShiftDetailPanel crew board now shows position dropdown first (defaults to first open slot), member search below. "Assign" button directly on open slots pre-fills position
+- **Bulk assignment**: "Fill All Open" button when 2+ positions unfilled. Compact form with one member dropdown per position
+- **Unavailable member filtering**: New `GET /api/v1/scheduling/shifts/{id}/unavailable-members` endpoint consolidates members on leave, with time-off, or already assigned. Removed from assignment dropdowns
+- **Required/Optional position toggle**: Template position editor adds required/optional toggle per position. Violet badge when required, muted when optional. Data structure changed from `string[]` to `{position: string, required: boolean}[]`
+- **Shift assignment notifications**: In-app + optional email notification when a member is assigned to a shift. Settings in Scheduling Notifications Panel under "Shift Assignment Alerts"
+- **Start-of-shift reminders**: Scheduled task (30-minute interval) sends reminders to assigned members within configurable lookahead window (default 2 hours). Includes equipment checklist list for the shift's apparatus. Settings: enable toggle, lookahead hours, email toggle, CC emails. Stored in `org.settings.shift_reminders`
+- **Selected shift highlight**: Currently viewed shift highlighted with violet ring across all calendar views (week, mobile, month, list)
+- **Collapsible shift creation options**: Start/End Date shown first; Custom Times, Apparatus, Officer, and Notes behind a collapsible "Additional Options" section
+- **Searchable template dropdown**: Shows search input when >5 templates, filters by name/apparatus/category
+- **Open/Specific swap selector**: Two-card radio buttons replace single dropdown for swap type selection
+- **Time-off conflict warning**: Amber banner on shift detail listing conflicting time-off requests with dates
+- **Notification history link**: "Alerts" link on My Shifts tab filtered to `schedule_change` trigger type
+- **Equipment check inline status**: Badge counts (pass/fail/in-progress/pending) next to equipment check header. Action hints: "Start check → Go to Checklists tab" or "Continue check → N items remaining"
+- **Member hours report fix**: Service now queries `ShiftAssignment` joined with `Shift` instead of `ShiftAttendance` (clock-in records), returning scheduled shift hours. Added `first_name`/`last_name` to `MemberHoursReport` schema and frontend type
+- **Availability report fix**: New `get_availability_summary()` aggregates time-off/leave/assignment data per member instead of returning raw records
+- **Shift overlap false positive fix**: Open-ended shifts (no `end_time`) restricted to same `shift_date` instead of being treated as infinitely long
+- **UTC timezone in notifications fix**: Shift assignment, shift reminder, and inventory overdue notifications now convert times to org timezone before formatting
+- **Shift color parsing fix**: `getShiftTemplateColor()` extracts time portion after "T" split before parsing hour, fixing all shifts defaulting to indigo
+- **Notes form coercion fix**: Changed `editingNotesValue ?? undefined` to `editingNotesValue || undefined` to prevent 422 on empty notes
+- **Pattern generation 422 fix**: Removed redundant `pattern_id` from `GenerateShiftsRequest` body (already a URL path parameter)
+- **Shift card text color accessibility**: WCAG AA 4.5:1 contrast calculation for hex template colors. Iterative lightening/darkening based on dark/light mode
+- **Dark mode fixes**: Added `dark:` variants on all interactive elements (confirm/decline/cancel buttons, inline text, request review buttons) across scheduling views
+- **Mobile touch targets**: Increased from 36px to 44px (WCAG standard) on My Shifts and ShiftDetailPanel action buttons
+- **Code reduction**: Consolidated 33 → 23 useState hooks in ShiftDetailPanel. Extracted `INACTIVE_ASSIGNMENT_STATUSES` constant. Deduplicated shift enrichment via `_enrich_shift_dict()`
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/scheduling/shifts/{id}/unavailable-members` | Consolidated unavailable user IDs for assignment filtering |
+
+**Data Model Changes:**
+
+| Table/Field | Change | Description |
+|-------------|--------|-------------|
+| `shift_templates.positions` | Schema change | JSON changed from `string[]` to `{position, required}[]` |
+| `shifts.activities` | New JSON key | `start_reminder_sent` (Boolean) prevents duplicate reminders |
+| `email_template_types` | Enum sync | Added `shift_assignment`, `shift_reminder` types |
+| `org.settings.shift_reminders` | New JSON key | `enabled`, `lookahead_hours`, `send_email`, `cc_emails` |
+| `org.settings.scheduling_assignment` | New JSON key | `notify_on_assignment`, `send_email`, `cc_emails` |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Bulk confirm with API failure | Optimistic UI reverts; toast shows error |
+| Template with bare string positions | Backward-compatible: defaults to `required=true` |
+| Shift with no `end_time` overlapping next day | Overlap restricted to same `shift_date` only |
+| Reminder for shift already started | Skipped — only shifts starting within lookahead window |
+| All positions filled via bulk assign | "Fill All Open" button hidden |
+| Member on leave assigned via API | Blocked by unavailable-members check in UI; API still accepts (no backend guard) |
+| Notes cleared to empty string | Converted to `undefined` via `||` to prevent 422 |
+| Dark mode with light template color | Text auto-darkened to maintain 4.5:1 contrast ratio |
+
+### Elections — Secretary Workflow, Eligibility Roster, Enums & Result Publishing (2026-03-24)
+
+- **Tabbed election detail workflow**: `ElectionWorkflowTabs` replaces monolithic detail page. Tabs: Ballot, Candidates, Eligibility, Overrides, Proxies, Attendance (draft/open), Cast Vote (open), Results (closed). WAI-ARIA Tabs pattern with roving tabindex
+- **Eligibility roster**: New `EligibilityRoster` component and `GET /api/v1/elections/{id}/eligibility-roster` endpoint. Color-coded rows (green/red/blue/muted), search + filter (All/Eligible/Ineligible/Voted/Override), expandable per-member rows showing per-ballot-item eligibility, ballot delivery indicator, ineligibility reasons
+- **Publish results panel**: One-click toggle to publish/hide results (`aria-pressed`). "Send Report" button emails results to eligible voters. Color-coded status indicators (green=closed, blue=open)
+- **Runoff chain visualization**: Horizontal timeline showing original → runoff 1 → runoff 2 elections. Each node: title, status, vote count, status icon. Current election highlighted with `aria-current="page"`
+- **Election summary cards**: 4-column dashboard metrics on elections list page: Active Elections, Need Attention (draft + expired), Completed, Total Votes Cast
+- **Election enums extracted to constants**: `VotingMethod`, `VictoryCondition`, `BallotChoice`, `RunoffType`, `QuorumType` added to `constants/enums.ts`. 50+ string literals replaced across 10+ files
+- **Backend validator deduplication**: 8 field validators consolidated into reusable `_validate_choice()` helper. `VALID_QUORUM_TYPES` extracted as constant
+- **Event type filter removed**: Elections can now be linked to any event type (not just business meetings)
+- **Accessibility**: WAI-ARIA Tabs pattern, `aria-expanded` on expandable rows, `aria-pressed` on toggle buttons, `aria-current` on runoff chain, keyboard navigation (Enter/Space)
+- **Department email generation**: New `DepartmentEmailSettings` schema with 4 format patterns (first.last, flast, firstlast, last.first). Auto-generated at member election/transfer. Uniqueness check with numeric suffix on collision. Personal email preserved in `User.personal_email`
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/elections/{id}/eligibility-roster` | Full member eligibility breakdown for secretary |
+
+**New Frontend Components:**
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| `ElectionWorkflowTabs` | `modules/elections/components/` | Tabbed navigation with dynamic visibility |
+| `EligibilityRoster` | `modules/elections/components/` | Secretary eligibility dashboard |
+| `PublishResultsPanel` | `modules/elections/components/` | Post-election result publishing |
+| `RunoffChain` | `modules/elections/components/` | Multi-stage election timeline |
+| `ElectionSummaryCards` | `modules/elections/components/` | Dashboard metrics cards |
+
+**New Enums (frontend):**
+
+| Enum | Values |
+|------|--------|
+| `VotingMethod` | `simple_majority`, `ranked_choice`, `approval`, `supermajority` |
+| `VictoryCondition` | `most_votes`, `majority`, `supermajority`, `threshold` |
+| `BallotChoice` | `approve`, `deny`, `abstain`, `write_in` |
+| `RunoffType` | `top_two`, `eliminate_lowest` |
+| `QuorumType` | `none`, `percentage`, `count` |
+
+**Data Model Changes:**
+
+| Table/Field | Change | Description |
+|-------------|--------|-------------|
+| `org.settings.department_email` | New JSON key | `enabled`, `domain`, `format` for department email generation |
+| `users.personal_email` | New column | Stores prospect's original email after department email assignment |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Election linked to non-business-meeting event | Now allowed — event type filter removed |
+| Department email collision (john.smith@dept.org exists) | Appends numeric suffix: john.smith2@dept.org |
+| Department email disabled | Uses prospect's personal email as primary |
+| Tabs when election is cancelled | Only Ballot tab visible |
+| Results tab auto-select | Auto-navigates to Results when election is closed |
+| Runoff chain with no parent | Shows single-node chain for standalone elections |
+
+### Inventory — Storage Areas, Barcode Backfill, Item Detail & WebSocket Fix (2026-03-24)
+
+- **Storage area items display**: Storage Areas page now shows actual inventory items assigned to each area with expandable inline panels. Items display name, serial number, status, and condition with direct links to item detail pages
+- **Storage area item link fix**: Item links from storage areas now navigate to `/inventory/items/{id}` instead of dashboard
+- **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback when empty, instead of hiding them
+- **Barcode backfill**: Items created before auto-generation lazily receive barcodes (INV-XXXXXXXX format) on first fetch. No migration needed
+- **Admin items page improvements**: InventoryItemsPage readability and bug fixes
+- **WebSocket double-accept fix**: Guard `client_state` check before `accept()` to prevent `RuntimeError` in inventory WebSocket endpoint
+- **Equipment check template builder fix**: Removed `useBlocker` from `useUnsavedChanges` (incompatible with BrowserRouter). Kept `beforeunload` handler for browser close/refresh
+- **Storage area name resolution**: Item detail page resolves and displays the storage area name instead of raw ID
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Item created before barcode auto-generation | Barcode lazily generated on first fetch |
+| Storage area with no items | Shows empty state message |
+| Item with no barcode or asset tag | Fields display `--` placeholder |
+| WebSocket connection already accepted | Guard prevents second `accept()` call |
+| Template builder navigation during unsaved changes | `beforeunload` fires on browser close; no in-app blocking (BrowserRouter limitation) |
+
+### Notifications — Batch Read, Badges, Polling & Dashboard Fixes (2026-03-24)
+
+- **Batch mark-all-read**: New `POST /api/v1/notifications/logs/read-all` endpoint marks all org notification logs as read in a single query
+- **Unread badge**: Bell icon (top nav) and Notifications link (side nav) show unread notification count badge. Shared Zustand store + `useNotificationPoller` hook initialized in AppLayout
+- **Smart polling**: Notification polling pauses when browser tab is hidden (Page Visibility API). Refetches immediately when tab becomes visible
+- **Pagination**: Notifications inbox uses "Load More" pagination (20 per page)
+- **Read filter**: "Show read" toggle to filter read/unread notifications. Improved empty states for filtered views
+- **Clear All fix**: Dashboard fetches only unread notifications (`include_read: false`). Cleared notifications no longer reappear on navigation
+- **Clickable dashboard notifications**: Notifications navigate to inbox if no `action_url` is set
+- **View All link fix**: "View All" navigates to `/notifications?tab=inbox` instead of bare `/notifications`
+- **Code cleanup**: Removed dead branches and simplified notification rendering logic
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/notifications/logs/read-all` | Batch mark all notification logs as read |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Tab hidden for extended period | Polling pauses; refetches on tab focus |
+| Clear All with no unread notifications | No-op; empty state displayed |
+| Notification with `action_url` clicked on dashboard | Navigates to `action_url` |
+| Notification without `action_url` clicked on dashboard | Navigates to notifications inbox |
+| Mark all read with 0 unread | Endpoint returns success; no DB writes |
+
+### Membership — Department Emails, Username Safety & Default Roles (2026-03-24)
+
+- **Department email generation at election**: When a prospect is elected to membership, the system generates a department email (e.g., john.smith@firedept.org) based on configurable format patterns. Four formats: `first.last`, `flast` (first-initial + last), `firstlast`, `last.first`. Collisions resolved with numeric suffix (john.smith2@firedept.org). Prospect's personal email preserved in `User.personal_email`
+- **Username collision handling**: `_generate_unique_username()` checks for existing usernames and appends incrementing suffixes (jsmith, jsmith1, jsmith2). Manual username validation also enforced
+- **Default member role**: All member creation paths (self-registration, admin creation, prospect transfer) now assign the default "member" role for baseline permissions
+- **`password_changed_at` set on creation**: All creation paths set `password_changed_at` to creation time so HIPAA password age checks work from day one. Self-registered users get `must_change_password=True`
+- **Membership ID auto-generation**: `generate_next_membership_id()` and `assign_next_membership_number()` added to OrganizationService. Previous membership numbers preserved on soft-delete and restored on reactivation
+- **Transfer UX improvements**: Department email generation integrated into transfer workflow
+
+**Data Model Changes:**
+
+| Table/Field | Change | Description |
+|-------------|--------|-------------|
+| `users.personal_email` | New column | Stores personal email when department email becomes primary |
+| `users.previous_membership_number` | New column | Preserves membership number on archive for reuse on reactivation |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Department email disabled in org settings | Uses prospect's personal email as primary |
+| Username "jsmith" already exists | Generates "jsmith1", "jsmith2", etc. |
+| Reactivated member with previous membership number | Previous number restored automatically |
+| Member soft-deleted then new member uses same number | Original number stored in `previous_membership_number`; new member gets next available |
+| Self-registered user without password change | `must_change_password=True` forces change on first login |
+
+### WCAG Accessibility Improvements (2026-03-24)
+
+- **Color contrast fixes (75 components)**: Light-mode semantic colors (`text-{color}-400/300`) replaced with WCAG AA-compliant variants (`text-{color}-700 dark:text-{color}-400`). Dark mode appearance unchanged
+- **Color contrast utility**: New `utils/colorContrast.ts` with `hexToRgb()`, `rgbToHex()`, `relativeLuminance()`, `contrastRatio()`, `accessibleTextColor()`, `colorCardStyle()`. Ensures 4.5:1 contrast ratio across all themes
+- **Form accessibility**: `htmlFor`/`id` associations on ~24 form inputs. `aria-required="true"` on required fields. `fieldset`/`legend` wrapping radio button groups across 7 components
+- **Live regions**: `aria-live="assertive"` added to ~52 `role="alert"` elements. `role="status" aria-live="polite"` on loading spinners
+- **Focus rings**: Fixed `DateRangePicker` date input focus outlines
+- **Alt text**: Image previews in `FileDropzone` now include descriptive alt text
+- **Camera error handling improvements**: `MemberScanPage` surfaces scanner errors via `tryStartScanner` wrapper. `InventoryScanModal` uses `getErrorMessage()` instead of generic string. Errors stay visible (no auto-dismiss)
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| High-contrast mode | Theme variables override; WCAG AAA (7:1) targeted where possible |
+| Dark mode with light hex color | `accessibleTextColor()` iteratively lightens text until 4.5:1 |
+| Screen reader on expandable roster rows | `aria-expanded` state announced on focus |
+| Camera permission denied | Clear error message; manual entry fallback available |
+
 ### Camera Scanning — Desktop & Cross-Browser Support (2026-03-22)
 
 - **Desktop camera scanning**: Camera-based scanning (QR codes, barcodes, member IDs) now works on desktop browsers by falling back to a user-facing camera when no environment-facing camera is detected. Previously limited to mobile devices

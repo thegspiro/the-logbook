@@ -120,6 +120,15 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### March 2026 (Mar 24) — Scheduling Bulk Actions, Elections Secretary Workflow, Inventory Storage Areas, Notifications Badges, WCAG Accessibility
+
+- **Scheduling bulk actions**: Bulk confirm/decline on My Shifts tab with optimistic UI. Inline approve/deny on Requests tab. Position-first assignment flow with "Fill All Open". Staffing status visualization (green/amber tints, ratio display). Unavailable member filtering. Required/optional position toggle on templates. Shift assignment notifications and start-of-shift reminders with equipment checklists. WCAG AA shift card contrast. 10 bug fixes (overlap detection, UTC in notifications, color parsing, member hours report, dark mode)
+- **Elections secretary workflow**: Tabbed election detail with WAI-ARIA pattern. Eligibility roster with search/filter/expandable rows. Publish results panel with one-click toggle. Runoff chain timeline visualization. Election summary dashboard cards. 5 new enums (`VotingMethod`, `VictoryCondition`, `BallotChoice`, `RunoffType`, `QuorumType`) extracted to constants. Event type filter removed (elections link to any event). Department email generation at member election
+- **Inventory storage areas**: Storage areas display actual items with expandable panels. Barcode/asset tag always visible on item detail. Lazy barcode backfill for pre-existing items. WebSocket double-accept fix. Equipment check template builder crash fix. Camera error handling improvements
+- **Notifications overhaul**: Batch mark-all-read endpoint. Unread badges on bell icon and side nav. Smart polling with Page Visibility API. Pagination (20/page). Read/unread filter. Dashboard clear-all fix. Clickable notifications with action URLs. View All link fix
+- **Membership improvements**: Department email generation (4 format patterns, collision handling). Username collision prevention. Default member role on all creation paths. `password_changed_at` set from day one. Membership ID auto-generation with number reuse safety
+- **WCAG accessibility**: Color contrast fixes across 75 components. New `colorContrast.ts` utility. Form accessibility (htmlFor/id, aria-required, fieldset/legend). Live regions (aria-live on 52 elements). Camera error handling improvements
+
 ### March 2026 (Mar 15) — Recurring Training Sessions, Scheduling Timezone Fixes, Inventory Auto-Variants, UTC Root Cause Fix & Pipeline Reports
 
 - **Recurring training sessions**: Training sessions can now recur using the same infrastructure as events (daily, weekly, monthly, etc.). Selecting a course auto-populates form fields. New quarter-hour time picker and quick duration buttons
