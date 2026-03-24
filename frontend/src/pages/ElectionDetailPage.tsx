@@ -7,7 +7,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { electionService, eventService } from '../services/api';
+import { electionService, eventService, meetingsService } from '../services/api';
+import type { MeetingRecord } from '../services/api';
 import { electionPackageService, applicantService } from '../modules/prospective-members/services/api';
 import type { ElectionPackage } from '../modules/prospective-members/types';
 import type { Election, ForensicsReport, VoteIntegrityResult, Candidate, BallotItem } from '../types/election';
@@ -101,6 +102,11 @@ export const ElectionDetailPage: React.FC = () => {
   // Upcoming events state
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
 
+  // Meeting binding state
+  const [showMeetingSelector, setShowMeetingSelector] = useState(false);
+  const [availableMeetings, setAvailableMeetings] = useState<MeetingRecord[]>([]);
+  const [isImportingAttendees, setIsImportingAttendees] = useState(false);
+
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('elections.manage');
   const tz = useTimezone();
@@ -143,6 +149,64 @@ export const ElectionDetailPage: React.FC = () => {
       setUpcomingEvents(events);
     } catch {
       // Non-critical — section will just be empty
+    }
+  };
+
+  const fetchAvailableMeetings = async () => {
+    try {
+      const data = await meetingsService.getMeetings({ limit: 100 });
+      setAvailableMeetings(data.meetings);
+    } catch {
+      // Non-critical
+    }
+  };
+
+  const handleMeetingChange = async (value: string) => {
+    if (!electionId || !election) return;
+
+    const [source, id] = value
+      ? [value.slice(0, value.indexOf(':')), value.slice(value.indexOf(':') + 1)]
+      : ['', ''];
+
+    try {
+      const updateData: Record<string, string | undefined> = {};
+      if (source === 'meeting') {
+        const meeting = availableMeetings.find(m => m.id === id);
+        updateData.meeting_id = id;
+        updateData.event_id = undefined;
+        updateData.meeting_date = meeting?.meeting_date;
+      } else if (source === 'event') {
+        const event = upcomingEvents.find(e => e.id === id);
+        updateData.meeting_id = undefined;
+        updateData.event_id = id;
+        updateData.meeting_date = event?.start_datetime;
+      } else {
+        updateData.meeting_id = undefined;
+        updateData.event_id = undefined;
+        updateData.meeting_date = undefined;
+      }
+
+      const updated = await electionService.updateElection(electionId, updateData);
+      setElection(updated);
+      setShowMeetingSelector(false);
+      toast.success('Meeting link updated');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update meeting link'));
+    }
+  };
+
+  const handleImportMeetingAttendees = async () => {
+    if (!electionId || !election?.meeting_id) return;
+
+    try {
+      setIsImportingAttendees(true);
+      const result = await electionService.importMeetingAttendees(electionId);
+      toast.success(result.message);
+      void fetchElection();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to import meeting attendees'));
+    } finally {
+      setIsImportingAttendees(false);
     }
   };
 
@@ -743,27 +807,116 @@ export const ElectionDetailPage: React.FC = () => {
               {election.anonymous_voting ? 'Yes' : 'No'}
             </div>
           </div>
-          {election.meeting_id && (
-            <div>
-              <div className="text-sm text-theme-text-muted">Linked Meeting</div>
-              <div className="mt-1 text-sm font-medium text-theme-text-primary">
-                <Link to={`/meetings/${election.meeting_id}`} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
-                  View Meeting &rarr;
-                </Link>
-              </div>
+          <div>
+            <div className="text-sm text-theme-text-muted">Linked Meeting</div>
+            <div className="mt-1 text-sm font-medium text-theme-text-primary">
+              {election.meeting_id ? (
+                <div className="flex items-center gap-2">
+                  <Link to={`/meetings/${election.meeting_id}`} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                    {election.meeting_title || 'View Meeting'} &rarr;
+                  </Link>
+                  {canManage && election.status === ElectionStatus.DRAFT && (
+                    <button
+                      onClick={() => { void fetchAvailableMeetings(); setShowMeetingSelector(true); }}
+                      className="text-xs text-theme-text-muted hover:text-theme-text-secondary"
+                      title="Change linked meeting"
+                    >
+                      (change)
+                    </button>
+                  )}
+                </div>
+              ) : election.event_id ? (
+                <div className="flex items-center gap-2">
+                  <Link to={`/events/${election.event_id}`} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                    View Event &rarr;
+                  </Link>
+                  {canManage && election.status === ElectionStatus.DRAFT && (
+                    <button
+                      onClick={() => { void fetchAvailableMeetings(); setShowMeetingSelector(true); }}
+                      className="text-xs text-theme-text-muted hover:text-theme-text-secondary"
+                      title="Change linked meeting"
+                    >
+                      (change)
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-theme-text-muted">None</span>
+                  {canManage && election.status === ElectionStatus.DRAFT && (
+                    <button
+                      onClick={() => { void fetchAvailableMeetings(); setShowMeetingSelector(true); }}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+                    >
+                      Link a meeting
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-          {election.event_id && (
-            <div>
-              <div className="text-sm text-theme-text-muted">Linked Event</div>
-              <div className="mt-1 text-sm font-medium text-theme-text-primary">
-                <Link to={`/events/${election.event_id}`} className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
-                  View Event &rarr;
-                </Link>
+            {election.meeting_id && election.meeting_date && (
+              <div className="mt-0.5 text-xs text-theme-text-muted">
+                {election.meeting_type && (
+                  <span className="capitalize">{election.meeting_type.replace('_', ' ')}</span>
+                )}
+                {election.meeting_type && ' — '}
+                {formatDate(election.meeting_date, tz)}
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
+
+        {/* Meeting Selector Modal (inline) */}
+        {showMeetingSelector && canManage && (
+          <div className="mt-4 p-4 bg-theme-surface-alt rounded-lg border border-theme-surface-border">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-sm font-medium text-theme-text-primary">Link Meeting or Event</h4>
+              <button
+                onClick={() => setShowMeetingSelector(false)}
+                className="text-theme-text-muted hover:text-theme-text-secondary text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+            <select
+              value={election.meeting_id ? `meeting:${election.meeting_id}` : election.event_id ? `event:${election.event_id}` : ''}
+              onChange={(e) => void handleMeetingChange(e.target.value)}
+              className="block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary text-sm focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
+            >
+              <option value="">No linked meeting</option>
+              {upcomingEvents.map((event) => (
+                <option key={`event-${event.id}`} value={`event:${event.id}`}>
+                  {event.title} ({formatDate(event.start_datetime, tz)})
+                </option>
+              ))}
+              {availableMeetings.length > 0 && (
+                <optgroup label="Meeting Minutes">
+                  {availableMeetings.map((meeting) => (
+                    <option key={`meeting-${meeting.id}`} value={`meeting:${meeting.id}`}>
+                      {meeting.title} ({formatDate(meeting.meeting_date, tz)})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </div>
+        )}
+
+        {/* Import Meeting Attendees */}
+        {election.meeting_id && canManage && election.status === ElectionStatus.DRAFT && (
+          <div className="mt-4">
+            <button
+              onClick={() => void handleImportMeetingAttendees()}
+              disabled={isImportingAttendees}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 text-sm"
+            >
+              {isImportingAttendees ? 'Importing...' : 'Import Attendees from Meeting'}
+            </button>
+            <p className="mt-1 text-xs text-theme-text-muted">
+              Copy the attendance list from the linked meeting into this election.
+            </p>
+          </div>
+        )}
 
         {/* Secretary Controls */}
         {canManage && (
