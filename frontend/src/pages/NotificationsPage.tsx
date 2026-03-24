@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Bell,
+  Inbox,
   Mail,
   Zap,
   Plus,
@@ -20,11 +21,13 @@ import {
   FileText,
   Wrench,
   CheckCheck,
+  ChevronRight,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime } from '../utils/dateFormatting';
+import { formatRelativeTime } from '../hooks/useRelativeTime';
 import {
   notificationsService,
 } from '../services/api';
@@ -103,22 +106,28 @@ function formatCategory(category: string): string {
 
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('notifications.manage');
+  const canView = checkPermission('notifications.view');
   const tz = useTimezone();
 
   // Data states
   const [rules, setRules] = useState<NotificationRuleRecord[]>([]);
   const [logs, setLogs] = useState<NotificationLogRecord[]>([]);
   const [summary, setSummary] = useState<NotificationsSummary | null>(null);
+  const [myNotifications, setMyNotifications] = useState<NotificationLogRecord[]>([]);
+  const [myUnreadCount, setMyUnreadCount] = useState(0);
 
   // UI states
   const [loading, setLoading] = useState(true);
+  const [loadingInbox, setLoadingInbox] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [togglingRuleId, setTogglingRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [activeTab, setActiveTab] = useState<'rules' | 'templates' | 'log'>('rules');
+  const initialTab = searchParams.get('tab') === 'inbox' ? 'inbox' as const : (canView ? 'rules' as const : 'inbox' as const);
+  const [activeTab, setActiveTab] = useState<'inbox' | 'rules' | 'templates' | 'log'>(initialTab);
   const [logChannelFilter, setLogChannelFilter] = useState<'all' | 'email' | 'in_app'>('all');
 
   // Create form states
@@ -128,8 +137,32 @@ const NotificationsPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Fetch all data on mount
+  // Fetch user inbox on mount
   useEffect(() => {
+    const fetchInbox = async () => {
+      setLoadingInbox(true);
+      try {
+        const [data, countData] = await Promise.all([
+          notificationsService.getMyNotifications({ include_read: true, limit: 50 }),
+          notificationsService.getMyUnreadCount(),
+        ]);
+        setMyNotifications(data.logs || []);
+        setMyUnreadCount(countData.unread_count);
+      } catch {
+        // Inbox is always available to authenticated users
+      } finally {
+        setLoadingInbox(false);
+      }
+    };
+    void fetchInbox();
+  }, []);
+
+  // Fetch admin data on mount (only if user has permission)
+  useEffect(() => {
+    if (!canView) {
+      setLoading(false);
+      return;
+    }
     const fetchData = async () => {
       setLoading(true);
       setError(null);
@@ -151,7 +184,7 @@ const NotificationsPage: React.FC = () => {
     };
 
     void fetchData();
-  }, []);
+  }, [canView]);
 
   const toggleRule = async (ruleId: string, currentEnabled: boolean) => {
     setTogglingRuleId(ruleId);
@@ -230,7 +263,39 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
-  if (loading) {
+  const handleMarkInboxNotificationRead = async (logId: string) => {
+    try {
+      await notificationsService.markMyNotificationRead(logId);
+      setMyNotifications((prev) =>
+        prev.map((n) => (n.id === logId ? { ...n, read: true } : n)),
+      );
+      setMyUnreadCount((prev) => Math.max(0, prev - 1));
+    } catch {
+      setError('Failed to mark notification as read');
+    }
+  };
+
+  const handleMarkAllInboxRead = async () => {
+    try {
+      await notificationsService.markAllMyNotificationsRead();
+      setMyNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setMyUnreadCount(0);
+    } catch {
+      setError('Failed to mark all as read');
+    }
+  };
+
+  const handleTabChange = (tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (tab === 'inbox') {
+      setSearchParams({ tab: 'inbox' });
+    } else {
+      searchParams.delete('tab');
+      setSearchParams(searchParams);
+    }
+  };
+
+  if (loading && loadingInbox) {
     return (
       <div className="min-h-screen">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
@@ -253,13 +318,15 @@ const NotificationsPage: React.FC = () => {
               <Bell className="w-6 h-6 text-white" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-2xl font-bold">Notification Rules & Logs</h1>
+              <h1 className="text-theme-text-primary text-2xl font-bold">Notifications</h1>
               <p className="text-theme-text-muted text-sm">
-                Manage automated notification rules and review send history across all channels
+                {activeTab === 'inbox'
+                  ? 'View and manage your notifications'
+                  : 'Manage automated notification rules and review send history across all channels'}
               </p>
             </div>
           </div>
-          {canManage && (
+          {canManage && activeTab !== 'inbox' && (
             <button
               onClick={() => setShowCreateModal(true)}
               className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors"
@@ -283,55 +350,170 @@ const NotificationsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" role="region" aria-label="Notification statistics">
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Notification Rules</p>
-            <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary?.total_rules ?? rules.length}</p>
+        {/* Stats - only show for admin tabs */}
+        {canView && activeTab !== 'inbox' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" role="region" aria-label="Notification statistics">
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Notification Rules</p>
+              <p className="text-theme-text-primary text-2xl font-bold mt-1">{summary?.total_rules ?? rules.length}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Active Rules</p>
+              <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
+            </div>
+            <div className="card p-4">
+              <p className="text-theme-text-muted text-xs font-medium uppercase">Sent This Month</p>
+              <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{(summary?.emails_sent_this_month ?? 0) + (summary?.notifications_sent_this_month ?? 0)}</p>
+            </div>
           </div>
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Active Rules</p>
-            <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">{summary?.active_rules ?? rules.filter(r => r.enabled).length}</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-theme-text-muted text-xs font-medium uppercase">Sent This Month</p>
-            <p className="text-orange-700 dark:text-orange-400 text-2xl font-bold mt-1">{(summary?.emails_sent_this_month ?? 0) + (summary?.notifications_sent_this_month ?? 0)}</p>
-          </div>
-        </div>
+        )}
 
         {/* Tabs */}
         <div className="flex space-x-1 mb-6 bg-theme-surface-secondary rounded-lg p-1 w-fit" role="tablist" aria-label="Notification views">
           <button
-            onClick={() => setActiveTab('rules')}
+            onClick={() => handleTabChange('inbox')}
             role="tab"
-            aria-selected={activeTab === 'rules'}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'rules' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+            aria-selected={activeTab === 'inbox'}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
+              activeTab === 'inbox' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
             }`}
           >
-            Notification Rules
+            <span>My Notifications</span>
+            {myUnreadCount > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                activeTab === 'inbox' ? 'bg-white/20 text-white' : 'bg-red-500 text-white'
+              }`}>
+                {myUnreadCount}
+              </span>
+            )}
           </button>
-          <button
-            onClick={() => setActiveTab('templates')}
-            role="tab"
-            aria-selected={activeTab === 'templates'}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'templates' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
-            }`}
-          >
-            Email Templates
-          </button>
-          <button
-            onClick={() => setActiveTab('log')}
-            role="tab"
-            aria-selected={activeTab === 'log'}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'log' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
-            }`}
-          >
-            Send Log
-          </button>
+          {canView && (
+            <button
+              onClick={() => handleTabChange('rules')}
+              role="tab"
+              aria-selected={activeTab === 'rules'}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'rules' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              Notification Rules
+            </button>
+          )}
+          {canView && (
+            <button
+              onClick={() => handleTabChange('templates')}
+              role="tab"
+              aria-selected={activeTab === 'templates'}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'templates' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              Email Templates
+            </button>
+          )}
+          {canView && (
+            <button
+              onClick={() => handleTabChange('log')}
+              role="tab"
+              aria-selected={activeTab === 'log'}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'log' ? 'bg-orange-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              Send Log
+            </button>
+          )}
         </div>
+
+        {activeTab === 'inbox' && (
+          <div role="tabpanel">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-theme-text-muted text-sm">
+                {myUnreadCount > 0 ? `${myUnreadCount} unread` : 'All caught up'}
+              </p>
+              {myUnreadCount > 0 && (
+                <button
+                  onClick={() => { void handleMarkAllInboxRead(); }}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+                >
+                  <CheckCheck className="w-4 h-4" />
+                  Mark all as read
+                </button>
+              )}
+            </div>
+            {loadingInbox ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-16 bg-theme-surface-hover animate-pulse rounded-lg"
+                  />
+                ))}
+              </div>
+            ) : myNotifications.length === 0 ? (
+              <div className="card p-12 text-center">
+                <Inbox className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
+                <h3 className="text-theme-text-primary text-xl font-bold mb-2">No Notifications</h3>
+                <p className="text-theme-text-secondary">
+                  You&apos;re all caught up. New notifications will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {myNotifications.map((notification) => (
+                  <button
+                    key={notification.id}
+                    onClick={() => {
+                      if (!notification.read) void handleMarkInboxNotificationRead(notification.id);
+                      if (notification.action_url && notification.action_url.startsWith('/'))
+                        navigate(notification.action_url);
+                    }}
+                    className={`w-full text-left p-4 rounded-lg transition-colors card ${
+                      notification.read
+                        ? 'opacity-60'
+                        : 'border-l-4 border-l-blue-500'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm truncate ${notification.read ? 'text-theme-text-muted' : 'font-semibold text-theme-text-primary'}`}>
+                          {notification.subject || 'Notification'}
+                        </p>
+                        <p className="text-xs text-theme-text-muted mt-1 line-clamp-2">
+                          {notification.message || ''}
+                        </p>
+                        {notification.category && (
+                          <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-sm bg-theme-surface-secondary text-theme-text-muted">
+                            {formatCategory(notification.category)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center shrink-0 gap-2">
+                        <span className="text-xs text-theme-text-muted whitespace-nowrap">
+                          {formatRelativeTime(notification.sent_at)}
+                        </span>
+                        {!notification.read ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleMarkInboxNotificationRead(notification.id);
+                            }}
+                            className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                            title="Mark as read"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        ) : notification.action_url ? (
+                          <ChevronRight className="w-4 h-4 text-theme-text-muted" />
+                        ) : null}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {activeTab === 'rules' && (
           <div role="tabpanel">
