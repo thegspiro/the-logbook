@@ -273,12 +273,17 @@ interface TemplateFormData {
   min_staffing: string;
   is_default: boolean;
   open_to_all_members: boolean;
-  positions: string[];
+  positions: PositionEntry[];
   category: TemplateCategory;
   apparatus_type: string;
   apparatus_id: string;
   event_type: EventType | '';
   resources: ResourceUnit[];
+}
+
+interface PositionEntry {
+  position: string;
+  required: boolean;
 }
 
 interface PatternFormData {
@@ -374,7 +379,9 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
         if (defaults) {
           setFormData(prev => ({
             ...prev,
-            positions: defaults.positions ?? prev.positions,
+            positions: defaults.positions
+              ? defaults.positions.map(p => ({ position: p, required: true }))
+              : prev.positions,
             min_staffing: String(defaults.minStaffing ?? prev.min_staffing),
           }));
           return;
@@ -441,8 +448,12 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
     setIsSubmitting(true);
     try {
       // For event templates, flatten resource positions into the positions array
-      const effectivePositions = formData.category === 'event' && formData.resources.length > 0
-        ? formData.resources.flatMap(r => Array.from({ length: r.quantity }, () => r.positions).flat())
+      const effectivePositions: PositionEntry[] = formData.category === 'event' && formData.resources.length > 0
+        ? formData.resources.flatMap(r =>
+            Array.from({ length: r.quantity }, () =>
+              r.positions.map(p => ({ position: p, required: true })),
+            ).flat(),
+          )
         : formData.positions;
       const payload: Record<string, unknown> = {
         name: formData.name,
@@ -466,7 +477,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
         const eventMeta = {
           event_type: formData.event_type || 'other',
           resources: formData.resources,
-          flat_positions: effectivePositions.length > 0 ? effectivePositions : [],
+          flat_positions: effectivePositions.length > 0 ? effectivePositions.map(p => p.position) : [],
         };
         payload.positions = eventMeta;
       }
@@ -584,7 +595,10 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                       ...prev,
                       apparatus_id: val,
                       apparatus_type: selected?.apparatus_type ?? '',
-                      positions: selected?.positions?.map(p => typeof p === 'string' ? p : p.position) ?? prev.positions,
+                      positions: selected?.positions?.map(p => typeof p === 'string'
+                        ? { position: p, required: true }
+                        : { position: p.position, required: (p as { required?: boolean }).required !== false },
+                      ) ?? prev.positions,
                       min_staffing: selected?.min_staffing ? String(selected.min_staffing) : prev.min_staffing,
                     }));
                   }
@@ -859,23 +873,23 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
             </div>
           </div>
 
-          {/* Required Positions (not shown for event templates — they use resources editor) */}
+          {/* Crew Positions (not shown for event templates — they use resources editor) */}
           {formData.category !== 'event' && <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              <span className="flex items-center gap-1.5"><Users className="w-4 h-4" aria-hidden="true" /> Required Positions</span>
+              <span className="flex items-center gap-1.5"><Users className="w-4 h-4" aria-hidden="true" /> Crew Positions</span>
             </label>
             <p className="text-xs text-theme-text-muted mb-2">
-              Define the crew structure for shifts created from this template.
+              Define the crew structure for shifts created from this template. Toggle the switch to mark a position as optional.
             </p>
             {formData.positions.length > 0 && (
               <div className="space-y-2 mb-2">
-                {formData.positions.map((pos, i) => (
+                {formData.positions.map((entry, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <select
-                      value={pos}
+                      value={entry.position}
                       onChange={(e) => {
                         const updated = [...formData.positions];
-                        updated[i] = e.target.value;
+                        updated[i] = { ...entry, position: e.target.value };
                         setFormData(prev => ({ ...prev, positions: updated }));
                       }}
                       className="flex-1 px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring"
@@ -884,6 +898,22 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
                         <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = [...formData.positions];
+                        updated[i] = { ...entry, required: !entry.required };
+                        setFormData(prev => ({ ...prev, positions: updated }));
+                      }}
+                      className={`px-2 py-1 text-xs font-medium rounded-lg border transition-colors ${
+                        entry.required
+                          ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-300 dark:border-violet-700'
+                          : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border'
+                      }`}
+                      title={entry.required ? 'Required — click to make optional' : 'Optional — click to make required'}
+                    >
+                      {entry.required ? 'Required' : 'Optional'}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -901,7 +931,7 @@ const TemplateFormModal: React.FC<TemplateModalProps> = ({
             )}
             <button
               type="button"
-              onClick={() => setFormData(prev => ({ ...prev, positions: [...prev.positions, 'firefighter'] }))}
+              onClick={() => setFormData(prev => ({ ...prev, positions: [...prev.positions, { position: 'firefighter', required: true }] }))}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
             >
               <Plus className="w-3.5 h-3.5" /> Add Position
@@ -1432,15 +1462,17 @@ export const ShiftTemplatesPage: React.FC = () => {
     // Parse event metadata from positions field if it's an event template
     let eventType: EventType | '' = '';
     let resources: ResourceUnit[] = [];
-    let positions: string[] = [];
+    let positions: PositionEntry[] = [];
 
     if ((t.category || 'standard') === 'event' && t.positions && !Array.isArray(t.positions)) {
       const meta = t.positions as { event_type?: string; resources?: ResourceUnit[] };
       eventType = (meta.event_type as EventType) || '';
       resources = meta.resources || [];
     } else if (Array.isArray(t.positions)) {
-      positions = (t.positions as Array<string | { position: string }>).map(
-        p => typeof p === 'string' ? p : p.position,
+      positions = (t.positions as Array<string | { position: string; required?: boolean }>).map(
+        p => typeof p === 'string'
+          ? { position: p, required: true }
+          : { position: p.position, required: p.required !== false },
       );
     }
 

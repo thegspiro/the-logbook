@@ -516,7 +516,7 @@ export const schedulingService = {
   },
 
   // --- Open Shifts ---
-  async getOpenShifts(params?: { start_date?: string; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
+  async getOpenShifts(params?: { start_date?: string | undefined; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
     const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
     return response.data;
   },
