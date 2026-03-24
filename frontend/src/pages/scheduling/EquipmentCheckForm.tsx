@@ -1406,12 +1406,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       {sections.map((section, sIdx) => (
         <div key={section.header?.id ?? `section-${sIdx}`} className="space-y-3">
           {section.header && (
-            <div className="border-b-2 border-purple-300 dark:border-purple-700 pb-1 pt-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-purple-600 dark:text-purple-400">
+            <div className="border-b border-theme-surface-border pb-1 pt-2">
+              <h3 className="text-sm font-bold text-theme-text-primary">
                 {section.header.name}
               </h3>
               {section.header.description && (
-                <p className="text-[10px] text-purple-500/70 mt-0.5">{section.header.description}</p>
+                <p className="text-[10px] text-theme-text-muted mt-0.5">{section.header.description}</p>
               )}
             </div>
           )}
