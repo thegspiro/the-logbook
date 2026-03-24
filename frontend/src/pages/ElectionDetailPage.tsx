@@ -30,7 +30,6 @@ import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatDateTime, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
-import { getEventTypeLabel } from '../utils/eventHelpers';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
 
 export const ElectionDetailPage: React.FC = () => {
@@ -1130,41 +1129,6 @@ export const ElectionDetailPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Upcoming Business Meeting Events */}
-              {upcomingEvents.length > 0 && (
-                <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-                  <h3 className="text-lg font-semibold text-theme-text-primary mb-4">
-                    Upcoming Meetings
-                  </h3>
-                  <div className="space-y-3">
-                    {upcomingEvents.map((event) => (
-                      <Link
-                        key={event.id}
-                        to={`/events/${event.id}`}
-                        className="flex items-center justify-between p-3 rounded-lg hover:bg-theme-surface-hover transition-colors border border-theme-surface-border"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-theme-text-primary truncate">
-                            {event.title}
-                          </p>
-                          <p className="text-xs text-theme-text-muted mt-0.5">
-                            {formatDateTime(event.start_datetime, tz)}
-                            {event.location_name ? ` · ${event.location_name}` : event.location ? ` · ${event.location}` : ''}
-                          </p>
-                        </div>
-                        <div className="ml-3 shrink-0 flex items-center gap-2">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400">
-                            {getEventTypeLabel(event.event_type)}
-                          </span>
-                          <svg className="h-4 w-4 text-theme-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                          </svg>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 

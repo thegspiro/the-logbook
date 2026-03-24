@@ -137,9 +137,9 @@ export interface ElectionUpdate {
   positions?: string[];
   ballot_items?: BallotItem[];
   position_eligibility?: { [position: string]: PositionEligibility };
-  meeting_date?: string;
-  meeting_id?: string;
-  event_id?: string;
+  meeting_date?: string | undefined;
+  meeting_id?: string | undefined;
+  event_id?: string | undefined;
   start_date?: string;
   end_date?: string;
   // NOTE: status is intentionally excluded — use /open, /close, /rollback endpoints
