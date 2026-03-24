@@ -7,12 +7,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   ArrowLeft, Plus, Pencil, Trash2, ChevronRight, ChevronDown,
-  Package, Loader2, RefreshCw, MapPin, Box, Layers, Search,
+  Package, Loader2, RefreshCw, MapPin, Box, Layers, Search, ExternalLink,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { inventoryService, locationsService } from '../../../services/api';
-import type { StorageAreaResponse, StorageAreaCreate, Location } from '../types';
-import { STORAGE_TYPES } from '../types';
+import type { StorageAreaResponse, StorageAreaCreate, Location, InventoryItem } from '../types';
+import { STORAGE_TYPES, getStatusStyle, getConditionColor } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
@@ -54,14 +54,85 @@ function flattenForDropdown(nodes: TreeNode[], d = 0): { id: string; name: strin
   return nodes.flatMap((n) => [{ id: n.id, name: n.name, depth: d }, ...flattenForDropdown(n.treeChildren, d + 1)]);
 }
 
+/* ---------- Items panel (shown when item count is clicked) ---------- */
+interface ItemsPanelProps {
+  areaId: string;
+  indent: number;
+}
+const ItemsPanel: React.FC<ItemsPanelProps> = ({ areaId, indent }) => {
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    inventoryService.getItems({ storage_area_id: areaId, limit: 50 })
+      .then((res) => { if (!cancelled) setItems(res.items); })
+      .catch(() => { if (!cancelled) setItems([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [areaId]);
+
+  const panelIndent = indent + 24;
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 py-2 text-theme-text-muted" style={{ paddingLeft: `${panelIndent}px` }}>
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span className="text-xs">Loading items…</span>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="py-2 text-xs text-theme-text-muted" style={{ paddingLeft: `${panelIndent}px` }}>
+        No items found in this area.
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-l-2 border-theme-surface-border ml-4" style={{ marginLeft: `${indent + 12}px` }}>
+      {items.map((item) => {
+        const statusStyle = getStatusStyle(item.status);
+        const condColor = getConditionColor(item.condition);
+        return (
+          <Link key={item.id} to={`/inventory/${item.id}`}
+            className="flex items-center gap-2 py-1.5 px-3 hover:bg-theme-surface-hover rounded-r-lg transition-colors group/item">
+            <Package className="w-3.5 h-3.5 text-theme-text-muted shrink-0" />
+            <span className="text-sm text-theme-text-primary truncate flex-1 min-w-0">
+              {item.name}
+              {item.serial_number && <span className="ml-1.5 text-theme-text-muted font-mono text-xs">#{item.serial_number}</span>}
+            </span>
+            {item.size && <span className="text-xs text-theme-text-muted shrink-0">{item.size}</span>}
+            <span className={`text-xs px-1.5 py-0.5 rounded-full border shrink-0 ${statusStyle}`}>
+              {item.status.replace(/_/g, ' ')}
+            </span>
+            <span className={`text-xs shrink-0 capitalize ${condColor}`}>
+              {item.condition.replace(/_/g, ' ')}
+            </span>
+            {item.tracking_type === 'pool' && (
+              <span className="text-xs text-theme-text-muted shrink-0">qty: {item.quantity - item.quantity_issued}</span>
+            )}
+            <ExternalLink className="w-3 h-3 text-theme-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity shrink-0" />
+          </Link>
+        );
+      })}
+    </div>
+  );
+};
+
 /* ---------- Tree row ---------- */
 interface TreeRowProps {
   node: TreeNode; depth: number; expanded: Set<string>;
   onToggle: (id: string) => void; onEdit: (a: StorageAreaResponse) => void; onDelete: (a: StorageAreaResponse) => void;
+  itemsVisible: Set<string>; onToggleItems: (id: string) => void;
 }
-const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEdit, onDelete }) => {
+const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEdit, onDelete, itemsVisible, onToggleItems }) => {
   const has = node.treeChildren.length > 0;
   const open = expanded.has(node.id);
+  const showItems = itemsVisible.has(node.id);
   // Cap indentation on mobile to prevent overflow on small screens
   const cappedDepth = typeof window !== 'undefined' && window.innerWidth < 768 ? Math.min(depth, 3) : depth;
   const indent = cappedDepth * 16 + 12;
@@ -84,9 +155,18 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEd
         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 shrink-0 hidden sm:inline">
           {getTypeLabel(node.storage_type)}
         </span>
-        <span className="text-xs text-theme-text-muted shrink-0 w-16 text-right">
+        <button
+          onClick={() => onToggleItems(node.id)}
+          className={`text-xs shrink-0 w-16 text-right rounded px-1 py-0.5 transition-colors ${
+            node.item_count > 0
+              ? 'hover:bg-theme-surface-hover cursor-pointer text-blue-700 dark:text-blue-400 underline decoration-dotted underline-offset-2'
+              : 'text-theme-text-muted cursor-default'
+          } ${showItems ? 'bg-blue-500/10 font-medium' : ''}`}
+          disabled={node.item_count === 0}
+          aria-label={node.item_count > 0 ? `${showItems ? 'Hide' : 'Show'} ${node.item_count} item${node.item_count !== 1 ? 's' : ''} in ${node.name}` : undefined}
+        >
           {node.item_count} {node.item_count === 1 ? 'item' : 'items'}
-        </span>
+        </button>
         {node.barcode && <span className="text-xs text-theme-text-muted font-mono shrink-0 hidden sm:inline">{node.barcode}</span>}
         <div className="flex items-center gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           <button onClick={() => onEdit(node)} aria-label={`Edit ${node.name}`}
@@ -99,9 +179,11 @@ const TreeRow: React.FC<TreeRowProps> = ({ node, depth, expanded, onToggle, onEd
           </button>
         </div>
       </div>
+      {showItems && node.item_count > 0 && <ItemsPanel areaId={node.id} indent={indent} />}
       {has && open && node.treeChildren.map((c) => (
         <TreeRow key={c.id} node={c} depth={depth + 1} expanded={expanded}
-          onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />
+          onToggle={onToggle} onEdit={onEdit} onDelete={onDelete}
+          itemsVisible={itemsVisible} onToggleItems={onToggleItems} />
       ))}
     </>
   );
@@ -125,6 +207,11 @@ const StorageAreasPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<StorageAreaResponse | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [itemsVisible, setItemsVisible] = useState<Set<string>>(new Set());
+
+  const toggleItemsPanel = (id: string) => {
+    setItemsVisible((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  };
 
   const facilities = locations.filter((l) => l.building && !l.facility_room_id);
   const rooms = locations.filter((l) => !!l.facility_room_id || !!l.room_number);
@@ -318,7 +405,8 @@ const StorageAreasPage: React.FC = () => {
           )}
           {displayTree.map((n) => (
             <TreeRow key={n.id} node={n} depth={0} expanded={expanded}
-              onToggle={toggleExpand} onEdit={openEditModal} onDelete={setDeleteTarget} />
+              onToggle={toggleExpand} onEdit={openEditModal} onDelete={setDeleteTarget}
+              itemsVisible={itemsVisible} onToggleItems={toggleItemsPanel} />
           ))}
         </div>
       )}
