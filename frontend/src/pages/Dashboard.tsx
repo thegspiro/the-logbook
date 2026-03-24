@@ -243,11 +243,12 @@ const Dashboard: React.FC = () => {
 
   const loadNotifications = async () => {
     try {
-      const data = await notificationsService.getLogs({ limit: 10 });
+      const [data, countData] = await Promise.all([
+        notificationsService.getMyNotifications({ limit: 10 }),
+        notificationsService.getMyUnreadCount(),
+      ]);
       setNotifications(data.logs || []);
-      setUnreadCount(
-        (data.logs || []).filter((n: NotificationLogRecord) => !n.read).length,
-      );
+      setUnreadCount(countData.unread_count);
     } catch {
       // Notifications are non-critical
     } finally {
@@ -434,7 +435,7 @@ const Dashboard: React.FC = () => {
 
   const markNotificationRead = async (logId: string) => {
     try {
-      await notificationsService.markAsRead(logId);
+      await notificationsService.markMyNotificationRead(logId);
       setNotifications((prev) =>
         prev.map((n) => (n.id === logId ? { ...n, read: true } : n)),
       );
@@ -1012,7 +1013,7 @@ const Dashboard: React.FC = () => {
                   </button>
                 )}
                 <button
-                  onClick={() => navigate("/notifications")}
+                  onClick={() => navigate("/notifications?tab=inbox")}
                   className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
                 >
                   <span>View All</span>
