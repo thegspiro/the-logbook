@@ -112,6 +112,7 @@ const CHECK_TYPES = [
   { value: 'level', label: 'Level' },
   { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
+  { value: 'text', label: 'Text' },
   { value: 'header', label: 'Section Header' },
 ] as const;
 
@@ -135,6 +136,7 @@ const CHECK_TYPE_HELP: Record<string, string> = {
   level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
   date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
   reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
+  text: 'Free-form text response. Good for notes, observations, VIN numbers, or any open-ended input.',
   header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
 

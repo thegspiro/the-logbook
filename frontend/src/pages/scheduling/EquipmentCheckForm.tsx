@@ -144,6 +144,7 @@ const CHECK_TYPE_ICONS: Partial<Record<CheckType, React.ElementType>> = {
   level: Gauge,
   date_lot: Calendar,
   reading: Hash,
+  text: MessageSquare,
   header: Type,
 };
 
@@ -575,7 +576,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       setResults((prev) => {
         const next = { ...prev };
         for (const item of compartment.items) {
-          if (item.checkType === 'header') continue;
+          if (item.checkType === 'header' || item.checkType === 'text') continue;
           const expStatus = getExpirationStatus(item);
           if (expStatus === 'expired') continue;
           const existing = next[item.id];
@@ -1137,6 +1138,26 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               />
             </div>
             {passFailButtons}
+          </div>
+        );
+
+      case 'text':
+        return (
+          <div className="space-y-2">
+            <textarea
+              id={`text-${item.id}`}
+              rows={2}
+              className="w-full rounded-lg border border-theme-surface-border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+              placeholder="Enter response..."
+              value={result?.notes ?? ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                updateResult(item.id, {
+                  notes: val || undefined,
+                  status: val.trim() ? 'pass' : 'not_checked',
+                });
+              }}
+            />
           </div>
         );
 

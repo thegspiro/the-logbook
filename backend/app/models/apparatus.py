@@ -2052,7 +2052,7 @@ class CheckTemplateItem(Base):
     sort_order = Column(Integer, default=0, nullable=False)
     check_type = Column(
         String(30), nullable=False, default="pass_fail"
-    )  # pass_fail, present, functional, quantity, level, date_lot, reading
+    )  # pass_fail, present, functional, quantity, level, date_lot, reading, text
     is_required = Column(Boolean, default=False, nullable=False)
     required_quantity = Column(Integer, nullable=True)
     expected_quantity = Column(Integer, nullable=True)
