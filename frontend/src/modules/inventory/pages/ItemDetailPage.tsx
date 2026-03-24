@@ -315,8 +315,8 @@ const ItemDetailPage: React.FC = () => {
           <Field label="Tracking" value={item.tracking_type === 'individual' ? 'Individual' : 'Pool'} />
           <Field label="Status" value={item.status.replace('_', ' ')} />
           <Field label="Condition" value={labelFor(item.condition)} />
-          {item.barcode && <Field label="Barcode" value={item.barcode} />}
-          {item.asset_tag && <Field label="Asset Tag" value={item.asset_tag} />}
+          <Field label="Barcode" value={item.barcode || '--'} />
+          <Field label="Asset Tag" value={item.asset_tag || '--'} />
           <Field label="Description" value={item.description || '--'} />
           {item.notes && <Field label="Notes" value={item.notes} />}
         </Card>
