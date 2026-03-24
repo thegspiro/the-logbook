@@ -107,8 +107,9 @@ const ItemDetailPage: React.FC = () => {
   const [exposures, setExposures] = useState<NFPAExposureRecord[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
-  // Location name resolution
+  // Location / storage area name resolution
   const [locationName, setLocationName] = useState<string | null>(null);
+  const [storageAreaName, setStorageAreaName] = useState<string | null>(null);
 
   // Edit modal data
   const [showEditModal, setShowEditModal] = useState(false);
@@ -143,10 +144,18 @@ const ItemDetailPage: React.FC = () => {
       setStorageAreas(areas);
       const cat = cats.find(c => c.id === fetched.category_id) ?? null;
       setCategory(cat);
-      // Resolve location name
+      // Resolve location and storage area names
       if (fetched.location_id) {
         const loc = locs.find((l: { id: string }) => l.id === fetched.location_id);
         setLocationName(loc?.name ?? null);
+      } else {
+        setLocationName(null);
+      }
+      if (fetched.storage_area_id) {
+        const area = areas.find((a: { id: string }) => a.id === fetched.storage_area_id);
+        setStorageAreaName(area ? `${area.name}${area.label ? ` (${area.label})` : ''}` : null);
+      } else {
+        setStorageAreaName(null);
       }
     } catch (err: unknown) {
       setError(getErrorMessage(err, 'Failed to load item'));
@@ -306,6 +315,8 @@ const ItemDetailPage: React.FC = () => {
           <Field label="Tracking" value={item.tracking_type === 'individual' ? 'Individual' : 'Pool'} />
           <Field label="Status" value={item.status.replace('_', ' ')} />
           <Field label="Condition" value={labelFor(item.condition)} />
+          {item.barcode && <Field label="Barcode" value={item.barcode} />}
+          {item.asset_tag && <Field label="Asset Tag" value={item.asset_tag} />}
           <Field label="Description" value={item.description || '--'} />
           {item.notes && <Field label="Notes" value={item.notes} />}
         </Card>
@@ -314,7 +325,7 @@ const ItemDetailPage: React.FC = () => {
         <Card title="Location" icon={<MapPin className="w-4 h-4" />}>
           <Field label="Station" value={item.station || '--'} />
           <Field label="Location" value={locationName || item.location_id || '--'} />
-          <Field label="Storage Area" value={item.storage_location || '--'} />
+          <Field label="Storage Area" value={storageAreaName || item.storage_location || '--'} />
         </Card>
 
         {/* Identity — electronics, ppe, equipment, tool, vehicle */}
@@ -323,8 +334,6 @@ const ItemDetailPage: React.FC = () => {
             <Field label="Serial Number" value={item.serial_number || '--'} />
             <Field label="Model Number" value={item.model_number || '--'} />
             <Field label="Manufacturer" value={item.manufacturer || '--'} />
-            <Field label="Asset Tag" value={item.asset_tag || '--'} />
-            <Field label="Barcode" value={item.barcode || '--'} />
           </Card>
         )}
 
