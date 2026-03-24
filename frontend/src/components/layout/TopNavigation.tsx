@@ -5,6 +5,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { organizationService } from '../../services/api';
+import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -36,6 +37,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const { checkPermission } = useAuthStore();
+  const notifUnreadCount = useNotificationCountStore((s) => s.unreadCount);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
@@ -340,16 +342,21 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
             {/* ── Utility icons ── */}
             <div className="flex items-center border-l border-theme-surface-border ml-1 pl-2 space-x-1">
               <a
-                href="/notifications"
-                onClick={(e) => handleNavigation('/notifications', e)}
-                className={`p-2 rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                href="/notifications?tab=inbox"
+                onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
+                className={`relative p-2 rounded-md transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                   notificationsActive ? 'text-theme-text-primary' : 'text-theme-text-secondary hover:bg-theme-surface-hover'
                 }`}
                 title="Notifications"
-                aria-label="Notifications"
+                aria-label={notifUnreadCount > 0 ? `Notifications (${notifUnreadCount} unread)` : 'Notifications'}
                 aria-current={notificationsActive ? 'page' : undefined}
               >
                 <Bell className="w-4 h-4" aria-hidden="true" />
+                {notifUnreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                    {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
+                  </span>
+                )}
               </a>
               <a
                 href="/account"
@@ -482,8 +489,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
               {/* ── Mobile utility links ── */}
               <div className="border-t border-theme-surface-border mt-2 pt-2 space-y-1">
                 <a
-                  href="/notifications"
-                  onClick={(e) => handleNavigation('/notifications', e)}
+                  href="/notifications?tab=inbox"
+                  onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
                   aria-current={notificationsActive ? 'page' : undefined}
                   className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
                     notificationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
@@ -491,6 +498,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                 >
                   <Bell className="w-4 h-4" aria-hidden="true" />
                   <span>Notifications</span>
+                  {notifUnreadCount > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1">
+                      {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
+                    </span>
+                  )}
                 </a>
                 <a
                   href="/account"

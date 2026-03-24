@@ -8,6 +8,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useIdleTimer } from '../../hooks/useIdleTimer';
 import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useNotificationPoller } from '../../hooks/useNotificationCount';
 
 /** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
  *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
@@ -42,6 +43,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // Keyboard shortcuts for navigation (#39)
   useNavigationShortcuts();
+
+  // Poll for unread notification count (shared across nav components)
+  useNotificationPoller();
 
   useEffect(() => {
     // Load branding from localStorage first (persists across sessions/logout)

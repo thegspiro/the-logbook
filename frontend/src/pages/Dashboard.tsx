@@ -73,6 +73,7 @@ import type { ShiftRecord } from "../modules/scheduling/services/api";
 import type { EventListItem } from "../types/event";
 import { dashboardService } from "../services/api";
 import { POSITION_LABELS } from "../constants/enums";
+import { useNotificationCountStore } from "../hooks/useNotificationCount";
 
 /**
  * Main Dashboard Component
@@ -100,7 +101,10 @@ const Dashboard: React.FC = () => {
   const [notifications, setNotifications] = useState<NotificationLogRecord[]>(
     [],
   );
-  const [unreadCount, setUnreadCount] = useState(0);
+  const unreadCount = useNotificationCountStore((s) => s.unreadCount);
+  const setUnreadCount = useNotificationCountStore((s) => s.setUnreadCount);
+  const decrementUnread = useNotificationCountStore((s) => s.decrement);
+  const clearUnread = useNotificationCountStore((s) => s.clear);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
 
   // Shifts (user's own upcoming shifts)
@@ -439,7 +443,7 @@ const Dashboard: React.FC = () => {
       setNotifications((prev) =>
         prev.map((n) => (n.id === logId ? { ...n, read: true } : n)),
       );
-      setUnreadCount((prev) => Math.max(0, prev - 1));
+      decrementUnread();
     } catch {
       toast.error("Failed to mark notification as read");
     }
@@ -449,7 +453,7 @@ const Dashboard: React.FC = () => {
     try {
       await notificationsService.markAllMyNotificationsRead();
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      setUnreadCount(0);
+      clearUnread();
       toast.success("All notifications marked as read");
     } catch {
       toast.error("Failed to clear notifications");

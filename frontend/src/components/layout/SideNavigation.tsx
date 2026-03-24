@@ -45,6 +45,7 @@ import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../stores/authStore";
 import { organizationService } from "../../services/api";
 import { prefetchRoute } from "../../utils/routePrefetch";
+import { useNotificationCountStore } from "../../hooks/useNotificationCount";
 
 interface SideNavigationProps {
   departmentName: string;
@@ -78,6 +79,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const { user: currentUser, checkPermission } = useAuthStore();
+  const notifUnreadCount = useNotificationCountStore((s) => s.unreadCount);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["Settings"]);
@@ -276,7 +278,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
         ]
       : []),
     ...(isModuleOn("notifications")
-      ? [{ label: "Notifications", path: "/notifications", icon: Bell } as NavItem]
+      ? [{ label: "Notifications", path: "/notifications?tab=inbox", icon: Bell } as NavItem]
       : []),
 
     // ── Personal settings (always visible) ──
@@ -474,8 +476,9 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
   const isActive = (path: string) => {
     if (path === "#") return false;
+    const pathOnly = path.split("?")[0] ?? path;
     return (
-      location.pathname === path || location.pathname.startsWith(path + "/")
+      location.pathname === pathOnly || location.pathname.startsWith(pathOnly + "/")
     );
   };
 
@@ -762,17 +765,27 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                             : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary active:scale-[0.98]"
                       }`}
                       title={collapsed ? item.label : undefined}
-                      aria-label={collapsed ? item.label : undefined}
+                      aria-label={collapsed ? (item.label === "Notifications" && notifUnreadCount > 0 ? `Notifications (${notifUnreadCount} unread)` : item.label) : undefined}
                     >
-                      <Icon
-                        className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
-                        aria-hidden="true"
-                      />
+                      <span className="relative">
+                        <Icon
+                          className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
+                          aria-hidden="true"
+                        />
+                        {collapsed && item.label === "Notifications" && notifUnreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-theme-nav-bg" />
+                        )}
+                      </span>
                       {!collapsed && (
                         <>
                           <span className="text-sm font-medium flex-1 text-left">
                             {item.label}
                           </span>
+                          {item.label === "Notifications" && notifUnreadCount > 0 && !parentActive && (
+                            <span className="bg-red-500 text-white text-[10px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1 mr-1">
+                              {notifUnreadCount > 99 ? "99+" : notifUnreadCount}
+                            </span>
+                          )}
                           {hasSubItems && (
                             <ChevronDown
                               className={`w-4 h-4 transition-transform ${
