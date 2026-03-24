@@ -869,6 +869,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Apparatus options for the dropdown
+  const [apparatusOptions, setApparatusOptions] = useState<Array<{ id?: string; name: string; unit_number?: string; apparatus_type: string }>>([]);
+
+  useEffect(() => {
+    const loadApparatusOptions = async () => {
+      try {
+        const result = await schedulingService.getApparatusOptions();
+        setApparatusOptions(result.options);
+      } catch {
+        // Non-critical — dropdown will just be empty
+      }
+    };
+    void loadApparatusOptions();
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Load existing template
   // ---------------------------------------------------------------------------
@@ -3390,10 +3405,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </select>
       </div>
 
-      {/* Apparatus ID */}
+      {/* Specific Apparatus */}
       <div>
-        <label className={labelClass}>Specific Apparatus ID</label>
-        <input type="text" className={inputClass} placeholder="Leave blank for all of type" value={form.apparatusId} onChange={(e) => updateForm({ apparatusId: e.target.value })} />
+        <label className={labelClass}>Specific Apparatus</label>
+        <select
+          className={selectClass}
+          value={form.apparatusId}
+          onChange={(e) => updateForm({ apparatusId: e.target.value })}
+        >
+          <option value="">All of type (default)</option>
+          {apparatusOptions
+            .filter((a) => !form.apparatusType || a.apparatus_type === form.apparatusType)
+            .filter((a) => a.id)
+            .map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.unit_number ? `${a.unit_number} — ${a.name}` : a.name}
+              </option>
+            ))}
+        </select>
+        <p className="mt-1 text-xs text-theme-text-muted">
+          Leave as &quot;All of type&quot; to use this template as the default for all {form.apparatusType || 'apparatus'} units
+        </p>
       </div>
 
       {/* Active toggle */}
