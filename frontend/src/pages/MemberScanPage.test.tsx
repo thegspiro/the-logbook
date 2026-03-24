@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderWithRouter } from "../test/utils";
 import { MemberScanPage } from "./MemberScanPage";
@@ -7,13 +7,19 @@ import { MemberScanPage } from "./MemberScanPage";
 // Mock html5-qrcode
 const mockStart = vi.fn().mockResolvedValue(undefined);
 const mockStop = vi.fn().mockResolvedValue(undefined);
+const mockGetCameras = vi.fn().mockResolvedValue([
+  { id: "cam-1", label: "Front Camera" },
+]);
 vi.mock("html5-qrcode", async (importOriginal) => {
   const actual = await importOriginal<typeof import("html5-qrcode")>();
   return {
     ...actual,
-    Html5Qrcode: vi.fn().mockImplementation(function () {
-      return { start: mockStart, stop: mockStop };
-    }),
+    Html5Qrcode: Object.assign(
+      vi.fn().mockImplementation(function () {
+        return { start: mockStart, stop: mockStop };
+      }),
+      { getCameras: (...args: unknown[]) => mockGetCameras(...args) as unknown },
+    ),
   };
 });
 
@@ -37,6 +43,9 @@ vi.mock("react-router-dom", async () => {
 describe("MemberScanPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetCameras.mockResolvedValue([
+      { id: "cam-1", label: "Front Camera" },
+    ]);
   });
 
   it("should render the page title", () => {
@@ -98,10 +107,29 @@ describe("MemberScanPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("should fall back to user-facing camera when environment camera fails", async () => {
-    mockStart
-      .mockRejectedValueOnce(new Error("No environment camera"))
-      .mockResolvedValueOnce(undefined);
+  it("should start scanner with camera device ID", async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<MemberScanPage />);
+
+    await user.click(
+      screen.getByRole("button", { name: /start scanning/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockGetCameras).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(mockStart).toHaveBeenCalledWith(
+        "cam-1",
+        expect.any(Object),
+        expect.any(Function),
+        expect.any(Function),
+      );
+    });
+  });
+
+  it("should show error when no cameras are found", async () => {
+    mockGetCameras.mockResolvedValue([]);
 
     const user = userEvent.setup();
     renderWithRouter(<MemberScanPage />);
@@ -110,23 +138,8 @@ describe("MemberScanPage", () => {
       screen.getByRole("button", { name: /start scanning/i }),
     );
 
-    expect(
-      await screen.findByRole("button", { name: /stop scanning/i }),
-    ).toBeInTheDocument();
-    expect(mockStart).toHaveBeenCalledTimes(2);
-    expect(mockStart).toHaveBeenNthCalledWith(
-      1,
-      { facingMode: "environment" },
-      expect.any(Object),
-      expect.any(Function),
-      expect.any(Function),
-    );
-    expect(mockStart).toHaveBeenNthCalledWith(
-      2,
-      { facingMode: "user" },
-      expect.any(Object),
-      expect.any(Function),
-      expect.any(Function),
-    );
+    await waitFor(() => {
+      expect(screen.getByText(/No cameras found/i)).toBeInTheDocument();
+    });
   });
 });
