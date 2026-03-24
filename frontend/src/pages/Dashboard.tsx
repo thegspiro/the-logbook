@@ -1045,9 +1045,10 @@ const Dashboard: React.FC = () => {
                     onClick={() => {
                       if (!notification.read)
                         void markNotificationRead(notification.id);
-                      // Only navigate to relative/internal paths to prevent open redirect
                       if (notification.action_url && notification.action_url.startsWith('/'))
                         navigate(notification.action_url);
+                      else
+                        navigate("/notifications?tab=inbox");
                     }}
                     className={`w-full text-left p-2.5 sm:p-3 rounded-lg transition-colors ${
                       notification.read

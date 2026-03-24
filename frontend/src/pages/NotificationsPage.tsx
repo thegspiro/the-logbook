@@ -521,7 +521,7 @@ const NotificationsPage: React.FC = () => {
                         <p className={`text-sm truncate ${notification.read ? 'text-theme-text-muted' : 'font-semibold text-theme-text-primary'}`}>
                           {notification.subject || 'Notification'}
                         </p>
-                        <p className="text-xs text-theme-text-muted mt-1 line-clamp-2">
+                        <p className="text-xs text-theme-text-muted mt-1 whitespace-pre-line">
                           {notification.message || ''}
                         </p>
                         {notification.category && (
