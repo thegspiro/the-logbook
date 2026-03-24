@@ -11,3 +11,7 @@ export { FuelLogsTab } from './FuelLogsTab';
 export { OperatorsTab } from './OperatorsTab';
 export { EquipmentTab } from './EquipmentTab';
 export { DocumentsTab } from './DocumentsTab';
+export { MaintenanceRecordModal } from './MaintenanceRecordModal';
+export { FuelLogModal } from './FuelLogModal';
+export { OperatorModal } from './OperatorModal';
+export { EquipmentModal } from './EquipmentModal';
