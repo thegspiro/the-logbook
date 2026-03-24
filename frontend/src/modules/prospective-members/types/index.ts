@@ -9,7 +9,7 @@
 // =============================================================================
 
 // Import enum types from the canonical source and re-export
-import type { StageType, ApplicantStatus } from '../../../constants/enums';
+import type { StageType, ApplicantStatus, VotingMethod, VictoryCondition } from '../../../constants/enums';
 export type { StageType, ApplicantStatus };
 
 /** Backend step progress status values (mirrors StepProgressStatus enum). */
@@ -126,8 +126,8 @@ export const DEFAULT_ELECTION_PACKAGE_FIELDS: ElectionPackageFieldConfig = {
 };
 
 export interface ElectionStageConfig {
-  voting_method: 'simple_majority' | 'approval' | 'supermajority';
-  victory_condition: 'most_votes' | 'majority' | 'supermajority';
+  voting_method: VotingMethod;
+  victory_condition: VictoryCondition;
   victory_percentage?: number | undefined;
   eligible_voter_roles: string[];
   anonymous_voting: boolean;

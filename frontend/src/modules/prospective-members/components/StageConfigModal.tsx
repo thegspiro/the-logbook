@@ -45,7 +45,7 @@ import {
   GripVertical,
   Eye,
 } from 'lucide-react';
-import { StageType as StageTypeConst } from '../../../constants/enums';
+import { StageType as StageTypeConst, VotingMethod, VictoryCondition } from '../../../constants/enums';
 import type {
   PipelineStage,
   PipelineStageCreate,
@@ -212,7 +212,7 @@ const STAGE_PRESETS: StagePreset[] = [
     description: 'Hold a membership vote for the applicant.',
     stageType: 'election_vote',
     config: () => ({
-      voting_method: 'simple_majority' as const,
+      voting_method: VotingMethod.SIMPLE_MAJORITY,
       victory_condition: 'majority' as const,
       eligible_voter_roles: ['member'],
       anonymous_voting: true,
@@ -334,7 +334,7 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   form_submission: () => ({ form_id: '', form_name: '' }),
   document_upload: () => ({ required_document_types: [''], allow_multiple: true }),
   election_vote: () => ({
-    voting_method: 'simple_majority' as const,
+    voting_method: VotingMethod.SIMPLE_MAJORITY,
     victory_condition: 'majority' as const,
     eligible_voter_roles: [],
     anonymous_voting: true,
@@ -1492,7 +1492,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     <option value="supermajority">Supermajority</option>
                   </select>
                 </div>
-                {electionConfig.victory_condition === 'supermajority' && (
+                {electionConfig.victory_condition === VictoryCondition.SUPERMAJORITY && (
                   <div>
                     <label htmlFor="stage-victory-percentage" className="text-theme-text-muted mb-2 block text-sm">
                       Required Percentage

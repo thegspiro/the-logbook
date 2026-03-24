@@ -15,8 +15,19 @@ from app.schemas.base import UTCResponseBase
 VALID_VOTING_METHODS = {"simple_majority", "ranked_choice", "approval", "supermajority"}
 VALID_VICTORY_CONDITIONS = {"most_votes", "majority", "supermajority", "threshold"}
 VALID_RUNOFF_TYPES = {"top_two", "eliminate_lowest"}
+VALID_QUORUM_TYPES = {"none", "percentage", "count"}
 VALID_BALLOT_ITEM_TYPES = {"membership_approval", "officer_election", "general_vote"}
 VALID_VOTE_TYPES = {"approval", "candidate_selection"}
+
+
+def _validate_choice(value, valid_set, label):
+    """Shared validation: reject values not in the allowed set, pass through None."""
+    if value is not None and value not in valid_set:
+        raise ValueError(
+            f"Invalid {label} '{value}'. "
+            f"Must be one of: {', '.join(sorted(valid_set))}"
+        )
+    return value
 
 
 # Ballot Item Schemas
@@ -194,36 +205,22 @@ class ElectionBase(BaseModel):
     @field_validator("quorum_type")
     @classmethod
     def validate_quorum_type(cls, v: str) -> str:
-        if v not in ("none", "percentage", "count"):
-            raise ValueError("quorum_type must be 'none', 'percentage', or 'count'")
-        return v
+        return _validate_choice(v, VALID_QUORUM_TYPES, "quorum type")
 
     @field_validator("voting_method")
     @classmethod
     def validate_voting_method(cls, v: str) -> str:
-        if v not in VALID_VOTING_METHODS:
-            raise ValueError(
-                f"Invalid voting method '{v}'. Must be one of: {', '.join(sorted(VALID_VOTING_METHODS))}"
-            )
-        return v
+        return _validate_choice(v, VALID_VOTING_METHODS, "voting method")
 
     @field_validator("victory_condition")
     @classmethod
     def validate_victory_condition(cls, v: str) -> str:
-        if v not in VALID_VICTORY_CONDITIONS:
-            raise ValueError(
-                f"Invalid victory condition '{v}'. Must be one of: {', '.join(sorted(VALID_VICTORY_CONDITIONS))}"
-            )
-        return v
+        return _validate_choice(v, VALID_VICTORY_CONDITIONS, "victory condition")
 
     @field_validator("runoff_type")
     @classmethod
     def validate_runoff_type(cls, v: str) -> str:
-        if v not in VALID_RUNOFF_TYPES:
-            raise ValueError(
-                f"Invalid runoff type '{v}'. Must be one of: {', '.join(sorted(VALID_RUNOFF_TYPES))}"
-            )
-        return v
+        return _validate_choice(v, VALID_RUNOFF_TYPES, "runoff type")
 
 
 class ElectionCreate(ElectionBase):
@@ -268,36 +265,22 @@ class ElectionUpdate(BaseModel):
     @field_validator("quorum_type")
     @classmethod
     def validate_quorum_type(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in ("none", "percentage", "count"):
-            raise ValueError("quorum_type must be 'none', 'percentage', or 'count'")
-        return v
+        return _validate_choice(v, VALID_QUORUM_TYPES, "quorum type")
 
     @field_validator("voting_method")
     @classmethod
     def validate_voting_method(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in VALID_VOTING_METHODS:
-            raise ValueError(
-                f"Invalid voting method '{v}'. Must be one of: {', '.join(sorted(VALID_VOTING_METHODS))}"
-            )
-        return v
+        return _validate_choice(v, VALID_VOTING_METHODS, "voting method")
 
     @field_validator("victory_condition")
     @classmethod
     def validate_victory_condition(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in VALID_VICTORY_CONDITIONS:
-            raise ValueError(
-                f"Invalid victory condition '{v}'. Must be one of: {', '.join(sorted(VALID_VICTORY_CONDITIONS))}"
-            )
-        return v
+        return _validate_choice(v, VALID_VICTORY_CONDITIONS, "victory condition")
 
     @field_validator("runoff_type")
     @classmethod
     def validate_runoff_type(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in VALID_RUNOFF_TYPES:
-            raise ValueError(
-                f"Invalid runoff type '{v}'. Must be one of: {', '.join(sorted(VALID_RUNOFF_TYPES))}"
-            )
-        return v
+        return _validate_choice(v, VALID_RUNOFF_TYPES, "runoff type")
 
 
 class ElectionResponse(UTCResponseBase):

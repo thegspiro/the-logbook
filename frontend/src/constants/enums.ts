@@ -110,6 +110,58 @@ export const VoteType = {
 export type VoteType = (typeof VoteType)[keyof typeof VoteType];
 
 // ============================================
+// Voting Method (Election.voting_method field)
+// ============================================
+export const VotingMethod = {
+  SIMPLE_MAJORITY: 'simple_majority',
+  RANKED_CHOICE: 'ranked_choice',
+  APPROVAL: 'approval',
+  SUPERMAJORITY: 'supermajority',
+} as const;
+export type VotingMethod = (typeof VotingMethod)[keyof typeof VotingMethod];
+
+// ============================================
+// Victory Condition (Election.victory_condition field)
+// ============================================
+export const VictoryCondition = {
+  MOST_VOTES: 'most_votes',
+  MAJORITY: 'majority',
+  SUPERMAJORITY: 'supermajority',
+  THRESHOLD: 'threshold',
+} as const;
+export type VictoryCondition = (typeof VictoryCondition)[keyof typeof VictoryCondition];
+
+// ============================================
+// Ballot Choice (voter action on a ballot item)
+// ============================================
+export const BallotChoice = {
+  APPROVE: 'approve',
+  DENY: 'deny',
+  ABSTAIN: 'abstain',
+  WRITE_IN: 'write_in',
+} as const;
+export type BallotChoice = (typeof BallotChoice)[keyof typeof BallotChoice];
+
+// ============================================
+// Runoff Type (Election.runoff_type field)
+// ============================================
+export const RunoffType = {
+  TOP_TWO: 'top_two',
+  ELIMINATE_LOWEST: 'eliminate_lowest',
+} as const;
+export type RunoffType = (typeof RunoffType)[keyof typeof RunoffType];
+
+// ============================================
+// Quorum Type (Election.quorum_type field)
+// ============================================
+export const QuorumType = {
+  NONE: 'none',
+  PERCENTAGE: 'percentage',
+  COUNT: 'count',
+} as const;
+export type QuorumType = (typeof QuorumType)[keyof typeof QuorumType];
+
+// ============================================
 // Onboarding / Connection Status
 // ============================================
 export const ConnectionStatus = {

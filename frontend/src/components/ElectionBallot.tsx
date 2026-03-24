@@ -16,7 +16,7 @@ import type {
   VotingMethod,
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
-import { VoteType } from '../constants/enums';
+import { VoteType, VotingMethod as VM } from '../constants/enums';
 
 interface ElectionBallotProps {
   electionId: string;
@@ -136,7 +136,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
       const votingMethod: VotingMethod = election.voting_method;
       const actualPosition = position === '_default' ? undefined : position;
 
-      if (votingMethod === 'ranked_choice') {
+      if (votingMethod === VM.RANKED_CHOICE) {
         const ranked = rankings[position] || [];
         if (ranked.length === 0) {
           setError('Please rank at least one candidate');
@@ -243,11 +243,11 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
 
   const getMethodLabel = () => {
     switch (votingMethod) {
-      case 'ranked_choice':
+      case VM.RANKED_CHOICE:
         return 'Rank candidates in order of preference (click to add ranking)';
       case VoteType.APPROVAL:
         return 'Select all candidates you approve of';
-      case 'supermajority':
+      case VM.SUPERMAJORITY:
         return 'Select one candidate';
       default:
         return 'Select one candidate';
@@ -303,7 +303,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
               ) : (
                 <>
                   {/* Ranked Choice: Show ranking */}
-                  {votingMethod === 'ranked_choice' && (
+                  {votingMethod === VM.RANKED_CHOICE && (
                     <div className="space-y-2" role="group" aria-label={`Ranked choice candidates${position !== '_default' ? ` for ${position}` : ''}`}>
                       {(rankings[position] || []).length > 0 && (
                         <div className="mb-4 p-3 bg-blue-500/10 rounded-lg">
@@ -410,7 +410,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                   )}
 
                   {/* Simple / Supermajority: Radio-style selection */}
-                  {(votingMethod === 'simple_majority' || votingMethod === 'supermajority') && (
+                  {(votingMethod === VM.SIMPLE_MAJORITY || votingMethod === VM.SUPERMAJORITY) && (
                     <div className="space-y-2" role="group" aria-label={`Candidates${position !== '_default' ? ` for ${position}` : ''}`}>
                       {positionCandidates.map((candidate) => {
                         const isSelected = selectedCandidates[position] === candidate.id;

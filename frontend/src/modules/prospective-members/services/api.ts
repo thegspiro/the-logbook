@@ -60,7 +60,7 @@ import type {
   InactivityAlertLevel,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
-import { StageType as StageTypeConst } from '../../../constants/enums';
+import { StageType as StageTypeConst, VotingMethod, VictoryCondition } from '../../../constants/enums';
 
 const api = createApiClient();
 
@@ -153,8 +153,8 @@ function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
       return { required_document_types: [], allow_multiple: true };
     case StageTypeConst.ELECTION_VOTE:
       return {
-        voting_method: 'simple_majority',
-        victory_condition: 'majority',
+        voting_method: VotingMethod.SIMPLE_MAJORITY,
+        victory_condition: VictoryCondition.MAJORITY,
         eligible_voter_roles: [],
         anonymous_voting: true,
       };

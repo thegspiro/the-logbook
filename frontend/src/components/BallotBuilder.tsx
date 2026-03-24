@@ -46,7 +46,7 @@ import {
 import { electionService } from '../services/api';
 import type { Election, BallotItem, BallotTemplate, VictoryCondition } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
-import { ElectionStatus, VoteType, BallotItemType } from '../constants/enums';
+import { ElectionStatus, VoteType, BallotItemType, VictoryCondition as VC } from '../constants/enums';
 
 // ─── Type color/icon/label maps ─────────────────────────────────
 
@@ -87,10 +87,10 @@ const VOTER_TYPE_OPTIONS = [
 ];
 
 const VICTORY_CONDITION_OPTIONS: { value: VictoryCondition; label: string }[] = [
-  { value: 'most_votes', label: 'Most Votes (Plurality)' },
-  { value: 'majority', label: 'Majority (>50%)' },
-  { value: 'supermajority', label: 'Supermajority' },
-  { value: 'threshold', label: 'Threshold' },
+  { value: VC.MOST_VOTES, label: 'Most Votes (Plurality)' },
+  { value: VC.MAJORITY, label: 'Majority (>50%)' },
+  { value: VC.SUPERMAJORITY, label: 'Supermajority' },
+  { value: VC.THRESHOLD, label: 'Threshold' },
 ];
 
 const inputClass = 'form-input';
@@ -124,11 +124,11 @@ const getVoterTypeLabel = (types: string[]) => {
 const getVictoryLabel = (item: BallotItem) => {
   if (!item.victory_condition) return null;
   switch (item.victory_condition) {
-    case 'supermajority':
+    case VC.SUPERMAJORITY:
       return `Supermajority (${item.victory_percentage ?? 67}%)`;
-    case 'majority':
+    case VC.MAJORITY:
       return 'Majority (>50%)';
-    case 'threshold':
+    case VC.THRESHOLD:
       return `Threshold (${item.victory_percentage ?? ''}%)`;
     default:
       return 'Most Votes';
@@ -462,7 +462,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                   onChange={(e) => {
                     if (e.target.checked) {
                       onUpdateItem(item.id, {
-                        victory_condition: election.victory_condition ?? 'most_votes',
+                        victory_condition: election.victory_condition ?? VC.MOST_VOTES,
                         victory_percentage: election.victory_percentage,
                       });
                     } else {
@@ -489,7 +489,7 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                     <label className={labelClass}>Victory Condition</label>
                     <select
                       className={selectClass}
-                      value={item.victory_condition ?? 'most_votes'}
+                      value={item.victory_condition ?? VC.MOST_VOTES}
                       onChange={(e) =>
                         onUpdateItem(item.id, {
                           victory_condition: e.target.value as VictoryCondition,
@@ -504,8 +504,8 @@ const SortableBallotCard: React.FC<SortableBallotCardProps> = ({
                       ))}
                     </select>
                   </div>
-                  {(item.victory_condition === 'supermajority' ||
-                    item.victory_condition === 'threshold') && (
+                  {(item.victory_condition === VC.SUPERMAJORITY ||
+                    item.victory_condition === VC.THRESHOLD) && (
                     <div>
                       <label className={labelClass}>Percentage</label>
                       <input

@@ -7,7 +7,7 @@
  */
 
 import type { Election } from '../types/election';
-import { ElectionStatus } from '../constants/enums';
+import { ElectionStatus, VictoryCondition as VC } from '../constants/enums';
 
 /**
  * Returns a human-readable string describing the time remaining until
@@ -62,13 +62,13 @@ export const getVictoryDescription = (election: Election): string => {
   const { victory_condition, victory_threshold, victory_percentage } = election;
 
   switch (victory_condition) {
-    case 'most_votes':
+    case VC.MOST_VOTES:
       return 'Most Votes (Plurality)';
-    case 'majority':
+    case VC.MAJORITY:
       return 'Majority (>50% of votes)';
-    case 'supermajority':
+    case VC.SUPERMAJORITY:
       return `Supermajority (${victory_percentage || 67}% of votes)`;
-    case 'threshold':
+    case VC.THRESHOLD:
       if (victory_threshold) {
         return `Threshold (${victory_threshold} votes required)`;
       }
