@@ -132,16 +132,25 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
     onScan,
   });
 
+  const tryStartScanner = useCallback(async () => {
+    try {
+      setError(null);
+      await startScanner();
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Camera access denied. Please allow camera permissions in your browser settings.'));
+    }
+  }, [startScanner]);
+
   // Auto-start camera when modal opens
   useEffect(() => {
     if (isOpen) {
       const timer = setTimeout(() => {
-        void startScanner();
+        void tryStartScanner();
       }, 100);
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [isOpen, startScanner]);
+  }, [isOpen, tryStartScanner]);
 
   // Cleanup on close
   useEffect(() => {
@@ -199,7 +208,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
           <div className="flex justify-center">
             {!scanning ? (
               <button
-                onClick={() => { void startScanner(); }}
+                onClick={() => { void tryStartScanner(); }}
                 disabled={lookingUp}
                 className="btn-info font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
               >

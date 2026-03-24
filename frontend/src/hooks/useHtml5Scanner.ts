@@ -51,37 +51,38 @@ export function useHtml5Scanner({
     // Stop any existing instance first
     await stopScanner();
 
-    const config: { formatsToSupport?: Html5QrcodeSupportedFormats[]; verbose: boolean } = {
+    const libConfig: { formatsToSupport?: Html5QrcodeSupportedFormats[]; verbose: boolean } = {
       verbose: false,
     };
     if (formatsToSupport) {
-      config.formatsToSupport = formatsToSupport;
+      libConfig.formatsToSupport = formatsToSupport;
     }
-
-    const html5QrCode = new Html5Qrcode(viewportId, config);
-    scannerRef.current = html5QrCode;
 
     const onSuccess = (decodedText: string) => {
       onScanRef.current(decodedText);
     };
     const onFailure = () => {};
 
-    try {
-      await html5QrCode.start(
-        { facingMode: 'environment' },
-        scanConfig,
-        onSuccess,
-        onFailure,
-      );
-    } catch {
-      await html5QrCode.start(
-        { facingMode: 'user' },
-        scanConfig,
-        onSuccess,
-        onFailure,
-      );
+    // Enumerate cameras first — this triggers the browser permission prompt
+    // and gives us device IDs that work reliably across desktop and mobile.
+    const cameras = await Html5Qrcode.getCameras();
+    if (cameras.length === 0) {
+      throw new Error('No cameras found on this device');
     }
 
+    // Prefer a rear/environment camera (mobile); fall back to the first available (desktop).
+    const backCamera = cameras.find(
+      (c) => /back|rear|environment/i.test(c.label),
+    );
+    const cameraId = (backCamera ?? cameras[0])?.id;
+    if (!cameraId) {
+      throw new Error('No cameras found on this device');
+    }
+
+    const html5QrCode = new Html5Qrcode(viewportId, libConfig);
+    scannerRef.current = html5QrCode;
+
+    await html5QrCode.start(cameraId, scanConfig, onSuccess, onFailure);
     setScanning(true);
   }, [viewportId, scanConfig, formatsToSupport, stopScanner]);
 
