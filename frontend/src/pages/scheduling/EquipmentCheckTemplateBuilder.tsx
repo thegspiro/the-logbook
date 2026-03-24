@@ -33,6 +33,7 @@ import {
   Hash,
   CheckSquare,
   Square,
+  Type,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -105,6 +106,7 @@ const CHECK_TYPES = [
   { value: 'level', label: 'Level' },
   { value: 'date_lot', label: 'Date / Lot' },
   { value: 'reading', label: 'Reading' },
+  { value: 'header', label: 'Section Header' },
 ] as const;
 
 const LEVEL_UNIT_PRESETS = [
@@ -127,6 +129,7 @@ const CHECK_TYPE_HELP: Record<string, string> = {
   level: 'Read a gauge or measure a level (e.g., fuel, pressure, fluid). Shows min level and unit fields.',
   date_lot: 'Track serial/lot numbers and verify against expected values. Good for medical supplies and dated items.',
   reading: 'Record a numeric reading without a pass/fail threshold. Good for odometer, hour meters, etc.',
+  header: 'Visual section divider to group items. Not a checkable item — just a label to help members navigate.',
 };
 
 // Pre-built vehicle check compartment templates by apparatus type
@@ -766,6 +769,51 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       // Unsaved compartment — add locally
       updateCompartmentField(compartmentIdx, {
         items: [...comp.items, emptyItem()],
+      });
+    }
+  };
+
+  const addHeader = async (compartmentIdx: number) => {
+    const comp = compartments[compartmentIdx];
+    if (!comp) return;
+
+    if (comp.id) {
+      try {
+        const payload: CheckTemplateItemCreate = {
+          name: 'Section Header',
+          sort_order: comp.items.length,
+          check_type: 'header',
+          is_required: false,
+        };
+        const created = await schedulingService.addCheckItem(comp.id, payload);
+        const item: ItemFormState = {
+          id: created.id,
+          name: created.name,
+          description: created.description ?? '',
+          checkType: 'header',
+          isRequired: false,
+          requiredQuantity: '',
+          expectedQuantity: '',
+          minLevel: '',
+          levelUnit: '',
+          serialNumber: '',
+          lotNumber: '',
+          hasExpiration: false,
+          expirationDate: '',
+          expirationWarningDays: '30',
+          imageUrl: '',
+        };
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, item] });
+        toast.success('Header added');
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to add header'));
+      }
+    } else {
+      updateCompartmentField(compartmentIdx, {
+        items: [
+          ...comp.items,
+          { ...emptyItem(), name: 'Section Header', checkType: 'header', isRequired: false },
+        ],
       });
     }
   };
@@ -1512,13 +1560,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const isInlineEditing = inlineEditKey === itemKey;
     const itemCount = totalItems ?? compartments[compIdx]?.items.length ?? 0;
 
+    const isHeader = item.checkType === 'header';
+
     return (
       <div
         key={itemKey}
         className={`rounded-md border overflow-hidden transition-colors ${
           isSelected
             ? 'border-blue-400 dark:border-blue-500 bg-blue-50/50 dark:bg-blue-900/10'
-            : 'border-theme-surface-border bg-theme-surface'
+            : isHeader
+              ? 'border-purple-300 dark:border-purple-700 bg-purple-50/50 dark:bg-purple-900/10'
+              : 'border-theme-surface-border bg-theme-surface'
         }`}
       >
         {/* Compact row — always visible */}
@@ -1564,6 +1616,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
           </button>
 
+          {isHeader && <Type className="h-3.5 w-3.5 text-purple-500 flex-shrink-0" />}
+
           {/* Inline editable name */}
           {isInlineEditing ? (
             <input
@@ -1583,17 +1637,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             />
           ) : (
             <span
-              className={`flex-1 text-sm truncate ${item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
+              className={`flex-1 text-sm truncate ${isHeader ? 'text-purple-700 dark:text-purple-400 font-semibold uppercase text-xs tracking-wide' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
               onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
               title="Double-click to rename"
             >
-              {item.name.trim() || 'Untitled Item'}
+              {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
             </span>
           )}
 
           {/* Badges */}
           <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
-            <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted">
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${isHeader ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
               {checkTypeLabel}
             </span>
             {item.isRequired && (
@@ -1648,31 +1702,32 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Expanded form — visible on click */}
         {isItemExpanded && (
-          <div className="border-t border-theme-surface-border px-3 py-3 space-y-3">
+          <div className={`border-t px-3 py-3 space-y-3 ${isHeader ? 'border-purple-200 dark:border-purple-800' : 'border-theme-surface-border'}`}>
             {/* Name + Description */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className={labelClass}>Name</label>
+                <label className={labelClass}>{isHeader ? 'Header Title' : 'Name'}</label>
                 <input
                   type="text"
                   className={inputClass}
-                  placeholder="Item name"
+                  placeholder={isHeader ? 'e.g. Medical Supplies' : 'Item name'}
                   value={item.name}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
                 />
               </div>
               <div>
-                <label className={labelClass}>Description</label>
+                <label className={labelClass}>{isHeader ? 'Subtitle' : 'Description'}</label>
                 <input
                   type="text"
                   className={inputClass}
-                  placeholder="Optional description"
+                  placeholder={isHeader ? 'Optional subtitle shown below the header' : 'Optional description'}
                   value={item.description}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
                 />
               </div>
             </div>
 
+            {!isHeader && (<>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Check Type */}
               <div>
@@ -1803,6 +1858,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </>
               )}
             </div>
+            </>)}
           </div>
         )}
       </div>
@@ -2051,6 +2107,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Add Item
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void addHeader(idx)}
+                    className="flex items-center gap-1 rounded-md border border-dashed border-theme-surface-border px-3 py-1.5 text-xs font-medium text-theme-text-muted hover:border-purple-500 hover:text-purple-600 transition-colors"
+                  >
+                    <Type className="h-3.5 w-3.5" />
+                    Add Header
                   </button>
                 </div>
               </div>
@@ -2404,29 +2468,60 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       )}
 
-      {/* Preview Modal */}
+      {/* Preview Modal — mobile device frame */}
       {showPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="relative mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-xl bg-theme-surface shadow-xl">
-            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
-              <h2 className="text-lg font-semibold text-theme-text-primary">Check Preview</h2>
-              <button
-                type="button"
-                onClick={() => setShowPreview(false)}
-                className="rounded-lg p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
-                <p className="text-xs text-blue-700 dark:text-blue-400">
-                  This is a preview of how the check will appear to members during their shift.
-                  Inputs are interactive for demonstration but nothing will be submitted.
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="relative flex flex-col items-center gap-3">
+            {/* Close button outside the phone frame */}
+            <button
+              type="button"
+              onClick={() => setShowPreview(false)}
+              className="absolute -top-2 -right-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-theme-surface text-theme-text-muted shadow-lg hover:text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+              aria-label="Close preview"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Phone frame */}
+            <div className="relative w-[375px] max-w-[90vw] rounded-[2.5rem] border-[6px] border-gray-800 dark:border-gray-600 bg-theme-surface shadow-2xl overflow-hidden">
+              {/* Phone notch */}
+              <div className="relative h-7 bg-gray-800 dark:bg-gray-600 flex items-end justify-center">
+                <div className="w-28 h-5 rounded-b-2xl bg-gray-800 dark:bg-gray-600" />
               </div>
-              <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+
+              {/* Phone status bar */}
+              <div className="flex items-center justify-between px-6 py-1 bg-theme-surface text-[10px] text-theme-text-muted">
+                <span>9:41</span>
+                <div className="flex items-center gap-1">
+                  <span>5G</span>
+                  <div className="w-6 h-2.5 rounded-sm border border-theme-text-muted relative">
+                    <div className="absolute inset-0.5 bg-theme-text-muted rounded-[1px]" style={{ width: '75%' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable content area */}
+              <div className="overflow-y-auto bg-theme-surface" style={{ height: 'min(70vh, 640px)' }}>
+                <div className="px-1 pb-4">
+                  <div className="mb-3 mx-3 mt-2 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+                    <p className="text-[10px] text-blue-700 dark:text-blue-400">
+                      Preview — inputs are interactive but nothing will be submitted.
+                    </p>
+                  </div>
+                  <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+                </div>
+              </div>
+
+              {/* Phone home indicator bar */}
+              <div className="flex justify-center py-2 bg-theme-surface">
+                <div className="w-32 h-1 rounded-full bg-gray-800/30 dark:bg-gray-400/30" />
+              </div>
             </div>
+
+            {/* Label */}
+            <p className="text-xs text-gray-400 text-center">
+              Mobile preview — most members will complete checks on their phone
+            </p>
           </div>
         </div>
       )}

@@ -56,6 +56,7 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItem,
   CheckItemHistory,
+  LastCheckItemResult,
   ComplianceReport,
   FailureLogResponse,
   ItemTrendResponse,
@@ -643,6 +644,17 @@ export const schedulingService = {
     const response = await api.get<CheckItemHistory[]>(
       `/equipment-checks/items/${itemId}/history`,
       { params: limit ? { limit } : undefined },
+    );
+    return response.data;
+  },
+
+  async getLastCheckResults(
+    templateId: string,
+    apparatusId?: string,
+  ): Promise<Record<string, LastCheckItemResult>> {
+    const response = await api.get<Record<string, LastCheckItemResult>>(
+      `/equipment-checks/templates/${templateId}/last-results`,
+      { params: apparatusId ? { apparatus_id: apparatusId } : undefined },
     );
     return response.data;
   },

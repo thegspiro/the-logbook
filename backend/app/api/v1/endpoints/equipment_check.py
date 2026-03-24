@@ -440,6 +440,24 @@ async def get_item_history(
     )
 
 
+@router.get("/templates/{template_id}/last-results")
+async def get_last_check_results(
+    template_id: str,
+    apparatus_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get item results from the most recent completed check for a template.
+
+    Optionally filter by apparatus_id so results are apparatus-specific
+    (e.g. E106 may have different quantities from E105).
+    """
+    service = EquipmentCheckService(db)
+    return await service.get_last_check_results(
+        template_id, current_user.organization_id, apparatus_id
+    )
+
+
 # =====================================================================
 # My Checklists (Member Page)
 # =====================================================================
