@@ -25,6 +25,7 @@ from app.models.training import (
     TrainingCategory,
     TrainingRecord,
     TrainingStatus,
+    TrainingType,
 )
 from app.models.user import User
 
@@ -1038,27 +1039,34 @@ class ExternalTrainingSyncService:
             if provider:
                 target_category_id = provider.default_category_id
 
+        # Build notes from description and import metadata
+        notes_parts = []
+        if import_record.description:
+            notes_parts.append(import_record.description)
+        if import_record.score:
+            notes_parts.append(f"Score: {import_record.score}")
+        notes_parts.append("Imported from external training provider")
+        import_notes = ". ".join(notes_parts)
+
         # Create training record
         training_record = TrainingRecord(
             user_id=target_user_id,
             organization_id=import_record.organization_id,
-            title=import_record.course_title,
-            description=import_record.description,
+            course_name=import_record.course_title,
+            course_code=import_record.course_code,
+            training_type=TrainingType.CONTINUING_EDUCATION,
             hours_completed=round((import_record.duration_minutes or 0) / 60.0, 2),
             completion_date=(
                 import_record.completion_date.date()
                 if import_record.completion_date
                 else None
             ),
+            passed=import_record.passed,
             status=TrainingStatus.COMPLETED,
             category_id=target_category_id,
             external_provider_id=import_record.provider_id,
             external_record_id=import_record.external_record_id,
-            notes=(
-                f"Imported from external training provider. Score: {import_record.score}"
-                if import_record.score
-                else "Imported from external training provider"
-            ),
+            notes=import_notes,
         )
 
         self.db.add(training_record)

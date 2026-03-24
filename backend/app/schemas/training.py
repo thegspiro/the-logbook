@@ -158,6 +158,7 @@ class TrainingRecordBase(BaseModel):
     course_name: str = Field(..., min_length=1, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
     training_type: str
+    category_id: Optional[UUID] = None
     scheduled_date: Optional[date] = None
     completion_date: Optional[date] = None
     expiration_date: Optional[date] = None
@@ -190,6 +191,7 @@ class TrainingRecordUpdate(BaseModel):
     course_name: Optional[str] = Field(None, min_length=1, max_length=255)
     course_code: Optional[str] = Field(None, max_length=50)
     training_type: Optional[str] = None
+    category_id: Optional[UUID] = None
     scheduled_date: Optional[date] = None
     completion_date: Optional[date] = None
     expiration_date: Optional[date] = None
@@ -214,6 +216,8 @@ class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
     organization_id: UUID
     user_id: UUID
     course_id: Optional[UUID] = None
+    external_provider_id: Optional[UUID] = None
+    external_record_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None

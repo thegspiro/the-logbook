@@ -231,6 +231,7 @@ export interface TrainingRecord {
   organization_id: string;
   user_id: string;
   course_id?: string;
+  category_id?: string;
   course_name: string;
   course_code?: string;
   training_type: TrainingType;
@@ -247,6 +248,8 @@ export interface TrainingRecord {
   passed?: boolean;
   instructor?: string;
   location?: string;
+  external_provider_id?: string;
+  external_record_id?: string;
   notes?: string;
   attachments?: string[];
   rank_at_completion?: string;
@@ -259,6 +262,7 @@ export interface TrainingRecord {
 export interface TrainingRecordCreate {
   user_id: string;
   course_id?: string;
+  category_id?: string;
   course_name: string;
   course_code?: string;
   training_type: TrainingType;
@@ -285,6 +289,7 @@ export interface TrainingRecordUpdate {
   course_name?: string;
   course_code?: string;
   training_type?: TrainingType;
+  category_id?: string | undefined;
   scheduled_date?: string;
   completion_date?: string;
   expiration_date?: string | undefined;
