@@ -4,8 +4,9 @@ Schemas for Training Module Configuration (Member Visibility Settings)
 
 from datetime import datetime
 from typing import Optional
+from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.base import UTCResponseBase
 
@@ -42,8 +43,18 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     # Reports access
     allow_member_report_export: bool
 
+    # Shift report review workflow
+    report_review_required: bool = False
+    report_review_role: str = "training_officer"
+
+    # Rating customization
+    rating_label: str = "Performance Rating"
+    rating_scale_type: str = "stars"
+    rating_scale_labels: Optional[dict] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    updated_by: Optional[UUID] = None
 
     model_config = {"from_attributes": True}
 
@@ -70,6 +81,15 @@ class TrainingModuleConfigUpdate(BaseModel):
     show_submission_history: Optional[bool] = None
 
     allow_member_report_export: Optional[bool] = None
+
+    # Shift report review workflow
+    report_review_required: Optional[bool] = None
+    report_review_role: Optional[str] = Field(None, max_length=50)
+
+    # Rating customization
+    rating_label: Optional[str] = Field(None, max_length=100)
+    rating_scale_type: Optional[str] = Field(None, max_length=20)
+    rating_scale_labels: Optional[dict] = None
 
 
 class MemberVisibilityResponse(BaseModel):

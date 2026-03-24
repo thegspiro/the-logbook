@@ -9,7 +9,7 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -236,16 +236,28 @@ class TrainingRequirementBase(BaseModel):
     requirement_type: RequirementType
     source: RequirementSource = RequirementSource.DEPARTMENT
     registry_name: Optional[str] = None
+    registry_code: Optional[str] = Field(None, max_length=50)
+    is_editable: bool = True
     training_type: Optional[str] = None
+    # Requirement quantities (field used depends on requirement_type)
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None
+    required_shifts: Optional[int] = Field(None, ge=0)
+    required_calls: Optional[int] = Field(None, ge=0)
+    required_call_types: Optional[List[str]] = None
+    required_skills: Optional[List[str]] = None
+    checklist_items: Optional[List[str]] = None
+    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    max_attempts: Optional[int] = Field(None, ge=1)
     frequency: str
     year: Optional[int] = Field(None, ge=2020, le=2100)
     applies_to_all: bool = True
     required_roles: Optional[List[str]] = None
+    required_positions: Optional[List[str]] = None
     required_membership_types: Optional[List[str]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+    time_limit_days: Optional[int] = Field(None, ge=1)
     # Due date calculation fields
     due_date_type: DueDateType = DueDateType.CALENDAR_PERIOD
     rolling_period_months: Optional[int] = Field(None, ge=1, le=120)  # 1-10 years
@@ -260,6 +272,26 @@ class TrainingRequirementBase(BaseModel):
 class TrainingRequirementCreate(TrainingRequirementBase):
     """Schema for creating a new training requirement"""
 
+    @model_validator(mode="after")
+    def validate_quantity_for_type(self) -> "TrainingRequirementCreate":
+        """Ensure the relevant quantity field is set for the requirement type."""
+        checks = {
+            RequirementType.HOURS: ("required_hours", self.required_hours),
+            RequirementType.COURSES: ("required_courses", self.required_courses),
+            RequirementType.SHIFTS: ("required_shifts", self.required_shifts),
+            RequirementType.CALLS: ("required_calls", self.required_calls),
+            RequirementType.KNOWLEDGE_TEST: ("passing_score", self.passing_score),
+        }
+        field_name, value = checks.get(
+            self.requirement_type, (None, "skip")
+        )
+        if value != "skip" and not value:
+            raise ValueError(
+                f"{field_name} is required for requirement_type "
+                f"'{self.requirement_type.value}'"
+            )
+        return self
+
 
 class TrainingRequirementUpdate(BaseModel):
     """Schema for updating a training requirement"""
@@ -267,16 +299,29 @@ class TrainingRequirementUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     requirement_type: Optional[RequirementType] = None
+    source: Optional[RequirementSource] = None
+    registry_name: Optional[str] = None
+    registry_code: Optional[str] = Field(None, max_length=50)
+    is_editable: Optional[bool] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None
+    required_shifts: Optional[int] = Field(None, ge=0)
+    required_calls: Optional[int] = Field(None, ge=0)
+    required_call_types: Optional[List[str]] = None
+    required_skills: Optional[List[str]] = None
+    checklist_items: Optional[List[str]] = None
+    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    max_attempts: Optional[int] = Field(None, ge=1)
     frequency: Optional[str] = None
     year: Optional[int] = Field(None, ge=2020, le=2100)
     applies_to_all: Optional[bool] = None
     required_roles: Optional[List[str]] = None
+    required_positions: Optional[List[str]] = None
     required_membership_types: Optional[List[str]] = None
     start_date: Optional[date] = None
     due_date: Optional[date] = None
+    time_limit_days: Optional[int] = Field(None, ge=1)
     # Due date calculation fields
     due_date_type: Optional[DueDateType] = None
     rolling_period_months: Optional[int] = Field(None, ge=1, le=120)
