@@ -1609,11 +1609,13 @@ class SchedulingService:
                 notif = NotificationLog(
                     id=generate_uuid(),
                     organization_id=str(organization_id),
-                    user_id=rid,
+                    recipient_id=rid,
                     channel="in_app",
-                    notification_type="shift_decline",
+                    category="shift_decline",
                     subject="Shift Coverage Needed",
-                    body=message,
+                    message=message,
+                    action_url="/scheduling",
+                    delivered=True,
                 )
                 self.db.add(notif)
             await self.db.flush()
@@ -1696,9 +1698,8 @@ class SchedulingService:
             )
             position_label = position or "unspecified"
 
-            from zoneinfo import ZoneInfo
-
             from app.core.utils import generate_uuid
+            from app.models.apparatus import EquipmentCheckTemplate
             from app.models.notification import NotificationLog
 
             org_tz = ZoneInfo(
@@ -1717,6 +1718,55 @@ class SchedulingService:
                     f"(starts {local_start.strftime('%H:%M')})."
                 )
 
+            checklist_names: list[str] = []
+            if shift.apparatus_id:
+                tmpl_result = await self.db.execute(
+                    select(EquipmentCheckTemplate)
+                    .where(
+                        EquipmentCheckTemplate.organization_id
+                        == str(organization_id)
+                    )
+                    .where(
+                        EquipmentCheckTemplate.apparatus_id
+                        == str(shift.apparatus_id)
+                    )
+                    .where(
+                        EquipmentCheckTemplate.check_timing
+                        == "start_of_shift"
+                    )
+                    .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+                    .order_by(EquipmentCheckTemplate.sort_order)
+                )
+                templates = list(tmpl_result.scalars().all())
+                checklist_names = [t.name for t in templates]
+
+                if not checklist_names:
+                    type_result = await self.db.execute(
+                        select(EquipmentCheckTemplate)
+                        .where(
+                            EquipmentCheckTemplate.organization_id
+                            == str(organization_id)
+                        )
+                        .where(
+                            EquipmentCheckTemplate.apparatus_id.is_(None)
+                        )
+                        .where(
+                            EquipmentCheckTemplate.check_timing
+                            == "start_of_shift"
+                        )
+                        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+                        .order_by(EquipmentCheckTemplate.sort_order)
+                    )
+                    type_templates = list(type_result.scalars().all())
+                    checklist_names = [t.name for t in type_templates]
+
+            if checklist_names:
+                checklist_list = ", ".join(checklist_names)
+                message += (
+                    f" Equipment checklists to complete: "
+                    f"{checklist_list}."
+                )
+
             notif = NotificationLog(
                 id=generate_uuid(),
                 organization_id=str(organization_id),
@@ -1725,6 +1775,8 @@ class SchedulingService:
                 category="shift_assignment",
                 subject="New Shift Assignment",
                 message=message,
+                action_url="/scheduling",
+                delivered=True,
             )
             self.db.add(notif)
             await self.db.flush()
