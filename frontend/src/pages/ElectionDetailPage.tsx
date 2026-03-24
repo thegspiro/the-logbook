@@ -901,18 +901,20 @@ export const ElectionDetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Import Meeting Attendees */}
-        {election.meeting_id && canManage && election.status === ElectionStatus.DRAFT && (
+        {/* Import Attendees from Linked Meeting or Event */}
+        {(election.meeting_id || election.event_id) && canManage && election.status === ElectionStatus.DRAFT && (
           <div className="mt-4">
             <button
               onClick={() => void handleImportMeetingAttendees()}
               disabled={isImportingAttendees}
               className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 text-sm"
             >
-              {isImportingAttendees ? 'Importing...' : 'Import Attendees from Meeting'}
+              {isImportingAttendees ? 'Importing...' : `Import Attendees from ${election.meeting_id ? 'Meeting' : 'Event'}`}
             </button>
             <p className="mt-1 text-xs text-theme-text-muted">
-              Copy the attendance list from the linked meeting into this election.
+              {election.meeting_id
+                ? 'Copy the attendance list from the linked meeting into this election.'
+                : 'Copy checked-in attendees (or RSVPs) from the linked event into this election.'}
             </p>
           </div>
         )}

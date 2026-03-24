@@ -20,6 +20,7 @@ from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.election import Candidate, Election, ElectionStatus, Vote
+from app.models.event import EventRSVP, RSVPStatus
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import User
 from app.schemas.election import (
@@ -1856,10 +1857,14 @@ async def import_meeting_attendees(
     current_user: User = Depends(require_permission("elections.manage")),
 ):
     """
-    Import attendees from the linked meeting into the election attendance list.
+    Import attendees from the linked meeting or event into the election
+    attendance list.
 
-    Copies present members from the meeting's attendance records into the
-    election's attendees JSON. Members already checked in are skipped.
+    When linked to a meeting (meeting_id): copies members marked present.
+    When linked to an event (event_id): copies members who checked in,
+    or who RSVP'd "going" if no one has checked in yet.
+
+    Members already in the election's attendance list are skipped.
 
     **Authentication required**
     **Requires permission: elections.manage**
@@ -1874,28 +1879,68 @@ async def import_meeting_attendees(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    if not election.meeting_id:
+    if not election.meeting_id and not election.event_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Election is not linked to a meeting",
+            detail="Election is not linked to a meeting or event",
         )
 
-    # Fetch meeting attendees who were present
-    meeting_attendees_result = await db.execute(
-        select(MeetingAttendee)
-        .options(selectinload(MeetingAttendee.user))
-        .where(MeetingAttendee.meeting_id == election.meeting_id)
-        .where(MeetingAttendee.present.is_(True))
-    )
-    meeting_attendees = meeting_attendees_result.scalars().all()
+    source_attendees: list[tuple[str, str]] = []
+    source_label = "meeting"
 
-    if not meeting_attendees:
+    if election.meeting_id:
+        meeting_attendees_result = await db.execute(
+            select(MeetingAttendee)
+            .options(selectinload(MeetingAttendee.user))
+            .where(MeetingAttendee.meeting_id == election.meeting_id)
+            .where(MeetingAttendee.present.is_(True))
+        )
+        for ma in meeting_attendees_result.scalars().all():
+            user_name = "Unknown"
+            if ma.user:
+                user_name = (
+                    f"{ma.user.first_name} {ma.user.last_name}".strip()
+                    or ma.user.email
+                )
+            source_attendees.append((str(ma.user_id), user_name))
+
+    elif election.event_id:
+        source_label = "event"
+        checked_in_result = await db.execute(
+            select(EventRSVP)
+            .options(selectinload(EventRSVP.user))
+            .where(EventRSVP.event_id == election.event_id)
+            .where(EventRSVP.checked_in.is_(True))
+        )
+        checked_in_rsvps = checked_in_result.scalars().all()
+
+        if checked_in_rsvps:
+            rsvps_to_import = checked_in_rsvps
+        else:
+            going_result = await db.execute(
+                select(EventRSVP)
+                .options(selectinload(EventRSVP.user))
+                .where(EventRSVP.event_id == election.event_id)
+                .where(EventRSVP.status == RSVPStatus.GOING)
+            )
+            rsvps_to_import = going_result.scalars().all()
+
+        for rsvp in rsvps_to_import:
+            user_name = "Unknown"
+            if rsvp.user:
+                user_name = (
+                    f"{rsvp.user.first_name} {rsvp.user.last_name}".strip()
+                    or rsvp.user.email
+                )
+            source_attendees.append((str(rsvp.user_id), user_name))
+
+    if not source_attendees:
         return ImportMeetingAttendeesResponse(
             success=True,
             imported=0,
             skipped=0,
             total_attendees=len(election.attendees or []),
-            message="No present attendees found in the linked meeting",
+            message=f"No attendees found in the linked {source_label}",
         )
 
     current_attendees = copy.deepcopy(election.attendees or [])
@@ -1905,18 +1950,10 @@ async def import_meeting_attendees(
     skipped = 0
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    for ma in meeting_attendees:
-        user_id = str(ma.user_id)
+    for user_id, user_name in source_attendees:
         if user_id in existing_user_ids:
             skipped += 1
             continue
-
-        user_name = "Unknown"
-        if ma.user:
-            user_name = (
-                f"{ma.user.first_name} {ma.user.last_name}".strip()
-                or ma.user.email
-            )
 
         current_attendees.append({
             "user_id": user_id,
@@ -1930,17 +1967,23 @@ async def import_meeting_attendees(
     election.updated_at = datetime.now(timezone.utc)
     await db.commit()
 
+    audit_data: dict = {
+        "election_id": str(election_id),
+        "source": source_label,
+        "imported": imported,
+        "skipped": skipped,
+    }
+    if election.meeting_id:
+        audit_data["meeting_id"] = election.meeting_id
+    if election.event_id:
+        audit_data["event_id"] = election.event_id
+
     await log_audit_event(
         db=db,
         event_type="meeting_attendees_imported",
         event_category="elections",
         severity="info",
-        event_data={
-            "election_id": str(election_id),
-            "meeting_id": election.meeting_id,
-            "imported": imported,
-            "skipped": skipped,
-        },
+        event_data=audit_data,
         user_id=str(current_user.id),
     )
 
@@ -1951,7 +1994,7 @@ async def import_meeting_attendees(
         total_attendees=len(current_attendees),
         message=(
             f"Imported {imported} attendee{'s' if imported != 1 else ''} "
-            f"from meeting ({skipped} already present)"
+            f"from {source_label} ({skipped} already present)"
         ),
     )
 
