@@ -8,7 +8,7 @@ import { MedicalScreeningPage } from './pages/MedicalScreeningPage';
 export function getMedicalScreeningRoutes() {
   return (
     <>
-      <Route path="medical-screening" element={<MedicalScreeningPage />} />
+      <Route path="/medical-screening" element={<MedicalScreeningPage />} />
     </>
   );
 }

@@ -35,24 +35,93 @@ const PATH_LABELS: Record<string, string> = {
   reports: 'Reports',
   forms: 'Forms',
   admin: 'Admin',
-  'action-items': 'Action Items',
-  'my-training': 'My Training',
-  'my-equipment': 'My Equipment',
-  submit: 'Submit',
-  courses: 'Course Library',
-  programs: 'Programs',
   account: 'My Account',
-  checkouts: 'Checkouts',
+  setup: 'Setup',
+  integrations: 'Integrations',
+  roles: 'Roles',
+
+  // Actions & generic segments
   edit: 'Edit',
   new: 'Create',
+  add: 'Add',
+  import: 'Import',
+  submit: 'Submit',
+  active: 'Active',
+  manage: 'Manage',
+  test: 'Test',
+
+  // Training module
+  'my-training': 'My Training',
+  courses: 'Course Library',
+  programs: 'Programs',
+  'skills-testing': 'Skills Testing',
+  'compliance-config': 'Compliance Config',
+  templates: 'Templates',
+
+  // Events module
   'qr-code': 'QR Code',
   'check-in': 'Check In',
   monitoring: 'Monitoring',
-  import: 'Import',
-  add: 'Add',
-  roles: 'Roles',
-  setup: 'Setup',
-  integrations: 'Integrations',
+  analytics: 'Analytics',
+
+  // Inventory module
+  'my-equipment': 'My Equipment',
+  checkouts: 'Checkouts',
+  items: 'Items',
+  'storage-areas': 'Storage Areas',
+  'variant-groups': 'Variant Groups',
+  'write-offs': 'Write-Offs',
+  reorder: 'Reorder',
+  kits: 'Kits',
+  pool: 'Pool',
+  charges: 'Charges',
+  returns: 'Returns',
+  requests: 'Requests',
+  maintenance: 'Maintenance',
+  categories: 'Categories',
+  'print-labels': 'Print Labels',
+
+  // Finance module
+  finance: 'Finance',
+  budgets: 'Budgets',
+  expenses: 'Expenses',
+  'check-requests': 'Check Requests',
+  'purchase-requests': 'Purchase Requests',
+  dues: 'Dues',
+  'approval-chains': 'Approval Chains',
+
+  // Scheduling module
+  patterns: 'Patterns',
+  'equipment-check-templates': 'Equipment Check Templates',
+  'equipment-check-reports': 'Equipment Check Reports',
+
+  // Other modules
+  'action-items': 'Action Items',
+  apparatus: 'Apparatus',
+  'apparatus-basic': 'Apparatus',
+  locations: 'Locations',
+  inspections: 'Inspections',
+  grants: 'Grants',
+  applications: 'Applications',
+  opportunities: 'Opportunities',
+  campaigns: 'Campaigns',
+  donors: 'Donors',
+  donations: 'Donations',
+  'prospective-members': 'Prospective Members',
+  interview: 'Interview',
+  'admin-hours': 'Admin Hours',
+  'medical-screening': 'Medical Screening',
+  'email-templates': 'Email Templates',
+  communications: 'Communications',
+  'ip-security': 'IP Security',
+  'my-requests': 'My Requests',
+  'public-portal': 'Public Portal',
+  'platform-analytics': 'Platform Analytics',
+  errors: 'Error Monitor',
+  waivers: 'Waivers',
+  scan: 'Scan Member ID',
+  history: 'History',
+  'id-card': 'ID Card',
 };
 
 function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
@@ -72,7 +141,7 @@ function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {
       continue;
     }
 
-    const label = PATH_LABELS[segment] || segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+    const label = PATH_LABELS[segment] || segment.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     const isLast = i === segments.length - 1;
 
     crumbs.push({

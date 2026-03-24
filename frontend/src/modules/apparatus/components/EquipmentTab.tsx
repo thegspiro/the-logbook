@@ -5,23 +5,20 @@
  */
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Package, MapPin } from 'lucide-react';
 import type { ApparatusEquipment } from '../types';
 
 interface EquipmentTabProps {
-  id: string;
   equipment: ApparatusEquipment[];
   loadingTab: boolean;
+  onAdd?: () => void;
 }
 
 export const EquipmentTab: React.FC<EquipmentTabProps> = ({
-  id,
   equipment,
   loadingTab,
+  onAdd,
 }) => {
-  const navigate = useNavigate();
-
   return (
     <div className="card p-6">
       <div className="flex items-center justify-between mb-6">
@@ -29,12 +26,14 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
           <Package className="w-5 h-5" />
           Equipment
         </h2>
-        <button
-          onClick={() => navigate(`/apparatus/${id}/equipment/new`)}
-          className="btn-primary text-sm"
-        >
-          Add Equipment
-        </button>
+        {onAdd && (
+          <button
+            onClick={onAdd}
+            className="btn-primary text-sm"
+          >
+            Add Equipment
+          </button>
+        )}
       </div>
       {loadingTab ? (
         <div className="text-center py-8">

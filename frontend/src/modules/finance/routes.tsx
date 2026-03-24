@@ -48,10 +48,19 @@ const ExpenseReportsPage = lazyWithRetry(
 const ExpenseReportFormPage = lazyWithRetry(
   () => import('./pages/ExpenseReportFormPage'),
 );
+const ExpenseReportDetailPage = lazyWithRetry(
+  () => import('./pages/ExpenseReportDetailPage'),
+);
 
 // Check Requests
 const CheckRequestsPage = lazyWithRetry(
   () => import('./pages/CheckRequestsPage'),
+);
+const CheckRequestDetailPage = lazyWithRetry(
+  () => import('./pages/CheckRequestDetailPage'),
+);
+const CheckRequestFormPage = lazyWithRetry(
+  () => import('./pages/CheckRequestFormPage'),
 );
 
 // Dues
@@ -114,11 +123,23 @@ export const getFinanceRoutes = () => {
         path="/finance/expenses/new"
         element={<ExpenseReportFormPage />}
       />
+      <Route
+        path="/finance/expenses/:id"
+        element={<ExpenseReportDetailPage />}
+      />
 
       {/* Check Requests */}
       <Route
         path="/finance/check-requests"
         element={<CheckRequestsPage />}
+      />
+      <Route
+        path="/finance/check-requests/new"
+        element={<CheckRequestFormPage />}
+      />
+      <Route
+        path="/finance/check-requests/:id"
+        element={<CheckRequestDetailPage />}
       />
 
       {/* Dues */}

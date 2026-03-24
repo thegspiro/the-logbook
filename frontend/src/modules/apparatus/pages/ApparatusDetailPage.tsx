@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   Truck,
   Wrench,
@@ -44,7 +44,9 @@ type TabType = 'overview' | 'maintenance' | 'fuel' | 'operators' | 'equipment' |
 export const ApparatusDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = (searchParams.get('tab') as TabType) || 'overview';
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [maintenanceRecords, setMaintenanceRecords] = useState<ApparatusMaintenance[]>([]);
   const [fuelLogs, setFuelLogs] = useState<ApparatusFuelLog[]>([]);
   const [operators, setOperators] = useState<ApparatusOperator[]>([]);
@@ -113,6 +115,20 @@ export const ApparatusDetailPage: React.FC = () => {
       void loadTabData();
     }
   }, [id, activeTab, currentApparatus]);
+
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    if (tab === 'overview') {
+      setSearchParams({});
+    } else {
+      setSearchParams({ tab });
+    }
+  };
+
+  const handleTabAdd = (tab: TabType) => {
+    setActiveTab(tab);
+    setSearchParams({ tab, action: 'new' });
+  };
 
   const getTypeById = (typeId: string) => types.find((t) => t.id === typeId);
   const getStatusById = (statusId: string) => statuses.find((s) => s.id === statusId);
@@ -189,7 +205,7 @@ export const ApparatusDetailPage: React.FC = () => {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors flex-1 justify-center ${
                 activeTab === tab.id
                   ? 'bg-red-600 text-white'
@@ -215,36 +231,36 @@ export const ApparatusDetailPage: React.FC = () => {
 
         {activeTab === 'maintenance' && (
           <MaintenanceTab
-            id={id || ''}
             maintenanceRecords={maintenanceRecords}
             loadingTab={loadingTab}
             timezone={tz}
+            onAdd={() => handleTabAdd('maintenance')}
           />
         )}
 
         {activeTab === 'fuel' && (
           <FuelLogsTab
-            id={id || ''}
             fuelLogs={fuelLogs}
             loadingTab={loadingTab}
             timezone={tz}
+            onAdd={() => handleTabAdd('fuel')}
           />
         )}
 
         {activeTab === 'operators' && (
           <OperatorsTab
-            id={id || ''}
             operators={operators}
             loadingTab={loadingTab}
             timezone={tz}
+            onAdd={() => handleTabAdd('operators')}
           />
         )}
 
         {activeTab === 'equipment' && (
           <EquipmentTab
-            id={id || ''}
             equipment={equipment}
             loadingTab={loadingTab}
+            onAdd={() => handleTabAdd('equipment')}
           />
         )}
 
