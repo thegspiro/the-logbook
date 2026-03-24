@@ -8,11 +8,12 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
-import { apparatusOperatorService } from '../services/api';
+import { apparatusOperatorService, evocLevelService } from '../services/api';
 import type {
   ApparatusOperator,
   ApparatusOperatorCreate,
   ApparatusOperatorUpdate,
+  EvocLevel,
 } from '../types';
 
 interface OperatorModalProps {
@@ -25,6 +26,7 @@ interface OperatorModalProps {
 
 interface FormData {
   userId: string;
+  evocLevelId: string;
   isCertified: boolean;
   certificationDate: string;
   certificationExpiration: string;
@@ -39,6 +41,7 @@ interface FormData {
 
 const EMPTY: FormData = {
   userId: '',
+  evocLevelId: '',
   isCertified: false,
   certificationDate: '',
   certificationExpiration: '',
@@ -64,11 +67,21 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
 }) => {
   const [f, setF] = useState<FormData>(EMPTY);
   const [saving, setSaving] = useState(false);
+  const [evocLevels, setEvocLevels] = useState<EvocLevel[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void evocLevelService.getLevels().then(setEvocLevels).catch(() => {
+        /* EVOC levels may not be configured */
+      });
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (editOperator) {
       setF({
         userId: editOperator.userId,
+        evocLevelId: editOperator.evocLevelId ?? '',
         isCertified: editOperator.isCertified,
         certificationDate: editOperator.certificationDate?.split('T')[0] ?? '',
         certificationExpiration: editOperator.certificationExpiration?.split('T')[0] ?? '',
@@ -98,6 +111,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
     try {
       if (editOperator) {
         const payload: ApparatusOperatorUpdate = {
+          evocLevelId: f.evocLevelId || undefined,
           isCertified: f.isCertified,
           licenseVerified: f.licenseVerified,
           hasRestrictions: f.hasRestrictions,
@@ -115,6 +129,7 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
         const payload: ApparatusOperatorCreate = {
           apparatusId,
           userId: f.userId,
+          evocLevelId: f.evocLevelId || undefined,
           isCertified: f.isCertified,
           licenseVerified: f.licenseVerified,
           hasRestrictions: f.hasRestrictions,
@@ -158,6 +173,25 @@ export const OperatorModal: React.FC<OperatorModalProps> = ({
               placeholder="Enter user ID"
               required
             />
+          </div>
+        )}
+
+        {/* EVOC Level */}
+        {evocLevels.length > 0 && (
+          <div>
+            <label className={labelClass}>EVOC Certification Level</label>
+            <select
+              className={inputClass}
+              value={f.evocLevelId}
+              onChange={(e) => up('evocLevelId', e.target.value)}
+            >
+              <option value="">No EVOC level</option>
+              {evocLevels.map((level) => (
+                <option key={level.id} value={level.id}>
+                  Level {level.levelNumber} — {level.name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 

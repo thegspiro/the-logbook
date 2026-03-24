@@ -296,6 +296,16 @@ export interface AvailabilityRecord {
 }
 
 // ============================================================================
+// EVOC Warning (returned with driver assignments)
+// ============================================================================
+
+export interface EvocWarning {
+  type: string;
+  message: string;
+  severity: 'warning' | 'error';
+}
+
+// ============================================================================
 // Signup Response
 // ============================================================================
 

@@ -31,6 +31,7 @@ from app.models.apparatus import (
     ApparatusStatus,
     ApparatusStatusHistory,
     ApparatusType,
+    EvocLevel,
 )
 from app.schemas.apparatus import (
     ApparatusArchive,
@@ -1404,7 +1405,10 @@ class ApparatusService:
         query = (
             select(ApparatusOperator)
             .where(and_(*conditions))
-            .options(selectinload(ApparatusOperator.user))
+            .options(
+                selectinload(ApparatusOperator.user),
+                selectinload(ApparatusOperator.evoc_level),
+            )
             .offset(skip)
             .limit(limit)
         )

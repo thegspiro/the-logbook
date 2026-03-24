@@ -222,6 +222,9 @@ export interface Apparatus {
   // Staffing
   minStaffing: number;
 
+  // EVOC
+  requiredEvocLevelId: string | null;
+
   // Fire/EMS Specifications
   pumpCapacityGpm: number | null;
   tankCapacityGallons: number | null;
@@ -309,6 +312,7 @@ export interface Apparatus {
   // Nested relationships
   apparatusType?: ApparatusType;
   statusRecord?: ApparatusStatus;
+  requiredEvocLevel?: EvocLevelListItem;
 }
 
 export interface ApparatusListItem {
@@ -327,8 +331,10 @@ export interface ApparatusListItem {
   isArchived: boolean;
   hasDeficiency: boolean;
   deficiencySince: string | null;
+  requiredEvocLevelId: string | null;
   apparatusType?: ApparatusType;
   statusRecord?: ApparatusStatus;
+  requiredEvocLevel?: EvocLevelListItem;
 }
 
 export interface ApparatusCreate {
@@ -352,6 +358,7 @@ export interface ApparatusCreate {
   seatingCapacity?: number | undefined;
   gvwr?: number | undefined;
   minStaffing?: number | undefined;
+  requiredEvocLevelId?: string | undefined;
   pumpCapacityGpm?: number | undefined;
   tankCapacityGallons?: number | undefined;
   foamCapacityGallons?: number | undefined;
@@ -598,6 +605,53 @@ export interface ApparatusFuelLogCreate {
 }
 
 // =============================================================================
+// EVOC Level
+// =============================================================================
+
+export interface EvocLevel {
+  id: string;
+  organizationId: string | null;
+  levelNumber: number;
+  name: string;
+  code: string;
+  description: string | null;
+  isCumulative: boolean;
+  trainingProgramId: string | null;
+  isSystem: boolean;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EvocLevelCreate {
+  levelNumber: number;
+  name: string;
+  code: string;
+  description?: string;
+  isCumulative?: boolean;
+  trainingProgramId?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export type EvocLevelUpdate = Partial<EvocLevelCreate>;
+
+export interface EvocLevelListItem {
+  id: string;
+  levelNumber: number;
+  name: string;
+  code: string;
+}
+
+export interface EvocEligibilityCheck {
+  eligible: boolean;
+  warning: string | null;
+  requiredLevel: { id: string; levelNumber: number; name: string } | null;
+  userLevel: { id: string; levelNumber: number; name: string } | null;
+}
+
+// =============================================================================
 // Operator
 // =============================================================================
 
@@ -612,6 +666,7 @@ export interface ApparatusOperator {
   organizationId: string;
   apparatusId: string;
   userId: string;
+  evocLevelId: string | null;
   isCertified: boolean;
   certificationDate: string | null;
   certificationExpiration: string | null;
@@ -627,11 +682,13 @@ export interface ApparatusOperator {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  evocLevel: EvocLevelListItem | null;
 }
 
 export interface ApparatusOperatorCreate {
   apparatusId: string;
   userId: string;
+  evocLevelId?: string | undefined;
   isCertified?: boolean;
   certificationDate?: string;
   certificationExpiration?: string;

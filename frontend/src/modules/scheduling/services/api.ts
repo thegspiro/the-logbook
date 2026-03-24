@@ -47,6 +47,7 @@ import type {
   AvailabilityRecord,
   ShiftSignupResponse,
   EligiblePositionsResponse,
+  EvocWarning,
   SchedulingEligibilitySettings,
 } from '../types';
 import type {
@@ -348,8 +349,11 @@ export const schedulingService = {
       status: a.assignment_status ?? a.status ?? 'assigned',
     }));
   },
-  async createAssignment(shiftId: string, data: AssignmentCreate): Promise<Assignment> {
-    const response = await api.post<Assignment>(`/scheduling/shifts/${shiftId}/assignments`, data);
+  async createAssignment(shiftId: string, data: AssignmentCreate): Promise<Assignment & { evoc_warnings?: EvocWarning[] }> {
+    const response = await api.post<Assignment & { evoc_warnings?: EvocWarning[] }>(
+      `/scheduling/shifts/${shiftId}/assignments`,
+      data,
+    );
     return response.data;
   },
   async updateAssignment(assignmentId: string, data: AssignmentUpdate): Promise<Assignment> {

@@ -83,10 +83,17 @@ export const OperatorsTab: React.FC<OperatorsTabProps> = ({
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-theme-text-primary font-medium">Operator ID: {op.userId}</p>
-                  <p className="text-theme-text-muted text-sm">
-                    {op.isCertified ? 'Certified' : 'Not Certified'}
-                    {op.certificationExpiration && ` • Expires ${formatDate(op.certificationExpiration, timezone)}`}
-                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <p className="text-theme-text-muted text-sm">
+                      {op.isCertified ? 'Certified' : 'Not Certified'}
+                      {op.certificationExpiration && ` • Expires ${formatDate(op.certificationExpiration, timezone)}`}
+                    </p>
+                    {op.evocLevel && (
+                      <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                        {op.evocLevel.name}
+                      </span>
+                    )}
+                  </div>
                   {op.licenseTypeRequired && (
                     <p className="text-theme-text-muted text-xs mt-0.5">
                       License: {op.licenseTypeRequired}

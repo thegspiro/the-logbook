@@ -35,6 +35,7 @@ from app.models.apparatus import (
     DefaultApparatusStatus,
     DefaultApparatusType,
     EquipmentCheckTemplate,
+    EvocLevel,
     FuelType,
     MaintenanceCategory,
     MaintenanceIntervalUnit,

@@ -182,6 +182,41 @@ class TrainingProgramService:
                 },
             )
 
+    async def _handle_evoc_completion(
+        self,
+        program: TrainingProgram,
+        enrollment: ProgramEnrollment,
+    ) -> None:
+        """When a training program linked to an EVOC level completes,
+        auto-add the member as an operator on qualifying apparatus."""
+        from app.models.apparatus import EvocLevel
+        from app.services.evoc_level_service import EvocLevelService
+
+        evoc_result = await self.db.execute(
+            select(EvocLevel).where(
+                EvocLevel.training_program_id == str(program.id),
+                EvocLevel.organization_id == str(program.organization_id),
+                EvocLevel.is_active.is_(True),
+            )
+        )
+        evoc_level = evoc_result.scalar_one_or_none()
+        if not evoc_level:
+            return
+
+        evoc_service = EvocLevelService(self.db)
+        new_operators = await evoc_service.auto_add_operators_for_evoc_completion(
+            user_id=str(enrollment.user_id),
+            evoc_level_id=str(evoc_level.id),
+            organization_id=str(program.organization_id),
+        )
+
+        if new_operators:
+            logger.info(
+                f"Auto-added {len(new_operators)} operator record(s) for user "
+                f"{enrollment.user_id} after EVOC level {evoc_level.level_number} "
+                f"completion"
+            )
+
     # ==================== Training Requirement Methods ====================
 
     async def create_training_requirement(
@@ -1010,6 +1045,10 @@ class TrainingProgramService:
                     await self._notify_program_completion(
                         enrollment, program, user, UUID(str(program.organization_id))
                     )
+
+                    # Auto-add as operator on matching apparatus when
+                    # an EVOC training program completes
+                    await self._handle_evoc_completion(program, enrollment)
             except Exception as e:
                 logger.error(f"Failed to send program completion notification: {e}")
 

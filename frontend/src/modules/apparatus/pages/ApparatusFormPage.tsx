@@ -14,8 +14,8 @@ import {
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useApparatusStore } from '../store/apparatusStore';
-import { apparatusService } from '../services/api';
-import type { ApparatusCreate, ApparatusUpdate, FuelType } from '../types';
+import { apparatusService, evocLevelService } from '../services/api';
+import type { ApparatusCreate, ApparatusUpdate, EvocLevel, FuelType } from '../types';
 
 export const ApparatusFormPage: React.FC = () => {
   const navigate = useNavigate();
@@ -34,6 +34,7 @@ export const ApparatusFormPage: React.FC = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [evocLevels, setEvocLevels] = useState<EvocLevel[]>([]);
 
   // Form state
   const [formData, setFormData] = useState<ApparatusCreate>({
@@ -57,6 +58,7 @@ export const ApparatusFormPage: React.FC = () => {
     seatingCapacity: undefined,
     gvwr: undefined,
     minStaffing: 1,
+    requiredEvocLevelId: '',
     pumpCapacityGpm: undefined,
     tankCapacityGallons: undefined,
     foamCapacityGallons: undefined,
@@ -98,6 +100,7 @@ export const ApparatusFormPage: React.FC = () => {
 
     void fetchTypes();
     void fetchStatuses();
+    void evocLevelService.getLevels().then(setEvocLevels).catch(() => { /* optional */ });
 
     if (isEditing && id) {
       void fetchApparatus(id);
@@ -128,6 +131,7 @@ export const ApparatusFormPage: React.FC = () => {
         seatingCapacity: currentApparatus.seatingCapacity ?? undefined,
         gvwr: currentApparatus.gvwr ?? undefined,
         minStaffing: currentApparatus.minStaffing ?? 1,
+        requiredEvocLevelId: currentApparatus.requiredEvocLevelId || '',
         pumpCapacityGpm: currentApparatus.pumpCapacityGpm ?? undefined,
         tankCapacityGallons: currentApparatus.tankCapacityGallons ?? undefined,
         foamCapacityGallons: currentApparatus.foamCapacityGallons ?? undefined,
@@ -510,6 +514,27 @@ export const ApparatusFormPage: React.FC = () => {
                   Minimum crew members required to staff this apparatus
                 </p>
               </div>
+              {evocLevels.length > 0 && (
+                <div>
+                  <label className="block text-sm text-theme-text-secondary mb-1">Required EVOC Level</label>
+                  <select
+                    name="requiredEvocLevelId"
+                    value={formData.requiredEvocLevelId ?? ''}
+                    onChange={handleChange}
+                    className="form-input"
+                  >
+                    <option value="">No EVOC requirement</option>
+                    {evocLevels.map((level) => (
+                      <option key={level.id} value={level.id}>
+                        Level {level.levelNumber} — {level.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-theme-text-muted text-xs mt-1">
+                    EVOC level required to drive this apparatus
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm text-theme-text-secondary mb-1">Seating Capacity</label>
                 <input

@@ -426,6 +426,13 @@ class Apparatus(Base):
     # Staffing
     min_staffing = Column(Integer, default=1, nullable=False, server_default="1")
 
+    # EVOC level required to drive this apparatus
+    required_evoc_level_id = Column(
+        String(36),
+        ForeignKey("evoc_levels.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # ===========================================
     # Fire/EMS Specific Specifications
     # ===========================================
@@ -565,6 +572,9 @@ class Apparatus(Base):
     )
     primary_station = relationship("Location", foreign_keys=[primary_station_id])
     current_location = relationship("Location", foreign_keys=[current_location_id])
+    required_evoc_level = relationship(
+        "EvocLevel", foreign_keys=[required_evoc_level_id]
+    )
 
     # Related records
     photos = relationship(
@@ -1148,6 +1158,74 @@ class ApparatusFuelLog(Base):
 
 
 # =============================================================================
+# EVOC Level
+# =============================================================================
+
+
+class EvocLevel(Base):
+    """
+    Organization-configurable EVOC (Emergency Vehicle Operator Course) levels.
+
+    EVOC levels are a national standard (1-4) but departments can customize
+    which level each apparatus requires based on local regulations and vehicle
+    weight classifications. Levels are cumulative by default (EVOC 3 implies
+    EVOC 2 privileges) but this can be overridden per level for exceptions.
+    """
+
+    __tablename__ = "evoc_levels"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    level_number = Column(Integer, nullable=False)
+    name = Column(String(100), nullable=False)
+    code = Column(String(50), nullable=False)
+    description = Column(Text, nullable=True)
+
+    # Cumulative behavior: when True, holding this level also grants all
+    # lower-numbered levels. Set False for local regulation exceptions.
+    is_cumulative = Column(Boolean, default=True, nullable=False)
+
+    # Link to the training program that certifies this level
+    training_program_id = Column(
+        String(36),
+        ForeignKey("training_programs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    is_system = Column(Boolean, default=False, nullable=False)
+    sort_order = Column(Integer, default=0, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    training_program = relationship("TrainingProgram", foreign_keys=[training_program_id])
+
+    __table_args__ = (
+        Index(
+            "idx_evoc_levels_org_level",
+            "organization_id",
+            "level_number",
+            unique=True,
+        ),
+        Index("idx_evoc_levels_org_code", "organization_id", "code", unique=True),
+        Index("idx_evoc_levels_active", "is_active"),
+    )
+
+    def __repr__(self):
+        return f"<EvocLevel(level={self.level_number}, name={self.name})>"
+
+
+# =============================================================================
 # Apparatus Operator
 # =============================================================================
 
@@ -1179,6 +1257,13 @@ class ApparatusOperator(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+
+    # EVOC certification level achieved by this operator
+    evoc_level_id = Column(
+        String(36),
+        ForeignKey("evoc_levels.id", ondelete="SET NULL"),
+        nullable=True,
     )
 
     # Certification
@@ -1217,6 +1302,7 @@ class ApparatusOperator(Base):
     # Relationships
     apparatus = relationship("Apparatus", back_populates="operators")
     user = relationship("User", foreign_keys=[user_id])
+    evoc_level = relationship("EvocLevel", foreign_keys=[evoc_level_id])
 
     __table_args__ = (
         Index("idx_apparatus_operators_apparatus", "apparatus_id"),
@@ -1228,6 +1314,7 @@ class ApparatusOperator(Base):
             unique=True,
         ),
         Index("idx_apparatus_operators_active", "is_active"),
+        Index("idx_apparatus_operators_evoc", "evoc_level_id"),
     )
 
     def __repr__(self):

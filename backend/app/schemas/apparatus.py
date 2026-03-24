@@ -250,6 +250,22 @@ class ApparatusStatusListItem(BaseModel):
 
 
 # =============================================================================
+# EVOC Level List Item (must be before Apparatus schemas that reference it)
+# =============================================================================
+
+
+class EvocLevelListItem(BaseModel):
+    """Lightweight EVOC level for embedding in other responses"""
+
+    id: str
+    level_number: int
+    name: str
+    code: str
+
+    model_config = _response_config
+
+
+# =============================================================================
 # Main Apparatus Schemas
 # =============================================================================
 
@@ -301,6 +317,11 @@ class ApparatusBase(BaseModel):
     # Staffing
     min_staffing: int = Field(
         default=1, ge=1, le=50, description="Minimum staffing level for this apparatus"
+    )
+
+    # EVOC
+    required_evoc_level_id: Optional[str] = Field(
+        None, description="EVOC level required to drive this apparatus"
     )
 
     # Fire/EMS Specifications
@@ -414,6 +435,9 @@ class ApparatusUpdate(BaseModel):
     # Staffing
     min_staffing: Optional[int] = Field(None, ge=1, le=50)
 
+    # EVOC
+    required_evoc_level_id: Optional[str] = None
+
     # Fire/EMS Specifications
     pump_capacity_gpm: Optional[int] = Field(None, ge=0)
     tank_capacity_gallons: Optional[int] = Field(None, ge=0)
@@ -516,6 +540,7 @@ class ApparatusResponse(ApparatusBase):
     # Nested relationships (optional, populated when needed)
     apparatus_type: Optional[ApparatusTypeListItem] = None
     status_record: Optional[ApparatusStatusListItem] = None
+    required_evoc_level: Optional[EvocLevelListItem] = None
 
     model_config = _response_config
 
@@ -538,10 +563,12 @@ class ApparatusListItem(BaseModel):
     is_archived: bool
     has_deficiency: bool = False
     deficiency_since: Optional[datetime] = None
+    required_evoc_level_id: Optional[str] = None
 
     # Nested type and status info
     apparatus_type: Optional[ApparatusTypeListItem] = None
     status_record: Optional[ApparatusStatusListItem] = None
+    required_evoc_level: Optional[EvocLevelListItem] = None
 
     model_config = _response_config
 
@@ -928,6 +955,58 @@ class ApparatusFuelLogResponse(ApparatusFuelLogBase):
 
 
 # =============================================================================
+# EVOC Level Schemas
+# =============================================================================
+
+
+class EvocLevelBase(BaseModel):
+    """Base EVOC level schema"""
+
+    level_number: int = Field(..., ge=1, le=10, description="EVOC level number")
+    name: str = Field(..., min_length=1, max_length=100)
+    code: str = Field(..., min_length=1, max_length=50)
+    description: Optional[str] = None
+    is_cumulative: bool = Field(
+        default=True,
+        description="When True, holding this level grants all lower-numbered levels",
+    )
+    training_program_id: Optional[str] = Field(
+        None, description="Training program that certifies this level"
+    )
+    sort_order: int = Field(default=0)
+    is_active: bool = Field(default=True)
+
+
+class EvocLevelCreate(EvocLevelBase):
+    """Schema for creating an EVOC level"""
+
+
+class EvocLevelUpdate(BaseModel):
+    """Schema for updating an EVOC level"""
+
+    level_number: Optional[int] = Field(None, ge=1, le=10)
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    code: Optional[str] = Field(None, min_length=1, max_length=50)
+    description: Optional[str] = None
+    is_cumulative: Optional[bool] = None
+    training_program_id: Optional[str] = None
+    sort_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
+class EvocLevelResponse(EvocLevelBase):
+    """Schema for EVOC level response"""
+
+    id: str
+    organization_id: Optional[str] = None
+    is_system: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+# =============================================================================
 # Apparatus Operator Schemas
 # =============================================================================
 
@@ -947,6 +1026,10 @@ class ApparatusOperatorBase(BaseModel):
 
     apparatus_id: str = Field(..., description="Apparatus ID")
     user_id: str = Field(..., description="User ID")
+
+    evoc_level_id: Optional[str] = Field(
+        None, description="EVOC certification level achieved"
+    )
 
     is_certified: bool = Field(default=True)
     certification_date: Optional[date] = None
@@ -970,6 +1053,8 @@ class ApparatusOperatorCreate(ApparatusOperatorBase):
 
 class ApparatusOperatorUpdate(BaseModel):
     """Schema for updating operator"""
+
+    evoc_level_id: Optional[str] = None
 
     is_certified: Optional[bool] = None
     certification_date: Optional[date] = None
@@ -996,6 +1081,8 @@ class ApparatusOperatorResponse(ApparatusOperatorBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    evoc_level: Optional[EvocLevelListItem] = None
 
     model_config = _response_config
 

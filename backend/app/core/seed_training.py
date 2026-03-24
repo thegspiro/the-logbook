@@ -1518,6 +1518,585 @@ async def seed_pipeline_templates(
     return program_ids
 
 
+async def seed_evoc_levels(
+    db: AsyncSession,
+    organization_id: str,
+    created_by: str,
+) -> List[str]:
+    """
+    Seed default EVOC (Emergency Vehicle Operator Course) levels and
+    create separate training programs for each level.
+
+    Standard EVOC levels:
+      1 - Personal/staff vehicles
+      2 - Ambulance/EMS (lighter emergency vehicles)
+      3 - Engine/rescue/tanker (fire suppression apparatus)
+      4 - Aerial/tiller/quint (heavy aerial apparatus)
+
+    Each level gets a linked training program template. Levels are
+    cumulative by default (EVOC 3 grants EVOC 2 privileges).
+    """
+    from app.models.apparatus import EvocLevel
+
+    logger.info(f"Seeding EVOC levels for organization {organization_id}")
+
+    evoc_definitions = [
+        {
+            "level_number": 1,
+            "name": "EVOC 1 — Personal Vehicles",
+            "code": "EVOC-1",
+            "description": (
+                "Basic emergency vehicle operations for staff cars, "
+                "command vehicles, and personal vehicles used in an "
+                "official capacity."
+            ),
+            "program_name": "EVOC Level 1 — Personal Vehicle Operator",
+            "program_code": "EVOC-1-CERT",
+            "program_desc": (
+                "EVOC Level 1 certification for personal/staff vehicle "
+                "operation. Covers defensive driving, emergency response "
+                "driving basics, and department vehicle policies."
+            ),
+            "target_position": "driver_candidate",
+            "time_limit_days": 30,
+            "phases": [
+                {
+                    "phase_number": 1,
+                    "name": "EVOC 1 Classroom & Practical",
+                    "description": "Defensive driving and emergency response driving fundamentals.",
+                    "time_limit_days": 30,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "EVOC 1 Classroom Training",
+                            "description": "Complete classroom training on defensive driving, department policies, and emergency response driving.",
+                            "requirement_type": RequirementType.HOURS,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_hours": 8.0,
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                        {
+                            "name": "EVOC 1 Driving Evaluation",
+                            "description": "Pass the EVOC Level 1 driving evaluation.",
+                            "requirement_type": RequirementType.SKILLS_EVALUATION,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_skills": [
+                                "Pre-trip vehicle inspection",
+                                "Defensive driving evaluation",
+                                "Parking and backing maneuvers",
+                            ],
+                            "is_required": True,
+                            "sort_order": 2,
+                        },
+                    ],
+                    "milestones": [
+                        {
+                            "name": "EVOC Level 1 Certified",
+                            "description": "Member has completed EVOC Level 1 certification.",
+                            "completion_percentage_threshold": 100.0,
+                            "notification_message": "Congratulations! You have earned EVOC Level 1 certification.",
+                        },
+                    ],
+                },
+            ],
+        },
+        {
+            "level_number": 2,
+            "name": "EVOC 2 — Ambulance/EMS",
+            "code": "EVOC-2",
+            "description": (
+                "Emergency vehicle operations for ambulances and lighter "
+                "emergency vehicles. Covers patient transport driving, "
+                "intersection clearing, and EMS-specific driving skills."
+            ),
+            "program_name": "EVOC Level 2 — Ambulance/EMS Operator",
+            "program_code": "EVOC-2-CERT",
+            "program_desc": (
+                "EVOC Level 2 certification for ambulance and EMS vehicle "
+                "operation. Covers emergency driving, patient transport, "
+                "intersection procedures, and EMS-specific skills."
+            ),
+            "target_position": "driver_candidate",
+            "time_limit_days": 60,
+            "phases": [
+                {
+                    "phase_number": 1,
+                    "name": "EVOC 2 Classroom Training",
+                    "description": "Emergency driving theory, laws, and EMS-specific driving.",
+                    "time_limit_days": 30,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "EVOC 2 Course Completion",
+                            "description": "Complete the EVOC Level 2 classroom course covering emergency driving and EMS vehicle operations.",
+                            "requirement_type": RequirementType.HOURS,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_hours": 16.0,
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                        {
+                            "name": "Ambulance Familiarization",
+                            "description": "Complete familiarization with department ambulances.",
+                            "requirement_type": RequirementType.CHECKLIST,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "checklist_items": [
+                                "Pre-trip inspection procedures",
+                                "Patient compartment familiarization",
+                                "Equipment location and operation",
+                                "Emergency systems (lights, siren, air horn)",
+                            ],
+                            "is_required": True,
+                            "sort_order": 2,
+                        },
+                    ],
+                    "milestones": [],
+                },
+                {
+                    "phase_number": 2,
+                    "name": "EVOC 2 Practical Evaluation",
+                    "description": "Practical driving skills for ambulance/EMS vehicles.",
+                    "time_limit_days": 30,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "Supervised Driving Hours",
+                            "description": "Complete supervised driving hours on department ambulances.",
+                            "requirement_type": RequirementType.HOURS,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_hours": 16.0,
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                        {
+                            "name": "EVOC 2 Driving Skills Evaluation",
+                            "description": "Pass the EVOC Level 2 practical driving evaluation.",
+                            "requirement_type": RequirementType.SKILLS_EVALUATION,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_skills": [
+                                "Serpentine/cone course",
+                                "Backing and parking maneuvers",
+                                "Intersection clearing procedures",
+                                "Emergency response driving",
+                                "Patient transport (smooth driving)",
+                            ],
+                            "is_required": True,
+                            "sort_order": 2,
+                        },
+                    ],
+                    "milestones": [
+                        {
+                            "name": "EVOC Level 2 Certified",
+                            "description": "Member has completed EVOC Level 2 certification.",
+                            "completion_percentage_threshold": 100.0,
+                            "notification_message": "Congratulations! You have earned EVOC Level 2 — Ambulance/EMS certification.",
+                        },
+                    ],
+                },
+            ],
+        },
+        {
+            "level_number": 3,
+            "name": "EVOC 3 — Engine/Rescue",
+            "code": "EVOC-3",
+            "description": (
+                "Emergency vehicle operations for engines, rescue vehicles, "
+                "tankers, and similar fire suppression apparatus. Covers "
+                "pumper operations, water supply, and heavy vehicle driving."
+            ),
+            "program_name": "EVOC Level 3 — Engine/Rescue Operator",
+            "program_code": "EVOC-3-CERT",
+            "program_desc": (
+                "EVOC Level 3 certification for engine, rescue, and tanker "
+                "operation. Covers heavy vehicle driving, pump operations, "
+                "water supply, and fire suppression apparatus skills."
+            ),
+            "target_position": "driver_candidate",
+            "time_limit_days": 180,
+            "phases": [
+                {
+                    "phase_number": 1,
+                    "name": "EVOC 3 Classroom & Driving Fundamentals",
+                    "description": "Heavy vehicle driving theory and apparatus familiarization.",
+                    "time_limit_days": 60,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "EVOC 3 Course Completion",
+                            "description": "Complete the EVOC Level 3 classroom course covering heavy apparatus operations.",
+                            "requirement_type": RequirementType.HOURS,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_hours": 24.0,
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                        {
+                            "name": "Apparatus Familiarization",
+                            "description": "Complete familiarization with department engines, rescues, and tankers.",
+                            "requirement_type": RequirementType.CHECKLIST,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "checklist_items": [
+                                "Engine familiarization complete",
+                                "Rescue familiarization complete",
+                                "Tanker/Tender familiarization complete",
+                                "Pre-trip inspection procedures",
+                            ],
+                            "is_required": True,
+                            "sort_order": 2,
+                        },
+                        {
+                            "name": "Supervised Driving Hours",
+                            "description": "Complete supervised driving hours on heavy apparatus.",
+                            "requirement_type": RequirementType.HOURS,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_hours": 20.0,
+                            "is_required": True,
+                            "sort_order": 3,
+                        },
+                    ],
+                    "milestones": [],
+                },
+                {
+                    "phase_number": 2,
+                    "name": "Pumper Operations",
+                    "description": "Pump operations including hydraulics, water supply, and relay pumping.",
+                    "time_limit_days": 90,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "Pump Operations Theory",
+                            "description": "Complete classroom training on pump theory, hydraulics, friction loss, and water supply calculations.",
+                            "requirement_type": RequirementType.HOURS,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_hours": 16.0,
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                        {
+                            "name": "Pump Operations Practical Skills",
+                            "description": "Demonstrate proficiency in all pump operations.",
+                            "requirement_type": RequirementType.SKILLS_EVALUATION,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_skills": [
+                                "Pump engagement and operation",
+                                "Hydrant supply operations",
+                                "Drafting operations",
+                                "Relay pumping",
+                                "Multi-line water supply",
+                                "Friction loss calculations (practical)",
+                            ],
+                            "is_required": True,
+                            "sort_order": 2,
+                        },
+                    ],
+                    "milestones": [],
+                },
+                {
+                    "phase_number": 3,
+                    "name": "EVOC 3 Final Evaluation",
+                    "description": "Comprehensive evaluation for engine/rescue operator certification.",
+                    "time_limit_days": 30,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "EVOC 3 Comprehensive Exam",
+                            "description": "Pass the comprehensive written and practical examination.",
+                            "requirement_type": RequirementType.CHECKLIST,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "checklist_items": [
+                                "Written examination passed (minimum 80%)",
+                                "Pumper operations practical passed",
+                                "EVOC driving practical passed",
+                                "Officer recommendation received",
+                            ],
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                    ],
+                    "milestones": [
+                        {
+                            "name": "EVOC Level 3 Certified",
+                            "description": "Member has completed EVOC Level 3 certification.",
+                            "completion_percentage_threshold": 100.0,
+                            "notification_message": "Congratulations! You have earned EVOC Level 3 — Engine/Rescue certification!",
+                        },
+                    ],
+                },
+            ],
+        },
+        {
+            "level_number": 4,
+            "name": "EVOC 4 — Aerial/Tiller",
+            "code": "EVOC-4",
+            "description": (
+                "Emergency vehicle operations for aerial apparatus, tillers, "
+                "quints, and other heavy aerial vehicles. Covers aerial "
+                "operations, tiller driving, and advanced positioning."
+            ),
+            "program_name": "EVOC Level 4 — Aerial/Tiller Operator",
+            "program_code": "EVOC-4-CERT",
+            "program_desc": (
+                "EVOC Level 4 certification for aerial apparatus and tiller "
+                "operation. Covers aerial ladder deployment, platform ops, "
+                "tiller driving, and advanced apparatus positioning."
+            ),
+            "target_position": "driver_candidate",
+            "time_limit_days": 180,
+            "phases": [
+                {
+                    "phase_number": 1,
+                    "name": "EVOC 4 Classroom & Familiarization",
+                    "description": "Aerial apparatus theory, safety, and familiarization.",
+                    "time_limit_days": 60,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "EVOC 4 Course Completion",
+                            "description": "Complete the EVOC Level 4 classroom course covering aerial apparatus operations.",
+                            "requirement_type": RequirementType.HOURS,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_hours": 24.0,
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                        {
+                            "name": "Aerial Apparatus Familiarization",
+                            "description": "Complete familiarization with department aerial apparatus.",
+                            "requirement_type": RequirementType.CHECKLIST,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "checklist_items": [
+                                "Truck/Ladder familiarization complete",
+                                "Tiller familiarization complete (if applicable)",
+                                "Quint familiarization complete (if applicable)",
+                                "Pre-trip inspection procedures",
+                                "Outrigger/stabilizer operation",
+                            ],
+                            "is_required": True,
+                            "sort_order": 2,
+                        },
+                    ],
+                    "milestones": [],
+                },
+                {
+                    "phase_number": 2,
+                    "name": "Aerial Operations",
+                    "description": "Aerial ladder, platform, and tiller driving operations.",
+                    "time_limit_days": 90,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "Aerial Operations Training",
+                            "description": "Complete classroom and practical training on aerial apparatus operations.",
+                            "requirement_type": RequirementType.HOURS,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_hours": 24.0,
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                        {
+                            "name": "Aerial Operations Skills",
+                            "description": "Demonstrate proficiency in aerial apparatus operations.",
+                            "requirement_type": RequirementType.SKILLS_EVALUATION,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "required_skills": [
+                                "Aerial apparatus positioning and setup",
+                                "Aerial ladder deployment and operation",
+                                "Platform/bucket operations",
+                                "Aerial waterway operations",
+                                "Ground stabilization/outriggers",
+                            ],
+                            "is_required": True,
+                            "sort_order": 2,
+                        },
+                    ],
+                    "milestones": [],
+                },
+                {
+                    "phase_number": 3,
+                    "name": "EVOC 4 Final Evaluation",
+                    "description": "Comprehensive evaluation for aerial/tiller operator certification.",
+                    "time_limit_days": 30,
+                    "requires_manual_advancement": True,
+                    "requirements": [
+                        {
+                            "name": "EVOC 4 Comprehensive Exam",
+                            "description": "Pass the comprehensive written and practical examination.",
+                            "requirement_type": RequirementType.CHECKLIST,
+                            "source": RequirementSource.DEPARTMENT,
+                            "frequency": RequirementFrequency.ONE_TIME,
+                            "due_date_type": DueDateType.FIXED_DATE,
+                            "checklist_items": [
+                                "Written examination passed (minimum 80%)",
+                                "Aerial operations practical passed",
+                                "EVOC driving practical passed",
+                                "Tiller driving practical passed (if applicable)",
+                                "Officer recommendation received",
+                            ],
+                            "is_required": True,
+                            "sort_order": 1,
+                        },
+                    ],
+                    "milestones": [
+                        {
+                            "name": "EVOC Level 4 Certified",
+                            "description": "Member has completed EVOC Level 4 certification.",
+                            "completion_percentage_threshold": 100.0,
+                            "notification_message": "Congratulations! You have earned EVOC Level 4 — Aerial/Tiller certification!",
+                        },
+                    ],
+                },
+            ],
+        },
+    ]
+
+    evoc_level_ids: List[str] = []
+
+    for evoc_def in evoc_definitions:
+        # Check if EVOC level already exists
+        existing_result = await db.execute(
+            select(EvocLevel).where(
+                EvocLevel.organization_id == organization_id,
+                EvocLevel.code == evoc_def["code"],
+            )
+        )
+        if existing_result.scalar_one_or_none():
+            logger.info(f"EVOC level already exists: {evoc_def['name']}")
+            continue
+
+        # Create the training program for this level
+        program_id = generate_uuid()
+        program = TrainingProgram(
+            id=program_id,
+            organization_id=organization_id,
+            name=evoc_def["program_name"],
+            description=evoc_def["program_desc"],
+            code=evoc_def["program_code"],
+            target_position=evoc_def["target_position"],
+            structure_type=ProgramStructureType.PHASES,
+            time_limit_days=evoc_def["time_limit_days"],
+            warning_days_before=30,
+            is_template=True,
+            active=True,
+            created_by=created_by,
+        )
+        db.add(program)
+
+        # Create phases and requirements (reusing pipeline template logic)
+        for phase_data in evoc_def["phases"]:
+            phase_id = generate_uuid()
+            phase = ProgramPhase(
+                id=phase_id,
+                program_id=program_id,
+                phase_number=phase_data["phase_number"],
+                name=phase_data["name"],
+                description=phase_data.get("description", ""),
+                time_limit_days=phase_data.get("time_limit_days"),
+                requires_manual_advancement=phase_data.get(
+                    "requires_manual_advancement", False
+                ),
+            )
+            db.add(phase)
+
+            for req_data in phase_data.get("requirements", []):
+                req_id = generate_uuid()
+                req = TrainingRequirement(
+                    id=req_id,
+                    organization_id=organization_id,
+                    name=req_data["name"],
+                    description=req_data.get("description", ""),
+                    requirement_type=req_data["requirement_type"],
+                    source=req_data.get("source", RequirementSource.DEPARTMENT),
+                    frequency=req_data.get("frequency", RequirementFrequency.ONE_TIME),
+                    due_date_type=req_data.get("due_date_type", DueDateType.FIXED_DATE),
+                    is_required=req_data.get("is_required", True),
+                    required_hours=req_data.get("required_hours"),
+                    required_skills=req_data.get("required_skills"),
+                    checklist_items=req_data.get("checklist_items"),
+                    created_by=created_by,
+                )
+                db.add(req)
+
+                link = ProgramRequirement(
+                    id=generate_uuid(),
+                    program_id=program_id,
+                    phase_id=phase_id,
+                    requirement_id=req_id,
+                    is_required=req_data.get("is_required", True),
+                    sort_order=req_data.get("sort_order", 0),
+                )
+                db.add(link)
+
+            for ms_data in phase_data.get("milestones", []):
+                milestone = ProgramMilestone(
+                    id=generate_uuid(),
+                    program_id=program_id,
+                    phase_id=phase_id,
+                    name=ms_data["name"],
+                    description=ms_data.get("description", ""),
+                    completion_percentage_threshold=ms_data.get(
+                        "completion_percentage_threshold", 100.0
+                    ),
+                    notification_message=ms_data.get("notification_message"),
+                )
+                db.add(milestone)
+
+        await db.flush()
+
+        # Create the EVOC level record linked to the program
+        evoc_level = EvocLevel(
+            id=generate_uuid(),
+            organization_id=organization_id,
+            level_number=evoc_def["level_number"],
+            name=evoc_def["name"],
+            code=evoc_def["code"],
+            description=evoc_def["description"],
+            is_cumulative=True,
+            training_program_id=program_id,
+            is_system=True,
+            sort_order=evoc_def["level_number"],
+            is_active=True,
+        )
+        db.add(evoc_level)
+        evoc_level_ids.append(evoc_level.id)
+        logger.info(f"Seeded EVOC level: {evoc_def['name']}")
+
+    await db.commit()
+    return evoc_level_ids
+
+
 async def seed_training_data(
     db: AsyncSession,
     organization_id: str,
@@ -1526,8 +2105,8 @@ async def seed_training_data(
     """
     Orchestrate seeding of all training data.
 
-    Seeds categories, courses, and requirements in order, passing the
-    category map to courses and requirements for proper linking.
+    Seeds categories, courses, requirements, pipeline templates, and
+    EVOC certification levels in order.
 
     Args:
         db: Async database session
@@ -1535,7 +2114,7 @@ async def seed_training_data(
         created_by: User ID of the creator
 
     Returns:
-        Dictionary with category_map, course_ids, and requirement_ids
+        Dictionary with category_map, course_ids, requirement_ids, and evoc_level_ids
     """
     logger.info(f"Starting training data seeding for organization {organization_id}")
 
@@ -1555,10 +2134,14 @@ async def seed_training_data(
     # 4. Seed pipeline templates (programs with phases, requirements, milestones)
     pipeline_ids = await seed_pipeline_templates(db, organization_id, created_by)
 
+    # 5. Seed EVOC levels with per-level training programs
+    evoc_level_ids = await seed_evoc_levels(db, organization_id, created_by)
+
     logger.info("Training data seeding completed!")
     return {
         "category_map": category_map,
         "course_ids": course_ids,
         "requirement_ids": requirement_ids,
         "pipeline_ids": pipeline_ids,
+        "evoc_level_ids": evoc_level_ids,
     }
