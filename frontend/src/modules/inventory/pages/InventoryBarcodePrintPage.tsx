@@ -456,6 +456,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
       {/* Dynamic print styles */}
       <style>
         {`
+          /* @page must be top-level — browsers ignore size when nested in @media */
+          @page {
+            size: ${preset.pageWidth} ${preset.pageHeight};
+            margin: ${isThermal ? '0' : '0.5in 0.19in'};
+          }
+
           @media print {
             /* ── Hide everything except labels ── */
             .print-controls { display: none !important; }
@@ -484,11 +490,6 @@ const InventoryBarcodePrintPage: React.FC = () => {
             /* Strip background gradient from the layout root */
             .min-h-screen {
               background: white !important;
-            }
-
-            @page {
-              size: ${preset.pageWidth} ${preset.pageHeight};
-              margin: ${isThermal ? '0' : '0.5in 0.19in'};
             }
 
             .barcode-labels-container {
