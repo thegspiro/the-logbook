@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ClipboardCheck,
   CheckCircle,
@@ -8,6 +9,7 @@ import {
   Search,
   ChevronDown,
   ChevronUp,
+  Settings,
   Loader2,
   Truck,
   Calendar,
@@ -22,6 +24,7 @@ import type { ActiveChecklistRecord } from '../../modules/scheduling/services/ap
 import { formatDate, formatTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
@@ -78,6 +81,8 @@ const statusBadge = (status: string) => {
 
 export const MyChecklistsPage: React.FC = () => {
   const timezone = useTimezone();
+  const { checkPermission } = useAuthStore();
+  const canManage = checkPermission('scheduling.manage') || checkPermission('equipment_check.manage');
 
   // Active checklists
   const [loading, setLoading] = useState(true);
@@ -303,9 +308,20 @@ export const MyChecklistsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <ClipboardCheck className="h-6 w-6 text-theme-text-primary" />
-        <h1 className="text-xl font-bold text-theme-text-primary">My Equipment Checklists</h1>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <ClipboardCheck className="h-6 w-6 text-theme-text-primary" />
+          <h1 className="text-xl font-bold text-theme-text-primary">My Equipment Checklists</h1>
+        </div>
+        {canManage && (
+          <Link
+            to="/scheduling/settings?tab=equipment"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            Manage Templates
+          </Link>
+        )}
       </div>
 
       {/* ============================================================= */}

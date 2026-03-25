@@ -35,7 +35,7 @@ import { EligibilitySettingsCard } from "./EligibilitySettingsCard";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type SettingsTab = "general" | "apparatus" | "notifications" | "equipment" | "eligibility";
+export type SettingsTab = "general" | "apparatus" | "notifications" | "equipment" | "eligibility";
 
 const SETTINGS_TABS: {
   id: SettingsTab;
@@ -63,14 +63,16 @@ interface ShiftSettingsPanelProps {
       | undefined;
   }>;
   onNavigateToTemplates: () => void;
+  defaultTab?: SettingsTab | undefined;
 }
 
 export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   templates,
   apparatusList,
   onNavigateToTemplates,
+  defaultTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab || "general");
   const [settings, setSettings] = useState<ShiftSettings>(() => {
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
