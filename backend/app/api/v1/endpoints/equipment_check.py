@@ -40,6 +40,7 @@ from app.schemas.equipment_check import (
     ShiftCheckSummary,
     ShiftEquipmentCheckCreate,
     ShiftEquipmentCheckResponse,
+    StandaloneEquipmentCheckCreate,
     TemplateChangeLogListResponse,
 )
 from app.services.equipment_check_service import EquipmentCheckService
@@ -551,6 +552,31 @@ async def submit_check(
         return check
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.post(
+    "/checks",
+    response_model=ShiftEquipmentCheckResponse,
+    status_code=201,
+)
+async def submit_standalone_check(
+    data: StandaloneEquipmentCheckCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Submit a standalone equipment check not tied to a shift."""
+    service = EquipmentCheckService(db)
+    try:
+        check = await service.submit_standalone_check(
+            organization_id=current_user.organization_id,
+            checked_by=str(current_user.id),
+            data=data.model_dump(exclude_unset=True),
+        )
+        return check
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=safe_error_detail(e)
+        )
 
 
 @router.get(

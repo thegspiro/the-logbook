@@ -330,6 +330,7 @@ export type {
   EquipmentCheckTemplateUpdate,
   CheckItemResultSubmit,
   ShiftEquipmentCheckCreate,
+  StandaloneEquipmentCheckCreate,
   ShiftEquipmentCheckItemRecord,
   ShiftEquipmentCheckRecord,
   ShiftCheckSummary,

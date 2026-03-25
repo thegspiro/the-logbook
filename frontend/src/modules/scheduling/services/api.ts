@@ -42,6 +42,7 @@ import type {
   CheckTemplateItemCreate,
   CheckTemplateItemUpdate,
   ShiftEquipmentCheckCreate,
+  StandaloneEquipmentCheckCreate,
   CoverageReport,
   CallVolumeReport,
   AvailabilityRecord,
@@ -622,6 +623,10 @@ export const schedulingService = {
   },
   async submitEquipmentCheck(shiftId: string, data: ShiftEquipmentCheckCreate): Promise<ShiftEquipmentCheckRecord> {
     const response = await api.post<ShiftEquipmentCheckRecord>(`/equipment-checks/shifts/${shiftId}/checks`, data);
+    return response.data;
+  },
+  async submitStandaloneCheck(data: StandaloneEquipmentCheckCreate): Promise<ShiftEquipmentCheckRecord> {
+    const response = await api.post<ShiftEquipmentCheckRecord>('/equipment-checks/checks', data);
     return response.data;
   },
   async getShiftChecks(shiftId: string, checkTiming?: string): Promise<ShiftEquipmentCheckRecord[]> {
