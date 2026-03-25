@@ -21,13 +21,11 @@ import {
   FileText,
   Wrench,
   CheckCheck,
-  ChevronRight,
 } from 'lucide-react';
 import { Breadcrumbs, SkeletonPage } from '../components/ux';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime } from '../utils/dateFormatting';
-import { formatRelativeTime } from '../hooks/useRelativeTime';
 import {
   notificationsService,
 } from '../services/api';
@@ -38,6 +36,7 @@ import type {
 } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
+import NotificationCard from '../components/NotificationCard';
 
 // Maps trigger enum values to display-friendly icons and colors
 const TRIGGER_DISPLAY: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
@@ -294,6 +293,17 @@ const NotificationsPage: React.FC = () => {
     }
   };
 
+  const handleTogglePin = async (logId: string, pinned: boolean) => {
+    try {
+      await notificationsService.toggleMyNotificationPin(logId, pinned);
+      setMyNotifications((prev) =>
+        prev.map((n) => (n.id === logId ? { ...n, pinned } : n)),
+      );
+    } catch {
+      setError('Failed to update pin state');
+    }
+  };
+
   const handleLoadMore = async () => {
     setLoadingMore(true);
     try {
@@ -502,54 +512,12 @@ const NotificationsPage: React.FC = () => {
             ) : (
               <div className="space-y-2">
                 {myNotifications.map((notification) => (
-                  <button
+                  <NotificationCard
                     key={notification.id}
-                    onClick={() => {
-                      if (!notification.read) void handleMarkInboxNotificationRead(notification.id);
-                      if (notification.action_url && notification.action_url.startsWith('/'))
-                        navigate(notification.action_url);
-                    }}
-                    className={`w-full text-left p-4 rounded-lg transition-colors card ${
-                      notification.read
-                        ? 'opacity-60'
-                        : 'border-l-4 border-l-blue-500'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm truncate ${notification.read ? 'text-theme-text-muted' : 'font-semibold text-theme-text-primary'}`}>
-                          {notification.subject || 'Notification'}
-                        </p>
-                        <p className="text-xs text-theme-text-muted mt-1 whitespace-pre-line">
-                          {notification.message || ''}
-                        </p>
-                        {notification.category && (
-                          <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded-sm bg-theme-surface-secondary text-theme-text-muted">
-                            {formatCategory(notification.category)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center shrink-0 gap-2">
-                        <span className="text-xs text-theme-text-muted whitespace-nowrap">
-                          {formatRelativeTime(notification.sent_at)}
-                        </span>
-                        {!notification.read ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleMarkInboxNotificationRead(notification.id);
-                            }}
-                            className="p-1.5 rounded text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
-                            title="Mark as read"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        ) : notification.action_url ? (
-                          <ChevronRight className="w-4 h-4 text-theme-text-muted" />
-                        ) : null}
-                      </div>
-                    </div>
-                  </button>
+                    notification={notification}
+                    onMarkRead={(id) => { void handleMarkInboxNotificationRead(id); }}
+                    onTogglePin={(id, pinned) => { void handleTogglePin(id, pinned); }}
+                  />
                 ))}
                 {myNotifications.length < inboxTotal && (
                   <div className="pt-2 text-center">
