@@ -90,6 +90,7 @@ class NotificationLogResponse(UTCResponseBase):
     delivered: bool
     read: bool
     read_at: Optional[datetime] = None
+    pinned: bool = False
     error: Optional[str] = None
     action_url: Optional[str] = None
     expires_at: Optional[datetime] = None

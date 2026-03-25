@@ -79,6 +79,11 @@ export const notificationsService = {
     const response = await api.post<{ marked_read: number }>('/notifications/my/read-all');
     return response.data;
   },
+
+  async toggleMyNotificationPin(logId: string, pinned: boolean): Promise<NotificationLogRecord> {
+    const response = await api.post<NotificationLogRecord>(`/notifications/my/${logId}/pin`, null, { params: { pinned } });
+    return response.data;
+  },
 };
 
 export interface DashboardStats {

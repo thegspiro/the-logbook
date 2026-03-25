@@ -169,6 +169,7 @@ class NotificationLog(Base):
     delivered = Column(Boolean, default=False)
     read = Column(Boolean, default=False)
     read_at = Column(DateTime(timezone=True))
+    pinned = Column(Boolean, default=False)
     error = Column(Text)
 
     # Navigation

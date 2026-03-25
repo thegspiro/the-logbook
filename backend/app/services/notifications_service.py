@@ -314,6 +314,34 @@ class NotificationsService:
             await self.db.rollback()
             return None, str(e)
 
+    async def toggle_pin(
+        self,
+        log_id: UUID,
+        organization_id: UUID,
+        user_id: UUID,
+        pinned: bool,
+    ) -> Tuple[Optional[NotificationLog], Optional[str]]:
+        """Pin or unpin a notification for the current user."""
+        try:
+            result = await self.db.execute(
+                select(NotificationLog)
+                .where(NotificationLog.id == str(log_id))
+                .where(NotificationLog.organization_id == str(organization_id))
+                .where(NotificationLog.recipient_id == str(user_id))
+                .where(NotificationLog.channel == NotificationChannel.IN_APP)
+            )
+            log = result.scalar_one_or_none()
+            if not log:
+                return None, "Notification not found"
+
+            log.pinned = pinned
+            await self.db.commit()
+            await self.db.refresh(log)
+            return log, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
     # ============================================
     # Summary & Reporting
     # ============================================

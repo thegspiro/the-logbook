@@ -281,6 +281,26 @@ async def mark_my_notification_read(
     return result
 
 
+@router.post("/my/{log_id}/pin", response_model=NotificationLogResponse)
+async def toggle_my_notification_pin(
+    log_id: UUID,
+    pinned: bool = Query(..., description="Pin (true) or unpin (false)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Pin or unpin one of the current user's notifications."""
+    service = NotificationsService(db)
+    result, error = await service.toggle_pin(
+        log_id, current_user.organization_id, current_user.id, pinned
+    )
+    if error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unable to update notification pin state. {error}",
+        )
+    return result
+
+
 # ============================================
 # Summary Endpoint
 # ============================================
