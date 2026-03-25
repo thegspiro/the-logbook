@@ -8,7 +8,7 @@ and shift equipment check submissions.
 from datetime import date, datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
@@ -143,6 +143,14 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    @field_validator("is_header", mode="before")
+    @classmethod
+    def coerce_is_header(cls, v: object) -> bool:
+        """Rows created before the is_header column was added store NULL."""
+        if v is None:
+            return False
+        return bool(v)
 
 
 # ============================================
