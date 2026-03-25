@@ -3474,8 +3474,8 @@ class ShiftEquipmentCheck(Base):
     )
     shift_id = Column(
         String(36),
-        ForeignKey("shifts.id", ondelete="CASCADE"),
-        nullable=False,
+        ForeignKey("shifts.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     template_id = Column(
@@ -3495,6 +3495,9 @@ class ShiftEquipmentCheck(Base):
     )
     checked_at = Column(DateTime(timezone=True), server_default=func.now())
     check_timing = Column(String(30), nullable=False)  # start_of_shift, end_of_shift
+    check_context = Column(
+        String(30), nullable=False, default="shift_based"
+    )  # shift_based, standalone
     overall_status = Column(String(30), nullable=False)  # pass, fail, incomplete
     total_items = Column(Integer, nullable=False, default=0)
     completed_items = Column(Integer, nullable=False, default=0)

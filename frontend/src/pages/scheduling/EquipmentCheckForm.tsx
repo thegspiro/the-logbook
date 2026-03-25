@@ -50,6 +50,7 @@ import type {
   CheckTemplateItem,
   CheckItemResultSubmit,
   ShiftEquipmentCheckCreate,
+  StandaloneEquipmentCheckCreate,
   CheckType,
   LastCheckItemResult,
 } from '../../modules/scheduling/types/equipmentCheck';
@@ -60,7 +61,7 @@ import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck
 // ============================================================================
 
 interface EquipmentCheckFormProps {
-  shiftId: string;
+  shiftId?: string | undefined;
   template: EquipmentCheckTemplate;
   onComplete?: () => void;
   onBack?: () => void;
@@ -442,7 +443,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Draft persistence — save progress to localStorage so it survives crashes
   // --------------------------------------------------------------------------
 
-  const draftKey = `equipment-check-draft-${shiftId}-${template.id}`;
+  const draftKey = `equipment-check-draft-${shiftId || 'standalone'}-${template.id}`;
 
   useEffect(() => {
     if (previewMode) return;
@@ -704,15 +705,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         }
       }
 
-      const payload: ShiftEquipmentCheckCreate = {
+      const basePayload = {
         template_id: template.id,
         check_timing: template.checkTiming,
         items,
         notes: overallNotes || undefined,
       };
 
-      // Offline: queue for later sync
-      if (!navigator.onLine) {
+      // Offline: queue for later sync (shift-based only; standalone requires connectivity)
+      if (!navigator.onLine && shiftId) {
+        const payload: ShiftEquipmentCheckCreate = basePayload;
         await enqueueCheck(shiftId, payload, itemsWithPhotos);
         const count = await getPendingCount();
         setPendingQueueCount(count);
@@ -722,8 +724,23 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return;
       }
 
-      const checkResult =
-        await schedulingService.submitEquipmentCheck(shiftId, payload);
+      if (!navigator.onLine && !shiftId) {
+        toast.error('Standalone checks require an internet connection');
+        setSubmitting(false);
+        return;
+      }
+
+      let checkResult;
+      if (shiftId) {
+        const payload: ShiftEquipmentCheckCreate = basePayload;
+        checkResult = await schedulingService.submitEquipmentCheck(shiftId, payload);
+      } else {
+        const payload: StandaloneEquipmentCheckCreate = {
+          ...basePayload,
+          apparatus_id: template.apparatusId || undefined,
+        };
+        checkResult = await schedulingService.submitStandaloneCheck(payload);
+      }
 
       // Upload photos to check items in parallel after submission
       if (itemsWithPhotos.length > 0 && checkResult.items) {
@@ -786,7 +803,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           items: fallbackItems,
           notes: overallNotes || undefined,
         };
-        await enqueueCheck(shiftId, fallbackPayload, fallbackPhotos);
+        if (shiftId) {
+          await enqueueCheck(shiftId, fallbackPayload, fallbackPhotos);
+        } else {
+          toast.error('Failed to submit check. Please try again.');
+          setSubmitting(false);
+          return;
+        }
         const count = await getPendingCount();
         setPendingQueueCount(count);
         try { localStorage.removeItem(draftKey); } catch { /* ignore */ }

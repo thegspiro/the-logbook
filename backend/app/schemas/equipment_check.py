@@ -264,10 +264,23 @@ class CheckItemResultSubmit(BaseModel):
 
 
 class ShiftEquipmentCheckCreate(BaseModel):
-    """Schema for submitting an equipment check."""
+    """Schema for submitting an equipment check tied to a shift."""
 
     template_id: str
     check_timing: str = Field(..., max_length=30)
+    items: List[CheckItemResultSubmit]
+    notes: Optional[str] = None
+    signature_data: Optional[str] = None
+
+
+class StandaloneEquipmentCheckCreate(BaseModel):
+    """Schema for submitting a standalone equipment check (no shift)."""
+
+    template_id: str
+    apparatus_id: Optional[str] = None
+    check_timing: str = Field(
+        default="start_of_shift", max_length=30
+    )
     items: List[CheckItemResultSubmit]
     notes: Optional[str] = None
     signature_data: Optional[str] = None
@@ -317,8 +330,9 @@ class ShiftEquipmentCheckResponse(UTCResponseBase):
 
     id: str
     organization_id: str
-    shift_id: str
+    shift_id: Optional[str] = None
     template_id: Optional[str] = None
+    check_context: str = "shift_based"
     apparatus_id: Optional[str] = None
     checked_by: Optional[str] = None
     checked_by_name: Optional[str] = None

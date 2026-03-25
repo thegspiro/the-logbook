@@ -233,6 +233,15 @@ export interface ShiftEquipmentCheckCreate {
   signature_data?: string | undefined;
 }
 
+export interface StandaloneEquipmentCheckCreate {
+  template_id: string;
+  apparatus_id?: string | undefined;
+  check_timing: string;
+  items: CheckItemResultSubmit[];
+  notes?: string | undefined;
+  signature_data?: string | undefined;
+}
+
 // ============================================================================
 // Shift Equipment Check Responses
 // ============================================================================
@@ -265,13 +274,14 @@ export interface ShiftEquipmentCheckItemRecord {
 export interface ShiftEquipmentCheckRecord {
   id: string;
   organizationId: string;
-  shiftId: string;
+  shiftId?: string;
   templateId?: string;
   apparatusId?: string;
   checkedBy?: string;
   checkedByName?: string;
   checkedAt?: string;
   checkTiming: string;
+  checkContext?: "shift_based" | "standalone";
   overallStatus: "pass" | "fail" | "incomplete";
   totalItems: number;
   completedItems: number;

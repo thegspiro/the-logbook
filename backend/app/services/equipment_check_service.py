@@ -671,6 +671,176 @@ class EquipmentCheckService:
         await self.db.commit()
         return await self.get_check(check.id, organization_id)
 
+    async def submit_standalone_check(
+        self,
+        organization_id: str,
+        checked_by: str,
+        data: Dict[str, Any],
+    ) -> ShiftEquipmentCheck:
+        """Submit a standalone equipment check not tied to a shift."""
+        template_id = data.get("template_id")
+        if not template_id:
+            raise ValueError("template_id is required")
+
+        result = await self.db.execute(
+            select(EquipmentCheckTemplate).where(
+                EquipmentCheckTemplate.id == template_id,
+                EquipmentCheckTemplate.organization_id
+                == organization_id,
+            )
+        )
+        template = result.scalars().first()
+        if not template:
+            raise ValueError("Template not found")
+
+        apparatus_id = data.get("apparatus_id") or template.apparatus_id
+
+        items_data = data.pop("items", [])
+
+        total = len(items_data)
+        completed = sum(
+            1
+            for i in items_data
+            if i.get("status") != "not_checked"
+        )
+        failed = sum(
+            1 for i in items_data if i.get("status") == "fail"
+        )
+
+        for item in items_data:
+            if item.get("is_expired"):
+                item["status"] = "fail"
+            req_qty = item.get("required_quantity")
+            found_qty = item.get("quantity_found")
+            if (
+                req_qty is not None
+                and found_qty is not None
+                and found_qty < req_qty
+            ):
+                item["status"] = "fail"
+
+        failed = sum(
+            1 for i in items_data if i.get("status") == "fail"
+        )
+        if failed == 0 and completed == total:
+            overall_status = "pass"
+        else:
+            overall_status = "fail"
+        if completed < total:
+            overall_status = "incomplete"
+
+        check = ShiftEquipmentCheck(
+            id=generate_uuid(),
+            organization_id=organization_id,
+            shift_id=None,
+            template_id=template_id,
+            apparatus_id=apparatus_id,
+            checked_by=checked_by,
+            checked_at=datetime.now(timezone.utc),
+            check_timing=data.get(
+                "check_timing", "start_of_shift"
+            ),
+            check_context="standalone",
+            overall_status=overall_status,
+            total_items=total,
+            completed_items=completed,
+            failed_items=failed,
+            notes=data.get("notes"),
+            signature_data=data.get("signature_data"),
+        )
+        self.db.add(check)
+        await self.db.flush()
+
+        template_item_ids = [
+            i.get("template_item_id")
+            for i in items_data
+            if i.get("template_item_id")
+        ]
+        template_items_map: Dict[str, CheckTemplateItem] = {}
+        if template_item_ids:
+            tmpl_result = await self.db.execute(
+                select(CheckTemplateItem).where(
+                    CheckTemplateItem.id.in_(template_item_ids)
+                )
+            )
+            for ti in tmpl_result.scalars().all():
+                template_items_map[str(ti.id)] = ti
+
+        for item_data in items_data:
+            tmpl_item_id = item_data.get("template_item_id")
+            serial_found = item_data.get("serial_found")
+            lot_found = item_data.get("lot_found")
+            updated_serial = False
+
+            if tmpl_item_id and (serial_found or lot_found):
+                tmpl_item = template_items_map.get(tmpl_item_id)
+                if tmpl_item:
+                    serial_changed = serial_found and (
+                        serial_found
+                        != (tmpl_item.serial_number or "")
+                    )
+                    lot_changed = lot_found and (
+                        lot_found != (tmpl_item.lot_number or "")
+                    )
+                    if serial_changed or lot_changed:
+                        updated_serial = True
+                        if serial_found:
+                            tmpl_item.serial_number = serial_found
+                        if lot_found:
+                            tmpl_item.lot_number = lot_found
+
+            check_item = ShiftEquipmentCheckItem(
+                id=generate_uuid(),
+                check_id=check.id,
+                template_item_id=tmpl_item_id,
+                compartment_name=item_data.get(
+                    "compartment_name", ""
+                ),
+                item_name=item_data.get("item_name", ""),
+                check_type=item_data.get("check_type"),
+                status=item_data.get("status", "not_checked"),
+                quantity_found=item_data.get("quantity_found"),
+                required_quantity=item_data.get(
+                    "required_quantity"
+                ),
+                critical_minimum_quantity=item_data.get(
+                    "critical_minimum_quantity"
+                ),
+                level_reading=item_data.get("level_reading"),
+                level_unit=item_data.get("level_unit"),
+                serial_number=item_data.get("serial_number"),
+                lot_number=item_data.get("lot_number"),
+                serial_found=serial_found,
+                lot_found=lot_found,
+                updated_serial=updated_serial,
+                photo_urls=item_data.get("photo_urls"),
+                is_expired=item_data.get("is_expired", False),
+                expiration_date=item_data.get("expiration_date"),
+                notes=item_data.get("notes"),
+            )
+            self.db.add(check_item)
+
+        if apparatus_id:
+            apparatus_result = await self.db.execute(
+                select(Apparatus).where(
+                    Apparatus.id == apparatus_id
+                )
+            )
+            apparatus = apparatus_result.scalars().first()
+            if apparatus:
+                if overall_status == "fail":
+                    if not apparatus.has_deficiency:
+                        apparatus.has_deficiency = True
+                        apparatus.deficiency_since = (
+                            datetime.now(timezone.utc)
+                        )
+                elif overall_status == "pass":
+                    apparatus.has_deficiency = False
+                    apparatus.deficiency_since = None
+
+        await self.db.commit()
+        return await self.get_check(check.id, organization_id)
+
     async def get_checks_for_shift(
         self,
         shift_id: str,

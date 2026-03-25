@@ -13,6 +13,8 @@ import {
   Loader2,
   Truck,
   Calendar,
+  Play,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -98,6 +100,11 @@ export const MyChecklistsPage: React.FC = () => {
   // Form state
   const [activeTemplate, setActiveTemplate] = useState<EquipmentCheckTemplate | null>(null);
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
+
+  // Standalone check template picker
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+  const [availableTemplates, setAvailableTemplates] = useState<EquipmentCheckTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
 
   // Selected history detail
   const [selectedCheck, setSelectedCheck] = useState<ShiftEquipmentCheckRecord | null>(null);
@@ -186,6 +193,33 @@ export const MyChecklistsPage: React.FC = () => {
     setActiveShiftId(null);
   }, []);
 
+  const handleOpenTemplatePicker = useCallback(async () => {
+    setShowTemplatePicker(true);
+    setTemplatesLoading(true);
+    try {
+      const templates = await schedulingService.getEquipmentCheckTemplates();
+      setAvailableTemplates(templates.filter((t) => t.isActive));
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load templates'));
+    } finally {
+      setTemplatesLoading(false);
+    }
+  }, []);
+
+  const handleStartStandaloneCheck = useCallback(
+    async (templateId: string) => {
+      try {
+        const template = await schedulingService.getEquipmentCheckTemplate(templateId);
+        setActiveTemplate(template);
+        setActiveShiftId(null);
+        setShowTemplatePicker(false);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to load check template'));
+      }
+    },
+    [],
+  );
+
   const handleViewCheckDetail = useCallback(
     async (checkId: string) => {
       try {
@@ -202,7 +236,7 @@ export const MyChecklistsPage: React.FC = () => {
   // Render: Equipment check form
   // ------------------------------------------------------------------
 
-  if (activeTemplate && activeShiftId) {
+  if (activeTemplate) {
     return (
       <Suspense
         fallback={
@@ -212,7 +246,7 @@ export const MyChecklistsPage: React.FC = () => {
         }
       >
         <EquipmentCheckForm
-          shiftId={activeShiftId}
+          shiftId={activeShiftId || undefined}
           template={activeTemplate}
           onComplete={handleComplete}
           onBack={handleBack}
@@ -313,15 +347,24 @@ export const MyChecklistsPage: React.FC = () => {
           <ClipboardCheck className="h-6 w-6 text-theme-text-primary" />
           <h1 className="text-xl font-bold text-theme-text-primary">My Equipment Checklists</h1>
         </div>
-        {canManage && (
-          <Link
-            to="/scheduling/settings?tab=equipment"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => void handleOpenTemplatePicker()}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
           >
-            <Settings className="h-3.5 w-3.5" />
-            Manage Templates
-          </Link>
-        )}
+            <Play className="h-3.5 w-3.5" />
+            Start a Check
+          </button>
+          {canManage && (
+            <Link
+              to="/scheduling/settings?tab=equipment"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-1.5 text-xs font-medium text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+            >
+              <Settings className="h-3.5 w-3.5" />
+              Manage Templates
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* ============================================================= */}
@@ -529,6 +572,99 @@ export const MyChecklistsPage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {/* Template Picker Modal */}
+      {showTemplatePicker && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" aria-label="Select a checklist template">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/50 transition-opacity"
+              onClick={() => setShowTemplatePicker(false)}
+              aria-hidden="true"
+            />
+            <div className="relative w-full max-w-md rounded-xl border border-theme-surface-border bg-theme-surface shadow-xl">
+              <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
+                <h2 className="text-base font-semibold text-theme-text-primary">Select a Checklist</h2>
+                <button
+                  onClick={() => setShowTemplatePicker(false)}
+                  className="rounded-lg p-1 text-theme-text-muted hover:bg-theme-surface-hover transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="p-4">
+                {templatesLoading ? (
+                  <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
+                    <Loader2 className="h-5 w-5 animate-spin text-theme-text-muted" />
+                    <span className="ml-2 text-sm text-theme-text-muted">Loading templates...</span>
+                  </div>
+                ) : availableTemplates.length === 0 ? (
+                  <div className="py-8 text-center">
+                    <ClipboardCheck className="mx-auto h-10 w-10 text-theme-text-muted" />
+                    <p className="mt-3 text-sm text-theme-text-muted">
+                      No active check templates available.
+                    </p>
+                    {canManage && (
+                      <Link
+                        to="/scheduling/settings?tab=equipment"
+                        className="mt-2 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
+                        onClick={() => setShowTemplatePicker(false)}
+                      >
+                        Create a template
+                      </Link>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {availableTemplates.map((tmpl) => (
+                      <button
+                        key={tmpl.id}
+                        onClick={() => void handleStartStandaloneCheck(tmpl.id)}
+                        className="flex w-full items-center gap-3 rounded-lg border border-theme-surface-border bg-theme-surface px-4 py-3 text-left transition-colors hover:bg-theme-surface-hover group"
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-500/10">
+                          <ClipboardCheck className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-theme-text-primary truncate">
+                            {tmpl.name}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-theme-text-muted">
+                            {tmpl.apparatusType && (
+                              <span className="flex items-center gap-1">
+                                <Truck className="h-3 w-3" />
+                                {tmpl.apparatusType}
+                              </span>
+                            )}
+                            <span>
+                              {tmpl.compartments?.reduce(
+                                (sum, c) => sum + (c.items?.length ?? 0),
+                                0,
+                              ) ?? 0}{' '}
+                              items
+                            </span>
+                            <span
+                              className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+                                tmpl.checkTiming === 'start_of_shift'
+                                  ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20'
+                                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                              }`}
+                            >
+                              {tmpl.checkTiming === 'start_of_shift' ? 'Start' : 'End'}
+                            </span>
+                          </div>
+                        </div>
+                        <Play className="h-4 w-4 text-theme-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
