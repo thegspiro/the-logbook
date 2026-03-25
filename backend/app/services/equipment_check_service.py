@@ -1035,6 +1035,7 @@ class EquipmentCheckService:
             description=source.description,
             sort_order=source.sort_order,
             image_url=source.image_url,
+            is_header=source.is_header,
             parent_compartment_id=parent_id,
         )
         self.db.add(compartment)
@@ -1052,6 +1053,7 @@ class EquipmentCheckService:
                 is_required=item.is_required,
                 required_quantity=item.required_quantity,
                 expected_quantity=item.expected_quantity,
+                critical_minimum_quantity=item.critical_minimum_quantity,
                 min_level=item.min_level,
                 level_unit=item.level_unit,
                 serial_number=item.serial_number,

@@ -6,13 +6,21 @@
  */
 
 import React from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Settings, Loader2 } from "lucide-react";
 import { ShiftSettingsPanel } from "../../modules/scheduling/components/ShiftSettingsPanel";
+import type { SettingsTab } from "../../modules/scheduling/components/ShiftSettingsPanel";
 import { useSchedulingStore } from "../../modules/scheduling/store/schedulingStore";
+
+const VALID_TABS: SettingsTab[] = ["general", "apparatus", "eligibility", "notifications", "equipment"];
 
 const SchedulingSettingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab") || "";
+  const defaultTab = (VALID_TABS as string[]).includes(tabParam)
+    ? (tabParam as SettingsTab)
+    : undefined;
   const {
     templates: backendTemplates,
     apparatus: apparatusList,
@@ -52,6 +60,7 @@ const SchedulingSettingsPage: React.FC = () => {
             templates={backendTemplates}
             apparatusList={apparatusList}
             onNavigateToTemplates={() => void navigate("/scheduling/templates")}
+            defaultTab={defaultTab}
           />
         )}
       </div>

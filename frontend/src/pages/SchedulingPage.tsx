@@ -212,6 +212,7 @@ const ADMIN_LINKS: {
   { label: "Templates", path: "/scheduling/templates", icon: ClipboardList, description: "Manage shift templates" },
   { label: "Patterns", path: "/scheduling/patterns", icon: Repeat, description: "Configure shift patterns" },
   { label: "Reports", path: "/scheduling/reports", icon: BarChart3, description: "View scheduling reports" },
+  { label: "Check Reports", path: "/scheduling/equipment-check-reports", icon: ClipboardList, description: "Equipment compliance" },
   { label: "Settings", path: "/scheduling/settings", icon: Settings, description: "Department settings" },
 ];
 
