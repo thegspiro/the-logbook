@@ -14,14 +14,13 @@ import {
   CheckCircle,
   CheckCircle2,
   XCircle,
-  ChevronLeft,
-  ChevronRight,
+  ChevronUp,
+  ChevronDown,
   AlertTriangle,
   Clock,
   MessageSquare,
   Loader2,
   ArrowLeft,
-  Grid3x3,
   Hash,
   Gauge,
   Calendar,
@@ -105,7 +104,7 @@ function getCompartmentStatus(
   compartment: CheckTemplateCompartment,
   results: Record<string, ItemResult>,
 ): 'complete' | 'has_failures' | 'in_progress' | 'not_started' {
-  const checkable = compartment.items.filter((i) => i.checkType !== 'header');
+  const checkable = compartment.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
   if (checkable.length === 0) return 'complete';
 
   let checked = 0;
@@ -136,6 +135,13 @@ const STATUS_COLORS = {
     'border-theme-surface-border bg-theme-surface text-theme-text-muted',
 } as const;
 
+const STATUS_LABELS: Record<string, string> = {
+  complete: 'Complete',
+  has_failures: 'Has Failures',
+  in_progress: 'In Progress',
+  not_started: 'Not Started',
+};
+
 const CHECK_TYPE_ICONS: Partial<Record<CheckType, React.ElementType>> = {
   pass_fail: CheckCircle,
   present: Eye,
@@ -160,9 +166,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   previewMode,
 }) => {
   const [results, setResults] = useState<Record<string, ItemResult>>({});
-  const [activeCompartment, setActiveCompartment] = useState<number | null>(
-    null,
-  );
+  const [collapsedCompartments, setCollapsedCompartments] = useState<Set<string>>(new Set());
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedPhotos, setExpandedPhotos] = useState<Set<string>>(new Set());
   const [expandedSerialUpdate, setExpandedSerialUpdate] = useState<Set<string>>(
@@ -315,7 +319,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   const checkableItems = useMemo(
-    () => allItems.filter((item) => item.checkType !== 'header'),
+    () => allItems.filter((item) => item.checkType !== 'header' && item.checkType !== 'text'),
     [allItems],
   );
 
@@ -375,6 +379,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const next = new Set(prev);
       if (next.has(itemId)) next.delete(itemId);
       else next.add(itemId);
+      return next;
+    });
+  }, []);
+
+  const toggleCompartmentCollapse = useCallback((compId: string) => {
+    setCollapsedCompartments((prev) => {
+      const next = new Set(prev);
+      if (next.has(compId)) next.delete(compId);
+      else next.add(compId);
       return next;
     });
   }, []);
@@ -544,21 +557,53 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   const focusNextItem = useCallback(
     (currentItemId: string) => {
-      if (activeCompartment === null) return;
-      const comp = compartments[activeCompartment];
-      if (!comp) return;
-      const currentIdx = comp.items.findIndex((i) => i.id === currentItemId);
-      if (currentIdx === -1 || currentIdx >= comp.items.length - 1) return;
-      const nextItem = comp.items[currentIdx + 1];
-      if (!nextItem) return;
-      const nextEl = itemRefs.current[nextItem.id];
-      if (nextEl) {
-        nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const passBtn = nextEl.querySelector<HTMLButtonElement>('[data-action="pass"]');
-        passBtn?.focus();
+      for (let cIdx = 0; cIdx < compartments.length; cIdx++) {
+        const comp = compartments[cIdx];
+        if (!comp || comp.isHeader) continue;
+        const itemIdx = comp.items.findIndex((i) => i.id === currentItemId);
+        if (itemIdx === -1) continue;
+
+        // Try next checkable item in same compartment
+        for (let i = itemIdx + 1; i < comp.items.length; i++) {
+          const nextItem = comp.items[i];
+          if (!nextItem || nextItem.checkType === 'header' || nextItem.checkType === 'text') continue;
+          const nextEl = itemRefs.current[nextItem.id];
+          if (nextEl) {
+            nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const passBtn = nextEl.querySelector<HTMLButtonElement>('[data-action="pass"]');
+            passBtn?.focus();
+          }
+          return;
+        }
+
+        // Try first checkable item in next non-header compartment
+        for (let nIdx = cIdx + 1; nIdx < compartments.length; nIdx++) {
+          const nextComp = compartments[nIdx];
+          if (!nextComp || nextComp.isHeader) continue;
+          if (collapsedCompartments.has(nextComp.id)) {
+            setCollapsedCompartments((prev) => {
+              const next = new Set(prev);
+              next.delete(nextComp.id);
+              return next;
+            });
+          }
+          const firstItem = nextComp.items.find((i) => i.checkType !== 'header' && i.checkType !== 'text');
+          if (firstItem) {
+            setTimeout(() => {
+              const el = itemRefs.current[firstItem.id];
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const passBtn = el.querySelector<HTMLButtonElement>('[data-action="pass"]');
+                passBtn?.focus();
+              }
+            }, 100);
+          }
+          return;
+        }
+        return;
       }
     },
-    [activeCompartment, compartments],
+    [compartments, collapsedCompartments],
   );
 
   const updateResultAndAdvance = useCallback(
@@ -1167,25 +1212,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         );
 
       case 'text':
-        return (
-          <div className="space-y-2">
-            <textarea
-              id={`text-${item.id}`}
-              rows={2}
-              className="w-full rounded-lg border border-theme-surface-border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-              placeholder="Enter response..."
-              value={result?.notes ?? ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                updateResult(item.id, {
-                  notes: val || undefined,
-                  status: val.trim() ? 'pass' : 'not_checked',
-                });
-              }}
-            />
-          </div>
-        );
-
       case 'header':
         return null;
 
@@ -1212,6 +1238,29 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               {item.description}
             </p>
           )}
+        </div>
+      );
+    }
+
+    if (item.checkType === 'text') {
+      return (
+        <div
+          key={item.id}
+          className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
+        >
+          <div className="flex items-start gap-2">
+            <MessageSquare className="h-4 w-4 text-theme-text-muted flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-theme-text-primary">
+                {item.name}
+              </p>
+              {item.description && (
+                <p className="mt-0.5 text-xs text-theme-text-muted">
+                  {item.description}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       );
     }
@@ -1378,313 +1427,171 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   };
 
   // --------------------------------------------------------------------------
-  // Render: Compartment Overview Grid
+  // Render: Flat Scrollable View — all compartments inline with items
   // --------------------------------------------------------------------------
 
-  const renderOverview = () => {
-    // Group compartments into sections: each section is optionally preceded by a header
-    const sections: { header?: typeof compartments[number]; items: { comp: typeof compartments[number]; idx: number }[] }[] = [];
-    let currentSection: typeof sections[number] = { items: [] };
+  const renderFlatView = () => {
+    const sections: { header?: typeof compartments[number]; comps: { comp: typeof compartments[number]; idx: number }[] }[] = [];
+    let currentSection: typeof sections[number] = { comps: [] };
 
     compartments.forEach((comp, idx) => {
       if (comp.isHeader) {
-        // Push the current section if it has items, then start a new one
-        if (currentSection.items.length > 0 || currentSection.header) {
+        if (currentSection.comps.length > 0 || currentSection.header) {
           sections.push(currentSection);
         }
-        currentSection = { header: comp, items: [] };
+        currentSection = { header: comp, comps: [] };
       } else {
-        currentSection.items.push({ comp, idx });
+        currentSection.comps.push({ comp, idx });
       }
     });
-    if (currentSection.items.length > 0 || currentSection.header) {
+    if (currentSection.comps.length > 0 || currentSection.header) {
       sections.push(currentSection);
     }
 
     return (
-    <div className="space-y-4">
-      {sections.map((section, sIdx) => (
-        <div key={section.header?.id ?? `section-${sIdx}`} className="space-y-3">
-          {section.header && (
-            <div className="border-b border-theme-surface-border pb-1 pt-2">
-              <h3 className="text-sm font-bold text-theme-text-primary">
-                {section.header.name}
-              </h3>
-              {section.header.description && (
-                <p className="text-[10px] text-theme-text-muted mt-0.5">{section.header.description}</p>
-              )}
-            </div>
-          )}
-          <div className={`grid grid-cols-1 gap-3 ${previewMode ? '' : 'sm:grid-cols-2'}`}>
-            {section.items.map(({ comp, idx }) => {
+      <div className="space-y-4">
+        {sections.map((section, sIdx) => (
+          <div key={section.header?.id ?? `section-${sIdx}`} className="space-y-3">
+            {section.header && (
+              <div className="border-b border-theme-surface-border pb-1 pt-2">
+                <h3 className="text-sm font-bold text-theme-text-primary">
+                  {section.header.name}
+                </h3>
+                {section.header.description && (
+                  <p className="text-[10px] text-theme-text-muted mt-0.5">{section.header.description}</p>
+                )}
+              </div>
+            )}
+
+            {section.comps.map(({ comp }) => {
+              const isCollapsed = collapsedCompartments.has(comp.id);
               const status = getCompartmentStatus(comp, results);
-              const checkable = comp.items.filter((i) => i.checkType !== 'header');
+              const checkable = comp.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
               const checked = checkable.filter((i) => {
                 const r = results[i.id];
                 return r && r.status !== 'not_checked';
               }).length;
 
               return (
-                <button
-                  key={comp.id}
-                  type="button"
-                  onClick={() => setActiveCompartment(idx)}
-                  className={`rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] min-h-[100px] ${STATUS_COLORS[status]}`}
-                  aria-label={`${comp.name}, ${checked} of ${checkable.length} checked${status === 'complete' ? ', complete' : status === 'has_failures' ? ', has failures' : ''}`}
-                >
-                  <p className="font-medium text-sm leading-tight">
-                    {comp.name}
-                  </p>
-                  <p className="text-xs mt-1 opacity-75">
-                    {checked}/{checkable.length} checked
-                  </p>
-                  {status === 'complete' && (
-                    <CheckCircle className="h-5 w-5 mt-2" aria-hidden="true" />
+                <div key={comp.id}>
+                  {/* Compartment header — collapsible */}
+                  <button
+                    type="button"
+                    onClick={() => toggleCompartmentCollapse(comp.id)}
+                    className={`w-full rounded-xl border-2 p-4 text-left transition-all active:scale-[0.98] ${STATUS_COLORS[status]}`}
+                    aria-expanded={!isCollapsed}
+                    aria-label={`${comp.name}, ${checked} of ${checkable.length} checked, ${STATUS_LABELS[status] ?? ''}`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-base leading-tight">
+                          {comp.name}
+                        </p>
+                        {comp.description && (
+                          <p className="text-xs mt-0.5 opacity-75 truncate">
+                            {comp.description}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs opacity-75">
+                            {checked}/{checkable.length} checked
+                          </span>
+                          {status === 'complete' && (
+                            <CheckCircle className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          {status === 'has_failures' && (
+                            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </div>
+                      </div>
+                      {isCollapsed ? (
+                        <ChevronDown className="h-5 w-5 flex-shrink-0 opacity-60" aria-hidden="true" />
+                      ) : (
+                        <ChevronUp className="h-5 w-5 flex-shrink-0 opacity-60" aria-hidden="true" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Items — visible when expanded */}
+                  {!isCollapsed && (
+                    <div className="space-y-3 mt-3 ml-1">
+                      {/* Pass All / Set All to Par */}
+                      {!previewMode && checked < checkable.length && (
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); passAllInCompartment(comp); }}
+                            aria-label={hasQuantityItems(comp) ? `Set all items in ${comp.name} to par` : `Mark all items in ${comp.name} as passed`}
+                            className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors whitespace-nowrap min-h-[40px]"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                            {hasQuantityItems(comp) ? 'Set All to Par' : 'Pass All'}
+                          </button>
+                        </div>
+                      )}
+
+                      {comp.items.length === 0 && (
+                        <p className="text-sm text-theme-text-muted italic py-4 text-center">
+                          No items in this compartment.
+                        </p>
+                      )}
+                      {comp.items.map((item) => renderCheckItem(item))}
+                    </div>
                   )}
-                  {status === 'has_failures' && (
-                    <AlertTriangle className="h-5 w-5 mt-2" aria-hidden="true" />
-                  )}
-                </button>
+                </div>
               );
             })}
           </div>
-        </div>
-      ))}
+        ))}
 
-      {/* Overall notes + submit (hidden in preview mode) */}
-      {!previewMode && (
-        <div className="space-y-3 pt-2">
-          <div>
-            <label htmlFor="overall-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">
-              Overall Notes
-            </label>
-            <textarea
-              id="overall-notes"
-              rows={3}
-              className="w-full rounded-lg border border-theme-surface-border px-3 py-2 text-sm bg-theme-surface text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Any overall notes or observations..."
-              value={overallNotes}
-              onChange={(e) => setOverallNotes(e.target.value)}
-            />
-          </div>
+        {/* Overall notes + submit */}
+        {!previewMode && (
+          <div className="space-y-3 pt-2">
+            <div>
+              <label htmlFor="overall-notes" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                Overall Notes
+              </label>
+              <textarea
+                id="overall-notes"
+                rows={3}
+                className="w-full rounded-lg border border-theme-surface-border px-3 py-2 text-sm bg-theme-surface text-theme-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Any overall notes or observations..."
+                value={overallNotes}
+                onChange={(e) => setOverallNotes(e.target.value)}
+              />
+            </div>
 
-          <button
-            type="button"
-            onClick={() => void handleSubmit()}
-            disabled={submitting || !allRequiredChecked}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[52px]"
-          >
-            {submitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {isOnline ? 'Submitting...' : 'Saving offline...'}
-              </>
-            ) : (
-              <>
-                {isOnline ? (
-                  <CheckCircle className="h-4 w-4" />
-                ) : (
-                  <WifiOff className="h-4 w-4" />
-                )}
-                {isOnline ? 'Submit Report' : 'Save Offline'}
-              </>
-            )}
-          </button>
-
-          {!allRequiredChecked && (
-            <p className="text-xs text-center text-theme-text-muted">
-              <AlertTriangle className="inline h-3 w-3 mr-1" />
-              All required items must be checked before submitting.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-  };
-
-  // --------------------------------------------------------------------------
-  // Render: Compartment Detail View
-  // --------------------------------------------------------------------------
-
-  const renderCompartmentDetail = (idx: number) => {
-    const comp = compartments[idx];
-    if (!comp) return null;
-
-    const checkable = comp.items.filter((i) => i.checkType !== 'header');
-    const checked = checkable.filter((i) => {
-      const r = results[i.id];
-      return r && r.status !== 'not_checked';
-    }).length;
-
-    return (
-      <div className="space-y-4">
-        {/* Compartment header with nav */}
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setActiveCompartment(null)}
-            className="flex items-center gap-1.5 text-sm text-theme-text-muted hover:text-theme-text-primary transition-colors min-h-[44px]"
-          >
-            <Grid3x3 className="h-4 w-4" />
-            Overview
-          </button>
-          <div className="flex items-center gap-1">
             <button
               type="button"
-              onClick={() => {
-                let prev = idx - 1;
-                while (prev >= 0 && compartments[prev]?.isHeader) prev--;
-                setActiveCompartment(prev >= 0 ? prev : compartments.length - 1);
-              }}
-              className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Previous compartment"
+              onClick={() => void handleSubmit()}
+              disabled={submitting || !allRequiredChecked}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[52px]"
             >
-              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+              {submitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {isOnline ? 'Submitting...' : 'Saving offline...'}
+                </>
+              ) : (
+                <>
+                  {isOnline ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : (
+                    <WifiOff className="h-4 w-4" />
+                  )}
+                  {isOnline ? 'Submit Report' : 'Save Offline'}
+                </>
+              )}
             </button>
-            {/* Quick-jump dropdown */}
-            <select
-              value={idx}
-              onChange={(e) => setActiveCompartment(Number(e.target.value))}
-              className="rounded-lg border border-theme-surface-border bg-theme-surface px-2 py-1 text-xs text-theme-text-muted focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[36px] max-w-[100px] sm:max-w-[140px] truncate"
-              aria-label="Jump to compartment"
-            >
-              {compartments.map((c, i) => {
-                if (c.isHeader) return null;
-                const st = getCompartmentStatus(c, results);
-                const prefix = st === 'complete' ? '\u2713 ' : st === 'has_failures' ? '\u2717 ' : '';
-                return (
-                  <option key={c.id} value={i}>
-                    {prefix}{c.name}
-                  </option>
-                );
-              })}
-            </select>
-            <button
-              type="button"
-              onClick={() => {
-                let next = idx + 1;
-                while (next < compartments.length && compartments[next]?.isHeader) next++;
-                setActiveCompartment(next < compartments.length ? next : 0);
-              }}
-              className="p-2 rounded-lg text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              aria-label="Next compartment"
-            >
-              <ChevronRight className="h-5 w-5" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
 
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-theme-text-primary">
-              {comp.name}
-            </h2>
-            {comp.description && (
-              <p className="text-sm text-theme-text-muted mt-0.5">
-                {comp.description}
+            {!allRequiredChecked && (
+              <p className="text-xs text-center text-theme-text-muted">
+                <AlertTriangle className="inline h-3 w-3 mr-1" />
+                All required items must be checked before submitting.
               </p>
             )}
-            <p className="text-xs text-theme-text-muted mt-1">
-              {checked}/{checkable.length} items checked
-            </p>
           </div>
-
-          {/* Pass All / Set All to Par button */}
-          {!previewMode && checked < checkable.length && (
-            <button
-              type="button"
-              onClick={() => passAllInCompartment(comp)}
-              aria-label={hasQuantityItems(comp) ? `Set all items in ${comp.name} to par` : `Mark all items in ${comp.name} as passed`}
-              className="flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium text-green-700 dark:text-green-400 hover:bg-green-500/20 transition-colors whitespace-nowrap min-h-[40px]"
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-              {hasQuantityItems(comp) ? 'Set All to Par' : 'Pass All'}
-            </button>
-          )}
-        </div>
-
-        {/* Items */}
-        <div className="space-y-3">
-          {comp.items.length === 0 && (
-            <p className="text-sm text-theme-text-muted italic py-4 text-center">
-              No items in this compartment.
-            </p>
-          )}
-          {comp.items.map((item) => renderCheckItem(item))}
-        </div>
-
-        {/* Bottom nav — previous/next compartment with names and status */}
-        {(() => {
-          let prevIdx = idx - 1;
-          while (prevIdx >= 0 && compartments[prevIdx]?.isHeader) prevIdx--;
-          let nextIdx = idx + 1;
-          while (nextIdx < compartments.length && compartments[nextIdx]?.isHeader) nextIdx++;
-          const prevComp = prevIdx >= 0 ? compartments[prevIdx] : undefined;
-          const nextComp = nextIdx < compartments.length ? compartments[nextIdx] : undefined;
-          const prevStatus = prevComp ? getCompartmentStatus(prevComp, results).replace('_', ' ') : '';
-          const nextStatus = nextComp ? getCompartmentStatus(nextComp, results).replace('_', ' ') : '';
-
-          return (
-        <div className="flex items-stretch justify-between gap-3 pt-4 border-t border-theme-surface-border">
-          <div className="flex-1 min-w-0">
-            {prevComp ? (
-              <button
-                type="button"
-                onClick={() => setActiveCompartment(prevIdx)}
-                className="w-full text-left rounded-lg px-3 py-2.5 hover:bg-theme-surface-secondary transition-colors min-h-[56px]"
-              >
-                <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Previous compartment</span>
-                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate">
-                  {prevComp.name}
-                </p>
-                <span className="text-[10px] text-theme-text-muted">
-                  ({prevStatus})
-                </span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setActiveCompartment(null)}
-                className="w-full text-left rounded-lg px-3 py-2.5 hover:bg-theme-surface-secondary transition-colors min-h-[56px]"
-              >
-                <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Back to</span>
-                <p className="text-sm font-medium text-theme-text-muted">Overview</p>
-              </button>
-            )}
-          </div>
-          <div className="flex-1 min-w-0 text-right">
-            {nextComp ? (
-              <button
-                type="button"
-                onClick={() => setActiveCompartment(nextIdx)}
-                className="w-full text-right rounded-lg px-3 py-2.5 hover:bg-theme-surface-secondary transition-colors min-h-[56px]"
-              >
-                <span className="text-[10px] uppercase tracking-wide text-theme-text-muted">Next compartment</span>
-                <p className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate">
-                  {nextComp.name}
-                </p>
-                <span className="text-[10px] text-theme-text-muted">
-                  ({nextStatus})
-                </span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setActiveCompartment(null)}
-                className="w-full text-right rounded-lg px-3 py-2.5 bg-blue-600 hover:bg-blue-700 transition-colors min-h-[56px]"
-              >
-                <span className="text-[10px] uppercase tracking-wide text-white/70">All done</span>
-                <p className="text-sm font-medium text-white flex items-center justify-end gap-1">
-                  <CheckCircle className="h-4 w-4" />
-                  Review & Submit
-                </p>
-              </button>
-            )}
-          </div>
-        </div>
-          );
-        })()}
+        )}
       </div>
     );
   };
@@ -1732,7 +1639,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {onBack && activeCompartment === null && (
+            {onBack && (
               <button
                 type="button"
                 onClick={onBack}
@@ -1763,9 +1670,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       </div>
 
       {/* Content */}
-      {activeCompartment !== null
-        ? renderCompartmentDetail(activeCompartment)
-        : renderOverview()}
+      {renderFlatView()}
     </div>
   );
 };
