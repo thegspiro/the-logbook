@@ -6,6 +6,7 @@
 
 import React from 'react';
 import type { ApparatusStatus, DefaultApparatusStatus } from '../types';
+import { getApparatusIcon } from '../utils/iconMap';
 
 interface StatusBadgeProps {
   status: ApparatusStatus;
@@ -84,8 +85,8 @@ const getSizeClasses = (size: 'sm' | 'md' | 'lg') => {
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
   const colors = getStatusColors(status.defaultStatus, status.color);
   const sizeClasses = getSizeClasses(size);
+  const IconComponent = status.icon ? getApparatusIcon(status.icon) : null;
 
-  // Check if using custom color (hex value)
   if (status.color) {
     return (
       <span
@@ -96,7 +97,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
           borderColor: `${status.color}50`,
         }}
       >
-        {status.icon && <span>{status.icon}</span>}
+        {IconComponent && <IconComponent className="w-3 h-3" />}
         {status.name.toUpperCase()}
       </span>
     );
@@ -106,7 +107,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
     <span
       className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} font-semibold rounded-sm border inline-flex items-center gap-1`}
     >
-      {status.icon && <span>{status.icon}</span>}
+      {IconComponent && <IconComponent className="w-3 h-3" />}
       {status.name.toUpperCase()}
     </span>
   );

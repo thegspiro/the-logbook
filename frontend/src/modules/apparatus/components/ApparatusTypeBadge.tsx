@@ -6,6 +6,7 @@
 
 import React from 'react';
 import type { ApparatusType, ApparatusCategory } from '../types';
+import { getApparatusIcon } from '../utils/iconMap';
 
 interface ApparatusTypeBadgeProps {
   type: ApparatusType;
@@ -90,8 +91,8 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({
 }) => {
   const colors = getCategoryColors(type.category);
   const sizeClasses = getSizeClasses(size);
+  const IconComponent = type.icon ? getApparatusIcon(type.icon) : null;
 
-  // Use custom color if provided
   if (type.color) {
     return (
       <span
@@ -102,7 +103,7 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({
           borderColor: `${type.color}50`,
         }}
       >
-        {showIcon && type.icon && <span>{type.icon}</span>}
+        {showIcon && IconComponent && <IconComponent className="w-3 h-3" />}
         {type.name}
       </span>
     );
@@ -112,7 +113,7 @@ export const ApparatusTypeBadge: React.FC<ApparatusTypeBadgeProps> = ({
     <span
       className={`${sizeClasses} ${colors.background} ${colors.text} ${colors.border} font-semibold rounded-sm border inline-flex items-center gap-1`}
     >
-      {showIcon && type.icon && <span>{type.icon}</span>}
+      {showIcon && IconComponent && <IconComponent className="w-3 h-3" />}
       {type.name}
     </span>
   );
