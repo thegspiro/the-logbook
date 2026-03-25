@@ -92,13 +92,15 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   const navigate = useNavigate();
   const tz = useTimezone();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [hasBeenOpened, setHasBeenOpened] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(0);
   const contentId = useId();
 
   const categoryDisplay = getCategoryDisplay(notification.category);
   const ctaLabel = getCtaLabel(notification.action_url, notification.category);
-  const isVisuallyActive = !notification.read || notification.pinned;
+  // Stay visually active while expanded for the first time, or if pinned
+  const isVisuallyActive = !notification.read || notification.pinned || (isExpanded && !hasBeenOpened);
 
   useEffect(() => {
     if (!contentRef.current) return undefined;
@@ -122,7 +124,9 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     const willExpand = !isExpanded;
     setIsExpanded(willExpand);
 
-    if (willExpand && !notification.read) {
+    // Mark as read when the user collapses after their first open
+    if (!willExpand && !hasBeenOpened && !notification.read) {
+      setHasBeenOpened(true);
       onMarkRead(notification.id);
     }
   };
