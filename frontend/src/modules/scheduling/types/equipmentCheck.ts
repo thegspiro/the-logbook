@@ -37,7 +37,7 @@ export const CHECK_TYPE_LABELS: Record<CheckType, string> = {
   level: "Level",
   date_lot: "Date / Lot",
   reading: "Reading",
-  text: "Text",
+  text: "Statement",
   header: "Section Header",
 };
 

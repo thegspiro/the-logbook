@@ -104,7 +104,7 @@ function getCompartmentStatus(
   compartment: CheckTemplateCompartment,
   results: Record<string, ItemResult>,
 ): 'complete' | 'has_failures' | 'in_progress' | 'not_started' {
-  const checkable = compartment.items.filter((i) => i.checkType !== 'header');
+  const checkable = compartment.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
   if (checkable.length === 0) return 'complete';
 
   let checked = 0;
@@ -319,7 +319,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   const checkableItems = useMemo(
-    () => allItems.filter((item) => item.checkType !== 'header'),
+    () => allItems.filter((item) => item.checkType !== 'header' && item.checkType !== 'text'),
     [allItems],
   );
 
@@ -566,7 +566,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         // Try next checkable item in same compartment
         for (let i = itemIdx + 1; i < comp.items.length; i++) {
           const nextItem = comp.items[i];
-          if (!nextItem || nextItem.checkType === 'header') continue;
+          if (!nextItem || nextItem.checkType === 'header' || nextItem.checkType === 'text') continue;
           const nextEl = itemRefs.current[nextItem.id];
           if (nextEl) {
             nextEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -587,7 +587,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               return next;
             });
           }
-          const firstItem = nextComp.items.find((i) => i.checkType !== 'header');
+          const firstItem = nextComp.items.find((i) => i.checkType !== 'header' && i.checkType !== 'text');
           if (firstItem) {
             setTimeout(() => {
               const el = itemRefs.current[firstItem.id];
@@ -1212,25 +1212,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         );
 
       case 'text':
-        return (
-          <div className="space-y-2">
-            <textarea
-              id={`text-${item.id}`}
-              rows={2}
-              className="w-full rounded-lg border border-theme-surface-border px-3 py-2.5 text-sm text-theme-text-primary bg-theme-surface focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
-              placeholder="Enter response..."
-              value={result?.notes ?? ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                updateResult(item.id, {
-                  notes: val || undefined,
-                  status: val.trim() ? 'pass' : 'not_checked',
-                });
-              }}
-            />
-          </div>
-        );
-
       case 'header':
         return null;
 
@@ -1257,6 +1238,29 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               {item.description}
             </p>
           )}
+        </div>
+      );
+    }
+
+    if (item.checkType === 'text') {
+      return (
+        <div
+          key={item.id}
+          className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
+        >
+          <div className="flex items-start gap-2">
+            <MessageSquare className="h-4 w-4 text-theme-text-muted flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <p className="text-sm font-medium text-theme-text-primary">
+                {item.name}
+              </p>
+              {item.description && (
+                <p className="mt-0.5 text-xs text-theme-text-muted">
+                  {item.description}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       );
     }
@@ -1462,7 +1466,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             {section.comps.map(({ comp }) => {
               const isCollapsed = collapsedCompartments.has(comp.id);
               const status = getCompartmentStatus(comp, results);
-              const checkable = comp.items.filter((i) => i.checkType !== 'header');
+              const checkable = comp.items.filter((i) => i.checkType !== 'header' && i.checkType !== 'text');
               const checked = checkable.filter((i) => {
                 const r = results[i.id];
                 return r && r.status !== 'not_checked';
