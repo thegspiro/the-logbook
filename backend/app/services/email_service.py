@@ -632,16 +632,14 @@ class EmailService:
 
             except Exception as e:
                 logger.error(
-                    "Failed to send email to %s: %s", _redact_email(to_email), e
+                    f"Failed to send email to {_redact_email(to_email)}: {e}"
                 )
                 failure_count += 1
 
         logger.info(
-            "Email send complete: %d succeeded, %d failed, subject=%r, template=%s",
-            success_count,
-            failure_count,
-            subject[:80],
-            template_type or "none",
+            f"Email send complete: {success_count} succeeded, "
+            f"{failure_count} failed, subject={subject[:80]!r}, "
+            f"template={template_type or 'none'}"
         )
 
         # Log to message_history when a db session is available
