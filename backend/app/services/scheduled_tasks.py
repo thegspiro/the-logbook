@@ -1239,6 +1239,20 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 subject = f"Shift Reminder \u2014 {shift_date_str} at {start_str}"
 
                 # In-app notification for each assigned member
+                shift_action_url = (
+                    f"/scheduling?shift={shift.id}"
+                )
+                shift_start_iso = (
+                    shift.start_time.isoformat()
+                    if shift.start_time
+                    else None
+                )
+                shift_metadata = {}
+                if shift_start_iso:
+                    shift_metadata["shift_start_time"] = shift_start_iso
+                if shift.id:
+                    shift_metadata["shift_id"] = str(shift.id)
+
                 member_ids = [
                     str(a.user_id) for a in assignments if a.user_id
                 ]
@@ -1252,18 +1266,16 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             category="shift_reminder",
                             subject=subject,
                             message=message,
-                            action_url="/scheduling",
+                            action_url=shift_action_url,
+                            metadata=shift_metadata or None,
                             delivered=True,
                         )
                         db.add(notif)
                         org_notifications += 1
                     except Exception as e:
                         logger.error(
-                            "Failed to create shift reminder notification "
-                            "for user %s, shift %s: %s",
-                            mid,
-                            shift.id,
-                            e,
+                            f"Failed to create shift reminder notification "
+                            f"for user {mid}, shift {shift.id}: {e}"
                         )
 
                 # Optional email

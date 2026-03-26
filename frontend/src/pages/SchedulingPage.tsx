@@ -28,7 +28,7 @@ import {
   Truck,
   ChevronDown,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import { useTimezone } from "../hooks/useTimezone";
 import { useTheme } from "../contexts/ThemeContext";
@@ -258,6 +258,32 @@ const SchedulingPage: React.FC = () => {
 
   // Shift detail panel
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link: open shift detail panel when ?shift=<id> is in the URL
+  useEffect(() => {
+    const shiftId = searchParams.get('shift');
+    if (!shiftId || selectedShift) return;
+
+    let cancelled = false;
+    const openShift = async () => {
+      try {
+        const shift = await schedulingService.getShift(shiftId);
+        if (!cancelled) {
+          setSelectedShift(shift);
+          // Clear the param so closing the panel doesn't re-open it
+          searchParams.delete('shift');
+          setSearchParams(searchParams, { replace: true });
+        }
+      } catch {
+        // Shift may have been deleted — silently clear the param
+        searchParams.delete('shift');
+        setSearchParams(searchParams, { replace: true });
+      }
+    };
+    void openShift();
+    return () => { cancelled = true; };
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Effective templates: backend if available, otherwise fallbacks
   const effectiveTemplates = useMemo(() => {
