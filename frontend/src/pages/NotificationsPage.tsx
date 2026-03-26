@@ -511,7 +511,13 @@ const NotificationsPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-2">
-                {myNotifications.map((notification) => (
+                {[...myNotifications]
+                  .sort((a, b) => {
+                    if (a.pinned && !b.pinned) return -1;
+                    if (!a.pinned && b.pinned) return 1;
+                    return 0;
+                  })
+                  .map((notification) => (
                   <NotificationCard
                     key={notification.id}
                     notification={notification}

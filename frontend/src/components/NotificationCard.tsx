@@ -12,6 +12,8 @@ import {
   FileText,
   Wrench,
   ExternalLink,
+  ClipboardCheck,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime } from '../utils/dateFormatting';
@@ -62,20 +64,63 @@ function getCategoryDisplay(category: string | undefined) {
   };
 }
 
-function getCtaLabel(actionUrl: string | undefined, category: string | undefined): string {
-  if (!actionUrl) return '';
+interface CtaAction {
+  label: string;
+  icon: React.ReactNode;
+  url: string;
+}
 
-  if (actionUrl.startsWith('/scheduling')) return 'View Shift';
-  if (actionUrl.startsWith('/events')) return 'View Event';
-  if (actionUrl.startsWith('/training')) return 'View Training';
-  if (actionUrl.startsWith('/maintenance') || actionUrl.startsWith('/apparatus')) return 'View Details';
-  if (actionUrl.startsWith('/members') || actionUrl.startsWith('/users')) return 'View Member';
+function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
+  const actions: CtaAction[] = [];
+  const { action_url: actionUrl, category, subject } = notification;
 
-  if (category === 'scheduling') return 'View Shift';
-  if (category === 'events') return 'View Event';
-  if (category === 'training') return 'View Training';
+  if (!actionUrl) return actions;
 
-  return 'View Details';
+  const subjectLower = (subject || '').toLowerCase();
+
+  // Shift reminder — offer both "View Shift" and "Start Checklist"
+  if (category === 'shift_reminder') {
+    actions.push({
+      label: 'View Shift',
+      icon: <ExternalLink className="w-3.5 h-3.5" />,
+      url: actionUrl,
+    });
+    actions.push({
+      label: 'Start Checklist',
+      icon: <ClipboardCheck className="w-3.5 h-3.5" />,
+      url: actionUrl,
+    });
+    return actions;
+  }
+
+  // Shift swap — offer "Review Swap"
+  if (category === 'shift_swap' && subjectLower.includes('request')) {
+    actions.push({
+      label: 'Review Swap',
+      icon: <ArrowLeftRight className="w-3.5 h-3.5" />,
+      url: actionUrl,
+    });
+    return actions;
+  }
+
+  // Default: single CTA based on URL/category
+  let label = 'View Details';
+  if (actionUrl.startsWith('/scheduling')) label = 'View Shift';
+  else if (actionUrl.startsWith('/events')) label = 'View Event';
+  else if (actionUrl.startsWith('/training')) label = 'View Training';
+  else if (actionUrl.startsWith('/maintenance') || actionUrl.startsWith('/apparatus')) label = 'View Details';
+  else if (actionUrl.startsWith('/members') || actionUrl.startsWith('/users')) label = 'View Member';
+  else if (category === 'scheduling') label = 'View Shift';
+  else if (category === 'events') label = 'View Event';
+  else if (category === 'training') label = 'View Training';
+
+  actions.push({
+    label,
+    icon: <ExternalLink className="w-3.5 h-3.5" />,
+    url: actionUrl,
+  });
+
+  return actions;
 }
 
 interface NotificationCardProps {
@@ -92,13 +137,15 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
   const navigate = useNavigate();
   const tz = useTimezone();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [hasBeenOpened, setHasBeenOpened] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | undefined>(0);
   const contentId = useId();
 
   const categoryDisplay = getCategoryDisplay(notification.category);
-  const ctaLabel = getCtaLabel(notification.action_url, notification.category);
-  const isVisuallyActive = !notification.read || notification.pinned;
+  const ctaActions = getCtaActions(notification);
+  // Stay visually active while expanded for the first time, or if pinned
+  const isVisuallyActive = !notification.read || notification.pinned || (isExpanded && !hasBeenOpened);
 
   useEffect(() => {
     if (!contentRef.current) return undefined;
@@ -122,14 +169,16 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
     const willExpand = !isExpanded;
     setIsExpanded(willExpand);
 
-    if (willExpand && !notification.read) {
+    // Mark as read when the user collapses after their first open
+    if (!willExpand && !hasBeenOpened && !notification.read) {
+      setHasBeenOpened(true);
       onMarkRead(notification.id);
     }
   };
 
-  const handleNavigate = () => {
-    if (notification.action_url && notification.action_url.startsWith('/')) {
-      navigate(notification.action_url);
+  const handleNavigate = (url: string) => {
+    if (url.startsWith('/')) {
+      navigate(url);
     }
   };
 
@@ -140,10 +189,10 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
 
   return (
     <div
-      className={`rounded-lg transition-colors card overflow-hidden ${
+      className={`rounded-lg card overflow-hidden transition-all duration-300 ease-in-out ${
         isVisuallyActive
-          ? 'border-l-4 border-l-blue-500'
-          : 'opacity-60'
+          ? 'border-l-4 border-l-blue-500 opacity-100'
+          : 'border-l-4 border-l-transparent opacity-60'
       }`}
     >
       {/* Collapsed header — always visible */}
@@ -159,7 +208,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
               {categoryDisplay.icon}
             </span>
             <div className="flex-1 min-w-0">
-              <p className={`text-sm truncate ${isVisuallyActive ? 'font-semibold text-theme-text-primary' : 'text-theme-text-muted'}`}>
+              <p className={`text-sm truncate transition-all duration-300 ${isVisuallyActive ? 'font-semibold text-theme-text-primary' : 'text-theme-text-muted'}`}>
                 {notification.subject || 'Notification'}
               </p>
               {!isExpanded && (
@@ -214,16 +263,21 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center gap-2">
-            {notification.action_url && (
+          <div className="flex flex-wrap items-center gap-2">
+            {ctaActions.map((action, idx) => (
               <button
-                onClick={handleNavigate}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-lg transition-colors"
+                key={action.label}
+                onClick={() => handleNavigate(action.url)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  idx === 0
+                    ? 'text-white bg-orange-600 hover:bg-orange-700'
+                    : 'border border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover'
+                }`}
               >
-                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-                {ctaLabel}
+                <span aria-hidden="true">{action.icon}</span>
+                {action.label}
               </button>
-            )}
+            ))}
             <button
               onClick={handlePinClick}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors ${

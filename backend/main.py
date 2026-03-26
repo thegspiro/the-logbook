@@ -1627,6 +1627,119 @@ async def lifespan(app: FastAPI):
 
     _scheduler_task = asyncio.create_task(_scheduled_email_loop())
 
+    # Background scheduled task runner — replaces the need for external cron.
+    # Groups tasks by interval and runs them in a single loop per worker.
+    _cron_task: asyncio.Task | None = None  # type: ignore[type-arg]
+
+    async def _scheduled_task_loop():
+        """Background loop that runs periodic tasks (shift reminders, event
+        reminders, etc.) so they work out-of-the-box without external cron."""
+        from app.core.database import async_session_factory
+        from app.services.scheduled_tasks import TASK_RUNNERS
+
+        # Tasks grouped by approximate interval (seconds).
+        # Each entry: (task_name, interval_seconds, last_run_timestamp)
+        task_schedule: list[list] = [
+            # Every 15 minutes
+            ["inventory_notifications", 900, 0.0],
+            # Every 30 minutes
+            ["event_reminders", 1800, 0.0],
+            ["post_event_validation", 1800, 0.0],
+            ["post_shift_validation", 1800, 0.0],
+            ["shift_reminders", 1800, 0.0],
+            # Daily tasks — run once per day, checked every 10 minutes
+            ["cert_expiration_alerts", 86400, 0.0],
+            ["action_item_reminders", 86400, 0.0],
+            ["inventory_low_stock_alerts", 86400, 0.0],
+            ["inventory_overdue_alerts", 86400, 0.0],
+            ["compliance_auto_reports", 86400, 0.0],
+            ["message_history_cleanup", 86400, 0.0],
+            ["series_end_reminders", 86400, 0.0],
+            ["rolling_recurrence_extend", 86400, 0.0],
+            # Weekly tasks
+            ["struggling_member_check", 604800, 0.0],
+            ["enrollment_deadline_warnings", 604800, 0.0],
+            ["nfpa_retirement_alerts", 604800, 0.0],
+            ["audit_log_archival", 604800, 0.0],
+            # Monthly tasks
+            ["membership_tier_advance", 2592000, 0.0],
+        ]
+
+        check_interval = 60  # Wake up every 60 seconds to see what's due
+        claim_ttl = check_interval + 120
+        await asyncio.sleep(30)  # Let server fully start
+
+        while not await _try_claim_background_task(
+            "scheduled_task_loop", ttl=claim_ttl
+        ):
+            logger.debug(
+                f"Scheduled task loop waiting for claim "
+                f"(worker PID {_worker_pid})"
+            )
+            await asyncio.sleep(check_interval)
+
+        logger.info(
+            f"Scheduled task runner started "
+            f"(worker PID {_worker_pid})"
+        )
+
+        import time
+
+        while True:
+            now = time.monotonic()
+            for entry in task_schedule:
+                task_name = entry[0]
+                interval = entry[1]
+                last_run = entry[2]
+
+                if (now - last_run) < interval:
+                    continue
+
+                runner = TASK_RUNNERS.get(task_name)
+                if not runner:
+                    continue
+
+                try:
+                    async with async_session_factory() as db:
+                        result = await runner(db)
+                        log_msg = (
+                            f"Scheduled task '{task_name}' completed: "
+                            f"{result}"
+                        )
+                        # Only log if something happened
+                        total = (
+                            result.get("total_notifications", 0)
+                            + result.get("total_sent", 0)
+                            + result.get("total_alerts", 0)
+                            + result.get("total_processed", 0)
+                            + result.get("alerts_sent", 0)
+                            + result.get("total_emails_sent", 0)
+                            + result.get("deleted", 0)
+                            + result.get("advanced", 0)
+                        )
+                        if total > 0:
+                            logger.info(log_msg)
+                except Exception as e:
+                    logger.error(
+                        f"Scheduled task '{task_name}' failed: {e}"
+                    )
+
+                entry[2] = now
+
+            # Renew Redis claim
+            if cache_manager.is_connected and cache_manager.redis_client:
+                try:
+                    await cache_manager.redis_client.set(
+                        "startup_task:scheduled_task_loop",
+                        str(_worker_pid),
+                        ex=claim_ttl,
+                    )
+                except Exception:
+                    pass
+            await asyncio.sleep(check_interval)
+
+    _cron_task = asyncio.create_task(_scheduled_task_loop())
+
     # Mark server as ready
     startup_status.set_ready()
     logger.info(f"Server started on port {settings.PORT} (worker PID {_worker_pid})")
@@ -1637,18 +1750,21 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info(f"Shutting down gracefully (worker PID {_worker_pid})...")
-    if _scheduler_task and not _scheduler_task.done():
-        _scheduler_task.cancel()
-        try:
-            await _scheduler_task
-        except asyncio.CancelledError:
-            pass
-    # Release the scheduled-email-loop Redis claim so the next worker
-    # starts immediately instead of waiting for the TTL to expire.
+    for _task in (_scheduler_task, _cron_task):
+        if _task and not _task.done():
+            _task.cancel()
+            try:
+                await _task
+            except asyncio.CancelledError:
+                pass
+    # Release Redis claims so the next worker starts immediately.
     if cache_manager.is_connected and cache_manager.redis_client:
         try:
             await cache_manager.redis_client.delete(
                 "startup_task:scheduled_email_loop"
+            )
+            await cache_manager.redis_client.delete(
+                "startup_task:scheduled_task_loop"
             )
         except Exception:
             pass
