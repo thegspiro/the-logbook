@@ -103,7 +103,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
       actions.push({
         label: 'Start Checklist',
         icon: <ClipboardCheck className="w-3.5 h-3.5" />,
-        url: actionUrl,
+        url: '/scheduling?tab=equipment-checks',
       });
     }
     return actions;
