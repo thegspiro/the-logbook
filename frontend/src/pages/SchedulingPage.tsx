@@ -228,6 +228,7 @@ const SchedulingPage: React.FC = () => {
   const tz = useTimezone();
   const { resolvedTheme } = useTheme();
   const canManage = checkPermission("scheduling.manage");
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Shared store — members, templates, apparatus loaded once and cached
   const {
@@ -240,8 +241,13 @@ const SchedulingPage: React.FC = () => {
     loadSummary,
   } = useSchedulingStore();
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<TabId>("schedule");
+  // Tab state — honour ?tab= query param for deep-linking
+  const initialTab = (searchParams.get('tab') || 'schedule') as TabId;
+  const [activeTab, setActiveTab] = useState<TabId>(
+    ['schedule', 'my-shifts', 'open-shifts', 'requests', 'equipment-checks', 'shift-reports'].includes(initialTab)
+      ? initialTab
+      : 'schedule'
+  );
 
   // Calendar state
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -258,7 +264,6 @@ const SchedulingPage: React.FC = () => {
 
   // Shift detail panel
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
 
   // Deep-link: open shift detail panel when ?shift=<id> is in the URL
   useEffect(() => {
