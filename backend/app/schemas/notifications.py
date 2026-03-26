@@ -93,6 +93,7 @@ class NotificationLogResponse(UTCResponseBase):
     pinned: bool = False
     error: Optional[str] = None
     action_url: Optional[str] = None
+    metadata: Optional[Any] = None
     expires_at: Optional[datetime] = None
     created_at: datetime
 

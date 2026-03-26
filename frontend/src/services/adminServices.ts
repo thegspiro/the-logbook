@@ -342,6 +342,7 @@ export interface NotificationLogRecord {
   pinned: boolean;
   error?: string;
   action_url?: string;
+  metadata?: Record<string, unknown>;
   expires_at?: string;
   created_at: string;
 }

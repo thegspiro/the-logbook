@@ -1623,7 +1623,7 @@ class SchedulingService:
                     category="shift_decline",
                     subject="Shift Coverage Needed",
                     message=message,
-                    action_url="/scheduling",
+                    action_url=f"/scheduling?shift={shift_id}",
                     delivered=True,
                 )
                 self.db.add(notif)
@@ -1776,6 +1776,12 @@ class SchedulingService:
                     f"{checklist_list}."
                 )
 
+            notif_metadata = {"shift_id": str(shift_id)}
+            if shift.start_time:
+                notif_metadata["shift_start_time"] = (
+                    shift.start_time.isoformat()
+                )
+
             notif = NotificationLog(
                 id=generate_uuid(),
                 organization_id=str(organization_id),
@@ -1784,7 +1790,8 @@ class SchedulingService:
                 category="shift_assignment",
                 subject="New Shift Assignment",
                 message=message,
-                action_url="/scheduling",
+                action_url=f"/scheduling?shift={shift_id}",
+                metadata=notif_metadata,
                 delivered=True,
             )
             self.db.add(notif)
@@ -1903,7 +1910,7 @@ class SchedulingService:
                     category="shift_swap",
                     subject="Shift Swap Request",
                     message=message,
-                    action_url="/scheduling",
+                    action_url=f"/scheduling?shift={swap_request.offering_shift_id}",
                     delivered=True,
                 )
                 self.db.add(notif)
@@ -1955,7 +1962,7 @@ class SchedulingService:
                 category="shift_swap",
                 subject=f"Swap Request {status_label.title()}",
                 message=message,
-                action_url="/scheduling",
+                action_url=f"/scheduling?shift={swap_request.offering_shift_id}",
                 delivered=True,
             )
             self.db.add(notif)
@@ -2020,7 +2027,7 @@ class SchedulingService:
                 category="shift_confirmation",
                 subject="Shift Assignment Confirmed",
                 message=message,
-                action_url="/scheduling",
+                action_url=f"/scheduling?shift={assignment.shift_id}",
                 delivered=True,
             )
             self.db.add(notif)
