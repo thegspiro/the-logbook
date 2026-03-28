@@ -988,7 +988,8 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         category="shift_validation",
                         subject=subject,
                         message=message,
-                        action_url="/scheduling",
+                        action_url=f"/scheduling?shift={shift.id}",
+                        metadata={"shift_id": str(shift.id)},
                         delivered=True,
                     )
                     db.add(in_app_log)
@@ -1004,7 +1005,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 wants_email = prefs.get("email_notifications", True)
                 if wants_email and officer.email:
                     try:
-                        full_url = f"{settings.FRONTEND_URL}/scheduling"
+                        full_url = f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
                         e_first = _html.escape(officer.first_name or "")
                         e_shift_date = _html.escape(shift_date_str)
                         _logo = build_email_logo_html(org)
@@ -1096,7 +1097,11 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     from app.core.config import settings
     from app.core.utils import generate_uuid
-    from app.models.apparatus import EquipmentCheckTemplate
+    from app.models.apparatus import (
+        Apparatus,
+        ApparatusType,
+        EquipmentCheckTemplate,
+    )
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import Shift, ShiftAssignment
     from app.services.email_service import EmailService, build_email_logo_html
@@ -1186,7 +1191,14 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     # Fall back to apparatus-type templates if none
                     # are assigned to the specific apparatus
                     if not checklist_names:
-                        type_result = await db.execute(
+                        app_result = await db.execute(
+                            select(Apparatus.apparatus_type_id).where(
+                                Apparatus.id == str(shift.apparatus_id)
+                            )
+                        )
+                        app_type_id = app_result.scalar_one_or_none()
+
+                        type_query = (
                             select(EquipmentCheckTemplate)
                             .where(
                                 EquipmentCheckTemplate.organization_id
@@ -1200,7 +1212,26 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                                 == "start_of_shift"
                             )
                             .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
-                            .order_by(EquipmentCheckTemplate.sort_order)
+                        )
+                        if app_type_id:
+                            app_type_result = await db.execute(
+                                select(ApparatusType.code).where(
+                                    ApparatusType.id == str(app_type_id)
+                                )
+                            )
+                            app_type_code = (
+                                app_type_result.scalar_one_or_none()
+                            )
+                            if app_type_code:
+                                type_query = type_query.where(
+                                    EquipmentCheckTemplate.apparatus_type
+                                    == app_type_code
+                                )
+
+                        type_result = await db.execute(
+                            type_query.order_by(
+                                EquipmentCheckTemplate.sort_order
+                            )
                         )
                         type_templates = list(
                             type_result.scalars().all()
