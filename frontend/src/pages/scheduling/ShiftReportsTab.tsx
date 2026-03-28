@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   FileText, Plus, Loader2, Star, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
@@ -28,7 +29,7 @@ import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateCustom, getTodayLocalDate } from '../../utils/dateFormatting';
 
-type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review';
+type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'drafts';
 
 const DEFAULT_CALL_TYPE_OPTIONS = [
   'Structure Fire', 'Vehicle Fire', 'Brush/Wildland',
@@ -61,8 +62,15 @@ export const ShiftReportsTab: React.FC = () => {
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('training.manage');
+  const [searchParams] = useSearchParams();
 
-  const [viewMode, setViewMode] = useState<ViewMode>(canManage ? 'filed-by-me' : 'my-reports');
+  const initialView = (): ViewMode => {
+    const viewParam = searchParams.get('view');
+    if (viewParam === 'drafts' && canManage) return 'drafts';
+    return canManage ? 'filed-by-me' : 'my-reports';
+  };
+
+  const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   const [reports, setReports] = useState<ShiftCompletionReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -127,6 +135,9 @@ export const ShiftReportsTab: React.FC = () => {
         setReports(data);
       } else if (viewMode === 'pending-review') {
         const data = await shiftCompletionService.getPendingReviewReports();
+        setReports(data);
+      } else if (viewMode === 'drafts') {
+        const data = await shiftCompletionService.getDraftReports();
         setReports(data);
       }
     } catch {
@@ -614,6 +625,16 @@ export const ShiftReportsTab: React.FC = () => {
           )}
           {canManage && (
             <button
+              onClick={() => setViewMode('drafts')}
+              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
+                viewMode === 'drafts' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" /> Drafts
+            </button>
+          )}
+          {canManage && (
+            <button
               onClick={() => setViewMode('create')}
               className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
                 viewMode === 'create' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
@@ -856,6 +877,7 @@ export const ShiftReportsTab: React.FC = () => {
               <h3 className="text-lg font-medium text-theme-text-primary mb-1">
                 {viewMode === 'my-reports' ? 'No reports for you yet' :
                  viewMode === 'pending-review' ? 'No reports pending review' :
+                 viewMode === 'drafts' ? 'No draft reports' :
                  'No reports filed yet'}
               </h3>
               <p className="text-theme-text-muted text-sm">
@@ -863,6 +885,8 @@ export const ShiftReportsTab: React.FC = () => {
                   ? 'Shift completion reports from your officers will appear here.'
                   : viewMode === 'pending-review'
                   ? 'All reports have been reviewed.'
+                  : viewMode === 'drafts'
+                  ? 'Draft reports are auto-created when shifts are finalized. Complete them to track trainee progress.'
                   : 'Submit a shift report to track trainee progress.'
                 }
               </p>

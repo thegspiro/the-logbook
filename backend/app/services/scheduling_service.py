@@ -3553,7 +3553,7 @@ class SchedulingService:
 
             # Auto-create draft shift completion reports for trainees
             # (members with active program enrollments) on this shift
-            await self._create_draft_reports_for_trainees(
+            draft_count = await self._create_draft_reports_for_trainees(
                 shift=shift,
                 organization_id=organization_id,
                 finalized_by_user_id=finalized_by_user_id,
@@ -3561,6 +3561,16 @@ class SchedulingService:
 
             await self.db.commit()
             await self.db.refresh(shift)
+
+            # Send post-finalization notification to the officer
+            if draft_count > 0:
+                await self._send_finalization_notification(
+                    shift=shift,
+                    organization_id=organization_id,
+                    officer_id=finalized_by_user_id,
+                    draft_count=draft_count,
+                )
+
             return shift, None
         except Exception as e:
             await self.db.rollback()
@@ -3571,12 +3581,13 @@ class SchedulingService:
         shift: Shift,
         organization_id: UUID,
         finalized_by_user_id: str,
-    ) -> None:
+    ) -> int:
         """Create draft ShiftCompletionReports for shift attendees who
         have active training program enrollments.
 
         Called during finalization so the officer only needs to add
         narrative and ratings to complete each report.
+        Returns the number of drafts created.
         """
         from app.services.shift_completion_service import (
             ShiftCompletionService,
@@ -3589,7 +3600,7 @@ class SchedulingService:
         )
         attendees = att_result.scalars().all()
         if not attendees:
-            return
+            return 0
 
         attendee_ids = [str(a.user_id) for a in attendees]
 
@@ -3607,12 +3618,13 @@ class SchedulingService:
         )
         trainee_enrollments = enrollment_result.all()
         if not trainee_enrollments:
-            return
+            return 0
 
         import logging
         logger = logging.getLogger(__name__)
 
         svc = ShiftCompletionService(self.db)
+        created_count = 0
 
         for user_id, enrollment_id in trainee_enrollments:
             try:
@@ -3653,6 +3665,7 @@ class SchedulingService:
                     review_status="draft",
                     commit=False,
                 )
+                created_count += 1
             except Exception as e:
                 logger.error(
                     "Failed to create draft report for "
@@ -3661,3 +3674,147 @@ class SchedulingService:
                     shift.id,
                     e,
                 )
+
+        return created_count
+
+    async def _send_finalization_notification(
+        self,
+        shift: Shift,
+        organization_id: UUID,
+        officer_id: str,
+        draft_count: int,
+    ) -> None:
+        """Send in-app + email notification after shift finalization
+        listing the draft reports that were auto-created."""
+        import html as _html
+        import logging
+
+        from app.core.config import settings
+        from app.core.utils import generate_uuid
+        from app.models.notification import (
+            NotificationChannel,
+            NotificationLog,
+        )
+        from app.models.user import User
+        from app.services.email_service import (
+            EmailService,
+            build_email_logo_html,
+        )
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            officer_result = await self.db.execute(
+                select(User).where(User.id == officer_id)
+            )
+            officer = officer_result.scalar_one_or_none()
+            if not officer:
+                return
+
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            shift_date_str = (
+                shift.shift_date.strftime("%b %d, %Y")
+                if shift.shift_date
+                else "Unknown"
+            )
+            subject = (
+                f"Shift Finalized: {draft_count} draft "
+                f"report{'s' if draft_count != 1 else ''} created"
+            )
+            message = (
+                f"Your shift on {shift_date_str} has been finalized. "
+                f"{draft_count} draft completion "
+                f"report{'s' if draft_count != 1 else ''} "
+                f"{'were' if draft_count != 1 else 'was'} "
+                f"auto-created for trainees on this shift. "
+                f"Please review and complete them."
+            )
+
+            # In-app notification
+            notif = NotificationLog(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                recipient_id=officer_id,
+                channel=NotificationChannel.IN_APP,
+                category="shift_finalized",
+                subject=subject,
+                message=message,
+                action_url="/scheduling?tab=shift-reports&view=drafts",
+                metadata={
+                    "shift_id": str(shift.id),
+                    "draft_count": draft_count,
+                },
+                delivered=True,
+            )
+            self.db.add(notif)
+
+            # Email notification
+            prefs = officer.notification_preferences or {}
+            wants_email = prefs.get("email_notifications", True)
+            if wants_email and officer.email:
+                try:
+                    full_url = (
+                        f"{settings.FRONTEND_URL}"
+                        f"/scheduling?tab=shift-reports&view=drafts"
+                    )
+                    e_first = _html.escape(
+                        officer.first_name or ""
+                    )
+                    e_date = _html.escape(shift_date_str)
+                    _logo = build_email_logo_html(org)
+                    email_service = EmailService(organization=org)
+
+                    html_body = f"""
+{_logo}
+<h2>Shift Finalized</h2>
+<p>Hi {e_first},</p>
+<p>Your shift on <strong>{e_date}</strong> has been
+finalized. <strong>{draft_count}</strong> draft completion
+report{'s' if draft_count != 1 else ''} {'were' if draft_count != 1 else 'was'}
+auto-created for trainees on this shift.</p>
+<p>Please review and complete each draft report with
+performance ratings, skills observed, and narratives.</p>
+<p><a href="{_html.escape(full_url)}"
+style="display:inline-block;padding:10px 20px;
+background-color:#7c3aed;color:#ffffff;
+text-decoration:none;border-radius:6px;
+font-weight:600;">Review Draft Reports</a></p>
+"""
+                    text_body = (
+                        f"Hi {officer.first_name or ''},\n\n"
+                        f"Your shift on {shift_date_str} has been "
+                        f"finalized. {draft_count} draft completion "
+                        f"report(s) were auto-created.\n\n"
+                        f"Review them at: {full_url}\n"
+                    )
+
+                    await email_service.send_email(
+                        to_emails=[officer.email],
+                        subject=subject,
+                        html_body=html_body,
+                        text_body=text_body,
+                        db=self.db,
+                        template_type="shift_finalized",
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to send finalization email "
+                        "to officer %s: %s",
+                        officer_id, e,
+                    )
+
+            await self.db.commit()
+        except Exception as e:
+            logger.error(
+                "Failed to send finalization notification "
+                "for shift %s: %s",
+                shift.id, e,
+            )

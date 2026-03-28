@@ -199,6 +199,12 @@ SCHEDULE = {
         "recommended_time": "02:30",
         "cron": "30 2 * * *",
     },
+    "shift_auto_checkout": {
+        "description": "Send checkout reminders when shifts end, then auto-checkout members 30 minutes after shift end if still checked in",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15 * * * *",
+        "cron": "*/15 * * * *",
+    },
 }
 
 
@@ -3129,6 +3135,171 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Two-phase end-of-shift checkout automation:
+    1. When a shift ends, send a checkout reminder to members still
+       checked in (but not yet checked out).
+    2. 30 minutes after shift end, auto-checkout any members who
+       still haven't checked out manually.
+
+    Tracks state via the shift's activities JSON to avoid duplicate
+    reminders.  Runs every 15 minutes.
+    """
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
+    from app.core.config import settings
+    from app.core.utils import generate_uuid
+    from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.training import Shift, ShiftAttendance
+
+    now = datetime.now(dt_timezone.utc)
+    lookback = now - timedelta(hours=2)
+    grace_cutoff = now - timedelta(minutes=30)
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_reminders = 0
+    total_auto_checkouts = 0
+    results = []
+
+    for org in organizations:
+        org_reminders = 0
+        org_checkouts = 0
+
+        try:
+            shifts_result = await db.execute(
+                select(Shift)
+                .where(Shift.organization_id == str(org.id))
+                .where(Shift.end_time.isnot(None))
+                .where(Shift.end_time <= now)
+                .where(Shift.end_time >= lookback)
+            )
+            shifts = list(shifts_result.scalars().all())
+
+            for shift in shifts:
+                activities = shift.activities or {}
+
+                # Find members still checked in (no checkout time)
+                att_result = await db.execute(
+                    select(ShiftAttendance).where(
+                        ShiftAttendance.shift_id == str(shift.id),
+                        ShiftAttendance.checked_in_at.isnot(None),
+                        ShiftAttendance.checked_out_at.is_(None),
+                    )
+                )
+                open_attendances = list(att_result.scalars().all())
+
+                if not open_attendances:
+                    continue
+
+                # Phase 1: Send checkout reminder at shift end
+                if not activities.get("checkout_reminder_sent"):
+                    for att in open_attendances:
+                        try:
+                            shift_date_str = (
+                                shift.shift_date.strftime("%b %d")
+                                if shift.shift_date
+                                else "today"
+                            )
+                            notif = NotificationLog(
+                                id=generate_uuid(),
+                                organization_id=str(org.id),
+                                recipient_id=str(att.user_id),
+                                channel=NotificationChannel.IN_APP,
+                                category="shift_checkout_reminder",
+                                subject="Reminder: Check out of your shift",
+                                message=(
+                                    f"Your shift on {shift_date_str} has "
+                                    f"ended. Please check out to record "
+                                    f"your hours accurately."
+                                ),
+                                action_url=(
+                                    f"/scheduling?shift={shift.id}"
+                                ),
+                                metadata={
+                                    "shift_id": str(shift.id),
+                                },
+                                delivered=True,
+                            )
+                            db.add(notif)
+                            org_reminders += 1
+                        except Exception as e:
+                            logger.error(
+                                "Failed to send checkout reminder "
+                                "for user %s shift %s: %s",
+                                att.user_id, shift.id, e,
+                            )
+
+                    shift.activities = {
+                        **activities,
+                        "checkout_reminder_sent": True,
+                    }
+
+                # Phase 2: Auto-checkout after 30-min grace period
+                if (
+                    shift.end_time
+                    and shift.end_time <= grace_cutoff
+                    and not activities.get("auto_checkout_completed")
+                ):
+                    for att in open_attendances:
+                        try:
+                            att.checked_out_at = shift.end_time
+                            checked_in = att.checked_in_at
+                            if checked_in and shift.end_time:
+                                delta = (
+                                    shift.end_time - checked_in
+                                ).total_seconds()
+                                att.duration_minutes = max(
+                                    round(delta / 60.0, 1), 0
+                                )
+                            org_checkouts += 1
+                        except Exception as e:
+                            logger.error(
+                                "Failed to auto-checkout user %s "
+                                "shift %s: %s",
+                                att.user_id, shift.id, e,
+                            )
+
+                    shift.activities = {
+                        **(shift.activities or {}),
+                        "auto_checkout_completed": True,
+                    }
+
+        except Exception as e:
+            logger.error(
+                "shift_auto_checkout error for org %s: %s",
+                org.id, e,
+            )
+
+        if org_reminders > 0 or org_checkouts > 0:
+            results.append({
+                "org_id": str(org.id),
+                "reminders": org_reminders,
+                "auto_checkouts": org_checkouts,
+            })
+        total_reminders += org_reminders
+        total_auto_checkouts += org_checkouts
+
+    if total_reminders > 0 or total_auto_checkouts > 0:
+        await db.commit()
+
+    logger.info(
+        "Shift auto-checkout: %d reminders, %d auto-checkouts "
+        "across %d orgs",
+        total_reminders, total_auto_checkouts, len(results),
+    )
+
+    return {
+        "task": "shift_auto_checkout",
+        "total_reminders": total_reminders,
+        "total_auto_checkouts": total_auto_checkouts,
+        "organizations": results,
+    }
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -3151,4 +3322,5 @@ TASK_RUNNERS = {
     "message_history_cleanup": run_message_history_cleanup,
     "series_end_reminders": run_series_end_reminders,
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
+    "shift_auto_checkout": run_shift_auto_checkout,
 }

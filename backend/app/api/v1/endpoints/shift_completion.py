@@ -228,6 +228,23 @@ async def get_pending_review_reports(
     )
 
 
+@router.get("/drafts", response_model=list[ShiftCompletionReportResponse])
+async def get_draft_reports(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Get auto-created draft shift completion reports awaiting officer input.
+
+    Drafts are created automatically when a shift is finalized for
+    trainees with active program enrollments.
+    """
+    service = ShiftCompletionService(db)
+    return await service.get_reports_by_status(
+        organization_id=current_user.organization_id,
+        review_status="draft",
+    )
+
+
 @router.get("/{report_id}", response_model=ShiftCompletionReportResponse)
 async def get_shift_report(
     report_id: str,
