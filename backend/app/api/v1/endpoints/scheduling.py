@@ -15,7 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
-from app.models.training import AssignmentStatus, BasicApparatus, ShiftAssignment
+from app.models.training import (
+    AssignmentStatus,
+    BasicApparatus,
+    ShiftAssignment,
+    ShiftAttendance,
+    ShiftCall,
+)
 from app.models.user import User
 from app.schemas.scheduling import (
     ApparatusOptionsResponse,
@@ -96,6 +102,8 @@ async def _enrich_shifts(
     # Compute attendee_count per shift (only active assignments)
     shift_ids = [s.id for s in shifts]
     attendee_counts: dict[str, int] = {}
+    call_counts: dict[str, int] = {}
+    hours_map: dict[str, float] = {}
     _active_statuses = [
         AssignmentStatus.ASSIGNED.value,
         AssignmentStatus.CONFIRMED.value,
@@ -111,11 +119,38 @@ async def _enrich_shifts(
         for row in count_result.all():
             attendee_counts[str(row[0])] = row[1]
 
+        call_result = await service.db.execute(
+            select(
+                ShiftCall.shift_id,
+                func.count(ShiftCall.id),
+            )
+            .where(ShiftCall.shift_id.in_(shift_ids))
+            .group_by(ShiftCall.shift_id)
+        )
+        for row in call_result.all():
+            call_counts[str(row[0])] = row[1]
+
+        hours_result = await service.db.execute(
+            select(
+                ShiftAttendance.shift_id,
+                func.coalesce(
+                    func.sum(ShiftAttendance.duration_minutes), 0
+                ),
+            )
+            .where(ShiftAttendance.shift_id.in_(shift_ids))
+            .group_by(ShiftAttendance.shift_id)
+        )
+        for row in hours_result.all():
+            total_min = row[1]
+            hours_map[str(row[0])] = round(total_min / 60.0, 1)
+
     enriched = []
     for s in shifts:
         d = {c.key: getattr(s, c.key) for c in s.__table__.columns}
         service._enrich_shift_dict(d, apparatus_map, user_name_map)
         d["attendee_count"] = attendee_counts.get(str(s.id), 0)
+        d["call_count"] = call_counts.get(str(s.id), 0)
+        d["total_hours"] = hours_map.get(str(s.id))
         enriched.append(d)
     return enriched
 
@@ -248,7 +283,7 @@ async def get_shift(
         "Shift",
     )
 
-    attendance = await service.get_shift_attendance(
+    attendance_records = await service.get_shift_attendance(
         shift_id, current_user.organization_id
     )
     apparatus_ids = [shift.apparatus_id] if shift.apparatus_id else []
@@ -259,10 +294,36 @@ async def get_shift(
     user_name_map = await service._get_user_name_map(officer_ids)
     d = {c.key: getattr(shift, c.key) for c in shift.__table__.columns}
     service._enrich_shift_dict(d, apparatus_map, user_name_map)
+
+    member_call_counts = await service.compute_member_call_counts(shift_id)
+
+    call_result = await service.db.execute(
+        select(func.count(ShiftCall.id)).where(
+            ShiftCall.shift_id == str(shift_id)
+        )
+    )
+    call_count = call_result.scalar() or 0
+
+    total_min_result = await service.db.execute(
+        select(
+            func.coalesce(
+                func.sum(ShiftAttendance.duration_minutes), 0
+            )
+        ).where(ShiftAttendance.shift_id == str(shift_id))
+    )
+    total_min = total_min_result.scalar() or 0
+    total_hours = round(total_min / 60.0, 1) if total_min > 0 else None
+
+    attendees = await service.enrich_attendance_records(
+        attendance_records, member_call_counts
+    )
+
     return {
         **d,
-        "attendees": attendance,
-        "attendee_count": len(attendance),
+        "attendees": attendees,
+        "attendee_count": len(attendees),
+        "call_count": call_count,
+        "total_hours": total_hours,
     }
 
 
@@ -301,6 +362,36 @@ async def delete_shift(
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to delete shift.", error)
         )
+
+
+@router.post("/shifts/{shift_id}/finalize", response_model=ShiftResponse)
+async def finalize_shift(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """
+    Finalize a shift after the officer has reviewed attendance and checklists.
+
+    Once finalized the shift is considered closed and attendance is locked.
+
+    **Permissions required:** scheduling.manage
+    """
+    service = SchedulingService(db)
+    shift, error = await service.finalize_shift(
+        shift_id,
+        current_user.organization_id,
+        finalized_by_user_id=str(current_user.id),
+    )
+    if not shift:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to finalize shift.", error),
+        )
+    enriched = await _enrich_shifts(
+        service, current_user.organization_id, [shift]
+    )
+    return enriched[0]
 
 
 # ============================================

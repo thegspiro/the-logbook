@@ -99,6 +99,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [pending, setPending] = useState({
     saving: false,
     deleting: false,
+    finalizing: false,
     signingUp: false,
     confirming: false,
     declining: false,
@@ -114,6 +115,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   // UI visibility toggles
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showFinalizeChecklist, setShowFinalizeChecklist] = useState(false);
   const [showAssignForm, setShowAssignForm] = useState(false);
   const [showBulkAssign, setShowBulkAssign] = useState(false);
 
@@ -451,6 +453,34 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     }
   };
 
+  const handleFinalize = async () => {
+    setPendingFlag('finalizing', true);
+    try {
+      const updated = await schedulingService.finalizeShift(shift.id);
+      setShift(updated);
+      toast.success('Shift finalized');
+      setShowFinalizeChecklist(false);
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to finalize shift'));
+    } finally {
+      setPendingFlag('finalizing', false);
+    }
+  };
+
+  // Pre-finalization checklist data — only end-of-shift checks gate finalization
+  const endOfShiftChecks = useMemo(() => {
+    return equipmentCheckSummaries.filter(c => c.checkTiming === 'end_of_shift');
+  }, [equipmentCheckSummaries]);
+
+  const hasIncompleteEquipmentChecks = useMemo(() => {
+    return endOfShiftChecks.some(c => !c.isCompleted);
+  }, [endOfShiftChecks]);
+
+  const completedEquipmentChecks = useMemo(() => {
+    return endOfShiftChecks.filter(c => c.isCompleted);
+  }, [endOfShiftChecks]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -667,7 +697,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {canManage && !isPast && (
+              {canManage && !isPast && !shift.is_finalized && (
                 <>
                   <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '', positions: shift.positions ?? [] }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
@@ -680,6 +710,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </>
+              )}
+              {canManage && isPast && !shift.is_finalized && (
+                <button
+                  onClick={() => setShowFinalizeChecklist(true)}
+                  className="px-3 py-1.5 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors inline-flex items-center gap-1.5"
+                  aria-label="Finalize shift"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Finalize
+                </button>
               )}
               <button onClick={onClose} className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Close panel">
                 <X className="w-5 h-5" />
@@ -704,6 +744,82 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   Delete Shift
                 </button>
               </div>
+            </div>
+          )}
+
+          {/* Finalize Checklist */}
+          {showFinalizeChecklist && (
+            <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-lg space-y-3">
+              <h4 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600" /> Pre-Finalization Checklist
+              </h4>
+
+              <div className="space-y-2 text-sm">
+                {/* Equipment checks — blocks if incomplete */}
+                {hasIncompleteEquipmentChecks ? (
+                  <div className="flex items-start gap-2 p-2 bg-red-500/10 border border-red-500/20 rounded-md">
+                    <XCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-medium text-red-700 dark:text-red-400">End-of-shift equipment checks incomplete</span>
+                      <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">
+                        {endOfShiftChecks.filter(c => !c.isCompleted).length} end-of-shift checklist(s) still pending. Equipment checks must be completed before finalizing.
+                      </p>
+                    </div>
+                  </div>
+                ) : endOfShiftChecks.length > 0 ? (
+                  <div className="flex items-center gap-2 p-2 bg-green-500/10 border border-green-500/20 rounded-md">
+                    <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                    <span className="text-green-700 dark:text-green-400">{completedEquipmentChecks.length} equipment check(s) completed</span>
+                  </div>
+                ) : null}
+
+                {/* Attendance summary — warn only */}
+                <div className="flex items-center gap-2 p-2 bg-theme-surface border border-theme-surface-border rounded-md">
+                  <Users className="w-4 h-4 text-theme-text-muted shrink-0" />
+                  <span className="text-theme-text-secondary">{activeAssignments.length} active assignment(s)</span>
+                </div>
+
+                {/* Call count */}
+                {shift.call_count !== undefined && shift.call_count !== null && (
+                  <div className="flex items-center gap-2 p-2 bg-theme-surface border border-theme-surface-border rounded-md">
+                    <FileText className="w-4 h-4 text-theme-text-muted shrink-0" />
+                    <span className="text-theme-text-secondary">{shift.call_count} call(s) recorded</span>
+                  </div>
+                )}
+              </div>
+
+              {hasIncompleteEquipmentChecks && (
+                <p className="text-xs text-red-600 dark:text-red-300">
+                  Complete all equipment checks before finalizing this shift.
+                </p>
+              )}
+
+              <div className="flex items-center gap-2 justify-end pt-1">
+                <button
+                  onClick={() => setShowFinalizeChecklist(false)}
+                  className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { void handleFinalize(); }}
+                  disabled={pending.finalizing || hasIncompleteEquipmentChecks}
+                  className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition-colors"
+                >
+                  {pending.finalizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  Finalize Shift
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Finalized badge */}
+          {shift.is_finalized && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+              <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+              <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                Shift finalized{shift.finalized_at ? ` on ${formatDateCustom(new Date(shift.finalized_at), { month: 'short', day: 'numeric', year: 'numeric' }, tz)}` : ''}
+              </span>
             </div>
           )}
 

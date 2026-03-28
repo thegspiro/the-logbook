@@ -18,13 +18,16 @@ from app.models.training import (
     AssignmentStatus,
     BasicApparatus,
     DueDateType,
+    EnrollmentStatus,
     PatternType,
+    ProgramEnrollment,
     RequirementFrequency,
     RequirementType,
     Shift,
     ShiftAssignment,
     ShiftAttendance,
     ShiftCall,
+    ShiftCompletionReport,
     ShiftPattern,
     ShiftPosition,
     ShiftSwapRequest,
@@ -328,9 +331,17 @@ class SchedulingService:
         return result
 
     async def enrich_attendance_records(
-        self, attendance_records: List[ShiftAttendance]
+        self,
+        attendance_records: List[ShiftAttendance],
+        member_call_counts: Optional[Dict[str, int]] = None,
     ) -> List[Dict[str, Any]]:
-        """Convert attendance ORM objects to dicts with user_name populated."""
+        """Convert attendance ORM objects to dicts with user_name and
+        live call_count populated.
+
+        If ``member_call_counts`` is provided it will be used to fill in
+        ``call_count`` for each member.  When omitted the stored value
+        on the ORM object (snapshotted at finalization) is used as-is.
+        """
         if not attendance_records:
             return []
         user_ids = list({a.user_id for a in attendance_records if a.user_id})
@@ -339,8 +350,30 @@ class SchedulingService:
         for a in attendance_records:
             d = {c.key: getattr(a, c.key) for c in a.__table__.columns}
             d["user_name"] = name_map.get(str(a.user_id))
+            if member_call_counts is not None:
+                d["call_count"] = member_call_counts.get(
+                    str(a.user_id), 0
+                )
             result.append(d)
         return result
+
+    async def compute_member_call_counts(
+        self, shift_id: UUID
+    ) -> Dict[str, int]:
+        """Count calls per member from ShiftCall.responding_members JSON."""
+        call_result = await self.db.execute(
+            select(ShiftCall.responding_members).where(
+                ShiftCall.shift_id == str(shift_id)
+            )
+        )
+        counts: Dict[str, int] = {}
+        for (members,) in call_result.all():
+            if not members:
+                continue
+            for uid in members:
+                uid_str = str(uid)
+                counts[uid_str] = counts.get(uid_str, 0) + 1
+        return counts
 
     # ============================================
     # Shift Management
@@ -506,11 +539,40 @@ class SchedulingService:
     async def delete_shift(
         self, shift_id: UUID, organization_id: UUID
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a shift"""
+        """Delete a shift.
+
+        Blocks deletion of finalized shifts and shifts that have
+        completion reports, since those are the source of truth for
+        training requirement tracking.
+        """
         try:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return False, "Shift not found"
+
+            if shift.is_finalized:
+                return False, (
+                    "Cannot delete a finalized shift. "
+                    "Finalized shifts are locked because their "
+                    "data feeds into training requirement "
+                    "tracking."
+                )
+
+            report_count = (
+                await self.db.execute(
+                    select(func.count(ShiftCompletionReport.id))
+                    .where(
+                        ShiftCompletionReport.shift_id
+                        == str(shift_id)
+                    )
+                )
+            ).scalar() or 0
+            if report_count > 0:
+                return False, (
+                    f"Cannot delete shift with "
+                    f"{report_count} completion report(s). "
+                    f"Remove the reports first."
+                )
 
             await self.db.delete(shift)
             await self.db.commit()
@@ -533,6 +595,11 @@ class SchedulingService:
                 return None, "Shift not found"
 
             attendance = ShiftAttendance(shift_id=shift_id, **attendance_data)
+
+            if attendance.checked_in_at and attendance.checked_out_at:
+                delta = attendance.checked_out_at - attendance.checked_in_at
+                attendance.duration_minutes = int(delta.total_seconds() / 60)
+
             self.db.add(attendance)
             await self.db.commit()
             await self.db.refresh(attendance)
@@ -3414,3 +3481,342 @@ class SchedulingService:
             )
 
         return compliance_data
+
+    # ============================================
+    # Shift Finalization
+    # ============================================
+
+    async def finalize_shift(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        finalized_by_user_id: str,
+    ) -> Tuple[Optional[Shift], Optional[str]]:
+        """Mark a shift as finalized after officer review.
+
+        Validates that the shift has ended before allowing finalization.
+        Snapshots call_count and total_hours onto the shift record so
+        the values are preserved even if attendance records change later.
+        """
+        try:
+            shift = await self.get_shift_by_id(shift_id, organization_id)
+            if not shift:
+                return None, "Shift not found"
+
+            if shift.is_finalized:
+                return None, "Shift is already finalized"
+
+            now = datetime.now(timezone.utc)
+            if shift.end_time and shift.end_time > now:
+                return None, "Cannot finalize a shift that has not ended"
+
+            # Snapshot call count
+            call_result = await self.db.execute(
+                select(func.count(ShiftCall.id)).where(
+                    ShiftCall.shift_id == str(shift_id)
+                )
+            )
+            shift.call_count = call_result.scalar() or 0
+
+            # Snapshot total hours from attendance duration
+            hours_result = await self.db.execute(
+                select(
+                    func.coalesce(
+                        func.sum(ShiftAttendance.duration_minutes), 0
+                    )
+                ).where(
+                    ShiftAttendance.shift_id == str(shift_id)
+                )
+            )
+            total_min = hours_result.scalar() or 0
+            shift.total_hours = (
+                round(total_min / 60.0, 1) if total_min > 0 else 0.0
+            )
+
+            # Snapshot per-member call counts onto attendance records
+            member_call_counts = await self.compute_member_call_counts(
+                shift_id
+            )
+            att_result = await self.db.execute(
+                select(ShiftAttendance).where(
+                    ShiftAttendance.shift_id == str(shift_id)
+                )
+            )
+            for att in att_result.scalars().all():
+                att.call_count = member_call_counts.get(
+                    str(att.user_id), 0
+                )
+
+            shift.is_finalized = True
+            shift.finalized_at = now
+            shift.finalized_by = finalized_by_user_id
+
+            # Auto-create draft shift completion reports for trainees
+            # (members with active program enrollments) on this shift
+            draft_count = await self._create_draft_reports_for_trainees(
+                shift=shift,
+                organization_id=organization_id,
+                finalized_by_user_id=finalized_by_user_id,
+            )
+
+            await self.db.commit()
+            await self.db.refresh(shift)
+
+            # Send post-finalization notification to the officer
+            if draft_count > 0:
+                await self._send_finalization_notification(
+                    shift=shift,
+                    organization_id=organization_id,
+                    officer_id=finalized_by_user_id,
+                    draft_count=draft_count,
+                )
+
+            return shift, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def _create_draft_reports_for_trainees(
+        self,
+        shift: Shift,
+        organization_id: UUID,
+        finalized_by_user_id: str,
+    ) -> int:
+        """Create draft ShiftCompletionReports for shift attendees who
+        have active training program enrollments.
+
+        Called during finalization so the officer only needs to add
+        narrative and ratings to complete each report.
+        Returns the number of drafts created.
+        """
+        from app.services.shift_completion_service import (
+            ShiftCompletionService,
+        )
+
+        att_result = await self.db.execute(
+            select(ShiftAttendance).where(
+                ShiftAttendance.shift_id == str(shift.id)
+            )
+        )
+        attendees = att_result.scalars().all()
+        if not attendees:
+            return 0
+
+        attendee_ids = [str(a.user_id) for a in attendees]
+
+        enrollment_result = await self.db.execute(
+            select(
+                ProgramEnrollment.user_id,
+                ProgramEnrollment.id,
+            ).where(
+                ProgramEnrollment.organization_id == str(
+                    organization_id
+                ),
+                ProgramEnrollment.user_id.in_(attendee_ids),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+            )
+        )
+        trainee_enrollments = enrollment_result.all()
+        if not trainee_enrollments:
+            return 0
+
+        from loguru import logger
+
+        svc = ShiftCompletionService(self.db)
+        created_count = 0
+
+        for user_id, enrollment_id in trainee_enrollments:
+            try:
+                att = next(
+                    (
+                        a for a in attendees
+                        if str(a.user_id) == str(user_id)
+                    ),
+                    None,
+                )
+                hours = 0.0
+                if att and att.duration_minutes:
+                    hours = round(
+                        att.duration_minutes / 60.0, 2
+                    )
+
+                if (
+                    hours <= 0
+                    and shift.start_time
+                    and shift.end_time
+                ):
+                    delta = shift.end_time - shift.start_time
+                    hours = round(
+                        delta.total_seconds() / 3600.0, 2
+                    )
+
+                if hours <= 0:
+                    hours = 1.0
+
+                await svc.create_report(
+                    organization_id=organization_id,
+                    officer_id=UUID(finalized_by_user_id),
+                    trainee_id=str(user_id),
+                    shift_date=shift.shift_date,
+                    hours_on_shift=hours,
+                    shift_id=str(shift.id),
+                    enrollment_id=str(enrollment_id),
+                    review_status="draft",
+                    commit=False,
+                )
+                created_count += 1
+            except Exception as e:
+                logger.error(
+                    "Failed to create draft report for "
+                    "trainee %s on shift %s: %s",
+                    user_id,
+                    shift.id,
+                    e,
+                )
+
+        return created_count
+
+    async def _send_finalization_notification(
+        self,
+        shift: Shift,
+        organization_id: UUID,
+        officer_id: str,
+        draft_count: int,
+    ) -> None:
+        """Send in-app + email notification after shift finalization
+        listing the draft reports that were auto-created."""
+        import html as _html
+
+        from loguru import logger
+
+        from app.core.config import settings
+        from app.core.utils import generate_uuid
+        from app.models.notification import (
+            NotificationChannel,
+            NotificationLog,
+        )
+        from app.models.user import User
+        from app.services.email_service import (
+            EmailService,
+            build_email_logo_html,
+        )
+
+        try:
+            officer_result = await self.db.execute(
+                select(User).where(User.id == officer_id)
+            )
+            officer = officer_result.scalar_one_or_none()
+            if not officer:
+                return
+
+            org_result = await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+            org = org_result.scalar_one_or_none()
+            if not org:
+                return
+
+            shift_date_str = (
+                shift.shift_date.strftime("%b %d, %Y")
+                if shift.shift_date
+                else "Unknown"
+            )
+            plural = "s" if draft_count != 1 else ""
+            subject = (
+                f"Shift Finalized: {draft_count} draft "
+                f"report{plural} created"
+            )
+            message = (
+                f"Your shift on {shift_date_str} has been "
+                f"finalized. {draft_count} draft completion "
+                f"report{plural} auto-created for trainees "
+                f"on this shift. Please review and complete "
+                f"them."
+            )
+
+            # In-app notification
+            notif = NotificationLog(
+                id=generate_uuid(),
+                organization_id=str(organization_id),
+                recipient_id=officer_id,
+                channel=NotificationChannel.IN_APP,
+                category="shift_finalized",
+                subject=subject,
+                message=message,
+                action_url="/scheduling?tab=shift-reports&view=drafts",
+                metadata={
+                    "shift_id": str(shift.id),
+                    "draft_count": draft_count,
+                },
+                delivered=True,
+            )
+            self.db.add(notif)
+
+            # Email notification
+            prefs = officer.notification_preferences or {}
+            wants_email = prefs.get("email_notifications", True)
+            if wants_email and officer.email:
+                try:
+                    full_url = (
+                        f"{settings.FRONTEND_URL}"
+                        f"/scheduling?tab=shift-reports&view=drafts"
+                    )
+                    e_first = _html.escape(
+                        officer.first_name or ""
+                    )
+                    e_date = _html.escape(shift_date_str)
+                    _logo = build_email_logo_html(org)
+                    email_service = EmailService(organization=org)
+
+                    e_url = _html.escape(full_url)
+                    html_body = (
+                        f"{_logo}"
+                        f"<h2>Shift Finalized</h2>"
+                        f"<p>Hi {e_first},</p>"
+                        f"<p>Your shift on <strong>{e_date}"
+                        f"</strong> has been finalized. "
+                        f"<strong>{draft_count}</strong> draft "
+                        f"completion report{plural} auto-created "
+                        f"for trainees on this shift.</p>"
+                        f"<p>Please review and complete each "
+                        f"draft with ratings, skills, and "
+                        f"narratives.</p>"
+                        f'<p><a href="{e_url}" style="'
+                        f"display:inline-block;padding:10px 20px;"
+                        f"background-color:#7c3aed;"
+                        f"color:#ffffff;text-decoration:none;"
+                        f"border-radius:6px;font-weight:600;"
+                        f'">Review Draft Reports</a></p>'
+                    )
+                    text_body = (
+                        f"Hi {officer.first_name or ''},\n\n"
+                        f"Your shift on {shift_date_str} has "
+                        f"been finalized. {draft_count} draft "
+                        f"report{plural} auto-created.\n\n"
+                        f"Review them at: {full_url}\n"
+                    )
+
+                    await email_service.send_email(
+                        to_emails=[officer.email],
+                        subject=subject,
+                        html_body=html_body,
+                        text_body=text_body,
+                        db=self.db,
+                        template_type="shift_finalized",
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Failed to send finalization email "
+                        "to officer %s: %s",
+                        officer_id, e,
+                    )
+
+            await self.db.commit()
+        except Exception as e:
+            logger.error(
+                "Failed to send finalization notification "
+                "for shift %s: %s",
+                shift.id, e,
+            )

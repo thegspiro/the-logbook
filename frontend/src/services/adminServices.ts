@@ -584,8 +584,23 @@ export const shiftCompletionService = {
     return response.data;
   },
 
+  async getDraftReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/drafts');
+    return response.data;
+  },
+
+  async updateReport(reportId: string, data: Partial<import('../types/training').ShiftCompletionReportCreate> & { review_status?: string }): Promise<import('../types/training').ShiftCompletionReport> {
+    const response = await api.put<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}`, data);
+    return response.data;
+  },
+
   async reviewReport(reportId: string, data: { review_status: string; reviewer_notes?: string | undefined; redact_fields?: string[] | undefined }): Promise<import('../types/training').ShiftCompletionReport> {
     const response = await api.post<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}/review`, data);
+    return response.data;
+  },
+
+  async previewShiftData(shiftId: string, traineeId: string): Promise<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }> {
+    const response = await api.get<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }>(`/training/shift-reports/shift-preview/${shiftId}/${traineeId}`);
     return response.data;
   },
 };

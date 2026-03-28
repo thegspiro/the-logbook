@@ -18,12 +18,40 @@ from app.schemas.shift_completion import (
     ReportReview,
     ShiftCompletionReportCreate,
     ShiftCompletionReportResponse,
+    ShiftCompletionReportUpdate,
     TraineeAcknowledgment,
 )
 from app.services.shift_completion_service import ShiftCompletionService
 from app.services.training_module_config_service import TrainingModuleConfigService
 
 router = APIRouter()
+
+
+@router.get("/shift-preview/{shift_id}/{trainee_id}")
+async def preview_shift_data(
+    shift_id: str,
+    trainee_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Preview auto-populated data for a shift+trainee before filing.
+
+    Returns hours, call count, and call types from actual records.
+    """
+    service = ShiftCompletionService(db)
+    hours = await service._get_trainee_hours_from_shift(
+        shift_id, trainee_id
+    )
+    calls, call_types = (
+        await service._get_trainee_call_data_from_shift(
+            shift_id, trainee_id
+        )
+    )
+    return {
+        "hours_on_shift": hours,
+        "calls_responded": calls,
+        "call_types": call_types,
+    }
 
 
 @router.post("", response_model=ShiftCompletionReportResponse, status_code=201)
@@ -201,6 +229,23 @@ async def get_pending_review_reports(
     )
 
 
+@router.get("/drafts", response_model=list[ShiftCompletionReportResponse])
+async def get_draft_reports(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Get auto-created draft shift completion reports awaiting officer input.
+
+    Drafts are created automatically when a shift is finalized for
+    trainees with active program enrollments.
+    """
+    service = ShiftCompletionService(db)
+    return await service.get_reports_by_status(
+        organization_id=current_user.organization_id,
+        review_status="draft",
+    )
+
+
 @router.get("/{report_id}", response_model=ShiftCompletionReportResponse)
 async def get_shift_report(
     report_id: str,
@@ -217,6 +262,35 @@ async def get_shift_report(
     if report.organization_id != str(current_user.organization_id):
         raise HTTPException(status_code=404, detail="Report not found")
 
+    return report
+
+
+@router.put("/{report_id}", response_model=ShiftCompletionReportResponse)
+async def update_shift_report(
+    report_id: str,
+    data: ShiftCompletionReportUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Update a draft shift completion report.
+
+    Officers use this to complete auto-created drafts with ratings,
+    narratives, and skills before submitting.  When review_status
+    transitions from draft to approved/pending_review, training
+    pipeline progress is triggered automatically.
+    """
+    service = ShiftCompletionService(db)
+    try:
+        report = await service.update_report(
+            report_id=report_id,
+            organization_id=current_user.organization_id,
+            officer_id=str(current_user.id),
+            updates=data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
     return report
 
 

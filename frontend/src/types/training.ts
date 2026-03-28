@@ -1174,6 +1174,7 @@ export interface ShiftCompletionReport {
   officer_narrative?: string;
   skills_observed?: SkillObservation[];
   tasks_performed?: TaskPerformed[];
+  data_sources?: Record<string, string>;
   enrollment_id?: string;
   requirements_progressed?: { requirement_progress_id: string; value_added: number }[];
   review_status: string;  // draft, pending_review, approved, flagged
@@ -1221,6 +1222,9 @@ export interface TrainingModuleConfig {
   rating_label: string;
   rating_scale_type: string;  // stars, competency, custom
   rating_scale_labels?: Record<string, string>;  // {"1":"Unsatisfactory","2":"Developing",...}
+  shift_review_call_types?: string[];
+  shift_review_default_skills?: string[];
+  shift_review_default_tasks?: string[];
 }
 
 export interface MemberVisibility {

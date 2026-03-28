@@ -19,6 +19,9 @@ from app.models.training import (
     RequirementProgress,
     RequirementProgressStatus,
     RequirementType,
+    Shift,
+    ShiftAttendance,
+    ShiftCall,
     ShiftCompletionReport,
     TrainingRequirement,
 )
@@ -30,6 +33,54 @@ class ShiftCompletionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_trainee_call_data_from_shift(
+        self,
+        shift_id: str,
+        trainee_id: str,
+    ) -> tuple[int, list[str]]:
+        """Query actual ShiftCall records to get a trainee's call count
+        and types.
+
+        Searches responding_members JSON arrays for the trainee's user
+        ID and collects the incident_type from each matching call.
+        """
+        result = await self.db.execute(
+            select(
+                ShiftCall.responding_members,
+                ShiftCall.incident_type,
+            ).where(ShiftCall.shift_id == shift_id)
+        )
+
+        calls_responded = 0
+        call_types: list[str] = []
+        for members, incident_type in result.all():
+            if not members:
+                continue
+            member_ids = [str(m) for m in members]
+            if trainee_id in member_ids:
+                calls_responded += 1
+                if incident_type:
+                    call_types.append(incident_type)
+
+        return calls_responded, call_types
+
+    async def _get_trainee_hours_from_shift(
+        self,
+        shift_id: str,
+        trainee_id: str,
+    ) -> Optional[float]:
+        """Get a trainee's hours from their ShiftAttendance record."""
+        result = await self.db.execute(
+            select(ShiftAttendance.duration_minutes).where(
+                ShiftAttendance.shift_id == shift_id,
+                ShiftAttendance.user_id == trainee_id,
+            )
+        )
+        duration = result.scalar_one_or_none()
+        if duration and duration > 0:
+            return round(duration / 60.0, 2)
+        return None
 
     async def create_report(
         self,
@@ -49,8 +100,77 @@ class ShiftCompletionService:
         tasks_performed: Optional[list] = None,
         enrollment_id: Optional[str] = None,
         review_status: str = "approved",
+        commit: bool = True,
     ) -> ShiftCompletionReport:
         """Create a shift completion report and update pipeline progress."""
+
+        # Validate shift linkage when provided
+        data_sources: dict = {}
+        if shift_id:
+            shift = (
+                await self.db.execute(
+                    select(Shift).where(
+                        Shift.id == shift_id,
+                        Shift.organization_id == str(
+                            organization_id
+                        ),
+                    )
+                )
+            ).scalar_one_or_none()
+            if not shift:
+                raise ValueError(
+                    "Shift not found in this organization"
+                )
+
+            att_check = (
+                await self.db.execute(
+                    select(ShiftAttendance.id).where(
+                        ShiftAttendance.shift_id == shift_id,
+                        ShiftAttendance.user_id == trainee_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if not att_check:
+                raise ValueError(
+                    "Trainee has no attendance record for "
+                    "this shift"
+                )
+
+            existing = (
+                await self.db.execute(
+                    select(ShiftCompletionReport.id).where(
+                        ShiftCompletionReport.shift_id
+                        == shift_id,
+                        ShiftCompletionReport.trainee_id
+                        == trainee_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing:
+                raise ValueError(
+                    "A report already exists for this "
+                    "trainee on this shift"
+                )
+
+        # When linked to a shift, auto-populate from actual records
+        if shift_id:
+            actual_calls, actual_types = (
+                await self._get_trainee_call_data_from_shift(
+                    shift_id, trainee_id
+                )
+            )
+            calls_responded = actual_calls
+            data_sources["calls_responded"] = "shift_calls"
+            if actual_types:
+                call_types = actual_types
+                data_sources["call_types"] = "shift_calls"
+
+            actual_hours = await self._get_trainee_hours_from_shift(
+                shift_id, trainee_id
+            )
+            if actual_hours:
+                hours_on_shift = actual_hours
+                data_sources["hours_on_shift"] = "shift_attendance"
 
         report = ShiftCompletionReport(
             organization_id=str(organization_id),
@@ -83,27 +203,34 @@ class ShiftCompletionService:
             ),
             enrollment_id=enrollment_id,
             review_status=review_status,
+            data_sources=data_sources if data_sources else None,
         )
 
         self.db.add(report)
         await self.db.flush()
 
-        # Auto-update pipeline requirement progress
-        requirements_progressed = await self._update_requirement_progress(
-            organization_id=organization_id,
-            trainee_id=trainee_id,
-            hours_on_shift=hours_on_shift,
-            calls_responded=calls_responded,
-            call_types=call_types,
-            enrollment_id=enrollment_id,
-            officer_id=officer_id,
-        )
+        # Auto-update pipeline requirement progress — skip for drafts
+        # since the officer hasn't reviewed the data yet.  Progress
+        # will be triggered when the draft is completed/approved.
+        if review_status != "draft":
+            requirements_progressed = (
+                await self._update_requirement_progress(
+                    organization_id=organization_id,
+                    trainee_id=trainee_id,
+                    hours_on_shift=hours_on_shift,
+                    calls_responded=calls_responded,
+                    call_types=call_types,
+                    enrollment_id=enrollment_id,
+                    officer_id=officer_id,
+                )
+            )
 
-        if requirements_progressed:
-            report.requirements_progressed = requirements_progressed
+            if requirements_progressed:
+                report.requirements_progressed = requirements_progressed
 
-        await self.db.commit()
-        await self.db.refresh(report)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(report)
         return report
 
     async def _update_requirement_progress(
@@ -257,6 +384,68 @@ class ShiftCompletionService:
         )
         return result.scalar_one_or_none()
 
+    async def update_report(
+        self,
+        report_id: str,
+        organization_id: UUID,
+        officer_id: str,
+        updates: dict,
+    ) -> Optional[ShiftCompletionReport]:
+        """Update a draft shift completion report and optionally submit it.
+
+        When review_status transitions away from 'draft', training
+        pipeline progress is triggered with the final report data.
+        """
+        report = await self.get_report(report_id)
+        if not report:
+            return None
+        if report.organization_id != str(organization_id):
+            return None
+        if report.officer_id != officer_id:
+            raise ValueError(
+                "Only the filing officer can update this report"
+            )
+
+        was_draft = report.review_status == "draft"
+
+        for field, value in updates.items():
+            if hasattr(report, field) and field not in (
+                "id", "organization_id", "officer_id",
+                "trainee_id", "created_at",
+            ):
+                setattr(report, field, value)
+
+        # Trigger training progress when a draft is completed
+        if was_draft and report.review_status in (
+            "approved", "pending_review",
+        ):
+            await self._trigger_deferred_progress(report, officer_id)
+
+        await self.db.commit()
+        await self.db.refresh(report)
+        return report
+
+    async def _trigger_deferred_progress(
+        self,
+        report: ShiftCompletionReport,
+        officer_id: str,
+    ) -> None:
+        """Trigger training pipeline progress that was deferred when
+        a report was created as a draft."""
+        requirements_progressed = (
+            await self._update_requirement_progress(
+                organization_id=UUID(report.organization_id),
+                trainee_id=report.trainee_id,
+                hours_on_shift=report.hours_on_shift,
+                calls_responded=report.calls_responded,
+                call_types=report.call_types,
+                enrollment_id=report.enrollment_id,
+                officer_id=UUID(officer_id),
+            )
+        )
+        if requirements_progressed:
+            report.requirements_progressed = requirements_progressed
+
     async def get_reports_for_trainee(
         self,
         organization_id: UUID,
@@ -311,7 +500,7 @@ class ShiftCompletionService:
         limit: int = 100,
         offset: int = 0,
     ) -> List[ShiftCompletionReport]:
-        """Get all shift completion reports for the organization with optional filters."""
+        """Get all shift completion reports for the organization."""
         query = (
             select(ShiftCompletionReport)
             .where(ShiftCompletionReport.organization_id == str(organization_id))
@@ -376,10 +565,17 @@ class ShiftCompletionService:
         reviewer_notes: Optional[str] = None,
         redact_fields: Optional[List[str]] = None,
     ) -> Optional[ShiftCompletionReport]:
-        """Review a shift completion report: approve, flag, or redact fields."""
+        """Review a shift completion report: approve, flag, or redact fields.
+
+        When transitioning from draft to approved/pending_review,
+        triggers training pipeline progress that was deferred at
+        draft creation time.
+        """
         report = await self.get_report(report_id)
         if not report or report.organization_id != str(organization_id):
             return None
+
+        was_draft = report.review_status == "draft"
 
         # Redact specified fields before approving (clear sensitive content)
         REDACTABLE_FIELDS = {
@@ -399,6 +595,12 @@ class ShiftCompletionService:
         report.reviewed_at = datetime.now(timezone.utc)
         if reviewer_notes:
             report.reviewer_notes = reviewer_notes
+
+        # Trigger deferred training progress when draft is activated
+        if was_draft and review_status in ("approved", "pending_review"):
+            await self._trigger_deferred_progress(
+                report, reviewer_id,
+            )
 
         await self.db.commit()
         await self.db.refresh(report)

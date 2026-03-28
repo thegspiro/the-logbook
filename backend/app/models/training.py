@@ -1327,6 +1327,9 @@ class ShiftCompletionReport(Base):
     skills_observed = Column(JSON)  # Array of { skill_name, demonstrated: bool, notes }
     tasks_performed = Column(JSON)  # Array of { task, description }
 
+    # Audit trail for auto-populated fields
+    data_sources = Column(JSON)  # e.g. {"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}
+
     # Pipeline linkage
     enrollment_id = Column(
         String(36),
@@ -1361,11 +1364,26 @@ class ShiftCompletionReport(Base):
     )
 
     __table_args__ = (
-        Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
+        Index(
+            "idx_shift_report_trainee", "trainee_id", "shift_date"
+        ),
         Index("idx_shift_report_officer", "officer_id"),
         Index("idx_shift_report_enrollment", "enrollment_id"),
-        Index("idx_shift_report_org_date", "organization_id", "shift_date"),
-        Index("idx_shift_report_review", "organization_id", "review_status"),
+        Index(
+            "idx_shift_report_org_date",
+            "organization_id",
+            "shift_date",
+        ),
+        Index(
+            "idx_shift_report_review",
+            "organization_id",
+            "review_status",
+        ),
+        UniqueConstraint(
+            "shift_id",
+            "trainee_id",
+            name="uq_shift_report_shift_trainee",
+        ),
     )
 
     def __repr__(self):
@@ -1445,6 +1463,17 @@ class TrainingModuleConfig(Base):
     rating_scale_labels = Column(
         JSON, nullable=True
     )  # {"1":"Unsatisfactory","2":"Developing","3":"Competent","4":"Proficient","5":"Exemplary"}
+
+    # Shift review defaults (configurable by training officers)
+    shift_review_call_types = Column(
+        JSON, nullable=True
+    )  # Org-approved incident types, e.g. ["Structure Fire", "EMS/Medical", ...]
+    shift_review_default_skills = Column(
+        JSON, nullable=True
+    )  # Default skills checklist, e.g. ["SCBA donning/doffing", ...]
+    shift_review_default_tasks = Column(
+        JSON, nullable=True
+    )  # Default tasks to track, e.g. ["Apparatus check-off", ...]
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -2176,6 +2205,19 @@ class Shift(Base):
         Boolean, default=False, nullable=False, server_default="0"
     )
 
+    # Summary totals — computed on finalization, also served live via API
+    call_count = Column(Integer, nullable=True)
+    total_hours = Column(Float, nullable=True)
+
+    # Finalization — officer formally closes the shift after review
+    is_finalized = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    finalized_at = Column(DateTime(timezone=True), nullable=True)
+    finalized_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -2215,7 +2257,8 @@ class ShiftAttendance(Base):
     # Timing
     checked_in_at = Column(DateTime(timezone=True))
     checked_out_at = Column(DateTime(timezone=True))
-    duration_minutes = Column(Integer)  # Calculated
+    duration_minutes = Column(Integer)  # Calculated from check-in/check-out
+    call_count = Column(Integer, nullable=True)  # Snapshotted at finalization
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
