@@ -303,6 +303,36 @@ async def delete_shift(
         )
 
 
+@router.post("/shifts/{shift_id}/finalize", response_model=ShiftResponse)
+async def finalize_shift(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """
+    Finalize a shift after the officer has reviewed attendance and checklists.
+
+    Once finalized the shift is considered closed and attendance is locked.
+
+    **Permissions required:** scheduling.manage
+    """
+    service = SchedulingService(db)
+    shift, error = await service.finalize_shift(
+        shift_id,
+        current_user.organization_id,
+        finalized_by_user_id=str(current_user.id),
+    )
+    if not shift:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to finalize shift.", error),
+        )
+    enriched = await _enrich_shifts(
+        service, current_user.organization_id, [shift]
+    )
+    return enriched[0]
+
+
 # ============================================
 # Attendance Endpoints
 # ============================================

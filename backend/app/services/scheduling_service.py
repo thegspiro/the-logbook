@@ -3414,3 +3414,41 @@ class SchedulingService:
             )
 
         return compliance_data
+
+    # ============================================
+    # Shift Finalization
+    # ============================================
+
+    async def finalize_shift(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        finalized_by_user_id: str,
+    ) -> Tuple[Optional[Shift], Optional[str]]:
+        """Mark a shift as finalized after officer review.
+
+        Validates that the shift has ended before allowing finalization.
+        Once finalized, attendance records should be treated as immutable.
+        """
+        try:
+            shift = await self.get_shift_by_id(shift_id, organization_id)
+            if not shift:
+                return None, "Shift not found"
+
+            if shift.is_finalized:
+                return None, "Shift is already finalized"
+
+            now = datetime.now(timezone.utc)
+            if shift.end_time and shift.end_time > now:
+                return None, "Cannot finalize a shift that has not ended"
+
+            shift.is_finalized = True
+            shift.finalized_at = now
+            shift.finalized_by = finalized_by_user_id
+
+            await self.db.commit()
+            await self.db.refresh(shift)
+            return shift, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)

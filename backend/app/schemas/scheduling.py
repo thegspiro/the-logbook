@@ -107,6 +107,9 @@ class ShiftResponse(UTCResponseBase):
     notes: Optional[str] = None
     activities: Optional[Any] = None
     attendee_count: Optional[int] = 0
+    is_finalized: bool = False
+    finalized_at: Optional[datetime] = None
+    finalized_by: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None

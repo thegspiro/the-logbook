@@ -101,6 +101,9 @@ export interface ShiftRecord {
   activities?: unknown;
   open_to_all_members?: boolean;
   attendee_count: number;
+  is_finalized: boolean;
+  finalized_at?: string;
+  finalized_by?: string;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -296,6 +299,11 @@ export const schedulingService = {
 
   async deleteShift(shiftId: string): Promise<void> {
     await api.delete(`/scheduling/shifts/${shiftId}`);
+  },
+
+  async finalizeShift(shiftId: string): Promise<ShiftRecord> {
+    const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`);
+    return response.data;
   },
 
   async addAttendance(shiftId: string, data: AttendanceCreate): Promise<ShiftAttendanceRecord> {

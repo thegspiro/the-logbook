@@ -2176,6 +2176,15 @@ class Shift(Base):
         Boolean, default=False, nullable=False, server_default="0"
     )
 
+    # Finalization — officer formally closes the shift after review
+    is_finalized = Column(
+        Boolean, default=False, nullable=False, server_default="0"
+    )
+    finalized_at = Column(DateTime(timezone=True), nullable=True)
+    finalized_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
