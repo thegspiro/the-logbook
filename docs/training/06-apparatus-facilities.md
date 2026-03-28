@@ -596,4 +596,42 @@ The Equipment Check system provides structured vehicle and equipment inspections
 
 ---
 
+## Apparatus Badge Fix & EVOC Integration (2026-03-25)
+
+### Badge Rendering Fix
+
+Apparatus type badges (Engine, Ladder, Rescue, Ambulance) and status badges (In Service, Out of Service, Reserve) now display the correct icons. Previously, badge icons were rendering as text (e.g., showing the word "Truck" instead of a truck icon).
+
+> **Screenshot needed:**
+> _[Screenshot of the apparatus list showing apparatus cards with correct icon rendering — a truck icon next to "Engine 1", an ambulance icon next to "Medic 3", with status badges showing colored dots and icons]_
+
+### EVOC Certification Level on Apparatus
+
+Each apparatus can now specify a minimum EVOC (Emergency Vehicle Operations Course) certification level required for its operators:
+
+1. Navigate to **Apparatus > [Vehicle] > Edit**
+2. Set the **Required EVOC Level** field to Basic, Intermediate, or Advanced
+3. Save
+
+When scheduling assigns a member to a Driver/Operator position on this apparatus, the system validates their EVOC certification level against this requirement.
+
+> **Screenshot needed:**
+> _[Screenshot of the apparatus edit form showing the "Required EVOC Level" dropdown set to "Intermediate" among other apparatus fields]_
+
+### Standalone Equipment Checks
+
+Equipment checks can now be performed on any apparatus at any time, independent of active shifts. Navigate to **Scheduling > Equipment Checks** to see available apparatus and start a check.
+
+See [Shifts & Scheduling > Standalone Equipment Checks](./03-scheduling.md#standalone-equipment-checks) for the full workflow.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Apparatus with no EVOC level set | No validation on driver/operator assignments |
+| Badge with unrecognized apparatus type | Falls back to generic vehicle icon |
+| Ad-hoc equipment check on out-of-service apparatus | Allowed — check is recorded normally |
+
+---
+
 **Previous:** [Inventory Management](./05-inventory.md) | **Next:** [Documents & Forms](./07-documents-forms.md)

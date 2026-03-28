@@ -326,7 +326,7 @@ GET    /api/v1/scheduling/summary                    # Dashboard summary stats
 
 ### SchedulingPage (Main Hub)
 
-The main scheduling interface is a 6-tab hub accessible at `/scheduling`:
+The main scheduling interface is a 7-tab hub accessible at `/scheduling` (supports `?tab=` deep-linking):
 
 | Tab | Access | Description |
 |-----|--------|-------------|
@@ -335,6 +335,7 @@ The main scheduling interface is a 6-tab hub accessible at `/scheduling`:
 | **Open Shifts** | All members | Browse upcoming shifts grouped by date. Sign up for positions with inline position selector. |
 | **Requests** | All members | View swap and time-off requests. Admins can approve/deny with reviewer notes. |
 | **Templates** | `scheduling.manage` | Manage shift templates and scheduling patterns. Generate shifts from patterns. |
+| **Equipment Checks** | All members | Browse apparatus checklists, perform ad-hoc or shift-linked equipment checks |
 | **Reports** | `scheduling.manage` | Scheduling analytics: member hours, coverage, call volume, availability. |
 
 ### ShiftDetailPanel
@@ -770,4 +771,134 @@ The text color on shift cards with custom hex colors now passes WCAG AA contrast
 
 ---
 
-*Last Updated: March 24, 2026*
+## Notification Cards, Deep-Linking & Standalone Equipment Checks (2026-03-26)
+
+### Notification Metadata & Deep-Linking
+
+Shift-related notifications now carry structured metadata for rich card rendering:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `notification_logs.metadata` | JSON (nullable) | Structured context: `shift_id`, `shift_date`, `checklist_count`, etc. |
+
+**Alembic migration**: `20260326_0100_add_notification_metadata.py`
+
+Notification cards use this metadata to render:
+- **Contextual CTAs**: "View Shift" for assignment notifications, "Start Checklist" for equipment check reminders
+- **Time-aware CTA**: "Start Checklist" shown only during the shift window; "View Shift" outside the window
+- **Shift deep-links**: Clicking opens `/scheduling?tab=my-shifts` with the shift pre-selected
+
+### Scheduling Page `?tab=` Query Parameter
+
+`SchedulingPage.tsx` now reads the `?tab=` query parameter on mount:
+
+| Parameter | Tab |
+|-----------|-----|
+| `?tab=schedule` | Schedule (calendar) — default |
+| `?tab=my-shifts` | My Shifts |
+| `?tab=open-shifts` | Open Shifts |
+| `?tab=requests` | Requests |
+| `?tab=equipment-checks` | Equipment Checks |
+
+Invalid values fall back to the Schedule tab. This enables deep-linking from notifications, email links, and the Start Checklist CTA in notification cards.
+
+### Expandable Notification Cards
+
+`NotificationCard.tsx` redesigned with expand/collapse behavior:
+- **Pinned-first sort**: Pinned notifications sorted to top across dashboard and inbox
+- **Mark as read on collapse**: Notifications marked read only when collapsed (not on expand) to prevent accidental mark-as-read from quick glances
+- **Smooth CSS transitions**: Height and opacity transitions on expand/collapse
+
+### In-Process Scheduled Task Runner
+
+`backend/main.py` now includes a built-in asyncio scheduled task runner:
+- Replaces external cron for shift reminders, notification cleanup, and periodic tasks
+- Tasks are idempotent — container restarts don't cause duplicate sends
+- Runs within the FastAPI process as a background asyncio task
+- Intervals configurable via organization settings
+
+### Standalone Equipment Checks
+
+Equipment checks are no longer tied exclusively to active shifts:
+- Members can perform ad-hoc checks on any apparatus at any time
+- Navigate to **Scheduling > Equipment Checks** tab to start
+- Checks saved without shift association appear in reports as "ad hoc"
+- Admin link added from Equipment Checks tab to template management
+
+### Flat Scrollable Check Form
+
+Equipment check form redesigned from tabbed compartments to a single flat scrollable view:
+- All compartments displayed inline with section headers
+- Sub-compartments merged under parent headings
+- Section headers (`is_header: true` items) displayed as bold black text — not scored
+
+### Text Check Type Change
+
+The "Text" check type changed from free-form text input to read-only statement display:
+- Used for safety reminders and instructions within checklists
+- Not included in pass/fail scoring
+- Example: "Verify all compartment doors are secure before moving apparatus"
+
+### Critical Minimum Quantity
+
+Quantity-type check items support `critical_minimum_quantity` threshold:
+- Items below this value flagged as **critical** (red warning) even if above required minimum
+- Validation: critical minimum must be ≤ required minimum
+
+### Template Clone Fix
+
+Template cloning now correctly copies:
+- `is_header` field on check items
+- `critical_minimum_quantity` field on quantity items
+
+### EVOC Certification Integration
+
+EVOC levels integrated across training, apparatus, and scheduling:
+
+| Data | Location | Description |
+|------|----------|-------------|
+| `users.evoc_level` | Member profile | Basic, Intermediate, Advanced |
+| `apparatus.required_evoc_level` | Apparatus record | Minimum EVOC for operators |
+| Scheduling validation | Driver/Operator assignment | Warning when member EVOC < required |
+
+### Training Record Categories
+
+Training records now include a `category` field (Fire, EMS, Hazmat, Rescue, etc.) for state reporting compliance. Virginia NCCR recertification standards added with category-based hour minimums.
+
+### Elections — Event Attendee Import
+
+Officers can import checked-in attendees from a linked event into an election's ballot list. Linked elections now display on event and minutes detail pages with status badges.
+
+### Navigation Fixes
+
+- `navigate(-1)` replaced with hardcoded parent page paths across all modules
+- Breadcrumb navigation added to hierarchical pages
+- Chrome label printing fixed via iframe-based approach with top-level `@page` rules
+
+### App Startup
+
+- MySQL readiness check with retry and exponential backoff
+- Alembic migration head merge for divergent branches
+
+### Apparatus Badge Fix
+
+Apparatus type and status badges now render actual Lucide icon components instead of icon names as text.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Notification with no metadata | Basic card rendering without deep-link CTAs |
+| `?tab=invalid` in URL | Falls back to Schedule tab |
+| Standalone check with no shift | Saved as "ad hoc"; included in reports |
+| Section header in scoring | Excluded from pass/fail calculations |
+| Template clone with headers | `is_header` and `critical_minimum_quantity` preserved |
+| Container restart during scheduled task | Tasks resume; idempotent checks prevent duplicates |
+| MySQL not ready at startup | Retries up to 5 times with exponential backoff |
+| EVOC not set for member | Warning on driver assignment; assignment still allowed |
+| Event attendee already in ballot | Skipped silently; count reflects new additions only |
+| `navigate(-1)` from deep link | Now navigates to hardcoded parent page |
+
+---
+
+*Last Updated: March 28, 2026*

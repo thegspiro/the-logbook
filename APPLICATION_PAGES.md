@@ -278,6 +278,9 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | URL | Page | Permission |
 |-----|------|------------|
 | `/scheduling` | Scheduling | Authenticated |
+| `/scheduling?tab=<tab>` | Scheduling (deep-link) | Authenticated |
+
+Supports `?tab=` query parameter for deep-linking to specific tabs: `schedule`, `my-shifts`, `open-shifts`, `requests`, `equipment-checks`. Shift notifications deep-link to the scheduling page with the relevant shift pre-selected.
 
 Tab-based interface with the following views:
 
@@ -287,6 +290,7 @@ Tab-based interface with the following views:
 | `my-shifts` | My Shifts | No |
 | `open-shifts` | Open Shifts | No |
 | `requests` | Requests | No |
+| `equipment-checks` | Equipment Checks | No |
 | `templates` | Templates | Yes |
 | `reports` | Reports | Yes |
 | `settings` | Settings | Yes |
@@ -429,3 +433,7 @@ Tab-based interface with the following views:
 ---
 
 **Total: ~108 direct routes + 25 admin hub tabs across 18 modules**
+
+> **Note (2026-03-26):** Notification cards redesigned with expand/collapse, pinned-first sorting, contextual CTAs, and mark-as-read on collapse. Notification metadata column added for rich card rendering. Scheduling page supports `?tab=` deep-linking (schedule, my-shifts, open-shifts, requests, equipment-checks). Shift notifications deep-link to scheduling with shift pre-selected. In-process scheduled task runner replaces external cron. Standalone equipment checks (not tied to shifts). Flat scrollable check form with inline compartments and section headers. Text check type changed to read-only statement. Critical minimum quantity threshold on check items. Template clone preserves is_header and critical_minimum_quantity. EVOC certification levels integrated across training, apparatus, and scheduling. Training record category tracking. Virginia NCCR recertification standards. Event attendees importable into election ballot lists. Linked elections displayed on event and minutes detail pages. Apparatus type/status badges render actual icons. navigate(-1) replaced with hardcoded back paths and breadcrumbs. Chrome label printing fixed via iframe-based approach. App startup handles MySQL not ready with retry backoff.
+>
+> **Note (2026-03-24):** Module availability depends on feature flags (`MODULE_*_ENABLED` in backend config). Disabled modules hide their navigation items and return 403 from API endpoints. The onboarding flow (`/onboarding/modules`) lets organizations choose which modules to enable during initial setup.

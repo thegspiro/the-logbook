@@ -263,4 +263,30 @@ POST   /api/v1/elections/{id}/send-ballot-emails   # Send ballot notification to
 
 ---
 
+---
+
+## Event Attendee Import & Linked Elections (2026-03-24)
+
+- **Import event attendees**: Officers can import checked-in attendees from a linked event into the election's ballot recipient list via the election detail page
+- **Linked elections on event pages**: Event detail pages display linked elections with status badges and direct links to the election
+- **Linked elections on minutes pages**: Meeting minutes detail pages show associated elections
+- **Quick-link buttons**: Upcoming Meetings list on election detail shows quick-action buttons for meeting-to-election association
+- **Removed redundant section**: Cleaned up duplicate Upcoming Meetings display
+
+### API Endpoint
+
+```
+POST   /api/v1/elections/{id}/import-attendees   # Import event attendees into ballot list
+```
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Event with no checked-in attendees | Returns empty list with informational message |
+| Attendee already in ballot list | Skipped silently; count reflects only new additions |
+| Election linked to cancelled event | Link preserved; event shows cancelled badge |
+
+---
+
 **See also:** [Prospective Members](Module-Prospective-Members) | [Role System](Role-System)

@@ -268,4 +268,41 @@ GET    /api/v1/scheduling/shifts/{id}/unavailable-members  # Unavailable user ID
 
 ---
 
+---
+
+## Notification Deep-Linking & Scheduled Tasks (2026-03-26)
+
+- **Scheduling page `?tab=` deep-linking**: SchedulingPage accepts `?tab=schedule|my-shifts|open-shifts|requests|equipment-checks` query parameter for direct navigation to a specific tab from notifications and external links
+- **Shift notification deep-link**: Shift assignment and reminder notifications link directly to the scheduling page with the shift pre-selected
+- **In-process scheduled task runner**: Backend runs shift reminders, notification cleanup, and periodic tasks via a built-in asyncio task runner in `main.py` — no external cron required
+- **Start-of-shift checklist CTA**: Notification cards show "Start Checklist" during the shift window or "View Shift" outside it, with deep-link to the Equipment Checks tab
+
+### Standalone Equipment Checks (2026-03-25)
+
+- **Equipment checks without active shift**: Members can perform ad-hoc equipment checks on any apparatus without being on an active shift
+- **Flat scrollable check form**: Check form redesigned from tabbed compartments to a single scrollable view with inline compartment headers
+- **Section headers in templates**: Template items support `is_header: true` for visual grouping labels that don't participate in pass/fail scoring
+- **Text check type**: Read-only statement display for safety reminders and instructions within checklists
+- **Critical minimum quantity**: Warning threshold below the required minimum; items below this are flagged as critical
+- **Template clone fix**: `is_header` and `critical_minimum_quantity` fields now preserved during template cloning
+
+### EVOC Certification Integration (2026-03-24)
+
+- **EVOC certification levels**: EVOC levels (Basic, Intermediate, Advanced) tracked per member and validated against apparatus requirements for driver/operator position assignments
+- **Required EVOC level on apparatus**: Each apparatus can specify a minimum EVOC level for operators
+
+---
+
+## Bug Fixes (2026-03-25)
+
+| Issue | Fix |
+|-------|-----|
+| Apparatus type/status badges showing icon names as text | Fixed to render actual Lucide icon components |
+| `navigate(-1)` causing unexpected navigation from deep links | Replaced with hardcoded parent page paths and breadcrumbs |
+| Chrome ignoring custom label page sizes | Switched to iframe-based printing with top-level `@page` rules |
+| App crash when MySQL not ready at startup | Added retry with exponential backoff on migration check |
+| Alembic multiple migration heads | Merged divergent branches into single linear chain |
+
+---
+
 **See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus)

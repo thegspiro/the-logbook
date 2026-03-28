@@ -602,4 +602,30 @@ The training module uses 16 exported service objects in `frontend/src/services/t
 
 ---
 
+---
+
+## Training Record Categories & EVOC Certification (2026-03-24)
+
+- **Training record categories**: Records now include a `category` field (Fire, EMS, Hazmat, Rescue, etc.) aligned with state reporting requirements
+- **Virginia NCCR standards**: Virginia National Continued Competency Requirements (NCCR) recertification standards added with required categories and hour minimums per category
+- **EVOC certification levels**: EVOC levels (Basic, Intermediate, Advanced) tracked per member, validated for driver/operator positions, and integrated across training, apparatus, and scheduling modules
+- **Schema alignment**: Training record schemas unified across backend and frontend — missing fields added to bulk entry and individual record forms
+
+### Data Model Changes
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `training_records.category` | String (nullable) | Training category classification |
+| `users.evoc_level` | String (nullable) | EVOC certification level |
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Record with no category | Excluded from category-based compliance reports |
+| EVOC level not set for member | Can be assigned to driver position but warning shown |
+| Virginia NCCR with incomplete categories | Flagged in compliance dashboard |
+
+---
+
 **See also:** [Compliance Module](Module-Compliance) | [Scheduling Module](Module-Scheduling)

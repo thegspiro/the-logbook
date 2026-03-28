@@ -1156,4 +1156,58 @@ The election detail page now shows **upcoming business meetings** in a dedicated
 
 ---
 
+## Linked Elections & Attendee Import (2026-03-24)
+
+### Viewing Linked Elections on Events
+
+Event detail pages now display elections that are linked to the event. Each linked election shows:
+
+- Election title and status badge (Draft, Open, Closed, Certified)
+- Direct link to the election detail page
+- Vote count summary
+
+> **Screenshot needed:**
+> _[Screenshot of an event detail page showing a "Linked Elections" section with one election card displaying the election title, "Open" status badge in blue, and a "View Election" link]_
+
+### Viewing Linked Elections on Meeting Minutes
+
+Meeting minutes detail pages also display any elections associated with the meeting, using the same card format as event pages.
+
+> **Screenshot needed:**
+> _[Screenshot of a meeting minutes detail page showing a "Linked Elections" section below the minutes content]_
+
+### Importing Event Attendees into Election Ballot
+
+Officers can populate an election's ballot recipient list directly from a linked event's attendee list:
+
+1. Open the election detail page
+2. Navigate to the **Ballot** tab
+3. Click **Import Attendees** and select the linked event
+4. Checked-in attendees from the event are added to the ballot recipient list
+5. Members already in the ballot list are automatically skipped
+
+This streamlines the workflow for in-meeting elections where only present members should vote.
+
+> **Screenshot needed:**
+> _[Screenshot of the election Ballot tab showing the "Import Attendees" button with a dropdown of linked events, and a success message "12 attendees imported, 3 already in list (skipped)"]_
+
+### Quick-Link Buttons on Upcoming Meetings
+
+The election detail page's Upcoming Meetings list now includes quick-action buttons for faster meeting-to-election association, eliminating the need to navigate to the meeting page separately.
+
+> **Screenshot needed:**
+> _[Screenshot of the Upcoming Meetings section on the election detail page showing meeting cards with "Link to Election" quick-action buttons]_
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Event with no checked-in attendees | Import returns empty list with informational message |
+| Attendee already in ballot list | Skipped silently; count shows only new additions |
+| Election linked to cancelled event | Link preserved; event shows cancelled badge |
+| Minutes with no linked election | Election section not displayed |
+| Importing from event with 100+ attendees | All attendees processed; progress indicator shown |
+
+---
+
 **Previous:** [Shifts & Scheduling](./03-scheduling.md) | **Next:** [Inventory Management](./05-inventory.md)
