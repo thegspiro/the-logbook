@@ -177,8 +177,11 @@ export const ShiftReportsTab: React.FC = () => {
     );
   }, [members, memberSearch]);
 
-  const handleToggleCallType = (type: string) => {
-    setForm(prev => {
+  const toggleCallType = (
+    setter: React.Dispatch<React.SetStateAction<Partial<ShiftCompletionReportCreate>>>,
+    type: string,
+  ) => {
+    setter(prev => {
       const types = prev.call_types || [];
       return {
         ...prev,
@@ -187,8 +190,11 @@ export const ShiftReportsTab: React.FC = () => {
     });
   };
 
-  const handleToggleSkill = (skillName: string) => {
-    setForm(prev => {
+  const toggleSkill = (
+    setter: React.Dispatch<React.SetStateAction<Partial<ShiftCompletionReportCreate>>>,
+    skillName: string,
+  ) => {
+    setter(prev => {
       const skills = prev.skills_observed || [];
       const existing = skills.find(s => s.skill_name === skillName);
       if (existing) {
@@ -197,6 +203,9 @@ export const ShiftReportsTab: React.FC = () => {
       return { ...prev, skills_observed: [...skills, { skill_name: skillName, demonstrated: true }] };
     });
   };
+
+  const handleToggleCallType = (type: string) => toggleCallType(setForm, type);
+  const handleToggleSkill = (skillName: string) => toggleSkill(setForm, skillName);
 
   const handleUpdateSkillComment = (skillName: string, comment: string) => {
     setForm(prev => {
@@ -365,27 +374,6 @@ export const ShiftReportsTab: React.FC = () => {
     } finally {
       setSavingDraft(false);
     }
-  };
-
-  const handleDraftToggleCallType = (type: string) => {
-    setDraftForm(prev => {
-      const types = prev.call_types || [];
-      return {
-        ...prev,
-        call_types: types.includes(type) ? types.filter(t => t !== type) : [...types, type],
-      };
-    });
-  };
-
-  const handleDraftToggleSkill = (skillName: string) => {
-    setDraftForm(prev => {
-      const skills = prev.skills_observed || [];
-      const existing = skills.find(s => s.skill_name === skillName);
-      if (existing) {
-        return { ...prev, skills_observed: skills.filter(s => s.skill_name !== skillName) };
-      }
-      return { ...prev, skills_observed: [...skills, { skill_name: skillName, demonstrated: true }] };
-    });
   };
 
   // Configurable rating display
@@ -695,7 +683,7 @@ export const ShiftReportsTab: React.FC = () => {
                     {callTypeOptions.map(type => {
                       const isSelected = (draftForm.call_types || []).includes(type);
                       return (
-                        <button key={type} type="button" onClick={() => handleDraftToggleCallType(type)}
+                        <button key={type} type="button" onClick={() => toggleCallType(setDraftForm, type)}
                           className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
                             isSelected
                               ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30'
@@ -734,7 +722,7 @@ export const ShiftReportsTab: React.FC = () => {
                     {skillOptions.map(skill => {
                       const isSelected = (draftForm.skills_observed || []).some(s => s.skill_name === skill);
                       return (
-                        <button key={skill} type="button" onClick={() => handleDraftToggleSkill(skill)}
+                        <button key={skill} type="button" onClick={() => toggleSkill(setDraftForm, skill)}
                           className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
                             isSelected
                               ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'

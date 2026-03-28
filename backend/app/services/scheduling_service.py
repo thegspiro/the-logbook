@@ -3620,8 +3620,7 @@ class SchedulingService:
         if not trainee_enrollments:
             return 0
 
-        import logging
-        logger = logging.getLogger(__name__)
+        from loguru import logger
 
         svc = ShiftCompletionService(self.db)
         created_count = 0
@@ -3687,7 +3686,8 @@ class SchedulingService:
         """Send in-app + email notification after shift finalization
         listing the draft reports that were auto-created."""
         import html as _html
-        import logging
+
+        from loguru import logger
 
         from app.core.config import settings
         from app.core.utils import generate_uuid
@@ -3700,8 +3700,6 @@ class SchedulingService:
             EmailService,
             build_email_logo_html,
         )
-
-        logger = logging.getLogger(__name__)
 
         try:
             officer_result = await self.db.execute(
@@ -3725,17 +3723,17 @@ class SchedulingService:
                 if shift.shift_date
                 else "Unknown"
             )
+            plural = "s" if draft_count != 1 else ""
             subject = (
                 f"Shift Finalized: {draft_count} draft "
-                f"report{'s' if draft_count != 1 else ''} created"
+                f"report{plural} created"
             )
             message = (
-                f"Your shift on {shift_date_str} has been finalized. "
-                f"{draft_count} draft completion "
-                f"report{'s' if draft_count != 1 else ''} "
-                f"{'were' if draft_count != 1 else 'was'} "
-                f"auto-created for trainees on this shift. "
-                f"Please review and complete them."
+                f"Your shift on {shift_date_str} has been "
+                f"finalized. {draft_count} draft completion "
+                f"report{plural} auto-created for trainees "
+                f"on this shift. Please review and complete "
+                f"them."
             )
 
             # In-app notification
@@ -3772,27 +3770,31 @@ class SchedulingService:
                     _logo = build_email_logo_html(org)
                     email_service = EmailService(organization=org)
 
-                    html_body = f"""
-{_logo}
-<h2>Shift Finalized</h2>
-<p>Hi {e_first},</p>
-<p>Your shift on <strong>{e_date}</strong> has been
-finalized. <strong>{draft_count}</strong> draft completion
-report{'s' if draft_count != 1 else ''} {'were' if draft_count != 1 else 'was'}
-auto-created for trainees on this shift.</p>
-<p>Please review and complete each draft report with
-performance ratings, skills observed, and narratives.</p>
-<p><a href="{_html.escape(full_url)}"
-style="display:inline-block;padding:10px 20px;
-background-color:#7c3aed;color:#ffffff;
-text-decoration:none;border-radius:6px;
-font-weight:600;">Review Draft Reports</a></p>
-"""
+                    e_url = _html.escape(full_url)
+                    html_body = (
+                        f"{_logo}"
+                        f"<h2>Shift Finalized</h2>"
+                        f"<p>Hi {e_first},</p>"
+                        f"<p>Your shift on <strong>{e_date}"
+                        f"</strong> has been finalized. "
+                        f"<strong>{draft_count}</strong> draft "
+                        f"completion report{plural} auto-created "
+                        f"for trainees on this shift.</p>"
+                        f"<p>Please review and complete each "
+                        f"draft with ratings, skills, and "
+                        f"narratives.</p>"
+                        f'<p><a href="{e_url}" style="'
+                        f"display:inline-block;padding:10px 20px;"
+                        f"background-color:#7c3aed;"
+                        f"color:#ffffff;text-decoration:none;"
+                        f"border-radius:6px;font-weight:600;"
+                        f'">Review Draft Reports</a></p>'
+                    )
                     text_body = (
                         f"Hi {officer.first_name or ''},\n\n"
-                        f"Your shift on {shift_date_str} has been "
-                        f"finalized. {draft_count} draft completion "
-                        f"report(s) were auto-created.\n\n"
+                        f"Your shift on {shift_date_str} has "
+                        f"been finalized. {draft_count} draft "
+                        f"report{plural} auto-created.\n\n"
                         f"Review them at: {full_url}\n"
                     )
 

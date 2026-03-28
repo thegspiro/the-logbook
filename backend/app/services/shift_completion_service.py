@@ -415,32 +415,36 @@ class ShiftCompletionService:
             ):
                 setattr(report, field, value)
 
-        report.updated_at = datetime.now(timezone.utc)
-
         # Trigger training progress when a draft is completed
-        is_now_active = report.review_status in (
+        if was_draft and report.review_status in (
             "approved", "pending_review",
-        )
-        if was_draft and is_now_active:
-            requirements_progressed = (
-                await self._update_requirement_progress(
-                    organization_id=organization_id,
-                    trainee_id=report.trainee_id,
-                    hours_on_shift=report.hours_on_shift,
-                    calls_responded=report.calls_responded,
-                    call_types=report.call_types,
-                    enrollment_id=report.enrollment_id,
-                    officer_id=UUID(officer_id),
-                )
-            )
-            if requirements_progressed:
-                report.requirements_progressed = (
-                    requirements_progressed
-                )
+        ):
+            await self._trigger_deferred_progress(report, officer_id)
 
         await self.db.commit()
         await self.db.refresh(report)
         return report
+
+    async def _trigger_deferred_progress(
+        self,
+        report: ShiftCompletionReport,
+        officer_id: str,
+    ) -> None:
+        """Trigger training pipeline progress that was deferred when
+        a report was created as a draft."""
+        requirements_progressed = (
+            await self._update_requirement_progress(
+                organization_id=UUID(report.organization_id),
+                trainee_id=report.trainee_id,
+                hours_on_shift=report.hours_on_shift,
+                calls_responded=report.calls_responded,
+                call_types=report.call_types,
+                enrollment_id=report.enrollment_id,
+                officer_id=UUID(officer_id),
+            )
+        )
+        if requirements_progressed:
+            report.requirements_progressed = requirements_progressed
 
     async def get_reports_for_trainee(
         self,
@@ -593,16 +597,9 @@ class ShiftCompletionService:
             report.reviewer_notes = reviewer_notes
 
         # Trigger deferred training progress when draft is activated
-        is_now_active = review_status in ("approved", "pending_review")
-        if was_draft and is_now_active:
-            await self._update_requirement_progress(
-                organization_id=organization_id,
-                trainee_id=report.trainee_id,
-                hours_on_shift=report.hours_on_shift,
-                calls_responded=report.calls_responded,
-                call_types=report.call_types,
-                enrollment_id=report.enrollment_id,
-                officer_id=UUID(report.officer_id),
+        if was_draft and review_status in ("approved", "pending_review"):
+            await self._trigger_deferred_progress(
+                report, reviewer_id,
             )
 
         await self.db.commit()
