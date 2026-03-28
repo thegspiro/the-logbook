@@ -1266,4 +1266,49 @@ Fixed an intermittent error where the real-time inventory updates WebSocket conn
 
 ---
 
+## Storage Area Items & Barcode Improvements (2026-03-24)
+
+### Viewing Items in Storage Areas
+
+Storage areas now display the inventory items assigned to each area:
+
+1. Navigate to **Inventory > Storage Areas**
+2. Click on a storage area to expand it
+3. Items assigned to that area appear in an inline panel showing:
+   - Item name
+   - Serial number
+   - Status badge
+   - Condition indicator
+4. Click on any item to navigate directly to its detail page
+
+> **Screenshot needed:**
+> _[Screenshot of the Storage Areas page with one area expanded showing 3-4 inventory items in an inline panel, each with name, serial number, and status badge. Show the expand/collapse arrow on the area header]_
+
+### Always-Visible Barcode & Asset Tag
+
+Item detail pages now always display the barcode and asset tag fields, even when empty. Empty fields show a `--` placeholder instead of being hidden, making it clear which items have barcodes assigned and which don't.
+
+> **Screenshot needed:**
+> _[Screenshot of an item detail page showing the barcode field with a generated barcode value (e.g., "INV-A3F82B9C") and the asset tag field showing "--" placeholder]_
+
+### Lazy Barcode Backfill
+
+Items created before the barcode auto-generation feature was added receive barcodes automatically:
+
+- When an item detail page is loaded and the item has no barcode, the system generates one (format: INV-XXXXXXXX)
+- No database migration required — backfill happens lazily on first access
+- The barcode is persisted so subsequent loads don't regenerate it
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Storage area with no items | Shows empty state: "No items in this storage area" |
+| Item with no barcode loaded for first time | Barcode auto-generated on first detail page access |
+| Item with barcode and asset tag both empty | Both fields display `--` placeholder |
+| Clicking item in storage area panel | Navigates to `/inventory/items/{id}` (not dashboard) |
+| Storage area name on item detail | Displays resolved area name instead of raw UUID |
+
+---
+
 **Previous:** [Events & Meetings](./04-events-meetings.md) | **Next:** [Apparatus & Facilities](./06-apparatus-facilities.md)

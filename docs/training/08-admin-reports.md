@@ -328,6 +328,54 @@ For each task you can see:
 > **Screenshot placeholder:**
 > _[Screenshot of the Scheduled Tasks page showing a list of tasks with name, frequency, last run time, next run time, and enabled toggle switches]_
 
+## In-Process Scheduled Task Runner (2026-03-25)
+
+The Logbook now runs scheduled tasks (shift reminders, notification cleanup, overdue checks, etc.) using a built-in asyncio task runner embedded in the backend process. This replaces the need for external cron jobs or Celery Beat for most periodic tasks.
+
+**What runs automatically:**
+- Start-of-shift reminders (every 30 minutes)
+- Notification log cleanup
+- Overdue inventory notifications
+- Equipment check reminder generation
+- Recurring event series extension
+
+**For IT administrators:**
+- No configuration needed — tasks start automatically with the backend
+- Task execution is idempotent — container restarts don't cause duplicate notifications
+- Task intervals and enable/disable flags are configured in organization settings
+- Logs appear in the standard backend log output with `[scheduler]` prefix
+
+> **Screenshot needed:**
+> _[Screenshot of the backend container log output showing scheduler task execution lines like "[scheduler] Running shift_reminders... [scheduler] 3 reminders sent"]_
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Container restarts during task execution | Task resumes on next interval; idempotent checks prevent duplicates |
+| MySQL not ready at startup | App retries migration check up to 5 times with exponential backoff before starting scheduler |
+| Task throws exception | Error logged; other tasks continue on schedule; failed task retries at next interval |
+| Multiple backend replicas | Each replica runs its own scheduler; use `DISABLE_SCHEDULER=true` env var on non-primary replicas to prevent duplicate execution |
+
+---
+
+## Navigation Improvements (2026-03-24)
+
+### Hardcoded Back Navigation
+
+All pages that previously used `navigate(-1)` (browser back button behavior) now use hardcoded parent page paths. This prevents unexpected navigation when users arrive via deep links, bookmarks, or external URLs (e.g., email notification links).
+
+### Breadcrumb Navigation
+
+Pages in hierarchical sections now include breadcrumb trails showing the navigation path:
+
+```
+Dashboard > Scheduling > Shift Templates > Edit Template
+```
+
+> **Screenshot needed:**
+> _[Screenshot of a scheduling sub-page showing breadcrumb navigation at the top: "Scheduling > Templates > Edit Station 1 Template" with each segment clickable]_
+
 ---
 
 ## Security and Compliance

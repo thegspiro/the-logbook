@@ -965,4 +965,128 @@ When you open a shift's detail panel, the corresponding shift card on the calend
 
 ---
 
+
+## Notification Cards, Deep-Linking & Standalone Equipment Checks (2026-03-26)
+
+### Expandable Notification Cards
+
+Shift-related notifications now use expandable cards that show a summary preview when collapsed and full details when expanded. Key behaviors:
+
+- **Pinned-first sorting**: Pinned notifications always appear at the top of the list
+- **Mark as read on collapse**: Notifications are only marked as read when you collapse the card, not when you first open it — this prevents accidental mark-as-read from quick glances
+- **Contextual action buttons**: Each notification type shows relevant action buttons (e.g., "View Shift" for assignment notifications, "Start Checklist" for equipment check reminders)
+
+> **Screenshot needed:**
+> _[Screenshot of the notification inbox showing two notification cards: one collapsed showing summary text with a pin icon and "View Shift" button, and one expanded showing full notification details with "Start Checklist" and "Dismiss" buttons]_
+
+### Scheduling Page Deep-Linking
+
+The scheduling page now supports `?tab=` query parameters for direct navigation to specific tabs:
+
+| Parameter | Tab |
+|-----------|-----|
+| `?tab=schedule` | Schedule (calendar) |
+| `?tab=my-shifts` | My Shifts |
+| `?tab=open-shifts` | Open Shifts |
+| `?tab=requests` | Requests |
+| `?tab=equipment-checks` | Equipment Checks |
+
+Shift notifications automatically deep-link to the correct tab. For example, clicking a shift assignment notification opens the scheduling page with My Shifts selected and the shift highlighted.
+
+> **Screenshot needed:**
+> _[Screenshot of the browser URL bar showing `/scheduling?tab=equipment-checks` and the Equipment Checks tab selected on the scheduling page]_
+
+### Standalone Equipment Checks
+
+Equipment checks are no longer tied exclusively to active shifts. Members can now perform ad-hoc checks on any apparatus at any time:
+
+1. Navigate to **Scheduling > Equipment Checks** tab
+2. Select the apparatus to check
+3. Complete the checklist as normal
+4. Submit — the check is saved without a shift association and appears in reports as "ad hoc"
+
+> **Screenshot needed:**
+> _[Screenshot of the Equipment Checks tab showing a list of apparatus with "Start Check" buttons, and one apparatus with a recent check timestamp and pass/fail badge]_
+
+### Flat Scrollable Check Form
+
+The equipment check form has been redesigned from a tabbed compartment view to a single flat scrollable page:
+
+- All compartments are displayed inline with clear section headers
+- Sub-compartments are merged under their parent compartment heading
+- Section headers (items with `is_header: true`) appear as bold black labels for visual grouping — they have no pass/fail controls and are not scored
+
+> **Screenshot needed:**
+> _[Screenshot of the flat equipment check form on a mobile device showing a compartment header ("Cab Interior"), a section header in bold ("Safety Equipment"), and several check items below with pass/fail buttons and quantity fields]_
+
+### Text Check Type
+
+The "Text" check type has been changed from a free-form text input to a read-only statement display. This is used for instructional text or safety reminders within checklists:
+
+- The text appears as a styled statement in the check form
+- Members read it but do not need to enter any response
+- Text items are not included in pass/fail scoring
+
+Example: "Verify all compartment doors are secure before moving apparatus"
+
+### Critical Minimum Quantity
+
+Quantity-type check items now support a `critical_minimum_quantity` threshold:
+
+- When the count falls below this value, the item is flagged as **critical** (red warning) even if above the required minimum
+- Useful for items where a certain threshold triggers a restock alert (e.g., "4 SCBA bottles required, critical if below 2")
+
+> **Edge case:** Critical minimum must be ≤ required minimum. Validation enforced when saving the template.
+
+### In-Process Scheduled Task Runner
+
+The backend now includes a built-in asyncio task runner in `main.py` that handles:
+
+- Start-of-shift reminders (30-minute intervals)
+- Notification cleanup
+- Other periodic maintenance tasks
+
+This replaces the need for external cron jobs. Tasks resume automatically on container restart with idempotent checks to prevent duplicate sends.
+
+### Edge Cases (2026-03-26)
+
+| Scenario | Behavior |
+|----------|----------|
+| Notification with no metadata | Card renders in basic mode without deep-link buttons |
+| `?tab=invalid-name` in URL | Falls back to Schedule (calendar) tab |
+| Standalone check with no shift | Saved as "ad hoc"; included in compliance reports |
+| Section header in check scoring | Not scored — excluded from pass/fail calculations |
+| Template clone with section headers | Headers and critical_minimum_quantity preserved |
+| App restart during scheduled task window | Tasks resume; idempotent checks prevent duplicate notifications |
+
+---
+
+## EVOC Certification & Position Validation (2026-03-24)
+
+### EVOC Certification Levels
+
+EVOC (Emergency Vehicle Operations Course) certification levels are now integrated across training, apparatus, and scheduling:
+
+1. **Member profiles** track EVOC level (Basic, Intermediate, Advanced)
+2. **Apparatus records** specify required EVOC level for operators
+3. **Scheduling** validates EVOC certification when assigning members to driver/operator positions
+
+When assigning a member to a Driver/Operator position, the system checks the apparatus's required EVOC level against the member's certification. If the member's level is insufficient, a warning is displayed.
+
+> **Screenshot needed:**
+> _[Screenshot of a member's profile showing EVOC certification level (e.g., "EVOC Level: Advanced") alongside other certifications]_
+
+> **Screenshot needed:**
+> _[Screenshot of the apparatus detail page showing the "Required EVOC Level" field set to "Intermediate"]_
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| EVOC not set for member | Can be assigned to driver position but warning shown |
+| Apparatus with no required EVOC level | No validation on driver assignments |
+| Member with expired EVOC certification | Warning shown; assignment still allowed |
+
+---
+
 **Previous:** [Training & Certification](./02-training.md) | **Next:** [Events & Meetings](./04-events-meetings.md)

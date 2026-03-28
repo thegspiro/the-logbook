@@ -139,6 +139,25 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 
 > **Hint:** The dashboard is personalized. Officers and administrators see additional summary cards with department-wide metrics. Regular members see their own upcoming items and assignments.
 
+### Notification Cards (2026-03-26)
+
+Dashboard notifications now use expandable cards:
+
+- Click to expand and see full notification details
+- Pinned notifications appear first
+- Notifications are marked as read when you collapse the card (not when you expand it)
+- Each notification shows context-aware action buttons:
+  - Shift notifications → "View Shift" button
+  - Equipment check reminders → "Start Checklist" button
+  - Other notifications → "View Details" or link to relevant page
+
+Clicking a shift notification takes you directly to the scheduling page with the correct tab and shift selected.
+
+> **Screenshot needed:**
+> _[Screenshot of the dashboard notifications section showing 2-3 expandable notification cards: one pinned (with pin icon) and expanded showing shift assignment details with a "View Shift" button, and one collapsed showing just the summary text]_
+
+> **Edge case:** If you expand a notification card to read it but navigate away before collapsing, the notification remains unread.
+
 ---
 
 ## Account Settings

@@ -7,6 +7,148 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Notification Cards — Expandable UI, Pinned Sort, Deep-Linking & Metadata (2026-03-26)
+
+- **Expandable notification cards**: NotificationCard component redesigned with expand/collapse behavior. Cards show a summary preview when collapsed and full details when expanded. Smooth CSS transitions on expand
+- **Pinned-first sort**: Pinned notifications are sorted to the top of the notification list across all views (dashboard, inbox)
+- **Mark as read on collapse**: Notifications are marked as read when the card is collapsed (not when expanded), preventing accidental mark-as-read from quick glances
+- **Contextual CTAs**: Notification cards show context-aware action buttons based on notification type (e.g., "View Shift" for shift notifications, "Start Checklist" for equipment check reminders)
+- **Notification metadata**: New `metadata` JSON column on `notification_logs` table stores structured data (e.g., `shift_id`, `shift_date`, `checklist_count`) for rich card rendering without additional API calls
+- **Shift deep-linking**: Shift notifications link directly to the scheduling page with the shift pre-selected. Equipment check reminders link to the Equipment Checks tab via `?tab=equipment-checks` query parameter
+- **Time-aware checklist CTA**: Start-of-shift reminders show "Start Checklist" CTA only during the shift window; shows "View Shift" outside the window
+- **Scheduling page tab deep-linking**: SchedulingPage now supports `?tab=` query parameter for direct navigation to specific tabs (schedule, my-shifts, open-shifts, requests, equipment-checks)
+- **In-process scheduled task runner**: Backend `main.py` now includes a built-in asyncio-based scheduled task runner that replaces the need for external cron. Runs shift reminders, notification cleanup, and other periodic tasks within the FastAPI process
+- **Email service logging fix**: Fixed loguru format string errors in email_service.py that caused logging failures on email send success paths
+
+**New Data Model Changes:**
+
+| Table/Field | Change | Description |
+|-------------|--------|-------------|
+| `notification_logs.metadata` | New JSON column | Stores structured notification context (shift_id, shift_date, checklist_count, etc.) |
+
+**New Migration:**
+- `20260326_0100_add_notification_metadata.py` — Adds `metadata` JSON column to `notification_logs`
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Notification with no metadata | Card renders in basic mode without deep-link CTAs |
+| Shift notification outside shift window | Shows "View Shift" CTA instead of "Start Checklist" |
+| Multiple pinned notifications | All pinned sorted to top; sub-sorted by creation date descending |
+| Expand without collapsing | Notification remains unread until explicitly collapsed |
+| `?tab=` with invalid tab name | Falls back to the default Schedule tab |
+| Scheduled task runner on container restart | Tasks resume automatically; no duplicate sends due to idempotent checks |
+
+### Equipment Checks — Standalone Checks, Flat View, Text Type & Template Improvements (2026-03-25)
+
+- **Standalone equipment checks**: Equipment checks can now be performed outside of shifts. Members can navigate to the Equipment Checks tab and submit checks for any apparatus at any time, not just during assigned shifts
+- **Flat scrollable view**: Equipment check form redesigned from tabbed compartments to a single flat scrollable view with inline compartment headers and sub-compartments merged inline under their parents
+- **Text check type**: New "Text" check type changed from free-form text input to a read-only statement display. Used for instructional text or safety reminders within checklists (e.g., "Verify all compartment doors are secure before moving apparatus")
+- **Section headers**: Compartment-level section headers added within checklist templates. Styled as bold black text (not purple uppercase) for visual grouping without being confused with interactive elements
+- **is_header field**: Template items support `is_header: true` flag to designate items as section headers rather than checkable items. Section headers are displayed in bold black and are not included in pass/fail scoring
+- **Template clone fix**: Cloning a template now correctly copies `is_header` and `critical_minimum_quantity` fields that were previously lost during clone operations
+- **is_header NULL validation fix**: Pre-existing compartments with NULL `is_header` values no longer cause validation errors when loading templates
+- **Admin navigation**: Equipment Checks tab in scheduling now includes a link to template management for admin users, allowing direct navigation to create/edit templates without going through Settings
+- **Critical minimum quantity**: Items with `critical_minimum_quantity` set show a warning threshold. When the quantity falls below this value, the item is flagged as critical even if above the required minimum
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Standalone check with no active shift | Check is saved without shift association; appears in reports as "ad hoc" |
+| Section header in check form | Displayed as bold label; no pass/fail controls; not scored |
+| Template with NULL is_header values | Treated as `false` (normal checkable item); no validation error |
+| Clone template with section headers | Headers correctly preserved in cloned template |
+| Sub-compartment items | Merged inline under parent compartment heading in flat view |
+| Critical minimum below required minimum | Critical threshold must be ≤ required minimum; validation enforced on save |
+
+### Training — Record Categories, Virginia NCCR & EVOC Certification Levels (2026-03-24)
+
+- **Training record category tracking**: Training records now include a `category` field for classification (e.g., "Fire", "EMS", "Hazmat", "Rescue"). Categories align with state reporting requirements
+- **Virginia NCCR recertification standards**: Added Virginia National Continued Competency Requirements (NCCR) recertification standards including required categories and hour minimums per category
+- **EVOC certification levels**: EVOC (Emergency Vehicle Operations Course) certification levels integrated across training, apparatus, and scheduling modules. Members can track EVOC certification level (Basic, Intermediate, Advanced). Apparatus records show required EVOC level. Scheduling validates EVOC certification for driver/operator position assignments
+- **Training schema alignment**: Backend and frontend training record schemas aligned — added missing fields to training record schemas and bulk entry including `category`, `training_type`, and certification-related fields
+- **Bulk entry fields**: Bulk training record entry form now includes all available fields matching individual record creation
+
+**Data Model Changes:**
+
+| Table/Field | Change | Description |
+|-------------|--------|-------------|
+| `training_records.category` | New column | Training category classification (Fire, EMS, Hazmat, etc.) |
+| `users.evoc_level` | New column | EVOC certification level (basic, intermediate, advanced) |
+| `apparatus.required_evoc_level` | New column | Minimum EVOC level required to operate this apparatus |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Training record with no category | Defaults to null; not included in category-based compliance reports |
+| EVOC level not set for member | Member can still be assigned to driver position but warning is shown |
+| Apparatus with no required EVOC level | No EVOC validation on driver assignments |
+| Virginia NCCR with incomplete categories | Missing categories flagged in compliance dashboard |
+
+### Elections — Event Attendee Import & Linked Election Display (2026-03-24)
+
+- **Import event attendees into election ballot list**: Election ballot recipients can now be populated from an event's attendee list. On the election detail page, officers can select a linked event and import its checked-in attendees as eligible voters
+- **Linked elections on event detail pages**: Event detail pages now show elections linked to the event with status badges and direct links
+- **Linked elections on minutes detail pages**: Meeting minutes detail pages show elections linked to the meeting with the same treatment
+- **Quick-link buttons on Upcoming Meetings**: Election detail page's Upcoming Meetings list now shows quick-link action buttons for faster meeting-to-election association
+- **Removed redundant Upcoming Meetings section**: Cleaned up duplicate Upcoming Meetings display on election detail page
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Event with no checked-in attendees | Import returns empty list with informational message |
+| Attendee already in ballot list | Duplicate is skipped silently; import count reflects only new additions |
+| Election linked to cancelled event | Link preserved; event shows cancelled badge |
+| Minutes with no linked election | No election section displayed |
+
+### Apparatus — Badge Icon Rendering Fix (2026-03-25)
+
+- **Type and status badges fix**: Apparatus type and status badges were rendering Lucide icon component names as raw text (e.g., "Truck" instead of a truck icon). Fixed to render actual icon components
+
+### Navigation — Hardcoded Back Paths & Breadcrumbs (2026-03-24)
+
+- **Replace navigate(-1)**: All instances of `navigate(-1)` (browser back) replaced with hardcoded back paths across multiple modules. Prevents unexpected navigation when users arrive via deep links or external URLs
+- **Breadcrumbs added**: Breadcrumb navigation added to pages that previously relied on browser history for back navigation
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| User arrives via deep link | Back button navigates to parent page (not browser history) |
+| User navigates through breadcrumbs | Each breadcrumb links to the correct parent page |
+
+### Print — Iframe-Based Chrome Label Printing (2026-03-24)
+
+- **Iframe-based printing**: Label printing now uses an iframe-based approach to force Chrome to respect `@page` size rules. Previously, Chrome would ignore custom page sizes in the print dialog, causing labels to print at letter size
+- **@page rule positioning**: Moved `@page` CSS rule to top level of the print stylesheet to ensure it's applied before Chrome's print dialog processes the page
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Non-Chrome browser | Falls back to standard print; @page rules work natively |
+| Printer without custom size support | Prints at closest available size with scaling |
+
+### Alembic — Migration Head Merge (2026-03-25)
+
+- **Merge multiple Alembic heads**: Merged divergent migration branches (pinned notifications, notification metadata) into a single linear migration chain
+
+### App Startup — MySQL Readiness Fix (2026-03-24)
+
+- **Graceful startup when MySQL is not ready**: Fixed app crash during startup when MySQL container is still initializing. Alembic migration check now catches `OperationalError` and retries with exponential backoff
+- **Sync engine retry helper**: Extracted retry logic with `connect_timeout` for database connectivity checks during startup
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| MySQL starts after app | App retries migration check up to 5 times with backoff; starts normally once MySQL is ready |
+| MySQL permanently unreachable | App logs error and exits after retries exhausted |
+
 ### Scheduling — Bulk Actions, Staffing Visualization, Notifications & Bug Fixes (2026-03-24)
 
 - **Bulk confirm/decline on My Shifts**: When 2+ pending shift assignments exist, checkboxes appear on each shift card with "Select All" toggle, "Confirm All", and "Decline All" bulk action buttons. Optimistic UI updates with rollback on failure

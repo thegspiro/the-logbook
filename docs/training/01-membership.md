@@ -522,6 +522,25 @@ The **Member Lifecycle Management** page (found under Members Admin) consolidate
 
 ---
 
+## EVOC Certification on Member Profiles (2026-03-24)
+
+Members can now have an EVOC (Emergency Vehicle Operations Course) certification level tracked on their profile:
+
+| Level | Description |
+|-------|-------------|
+| Basic | Standard vehicle operation |
+| Intermediate | Emergency vehicle operation with lights and sirens |
+| Advanced | Specialized apparatus operation (aerials, heavy rescue) |
+
+The EVOC level is set by administrators via the member admin edit page and is used by the Scheduling module to validate driver/operator position assignments against apparatus requirements.
+
+> **Screenshot needed:**
+> _[Screenshot of the member admin edit page showing the EVOC Level dropdown (Basic/Intermediate/Advanced) in the certifications section alongside other certification fields]_
+
+> **Edge case:** Members without an EVOC level set can still be assigned to driver/operator positions, but a warning badge appears on the assignment.
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |

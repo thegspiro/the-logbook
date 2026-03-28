@@ -413,4 +413,24 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 
 ---
 
+---
+
+## Storage Area Item Display & Barcode Improvements (2026-03-24)
+
+- **Storage area items display**: Storage areas page shows inventory items assigned to each area with expandable inline panels showing name, serial number, status, and condition
+- **Item links from storage areas**: Items in storage area panels link directly to `/inventory/items/{id}` (previously linked to dashboard)
+- **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback instead of hiding empty fields
+- **Lazy barcode backfill**: Items created before barcode auto-generation receive barcodes (INV-XXXXXXXX format) on first fetch — no migration needed
+- **Storage area name resolution**: Item detail page displays resolved storage area name instead of raw ID
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Item created before barcode auto-gen | Barcode lazily generated on first detail page load |
+| Storage area with no items | Shows empty state message |
+| Item without barcode or asset tag | Fields display `--` placeholder |
+
+---
+
 **See also:** [Apparatus Module](Module-Apparatus) | [Training Module](Module-Training)

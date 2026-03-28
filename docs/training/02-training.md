@@ -775,4 +775,71 @@ For a comprehensive guide with a realistic NREMT example walkthrough, see the de
 
 ---
 
+
+## Training Record Categories & Virginia NCCR Standards (2026-03-24)
+
+### Training Record Categories
+
+Training records now include a **Category** field for classification. When submitting or reviewing training records, select the appropriate category:
+
+| Category | Description |
+|----------|-------------|
+| Fire | Fire suppression and prevention training |
+| EMS | Emergency Medical Services training |
+| Hazmat | Hazardous materials response training |
+| Rescue | Technical rescue training |
+| Driver/Operator | Apparatus operation and EVOC training |
+| Leadership | Officer development and leadership training |
+
+Categories align with state reporting requirements and are used in compliance calculations for jurisdictions that require specific category hour minimums.
+
+> **Screenshot needed:**
+> _[Screenshot of the training record submission form showing the new "Category" dropdown field with options like Fire, EMS, Hazmat, Rescue, and the existing fields (course, date, hours)]_
+
+### Virginia NCCR Recertification Standards
+
+Virginia's National Continued Competency Requirements (NCCR) recertification standards have been added to the compliance tracking system. These define:
+
+- Required training categories for recertification
+- Hour minimums per category
+- Recertification cycle periods
+
+The compliance dashboard shows progress toward NCCR requirements with category breakdowns.
+
+> **Screenshot needed:**
+> _[Screenshot of the compliance dashboard showing a Virginia NCCR progress card with category bars (Fire: 12/16 hours, EMS: 8/8 hours, Hazmat: 2/4 hours) and an overall progress percentage]_
+
+### EVOC Certification Levels
+
+EVOC (Emergency Vehicle Operations Course) certification levels are now tracked on member profiles:
+
+- **Basic** — Standard vehicle operation
+- **Intermediate** — Emergency vehicle operation with lights and sirens
+- **Advanced** — Specialized apparatus operation (aerials, heavy rescue)
+
+EVOC levels integrate with the Apparatus module (required EVOC level per vehicle) and Scheduling module (validation on driver/operator assignments).
+
+> **Screenshot needed:**
+> _[Screenshot of a member's training profile showing the EVOC certification level field with "Advanced" selected and the certification date]_
+
+### Bulk Entry Improvements
+
+The bulk training record entry form now includes all available fields, matching the individual record creation form:
+
+- Category selection
+- Training type
+- Certification-related fields (certification name, expiration date, certifying body)
+- Notes and attachments
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Training record with no category | Not counted toward category-specific compliance requirements |
+| Virginia NCCR with incomplete categories | Missing categories flagged in compliance dashboard |
+| EVOC level not set on member profile | Member can still be assigned to driver positions but a warning is shown |
+| Bulk entry with mixed categories | Each record saves with its own category independently |
+
+---
+
 **Previous:** [Membership Management](./01-membership.md) | **Next:** [Shifts & Scheduling](./03-scheduling.md)

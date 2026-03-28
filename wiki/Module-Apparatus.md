@@ -168,4 +168,20 @@ Compliance Dashboard / Failure Log / Item Trends
 
 ---
 
+---
+
+## Apparatus Badge Fix & EVOC Integration (2026-03-25)
+
+- **Badge icon rendering fix**: Apparatus type and status badges now render actual Lucide icon components instead of displaying icon component names as text (e.g., a truck icon instead of the word "Truck")
+- **EVOC certification level**: New `required_evoc_level` field on apparatus records defines the minimum EVOC certification required for driver/operator position assignments
+- **Standalone equipment checks**: Equipment checks can now be performed on apparatus at any time, not just during active shifts
+
+### Data Model Changes
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `apparatus.required_evoc_level` | String (nullable) | Minimum EVOC level (basic, intermediate, advanced) for operators |
+
+---
+
 **See also:** [Scheduling Module](Module-Scheduling) | [Inventory Module](Module-Inventory)
