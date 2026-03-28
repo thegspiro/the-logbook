@@ -283,7 +283,7 @@ async def get_shift(
         "Shift",
     )
 
-    attendance = await service.get_shift_attendance(
+    attendance_records = await service.get_shift_attendance(
         shift_id, current_user.organization_id
     )
     apparatus_ids = [shift.apparatus_id] if shift.apparatus_id else []
@@ -294,6 +294,8 @@ async def get_shift(
     user_name_map = await service._get_user_name_map(officer_ids)
     d = {c.key: getattr(shift, c.key) for c in shift.__table__.columns}
     service._enrich_shift_dict(d, apparatus_map, user_name_map)
+
+    member_call_counts = await service.compute_member_call_counts(shift_id)
 
     call_result = await service.db.execute(
         select(func.count(ShiftCall.id)).where(
@@ -312,10 +314,14 @@ async def get_shift(
     total_min = total_min_result.scalar() or 0
     total_hours = round(total_min / 60.0, 1) if total_min > 0 else None
 
+    attendees = await service.enrich_attendance_records(
+        attendance_records, member_call_counts
+    )
+
     return {
         **d,
-        "attendees": attendance,
-        "attendee_count": len(attendance),
+        "attendees": attendees,
+        "attendee_count": len(attendees),
         "call_count": call_count,
         "total_hours": total_hours,
     }

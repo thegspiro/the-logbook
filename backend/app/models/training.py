@@ -2228,7 +2228,8 @@ class ShiftAttendance(Base):
     # Timing
     checked_in_at = Column(DateTime(timezone=True))
     checked_out_at = Column(DateTime(timezone=True))
-    duration_minutes = Column(Integer)  # Calculated
+    duration_minutes = Column(Integer)  # Calculated from check-in/check-out
+    call_count = Column(Integer, nullable=True)  # Snapshotted at finalization
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

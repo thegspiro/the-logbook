@@ -120,6 +120,7 @@ export interface ShiftAttendanceRecord {
   checked_in_at?: string;
   checked_out_at?: string;
   duration_minutes?: number;
+  call_count?: number;
   created_at: string;
 }
 

@@ -150,6 +150,7 @@ class ShiftAttendanceResponse(UTCResponseBase):
     checked_in_at: Optional[datetime] = None
     checked_out_at: Optional[datetime] = None
     duration_minutes: Optional[int] = None
+    call_count: Optional[int] = None
     created_at: datetime
 
     model_config = _response_config

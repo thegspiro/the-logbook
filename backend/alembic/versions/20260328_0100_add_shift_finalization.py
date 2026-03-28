@@ -1,8 +1,8 @@
-"""Add finalization and summary columns to shifts table
+"""Add finalization, summary columns to shifts, and per-member call_count
 
-Adds call_count and total_hours for shift-level summaries, plus
-is_finalized, finalized_at, and finalized_by so shift officers
-can formally close a shift after validating attendance and checklists.
+Adds shift-level call_count and total_hours for summaries, finalization
+fields (is_finalized, finalized_at, finalized_by), and a per-member
+call_count on shift_attendance so each member's call count is tracked.
 
 Revision ID: 20260328_0100
 Revises: 20260326_0100
@@ -50,9 +50,14 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
+    op.add_column(
+        "shift_attendance",
+        sa.Column("call_count", sa.Integer(), nullable=True),
+    )
 
 
 def downgrade() -> None:
+    op.drop_column("shift_attendance", "call_count")
     op.drop_column("shifts", "finalized_by")
     op.drop_column("shifts", "finalized_at")
     op.drop_column("shifts", "is_finalized")

@@ -328,9 +328,17 @@ class SchedulingService:
         return result
 
     async def enrich_attendance_records(
-        self, attendance_records: List[ShiftAttendance]
+        self,
+        attendance_records: List[ShiftAttendance],
+        member_call_counts: Optional[Dict[str, int]] = None,
     ) -> List[Dict[str, Any]]:
-        """Convert attendance ORM objects to dicts with user_name populated."""
+        """Convert attendance ORM objects to dicts with user_name and
+        live call_count populated.
+
+        If ``member_call_counts`` is provided it will be used to fill in
+        ``call_count`` for each member.  When omitted the stored value
+        on the ORM object (snapshotted at finalization) is used as-is.
+        """
         if not attendance_records:
             return []
         user_ids = list({a.user_id for a in attendance_records if a.user_id})
@@ -339,8 +347,30 @@ class SchedulingService:
         for a in attendance_records:
             d = {c.key: getattr(a, c.key) for c in a.__table__.columns}
             d["user_name"] = name_map.get(str(a.user_id))
+            if member_call_counts is not None:
+                d["call_count"] = member_call_counts.get(
+                    str(a.user_id), 0
+                )
             result.append(d)
         return result
+
+    async def compute_member_call_counts(
+        self, shift_id: UUID
+    ) -> Dict[str, int]:
+        """Count calls per member from ShiftCall.responding_members JSON."""
+        call_result = await self.db.execute(
+            select(ShiftCall.responding_members).where(
+                ShiftCall.shift_id == str(shift_id)
+            )
+        )
+        counts: Dict[str, int] = {}
+        for (members,) in call_result.all():
+            if not members:
+                continue
+            for uid in members:
+                uid_str = str(uid)
+                counts[uid_str] = counts.get(uid_str, 0) + 1
+        return counts
 
     # ============================================
     # Shift Management
@@ -3470,6 +3500,20 @@ class SchedulingService:
             shift.total_hours = (
                 round(total_min / 60.0, 1) if total_min > 0 else 0.0
             )
+
+            # Snapshot per-member call counts onto attendance records
+            member_call_counts = await self.compute_member_call_counts(
+                shift_id
+            )
+            att_result = await self.db.execute(
+                select(ShiftAttendance).where(
+                    ShiftAttendance.shift_id == str(shift_id)
+                )
+            )
+            for att in att_result.scalars().all():
+                att.call_count = member_call_counts.get(
+                    str(att.user_id), 0
+                )
 
             shift.is_finalized = True
             shift.finalized_at = now
