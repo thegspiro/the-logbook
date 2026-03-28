@@ -2176,6 +2176,10 @@ class Shift(Base):
         Boolean, default=False, nullable=False, server_default="0"
     )
 
+    # Summary totals — computed on finalization, also served live via API
+    call_count = Column(Integer, nullable=True)
+    total_hours = Column(Float, nullable=True)
+
     # Finalization — officer formally closes the shift after review
     is_finalized = Column(
         Boolean, default=False, nullable=False, server_default="0"

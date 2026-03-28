@@ -101,6 +101,8 @@ export interface ShiftRecord {
   activities?: unknown;
   open_to_all_members?: boolean;
   attendee_count: number;
+  call_count: number;
+  total_hours?: number | null;
   is_finalized: boolean;
   finalized_at?: string;
   finalized_by?: string;

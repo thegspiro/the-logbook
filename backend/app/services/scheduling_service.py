@@ -533,6 +533,11 @@ class SchedulingService:
                 return None, "Shift not found"
 
             attendance = ShiftAttendance(shift_id=shift_id, **attendance_data)
+
+            if attendance.checked_in_at and attendance.checked_out_at:
+                delta = attendance.checked_out_at - attendance.checked_in_at
+                attendance.duration_minutes = int(delta.total_seconds() / 60)
+
             self.db.add(attendance)
             await self.db.commit()
             await self.db.refresh(attendance)
@@ -3428,7 +3433,8 @@ class SchedulingService:
         """Mark a shift as finalized after officer review.
 
         Validates that the shift has ended before allowing finalization.
-        Once finalized, attendance records should be treated as immutable.
+        Snapshots call_count and total_hours onto the shift record so
+        the values are preserved even if attendance records change later.
         """
         try:
             shift = await self.get_shift_by_id(shift_id, organization_id)
@@ -3441,6 +3447,29 @@ class SchedulingService:
             now = datetime.now(timezone.utc)
             if shift.end_time and shift.end_time > now:
                 return None, "Cannot finalize a shift that has not ended"
+
+            # Snapshot call count
+            call_result = await self.db.execute(
+                select(func.count(ShiftCall.id)).where(
+                    ShiftCall.shift_id == str(shift_id)
+                )
+            )
+            shift.call_count = call_result.scalar() or 0
+
+            # Snapshot total hours from attendance duration
+            hours_result = await self.db.execute(
+                select(
+                    func.coalesce(
+                        func.sum(ShiftAttendance.duration_minutes), 0
+                    )
+                ).where(
+                    ShiftAttendance.shift_id == str(shift_id)
+                )
+            )
+            total_min = hours_result.scalar() or 0
+            shift.total_hours = (
+                round(total_min / 60.0, 1) if total_min > 0 else 0.0
+            )
 
             shift.is_finalized = True
             shift.finalized_at = now
