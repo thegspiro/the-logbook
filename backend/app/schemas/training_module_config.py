@@ -3,7 +3,7 @@ Schemas for Training Module Configuration (Member Visibility Settings)
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -52,6 +52,11 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     rating_scale_type: str = "stars"
     rating_scale_labels: Optional[dict] = None
 
+    # Shift review defaults
+    shift_review_call_types: Optional[List[str]] = None
+    shift_review_default_skills: Optional[List[str]] = None
+    shift_review_default_tasks: Optional[List[str]] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     updated_by: Optional[UUID] = None
@@ -90,6 +95,11 @@ class TrainingModuleConfigUpdate(BaseModel):
     rating_label: Optional[str] = Field(None, max_length=100)
     rating_scale_type: Optional[str] = Field(None, max_length=20)
     rating_scale_labels: Optional[dict] = None
+
+    # Shift review defaults
+    shift_review_call_types: Optional[List[str]] = None
+    shift_review_default_skills: Optional[List[str]] = None
+    shift_review_default_tasks: Optional[List[str]] = None
 
 
 class MemberVisibilityResponse(BaseModel):

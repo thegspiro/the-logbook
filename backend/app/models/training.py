@@ -1464,6 +1464,17 @@ class TrainingModuleConfig(Base):
         JSON, nullable=True
     )  # {"1":"Unsatisfactory","2":"Developing","3":"Competent","4":"Proficient","5":"Exemplary"}
 
+    # Shift review defaults (configurable by training officers)
+    shift_review_call_types = Column(
+        JSON, nullable=True
+    )  # Org-approved incident types, e.g. ["Structure Fire", "EMS/Medical", ...]
+    shift_review_default_skills = Column(
+        JSON, nullable=True
+    )  # Default skills checklist, e.g. ["SCBA donning/doffing", ...]
+    shift_review_default_tasks = Column(
+        JSON, nullable=True
+    )  # Default tasks to track, e.g. ["Apparatus check-off", ...]
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

@@ -19,7 +19,10 @@ import {
   Link,
   Zap,
 } from 'lucide-react';
-import { shiftCompletionService, userService, trainingProgramService } from '../services/api';
+import {
+  shiftCompletionService, userService, trainingProgramService,
+  trainingModuleConfigService,
+} from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
 import { useTimezone } from '../hooks/useTimezone';
@@ -31,6 +34,7 @@ import type {
   TaskPerformed,
   TraineeShiftStats,
   ProgramEnrollment,
+  TrainingModuleConfig,
 } from '../types/training';
 
 // ==================== Star Rating ====================
@@ -189,6 +193,7 @@ const ShiftReportPage: React.FC = () => {
   const [filedReports, setFiledReports] = useState<ShiftCompletionReport[]>([]);
   const [receivedReports, setReceivedReports] = useState<ShiftCompletionReport[]>([]);
   const [myStats, setMyStats] = useState<TraineeShiftStats | null>(null);
+  const [moduleConfig, setModuleConfig] = useState<TrainingModuleConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [memberMap, setMemberMap] = useState<Record<string, string>>({});
 
@@ -219,13 +224,15 @@ const ShiftReportPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [membersData, filedData, receivedData, statsData] = await Promise.all([
+      const [membersData, filedData, receivedData, statsData, configData] = await Promise.all([
         userService.getUsers(),
         shiftCompletionService.getReportsByOfficer().catch(() => []),
         shiftCompletionService.getMyReports().catch(() => []),
         shiftCompletionService.getMyStats().catch(() => null),
+        trainingModuleConfigService.getConfig().catch(() => null),
       ]);
 
+      setModuleConfig(configData);
       setMembers(membersData as SimpleUser[]);
       const map: Record<string, string> = {};
       (membersData as SimpleUser[]).forEach((m) => {
@@ -388,11 +395,14 @@ const ShiftReportPage: React.FC = () => {
     }
   };
 
-  const COMMON_CALL_TYPES = [
+  const DEFAULT_CALL_TYPES = [
     'Structure Fire', 'Wildland Fire', 'Vehicle Fire',
     'Medical - ALS', 'Medical - BLS', 'MVA',
     'Hazmat', 'Rescue', 'Public Assist',
   ];
+  const callTypeOptions = moduleConfig?.shift_review_call_types?.length
+    ? moduleConfig.shift_review_call_types
+    : DEFAULT_CALL_TYPES;
 
   return (
     <div className="min-h-screen">
@@ -592,7 +602,7 @@ const ShiftReportPage: React.FC = () => {
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Call Types</label>
                 <div className="flex flex-wrap gap-1 mb-2">
-                  {COMMON_CALL_TYPES.map((ct) => (
+                  {callTypeOptions.map((ct) => (
                     <button
                       key={ct}
                       type="button"

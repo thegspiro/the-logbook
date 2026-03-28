@@ -1222,6 +1222,9 @@ export interface TrainingModuleConfig {
   rating_label: string;
   rating_scale_type: string;  // stars, competency, custom
   rating_scale_labels?: Record<string, string>;  // {"1":"Unsatisfactory","2":"Developing",...}
+  shift_review_call_types?: string[];
+  shift_review_default_skills?: string[];
+  shift_review_default_tasks?: string[];
 }
 
 export interface MemberVisibility {

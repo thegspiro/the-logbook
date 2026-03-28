@@ -30,13 +30,13 @@ import { formatDateCustom, getTodayLocalDate } from '../../utils/dateFormatting'
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review';
 
-const CALL_TYPE_OPTIONS = [
+const DEFAULT_CALL_TYPE_OPTIONS = [
   'Structure Fire', 'Vehicle Fire', 'Brush/Wildland',
   'EMS/Medical', 'Motor Vehicle Accident', 'Hazmat',
   'Rescue/Extrication', 'Alarm Investigation', 'Public Assist', 'Other',
 ];
 
-const COMMON_SKILLS = [
+const DEFAULT_SKILLS = [
   'SCBA donning/doffing', 'Hose deployment', 'Ladder operations',
   'Search and rescue', 'Ventilation', 'Pump operations',
   'Patient assessment', 'CPR/AED', 'Vitals monitoring',
@@ -109,6 +109,12 @@ export const ShiftReportsTab: React.FC = () => {
   const ratingLabel = config?.rating_label || 'Performance Rating';
   const ratingScaleType = config?.rating_scale_type || 'stars';
   const ratingScaleLabels = config?.rating_scale_labels || DEFAULT_COMPETENCY_LABELS;
+  const callTypeOptions = config?.shift_review_call_types?.length
+    ? config.shift_review_call_types
+    : DEFAULT_CALL_TYPE_OPTIONS;
+  const skillOptions = config?.shift_review_default_skills?.length
+    ? config.shift_review_default_skills
+    : DEFAULT_SKILLS;
 
   const loadReports = useCallback(async () => {
     setLoading(true);
@@ -699,7 +705,7 @@ export const ShiftReportsTab: React.FC = () => {
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-2">Call Types</label>
               <div className="flex flex-wrap gap-2">
-                {CALL_TYPE_OPTIONS.map(type => (
+                {callTypeOptions.map(type => (
                   <button key={type} onClick={() => handleToggleCallType(type)}
                     className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                       form.call_types?.includes(type)
@@ -750,7 +756,7 @@ export const ShiftReportsTab: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-2">Skills Observed</label>
             <div className="space-y-2">
-              {COMMON_SKILLS.map(skill => {
+              {skillOptions.map(skill => {
                 const selected = form.skills_observed?.find(s => s.skill_name === skill);
                 return (
                   <div key={skill}>
