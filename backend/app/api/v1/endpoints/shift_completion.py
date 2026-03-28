@@ -18,6 +18,7 @@ from app.schemas.shift_completion import (
     ReportReview,
     ShiftCompletionReportCreate,
     ShiftCompletionReportResponse,
+    ShiftCompletionReportUpdate,
     TraineeAcknowledgment,
 )
 from app.services.shift_completion_service import ShiftCompletionService
@@ -261,6 +262,35 @@ async def get_shift_report(
     if report.organization_id != str(current_user.organization_id):
         raise HTTPException(status_code=404, detail="Report not found")
 
+    return report
+
+
+@router.put("/{report_id}", response_model=ShiftCompletionReportResponse)
+async def update_shift_report(
+    report_id: str,
+    data: ShiftCompletionReportUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Update a draft shift completion report.
+
+    Officers use this to complete auto-created drafts with ratings,
+    narratives, and skills before submitting.  When review_status
+    transitions from draft to approved/pending_review, training
+    pipeline progress is triggered automatically.
+    """
+    service = ShiftCompletionService(db)
+    try:
+        report = await service.update_report(
+            report_id=report_id,
+            organization_id=current_user.organization_id,
+            officer_id=str(current_user.id),
+            updates=data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
     return report
 
 

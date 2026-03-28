@@ -65,12 +65,16 @@ class ShiftCompletionReportCreate(BaseModel):
 
 
 class ShiftCompletionReportUpdate(BaseModel):
+    hours_on_shift: Optional[float] = Field(None, gt=0, le=48)
+    calls_responded: Optional[int] = Field(None, ge=0)
+    call_types: Optional[List[str]] = Field(None, max_length=50)
     performance_rating: Optional[int] = Field(None, ge=1, le=5)
     areas_of_strength: Optional[str] = None
     areas_for_improvement: Optional[str] = None
     officer_narrative: Optional[str] = None
     skills_observed: Optional[List[SkillObservation]] = None
     tasks_performed: Optional[List[TaskPerformed]] = None
+    review_status: Optional[str] = None
 
 
 class TraineeAcknowledgment(BaseModel):

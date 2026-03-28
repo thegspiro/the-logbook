@@ -468,14 +468,18 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     }
   };
 
-  // Pre-finalization checklist data
-  const hasIncompleteEquipmentChecks = useMemo(() => {
-    return equipmentCheckSummaries.some(c => !c.isCompleted);
+  // Pre-finalization checklist data — only end-of-shift checks gate finalization
+  const endOfShiftChecks = useMemo(() => {
+    return equipmentCheckSummaries.filter(c => c.checkTiming === 'end_of_shift');
   }, [equipmentCheckSummaries]);
 
+  const hasIncompleteEquipmentChecks = useMemo(() => {
+    return endOfShiftChecks.some(c => !c.isCompleted);
+  }, [endOfShiftChecks]);
+
   const completedEquipmentChecks = useMemo(() => {
-    return equipmentCheckSummaries.filter(c => c.isCompleted);
-  }, [equipmentCheckSummaries]);
+    return endOfShiftChecks.filter(c => c.isCompleted);
+  }, [endOfShiftChecks]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -758,11 +762,11 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <div>
                       <span className="font-medium text-red-700 dark:text-red-400">End-of-shift equipment checks incomplete</span>
                       <p className="text-xs text-red-600 dark:text-red-300 mt-0.5">
-                        {equipmentCheckSummaries.filter(c => !c.isCompleted).length} checklist(s) still pending. Equipment checks must be completed before finalizing.
+                        {endOfShiftChecks.filter(c => !c.isCompleted).length} end-of-shift checklist(s) still pending. Equipment checks must be completed before finalizing.
                       </p>
                     </div>
                   </div>
-                ) : equipmentCheckSummaries.length > 0 ? (
+                ) : endOfShiftChecks.length > 0 ? (
                   <div className="flex items-center gap-2 p-2 bg-green-500/10 border border-green-500/20 rounded-md">
                     <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
                     <span className="text-green-700 dark:text-green-400">{completedEquipmentChecks.length} equipment check(s) completed</span>

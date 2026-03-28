@@ -12,7 +12,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   FileText, Plus, Loader2, Star, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
-  Shield, Eye, EyeOff, MessageSquare, ClipboardCheck,
+  Shield, Eye, EyeOff, MessageSquare, ClipboardCheck, Pencil,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
@@ -53,6 +53,7 @@ const DEFAULT_COMPETENCY_LABELS: Record<string, string> = {
 };
 
 const REVIEW_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  draft: { bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-400', label: 'Draft' },
   pending_review: { bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', label: 'Pending Review' },
   approved: { bg: 'bg-green-500/10', text: 'text-green-700 dark:text-green-400', label: 'Approved' },
   flagged: { bg: 'bg-red-500/10', text: 'text-red-700 dark:text-red-400', label: 'Flagged' },
@@ -105,6 +106,11 @@ export const ShiftReportsTab: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [redactFields, setRedactFields] = useState<string[]>([]);
   const [reviewing, setReviewing] = useState(false);
+
+  // Draft edit state
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [draftForm, setDraftForm] = useState<Partial<ShiftCompletionReportCreate>>({});
+  const [savingDraft, setSavingDraft] = useState(false);
 
   // Load config for visibility and rating settings
   useEffect(() => {
@@ -316,6 +322,70 @@ export const ShiftReportsTab: React.FC = () => {
     setRedactFields(prev =>
       prev.includes(field) ? prev.filter(f => f !== field) : [...prev, field]
     );
+  };
+
+  const handleEditDraft = (report: ShiftCompletionReport) => {
+    setEditingDraftId(report.id);
+    setDraftForm({
+      hours_on_shift: report.hours_on_shift,
+      calls_responded: report.calls_responded,
+      call_types: report.call_types || [],
+      performance_rating: report.performance_rating ?? undefined,
+      areas_of_strength: report.areas_of_strength || '',
+      areas_for_improvement: report.areas_for_improvement || '',
+      officer_narrative: report.officer_narrative || '',
+      skills_observed: report.skills_observed || [],
+      tasks_performed: report.tasks_performed || [],
+    });
+    setExpandedId(report.id);
+  };
+
+  const handleSaveDraft = async (submit: boolean) => {
+    if (!editingDraftId) return;
+    setSavingDraft(true);
+    try {
+      const payload: Record<string, unknown> = {
+        ...draftForm,
+        performance_rating: draftForm.performance_rating || undefined,
+        areas_of_strength: draftForm.areas_of_strength || undefined,
+        areas_for_improvement: draftForm.areas_for_improvement || undefined,
+        officer_narrative: draftForm.officer_narrative || undefined,
+        skills_observed: draftForm.skills_observed?.length ? draftForm.skills_observed : undefined,
+        tasks_performed: draftForm.tasks_performed?.filter(t => t.task.trim()) || undefined,
+      };
+      if (submit) {
+        payload.review_status = config?.report_review_required ? 'pending_review' : 'approved';
+      }
+      await shiftCompletionService.updateReport(editingDraftId, payload);
+      toast.success(submit ? 'Report submitted' : 'Draft saved');
+      setEditingDraftId(null);
+      void loadReports();
+    } catch {
+      toast.error('Failed to save report');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleDraftToggleCallType = (type: string) => {
+    setDraftForm(prev => {
+      const types = prev.call_types || [];
+      return {
+        ...prev,
+        call_types: types.includes(type) ? types.filter(t => t !== type) : [...types, type],
+      };
+    });
+  };
+
+  const handleDraftToggleSkill = (skillName: string) => {
+    setDraftForm(prev => {
+      const skills = prev.skills_observed || [];
+      const existing = skills.find(s => s.skill_name === skillName);
+      if (existing) {
+        return { ...prev, skills_observed: skills.filter(s => s.skill_name !== skillName) };
+      }
+      return { ...prev, skills_observed: [...skills, { skill_name: skillName, demonstrated: true }] };
+    });
   };
 
   // Configurable rating display
@@ -582,6 +652,146 @@ export const ShiftReportsTab: React.FC = () => {
                 >
                   <Check className="w-4 h-4" /> Acknowledge Report
                 </button>
+              </div>
+            )}
+
+            {/* Draft edit actions */}
+            {viewMode === 'drafts' && report.review_status === 'draft' && canManage && editingDraftId !== report.id && (
+              <div className="pt-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleEditDraft(report); }}
+                  className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Pencil className="w-4 h-4" /> Complete Draft
+                </button>
+              </div>
+            )}
+
+            {/* Inline draft edit form */}
+            {editingDraftId === report.id && (
+              <div className="pt-3 space-y-4 border-t border-theme-surface-border" onClick={e => e.stopPropagation()}>
+                <h4 className="text-sm font-semibold text-theme-text-primary">Complete Draft Report</h4>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Hours on Shift</label>
+                    <input type="number" step="0.25" min="0" value={draftForm.hours_on_shift ?? 0}
+                      onChange={e => setDraftForm(p => ({ ...p, hours_on_shift: parseFloat(e.target.value) || 0 }))}
+                      className="form-input focus:ring-violet-500 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Calls Responded</label>
+                    <input type="number" min="0" value={draftForm.calls_responded ?? 0}
+                      onChange={e => setDraftForm(p => ({ ...p, calls_responded: parseInt(e.target.value) || 0 }))}
+                      className="form-input focus:ring-violet-500 text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Call Types</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {callTypeOptions.map(type => {
+                      const isSelected = (draftForm.call_types || []).includes(type);
+                      return (
+                        <button key={type} type="button" onClick={() => handleDraftToggleCallType(type)}
+                          className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                            isSelected
+                              ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30'
+                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">{ratingLabel}</label>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map(val => (
+                      <button key={val} type="button"
+                        onClick={() => setDraftForm(p => ({ ...p, performance_rating: val }))}
+                        className="p-1"
+                      >
+                        <Star className={`w-5 h-5 ${(draftForm.performance_rating ?? 0) >= val ? 'fill-amber-400 text-amber-400' : 'text-theme-text-muted'}`} />
+                      </button>
+                    ))}
+                    {draftForm.performance_rating && ratingScaleType === 'competency' && (
+                      <span className="ml-2 text-xs text-theme-text-muted">
+                        {ratingScaleLabels[String(draftForm.performance_rating)] ?? ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Skills Observed</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {skillOptions.map(skill => {
+                      const isSelected = (draftForm.skills_observed || []).some(s => s.skill_name === skill);
+                      return (
+                        <button key={skill} type="button" onClick={() => handleDraftToggleSkill(skill)}
+                          className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                            isSelected
+                              ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
+                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
+                          }`}
+                        >
+                          {skill}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Officer Narrative</label>
+                  <textarea rows={3} value={draftForm.officer_narrative || ''}
+                    onChange={e => setDraftForm(p => ({ ...p, officer_narrative: e.target.value }))}
+                    placeholder="Summary of trainee performance during this shift..."
+                    className="form-input focus:ring-violet-500 resize-none text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
+                    <textarea rows={2} value={draftForm.areas_of_strength || ''}
+                      onChange={e => setDraftForm(p => ({ ...p, areas_of_strength: e.target.value }))}
+                      className="form-input focus:ring-violet-500 resize-none text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
+                    <textarea rows={2} value={draftForm.areas_for_improvement || ''}
+                      onChange={e => setDraftForm(p => ({ ...p, areas_for_improvement: e.target.value }))}
+                      className="form-input focus:ring-violet-500 resize-none text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 justify-end pt-1">
+                  <button onClick={() => setEditingDraftId(null)}
+                    className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary"
+                  >
+                    Cancel
+                  </button>
+                  <button onClick={() => { void handleSaveDraft(false); }} disabled={savingDraft}
+                    className="px-3 py-1.5 text-sm border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+                  >
+                    Save Draft
+                  </button>
+                  <button onClick={() => { void handleSaveDraft(true); }} disabled={savingDraft}
+                    className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition-colors"
+                  >
+                    {savingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    Submit Report
+                  </button>
+                </div>
               </div>
             )}
           </div>
