@@ -19,6 +19,7 @@ from app.models.training import (
     RequirementProgress,
     RequirementProgressStatus,
     RequirementType,
+    ShiftCall,
     ShiftCompletionReport,
     TrainingRequirement,
 )
@@ -30,6 +31,36 @@ class ShiftCompletionService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_trainee_call_data_from_shift(
+        self,
+        shift_id: str,
+        trainee_id: str,
+    ) -> tuple[int, list[str]]:
+        """Query actual ShiftCall records to get a trainee's call count and types.
+
+        Searches responding_members JSON arrays for the trainee's user ID
+        and collects the incident_type from each matching call.
+        """
+        result = await self.db.execute(
+            select(
+                ShiftCall.responding_members,
+                ShiftCall.incident_type,
+            ).where(ShiftCall.shift_id == shift_id)
+        )
+
+        calls_responded = 0
+        call_types: list[str] = []
+        for members, incident_type in result.all():
+            if not members:
+                continue
+            member_ids = [str(m) for m in members]
+            if trainee_id in member_ids:
+                calls_responded += 1
+                if incident_type:
+                    call_types.append(incident_type)
+
+        return calls_responded, call_types
 
     async def create_report(
         self,
@@ -51,6 +82,17 @@ class ShiftCompletionService:
         review_status: str = "approved",
     ) -> ShiftCompletionReport:
         """Create a shift completion report and update pipeline progress."""
+
+        # When linked to a shift, auto-populate call data from actual
+        # ShiftCall records instead of relying on manual entry
+        if shift_id:
+            actual_calls, actual_types = (
+                await self._get_trainee_call_data_from_shift(
+                    shift_id, trainee_id
+                )
+            )
+            calls_responded = actual_calls
+            call_types = actual_types if actual_types else call_types
 
         report = ShiftCompletionReport(
             organization_id=str(organization_id),
@@ -311,7 +353,7 @@ class ShiftCompletionService:
         limit: int = 100,
         offset: int = 0,
     ) -> List[ShiftCompletionReport]:
-        """Get all shift completion reports for the organization with optional filters."""
+        """Get all shift completion reports for the organization."""
         query = (
             select(ShiftCompletionReport)
             .where(ShiftCompletionReport.organization_id == str(organization_id))
