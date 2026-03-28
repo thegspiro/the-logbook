@@ -18,7 +18,9 @@ from app.models.training import (
     AssignmentStatus,
     BasicApparatus,
     DueDateType,
+    EnrollmentStatus,
     PatternType,
+    ProgramEnrollment,
     RequirementFrequency,
     RequirementType,
     Shift,
@@ -3519,9 +3521,95 @@ class SchedulingService:
             shift.finalized_at = now
             shift.finalized_by = finalized_by_user_id
 
+            # Auto-create draft shift completion reports for trainees
+            # (members with active program enrollments) on this shift
+            await self._create_draft_reports_for_trainees(
+                shift=shift,
+                organization_id=organization_id,
+                finalized_by_user_id=finalized_by_user_id,
+            )
+
             await self.db.commit()
             await self.db.refresh(shift)
             return shift, None
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def _create_draft_reports_for_trainees(
+        self,
+        shift: Shift,
+        organization_id: UUID,
+        finalized_by_user_id: str,
+    ) -> None:
+        """Create draft ShiftCompletionReports for shift attendees who
+        have active training program enrollments.
+
+        Called during finalization so the officer only needs to add
+        narrative and ratings to complete each report.
+        """
+        from app.services.shift_completion_service import (
+            ShiftCompletionService,
+        )
+
+        att_result = await self.db.execute(
+            select(ShiftAttendance).where(
+                ShiftAttendance.shift_id == str(shift.id)
+            )
+        )
+        attendees = att_result.scalars().all()
+        if not attendees:
+            return
+
+        attendee_ids = [str(a.user_id) for a in attendees]
+
+        enrollment_result = await self.db.execute(
+            select(
+                ProgramEnrollment.user_id,
+                ProgramEnrollment.id,
+            ).where(
+                ProgramEnrollment.organization_id == str(
+                    organization_id
+                ),
+                ProgramEnrollment.user_id.in_(attendee_ids),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+            )
+        )
+        trainee_enrollments = enrollment_result.all()
+        if not trainee_enrollments:
+            return
+
+        svc = ShiftCompletionService(self.db)
+
+        for user_id, enrollment_id in trainee_enrollments:
+            att = next(
+                (
+                    a for a in attendees
+                    if str(a.user_id) == str(user_id)
+                ),
+                None,
+            )
+            hours = 0.0
+            if att and att.duration_minutes:
+                hours = round(att.duration_minutes / 60.0, 2)
+
+            if hours <= 0 and shift.start_time and shift.end_time:
+                delta = shift.end_time - shift.start_time
+                hours = round(
+                    delta.total_seconds() / 3600.0, 2
+                )
+
+            if hours <= 0:
+                hours = 1.0
+
+            await svc.create_report(
+                organization_id=organization_id,
+                officer_id=UUID(finalized_by_user_id),
+                trainee_id=str(user_id),
+                shift_date=shift.shift_date,
+                hours_on_shift=hours,
+                shift_id=str(shift.id),
+                enrollment_id=str(enrollment_id),
+                review_status="draft",
+                commit=False,
+            )

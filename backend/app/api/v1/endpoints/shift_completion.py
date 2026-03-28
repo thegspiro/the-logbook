@@ -26,6 +26,33 @@ from app.services.training_module_config_service import TrainingModuleConfigServ
 router = APIRouter()
 
 
+@router.get("/shift-preview/{shift_id}/{trainee_id}")
+async def preview_shift_data(
+    shift_id: str,
+    trainee_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Preview auto-populated data for a shift+trainee before filing.
+
+    Returns hours, call count, and call types from actual records.
+    """
+    service = ShiftCompletionService(db)
+    hours = await service._get_trainee_hours_from_shift(
+        shift_id, trainee_id
+    )
+    calls, call_types = (
+        await service._get_trainee_call_data_from_shift(
+            shift_id, trainee_id
+        )
+    )
+    return {
+        "hours_on_shift": hours,
+        "calls_responded": calls,
+        "call_types": call_types,
+    }
+
+
 @router.post("", response_model=ShiftCompletionReportResponse, status_code=201)
 async def create_shift_report(
     data: ShiftCompletionReportCreate,

@@ -1327,6 +1327,9 @@ class ShiftCompletionReport(Base):
     skills_observed = Column(JSON)  # Array of { skill_name, demonstrated: bool, notes }
     tasks_performed = Column(JSON)  # Array of { task, description }
 
+    # Audit trail for auto-populated fields
+    data_sources = Column(JSON)  # e.g. {"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}
+
     # Pipeline linkage
     enrollment_id = Column(
         String(36),

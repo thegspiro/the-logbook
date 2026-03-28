@@ -5,7 +5,7 @@ Pydantic models for shift officer reports on trainee experiences.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -87,6 +87,8 @@ class ShiftCompletionReportResponse(UTCResponseBase):
 
     skills_observed: Optional[List[SkillObservation]] = None
     tasks_performed: Optional[List[TaskPerformed]] = None
+
+    data_sources: Optional[Dict[str, str]] = None
 
     enrollment_id: Optional[str] = None
     requirements_progressed: Optional[List[RequirementProgressEntry]] = None

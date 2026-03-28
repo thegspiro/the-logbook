@@ -16,10 +16,14 @@ import {
   Send,
   FileText,
   TrendingUp,
+  Link,
+  Zap,
 } from 'lucide-react';
 import { shiftCompletionService, userService, trainingProgramService } from '../services/api';
+import { schedulingService } from '../modules/scheduling/services/api';
+import type { ShiftRecord } from '../modules/scheduling/services/api';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatDate, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 import type {
   ShiftCompletionReport,
   ShiftCompletionReportCreate,
@@ -191,6 +195,10 @@ const ShiftReportPage: React.FC = () => {
   // Form state
   const [traineeId, setTraineeId] = useState('');
   const [shiftDate, setShiftDate] = useState(() => getTodayLocalDate(tz));
+  const [selectedShiftId, setSelectedShiftId] = useState('');
+  const [availableShifts, setAvailableShifts] = useState<ShiftRecord[]>([]);
+  const [loadingShifts, setLoadingShifts] = useState(false);
+  const [autoPopulated, setAutoPopulated] = useState<Record<string, boolean>>({});
   const [hoursOnShift, setHoursOnShift] = useState<number>(0);
   const [callsResponded, setCallsResponded] = useState<number>(0);
   const [callTypes, setCallTypes] = useState<string[]>([]);
@@ -233,6 +241,44 @@ const ShiftReportPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Load shifts for the selected date
+  useEffect(() => {
+    if (!shiftDate) return;
+    setLoadingShifts(true);
+    schedulingService
+      .getShifts({ start_date: shiftDate, end_date: shiftDate })
+      .then((res) => setAvailableShifts(res.shifts))
+      .catch(() => setAvailableShifts([]))
+      .finally(() => setLoadingShifts(false));
+  }, [shiftDate]);
+
+  // Preview auto-populated data when shift + trainee selected
+  useEffect(() => {
+    if (!selectedShiftId || !traineeId) {
+      setAutoPopulated({});
+      return;
+    }
+    shiftCompletionService
+      .previewShiftData(selectedShiftId, traineeId)
+      .then((preview) => {
+        const populated: Record<string, boolean> = {};
+        if (preview.hours_on_shift && preview.hours_on_shift > 0) {
+          setHoursOnShift(preview.hours_on_shift);
+          populated['hours_on_shift'] = true;
+        }
+        if (preview.calls_responded > 0) {
+          setCallsResponded(preview.calls_responded);
+          populated['calls_responded'] = true;
+        }
+        if (preview.call_types.length > 0) {
+          setCallTypes(preview.call_types);
+          populated['call_types'] = true;
+        }
+        setAutoPopulated(populated);
+      })
+      .catch(() => setAutoPopulated({}));
+  }, [selectedShiftId, traineeId]);
 
   // Load enrollments when trainee is selected
   useEffect(() => {
@@ -290,6 +336,7 @@ const ShiftReportPage: React.FC = () => {
         calls_responded: callsResponded,
         call_types: callTypes.length > 0 ? callTypes : undefined,
         performance_rating: rating > 0 ? rating : undefined,
+        ...(selectedShiftId ? { shift_id: selectedShiftId } : {}),
         ...(strengths ? { areas_of_strength: strengths } : {}),
         ...(improvements ? { areas_for_improvement: improvements } : {}),
         ...(narrative ? { officer_narrative: narrative } : {}),
@@ -308,6 +355,8 @@ const ShiftReportPage: React.FC = () => {
 
       // Reset form
       setTraineeId('');
+      setSelectedShiftId('');
+      setAutoPopulated({});
       setHoursOnShift(0);
       setCallsResponded(0);
       setCallTypes([]);
@@ -453,14 +502,60 @@ const ShiftReportPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Link to Shift */}
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                <Link className="w-3.5 h-3.5 inline mr-1" />
+                Link to Shift (optional)
+              </label>
+              <select
+                value={selectedShiftId}
+                onChange={(e) => setSelectedShiftId(e.target.value)}
+                className="form-input w-full"
+                disabled={loadingShifts}
+              >
+                <option value="">
+                  {loadingShifts ? 'Loading shifts...' : 'No shift linked — manual entry'}
+                </option>
+                {availableShifts.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.apparatus_name || s.apparatus_unit_number || 'Shift'} — {formatTime(s.start_time, tz)}
+                    {s.end_time ? ` to ${formatTime(s.end_time, tz)}` : ''}
+                    {s.shift_officer_name ? ` (${s.shift_officer_name})` : ''}
+                  </option>
+                ))}
+              </select>
+              {selectedShiftId && Object.keys(autoPopulated).length > 0 && (
+                <div className="mt-1.5 flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400">
+                  <Zap className="w-3 h-3" />
+                  <span>
+                    Auto-filled from shift records:{' '}
+                    {Object.keys(autoPopulated).map((k) => k.replace(/_/g, ' ')).join(', ')}
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Hours + Calls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Hours on Shift <span className="text-red-700 dark:text-red-400">*</span></label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                  Hours on Shift <span className="text-red-700 dark:text-red-400">*</span>
+                  {autoPopulated['hours_on_shift'] && (
+                    <span className="ml-1.5 text-xs font-normal text-blue-700 dark:text-blue-400">(auto)</span>
+                  )}
+                </label>
                 <input
                   type="number"
                   value={hoursOnShift || ''}
-                  onChange={(e) => setHoursOnShift(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    setHoursOnShift(parseFloat(e.target.value) || 0);
+                    setAutoPopulated((prev) => {
+                      const next = { ...prev };
+                      delete next['hours_on_shift'];
+                      return next;
+                    });
+                  }}
                   className="form-input w-full"
                   required
                   min={0.5}
@@ -469,11 +564,23 @@ const ShiftReportPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Calls Responded</label>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+                  Calls Responded
+                  {autoPopulated['calls_responded'] && (
+                    <span className="ml-1.5 text-xs font-normal text-blue-700 dark:text-blue-400">(auto)</span>
+                  )}
+                </label>
                 <input
                   type="number"
                   value={callsResponded || ''}
-                  onChange={(e) => setCallsResponded(parseInt(e.target.value) || 0)}
+                  onChange={(e) => {
+                    setCallsResponded(parseInt(e.target.value) || 0);
+                    setAutoPopulated((prev) => {
+                      const next = { ...prev };
+                      delete next['calls_responded'];
+                      return next;
+                    });
+                  }}
                   className="form-input w-full"
                   min={0}
                 />

@@ -1174,6 +1174,7 @@ export interface ShiftCompletionReport {
   officer_narrative?: string;
   skills_observed?: SkillObservation[];
   tasks_performed?: TaskPerformed[];
+  data_sources?: Record<string, string>;
   enrollment_id?: string;
   requirements_progressed?: { requirement_progress_id: string; value_added: number }[];
   review_status: string;  // draft, pending_review, approved, flagged

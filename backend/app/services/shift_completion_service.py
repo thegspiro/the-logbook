@@ -19,6 +19,7 @@ from app.models.training import (
     RequirementProgress,
     RequirementProgressStatus,
     RequirementType,
+    ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
     TrainingRequirement,
@@ -37,10 +38,11 @@ class ShiftCompletionService:
         shift_id: str,
         trainee_id: str,
     ) -> tuple[int, list[str]]:
-        """Query actual ShiftCall records to get a trainee's call count and types.
+        """Query actual ShiftCall records to get a trainee's call count
+        and types.
 
-        Searches responding_members JSON arrays for the trainee's user ID
-        and collects the incident_type from each matching call.
+        Searches responding_members JSON arrays for the trainee's user
+        ID and collects the incident_type from each matching call.
         """
         result = await self.db.execute(
             select(
@@ -62,6 +64,23 @@ class ShiftCompletionService:
 
         return calls_responded, call_types
 
+    async def _get_trainee_hours_from_shift(
+        self,
+        shift_id: str,
+        trainee_id: str,
+    ) -> Optional[float]:
+        """Get a trainee's hours from their ShiftAttendance record."""
+        result = await self.db.execute(
+            select(ShiftAttendance.duration_minutes).where(
+                ShiftAttendance.shift_id == shift_id,
+                ShiftAttendance.user_id == trainee_id,
+            )
+        )
+        duration = result.scalar_one_or_none()
+        if duration and duration > 0:
+            return round(duration / 60.0, 2)
+        return None
+
     async def create_report(
         self,
         organization_id: UUID,
@@ -80,11 +99,12 @@ class ShiftCompletionService:
         tasks_performed: Optional[list] = None,
         enrollment_id: Optional[str] = None,
         review_status: str = "approved",
+        commit: bool = True,
     ) -> ShiftCompletionReport:
         """Create a shift completion report and update pipeline progress."""
 
-        # When linked to a shift, auto-populate call data from actual
-        # ShiftCall records instead of relying on manual entry
+        # When linked to a shift, auto-populate from actual records
+        data_sources: dict = {}
         if shift_id:
             actual_calls, actual_types = (
                 await self._get_trainee_call_data_from_shift(
@@ -92,7 +112,17 @@ class ShiftCompletionService:
                 )
             )
             calls_responded = actual_calls
-            call_types = actual_types if actual_types else call_types
+            data_sources["calls_responded"] = "shift_calls"
+            if actual_types:
+                call_types = actual_types
+                data_sources["call_types"] = "shift_calls"
+
+            actual_hours = await self._get_trainee_hours_from_shift(
+                shift_id, trainee_id
+            )
+            if actual_hours:
+                hours_on_shift = actual_hours
+                data_sources["hours_on_shift"] = "shift_attendance"
 
         report = ShiftCompletionReport(
             organization_id=str(organization_id),
@@ -125,6 +155,7 @@ class ShiftCompletionService:
             ),
             enrollment_id=enrollment_id,
             review_status=review_status,
+            data_sources=data_sources if data_sources else None,
         )
 
         self.db.add(report)
@@ -144,8 +175,9 @@ class ShiftCompletionService:
         if requirements_progressed:
             report.requirements_progressed = requirements_progressed
 
-        await self.db.commit()
-        await self.db.refresh(report)
+        if commit:
+            await self.db.commit()
+            await self.db.refresh(report)
         return report
 
     async def _update_requirement_progress(

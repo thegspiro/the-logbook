@@ -588,6 +588,11 @@ export const shiftCompletionService = {
     const response = await api.post<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}/review`, data);
     return response.data;
   },
+
+  async previewShiftData(shiftId: string, traineeId: string): Promise<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }> {
+    const response = await api.get<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }>(`/training/shift-reports/shift-preview/${shiftId}/${traineeId}`);
+    return response.data;
+  },
 };
 
 // ============================================
