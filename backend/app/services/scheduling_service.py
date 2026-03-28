@@ -27,6 +27,7 @@ from app.models.training import (
     ShiftAssignment,
     ShiftAttendance,
     ShiftCall,
+    ShiftCompletionReport,
     ShiftPattern,
     ShiftPosition,
     ShiftSwapRequest,
@@ -538,11 +539,40 @@ class SchedulingService:
     async def delete_shift(
         self, shift_id: UUID, organization_id: UUID
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a shift"""
+        """Delete a shift.
+
+        Blocks deletion of finalized shifts and shifts that have
+        completion reports, since those are the source of truth for
+        training requirement tracking.
+        """
         try:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return False, "Shift not found"
+
+            if shift.is_finalized:
+                return False, (
+                    "Cannot delete a finalized shift. "
+                    "Finalized shifts are locked because their "
+                    "data feeds into training requirement "
+                    "tracking."
+                )
+
+            report_count = (
+                await self.db.execute(
+                    select(func.count(ShiftCompletionReport.id))
+                    .where(
+                        ShiftCompletionReport.shift_id
+                        == str(shift_id)
+                    )
+                )
+            ).scalar() or 0
+            if report_count > 0:
+                return False, (
+                    f"Cannot delete shift with "
+                    f"{report_count} completion report(s). "
+                    f"Remove the reports first."
+                )
 
             await self.db.delete(shift)
             await self.db.commit()
