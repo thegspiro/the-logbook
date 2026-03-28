@@ -7,7 +7,7 @@ Pydantic models for shift officer reports on trainee experiences.
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -36,17 +36,32 @@ class ShiftCompletionReportCreate(BaseModel):
     trainee_id: str
     hours_on_shift: float = Field(gt=0, le=48)
     calls_responded: int = Field(ge=0, default=0)
-    call_types: Optional[List[str]] = None
+    call_types: Optional[List[str]] = Field(
+        None, max_length=50
+    )
 
-    performance_rating: Optional[int] = Field(None, ge=1, le=5)
+    performance_rating: Optional[int] = Field(
+        None, ge=1, le=5
+    )
     areas_of_strength: Optional[str] = None
     areas_for_improvement: Optional[str] = None
     officer_narrative: Optional[str] = None
 
-    skills_observed: Optional[List[SkillObservation]] = None
-    tasks_performed: Optional[List[TaskPerformed]] = None
+    skills_observed: Optional[List[SkillObservation]] = Field(
+        None, max_length=100
+    )
+    tasks_performed: Optional[List[TaskPerformed]] = Field(
+        None, max_length=100
+    )
 
     enrollment_id: Optional[str] = None
+
+    @field_validator("shift_date")
+    @classmethod
+    def shift_date_not_future(cls, v: date) -> date:
+        if v > date.today():
+            raise ValueError("Shift date cannot be in the future")
+        return v
 
 
 class ShiftCompletionReportUpdate(BaseModel):

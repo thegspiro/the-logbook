@@ -3579,37 +3579,55 @@ class SchedulingService:
         if not trainee_enrollments:
             return
 
+        import logging
+        logger = logging.getLogger(__name__)
+
         svc = ShiftCompletionService(self.db)
 
         for user_id, enrollment_id in trainee_enrollments:
-            att = next(
-                (
-                    a for a in attendees
-                    if str(a.user_id) == str(user_id)
-                ),
-                None,
-            )
-            hours = 0.0
-            if att and att.duration_minutes:
-                hours = round(att.duration_minutes / 60.0, 2)
-
-            if hours <= 0 and shift.start_time and shift.end_time:
-                delta = shift.end_time - shift.start_time
-                hours = round(
-                    delta.total_seconds() / 3600.0, 2
+            try:
+                att = next(
+                    (
+                        a for a in attendees
+                        if str(a.user_id) == str(user_id)
+                    ),
+                    None,
                 )
+                hours = 0.0
+                if att and att.duration_minutes:
+                    hours = round(
+                        att.duration_minutes / 60.0, 2
+                    )
 
-            if hours <= 0:
-                hours = 1.0
+                if (
+                    hours <= 0
+                    and shift.start_time
+                    and shift.end_time
+                ):
+                    delta = shift.end_time - shift.start_time
+                    hours = round(
+                        delta.total_seconds() / 3600.0, 2
+                    )
 
-            await svc.create_report(
-                organization_id=organization_id,
-                officer_id=UUID(finalized_by_user_id),
-                trainee_id=str(user_id),
-                shift_date=shift.shift_date,
-                hours_on_shift=hours,
-                shift_id=str(shift.id),
-                enrollment_id=str(enrollment_id),
-                review_status="draft",
-                commit=False,
-            )
+                if hours <= 0:
+                    hours = 1.0
+
+                await svc.create_report(
+                    organization_id=organization_id,
+                    officer_id=UUID(finalized_by_user_id),
+                    trainee_id=str(user_id),
+                    shift_date=shift.shift_date,
+                    hours_on_shift=hours,
+                    shift_id=str(shift.id),
+                    enrollment_id=str(enrollment_id),
+                    review_status="draft",
+                    commit=False,
+                )
+            except Exception as e:
+                logger.error(
+                    "Failed to create draft report for "
+                    "trainee %s on shift %s: %s",
+                    user_id,
+                    shift.id,
+                    e,
+                )

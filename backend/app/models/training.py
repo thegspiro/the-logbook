@@ -1364,11 +1364,26 @@ class ShiftCompletionReport(Base):
     )
 
     __table_args__ = (
-        Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
+        Index(
+            "idx_shift_report_trainee", "trainee_id", "shift_date"
+        ),
         Index("idx_shift_report_officer", "officer_id"),
         Index("idx_shift_report_enrollment", "enrollment_id"),
-        Index("idx_shift_report_org_date", "organization_id", "shift_date"),
-        Index("idx_shift_report_review", "organization_id", "review_status"),
+        Index(
+            "idx_shift_report_org_date",
+            "organization_id",
+            "shift_date",
+        ),
+        Index(
+            "idx_shift_report_review",
+            "organization_id",
+            "review_status",
+        ),
+        UniqueConstraint(
+            "shift_id",
+            "trainee_id",
+            name="uq_shift_report_shift_trainee",
+        ),
     )
 
     def __repr__(self):

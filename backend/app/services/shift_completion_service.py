@@ -19,6 +19,7 @@ from app.models.training import (
     RequirementProgress,
     RequirementProgressStatus,
     RequirementType,
+    Shift,
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
@@ -103,8 +104,55 @@ class ShiftCompletionService:
     ) -> ShiftCompletionReport:
         """Create a shift completion report and update pipeline progress."""
 
-        # When linked to a shift, auto-populate from actual records
+        # Validate shift linkage when provided
         data_sources: dict = {}
+        if shift_id:
+            shift = (
+                await self.db.execute(
+                    select(Shift).where(
+                        Shift.id == shift_id,
+                        Shift.organization_id == str(
+                            organization_id
+                        ),
+                    )
+                )
+            ).scalar_one_or_none()
+            if not shift:
+                raise ValueError(
+                    "Shift not found in this organization"
+                )
+
+            att_check = (
+                await self.db.execute(
+                    select(ShiftAttendance.id).where(
+                        ShiftAttendance.shift_id == shift_id,
+                        ShiftAttendance.user_id == trainee_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if not att_check:
+                raise ValueError(
+                    "Trainee has no attendance record for "
+                    "this shift"
+                )
+
+            existing = (
+                await self.db.execute(
+                    select(ShiftCompletionReport.id).where(
+                        ShiftCompletionReport.shift_id
+                        == shift_id,
+                        ShiftCompletionReport.trainee_id
+                        == trainee_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing:
+                raise ValueError(
+                    "A report already exists for this "
+                    "trainee on this shift"
+                )
+
+        # When linked to a shift, auto-populate from actual records
         if shift_id:
             actual_calls, actual_types = (
                 await self._get_trainee_call_data_from_shift(
