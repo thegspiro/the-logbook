@@ -1188,11 +1188,38 @@ export interface ShiftCompletionReport {
   updated_at: string;
 }
 
+export interface MonthlyShiftData {
+  month: string;
+  reports: number;
+  hours: number;
+  calls?: number;
+}
+
 export interface TraineeShiftStats {
+  total_reports: number;
+  total_hours: number | null;
+  total_calls: number | null;
+  avg_rating: number | null;
+  monthly: MonthlyShiftData[];
+}
+
+export interface OfficerAnalyticsTrainee {
+  trainee_id: string;
+  name: string;
+  reports: number;
+  hours: number;
+  calls: number;
+  avg_rating: number | null;
+}
+
+export interface OfficerShiftAnalytics {
   total_reports: number;
   total_hours: number;
   total_calls: number;
   avg_rating: number | null;
+  status_counts: Record<string, number>;
+  trainees: OfficerAnalyticsTrainee[];
+  monthly: MonthlyShiftData[];
 }
 
 

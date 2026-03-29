@@ -13,6 +13,7 @@ import {
   FileText, Plus, Loader2, Star, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
   Shield, Eye, EyeOff, MessageSquare, ClipboardCheck, Pencil,
+  BarChart3, TrendingUp, Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
@@ -24,6 +25,8 @@ import type {
   ShiftCompletionReportCreate,
   TaskPerformed,
   TrainingModuleConfig,
+  TraineeShiftStats,
+  OfficerShiftAnalytics,
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -112,6 +115,10 @@ export const ShiftReportsTab: React.FC = () => {
   const [draftForm, setDraftForm] = useState<Partial<ShiftCompletionReportCreate>>({});
   const [savingDraft, setSavingDraft] = useState(false);
 
+  // Analytics state
+  const [traineeStats, setTraineeStats] = useState<TraineeShiftStats | null>(null);
+  const [officerAnalytics, setOfficerAnalytics] = useState<OfficerShiftAnalytics | null>(null);
+
   // Load config for visibility and rating settings
   useEffect(() => {
     trainingModuleConfigService.getConfig()
@@ -156,6 +163,19 @@ export const ShiftReportsTab: React.FC = () => {
   useEffect(() => {
     if (viewMode !== 'create') void loadReports();
   }, [loadReports, viewMode]);
+
+  // Load analytics data for dashboard views
+  useEffect(() => {
+    if (viewMode === 'my-reports') {
+      shiftCompletionService.getMyStats()
+        .then(setTraineeStats)
+        .catch(() => { /* stats not critical */ });
+    } else if (viewMode === 'filed-by-me' && canManage) {
+      shiftCompletionService.getOfficerAnalytics()
+        .then(setOfficerAnalytics)
+        .catch(() => { /* analytics not critical */ });
+    }
+  }, [viewMode, canManage]);
 
   // Load members when switching to create mode
   useEffect(() => {
@@ -460,6 +480,155 @@ export const ShiftReportsTab: React.FC = () => {
             );
           })}
         </div>
+      </div>
+    );
+  };
+
+  const renderTraineeDashboard = () => {
+    if (!traineeStats || traineeStats.total_reports === 0) return null;
+    const maxHours = Math.max(...traineeStats.monthly.map(m => m.hours), 1);
+    return (
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
+          <TrendingUp className="w-4 h-4 text-violet-500" /> My Shift Progress
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-3 bg-violet-500/5 border border-violet-500/15 rounded-lg text-center">
+            <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{traineeStats.total_reports}</p>
+            <p className="text-xs text-theme-text-muted mt-0.5">Reports</p>
+          </div>
+          {traineeStats.total_hours != null && (
+            <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-lg text-center">
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{traineeStats.total_hours.toFixed(1)}</p>
+              <p className="text-xs text-theme-text-muted mt-0.5">Hours</p>
+            </div>
+          )}
+          {traineeStats.total_calls != null && (
+            <div className="p-3 bg-green-500/5 border border-green-500/15 rounded-lg text-center">
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">{traineeStats.total_calls}</p>
+              <p className="text-xs text-theme-text-muted mt-0.5">Calls</p>
+            </div>
+          )}
+          {traineeStats.avg_rating != null && (
+            <div className="p-3 bg-amber-500/5 border border-amber-500/15 rounded-lg text-center">
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{traineeStats.avg_rating}</p>
+              <p className="text-xs text-theme-text-muted mt-0.5">Avg Rating</p>
+            </div>
+          )}
+        </div>
+        {traineeStats.monthly.length > 1 && (
+          <div>
+            <p className="text-xs font-medium text-theme-text-secondary mb-2">Monthly Hours</p>
+            <div className="flex items-end gap-1 h-20">
+              {traineeStats.monthly.map(m => (
+                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
+                  <div
+                    className="w-full bg-violet-500/20 rounded-t"
+                    style={{ height: `${Math.max((m.hours / maxHours) * 100, 4)}%` }}
+                  />
+                  <span className="text-[9px] text-theme-text-muted">{m.month.split('-')[1] ?? ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderOfficerDashboard = () => {
+    if (!officerAnalytics || officerAnalytics.total_reports === 0) return null;
+    const maxHours = Math.max(...officerAnalytics.monthly.map(m => m.hours), 1);
+    const draftCount = officerAnalytics.status_counts['draft'] ?? 0;
+    const pendingCount = officerAnalytics.status_counts['pending_review'] ?? 0;
+    return (
+      <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-violet-500" /> Shift Report Analytics
+        </h3>
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="p-3 bg-violet-500/5 border border-violet-500/15 rounded-lg text-center">
+            <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">{officerAnalytics.total_reports}</p>
+            <p className="text-xs text-theme-text-muted mt-0.5">Reports</p>
+          </div>
+          <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-lg text-center">
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{officerAnalytics.total_hours.toFixed(1)}</p>
+            <p className="text-xs text-theme-text-muted mt-0.5">Total Hours</p>
+          </div>
+          <div className="p-3 bg-green-500/5 border border-green-500/15 rounded-lg text-center">
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">{officerAnalytics.total_calls}</p>
+            <p className="text-xs text-theme-text-muted mt-0.5">Total Calls</p>
+          </div>
+          {draftCount > 0 && (
+            <div className="p-3 bg-blue-500/5 border border-blue-500/15 rounded-lg text-center cursor-pointer hover:bg-blue-500/10 transition-colors"
+              onClick={() => setViewMode('drafts')}
+            >
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{draftCount}</p>
+              <p className="text-xs text-theme-text-muted mt-0.5">Drafts</p>
+            </div>
+          )}
+          {pendingCount > 0 && (
+            <div className="p-3 bg-amber-500/5 border border-amber-500/15 rounded-lg text-center cursor-pointer hover:bg-amber-500/10 transition-colors"
+              onClick={() => setViewMode('pending-review')}
+            >
+              <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pendingCount}</p>
+              <p className="text-xs text-theme-text-muted mt-0.5">Pending Review</p>
+            </div>
+          )}
+        </div>
+
+        {/* Per-trainee table */}
+        {officerAnalytics.trainees.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-theme-text-secondary mb-2 flex items-center gap-1">
+              <Users className="w-3.5 h-3.5" /> Trainee Summary
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-theme-text-muted border-b border-theme-surface-border">
+                    <th className="pb-2 font-medium">Trainee</th>
+                    <th className="pb-2 font-medium text-right">Reports</th>
+                    <th className="pb-2 font-medium text-right">Hours</th>
+                    <th className="pb-2 font-medium text-right">Calls</th>
+                    <th className="pb-2 font-medium text-right">Avg Rating</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-theme-surface-border">
+                  {officerAnalytics.trainees.map(t => (
+                    <tr key={t.trainee_id} className="text-theme-text-primary">
+                      <td className="py-2 font-medium">{t.name}</td>
+                      <td className="py-2 text-right">{t.reports}</td>
+                      <td className="py-2 text-right">{t.hours.toFixed(1)}</td>
+                      <td className="py-2 text-right">{t.calls}</td>
+                      <td className="py-2 text-right">{t.avg_rating ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Monthly trend */}
+        {officerAnalytics.monthly.length > 1 && (
+          <div>
+            <p className="text-xs font-medium text-theme-text-secondary mb-2">Monthly Trend</p>
+            <div className="flex items-end gap-1.5 h-24">
+              {officerAnalytics.monthly.map(m => (
+                <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-[9px] font-medium text-theme-text-muted">{m.reports}</span>
+                  <div
+                    className="w-full bg-violet-500/20 rounded-t"
+                    style={{ height: `${Math.max((m.hours / maxHours) * 100, 4)}%` }}
+                  />
+                  <span className="text-[9px] text-theme-text-muted">{m.month.split('-')[1] ?? ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -843,6 +1012,10 @@ export const ShiftReportsTab: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Analytics dashboards */}
+      {viewMode === 'my-reports' && renderTraineeDashboard()}
+      {viewMode === 'filed-by-me' && renderOfficerDashboard()}
 
       {/* Encryption notice for officers */}
       {canManage && viewMode === 'create' && (

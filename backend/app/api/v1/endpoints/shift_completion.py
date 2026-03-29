@@ -134,12 +134,37 @@ async def get_my_shift_stats(
     current_user: User = Depends(get_current_user),
 ):
     """Get aggregate stats for the current user's shift completion reports."""
+    config_service = TrainingModuleConfigService(db)
+    config = await config_service.get_config(current_user.organization_id)
+    visibility = config.to_visibility_dict()
+
     service = ShiftCompletionService(db)
-    return await service.get_trainee_stats(
+    stats = await service.get_trainee_stats(
         organization_id=current_user.organization_id,
         trainee_id=str(current_user.id),
         start_date=start_date,
         end_date=end_date,
+    )
+
+    if not visibility.get("show_performance_rating", True):
+        stats["avg_rating"] = None
+    if not visibility.get("show_shift_stats", True):
+        stats["total_hours"] = None
+        stats["total_calls"] = None
+        stats["monthly"] = []
+
+    return stats
+
+
+@router.get("/officer-analytics")
+async def get_officer_analytics(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Get org-wide shift report analytics for training officers."""
+    service = ShiftCompletionService(db)
+    return await service.get_officer_analytics(
+        organization_id=current_user.organization_id,
     )
 
 
