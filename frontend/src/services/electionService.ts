@@ -17,6 +17,7 @@ import type {
   ElectionCreate,
   ElectionDeleteResponse,
   ElectionListItem,
+  ElectionReportResponse,
   ElectionResults,
   ElectionSettings,
   ElectionStats,
@@ -32,6 +33,7 @@ import type {
   Vote,
   VoteCreate,
   VoteIntegrityResult,
+  VoteReceiptResponse,
   VoterEligibility,
   VoterOverride,
   VoterOverrideCreate,
@@ -195,8 +197,8 @@ export const electionService = {
   /**
    * Cast votes in bulk
    */
-  async bulkCastVotes(electionId: string, votes: VoteCreate[]): Promise<{ success: boolean; votes_cast: number }> {
-    const response = await api.post<{ success: boolean; votes_cast: number }>(`/elections/${electionId}/vote/bulk`, { votes });
+  async bulkCastVotes(electionId: string, votes: Array<Record<string, string>>): Promise<Vote[]> {
+    const response = await api.post<Vote[]>(`/elections/${electionId}/vote/bulk`, { election_id: electionId, votes });
     return response.data;
   },
 
@@ -395,6 +397,24 @@ export const electionService = {
    */
   async getEligibilityRoster(electionId: string): Promise<EligibilityRoster> {
     const response = await api.get<EligibilityRoster>(`/elections/${electionId}/eligibility-roster`);
+    return response.data;
+  },
+
+  /**
+   * Send an election report email with results, ballot recipients, and skip reasons
+   */
+  async sendReport(electionId: string): Promise<ElectionReportResponse> {
+    const response = await api.post<ElectionReportResponse>(`/elections/${electionId}/send-report`);
+    return response.data;
+  },
+
+  /**
+   * Verify a vote receipt hash (public — no auth required)
+   */
+  async verifyReceipt(electionId: string, receipt: string): Promise<VoteReceiptResponse> {
+    const response = await api.get<VoteReceiptResponse>(`/elections/${electionId}/verify-receipt`, {
+      params: { receipt },
+    });
     return response.data;
   },
 

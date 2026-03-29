@@ -2224,6 +2224,19 @@ class ElectionService:
         )
         all_votes = votes_result.scalars().all()
 
+        # Batch-fetch all candidate names to avoid N+1 queries
+        candidate_ids = {v.candidate_id for v in all_votes if v.candidate_id}
+        candidate_names: Dict[str, str] = {}
+        if candidate_ids:
+            cand_result = await self.db.execute(
+                select(Candidate.id, Candidate.name).where(
+                    Candidate.id.in_(list(candidate_ids))
+                )
+            )
+            candidate_names = {
+                str(row.id): row.name for row in cand_result.all()
+            }
+
         for item in pkg_items:
             pkg = pkgs_by_id.get(item["prospect_package_id"])
             if not pkg:
@@ -2235,12 +2248,7 @@ class ElectionService:
             approve_count = 0
             deny_count = 0
             for vote in item_votes:
-                candidate_result = await self.db.execute(
-                    select(Candidate.name).where(
-                        Candidate.id == vote.candidate_id
-                    )
-                )
-                name = candidate_result.scalar_one_or_none()
+                name = candidate_names.get(str(vote.candidate_id))
                 if name == "Approve":
                     approve_count += 1
                 elif name == "Deny":
@@ -4504,20 +4512,30 @@ Best regards,
         # Check who has voted (for live status)
         voted_user_ids: set = set()
         if election.anonymous_voting:
+            # Batch-compute voter hashes and query once instead of N+1
+            hash_to_user: Dict[str, str] = {}
             for user in users:
                 voter_hash = self._generate_voter_hash(
                     user.id, election_id,
                     election.voter_anonymity_salt or "",
                 )
+                hash_to_user[voter_hash] = str(user.id)
+
+            if hash_to_user:
+                all_hashes = list(hash_to_user.keys())
                 vote_result = await self.db.execute(
-                    select(func.count(Vote.id))
+                    select(Vote.voter_hash)
                     .where(Vote.election_id == str(election_id))
-                    .where(Vote.voter_hash == voter_hash)
+                    .where(Vote.voter_hash.in_(all_hashes))
                     .where(Vote.deleted_at.is_(None))
                     .where(Vote.is_test == False)  # noqa: E712
+                    .distinct()
                 )
-                if (vote_result.scalar() or 0) > 0:
-                    voted_user_ids.add(str(user.id))
+                for row in vote_result.all():
+                    matched_hash = row[0]
+                    uid = hash_to_user.get(matched_hash)
+                    if uid:
+                        voted_user_ids.add(uid)
         else:
             vote_result = await self.db.execute(
                 select(Vote.voter_id)

@@ -282,13 +282,13 @@ describe('electionService', () => {
   // --- bulkCastVotes ---
   describe('bulkCastVotes', () => {
     it('should POST bulk votes to /elections/:id/vote/bulk', async () => {
-      const votes = [{ candidate_id: 'c1', ballot_item_id: 'bi1' }];
-      const response = { success: true, votes_cast: 1 };
+      const votes = [{ Chief: 'c1' }];
+      const response = [{ id: 'v1', election_id: 'el1', candidate_id: 'c1', voted_at: '2026-01-01' }];
       mockPost.mockResolvedValueOnce({ data: response });
 
-      const result = await electionService.bulkCastVotes('el1', votes as never);
+      const result = await electionService.bulkCastVotes('el1', votes);
 
-      expect(mockPost).toHaveBeenCalledWith('/elections/el1/vote/bulk', { votes });
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/vote/bulk', { election_id: 'el1', votes });
       expect(result).toEqual(response);
     });
   });
@@ -521,6 +521,32 @@ describe('electionService', () => {
 
       expect(mockPost).toHaveBeenCalledWith('/elections/el1/proxy-vote', data);
       expect(result).toEqual(vote);
+    });
+  });
+
+  // --- sendReport ---
+  describe('sendReport', () => {
+    it('should POST to /elections/:id/send-report', async () => {
+      const response = { success: true, message: 'Report sent' };
+      mockPost.mockResolvedValueOnce({ data: response });
+
+      const result = await electionService.sendReport('el1');
+
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/send-report');
+      expect(result).toEqual(response);
+    });
+  });
+
+  // --- verifyReceipt ---
+  describe('verifyReceipt', () => {
+    it('should GET /elections/:id/verify-receipt with receipt param', async () => {
+      const response = { verified: true, message: 'Vote recorded', voted_at: '2026-01-01T00:00:00', position: 'Chief' };
+      mockGet.mockResolvedValueOnce({ data: response });
+
+      const result = await electionService.verifyReceipt('el1', 'abc123hash');
+
+      expect(mockGet).toHaveBeenCalledWith('/elections/el1/verify-receipt', { params: { receipt: 'abc123hash' } });
+      expect(result).toEqual(response);
     });
   });
 });
