@@ -294,7 +294,7 @@ export const ShiftReportsTab: React.FC = () => {
     if (!ackReportId) return;
     setAcknowledging(true);
     try {
-      await shiftCompletionService.acknowledgeReport(ackReportId, ackComments ?? undefined);
+      await shiftCompletionService.acknowledgeReport(ackReportId, ackComments || undefined);
       toast.success('Report acknowledged');
       setAckReportId(null);
       setAckComments('');
@@ -312,7 +312,7 @@ export const ShiftReportsTab: React.FC = () => {
     try {
       await shiftCompletionService.reviewReport(reviewReportId, {
         review_status: action,
-        reviewer_notes: reviewNotes ?? undefined,
+        reviewer_notes: reviewNotes || undefined,
         redact_fields: redactFields.length > 0 ? redactFields : undefined,
       });
       toast.success(action === SubmissionStatus.APPROVED ? 'Report approved' : 'Report flagged');

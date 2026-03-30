@@ -385,6 +385,9 @@ class User(Base):
             "membership_number",
             unique=True,
         ),
+        Index("idx_user_org_status_deleted", "organization_id", "status", "deleted_at"),
+        Index("idx_user_created_at", "created_at"),
+        Index("idx_user_last_login_at", "last_login_at"),
     )
 
     # Backward-compatible alias so ``selectinload(User.roles)`` and

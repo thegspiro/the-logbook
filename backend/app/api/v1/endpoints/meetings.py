@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.meetings import (
     ActionItemCreate,
@@ -84,7 +85,7 @@ async def create_meeting(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to create meeting. {error}"
+            status_code=400, detail=safe_error_detail(ValueError(error))
         )
     return result
 
@@ -118,7 +119,7 @@ async def update_meeting(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to update meeting. {error}"
+            status_code=400, detail=safe_error_detail(ValueError(error))
         )
     return result
 
@@ -136,7 +137,7 @@ async def delete_meeting(
     )
     if not success:
         raise HTTPException(
-            status_code=400, detail=f"Unable to delete meeting. {error}"
+            status_code=400, detail=safe_error_detail(ValueError(error))
         )
 
 
@@ -153,7 +154,7 @@ async def approve_meeting(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to approve meeting. {error}"
+            status_code=400, detail=safe_error_detail(ValueError(error))
         )
     return result
 
@@ -180,7 +181,9 @@ async def add_attendee(
         meeting_id, current_user.organization_id, attendee.model_dump()
     )
     if error:
-        raise HTTPException(status_code=400, detail=f"Unable to add attendee. {error}")
+        raise HTTPException(
+            status_code=400, detail=safe_error_detail(ValueError(error))
+        )
     return result
 
 
@@ -200,7 +203,7 @@ async def remove_attendee(
     )
     if not success:
         raise HTTPException(
-            status_code=400, detail=f"Unable to remove attendee. {error}"
+            status_code=400, detail=safe_error_detail(ValueError(error))
         )
 
 
@@ -227,7 +230,7 @@ async def create_action_item(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to create action item. {error}"
+            status_code=400, detail=safe_error_detail(ValueError(error))
         )
     return result
 
@@ -246,7 +249,7 @@ async def update_action_item(
     )
     if error:
         raise HTTPException(
-            status_code=400, detail=f"Unable to update action item. {error}"
+            status_code=400, detail=safe_error_detail(ValueError(error))
         )
     return result
 
@@ -264,7 +267,7 @@ async def delete_action_item(
     )
     if not success:
         raise HTTPException(
-            status_code=400, detail=f"Unable to delete action item. {error}"
+            status_code=400, detail=safe_error_detail(ValueError(error))
         )
 
 

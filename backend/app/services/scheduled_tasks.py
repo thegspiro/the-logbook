@@ -3149,7 +3149,6 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
     from datetime import timedelta
     from datetime import timezone as dt_timezone
 
-    from app.core.config import settings
     from app.core.utils import generate_uuid
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import Shift, ShiftAttendance

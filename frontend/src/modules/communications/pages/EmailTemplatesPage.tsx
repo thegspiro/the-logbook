@@ -127,7 +127,7 @@ const EmailTemplatesPage: React.FC = () => {
       const mid = memberId !== undefined ? memberId : previewMemberId;
       if (mid !== undefined) setPreviewMemberId(mid);
       // Empty context — backend merges per-type sample data + live org + member
-      void previewTemplate(selectedTemplate.id, undefined, undefined, mid ?? undefined);
+      void previewTemplate(selectedTemplate.id, undefined, undefined, mid || undefined);
     },
     [selectedTemplate, previewTemplate, previewMemberId],
   );
@@ -135,7 +135,7 @@ const EmailTemplatesPage: React.FC = () => {
   // Auto-load preview when selecting a template
   useEffect(() => {
     if (selectedTemplate) {
-      void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId ?? undefined);
+      void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId || undefined);
     }
     // Only trigger on template selection change
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -372,7 +372,7 @@ const EmailTemplatesPage: React.FC = () => {
                   <button
                     onClick={() => {
                       setEditorView('preview');
-                      void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId ?? undefined);
+                      void previewTemplate(selectedTemplate.id, undefined, undefined, previewMemberId || undefined);
                     }}
                     className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${
                       editorView === 'preview'
