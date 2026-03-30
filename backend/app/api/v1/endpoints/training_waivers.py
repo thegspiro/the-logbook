@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import ensure_found, generate_uuid
 from app.models.training import TrainingWaiver, TrainingWaiverType
@@ -112,6 +112,7 @@ async def create_training_waiver(
 async def list_training_waivers(
     user_id: str | None = Query(None),
     active_only: bool = Query(True),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -126,6 +127,7 @@ async def list_training_waivers(
         query = query.where(TrainingWaiver.active == True)  # noqa: E712
 
     query = query.order_by(TrainingWaiver.start_date.desc())
+    query = query.offset(pagination.skip).limit(pagination.limit)
     result = await db.execute(query)
     waivers = result.scalars().all()
 

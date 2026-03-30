@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
+    PaginationParams,
     _collect_user_permissions,
     _has_permission,
     get_current_user,
@@ -139,6 +140,7 @@ async def create_leave_of_absence(
 async def list_leaves_of_absence(
     user_id: str | None = Query(None),
     active_only: bool = Query(True),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("members.manage")),
 ):
@@ -149,7 +151,8 @@ async def list_leaves_of_absence(
         user_id=user_id,
         active_only=active_only,
     )
-    return [_to_response(leave) for leave in leaves]
+    paginated = leaves[pagination.skip:pagination.skip + pagination.limit]
+    return [_to_response(leave) for leave in paginated]
 
 
 @router.get("/leaves-of-absence/me", response_model=list[LeaveOfAbsenceResponse])
@@ -171,6 +174,7 @@ async def get_my_leaves(
 async def get_member_leaves(
     user_id: str,
     active_only: bool = Query(True),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -188,7 +192,8 @@ async def get_member_leaves(
         user_id=user_id,
         active_only=active_only,
     )
-    return [_to_response(leave) for leave in leaves]
+    paginated = leaves[pagination.skip:pagination.skip + pagination.limit]
+    return [_to_response(leave) for leave in paginated]
 
 
 @router.patch("/leaves-of-absence/{leave_id}", response_model=LeaveOfAbsenceResponse)
