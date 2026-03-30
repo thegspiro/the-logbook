@@ -11,6 +11,7 @@ import type { CreateAPIKeyRequest, PublicPortalAPIKey } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime, localToUTC } from '../../../utils/dateFormatting';
 import DateTimeQuarterHour from '../../../components/ux/DateTimeQuarterHour';
+import { Modal } from '../../../components/Modal';
 
 interface CreateKeyModalProps {
   isOpen: boolean;
@@ -36,7 +37,6 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
         expires_at: formData.expires_at ? localToUTC(formData.expires_at, tz) : undefined,
       };
       await onCreate(submitData);
-      // Reset form and close
       setFormData({ name: '', rate_limit: undefined, expires_at: undefined });
       onClose();
     } catch (_error) {
@@ -46,118 +46,100 @@ const CreateKeyModal: React.FC<CreateKeyModalProps> = ({ isOpen, onClose, onCrea
     }
   };
 
-  if (!isOpen) return null;
+  const footer = (
+    <>
+      <button
+        type="submit"
+        form="create-api-key-form"
+        disabled={isSubmitting}
+        className="btn-info rounded-md text-center"
+      >
+        {isSubmitting ? 'Creating...' : 'Create API Key'}
+      </button>
+      <button
+        type="button"
+        onClick={onClose}
+        disabled={isSubmitting}
+        className="px-4 py-2 text-theme-text-secondary bg-theme-surface-secondary rounded-md hover:bg-theme-surface-hover disabled:opacity-50 sm:mr-3"
+      >
+        Cancel
+      </button>
+    </>
+  );
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-api-key-title"
-      onKeyDown={(e) => { if (e.key === 'Escape' && !isSubmitting) onClose(); }}
-      onClick={(e) => { if (e.target === e.currentTarget && !isSubmitting) onClose(); }}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Create API Key"
+      size="sm"
+      closeOnClickOutside={!isSubmitting}
+      closeOnEscape={!isSubmitting}
+      footer={footer}
     >
-      <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 id="create-api-key-title" className="text-lg font-semibold text-theme-text-primary">Create API Key</h3>
-          <button
-            onClick={onClose}
-            className="text-theme-text-muted hover:text-theme-text-primary"
-            disabled={isSubmitting}
-            aria-label="Close dialog"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+      <form id="create-api-key-form" onSubmit={(e) => { void handleSubmit(e); }}>
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="api-key-name" className="block text-sm font-medium text-theme-text-secondary mb-1">
+              Key Name <span aria-hidden="true">*</span>
+            </label>
+            <input
+              id="api-key-name"
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="e.g., Website Integration Key"
+              required
+              aria-required="true"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+            />
+            <p className="text-xs text-theme-text-muted mt-1">
+              A descriptive name to identify this API key
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="api-key-rate-limit" className="block text-sm font-medium text-theme-text-secondary mb-1">
+              Rate Limit (requests/hour)
+            </label>
+            <input
+              id="api-key-rate-limit"
+              type="number"
+              min="1"
+              max="100000"
+              value={formData.rate_limit || ''}
+              onChange={(e) => setFormData({
+                ...formData,
+                rate_limit: e.target.value ? parseInt(e.target.value) : undefined
+              })}
+              placeholder="Leave blank for default (1000)"
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+            />
+            <p className="text-xs text-theme-text-muted mt-1">
+              Optional: Override the default rate limit for this key
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="api-key-expiration" className="block text-sm font-medium text-theme-text-secondary mb-1">
+              Expiration Date
+            </label>
+            <DateTimeQuarterHour
+              id="api-key-expiration"
+              value={formData.expires_at || ''}
+              onChange={(val) => setFormData({
+                ...formData,
+                expires_at: val || undefined
+              })}
+              className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+            />
+            <p className="text-xs text-theme-text-muted mt-1">
+              Optional: Set when this key should expire
+            </p>
+          </div>
         </div>
-
-        <form onSubmit={(e) => { void handleSubmit(e); }}>
-          <div className="space-y-4">
-            {/* Name */}
-            <div>
-              <label htmlFor="api-key-name" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Key Name <span aria-hidden="true">*</span>
-              </label>
-              <input
-                id="api-key-name"
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., Website Integration Key"
-                required
-                aria-required="true"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-              />
-              <p className="text-xs text-theme-text-muted mt-1">
-                A descriptive name to identify this API key
-              </p>
-            </div>
-
-            {/* Rate Limit Override */}
-            <div>
-              <label htmlFor="api-key-rate-limit" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Rate Limit (requests/hour)
-              </label>
-              <input
-                id="api-key-rate-limit"
-                type="number"
-                min="1"
-                max="100000"
-                value={formData.rate_limit || ''}
-                onChange={(e) => setFormData({
-                  ...formData,
-                  rate_limit: e.target.value ? parseInt(e.target.value) : undefined
-                })}
-                placeholder="Leave blank for default (1000)"
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-              />
-              <p className="text-xs text-theme-text-muted mt-1">
-                Optional: Override the default rate limit for this key
-              </p>
-            </div>
-
-            {/* Expiration Date */}
-            <div>
-              <label htmlFor="api-key-expiration" className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Expiration Date
-              </label>
-              <DateTimeQuarterHour
-                id="api-key-expiration"
-                value={formData.expires_at || ''}
-                onChange={(val) => setFormData({
-                  ...formData,
-                  expires_at: val || undefined
-                })}
-                className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-md text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-              />
-              <p className="text-xs text-theme-text-muted mt-1">
-                Optional: Set when this key should expire
-              </p>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-4 py-2 text-theme-text-secondary bg-theme-surface-secondary rounded-md hover:bg-theme-surface-hover disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="btn-info rounded-md text-center"
-            >
-              {isSubmitting ? 'Creating...' : 'Create API Key'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 };
 

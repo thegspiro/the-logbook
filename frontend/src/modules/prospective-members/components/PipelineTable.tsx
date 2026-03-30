@@ -85,7 +85,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
     const sorted = [...applicants].sort((a, b) => {
       let valA: string | number = '';
       let valB: string | number = '';
-      switch (sortField) {
+      switch (sortField as SortField) {
         case 'name':
           valA = `${a.first_name} ${a.last_name}`.toLowerCase();
           valB = `${b.first_name} ${b.last_name}`.toLowerCase();
@@ -265,13 +265,13 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                     )}
                   </button>
                 </th>
-                <SortableHeader label="Name" field="name" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader label="Email" field="email" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-secondary" />
-                <SortableHeader label="Current Stage" field="current_stage_name" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader label="Status" field="status" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} />
-                <SortableHeader label="Days in Stage" field="days_in_stage" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-secondary" />
-                <SortableHeader label="Target Type" field="target_membership_type" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-tertiary" />
-                <SortableHeader label="Applied" field="created_at" sortField={sortField} sortDirection={sortDirection} onSort={handleSort} className="table-col-tertiary" />
+                <th className="text-left p-3"><SortableHeader label="Name" field="name" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
+                <th className="text-left p-3 table-col-secondary"><SortableHeader label="Email" field="email" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
+                <th className="text-left p-3"><SortableHeader label="Current Stage" field="current_stage_name" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
+                <th className="text-left p-3"><SortableHeader label="Status" field="status" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
+                <th className="text-left p-3 table-col-secondary"><SortableHeader label="Days in Stage" field="days_in_stage" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
+                <th className="text-left p-3 table-col-tertiary"><SortableHeader label="Target Type" field="target_membership_type" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
+                <th className="text-left p-3 table-col-tertiary"><SortableHeader label="Applied" field="created_at" currentSort={sortField} currentDirection={sortDirection} onSort={handleSort} /></th>
                 <th scope="col" className="w-12 p-3"></th>
               </tr>
             </thead>
