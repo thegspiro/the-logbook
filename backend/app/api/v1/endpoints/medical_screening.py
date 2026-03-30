@@ -10,7 +10,8 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import PaginationParams, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.medical_screening import (
@@ -38,6 +39,7 @@ router = APIRouter()
 async def list_requirements(
     is_active: Optional[bool] = Query(None),
     screening_type: Optional[str] = Query(None),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("medical_screening.view")),
 ):
@@ -48,7 +50,7 @@ async def list_requirements(
         is_active=is_active,
         screening_type=screening_type,
     )
-    return requirements
+    return requirements[pagination.skip:pagination.skip + pagination.limit]
 
 
 @router.get(
@@ -89,6 +91,15 @@ async def create_requirement(
         organization_id=current_user.organization_id,
         data=data,
     )
+    await log_audit_event(
+        db=db,
+        event_type="medical_screening.requirement_created",
+        event_category="medical_screening",
+        severity="info",
+        event_data={"requirement_name": data.name},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     await db.commit()
     return requirement
 
@@ -113,6 +124,15 @@ async def update_requirement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Screening requirement not found",
         )
+    await log_audit_event(
+        db=db,
+        event_type="medical_screening.requirement_updated",
+        event_category="medical_screening",
+        severity="info",
+        event_data={"requirement_id": requirement_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     await db.commit()
     return requirement
 
@@ -136,6 +156,15 @@ async def delete_requirement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Screening requirement not found",
         )
+    await log_audit_event(
+        db=db,
+        event_type="medical_screening.requirement_deleted",
+        event_category="medical_screening",
+        severity="warning",
+        event_data={"requirement_id": requirement_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     await db.commit()
 
 
@@ -151,6 +180,7 @@ async def list_records(
     prospect_id: Optional[str] = Query(None),
     screening_type: Optional[str] = Query(None),
     record_status: Optional[str] = Query(None, alias="status"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("medical_screening.view")),
 ):
@@ -163,7 +193,7 @@ async def list_records(
         screening_type=screening_type,
         status=record_status,
     )
-    return records
+    return records[pagination.skip:pagination.skip + pagination.limit]
 
 
 @router.get(
@@ -202,6 +232,18 @@ async def create_record(
         organization_id=current_user.organization_id,
         data=data,
     )
+    await log_audit_event(
+        db=db,
+        event_type="medical_screening.record_created",
+        event_category="medical_screening",
+        severity="info",
+        event_data={
+            "record_user_id": data.user_id,
+            "screening_type": data.screening_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     await db.commit()
     return record
 
@@ -229,6 +271,15 @@ async def update_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Screening record not found",
         )
+    await log_audit_event(
+        db=db,
+        event_type="medical_screening.record_updated",
+        event_category="medical_screening",
+        severity="info",
+        event_data={"record_id": record_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     await db.commit()
     return record
 
@@ -250,6 +301,15 @@ async def delete_record(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Screening record not found",
         )
+    await log_audit_event(
+        db=db,
+        event_type="medical_screening.record_deleted",
+        event_category="medical_screening",
+        severity="warning",
+        event_data={"record_id": record_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     await db.commit()
 
 

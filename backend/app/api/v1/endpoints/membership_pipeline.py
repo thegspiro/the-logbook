@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.membership_pipeline import (
@@ -130,6 +131,15 @@ async def create_pipeline(
         inactivity_config=data.inactivity_config,
         steps=steps,
         created_by=current_user.id,
+    )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.pipeline_created",
+        event_category="membership",
+        severity="info",
+        event_data={"pipeline_name": data.name, "pipeline_id": str(pipeline.id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
     )
     return pipeline
 
@@ -264,6 +274,15 @@ async def delete_pipeline(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Pipeline not found"
         )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.pipeline_deleted",
+        event_category="membership",
+        severity="warning",
+        event_data={"pipeline_id": str(pipeline_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 @router.post(
@@ -816,6 +835,18 @@ async def create_prospect(
         data=prospect_data,
         created_by=current_user.id,
     )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospect_created",
+        event_category="membership",
+        severity="info",
+        event_data={
+            "prospect_name": f"{data.first_name} {data.last_name}",
+            "prospect_email": data.email,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return prospect
 
 
@@ -934,6 +965,15 @@ async def advance_prospect(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospect_advanced",
+        event_category="membership",
+        severity="info",
+        event_data={"prospect_id": str(prospect_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return prospect
 
 
@@ -1009,6 +1049,18 @@ async def transfer_prospect(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=result.get("message")
         )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospect_transferred",
+        event_category="membership",
+        severity="warning",
+        event_data={
+            "prospect_id": str(prospect_id),
+            "new_username": data.username,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return result
 
 
