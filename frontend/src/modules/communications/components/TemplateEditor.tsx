@@ -15,18 +15,7 @@ import {
   Info,
 } from 'lucide-react';
 import type { EmailTemplate, EmailTemplateUpdate, TemplateVariable } from '../types';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validateEmailList(raw: string): string | null {
-  if (!raw.trim()) return null;
-  const entries = raw.split(',').map((e) => e.trim()).filter(Boolean);
-  const invalid = entries.filter((e) => !EMAIL_REGEX.test(e));
-  if (invalid.length > 0) {
-    return `Invalid email${invalid.length > 1 ? 's' : ''}: ${invalid.join(', ')}`;
-  }
-  return null;
-}
+import { validateEmailList, parseEmailList } from '../../../hooks/useEmailListInput';
 
 interface TemplateEditorProps {
   template: EmailTemplate;
@@ -56,9 +45,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const htmlRef = useRef<HTMLTextAreaElement>(null);
   const subjectRef = useRef<HTMLInputElement>(null);
 
-  // Parse comma-separated emails into arrays (empty string → empty array)
-  const parsedCc = defaultCc.split(',').map((e) => e.trim()).filter(Boolean);
-  const parsedBcc = defaultBcc.split(',').map((e) => e.trim()).filter(Boolean);
+  const parsedCc = parseEmailList(defaultCc);
+  const parsedBcc = parseEmailList(defaultBcc);
   const origCc = (template.default_cc ?? []).join(', ');
   const origBcc = (template.default_bcc ?? []).join(', ');
 

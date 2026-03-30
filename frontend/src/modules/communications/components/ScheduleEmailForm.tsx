@@ -12,6 +12,7 @@ import { useScheduledEmailsStore } from '../store/scheduledEmailsStore';
 import { localToUTC, getTodayLocalDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 import TimeQuarterHour from '../../../components/ux/TimeQuarterHour';
+import { validateEmailList, parseEmailList } from '../../../hooks/useEmailListInput';
 
 interface ScheduleEmailFormProps {
   templates: EmailTemplate[];
@@ -20,18 +21,6 @@ interface ScheduleEmailFormProps {
 
 const inputClass = 'form-input';
 const labelClass = 'form-label';
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function validateEmailList(raw: string): string | null {
-  if (!raw.trim()) return null;
-  const entries = raw.split(',').map((e) => e.trim()).filter(Boolean);
-  const invalid = entries.filter((e) => !EMAIL_REGEX.test(e));
-  if (invalid.length > 0) {
-    return `Invalid email${invalid.length > 1 ? 's' : ''}: ${invalid.join(', ')}`;
-  }
-  return null;
-}
 
 const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
   templates,
@@ -82,18 +71,9 @@ const ScheduleEmailForm: React.FC<ScheduleEmailFormProps> = ({
       return;
     }
 
-    const recipients = toEmails
-      .split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-    const cc = ccEmails
-      .split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
-    const bcc = bccEmails
-      .split(',')
-      .map((e) => e.trim())
-      .filter(Boolean);
+    const recipients = parseEmailList(toEmails);
+    const cc = parseEmailList(ccEmails);
+    const bcc = parseEmailList(bccEmails);
 
     const scheduledAt = localToUTC(`${scheduledDate}T${scheduledTime}`, tz);
 

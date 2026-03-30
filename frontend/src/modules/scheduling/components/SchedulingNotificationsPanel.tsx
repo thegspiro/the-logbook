@@ -11,12 +11,13 @@
  * Extracted from the SchedulingPage monolith for maintainability.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Bell, Clock, Loader2, Mail, AlertTriangle, UserPlus } from "lucide-react";
 import toast from "react-hot-toast";
 import { notificationsService, organizationService } from "../../../services/api";
 import type { NotificationRuleRecord } from "../../../services/api";
 import { getErrorMessage } from "../../../utils/errorHandling";
+import { useEmailListInput } from "../../../hooks/useEmailListInput";
 
 const SCHEDULING_NOTIFICATION_PRESETS = [
   {
@@ -134,31 +135,24 @@ export const SchedulingNotificationsPanel: React.FC = () => {
   const [declineSettings, setDeclineSettings] = useState<DeclineSettings>(DEFAULT_DECLINE_SETTINGS);
   const [loadingDecline, setLoadingDecline] = useState(true);
   const [savingDecline, setSavingDecline] = useState(false);
-  const [ccInput, setCcInput] = useState("");
 
-  // Shift assignment notification settings (stored in org settings)
   const [assignmentSettings, setAssignmentSettings] = useState<AssignmentSettings>(
     DEFAULT_ASSIGNMENT_SETTINGS,
   );
   const [loadingAssignment, setLoadingAssignment] = useState(true);
   const [savingAssignment, setSavingAssignment] = useState(false);
-  const [assignCcInput, setAssignCcInput] = useState("");
 
-  // Start-of-shift reminder settings (stored in org settings)
   const [reminderSettings, setReminderSettings] = useState<ShiftReminderSettings>(
     DEFAULT_REMINDER_SETTINGS,
   );
   const [loadingReminder, setLoadingReminder] = useState(true);
   const [savingReminder, setSavingReminder] = useState(false);
-  const [reminderCcInput, setReminderCcInput] = useState("");
 
-  // Equipment check failure alert settings (stored in org settings)
   const [equipAlertSettings, setEquipAlertSettings] = useState<EquipmentCheckAlertSettings>(
     DEFAULT_EQUIPMENT_ALERT_SETTINGS,
   );
   const [loadingEquipAlerts, setLoadingEquipAlerts] = useState(true);
   const [savingEquipAlerts, setSavingEquipAlerts] = useState(false);
-  const [equipCcInput, setEquipCcInput] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -242,21 +236,11 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     }
   };
 
-  const addAssignCcEmail = () => {
-    const email = assignCcInput.trim();
-    if (!email || assignmentSettings.cc_emails.includes(email)) return;
-    const updated = { ...assignmentSettings, cc_emails: [...assignmentSettings.cc_emails, email] };
-    setAssignCcInput("");
-    void saveAssignmentSettings(updated);
-  };
-
-  const removeAssignCcEmail = (email: string) => {
-    const updated = {
-      ...assignmentSettings,
-      cc_emails: assignmentSettings.cc_emails.filter(e => e !== email),
-    };
-    void saveAssignmentSettings(updated);
-  };
+  const onAssignCcChange = useCallback(
+    (emails: string[]) => { void saveAssignmentSettings({ ...assignmentSettings, cc_emails: emails }); },
+    [assignmentSettings],
+  );
+  const assignCc = useEmailListInput(assignmentSettings.cc_emails, onAssignCcChange);
 
   const saveReminderSettings = async (updated: ShiftReminderSettings) => {
     setSavingReminder(true);
@@ -271,21 +255,11 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     }
   };
 
-  const addReminderCcEmail = () => {
-    const email = reminderCcInput.trim();
-    if (!email || reminderSettings.cc_emails.includes(email)) return;
-    const updated = { ...reminderSettings, cc_emails: [...reminderSettings.cc_emails, email] };
-    setReminderCcInput("");
-    void saveReminderSettings(updated);
-  };
-
-  const removeReminderCcEmail = (email: string) => {
-    const updated = {
-      ...reminderSettings,
-      cc_emails: reminderSettings.cc_emails.filter(e => e !== email),
-    };
-    void saveReminderSettings(updated);
-  };
+  const onReminderCcChange = useCallback(
+    (emails: string[]) => { void saveReminderSettings({ ...reminderSettings, cc_emails: emails }); },
+    [reminderSettings],
+  );
+  const reminderCc = useEmailListInput(reminderSettings.cc_emails, onReminderCcChange);
 
   const saveEquipAlertSettings = async (updated: EquipmentCheckAlertSettings) => {
     setSavingEquipAlerts(true);
@@ -320,34 +294,17 @@ export const SchedulingNotificationsPanel: React.FC = () => {
     void saveEquipAlertSettings(updated);
   };
 
-  const addCcEmail = () => {
-    const email = ccInput.trim();
-    if (!email || declineSettings.cc_emails.includes(email)) return;
-    const updated = { ...declineSettings, cc_emails: [...declineSettings.cc_emails, email] };
-    setCcInput("");
-    void saveDeclineSettings(updated);
-  };
+  const onDeclineCcChange = useCallback(
+    (emails: string[]) => { void saveDeclineSettings({ ...declineSettings, cc_emails: emails }); },
+    [declineSettings],
+  );
+  const declineCc = useEmailListInput(declineSettings.cc_emails, onDeclineCcChange);
 
-  const removeCcEmail = (email: string) => {
-    const updated = { ...declineSettings, cc_emails: declineSettings.cc_emails.filter(e => e !== email) };
-    void saveDeclineSettings(updated);
-  };
-
-  const addEquipCcEmail = () => {
-    const email = equipCcInput.trim();
-    if (!email || equipAlertSettings.cc_emails.includes(email)) return;
-    const updated = { ...equipAlertSettings, cc_emails: [...equipAlertSettings.cc_emails, email] };
-    setEquipCcInput("");
-    void saveEquipAlertSettings(updated);
-  };
-
-  const removeEquipCcEmail = (email: string) => {
-    const updated = {
-      ...equipAlertSettings,
-      cc_emails: equipAlertSettings.cc_emails.filter(e => e !== email),
-    };
-    void saveEquipAlertSettings(updated);
-  };
+  const onEquipCcChange = useCallback(
+    (emails: string[]) => { void saveEquipAlertSettings({ ...equipAlertSettings, cc_emails: emails }); },
+    [equipAlertSettings],
+  );
+  const equipCc = useEmailListInput(equipAlertSettings.cc_emails, onEquipCcChange);
 
   const isRuleEnabled = (presetName: string) => {
     return rules.some((r) => r.name === presetName && r.enabled);
@@ -549,14 +506,14 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     <div className="flex items-center gap-2 mb-2">
                       <input
                         type="email"
-                        value={ccInput}
-                        onChange={(e) => setCcInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCcEmail(); } }}
+                        value={declineCc.inputValue}
+                        onChange={(e) => declineCc.setInputValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); declineCc.add(); } }}
                         placeholder="email@example.com"
                         className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
                       />
                       <button
-                        onClick={addCcEmail}
+                        onClick={declineCc.add}
                         className="px-3 py-1 text-xs bg-violet-600 text-white rounded-lg hover:bg-violet-700"
                       >
                         Add
@@ -571,7 +528,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           >
                             {email}
                             <button
-                              onClick={() => removeCcEmail(email)}
+                              onClick={() => declineCc.remove(email)}
                               className="text-theme-text-muted hover:text-red-500"
                             >
                               &times;
@@ -648,14 +605,14 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     <div className="flex items-center gap-2 mb-2">
                       <input
                         type="email"
-                        value={assignCcInput}
-                        onChange={(e) => setAssignCcInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addAssignCcEmail(); } }}
+                        value={assignCc.inputValue}
+                        onChange={(e) => assignCc.setInputValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); assignCc.add(); } }}
                         placeholder="email@example.com"
                         className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-blue-500"
                       />
                       <button
-                        onClick={addAssignCcEmail}
+                        onClick={assignCc.add}
                         className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                       >
                         Add
@@ -670,7 +627,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           >
                             {email}
                             <button
-                              onClick={() => removeAssignCcEmail(email)}
+                              onClick={() => assignCc.remove(email)}
                               className="text-theme-text-muted hover:text-red-500"
                             >
                               &times;
@@ -773,14 +730,14 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     <div className="flex items-center gap-2 mb-2">
                       <input
                         type="email"
-                        value={reminderCcInput}
-                        onChange={(e) => setReminderCcInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addReminderCcEmail(); } }}
+                        value={reminderCc.inputValue}
+                        onChange={(e) => reminderCc.setInputValue(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); reminderCc.add(); } }}
                         placeholder="email@example.com"
                         className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-green-500"
                       />
                       <button
-                        onClick={addReminderCcEmail}
+                        onClick={reminderCc.add}
                         className="px-3 py-1 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700"
                       >
                         Add
@@ -795,7 +752,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           >
                             {email}
                             <button
-                              onClick={() => removeReminderCcEmail(email)}
+                              onClick={() => reminderCc.remove(email)}
                               className="text-theme-text-muted hover:text-red-500"
                             >
                               &times;
@@ -919,16 +876,16 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                     <div className="flex items-center gap-2 mb-2">
                       <input
                         type="email"
-                        value={equipCcInput}
-                        onChange={(e) => setEquipCcInput(e.target.value)}
+                        value={equipCc.inputValue}
+                        onChange={(e) => equipCc.setInputValue(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") { e.preventDefault(); addEquipCcEmail(); }
+                          if (e.key === "Enter") { e.preventDefault(); equipCc.add(); }
                         }}
                         placeholder="email@example.com"
                         className="flex-1 px-2 py-1 text-sm bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-red-500"
                       />
                       <button
-                        onClick={addEquipCcEmail}
+                        onClick={equipCc.add}
                         className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700"
                       >
                         Add
@@ -943,7 +900,7 @@ export const SchedulingNotificationsPanel: React.FC = () => {
                           >
                             {email}
                             <button
-                              onClick={() => removeEquipCcEmail(email)}
+                              onClick={() => equipCc.remove(email)}
                               className="text-theme-text-muted hover:text-red-500"
                             >
                               &times;
