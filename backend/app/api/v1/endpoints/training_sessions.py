@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.event import Event
@@ -306,6 +306,7 @@ async def list_training_sessions_calendar(
     ),
     training_type: str | None = Query(None, description="Filter by training type"),
     include_finalized: bool = Query(True, description="Include finalized sessions"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -339,6 +340,7 @@ async def list_training_sessions_calendar(
         query = query.where(TrainingSession.is_finalized == False)  # noqa: E712
 
     query = query.order_by(Event.start_datetime)
+    query = query.offset(pagination.skip).limit(pagination.limit)
 
     result = await db.execute(query)
     sessions = list(result.scalars().all())

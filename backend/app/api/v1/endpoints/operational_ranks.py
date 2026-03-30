@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
@@ -43,6 +43,7 @@ def _rank_to_response(rank) -> RankResponse:
 @router.get("", response_model=list[RankResponse])
 async def list_ranks(
     is_active: bool | None = Query(None, description="Filter by active status"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -61,7 +62,8 @@ async def list_ranks(
         organization_id=current_user.organization_id,
         is_active=is_active,
     )
-    return [_rank_to_response(r) for r in ranks]
+    paginated = ranks[pagination.skip:pagination.skip + pagination.limit]
+    return [_rank_to_response(r) for r in paginated]
 
 
 @router.post("", response_model=RankResponse, status_code=status.HTTP_201_CREATED)

@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.event_request import (
     EventRequest,
     EventRequestActivity,
@@ -544,7 +545,9 @@ async def public_cancel_request(
     ):
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot cancel a {event_request.status.value} request",
+            detail=safe_error_detail(
+                ValueError(f"Cannot cancel a {event_request.status.value} request")
+            ),
         )
 
     old_status = event_request.status.value
@@ -669,13 +672,22 @@ async def update_event_request_status(
     try:
         new_status = EventRequestStatus(update.status)
     except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid status: {update.status}")
+        raise HTTPException(
+            status_code=400,
+            detail=safe_error_detail(
+                ValueError(f"Invalid status: {update.status}")
+            ),
+        )
 
     allowed = VALID_TRANSITIONS.get(event_request.status, [])
     if new_status not in allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot transition from {event_request.status.value} to {new_status.value}",
+            detail=safe_error_detail(
+                ValueError(
+                    f"Cannot transition from {event_request.status.value} to {new_status.value}"
+                )
+            ),
         )
 
     old_status = event_request.status.value
@@ -859,7 +871,9 @@ async def schedule_request(
     if EventRequestStatus.SCHEDULED not in allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot schedule a request in {event_request.status.value} status",
+            detail=safe_error_detail(
+                ValueError(f"Cannot schedule a request in {event_request.status.value} status")
+            ),
         )
 
     old_status = event_request.status.value
@@ -996,7 +1010,9 @@ async def postpone_request(
     if EventRequestStatus.POSTPONED not in allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot postpone a request in {event_request.status.value} status",
+            detail=safe_error_detail(
+                ValueError(f"Cannot postpone a request in {event_request.status.value} status")
+            ),
         )
 
     old_status = event_request.status.value
@@ -1075,7 +1091,9 @@ async def update_task_completion(
     ):
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot update tasks on a {event_request.status.value} request",
+            detail=safe_error_detail(
+                ValueError(f"Cannot update tasks on a {event_request.status.value} request")
+            ),
         )
 
     completions = dict(event_request.task_completions or {})
@@ -1207,7 +1225,7 @@ async def send_template_email(
             "message": f"Email '{template.name}' sent to {event_request.contact_email}"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 # ============================================

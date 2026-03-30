@@ -9,8 +9,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ChevronLeft,
   ChevronRight,
-  ChevronUp,
-  ChevronDown,
   CheckSquare,
   Square,
   Forward,
@@ -19,7 +17,6 @@ import {
   MoreHorizontal,
   AlertTriangle,
   Loader2,
-  ChevronsUpDown,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { ApplicantListItem, ApplicantStatus } from '../types';
@@ -28,6 +25,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums';
+import { SortableHeader, type SortDirection } from '../../../components/ux/SortableHeader';
 
 interface PipelineTableProps {
   applicants: ApplicantListItem[];
@@ -51,40 +49,6 @@ const STATUS_BADGES: Record<ApplicantStatus, { label: string; className: string 
 };
 
 type SortField = 'name' | 'email' | 'current_stage_name' | 'status' | 'days_in_stage' | 'target_membership_type' | 'created_at';
-type SortDirection = 'asc' | 'desc';
-
-const SortableHeader: React.FC<{
-  label: string;
-  field: SortField;
-  sortField: SortField | null;
-  sortDirection: SortDirection;
-  onSort: (field: SortField) => void;
-  className?: string;
-}> = ({ label, field, sortField, sortDirection, onSort, className }) => {
-  const isSorted = sortField === field;
-  const ariaSortValue = isSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
-
-  return (
-    <th
-      className={`text-left p-3 text-xs font-medium text-theme-text-muted uppercase tracking-wider cursor-pointer select-none hover:text-theme-text-primary transition-colors ${className ?? ''}`}
-      onClick={() => onSort(field)}
-      aria-sort={ariaSortValue}
-    >
-      <span className="flex items-center gap-1">
-        {label}
-        {isSorted ? (
-          sortDirection === 'asc' ? (
-            <ChevronUp className="w-3 h-3" aria-hidden="true" />
-          ) : (
-            <ChevronDown className="w-3 h-3" aria-hidden="true" />
-          )
-        ) : (
-          <ChevronsUpDown className="w-3 h-3 opacity-30" aria-hidden="true" />
-        )}
-      </span>
-    </th>
-  );
-};
 
 export const PipelineTable: React.FC<PipelineTableProps> = ({
   applicants,
@@ -108,20 +72,16 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
   const [showBulkRejectConfirm, setShowBulkRejectConfirm] = useState(false);
   const [rejectConfirmId, setRejectConfirmId] = useState<string | null>(null);
   const [withdrawConfirmId, setWithdrawConfirmId] = useState<string | null>(null);
-  const [sortField, setSortField] = useState<SortField | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
+  const handleSort = (field: string, direction: SortDirection) => {
+    setSortField(direction ? field : null);
+    setSortDirection(direction);
   };
 
   const sortedApplicants = useMemo(() => {
-    if (!sortField) return applicants;
+    if (!sortField || !sortDirection) return applicants;
     const sorted = [...applicants].sort((a, b) => {
       let valA: string | number = '';
       let valB: string | number = '';
