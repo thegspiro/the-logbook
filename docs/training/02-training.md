@@ -326,21 +326,147 @@ The card also shows:
 
 ## Shift Completion Reports
 
-**Required Permission:** `training.manage`
+**Required Permission:** `training.manage` (officers) / authenticated (trainees, own reports only)
 
-Navigate to **Training Admin > Shift Reports** to view and manage shift officer reports.
+Navigate to **Training Admin > Shift Reports** or the **Shift Reports** tab in the Scheduling page to view and manage shift officer reports.
 
 Shift completion reports are filed by shift officers after each shift. They record:
-- Trainee name
-- Hours on shift
-- Calls responded
-- Call types
-- Officer observations
+- **Trainee name** and linked shift
+- **Hours on shift** — auto-populated from shift attendance records
+- **Calls responded** — auto-populated from ShiftCall records where the trainee was a responding member
+- **Call types** — extracted from incident types of matching ShiftCall records
+- **Performance rating** (1-5 scale, configurable label and scale type)
+- **Areas of strength** and **areas for improvement** (encrypted at rest with AES-256)
+- **Officer narrative** (encrypted free-form assessment)
+- **Skills observed** — structured list of `{skill_name, demonstrated, notes, comment}` entries
+- **Tasks performed** — structured list of `{task, description, comment}` entries
 
-These reports **automatically update training program progress** for enrolled members. When a report is filed, the system credits hours, shift count, and call count toward matching requirements.
+These reports **automatically update training program progress** for enrolled members. When a report is filed (or a draft is completed), the system credits hours, shift count, and call count toward matching requirements. Call type requirements support **case-insensitive matching** against the report's call_types array — only calls matching the required types count toward progress.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the Shift Reports tab showing a list of filed reports with columns for date, officer, trainee, hours, calls, and a status indicator showing which requirements were auto-progressed]_
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports tab showing a list of filed reports with columns for date, officer, trainee, hours, calls, rating, and a status indicator showing which requirements were auto-progressed._
+
+### Shift Finalization Workflow *(2026-03-28)*
+
+Before filing shift reports, officers should **finalize the shift**. This creates snapshot data and auto-generates draft reports.
+
+1. Navigate to the **Shift Detail Panel** for a past shift
+2. Click **"Finalize Shift"** — a pre-finalization checklist modal appears
+3. The checklist validates:
+   - **End-of-shift equipment checks** must be completed (blocking requirement)
+   - Attendance count and call count displayed for reference
+4. On confirmation, the system:
+   - Snapshots `call_count` and `total_hours` on the shift record
+   - Computes per-member `call_count` on each ShiftAttendance record
+   - Sets `is_finalized=true` with timestamp and officer ID
+   - **Auto-creates draft ShiftCompletionReports** for all attendees with active training program enrollments
+   - Sends a notification to the officer listing the number of drafts created
+5. After finalization, a green badge shows "Shift finalized on [date]"
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the pre-finalization checklist modal showing the equipment check validation, attendance count, call count, and the Finalize button._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the ShiftDetailPanel after finalization showing the green "Finalized" badge with timestamp._
+
+### Auto-Population from Shift Data
+
+When creating or completing a shift report, the system can auto-populate data from shift records:
+
+1. Select a **shift date** and **trainee** in the report form
+2. The system calls the **shift preview** endpoint to pull:
+   - **Hours on shift** from ShiftAttendance duration
+   - **Calls responded** from ShiftCall records where the trainee is in `responding_members`
+   - **Call types** from the incident types of matching ShiftCall records
+3. Auto-populated fields display an **(auto)** badge in the form
+4. Officers can edit all auto-populated values before submitting
+5. The `data_sources` field tracks which fields were auto-populated vs manually entered for audit purposes
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing auto-populated hours and calls fields with the (auto) badge, plus the performance rating stars and narrative text areas below._
+
+### Draft Reports and Review Workflow *(2026-03-28)*
+
+The shift report system supports a multi-stage review workflow:
+
+1. **Draft** — Auto-created on shift finalization. Officer completes the evaluation fields (rating, narrative, skills, tasks)
+2. **Pending Review** — Report submitted for review by a training officer (if `report_review_required` is enabled in org config)
+3. **Approved** — Report finalized and visible to the trainee (subject to visibility config)
+4. **Flagged** — Report flagged by reviewer for correction or concern
+
+**For Officers:**
+- Navigate to the **Drafts** view in ShiftReportsTab to see auto-created drafts awaiting completion
+- Click a draft to edit and fill in evaluation details
+- Submit to transition the draft to `approved` or `pending_review`
+- Draft → approved transition triggers **deferred pipeline progress** (progress was not applied when the draft was created)
+
+**For Reviewers:**
+- Navigate to the **Pending Review** view
+- Review reports and approve or flag them
+- Optionally **redact fields** — clearing sensitive content from specified fields before the trainee sees the report
+- Add **reviewer notes** (encrypted, never visible to trainees)
+
+**For Trainees:**
+- Navigate to **My Reports** to see approved reports
+- Click **Acknowledge** to confirm you have reviewed the report
+- Add optional **comments** during acknowledgment
+- View personal statistics: total hours, calls, average rating, and monthly breakdown
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the officer's Drafts view showing auto-created draft reports with shift date, trainee name, auto-populated hours/calls, and an "Edit" button to complete the report._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the review modal showing review status options (Approve/Flag), field redaction checkboxes, and reviewer notes textarea._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the trainee's My Reports view showing a list of approved reports with an Acknowledge button and the personal stats card above._
+
+### Officer Analytics Dashboard *(2026-03-29)*
+
+Navigate to the **Officer Dashboard** view in ShiftReportsTab to see org-wide analytics:
+
+- **Summary cards** — Total reports, total hours, total calls, average rating
+- **Per-trainee breakdown table** — Each trainee's report count, hours, calls, and average rating
+- **Status counts** — How many reports are in draft, pending_review, approved, and flagged status
+- **Monthly trend** — Chart data showing reports, hours, and calls per month
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the officer analytics dashboard showing the summary metric cards at the top, the per-trainee data table in the middle, and the monthly trend section below._
+
+### Trainee Statistics Dashboard *(2026-03-29)*
+
+Trainees see a personal stats card at the top of their My Reports view:
+
+- **Total reports** received
+- **Total hours** logged across all reports
+- **Total calls** responded
+- **Average rating** across all rated reports
+- **Monthly breakdown** — per-month data for the current evaluation period
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the trainee stats card showing total hours, calls, average rating, and monthly breakdown._
+
+### Visibility Configuration
+
+Training officers can control what trainees see via **Training Module Configuration**:
+
+| Setting | Controls |
+|---------|----------|
+| `show_performance_rating` | Whether rating stars appear on trainee-visible reports |
+| `show_officer_narrative` | Whether officer's free-form assessment is visible to trainee |
+| `show_areas_of_strength` | Whether strengths are visible to trainee |
+| `show_areas_for_improvement` | Whether improvement areas are visible to trainee |
+| `show_skills_observed` | Whether skills observations appear |
+| `show_shift_stats` | Whether the trainee stats dashboard appears |
+| `show_shift_reports` | Whether the shift reports section appears at all |
+| `report_review_required` | Whether reports require reviewer approval before trainee visibility |
+| `rating_label` | Custom label for the performance rating (e.g., "Performance", "Readiness") |
+| `rating_scale_type` | Rating scale type (numeric, descriptive) |
+| `rating_scale_labels` | Custom labels for each rating level |
+
+### Edge Cases
+
+- **Duplicate prevention:** A unique constraint on `(shift_id, trainee_id)` prevents filing two reports for the same trainee on the same shift. If a second report is attempted, the system returns a descriptive error.
+- **Finalization blocking:** Shifts cannot be finalized if end-of-shift equipment checks are incomplete. Start-of-shift checks do not block finalization.
+- **Finalized shift protection:** Finalized shifts cannot be edited or deleted. Shifts with associated completion reports also cannot be deleted.
+- **Draft pipeline deferral:** Draft reports do not trigger training pipeline progress on creation. Progress is deferred until the draft is completed and transitions to `approved` or `pending_review`.
+- **Field redaction:** When a reviewer redacts fields, those field values are set to null before the report becomes visible to the trainee. The original values are not recoverable.
+- **Reviewer notes privacy:** The `reviewer_notes` field (encrypted at rest) is never exposed to the trainee in any view or API response.
+- **Auto-populate edge case:** If the trainee is not found in the shift's attendance records, the preview returns zeroed data. If there are no ShiftCall records, calls_responded defaults to 0 and call_types is empty.
+- **Call type matching:** Requirements with `required_call_types` use case-insensitive matching. "Medical" in a requirement matches "medical" in a call type. The system tracks matched types in `progress_notes` for audit.
+- **Ad hoc reports:** Reports filed without a `shift_id` are saved as ad hoc reports — no auto-population is available, and they appear in reports as "ad hoc".
+- **Failure isolation during finalization:** If draft auto-creation fails for one trainee, the error is logged and processing continues for remaining attendees.
 
 ---
 

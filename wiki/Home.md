@@ -120,6 +120,20 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### March 2026 (Mar 28-31) — Shift Completion Pipeline, Analytics Dashboards, Elections Fixes, Code Quality & Frontend Consolidation
+
+- **Shift completion pipeline**: End-to-end shift finalization workflow with `POST /scheduling/shifts/{id}/finalize`. Snapshots call_count and total_hours, computes per-member call_count, auto-creates draft ShiftCompletionReports for enrolled trainees. Pre-finalization checklist validates equipment checks. Finalized shifts and shifts with reports protected from deletion. Auto-populate report data from shift records (hours, calls, call types) with audit trail in `data_sources` JSON
+- **Shift report analytics**: Officer analytics dashboard with org-wide totals, per-trainee breakdown, status counts, and monthly trends. Trainee stats dashboard with personal totals and monthly breakdown. 5 new API endpoints. ShiftReportsTab expanded to 5 view modes (my-reports, filed-by-me, pending-review, drafts, create)
+- **Shift report review workflow**: Officers review reports (approve/flag) with optional field redaction. Trainees acknowledge reports with comments. Configurable visibility controls. Draft → approved transition triggers deferred pipeline progress. Encrypted evaluation fields (AES-256)
+- **Elections module fixes**: N+1 query fixes in `_sync_package_statuses()` and `get_eligibility_roster()`. Typed `ForensicsResponse` schema replacing untyped Dict. New `/send-report` and `/verify-receipt` endpoints. Frontend type corrections for bulk cast votes
+- **HIPAA audit logging**: Added `log_audit_event()` calls to medical screening, documents, membership pipeline, and messages endpoints
+- **Pagination standardization**: Added PaginationParams to 16 previously unbounded list endpoints across finance, grants, medical screening, member_leaves, training_waivers, operational_ranks, and training_sessions
+- **XSS prevention**: Replaced `dangerouslySetInnerHTML` in EventDetailPage with React-based SimpleMarkdown component (safe URL validation, token-based parsing)
+- **Frontend consolidation**: New `useEmailListInput` shared hook. APIKeysTab migrated to shared Modal. PipelineTable uses shared SortableHeader. ~92 lines removed across 6 files
+- **Security fix**: Analytics endpoint user_id spoofing patched — always uses `current_user.id` instead of client-supplied value
+- **Form value coercion**: Fixed ~15 instances of `??` → `||` to prevent 422 errors from empty string submission
+- **Database performance**: Added composite index on `users(organization_id, status, deleted_at)` plus indexes on `created_at` and `last_login_at`
+
 ### March 2026 (Mar 24) — Scheduling Bulk Actions, Elections Secretary Workflow, Inventory Storage Areas, Notifications Badges, WCAG Accessibility
 
 - **Scheduling bulk actions**: Bulk confirm/decline on My Shifts tab with optimistic UI. Inline approve/deny on Requests tab. Position-first assignment flow with "Fill All Open". Staffing status visualization (green/amber tints, ratio display). Unavailable member filtering. Required/optional position toggle on templates. Shift assignment notifications and start-of-shift reminders with equipment checklists. WCAG AA shift card contrast. 10 bug fixes (overlap detection, UTC in notifications, color parsing, member hours report, dark mode)

@@ -463,15 +463,20 @@ Shift templates can now be linked to actual department vehicles from the Apparat
 
 ## Training Module Integration
 
-The scheduling module connects to the training module through **Shift Completion Reports**:
+The scheduling module connects to the training module through **Shift Completion Reports** and the **Shift Finalization Workflow**:
 
-1. **Shift Report Page** (`ShiftReportPage.tsx`): Officers file shift completion reports documenting trainee performance
-2. **Skill Observations**: Track which skills were demonstrated during a shift
-3. **Tasks Performed**: Log tasks completed during the shift
-4. **Pipeline Progress**: Shift hours and calls automatically update training pipeline requirements
-5. **Performance Ratings**: 1-5 star ratings with strengths/improvement areas
+1. **Shift Finalization** (`POST /scheduling/shifts/{id}/finalize`): Officers finalize past shifts, which snapshots call_count and total_hours, computes per-member call counts, and auto-creates draft ShiftCompletionReports for enrolled trainees *(2026-03-28)*
+2. **Shift Report Page** (`ShiftReportPage.tsx`): Officers file shift completion reports documenting trainee performance
+3. **Auto-Population**: Report form auto-populates hours, calls, and call types from shift attendance and ShiftCall records via `GET /training/shift-reports/shift-preview/{shift_id}/{trainee_id}` *(2026-03-28)*
+4. **Draft Review Workflow**: Auto-created drafts are completed by officers, optionally reviewed by training officers (approve/flag with field redaction), and acknowledged by trainees *(2026-03-28)*
+5. **Skill Observations**: Track which skills were demonstrated during a shift (structured JSON: `{skill_name, demonstrated, notes, comment}`)
+6. **Tasks Performed**: Log tasks completed during the shift (structured JSON: `{task, description, comment}`)
+7. **Pipeline Progress**: Shift hours, shift count, and call count (with call type matching) automatically update training pipeline requirements. Draft reports defer progress until completed *(2026-03-28)*
+8. **Performance Ratings**: 1-5 star ratings with strengths/improvement areas (encrypted at rest)
+9. **Officer Analytics**: Org-wide analytics dashboard with per-trainee breakdown, status counts, and monthly trends (`GET /training/shift-reports/officer-analytics`) *(2026-03-29)*
+10. **Trainee Stats**: Personal stats dashboard with total hours, calls, average rating, and monthly breakdown (`GET /training/shift-reports/my-stats`) *(2026-03-29)*
 
-This integration allows training officers to document field observations and automatically advance trainees through their training programs based on shift activity.
+This integration allows training officers to document field observations, automatically advance trainees through their training programs based on shift activity, and track department-wide training progress through analytical dashboards.
 
 ---
 
@@ -485,7 +490,8 @@ This integration allows training officers to document field observations and aut
 5. START       → Shift begins, attendance tracked
 6. CALLS       → Calls/incidents logged during shift
 7. END         → Shift ends, checkout recorded
-8. FOLLOW-UP   → Shift completion report filed, training updated
+8. FINALIZE    → Officer finalizes shift (snapshots data, creates draft reports)
+9. FOLLOW-UP   → Officer completes draft reports, training pipeline updated
 ```
 
 ---
@@ -509,12 +515,15 @@ This integration allows training officers to document field observations and aut
 - Foreign key constraints on all relationship fields
 - Cascade delete on organization removal
 - `UniqueConstraint(shift_id, user_id)` on `ShiftAssignment` prevents duplicate assignments
+- `UniqueConstraint(shift_id, trainee_id)` on `ShiftCompletionReport` prevents duplicate reports *(2026-03-28)*
 - `IntegrityError` catch on concurrent assignment attempts as a race condition fallback
 - Overlap query scoped to ±1 day of `shift_date` to prevent false positives from ancient unclosed shifts
 - `confirm_assignment` validates `organization_id` to prevent cross-org access
 - Date range validation on time-off requests (`end_date >= start_date`)
 - Pattern generation deduplicates `assigned_members` by `user_id`
 - PATCH endpoints use `exclude_unset` so clients can explicitly clear optional fields
+- Finalized shifts cannot be edited or deleted *(2026-03-28)*
+- Shifts with associated completion reports cannot be deleted *(2026-03-28)*
 
 ---
 
@@ -898,7 +907,89 @@ Apparatus type and status badges now render actual Lucide icon components instea
 | EVOC not set for member | Warning on driver assignment; assignment still allowed |
 | Event attendee already in ballot | Skipped silently; count reflects new additions only |
 | `navigate(-1)` from deep link | Now navigates to hardcoded parent page |
+| Finalize shift with incomplete end-of-shift checks | Blocked; Finalize button disabled |
+| Finalize shift that hasn't ended yet | Finalize button not shown |
+| Finalize already-finalized shift | Returns 400 error |
+| Delete finalized shift | Blocked with descriptive error |
+| Delete shift with completion reports | Blocked with descriptive error |
+| Draft auto-creation fails for one trainee | Logged; remaining trainees processed |
+| Duplicate report for same shift + trainee | Unique constraint prevents; descriptive error returned |
+| Auto-populate preview for trainee not on shift | Returns zeroed data |
 
 ---
 
-*Last Updated: March 28, 2026*
+## Shift Finalization & Completion Reports (2026-03-28)
+
+### New Data Model Fields
+
+| Table | Column | Type | Description |
+|-------|--------|------|-------------|
+| `shifts` | `call_count` | Integer, nullable | Aggregate call count snapshot at finalization |
+| `shifts` | `total_hours` | Float, nullable | Total attendance hours snapshot at finalization |
+| `shifts` | `is_finalized` | Boolean, default=False | Whether the shift has been finalized |
+| `shifts` | `finalized_at` | DateTime, nullable | When the shift was finalized |
+| `shifts` | `finalized_by` | FK → users, nullable | Officer who finalized the shift |
+| `shift_attendance` | `call_count` | Integer, nullable | Per-member call participation count |
+
+### New API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/scheduling/shifts/{id}/finalize` | Finalize shift with data snapshots and draft report creation |
+
+### Finalization Data Flow
+
+```
+Officer clicks "Finalize Shift"
+    ↓
+Pre-finalization checklist validates end-of-shift equipment checks
+    ↓
+POST /scheduling/shifts/{id}/finalize
+    ↓
+Backend:
+  1. Validates shift has ended and is not already finalized
+  2. Queries ShiftCall records → snapshots call_count on shift
+  3. Sums ShiftAttendance.duration_minutes → snapshots total_hours
+  4. For each attendee: counts calls from responding_members → per-member call_count
+  5. Sets is_finalized=true, finalized_at, finalized_by
+  6. For each attendee with active ProgramEnrollment:
+     Creates ShiftCompletionReport (review_status="draft")
+     Pre-populates hours and calls from shift data
+  7. Sends notification to officer with draft count
+    ↓
+Frontend shows "Finalized" badge, hides edit controls
+```
+
+---
+
+## Shift Report Analytics (2026-03-29)
+
+### Officer Analytics Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/training/shift-reports/officer-analytics` | Org-wide totals, per-trainee breakdown, status counts, monthly trends |
+| `GET` | `/api/v1/training/shift-reports/by-officer` | Reports filed by current officer |
+| `GET` | `/api/v1/training/shift-reports/trainee/{id}` | Reports for a specific trainee |
+| `GET` | `/api/v1/training/shift-reports/trainee/{id}/stats` | Stats for a specific trainee |
+
+### Trainee Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/training/shift-reports/my-reports` | Trainee's approved reports (visibility-filtered) |
+| `GET` | `/api/v1/training/shift-reports/my-stats` | Trainee's aggregate statistics |
+
+### ShiftReportsTab View Modes
+
+| View | Who Sees It | Content |
+|------|-------------|---------|
+| **My Reports** | Trainees | Received approved reports with acknowledgment |
+| **Filed by Me** | Officers | Reports the officer has filed |
+| **Pending Review** | Training officers | Reports awaiting review approval |
+| **Drafts** | Officers | Auto-created drafts from finalization |
+| **Create** | Officers | New report form with auto-population |
+
+---
+
+*Last Updated: March 31, 2026*

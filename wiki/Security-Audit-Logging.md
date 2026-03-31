@@ -28,6 +28,10 @@ Every significant action in the system is recorded in the audit log with:
 | **Events** | Event creation, check-in, attendance modification |
 | **Inventory** | Assignment, checkout, return, clearance |
 | **Settings** | Module toggle, configuration change, role permission change |
+| **Medical Screening** | Requirement creation/update/delete, screening record creation/update/delete *(2026-03-29)* |
+| **Documents** | Document upload (filename, MIME type, file size), document delete *(2026-03-29)* |
+| **Membership Pipeline** | Pipeline created/deleted, prospect created/advanced/transferred *(2026-03-29)* |
+| **Messages** | Message creation and deletion *(2026-03-29)* |
 | **Security** | Alert generated, alert acknowledged, integrity check |
 
 ---

@@ -1207,47 +1207,89 @@ PUT    /api/v1/training/submissions/config             Update config (officer)
 
 ## Shift Completion Reports
 
-Shift officers submit reports on trainee experiences after each shift. These reports feed into pipeline requirement progress for shift, call, and hour-based requirements.
+Shift officers submit reports on trainee experiences after each shift. These reports feed into pipeline requirement progress for shift, call, and hour-based requirements. Reports can be auto-created as drafts during shift finalization or manually filed by officers. *(Updated 2026-03-28)*
 
 ### Report Contents
 
-- **Shift Details**: Date, hours on shift, calls responded, call types
-- **Performance Observations**: 1-5 rating, areas of strength, areas for improvement, officer narrative
-- **Skills Observed**: List of skills with demonstrated/not demonstrated status
-- **Tasks Performed**: List of tasks completed during the shift
+- **Shift Details**: Date, hours on shift, calls responded, call types — auto-populated from shift attendance and ShiftCall records when a shift is linked
+- **Performance Observations**: 1-5 rating (configurable label and scale), areas of strength, areas for improvement, officer narrative — all evaluation fields encrypted at rest (AES-256)
+- **Skills Observed**: Structured list of `{skill_name, demonstrated, notes, comment}` entries for detailed performance tracking
+- **Tasks Performed**: Structured list of `{task, description, comment}` entries for shift activity documentation
 - **Pipeline Linkage**: Optionally link to a trainee's program enrollment to auto-update requirement progress
+- **Audit Trail**: `data_sources` JSON field tracks which fields were auto-populated from shift data vs manually entered (e.g., `{"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}`)
+
+### Auto-Population from Shift Data *(2026-03-28)*
+
+When a shift and trainee are selected in the report form, the system auto-populates:
+- **Hours on shift** from ShiftAttendance duration
+- **Calls responded** from ShiftCall records where the trainee is in `responding_members`
+- **Call types** from the incident types of matching calls
+
+Auto-populated fields display an **(auto)** badge. Officers can edit values before submitting.
 
 ### Auto-Progress Updates
 
-When a shift report is linked to a program enrollment, the system automatically updates requirement progress:
+When a shift report is created (or a draft transitions to `approved`/`pending_review`), the system automatically updates requirement progress:
 - **SHIFTS** requirements: Incremented by 1
-- **CALLS** requirements: Incremented by the number of calls responded
+- **CALLS** requirements: If `required_call_types` specified on the requirement, only matching calls count (case-insensitive). Otherwise all calls counted. Call type breakdown tracked in `progress_notes`
 - **HOURS** requirements: Incremented by hours on shift
 
-Progress percentages and enrollment completion are automatically recalculated.
+Progress percentages and enrollment completion are automatically recalculated. **Draft reports do not trigger progress updates** — progress is deferred until the draft is completed.
+
+### Review Workflow *(2026-03-28)*
+
+Reports support a multi-stage review workflow:
+
+| Status | Description |
+|--------|-------------|
+| `draft` | Auto-created on shift finalization; awaiting officer completion |
+| `pending_review` | Submitted for training officer review (if `report_review_required` enabled) |
+| `approved` | Finalized and visible to trainee (subject to visibility config) |
+| `flagged` | Flagged by reviewer for correction or concern |
+
+Reviewers can optionally **redact fields** (clearing sensitive content) and add **reviewer notes** (encrypted, never visible to trainees).
 
 ### Trainee Acknowledgment
 
-Trainees can acknowledge shift reports and add their own comments. This creates a record that the trainee has reviewed the officer's observations.
+Trainees can acknowledge shift reports and add their own comments via `POST /{report_id}/acknowledge`. Acknowledgment timestamp and comments are recorded for compliance tracking.
+
+### Analytics Dashboards *(2026-03-29)*
+
+**Officer Analytics** (`GET /training/shift-reports/officer-analytics`):
+- Org-wide totals: reports, hours, calls, average rating
+- Per-trainee breakdown table
+- Status counts (draft/pending/approved/flagged)
+- Monthly trend data
+
+**Trainee Statistics** (`GET /training/shift-reports/my-stats`):
+- Personal totals: reports, hours, calls, average rating
+- Monthly breakdown
 
 ### Pages
 
 | Page | Path | Access |
 |------|------|--------|
-| New Report / Filed / Received | `/training/shift-reports` | All members |
+| Shift Reports (multi-view) | ShiftReportsTab in SchedulingPage | All members |
+| Shift Report Form | ShiftReportPage | `training.manage` |
 
 ### API Endpoints
 
 ```http
-POST   /api/v1/training/shift-reports/                   Create report (officer)
-GET    /api/v1/training/shift-reports/my-reports          Trainee's received reports
-GET    /api/v1/training/shift-reports/my-stats            Trainee's aggregate stats
-GET    /api/v1/training/shift-reports/by-officer          Officer's filed reports
-GET    /api/v1/training/shift-reports/trainee/{id}        Trainee reports (officer)
-GET    /api/v1/training/shift-reports/trainee/{id}/stats  Trainee stats (officer)
-GET    /api/v1/training/shift-reports/all                 All reports (officer)
-GET    /api/v1/training/shift-reports/{id}                Single report
-POST   /api/v1/training/shift-reports/{id}/acknowledge    Trainee acknowledges
+POST   /api/v1/training/shift-reports/                                  Create report (officer)
+GET    /api/v1/training/shift-reports/my-reports                        Trainee's received reports
+GET    /api/v1/training/shift-reports/my-stats                          Trainee's aggregate stats
+GET    /api/v1/training/shift-reports/officer-analytics                 Org-wide analytics (officer)
+GET    /api/v1/training/shift-reports/by-officer                        Officer's filed reports
+GET    /api/v1/training/shift-reports/pending-review                    Reports awaiting review
+GET    /api/v1/training/shift-reports/drafts                            Auto-created drafts
+GET    /api/v1/training/shift-reports/all                               All org reports (filtered)
+GET    /api/v1/training/shift-reports/trainee/{id}                      Trainee reports (officer)
+GET    /api/v1/training/shift-reports/trainee/{id}/stats                Trainee stats (officer)
+GET    /api/v1/training/shift-reports/shift-preview/{shift_id}/{trainee_id}  Auto-populate preview
+GET    /api/v1/training/shift-reports/{id}                              Single report
+PUT    /api/v1/training/shift-reports/{id}                              Update draft
+POST   /api/v1/training/shift-reports/{id}/acknowledge                  Trainee acknowledges
+POST   /api/v1/training/shift-reports/{id}/review                       Officer reviews (approve/flag/redact)
 ```
 
 ---
@@ -1360,16 +1402,20 @@ Navigate to **Reports** page and use the **Reporting Period** section above the 
 
 ## Database Schema (New Tables)
 
-### `shift_completion_reports`
+### `shift_completion_reports` *(updated 2026-03-28)*
 - id, organization_id
-- shift_id, shift_date
+- shift_id (nullable — null for ad hoc reports), shift_date
 - trainee_id, officer_id
 - hours_on_shift, calls_responded, call_types (JSON)
-- performance_rating (1-5), areas_of_strength, areas_for_improvement, officer_narrative
-- skills_observed (JSON), tasks_performed (JSON)
-- enrollment_id, requirements_progressed (JSON)
+- performance_rating (1-5), areas_of_strength (EncryptedText), areas_for_improvement (EncryptedText), officer_narrative (EncryptedText)
+- skills_observed (JSON: `[{skill_name, demonstrated, notes, comment}]`), tasks_performed (JSON: `[{task, description, comment}]`)
+- enrollment_id, requirements_progressed (JSON: `[{requirement_progress_id, value_added}]`)
+- data_sources (JSON — audit trail tracking auto-populated vs manual fields)
+- review_status (`draft`, `pending_review`, `approved`, `flagged`)
+- reviewed_by, reviewed_at, reviewer_notes (EncryptedText — never exposed to trainee)
 - trainee_acknowledged, trainee_acknowledged_at, trainee_comments
 - created_at, updated_at
+- Unique constraint: `(shift_id, trainee_id)`
 
 ### `training_module_configs`
 - id, organization_id (unique)
@@ -1419,8 +1465,12 @@ Training sessions can be linked to events via the `training_session.event_id` fo
 
 Shift completion reports (`POST /training/shift-reports`) auto-progress program requirements when linked to an enrollment:
 - **SHIFTS** requirements: Incremented by 1 per report
-- **CALLS** requirements: Incremented by the number of calls responded
+- **CALLS** requirements: If `required_call_types` specified on the requirement, only matching calls count (case-insensitive matching). Otherwise all calls counted. Call type breakdown tracked in `progress_notes` *(2026-03-28)*
 - **HOURS** requirements: Incremented by hours on shift
+
+**Shift Finalization Integration** *(2026-03-28)*: When a shift is finalized via `POST /scheduling/shifts/{id}/finalize`, the system auto-creates draft ShiftCompletionReports for all attendees with active program enrollments. Draft reports do NOT trigger pipeline progress — progress is deferred until the officer completes the draft (transitions to `approved` or `pending_review`). This prevents double-counting and ensures officer review before data impacts training pipeline.
+
+**Auto-Population** *(2026-03-28)*: The report form auto-populates hours, calls, and call types from shift records via `GET /training/shift-reports/shift-preview/{shift_id}/{trainee_id}`. The `data_sources` audit trail tracks which fields were auto-populated.
 
 > **Edge Case:** If a shift report is filed for a member who is enrolled in multiple programs with overlapping requirements, the system credits all matching requirements across all active enrollments. This means a single shift can progress multiple program requirements simultaneously.
 

@@ -24,7 +24,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 |-------|-------------|
 | `audit_logs` | Tamper-proof audit trail with SHA-256 hash chain |
 | `notification_rules` | Notification rule definitions with trigger, category, channel, and config *(2026-03-23)* |
-| `notification_logs` | In-app and email notification records with action_url and expiry |
+| `notification_logs` | In-app and email notification records with action_url, expiry, and `metadata` JSON column for structured context (shift_id, shift_date, checklist_count, etc.) *(updated 2026-03-26)* |
 | `department_messages` | Internal department messages with targeting, priority, and `is_persistent` flag *(2026-03-23)* |
 | `department_message_reads` | Per-user read/acknowledged tracking for department messages *(2026-03-23)* |
 | `security_alerts` | Intrusion detection and security event alerts |
@@ -45,7 +45,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `program_enrollments` | Member enrollments in training programs |
 | `training_waivers` | Training requirement waivers (auto-linked from LOA or manual) |
 | `training_submissions` | Self-reported training pending review |
-| `shift_completion_reports` | Post-shift training reports filed by officers |
+| `shift_completion_reports` | Post-shift training reports with encrypted evaluation fields, review workflow (`draft`/`pending_review`/`approved`/`flagged`), trainee acknowledgment, skills observed, tasks performed, call type tracking, pipeline progress linkage, and audit trail (`data_sources`) *(updated 2026-03-28)* |
 
 ### Membership
 
@@ -66,7 +66,9 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `shifts` | Shift definitions with date, time, and location |
+| `shifts` | Shift definitions with date, time, location, finalization state (`is_finalized`, `finalized_at`, `finalized_by`), and aggregate snapshots (`call_count`, `total_hours`) *(updated 2026-03-28)* |
+| `shift_attendance` | Member attendance records with clock-in/out times, duration, and per-member `call_count` snapshot *(updated 2026-03-28)* |
+| `shift_calls` | Incident/call records linked to shifts with `responding_members` JSON array |
 | `shift_assignments` | Member assignments to shifts with positions |
 | `shift_templates` | Reusable shift configurations |
 | `shift_patterns` | Patterns for bulk shift generation |
