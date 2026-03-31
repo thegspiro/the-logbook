@@ -937,8 +937,8 @@ export const applicantService = {
           file_name: file.name,
           file_path: `/uploads/prospects/${applicantId}/${file.name}`,
           file_size: file.size,
-          mime_type: file.type ?? undefined,
-          step_id: stageId ?? undefined,
+          mime_type: file.type || undefined,
+          step_id: stageId || undefined,
         },
       }
     );

@@ -318,7 +318,7 @@ const FormsPage: React.FC = () => {
     try {
       const [formsRes, summaryRes] = await Promise.all([
         formsService.getForms({
-          search: searchQuery ?? undefined,
+          search: searchQuery || undefined,
           category: categoryFilter !== 'all' ? categoryFilter : undefined,
         }),
         formsService.getSummary(),

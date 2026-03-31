@@ -138,7 +138,7 @@ export const ProspectiveMembersPage: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchQuery !== (filters.search ?? '')) {
-        setFilters({ search: searchQuery ?? undefined });
+        setFilters({ search: searchQuery || undefined });
       }
     }, 300);
     return () => clearTimeout(timer);

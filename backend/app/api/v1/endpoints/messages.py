@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found
 from app.models.user import User
@@ -187,6 +188,19 @@ async def create_message(
     )
     if error:
         raise HTTPException(status_code=400, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="message_created",
+        event_category="messages",
+        severity="info",
+        event_data={
+            "message_title": data.title,
+            "target_type": data.target_type,
+            "priority": data.priority,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return _serialize_message(message)
 
 
@@ -278,6 +292,15 @@ async def delete_message(
     )
     if not success:
         raise HTTPException(status_code=400, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="message_deleted",
+        event_category="messages",
+        severity="warning",
+        event_data={"message_id": message_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 @router.post("/{message_id}/read")

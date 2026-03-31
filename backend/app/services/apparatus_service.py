@@ -31,7 +31,6 @@ from app.models.apparatus import (
     ApparatusStatus,
     ApparatusStatusHistory,
     ApparatusType,
-    EvocLevel,
 )
 from app.schemas.apparatus import (
     ApparatusArchive,

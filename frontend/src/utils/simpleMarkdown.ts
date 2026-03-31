@@ -1,9 +1,9 @@
 /**
  * Simple Markdown Renderer
  *
- * Converts a small subset of markdown syntax to HTML for event descriptions.
- * Sanitizes HTML first (escapes angle brackets and ampersands) to prevent XSS,
- * then applies markdown conversions.
+ * Converts a small subset of markdown syntax to HTML or React elements for
+ * event descriptions. Sanitizes HTML first (escapes angle brackets and
+ * ampersands) to prevent XSS, then applies markdown conversions.
  *
  * Supported syntax:
  * - **bold** → <strong>bold</strong>
@@ -12,6 +12,8 @@
  * - Lines starting with "- " → <ul><li>…</li></ul>
  * - Newlines → <br>
  */
+
+import React from 'react';
 
 /**
  * Escape HTML special characters to prevent XSS.
@@ -99,3 +101,138 @@ export function renderSimpleMarkdown(text: string): string {
 
   return html;
 }
+
+interface InlineToken {
+  type: 'text' | 'bold' | 'italic' | 'link';
+  content: string;
+  href?: string;
+}
+
+/**
+ * Parse inline markdown tokens (bold, italic, links) from a plain-text string.
+ * Returns an array of typed tokens for React rendering.
+ */
+function parseInlineTokens(text: string): InlineToken[] {
+  const tokens: InlineToken[] = [];
+  const pattern = /\*\*(.+?)\*\*|(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)|\[([^\]]+)\]\(([^)]+)\)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      tokens.push({ type: 'text', content: text.slice(lastIndex, match.index) });
+    }
+
+    const boldContent = match[1];
+    const italicContent = match[2];
+    const linkText = match[3];
+    const linkUrl = match[4];
+
+    if (boldContent !== undefined) {
+      tokens.push({ type: 'bold', content: boldContent });
+    } else if (italicContent !== undefined) {
+      tokens.push({ type: 'italic', content: italicContent });
+    } else if (linkText !== undefined && linkUrl !== undefined) {
+      if (isSafeUrl(linkUrl)) {
+        tokens.push({ type: 'link', content: linkText, href: linkUrl });
+      } else {
+        tokens.push({ type: 'text', content: linkText });
+      }
+    }
+
+    lastIndex = match.index + (match[0]?.length ?? 0);
+  }
+
+  if (lastIndex < text.length) {
+    tokens.push({ type: 'text', content: text.slice(lastIndex) });
+  }
+
+  return tokens;
+}
+
+function renderInlineTokens(tokens: InlineToken[], keyPrefix: string): React.ReactNode[] {
+  return tokens.map((token, i) => {
+    const key = `${keyPrefix}-${i}`;
+    switch (token.type) {
+      case 'bold':
+        return React.createElement('strong', { key }, token.content);
+      case 'italic':
+        return React.createElement('em', { key }, token.content);
+      case 'link':
+        return React.createElement(
+          'a',
+          {
+            key,
+            href: token.href,
+            target: '_blank',
+            rel: 'noopener noreferrer',
+            className: 'text-blue-600 dark:text-blue-400 underline hover:text-blue-800 dark:hover:text-blue-300',
+          },
+          token.content,
+        );
+      default:
+        return React.createElement(React.Fragment, { key }, token.content);
+    }
+  });
+}
+
+interface SimpleMarkdownProps {
+  text: string;
+  className?: string;
+}
+
+/**
+ * React component that renders a simple markdown subset without
+ * dangerouslySetInnerHTML. Supports bold, italic, links, bullet lists,
+ * and newline breaks.
+ */
+export const SimpleMarkdown: React.FC<SimpleMarkdownProps> = ({ text, className }) => {
+  const lines = text.split('\n');
+  const blocks: React.ReactNode[] = [];
+  let currentListItems: React.ReactNode[] = [];
+  let blockIndex = 0;
+
+  const flushList = () => {
+    if (currentListItems.length > 0) {
+      blocks.push(
+        React.createElement(
+          'ul',
+          { key: `block-${blockIndex}`, className: 'list-disc list-inside my-1' },
+          ...currentListItems,
+        ),
+      );
+      blockIndex++;
+      currentListItems = [];
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+
+    if (line.startsWith('- ')) {
+      const content = line.slice(2);
+      const tokens = parseInlineTokens(content);
+      currentListItems.push(
+        React.createElement('li', { key: `li-${i}` }, ...renderInlineTokens(tokens, `li-${i}`)),
+      );
+    } else {
+      flushList();
+
+      const tokens = parseInlineTokens(line);
+      const inlineElements = renderInlineTokens(tokens, `line-${i}`);
+      blocks.push(React.createElement(React.Fragment, { key: `block-${blockIndex}` }, ...inlineElements));
+      blockIndex++;
+
+      const nextLine = lines[i + 1];
+      const nextIsList = nextLine !== undefined && nextLine.startsWith('- ');
+      if (i < lines.length - 1 && !nextIsList) {
+        blocks.push(React.createElement('br', { key: `br-${blockIndex}` }));
+        blockIndex++;
+      }
+    }
+  }
+
+  flushList();
+
+  return React.createElement('div', { className }, ...blocks);
+};

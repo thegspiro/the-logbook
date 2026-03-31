@@ -50,7 +50,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
 
   const handleMemberChange = (memberId: string) => {
     setSelectedMemberId(memberId);
-    onRefresh(memberId ?? undefined);
+    onRefresh(memberId || undefined);
   };
 
   return (
@@ -88,7 +88,7 @@ export const TemplatePreview: React.FC<TemplatePreviewProps> = ({
             </button>
           </div>
           <button
-            onClick={() => onRefresh(selectedMemberId ?? undefined)}
+            onClick={() => onRefresh(selectedMemberId || undefined)}
             disabled={isPreviewing}
             className="flex items-center space-x-1.5 px-3 py-1.5 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
           >

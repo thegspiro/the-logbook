@@ -458,7 +458,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const handleHold = async () => {
     if (!applicant) return;
     try {
-      await holdApplicant(applicant.id, actionNotes ?? undefined);
+      await holdApplicant(applicant.id, actionNotes || undefined);
       toast.success('Applicant put on hold');
       setActionNotes('');
       setShowNotesInput(false);
@@ -522,8 +522,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       // Save any pending edits first
       if (currentElectionPackage) {
         await updateElectionPackage(applicant.id, {
-          coordinator_notes: pkgNotes ?? undefined,
-          supporting_statement: pkgStatement ?? undefined,
+          coordinator_notes: pkgNotes || undefined,
+          supporting_statement: pkgStatement || undefined,
         });
       }
       await submitElectionPackage(applicant.id);

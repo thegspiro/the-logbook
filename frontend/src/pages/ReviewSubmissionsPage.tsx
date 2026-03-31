@@ -177,7 +177,7 @@ const ReviewPanel: React.FC<{
                 <label className="text-xs text-theme-text-muted">Training Type</label>
                 <select
                   value={overrideType || ''}
-                  onChange={(e) => setOverrideType((e.target.value as TrainingType) ?? undefined)}
+                  onChange={(e) => setOverrideType((e.target.value as TrainingType) || undefined)}
                   className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-sm text-theme-text-primary text-sm"
                 >
                   <option value="">No change</option>

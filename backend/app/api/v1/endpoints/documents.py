@@ -24,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.document import Document, DocumentStatus
@@ -310,6 +311,20 @@ async def upload_document(
             status_code=400, detail=safe_error_detail(e, "Unable to save document")
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="document_uploaded",
+        event_category="documents",
+        severity="info",
+        event_data={
+            "document_name": name,
+            "file_type": detected_mime,
+            "file_size": len(content),
+            "folder_id": folder_id,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return document
 
 
@@ -358,6 +373,15 @@ async def delete_document(
     success = await service.delete_document(document_id, current_user.organization_id)
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
+    await log_audit_event(
+        db=db,
+        event_type="document_deleted",
+        event_category="documents",
+        severity="warning",
+        event_data={"document_id": str(document_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ============================================

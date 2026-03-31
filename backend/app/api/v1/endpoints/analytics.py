@@ -4,8 +4,11 @@ Analytics API Endpoints
 Endpoints for tracking and retrieving analytics data.
 """
 
+from typing import Optional
+
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import extract, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,20 +25,30 @@ from app.models.user import User
 router = APIRouter()
 
 
+class AnalyticsEventCreate(BaseModel):
+    event_type: str = Field(
+        default="unknown", max_length=50, description="Type of analytics event"
+    )
+    event_id: Optional[str] = Field(
+        default=None, max_length=36, description="Reference to the tracked event"
+    )
+    metadata: Optional[dict] = Field(default_factory=dict)
+
+
 @router.post("/track")
 async def track_event(
-    data: dict,
+    data: AnalyticsEventCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Track an analytics event"""
     event = AnalyticsEvent(
         organization_id=current_user.organization_id,
-        event_type=data.get("event_type", "unknown"),
-        event_id=data.get("event_id"),
-        user_id=data.get("user_id") or str(current_user.id),
-        device_type=data.get("metadata", {}).get("deviceType"),
-        event_metadata=data.get("metadata", {}),
+        event_type=data.event_type,
+        event_id=data.event_id,
+        user_id=str(current_user.id),
+        device_type=(data.metadata or {}).get("deviceType"),
+        event_metadata=data.metadata or {},
     )
     db.add(event)
     await db.commit()

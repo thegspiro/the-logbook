@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import PaginationParams, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -74,6 +74,7 @@ async def list_opportunities(
     search: Optional[str] = Query(
         None, description="Search by name, agency, or description"
     ),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -91,7 +92,7 @@ async def list_opportunities(
             active_only=active_only,
             search=search,
         )
-        return opportunities
+        return opportunities[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -263,6 +264,7 @@ async def list_applications(
     ),
     priority: Optional[str] = Query(None, description="Filter by priority"),
     assigned_to: Optional[UUID] = Query(None, description="Filter by assigned user"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -280,7 +282,7 @@ async def list_applications(
             priority=priority,
             assigned_to=str(assigned_to) if assigned_to else None,
         )
-        return applications
+        return applications[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -464,6 +466,7 @@ async def delete_application(
 )
 async def list_budget_items(
     app_id: UUID,
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -479,7 +482,7 @@ async def list_budget_items(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
         )
-        return items
+        return items[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -616,6 +619,7 @@ async def delete_budget_item(
 )
 async def list_expenditures(
     app_id: UUID,
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -631,7 +635,7 @@ async def list_expenditures(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
         )
-        return expenditures
+        return expenditures[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -774,6 +778,7 @@ async def list_compliance_tasks(
     due_before: Optional[date] = Query(
         None, description="Filter tasks due before this date"
     ),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -791,7 +796,7 @@ async def list_compliance_tasks(
             status=status_filter,
             due_before=due_before,
         )
-        return tasks
+        return tasks[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -930,6 +935,7 @@ async def delete_compliance_task(
 )
 async def list_notes(
     app_id: UUID,
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -942,7 +948,7 @@ async def list_notes(
     try:
         service = GrantService(db)
         notes = await service.list_notes(application_id=str(app_id))
-        return notes
+        return notes[pagination.skip:pagination.skip + pagination.limit]
     except Exception as e:
         logger.error(f"Error listing grant notes: {e}")
         raise HTTPException(
@@ -1003,6 +1009,7 @@ async def list_campaigns(
         None, alias="status", description="Filter by campaign status"
     ),
     campaign_type: Optional[str] = Query(None, description="Filter by campaign type"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -1019,7 +1026,7 @@ async def list_campaigns(
             status=status_filter,
             campaign_type=campaign_type,
         )
-        return campaigns
+        return campaigns[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1190,6 +1197,7 @@ async def list_donors(
         None, description="Search by name, email, or company"
     ),
     donor_type: Optional[str] = Query(None, description="Filter by donor type"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -1206,7 +1214,7 @@ async def list_donors(
             donor_type=donor_type,
             search=search,
         )
-        return donors
+        return donors[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1346,6 +1354,7 @@ async def list_donations(
     end_date: Optional[date] = Query(
         None, description="Filter donations until this date"
     ),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -1364,7 +1373,7 @@ async def list_donations(
             start_date=start_date,
             end_date=end_date,
         )
-        return donations
+        return donations[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1467,6 +1476,7 @@ async def list_pledges(
         None, alias="status", description="Filter by pledge status"
     ),
     campaign_id: Optional[UUID] = Query(None, description="Filter by campaign"),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -1483,7 +1493,7 @@ async def list_pledges(
             status=status_filter,
             campaign_id=str(campaign_id) if campaign_id else None,
         )
-        return pledges
+        return pledges[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1586,6 +1596,7 @@ async def list_fundraising_events(
     status_filter: Optional[str] = Query(
         None, alias="status", description="Filter by event status"
     ),
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("fundraising.view")),
 ):
@@ -1602,7 +1613,7 @@ async def list_fundraising_events(
             campaign_id=str(campaign_id) if campaign_id else None,
             status=status_filter,
         )
-        return events
+        return events[pagination.skip:pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

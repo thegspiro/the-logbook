@@ -23,7 +23,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
 import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin, StopCircle } from 'lucide-react';
-import { renderSimpleMarkdown } from '../utils/simpleMarkdown';
+import { SimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
 import { EventNotificationPanel } from '../components/event-detail/EventNotificationPanel';
@@ -995,9 +995,9 @@ export const EventDetailPage: React.FC = () => {
             {event.description && (
               <div className="mb-4">
                 <h3 className="text-sm font-medium text-theme-text-secondary mb-1">Description</h3>
-                <div
+                <SimpleMarkdown
+                  text={event.description}
                   className="text-theme-text-secondary prose-sm"
-                  dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(event.description) }}
                 />
               </div>
             )}
