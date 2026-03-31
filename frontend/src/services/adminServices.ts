@@ -599,6 +599,11 @@ export const shiftCompletionService = {
     return response.data;
   },
 
+  async getOfficerAnalytics(): Promise<import('../types/training').OfficerShiftAnalytics> {
+    const response = await api.get<import('../types/training').OfficerShiftAnalytics>('/training/shift-reports/officer-analytics');
+    return response.data;
+  },
+
   async previewShiftData(shiftId: string, traineeId: string): Promise<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }> {
     const response = await api.get<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }>(`/training/shift-reports/shift-preview/${shiftId}/${traineeId}`);
     return response.data;

@@ -614,28 +614,221 @@ class ShiftCompletionService:
         end_date: Optional[date] = None,
     ) -> dict:
         """Get aggregate stats for a trainee's shift completion reports."""
-        query = select(
-            func.count(ShiftCompletionReport.id).label("total_reports"),
-            func.sum(ShiftCompletionReport.hours_on_shift).label("total_hours"),
-            func.sum(ShiftCompletionReport.calls_responded).label("total_calls"),
-            func.avg(ShiftCompletionReport.performance_rating).label("avg_rating"),
-        ).where(
+        base_filter = [
             ShiftCompletionReport.organization_id == str(organization_id),
             ShiftCompletionReport.trainee_id == trainee_id,
-        )
+            ShiftCompletionReport.review_status != "draft",
+        ]
         if start_date:
-            query = query.where(ShiftCompletionReport.shift_date >= start_date)
+            base_filter.append(
+                ShiftCompletionReport.shift_date >= start_date
+            )
         if end_date:
-            query = query.where(ShiftCompletionReport.shift_date <= end_date)
+            base_filter.append(
+                ShiftCompletionReport.shift_date <= end_date
+            )
 
-        result = await self.db.execute(query)
+        result = await self.db.execute(
+            select(
+                func.count(ShiftCompletionReport.id).label(
+                    "total_reports"
+                ),
+                func.sum(
+                    ShiftCompletionReport.hours_on_shift
+                ).label("total_hours"),
+                func.sum(
+                    ShiftCompletionReport.calls_responded
+                ).label("total_calls"),
+                func.avg(
+                    ShiftCompletionReport.performance_rating
+                ).label("avg_rating"),
+            ).where(*base_filter)
+        )
         row = result.one()
+
+        # Monthly breakdown for trend display
+        monthly_result = await self.db.execute(
+            select(
+                func.date_format(
+                    ShiftCompletionReport.shift_date, "%Y-%m"
+                ).label("month"),
+                func.count(ShiftCompletionReport.id).label(
+                    "reports"
+                ),
+                func.sum(
+                    ShiftCompletionReport.hours_on_shift
+                ).label("hours"),
+                func.sum(
+                    ShiftCompletionReport.calls_responded
+                ).label("calls"),
+            )
+            .where(*base_filter)
+            .group_by("month")
+            .order_by("month")
+            .limit(12)
+        )
+        monthly = [
+            {
+                "month": r.month,
+                "reports": r.reports or 0,
+                "hours": float(r.hours or 0),
+                "calls": int(r.calls or 0),
+            }
+            for r in monthly_result.all()
+        ]
 
         return {
             "total_reports": row.total_reports or 0,
             "total_hours": float(row.total_hours or 0),
             "total_calls": int(row.total_calls or 0),
             "avg_rating": (
-                round(float(row.avg_rating or 0), 1) if row.avg_rating else None
+                round(float(row.avg_rating or 0), 1)
+                if row.avg_rating
+                else None
             ),
+            "monthly": monthly,
+        }
+
+    async def get_officer_analytics(
+        self,
+        organization_id: UUID,
+    ) -> dict:
+        """Get org-wide shift report analytics for training officers.
+
+        Returns aggregate totals, per-trainee summary, report status
+        counts, and monthly trend data.
+        """
+        org_filter = [
+            ShiftCompletionReport.organization_id
+            == str(organization_id),
+        ]
+
+        # Aggregate totals (exclude drafts from counts)
+        active_filter = org_filter + [
+            ShiftCompletionReport.review_status != "draft",
+        ]
+        totals_result = await self.db.execute(
+            select(
+                func.count(ShiftCompletionReport.id).label(
+                    "total_reports"
+                ),
+                func.sum(
+                    ShiftCompletionReport.hours_on_shift
+                ).label("total_hours"),
+                func.sum(
+                    ShiftCompletionReport.calls_responded
+                ).label("total_calls"),
+                func.avg(
+                    ShiftCompletionReport.performance_rating
+                ).label("avg_rating"),
+            ).where(*active_filter)
+        )
+        totals = totals_result.one()
+
+        # Status breakdown (including drafts)
+        status_result = await self.db.execute(
+            select(
+                ShiftCompletionReport.review_status,
+                func.count(ShiftCompletionReport.id).label("count"),
+            )
+            .where(*org_filter)
+            .group_by(ShiftCompletionReport.review_status)
+        )
+        status_counts = {
+            r.review_status: r.count
+            for r in status_result.all()
+        }
+
+        # Per-trainee summary
+        from app.models.user import User
+
+        trainee_result = await self.db.execute(
+            select(
+                ShiftCompletionReport.trainee_id,
+                User.first_name,
+                User.last_name,
+                func.count(ShiftCompletionReport.id).label(
+                    "reports"
+                ),
+                func.sum(
+                    ShiftCompletionReport.hours_on_shift
+                ).label("hours"),
+                func.sum(
+                    ShiftCompletionReport.calls_responded
+                ).label("calls"),
+                func.avg(
+                    ShiftCompletionReport.performance_rating
+                ).label("avg_rating"),
+            )
+            .join(
+                User,
+                User.id == ShiftCompletionReport.trainee_id,
+            )
+            .where(*active_filter)
+            .group_by(
+                ShiftCompletionReport.trainee_id,
+                User.first_name,
+                User.last_name,
+            )
+            .order_by(
+                func.sum(
+                    ShiftCompletionReport.hours_on_shift
+                ).desc()
+            )
+        )
+        trainees = [
+            {
+                "trainee_id": r.trainee_id,
+                "name": f"{r.first_name or ''} {r.last_name or ''}".strip() or "Unknown",
+                "reports": r.reports or 0,
+                "hours": float(r.hours or 0),
+                "calls": int(r.calls or 0),
+                "avg_rating": (
+                    round(float(r.avg_rating), 1)
+                    if r.avg_rating
+                    else None
+                ),
+            }
+            for r in trainee_result.all()
+        ]
+
+        # Monthly trend (last 6 months)
+        monthly_result = await self.db.execute(
+            select(
+                func.date_format(
+                    ShiftCompletionReport.shift_date, "%Y-%m"
+                ).label("month"),
+                func.count(ShiftCompletionReport.id).label(
+                    "reports"
+                ),
+                func.sum(
+                    ShiftCompletionReport.hours_on_shift
+                ).label("hours"),
+            )
+            .where(*active_filter)
+            .group_by("month")
+            .order_by("month")
+            .limit(6)
+        )
+        monthly = [
+            {
+                "month": r.month,
+                "reports": r.reports or 0,
+                "hours": float(r.hours or 0),
+            }
+            for r in monthly_result.all()
+        ]
+
+        return {
+            "total_reports": totals.total_reports or 0,
+            "total_hours": float(totals.total_hours or 0),
+            "total_calls": int(totals.total_calls or 0),
+            "avg_rating": (
+                round(float(totals.avg_rating or 0), 1)
+                if totals.avg_rating
+                else None
+            ),
+            "status_counts": status_counts,
+            "trainees": trainees,
+            "monthly": monthly,
         }
