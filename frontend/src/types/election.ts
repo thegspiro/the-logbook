@@ -384,6 +384,20 @@ export interface ImportMeetingAttendeesResponse {
   message: string;
 }
 
+// Election report response
+export interface ElectionReportResponse {
+  success: boolean;
+  message: string;
+}
+
+// Vote receipt verification
+export interface VoteReceiptResponse {
+  verified: boolean;
+  message: string;
+  voted_at?: string | null;
+  position?: string | null;
+}
+
 // Ballot template types
 
 export interface BallotTemplate {

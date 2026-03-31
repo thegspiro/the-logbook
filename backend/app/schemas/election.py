@@ -833,18 +833,107 @@ class SoftDeleteVoteResponse(BaseModel):
     vote_id: str
 
 
+class DeletedVoteRecord(BaseModel):
+    """A single soft-deleted vote in the forensics report"""
+
+    vote_id: str
+    candidate_id: str
+    position: Optional[str] = None
+    deleted_at: Optional[str] = None
+    deleted_by: Optional[str] = None
+    deletion_reason: Optional[str] = None
+
+
+class DeletedVotesSummary(BaseModel):
+    """Deleted votes section of forensics report"""
+
+    count: int
+    records: List[DeletedVoteRecord]
+
+
+class TokenAccessRecord(BaseModel):
+    """A single voting token access record"""
+
+    token_id: str
+    used: bool
+    used_at: Optional[str] = None
+    first_accessed_at: Optional[str] = None
+    access_count: int = 0
+    positions_voted: Optional[List[str]] = None
+    created_at: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
+class VotingTokensSummary(BaseModel):
+    """Voting tokens section of forensics report"""
+
+    total_issued: int
+    total_used: int
+    records: List[TokenAccessRecord]
+
+
+class AuditLogEntry(BaseModel):
+    """A single audit log entry"""
+
+    id: str
+    timestamp: Optional[str] = None
+    event_type: str
+    severity: Optional[str] = None
+    user_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    event_data: Optional[Dict[str, Any]] = None
+
+
+class AuditLogSummary(BaseModel):
+    """Audit log section of forensics report"""
+
+    total_entries: int
+    entries: List[AuditLogEntry]
+
+
+class AnomalyDetection(BaseModel):
+    """Anomaly detection section of forensics report"""
+
+    suspicious_ips: Dict[str, int] = {}
+    ip_vote_distribution: Dict[str, int] = {}
+
+
+class ProxyVoteRecord(BaseModel):
+    """A single proxy vote in the forensics report"""
+
+    vote_id: str
+    position: Optional[str] = None
+    proxy_voter_id: Optional[str] = None
+    delegating_user_id: Optional[str] = None
+    authorization_id: Optional[str] = None
+    voted_at: Optional[str] = None
+
+
+class ProxyVotingSummary(BaseModel):
+    """Proxy voting section of forensics report"""
+
+    authorizations: List[Dict[str, Any]] = []
+    total_proxy_votes: int = 0
+    proxy_votes: List[ProxyVoteRecord] = []
+
+
 class ForensicsResponse(BaseModel):
     """Response for election forensics report"""
 
     election_id: str
     election_title: str
-    integrity: Optional[Dict[str, Any]] = None
-    deleted_votes: Optional[List[Dict[str, Any]]] = None
+    election_status: str
+    anonymous_voting: bool
+    voting_method: str
+    created_at: Optional[str] = None
+    vote_integrity: Optional[Dict[str, Any]] = None
+    deleted_votes: Optional[DeletedVotesSummary] = None
     rollback_history: Optional[List[Dict[str, Any]]] = None
-    token_access_log: Optional[List[Dict[str, Any]]] = None
-    audit_trail: Optional[List[Dict[str, Any]]] = None
-    anomalies: Optional[Dict[str, Any]] = None
-    voting_timeline: Optional[List[Dict[str, Any]]] = None
+    voting_tokens: Optional[VotingTokensSummary] = None
+    audit_log: Optional[AuditLogSummary] = None
+    anomaly_detection: Optional[AnomalyDetection] = None
+    proxy_voting: Optional[ProxyVotingSummary] = None
+    voting_timeline: Optional[Dict[str, int]] = None
 
 
 class AttendeeListResponse(BaseModel):

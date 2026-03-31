@@ -2691,6 +2691,7 @@ async def verify_vote_receipt(
     election_id: UUID,
     receipt: str,
     db: AsyncSession = Depends(get_db),
+    _rate: None = Depends(_ballot_read_rate_limit),
 ):
     """
     Verify a vote receipt hash.

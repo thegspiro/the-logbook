@@ -64,12 +64,8 @@ export const PublishResultsPanel: React.FC<PublishResultsPanelProps> = ({
   const handleSendReport = async () => {
     try {
       setSendingReport(true);
-      await electionService.sendBallotEmail(electionId, {
-        subject: `Election Results: ${election.title}`,
-        message: 'The election results have been finalized and are now available for review.',
-        include_ballot_link: false,
-      });
-      toast.success('Results report sent to eligible voters');
+      await electionService.sendReport(electionId);
+      toast.success('Results report sent successfully');
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to send results report'));
     } finally {
