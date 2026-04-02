@@ -1424,7 +1424,6 @@ export const EventDetailPage: React.FC = () => {
           bulkAddLoading={bulkAddLoading}
           onBulkAddAllEligible={() => { void handleBulkAddAllEligible(); }}
           onCheckIn={(userId) => { void handleCheckIn(userId); void fetchEligibleMembers(); }}
-          onFetchEligibleMembers={fetchEligibleMembers}
           onClose={() => setShowCheckInModal(false)}
           timezone={tz}
         />

@@ -18,7 +18,6 @@ interface EventCheckInModalProps {
   bulkAddLoading: boolean;
   onBulkAddAllEligible: () => void;
   onCheckIn: (userId: string) => void;
-  onFetchEligibleMembers: () => void;
   onClose: () => void;
   timezone: string;
 }
@@ -31,7 +30,6 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
   bulkAddLoading,
   onBulkAddAllEligible,
   onCheckIn,
-  onFetchEligibleMembers,
   onClose,
   timezone,
 }) => {
@@ -158,8 +156,7 @@ const EventCheckInModal: React.FC<EventCheckInModalProps> = ({
                       ) : (
                         <button
                           onClick={() => {
-                            void onCheckIn(member.id);
-                            void onFetchEligibleMembers();
+                            onCheckIn(member.id);
                           }}
                           className="btn-primary font-medium inline-flex items-center px-3 py-1.5 rounded-md text-sm"
                         >
