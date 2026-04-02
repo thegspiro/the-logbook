@@ -17,11 +17,10 @@ import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
 import { RSVPStatusBadge } from '../components/RSVPStatusBadge';
-import { getRSVPStatusLabel, getRSVPStatusColor, downloadICSFile } from '../utils/eventHelpers';
+import { downloadICSFile } from '../utils/eventHelpers';
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
-import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
 import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin, StopCircle } from 'lucide-react';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
@@ -29,6 +28,15 @@ import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceI
 import { EventNotificationPanel } from '../components/event-detail/EventNotificationPanel';
 import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
 import type { NotificationType, NotificationTarget } from '../components/event-detail/EventNotificationPanel';
+import EventRSVPModal from '../components/event-detail/EventRSVPModal';
+import EventCancelModal from '../components/event-detail/EventCancelModal';
+import EventCancelSeriesModal from '../components/event-detail/EventCancelSeriesModal';
+import EventCheckInModal from '../components/event-detail/EventCheckInModal';
+import EventRecordTimesModal from '../components/event-detail/EventRecordTimesModal';
+import EventOverrideAttendanceModal from '../components/event-detail/EventOverrideAttendanceModal';
+import EventEndConfirmModal from '../components/event-detail/EventEndConfirmModal';
+import EventDeleteConfirmModal from '../components/event-detail/EventDeleteConfirmModal';
+import EventSaveTemplateModal from '../components/event-detail/EventSaveTemplateModal';
 
 export const EventDetailPage: React.FC = () => {
   const { id: eventId } = useParams<{ id: string }>();
@@ -1379,963 +1387,170 @@ export const EventDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* RSVP Modal */}
       {showRSVPModal && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="rsvp-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRSVPModal(false); setSubmitError(null); } }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowRSVPModal(false); setSubmitError(null); }}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-              <form onSubmit={(e) => { void handleRSVP(e); }}>
-                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 id="rsvp-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">RSVP for {event.title}</h3>
-
-                  {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
-                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <fieldset>
-                      <legend className="block text-sm font-medium text-theme-text-secondary mb-2">
-                        Your Response
-                      </legend>
-                      <div className="space-y-2">
-                        {(event.allowed_rsvp_statuses || [RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING]).map((status) => (
-                          <label key={status} className="flex items-center">
-                            <input
-                              type="radio"
-                              name="rsvp-response"
-                              value={status}
-                              checked={rsvpStatus === status}
-                              onChange={(e) => setRsvpStatus(e.target.value as RSVPStatus)}
-                              className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border"
-                            />
-                            <span className="ml-2 text-sm text-theme-text-secondary">
-                              {getRSVPStatusLabel(status)}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </fieldset>
-
-                    {event.allow_guests && rsvpStatus === RSVPStatusEnum.GOING && (
-                      <div>
-                        <label htmlFor="guest_count" className="block text-sm font-medium text-theme-text-secondary">
-                          Number of Guests
-                        </label>
-                        <input
-                          type="number"
-                          id="guest_count"
-                          min="0"
-                          max="10"
-                          value={guestCount}
-                          onChange={(e) => setGuestCount(parseInt(e.target.value))}
-                          className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                        />
-                      </div>
-                    )}
-
-                    <div>
-                      <label htmlFor="notes" className="block text-sm font-medium text-theme-text-secondary">
-                        Notes (optional)
-                      </label>
-                      <textarea
-                        id="notes"
-                        rows={3}
-                        value={rsvpNotes}
-                        onChange={(e) => setRsvpNotes(e.target.value)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                        placeholder="Any special requests or comments"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="dietary_restrictions" className="block text-sm font-medium text-theme-text-secondary">
-                        Dietary Restrictions (optional)
-                      </label>
-                      <input
-                        type="text"
-                        id="dietary_restrictions"
-                        value={rsvpDietaryRestrictions}
-                        onChange={(e) => setRsvpDietaryRestrictions(e.target.value)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                        placeholder="e.g., Vegetarian, Nut allergy"
-                        maxLength={500}
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="accessibility_needs" className="block text-sm font-medium text-theme-text-secondary">
-                        Accessibility Needs (optional)
-                      </label>
-                      <input
-                        type="text"
-                        id="accessibility_needs"
-                        value={rsvpAccessibilityNeeds}
-                        onChange={(e) => setRsvpAccessibilityNeeds(e.target.value)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                        placeholder="e.g., Wheelchair access"
-                        maxLength={500}
-                      />
-                    </div>
-
-                    {event && (event.is_recurring || event.recurrence_parent_id) && (
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={rsvpApplyToSeries}
-                          onChange={(e) => setRsvpApplyToSeries(e.target.checked)}
-                          className="h-4 w-4 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded"
-                        />
-                        <span className="text-sm text-theme-text-secondary">
-                          Apply to all future events in this series
-                        </span>
-                      </label>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
-                  >
-                    {submitting ? 'Submitting...' : 'Submit RSVP'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowRSVPModal(false);
-                      setSubmitError(null);
-                    }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <EventRSVPModal
+          event={event}
+          rsvpStatus={rsvpStatus}
+          onRsvpStatusChange={setRsvpStatus}
+          guestCount={guestCount}
+          onGuestCountChange={setGuestCount}
+          rsvpNotes={rsvpNotes}
+          onRsvpNotesChange={setRsvpNotes}
+          rsvpDietaryRestrictions={rsvpDietaryRestrictions}
+          onRsvpDietaryRestrictionsChange={setRsvpDietaryRestrictions}
+          rsvpAccessibilityNeeds={rsvpAccessibilityNeeds}
+          onRsvpAccessibilityNeedsChange={setRsvpAccessibilityNeeds}
+          rsvpApplyToSeries={rsvpApplyToSeries}
+          onRsvpApplyToSeriesChange={setRsvpApplyToSeries}
+          submitting={submitting}
+          submitError={submitError}
+          onSubmit={(e) => { void handleRSVP(e); }}
+          onClose={() => { setShowRSVPModal(false); setSubmitError(null); }}
+        />
       )}
 
-      {/* Cancel Event Modal */}
       {showCancelModal && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="cancel-event-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowCancelModal(false); setSubmitError(null); setCancelReason(''); } }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowCancelModal(false); setSubmitError(null); setCancelReason(''); }}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-              <form onSubmit={(e) => { void handleCancelEvent(e); }}>
-                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
-
-                  <div className="mb-4 bg-yellow-50 border border-yellow-200 dark:bg-yellow-500/10 dark:border-yellow-500/30 rounded-lg p-3">
-                    <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                      This action cannot be undone. The event will be marked as cancelled.
-                    </p>
-                  </div>
-
-                  {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
-                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
-                    </div>
-                  )}
-
-                  <div>
-                    <label htmlFor="cancel_reason" className="block text-sm font-medium text-theme-text-secondary">
-                      Reason for Cancellation <span aria-hidden="true">*</span>
-                    </label>
-                    <textarea
-                      id="cancel_reason"
-                      rows={4}
-                      required
-                      aria-required="true"
-                      minLength={10}
-                      maxLength={500}
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                      className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                      placeholder="Please provide a reason for cancelling this event..."
-                    />
-                    <p className="mt-1 text-xs text-theme-text-muted">
-                      {cancelReason.length}/500 characters (minimum 10)
-                    </p>
-                  </div>
-
-                  <div className="mt-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={sendCancelNotifications}
-                        onChange={(e) => setSendCancelNotifications(e.target.checked)}
-                        className="form-checkbox border-theme-surface-border"
-                      />
-                      <span className="ml-2 text-sm text-theme-text-secondary">
-                        Send cancellation notifications to all RSVPs
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="submit"
-                    disabled={submitting || cancelReason.length < 10}
-                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
-                  >
-                    {submitting ? 'Cancelling...' : 'Cancel Event'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCancelModal(false);
-                      setSubmitError(null);
-                      setCancelReason('');
-                      setSendCancelNotifications(false);
-                    }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    Go Back
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <EventCancelModal
+          cancelReason={cancelReason}
+          onCancelReasonChange={setCancelReason}
+          sendCancelNotifications={sendCancelNotifications}
+          onSendCancelNotificationsChange={setSendCancelNotifications}
+          submitting={submitting}
+          submitError={submitError}
+          onSubmit={(e) => { void handleCancelEvent(e); }}
+          onClose={() => { setShowCancelModal(false); setSubmitError(null); setCancelReason(''); setSendCancelNotifications(false); }}
+        />
       )}
 
-      {/* Cancel Series Modal */}
       {showCancelSeriesModal && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="cancel-series-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowCancelSeriesModal(false); setSubmitError(null); setCancelReason(''); } }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowCancelSeriesModal(false); setSubmitError(null); setCancelReason(''); }}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-              <form onSubmit={(e) => { void handleCancelSeries(e); }}>
-                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 id="cancel-series-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Recurring Series</h3>
-
-                  <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-3 dark:bg-red-500/10 dark:border-red-500/30">
-                    <p className="text-sm text-red-800 dark:text-red-300">
-                      This will cancel multiple events in this recurring series. This action cannot be undone.
-                    </p>
-                  </div>
-
-                  {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
-                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
-                    </div>
-                  )}
-
-                  <div className="mb-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={cancelSeriesFutureOnly}
-                        onChange={(e) => setCancelSeriesFutureOnly(e.target.checked)}
-                        className="form-checkbox border-theme-surface-border"
-                      />
-                      <span className="ml-2 text-sm text-theme-text-secondary">
-                        Only cancel future events (keep past events)
-                      </span>
-                    </label>
-                  </div>
-
-                  <div>
-                    <label htmlFor="cancel_series_reason" className="block text-sm font-medium text-theme-text-secondary">
-                      Reason for Cancellation <span aria-hidden="true">*</span>
-                    </label>
-                    <textarea
-                      id="cancel_series_reason"
-                      rows={4}
-                      required
-                      aria-required="true"
-                      minLength={10}
-                      maxLength={500}
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                      className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                      placeholder="Please provide a reason for cancelling this series..."
-                    />
-                    <p className="mt-1 text-xs text-theme-text-muted">
-                      {cancelReason.length}/500 characters (minimum 10)
-                    </p>
-                  </div>
-
-                  <div className="mt-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={sendCancelNotifications}
-                        onChange={(e) => setSendCancelNotifications(e.target.checked)}
-                        className="form-checkbox border-theme-surface-border"
-                      />
-                      <span className="ml-2 text-sm text-theme-text-secondary">
-                        Send cancellation notifications to all RSVPs
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="submit"
-                    disabled={submitting || cancelReason.length < 10}
-                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
-                  >
-                    {submitting ? 'Cancelling...' : 'Cancel Series'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCancelSeriesModal(false);
-                      setSubmitError(null);
-                      setCancelReason('');
-                      setSendCancelNotifications(false);
-                      setCancelSeriesFutureOnly(false);
-                    }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    Go Back
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <EventCancelSeriesModal
+          cancelReason={cancelReason}
+          onCancelReasonChange={setCancelReason}
+          sendCancelNotifications={sendCancelNotifications}
+          onSendCancelNotificationsChange={setSendCancelNotifications}
+          cancelSeriesFutureOnly={cancelSeriesFutureOnly}
+          onCancelSeriesFutureOnlyChange={setCancelSeriesFutureOnly}
+          submitting={submitting}
+          submitError={submitError}
+          onSubmit={(e) => { void handleCancelSeries(e); }}
+          onClose={() => { setShowCancelSeriesModal(false); setSubmitError(null); setCancelReason(''); setSendCancelNotifications(false); setCancelSeriesFutureOnly(false); }}
+        />
       )}
 
-      {/* Check In Modal */}
       {showCheckInModal && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="checkin-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowCheckInModal(false); }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => setShowCheckInModal(false)}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full relative z-10">
-              <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 id="checkin-modal-title" className="text-lg font-medium text-theme-text-primary">Check In Members</h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowCheckInModal(false)}
-                    className="text-theme-text-muted hover:text-theme-text-primary"
-                    aria-label="Close dialog"
-                  >
-                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <p className="text-sm text-theme-text-secondary mb-4">
-                  Check in members as they arrive at the event. Their attendance will be recorded with a timestamp.
-                </p>
-
-                {/* Bulk Add All Eligible */}
-                <div className="mb-4">
-                  <button
-                    onClick={() => { void handleBulkAddAllEligible(); }}
-                    disabled={bulkAddLoading}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {bulkAddLoading ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                        </svg>
-                        Adding...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Add All Eligible as Going
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Search */}
-                <div className="mb-4">
-                  <label htmlFor="member-search" className="block text-sm font-medium text-theme-text-secondary mb-2">
-                    Search Members
-                  </label>
-                  <input
-                    type="text"
-                    id="member-search"
-                    value={memberSearch}
-                    onChange={(e) => setMemberSearch(e.target.value)}
-                    aria-label="Search by name or email..." placeholder="Search by name or email..."
-                    className="block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                  />
-                </div>
-
-                {/* Member List */}
-                <div className="max-h-96 overflow-y-auto border border-theme-surface-border rounded-md">
-                  {eligibleMembers
-                    .filter(
-                      (member) =>
-                        memberSearch === '' ||
-                        `${member.first_name} ${member.last_name}`
-                          .toLowerCase()
-                          .includes(memberSearch.toLowerCase()) ||
-                        member.email.toLowerCase().includes(memberSearch.toLowerCase())
-                    )
-                    .map((member) => {
-                      const rsvp = rsvps.find((r) => r.user_id === member.id);
-                      const isCheckedIn = rsvp?.checked_in || false;
-
-                      return (
-                        <div
-                          key={member.id}
-                          className="flex items-center justify-between p-3 border-b border-theme-surface-border hover:bg-theme-surface-hover"
-                        >
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-theme-text-primary">
-                              {member.first_name} {member.last_name}
-                            </p>
-                            <p className="text-xs text-theme-text-muted">{member.email}</p>
-                            {rsvp && (
-                              <div className="flex items-center mt-1 space-x-2">
-                                <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getRSVPStatusColor(
-                                    rsvp.status
-                                  )}`}
-                                >
-                                  {getRSVPStatusLabel(rsvp.status)}
-                                </span>
-                                {isCheckedIn && (
-                                  <span className="text-xs text-green-600">
-                                    ✓ Checked in at{' '}
-                                    {rsvp.checked_in_at &&
-                                      formatTime(rsvp.checked_in_at, tz)}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            {isCheckedIn ? (
-                              <span className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400">
-                                Checked In
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  void handleCheckIn(member.id);
-                                  void fetchEligibleMembers();
-                                }}
-                                className="btn-primary font-medium inline-flex items-center px-3 py-1.5 rounded-md text-sm"
-                              >
-                                Check In
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  {eligibleMembers.filter(
-                    (member) =>
-                      memberSearch === '' ||
-                      `${member.first_name} ${member.last_name}`
-                        .toLowerCase()
-                        .includes(memberSearch.toLowerCase()) ||
-                      member.email.toLowerCase().includes(memberSearch.toLowerCase())
-                  ).length === 0 && (
-                    <div className="p-4 text-center text-theme-text-muted">
-                      {memberSearch ? 'No members found matching your search.' : 'No members available for check-in.'}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  onClick={() => setShowCheckInModal(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EventCheckInModal
+          eligibleMembers={eligibleMembers}
+          rsvps={rsvps}
+          memberSearch={memberSearch}
+          onMemberSearchChange={setMemberSearch}
+          bulkAddLoading={bulkAddLoading}
+          onBulkAddAllEligible={() => { void handleBulkAddAllEligible(); }}
+          onCheckIn={(userId) => { void handleCheckIn(userId); void fetchEligibleMembers(); }}
+          onFetchEligibleMembers={fetchEligibleMembers}
+          onClose={() => setShowCheckInModal(false)}
+          timezone={tz}
+        />
       )}
 
-      {/* Record Times Modal */}
       {showRecordTimesModal && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="record-times-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRecordTimesModal(false); setSubmitError(null); } }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowRecordTimesModal(false); setSubmitError(null); }}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-              <form onSubmit={(e) => { void handleRecordTimes(e); }}>
-                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 id="record-times-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Record Official Event Times</h3>
-
-                  <p className="text-sm text-theme-text-secondary mb-4">
-                    Record the actual start and end times of the event. All checked-in members will be credited for attendance based on these times.
-                  </p>
-
-                  {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
-                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="actual_start_time" className="block text-sm font-medium text-theme-text-secondary">
-                        Actual Start Time
-                      </label>
-                      <DateTimeQuarterHour
-                        id="actual_start_time"
-                        value={actualStartTime}
-                        onChange={(val) => setActualStartTime(val)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                      />
-                      {event?.actual_start_time && (
-                        <p className="mt-1 text-xs text-theme-text-muted">
-                          Currently: {formatShortDateTime(event.actual_start_time, tz)}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label htmlFor="actual_end_time" className="block text-sm font-medium text-theme-text-secondary">
-                        Actual End Time
-                      </label>
-                      <DateTimeQuarterHour
-                        id="actual_end_time"
-                        value={actualEndTime}
-                        onChange={(val) => setActualEndTime(val)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                      />
-                      {event?.actual_end_time && (
-                        <p className="mt-1 text-xs text-theme-text-muted">
-                          Currently: {formatShortDateTime(event.actual_end_time, tz)}
-                        </p>
-                      )}
-                    </div>
-
-                    {actualStartTime && actualEndTime && (
-                      <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
-                        <p className="text-sm text-blue-800 dark:text-blue-300">
-                          <strong>Duration:</strong>{' '}
-                          {Math.round((new Date(actualEndTime).getTime() - new Date(actualStartTime).getTime()) / 60000)} minutes
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
-                  >
-                    {submitting ? 'Saving...' : 'Save Times'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowRecordTimesModal(false);
-                      setSubmitError(null);
-                    }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <EventRecordTimesModal
+          actualStartTime={actualStartTime}
+          onActualStartTimeChange={setActualStartTime}
+          actualEndTime={actualEndTime}
+          onActualEndTimeChange={setActualEndTime}
+          currentActualStartTime={event?.actual_start_time}
+          currentActualEndTime={event?.actual_end_time}
+          submitting={submitting}
+          submitError={submitError}
+          onSubmit={(e) => { void handleRecordTimes(e); }}
+          onClose={() => { setShowRecordTimesModal(false); setSubmitError(null); }}
+          timezone={tz}
+        />
       )}
 
-      {/* Override Attendance Modal */}
       {showOverrideModal && editingRsvp && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="override-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowOverrideModal(false); setSubmitError(null); } }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { setShowOverrideModal(false); setSubmitError(null); }}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-              <form onSubmit={(e) => { void handleOverrideAttendance(e); }}>
-                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <h3 id="override-modal-title" className="text-lg font-medium text-theme-text-primary mb-1">
-                    Edit Attendance Times
-                  </h3>
-                  <p className="text-sm text-theme-text-muted mb-4">{editingRsvp.user_name}</p>
-
-                  {submitError && (
-                    <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3" role="alert" aria-live="assertive">
-                      <p className="text-sm text-red-700 dark:text-red-300">{submitError}</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-4">
-                    <div>
-                      <label htmlFor="override_check_in" className="block text-sm font-medium text-theme-text-secondary">
-                        Check-in Time
-                      </label>
-                      <DateTimeQuarterHour
-                        id="override_check_in"
-                        value={overrideCheckIn}
-                        onChange={(val) => setOverrideCheckIn(val)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="override_check_out" className="block text-sm font-medium text-theme-text-secondary">
-                        Check-out Time
-                      </label>
-                      <DateTimeQuarterHour
-                        id="override_check_out"
-                        value={overrideCheckOut}
-                        onChange={(val) => setOverrideCheckOut(val)}
-                        className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
-                      />
-                    </div>
-
-                    {overrideCheckIn && overrideCheckOut && (
-                      <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg p-3">
-                        <p className="text-sm text-blue-800 dark:text-blue-300">
-                          <strong>Duration:</strong>{' '}
-                          {Math.round((new Date(overrideCheckOut).getTime() - new Date(overrideCheckIn).getTime()) / 60000)} minutes
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
-                  >
-                    {submitting ? 'Saving...' : 'Save Times'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowOverrideModal(false);
-                      setEditingRsvp(null);
-                      setSubmitError(null);
-                    }}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <EventOverrideAttendanceModal
+          editingRsvp={editingRsvp}
+          overrideCheckIn={overrideCheckIn}
+          onOverrideCheckInChange={setOverrideCheckIn}
+          overrideCheckOut={overrideCheckOut}
+          onOverrideCheckOutChange={setOverrideCheckOut}
+          submitting={submitting}
+          submitError={submitError}
+          onSubmit={(e) => { void handleOverrideAttendance(e); }}
+          onClose={() => { setShowOverrideModal(false); setEditingRsvp(null); setSubmitError(null); }}
+        />
       )}
 
-      {/* Delete Confirmation Modal */}
-      {/* End Event Confirmation Modal */}
       {showEndEventConfirm && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="end-event-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowEndEventConfirm(false); }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => setShowEndEventConfirm(false)}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-              <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-500/20 sm:mx-0 sm:h-10 sm:w-10">
-                    <StopCircle className="h-6 w-6 text-red-600" />
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 id="end-event-modal-title" className="text-lg leading-6 font-medium text-theme-text-primary">
-                      End Event Early
-                    </h3>
-                    <div className="mt-2">
-                      <p className="text-sm text-theme-text-muted">
-                        This will end &ldquo;{event.title}&rdquo; now and check out all currently checked-in members. Attendance durations will be calculated based on the current time.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => { void handleEndEvent(); }}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-xs px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
-                >
-                  {submitting ? 'Ending...' : 'End Event Now'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowEndEventConfirm(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Go Back
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EventEndConfirmModal
+          eventTitle={event.title}
+          submitting={submitting}
+          onConfirm={() => { void handleEndEvent(); }}
+          onClose={() => setShowEndEventConfirm(false)}
+        />
       )}
 
       {showDeleteConfirm && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-event-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowDeleteConfirm(false); }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => setShowDeleteConfirm(false)}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-              <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mx-auto shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-500/20 sm:mx-0 sm:h-10 sm:w-10">
-                    <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                    </svg>
-                  </div>
-                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
-                    <h3 id="delete-event-modal-title" className="text-lg leading-6 font-medium text-theme-text-primary">
-                      Delete Event
-                    </h3>
-                    <div className="mt-2">
-                      <p className="text-sm text-theme-text-muted">
-                        Are you sure you want to permanently delete &ldquo;{event.title}&rdquo;? This will remove all RSVPs and attendance records. This action cannot be undone.
-                      </p>
-                      {(event.is_recurring || event.recurrence_parent_id) && (
-                        <div className="mt-4 space-y-2">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="deleteScope"
-                              value="single"
-                              checked={deleteScope === 'single'}
-                              onChange={() => setDeleteScope('single')}
-                              className="text-theme-primary focus:ring-theme-focus-ring"
-                            />
-                            <span className="text-sm text-theme-text-primary">Delete only this event</span>
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="deleteScope"
-                              value="series"
-                              checked={deleteScope === 'series'}
-                              onChange={() => setDeleteScope('series')}
-                              className="text-theme-primary focus:ring-theme-focus-ring"
-                            />
-                            <span className="text-sm text-theme-text-primary">Delete all events in this series</span>
-                          </label>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button
-                  type="button"
-                  disabled={submitting}
-                  onClick={() => { void handleDeleteEvent(); }}
-                  className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
-                >
-                  {submitting ? 'Deleting...' : deleteScope === 'series' ? 'Delete Entire Series' : 'Delete Permanently'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  Go Back
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EventDeleteConfirmModal
+          eventTitle={event.title}
+          isRecurring={!!(event.is_recurring || event.recurrence_parent_id)}
+          deleteScope={deleteScope}
+          onDeleteScopeChange={setDeleteScope}
+          submitting={submitting}
+          onConfirm={() => { void handleDeleteEvent(); }}
+          onClose={() => setShowDeleteConfirm(false)}
+        />
       )}
 
-      {/* Save as Template Modal */}
       {showTemplateModal && (
-        <div
-          className="fixed inset-0 z-50 overflow-y-auto"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="save-template-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowTemplateModal(false); }}
-        >
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => setShowTemplateModal(false)}>
-              <div className="absolute inset-0 bg-black/75"></div>
-            </div>
-
-            <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                const name = templateName.trim();
-                if (!name || !event) return;
-                void (async () => {
-                  try {
-                    setSubmitting(true);
-                    setSubmitError(null);
-                    const templateData: import('../types/event').EventTemplateCreate = {
-                      name,
-                      event_type: event.event_type,
-                      requires_rsvp: event.requires_rsvp,
-                      is_mandatory: event.is_mandatory,
-                      allow_guests: event.allow_guests,
-                      require_checkout: event.require_checkout || false,
-                      send_reminders: event.send_reminders,
-                      reminder_schedule: event.reminder_schedule,
-                    };
-                    const descTrimmed = templateDescription.trim();
-                    if (descTrimmed) templateData.description = descTrimmed;
-                    if (event.title) templateData.default_title = event.title;
-                    if (event.description) templateData.default_description = event.description;
-                    if (event.location_id) templateData.default_location_id = event.location_id;
-                    if (event.location) templateData.default_location = event.location;
-                    if (event.location_details) templateData.default_location_details = event.location_details;
-                    if (event.max_attendees) templateData.max_attendees = event.max_attendees;
-                    if (event.check_in_window_type) templateData.check_in_window_type = event.check_in_window_type;
-                    if (event.check_in_minutes_before != null) templateData.check_in_minutes_before = event.check_in_minutes_before;
-                    if (event.check_in_minutes_after != null) templateData.check_in_minutes_after = event.check_in_minutes_after;
-                    await eventService.createTemplate(templateData);
-                    setShowTemplateModal(false);
-                    toast.success('Template saved successfully');
-                  } catch (err) {
-                    toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to save template');
-                  } finally {
-                    setSubmitting(false);
-                  }
-                })();
-              }}>
-                <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6">
-                  <h3 id="save-template-modal-title" className="text-lg leading-6 font-medium text-theme-text-primary mb-4">
-                    Save as Template
-                  </h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                        Template Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={templateName}
-                        onChange={(e) => setTemplateName(e.target.value)}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                        placeholder="e.g., Weekly Business Meeting"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                        Description (optional)
-                      </label>
-                      <textarea
-                        value={templateDescription}
-                        onChange={(e) => setTemplateDescription(e.target.value)}
-                        rows={3}
-                        className="w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                        placeholder="Brief description of this template..."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-theme-surface-secondary px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="submit"
-                    disabled={submitting || !templateName.trim()}
-                    className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full disabled:opacity-50"
-                  >
-                    {submitting ? 'Saving...' : 'Save Template'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplateModal(false)}
-                    className="mt-3 w-full inline-flex justify-center rounded-md border border-theme-surface-border shadow-xs px-4 py-2 bg-theme-surface text-base font-medium text-theme-text-secondary hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <EventSaveTemplateModal
+          templateName={templateName}
+          onTemplateNameChange={setTemplateName}
+          templateDescription={templateDescription}
+          onTemplateDescriptionChange={setTemplateDescription}
+          submitting={submitting}
+          onSubmit={(e) => {
+            e.preventDefault();
+            const name = templateName.trim();
+            if (!name || !event) return;
+            void (async () => {
+              try {
+                setSubmitting(true);
+                setSubmitError(null);
+                const templateData: import('../types/event').EventTemplateCreate = {
+                  name,
+                  event_type: event.event_type,
+                  requires_rsvp: event.requires_rsvp,
+                  is_mandatory: event.is_mandatory,
+                  allow_guests: event.allow_guests,
+                  require_checkout: event.require_checkout || false,
+                  send_reminders: event.send_reminders,
+                  reminder_schedule: event.reminder_schedule,
+                };
+                const descTrimmed = templateDescription.trim();
+                if (descTrimmed) templateData.description = descTrimmed;
+                if (event.title) templateData.default_title = event.title;
+                if (event.description) templateData.default_description = event.description;
+                if (event.location_id) templateData.default_location_id = event.location_id;
+                if (event.location) templateData.default_location = event.location;
+                if (event.location_details) templateData.default_location_details = event.location_details;
+                if (event.max_attendees) templateData.max_attendees = event.max_attendees;
+                if (event.check_in_window_type) templateData.check_in_window_type = event.check_in_window_type;
+                if (event.check_in_minutes_before != null) templateData.check_in_minutes_before = event.check_in_minutes_before;
+                if (event.check_in_minutes_after != null) templateData.check_in_minutes_after = event.check_in_minutes_after;
+                await eventService.createTemplate(templateData);
+                setShowTemplateModal(false);
+                toast.success('Template saved successfully');
+              } catch (err) {
+                toast.error((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to save template');
+              } finally {
+                setSubmitting(false);
+              }
+            })();
+          }}
+          onClose={() => setShowTemplateModal(false)}
+        />
       )}
     </div>
     </div>
