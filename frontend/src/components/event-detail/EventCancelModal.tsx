@@ -1,26 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
+
+interface CancelEventPayload {
+  cancellationReason: string;
+  sendNotifications: boolean;
+}
 
 interface EventCancelModalProps {
-  cancelReason: string;
-  onCancelReasonChange: (reason: string) => void;
-  sendCancelNotifications: boolean;
-  onSendCancelNotificationsChange: (value: boolean) => void;
   submitting: boolean;
   submitError: string | null;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (payload: CancelEventPayload) => void;
   onClose: () => void;
 }
 
 const EventCancelModal: React.FC<EventCancelModalProps> = ({
-  cancelReason,
-  onCancelReasonChange,
-  sendCancelNotifications,
-  onSendCancelNotificationsChange,
   submitting,
   submitError,
   onSubmit,
   onClose,
 }) => {
+  const [cancelReason, setCancelReason] = useState('');
+  const [sendCancelNotifications, setSendCancelNotifications] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ cancellationReason: cancelReason, sendNotifications: sendCancelNotifications });
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -30,12 +35,12 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({
       onKeyDown={(e) => { if (e.key === 'Escape') { onClose(); } }}
     >
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { onClose(); }}>
+        <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={onClose}>
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
         <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-          <form onSubmit={onSubmit}>
+          <form onSubmit={handleSubmit}>
             <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
               <h3 id="cancel-event-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Event</h3>
 
@@ -63,7 +68,7 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({
                   minLength={10}
                   maxLength={500}
                   value={cancelReason}
-                  onChange={(e) => onCancelReasonChange(e.target.value)}
+                  onChange={(e) => setCancelReason(e.target.value)}
                   className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                   placeholder="Please provide a reason for cancelling this event..."
                 />
@@ -77,7 +82,7 @@ const EventCancelModal: React.FC<EventCancelModalProps> = ({
                   <input
                     type="checkbox"
                     checked={sendCancelNotifications}
-                    onChange={(e) => onSendCancelNotificationsChange(e.target.checked)}
+                    onChange={(e) => setSendCancelNotifications(e.target.checked)}
                     className="form-checkbox border-theme-surface-border"
                   />
                   <span className="ml-2 text-sm text-theme-text-secondary">

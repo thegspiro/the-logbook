@@ -55,12 +55,8 @@ export const EventDetailPage: React.FC = () => {
   const [rsvpNotes, setRsvpNotes] = useState('');
   const [rsvpDietaryRestrictions, setRsvpDietaryRestrictions] = useState('');
   const [rsvpAccessibilityNeeds, setRsvpAccessibilityNeeds] = useState('');
-  const [cancelReason, setCancelReason] = useState('');
-  const [sendCancelNotifications, setSendCancelNotifications] = useState(false);
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
-  const [cancelSeriesFutureOnly, setCancelSeriesFutureOnly] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deleteScope, setDeleteScope] = useState<'single' | 'series'>('single');
   const [showEndEventConfirm, setShowEndEventConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -331,8 +327,7 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
-  const handleCancelEvent = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCancelEvent = async (payload: { cancellationReason: string; sendNotifications: boolean }) => {
     if (!eventId) return;
 
     try {
@@ -340,13 +335,11 @@ export const EventDetailPage: React.FC = () => {
       setSubmitError(null);
 
       await eventService.cancelEvent(eventId, {
-        cancellation_reason: cancelReason,
-        send_notifications: sendCancelNotifications,
+        cancellation_reason: payload.cancellationReason,
+        send_notifications: payload.sendNotifications,
       });
 
       setShowCancelModal(false);
-      setCancelReason('');
-      setSendCancelNotifications(false);
       toast.success('Event cancelled successfully');
       await fetchEvent();
     } catch (err) {
@@ -356,8 +349,7 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
-  const handleCancelSeries = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCancelSeries = async (payload: { cancellationReason: string; sendNotifications: boolean; futureOnly: boolean }) => {
     if (!event) return;
 
     const parentId = event.recurrence_parent_id || event.id;
@@ -368,16 +360,13 @@ export const EventDetailPage: React.FC = () => {
       const result = await eventService.cancelEventSeries(
         parentId,
         {
-          cancellation_reason: cancelReason,
-          send_notifications: sendCancelNotifications,
+          cancellation_reason: payload.cancellationReason,
+          send_notifications: payload.sendNotifications,
         },
-        cancelSeriesFutureOnly,
+        payload.futureOnly,
       );
 
       setShowCancelSeriesModal(false);
-      setCancelReason('');
-      setSendCancelNotifications(false);
-      setCancelSeriesFutureOnly(false);
       toast.success(result.message);
       await fetchEvent();
     } catch (err) {
@@ -458,12 +447,12 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
-  const handleDeleteEvent = async () => {
+  const handleDeleteEvent = async (scope: 'single' | 'series') => {
     if (!eventId || !event) return;
 
     try {
       setSubmitting(true);
-      if (deleteScope === 'series' && (event.is_recurring || event.recurrence_parent_id)) {
+      if (scope === 'series' && (event.is_recurring || event.recurrence_parent_id)) {
         const parentId = event.recurrence_parent_id || eventId;
         await eventService.deleteEventSeries(parentId);
         toast.success('All events in the series deleted');
@@ -477,7 +466,6 @@ export const EventDetailPage: React.FC = () => {
     } finally {
       setSubmitting(false);
       setShowDeleteConfirm(false);
-      setDeleteScope('single');
     }
   };
 
@@ -968,7 +956,7 @@ export const EventDetailPage: React.FC = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => { setShowActionsMenu(false); setDeleteScope('single'); setShowDeleteConfirm(true); }}
+                            onClick={() => { setShowActionsMenu(false); setShowDeleteConfirm(true); }}
                             className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-theme-surface-hover"
                           >
                             Delete Event
@@ -1411,29 +1399,19 @@ export const EventDetailPage: React.FC = () => {
 
       {showCancelModal && (
         <EventCancelModal
-          cancelReason={cancelReason}
-          onCancelReasonChange={setCancelReason}
-          sendCancelNotifications={sendCancelNotifications}
-          onSendCancelNotificationsChange={setSendCancelNotifications}
           submitting={submitting}
           submitError={submitError}
-          onSubmit={(e) => { void handleCancelEvent(e); }}
-          onClose={() => { setShowCancelModal(false); setSubmitError(null); setCancelReason(''); setSendCancelNotifications(false); }}
+          onSubmit={(payload) => { void handleCancelEvent(payload); }}
+          onClose={() => { setShowCancelModal(false); setSubmitError(null); }}
         />
       )}
 
       {showCancelSeriesModal && (
         <EventCancelSeriesModal
-          cancelReason={cancelReason}
-          onCancelReasonChange={setCancelReason}
-          sendCancelNotifications={sendCancelNotifications}
-          onSendCancelNotificationsChange={setSendCancelNotifications}
-          cancelSeriesFutureOnly={cancelSeriesFutureOnly}
-          onCancelSeriesFutureOnlyChange={setCancelSeriesFutureOnly}
           submitting={submitting}
           submitError={submitError}
-          onSubmit={(e) => { void handleCancelSeries(e); }}
-          onClose={() => { setShowCancelSeriesModal(false); setSubmitError(null); setCancelReason(''); setSendCancelNotifications(false); setCancelSeriesFutureOnly(false); }}
+          onSubmit={(payload) => { void handleCancelSeries(payload); }}
+          onClose={() => { setShowCancelSeriesModal(false); setSubmitError(null); }}
         />
       )}
 
@@ -1495,10 +1473,8 @@ export const EventDetailPage: React.FC = () => {
         <EventDeleteConfirmModal
           eventTitle={event.title}
           isRecurring={!!(event.is_recurring || event.recurrence_parent_id)}
-          deleteScope={deleteScope}
-          onDeleteScopeChange={setDeleteScope}
           submitting={submitting}
-          onConfirm={() => { void handleDeleteEvent(); }}
+          onConfirm={(scope) => { void handleDeleteEvent(scope); }}
           onClose={() => setShowDeleteConfirm(false)}
         />
       )}

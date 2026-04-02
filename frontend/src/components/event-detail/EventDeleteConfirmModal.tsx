@@ -1,24 +1,22 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 interface EventDeleteConfirmModalProps {
   eventTitle: string;
   isRecurring: boolean;
-  deleteScope: 'single' | 'series';
-  onDeleteScopeChange: (scope: 'single' | 'series') => void;
   submitting: boolean;
-  onConfirm: () => void;
+  onConfirm: (scope: 'single' | 'series') => void;
   onClose: () => void;
 }
 
 const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
   eventTitle,
   isRecurring,
-  deleteScope,
-  onDeleteScopeChange,
   submitting,
   onConfirm,
   onClose,
 }) => {
+  const [deleteScope, setDeleteScope] = useState<'single' | 'series'>('single');
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -56,7 +54,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
                           name="deleteScope"
                           value="single"
                           checked={deleteScope === 'single'}
-                          onChange={() => onDeleteScopeChange('single')}
+                          onChange={() => setDeleteScope('single')}
                           className="text-theme-primary focus:ring-theme-focus-ring"
                         />
                         <span className="text-sm text-theme-text-primary">Delete only this event</span>
@@ -67,7 +65,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
                           name="deleteScope"
                           value="series"
                           checked={deleteScope === 'series'}
-                          onChange={() => onDeleteScopeChange('series')}
+                          onChange={() => setDeleteScope('series')}
                           className="text-theme-primary focus:ring-theme-focus-ring"
                         />
                         <span className="text-sm text-theme-text-primary">Delete all events in this series</span>
@@ -83,7 +81,7 @@ const EventDeleteConfirmModal: React.FC<EventDeleteConfirmModalProps> = ({
             <button
               type="button"
               disabled={submitting}
-              onClick={onConfirm}
+              onClick={() => onConfirm(deleteScope)}
               className="btn-primary font-medium inline-flex justify-center rounded-md sm:ml-3 sm:text-sm sm:w-auto text-base w-full"
             >
               {submitting ? 'Deleting...' : deleteScope === 'series' ? 'Delete Entire Series' : 'Delete Permanently'}

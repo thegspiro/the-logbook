@@ -1,30 +1,33 @@
-import React from 'react';
+import React, { useState } from 'react';
+
+interface CancelSeriesPayload {
+  cancellationReason: string;
+  sendNotifications: boolean;
+  futureOnly: boolean;
+}
 
 interface EventCancelSeriesModalProps {
-  cancelReason: string;
-  onCancelReasonChange: (reason: string) => void;
-  sendCancelNotifications: boolean;
-  onSendCancelNotificationsChange: (value: boolean) => void;
-  cancelSeriesFutureOnly: boolean;
-  onCancelSeriesFutureOnlyChange: (value: boolean) => void;
   submitting: boolean;
   submitError: string | null;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit: (payload: CancelSeriesPayload) => void;
   onClose: () => void;
 }
 
 const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
-  cancelReason,
-  onCancelReasonChange,
-  sendCancelNotifications,
-  onSendCancelNotificationsChange,
-  cancelSeriesFutureOnly,
-  onCancelSeriesFutureOnlyChange,
   submitting,
   submitError,
   onSubmit,
   onClose,
 }) => {
+  const [cancelReason, setCancelReason] = useState('');
+  const [sendCancelNotifications, setSendCancelNotifications] = useState(false);
+  const [futureOnly, setFutureOnly] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ cancellationReason: cancelReason, sendNotifications: sendCancelNotifications, futureOnly });
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 overflow-y-auto"
@@ -34,12 +37,12 @@ const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
       onKeyDown={(e) => { if (e.key === 'Escape') { onClose(); } }}
     >
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={() => { onClose(); }}>
+        <div className="fixed inset-0 transition-opacity" aria-hidden="true" onClick={onClose}>
           <div className="absolute inset-0 bg-black/75"></div>
         </div>
 
         <div className="inline-block align-bottom bg-theme-surface-modal rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full relative z-10">
-          <form onSubmit={onSubmit}>
+          <form onSubmit={handleSubmit}>
             <div className="bg-theme-surface-modal px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
               <h3 id="cancel-series-modal-title" className="text-lg font-medium text-theme-text-primary mb-4">Cancel Recurring Series</h3>
 
@@ -59,8 +62,8 @@ const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
                 <label className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={cancelSeriesFutureOnly}
-                    onChange={(e) => onCancelSeriesFutureOnlyChange(e.target.checked)}
+                    checked={futureOnly}
+                    onChange={(e) => setFutureOnly(e.target.checked)}
                     className="form-checkbox border-theme-surface-border"
                   />
                   <span className="ml-2 text-sm text-theme-text-secondary">
@@ -81,7 +84,7 @@ const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
                   minLength={10}
                   maxLength={500}
                   value={cancelReason}
-                  onChange={(e) => onCancelReasonChange(e.target.value)}
+                  onChange={(e) => setCancelReason(e.target.value)}
                   className="mt-1 block w-full bg-theme-input-bg text-theme-text-primary border-theme-input-border rounded-md shadow-xs focus:ring-theme-focus-ring focus:border-theme-focus-ring sm:text-sm"
                   placeholder="Please provide a reason for cancelling this series..."
                 />
@@ -95,7 +98,7 @@ const EventCancelSeriesModal: React.FC<EventCancelSeriesModalProps> = ({
                   <input
                     type="checkbox"
                     checked={sendCancelNotifications}
-                    onChange={(e) => onSendCancelNotificationsChange(e.target.checked)}
+                    onChange={(e) => setSendCancelNotifications(e.target.checked)}
                     className="form-checkbox border-theme-surface-border"
                   />
                   <span className="ml-2 text-sm text-theme-text-secondary">
