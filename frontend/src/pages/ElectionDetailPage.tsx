@@ -11,7 +11,7 @@ import { electionService, eventService, meetingsService } from '../services/api'
 import type { MeetingRecord } from '../services/api';
 import { electionPackageService, applicantService } from '../modules/prospective-members/services/api';
 import type { ElectionPackage } from '../modules/prospective-members/types';
-import type { Election, ForensicsReport, VoteIntegrityResult, Candidate, BallotItem } from '../types/election';
+import type { Election, ForensicsReport, VoteIntegrityResult, Candidate } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
 import { ElectionBallot } from '../components/ElectionBallot';
@@ -25,12 +25,17 @@ import { RunoffChain } from '../modules/elections/components/RunoffChain';
 import { PublishResultsPanel } from '../modules/elections/components/PublishResultsPanel';
 import { ElectionWorkflowTabs } from '../modules/elections/components/ElectionWorkflowTabs';
 import { useAuthStore } from '../stores/authStore';
-import { ElectionStatus, VoteType, BallotItemType } from '../constants/enums';
-import DateTimeQuarterHour from '../components/ux/DateTimeQuarterHour';
+import { ElectionStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatDateTime, formatForDateTimeInput, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
+import { formatDate, formatDateTime, getTodayLocalDate, localToUTC } from '../utils/dateFormatting';
 import { getTimeRemaining, getStatusBadgeClass } from '../utils/electionHelpers';
+import SendBallotEmailsModal from '../components/election-detail/SendBallotEmailsModal';
+import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
+import DeleteElectionModal from '../components/election-detail/DeleteElectionModal';
+import ExtendElectionModal from '../components/election-detail/ExtendElectionModal';
+import BallotPreviewModal from '../components/election-detail/BallotPreviewModal';
+import RollbackElectionModal from '../components/election-detail/RollbackElectionModal';
 
 export const ElectionDetailPage: React.FC = () => {
   const { electionId } = useParams<{ electionId: string }>();
@@ -39,36 +44,23 @@ export const ElectionDetailPage: React.FC = () => {
   const [election, setElection] = useState<Election | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Lifecycle modal state (extend, rollback, visibility)
+  // Modal visibility state
   const [showExtendModal, setShowExtendModal] = useState(false);
-  const [newEndDate, setNewEndDate] = useState('');
   const [extendError, setExtendError] = useState<string | null>(null);
   const [showRollbackModal, setShowRollbackModal] = useState(false);
-  const [rollbackReason, setRollbackReason] = useState('');
   const [rollbackError, setRollbackError] = useState<string | null>(null);
   const [isRollingBack, setIsRollingBack] = useState(false);
-
-  // Send Ballot Emails state
   const [showSendEmailModal, setShowSendEmailModal] = useState(false);
-  const [emailSubject, setEmailSubject] = useState('');
-  const [emailMessage, setEmailMessage] = useState('');
   const [isSendingEmails, setIsSendingEmails] = useState(false);
   const [sendEmailError, setSendEmailError] = useState<string | null>(null);
-  const [sendEligibilitySummary, setSendEligibilitySummary] = useState(true);
   const [lastSkippedDetails, setLastSkippedDetails] = useState<Array<{ name: string; reason: string }>>([]);
-
-  // Remind Non-Voters state
   const [isLoadingNonVoters, setIsLoadingNonVoters] = useState(false);
   const [showRemindModal, setShowRemindModal] = useState(false);
   const [nonVoterCount, setNonVoterCount] = useState(0);
   const [nonVoterIds, setNonVoterIds] = useState<string[]>([]);
-  const [remindMessage, setRemindMessage] = useState('');
   const [isSendingReminders, setIsSendingReminders] = useState(false);
   const [remindError, setRemindError] = useState<string | null>(null);
-
-  // Delete Election state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteReason, setDeleteReason] = useState('');
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -267,7 +259,7 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  const handleExtendElection = async () => {
+  const handleExtendElection = async (newEndDate: string) => {
     if (!electionId || !newEndDate) return;
 
     try {
@@ -277,46 +269,22 @@ export const ElectionDetailPage: React.FC = () => {
       });
       setElection(updated);
       setShowExtendModal(false);
-      setNewEndDate('');
     } catch (err: unknown) {
       setExtendError(getErrorMessage(err, 'Failed to extend election'));
     }
   };
 
-  const extendByHours = (hours: number) => {
-    if (!election) return;
-    const currentEnd = new Date(election.end_date);
-    const newEnd = new Date(currentEnd.getTime() + hours * 60 * 60 * 1000);
-    setNewEndDate(formatForDateTimeInput(newEnd, tz));
-  };
-
-  const extendToEndOfDay = () => {
-    if (!election) return;
-    const currentEnd = new Date(election.end_date);
-    currentEnd.setHours(23, 59, 0, 0);
-    setNewEndDate(formatForDateTimeInput(currentEnd, tz));
-  };
-
-  const handleRollbackElection = async () => {
-    if (!electionId || !rollbackReason.trim()) {
-      setRollbackError('Please provide a reason for the rollback');
-      return;
-    }
-
-    if (rollbackReason.trim().length < 10) {
-      setRollbackError('Reason must be at least 10 characters');
-      return;
-    }
+  const handleRollbackElection = async (reason: string) => {
+    if (!electionId) return;
 
     try {
       setIsRollingBack(true);
       setRollbackError(null);
 
-      const response = await electionService.rollbackElection(electionId, rollbackReason.trim());
+      const response = await electionService.rollbackElection(electionId, reason);
 
       setElection(response.election);
       setShowRollbackModal(false);
-      setRollbackReason('');
 
       toast.success(`Election rolled back successfully. ${response.notifications_sent} leadership members were notified.`);
     } catch (err: unknown) {
@@ -329,7 +297,7 @@ export const ElectionDetailPage: React.FC = () => {
   // ── Communication handlers ──────────────────────────────────────
 
   /** Sends ballot emails to all eligible voters. Tracks skipped members for UI banner. */
-  const handleSendBallotEmails = async () => {
+  const handleSendBallotEmails = async (payload: { subject: string; message: string; sendEligibilitySummary: boolean }) => {
     if (!electionId) return;
 
     try {
@@ -337,15 +305,13 @@ export const ElectionDetailPage: React.FC = () => {
       setSendEmailError(null);
 
       const response = await electionService.sendBallotEmail(electionId, {
-        subject: emailSubject.trim() || undefined,
-        message: emailMessage.trim() || undefined,
+        subject: payload.subject.trim() || undefined,
+        message: payload.message.trim() || undefined,
         include_ballot_link: true,
-        send_eligibility_summary: sendEligibilitySummary,
+        send_eligibility_summary: payload.sendEligibilitySummary,
       });
 
       setShowSendEmailModal(false);
-      setEmailSubject('');
-      setEmailMessage('');
       void fetchElection(); // Refresh to update email_sent status
 
       // Persist skipped details so they stay visible in a banner
@@ -399,7 +365,6 @@ export const ElectionDetailPage: React.FC = () => {
         return;
       }
 
-      setRemindMessage('');
       setRemindError(null);
       setShowRemindModal(true);
     } catch (err: unknown) {
@@ -409,7 +374,7 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  const handleSendReminders = async () => {
+  const handleSendReminders = async (message: string) => {
     if (!electionId || nonVoterIds.length === 0) return;
 
     try {
@@ -418,12 +383,11 @@ export const ElectionDetailPage: React.FC = () => {
 
       const response = await electionService.sendBallotEmail(electionId, {
         recipient_user_ids: nonVoterIds,
-        message: remindMessage || 'This is a reminder to cast your vote. The voting window will be closing soon.',
+        message: message || 'This is a reminder to cast your vote. The voting window will be closing soon.',
         include_ballot_link: true,
       });
 
       setShowRemindModal(false);
-      setRemindMessage('');
 
       // Show skipped details from reminders in the persistent banner
       if (response.skipped_details && response.skipped_details.length > 0) {
@@ -450,15 +414,10 @@ export const ElectionDetailPage: React.FC = () => {
   // ── Destructive action handlers ─────────────────────────────────
 
   /** Deletes the election. Requires a reason (10+ chars) for non-draft elections. */
-  const handleDeleteElection = async () => {
+  const handleDeleteElection = async (reason: string) => {
     if (!electionId || !election) return;
 
     const isDraft = election.status === ElectionStatus.DRAFT;
-
-    if (!isDraft && deleteReason.trim().length < 10) {
-      setDeleteError('A reason of at least 10 characters is required');
-      return;
-    }
 
     try {
       setIsDeleting(true);
@@ -466,7 +425,7 @@ export const ElectionDetailPage: React.FC = () => {
 
       const response = await electionService.deleteElection(
         electionId,
-        isDraft ? undefined : deleteReason.trim(),
+        isDraft ? undefined : reason.trim(),
       );
 
       setShowDeleteModal(false);
@@ -544,17 +503,6 @@ export const ElectionDetailPage: React.FC = () => {
     } finally {
       setLoadingPreview(false);
     }
-  };
-
-  const getPreviewCandidatesForItem = (item: BallotItem): Candidate[] => {
-    if (item.position) {
-      return previewCandidates.filter((c) => c.position === item.position && !c.is_write_in);
-    }
-    // Fallback for ballot items without a position field: match candidates
-    // whose position appears in the ballot item title (e.g. "Election for Chief")
-    return previewCandidates.filter(
-      (c) => c.position && item.title.includes(c.position) && !c.is_write_in,
-    );
   };
 
   if (loading) {
@@ -951,7 +899,6 @@ export const ElectionDetailPage: React.FC = () => {
                   <>
                     <button
                       onClick={() => {
-                        setNewEndDate(formatForDateTimeInput(new Date(election.end_date), tz));
                         setShowExtendModal(true);
                       }}
                       className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm"
@@ -1514,772 +1461,66 @@ export const ElectionDetailPage: React.FC = () => {
         </div>
       )}
 
-      {/* ==================== */}
-      {/* Modals */}
-      {/* ==================== */}
-
-      {/* Send Ballot Emails Modal */}
       {showSendEmailModal && election && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="send-email-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowSendEmailModal(false); setSendEmailError(null); } }}
-        >
-          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="send-email-modal-title" className="text-lg font-medium text-theme-text-primary">
-                {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
-              </h3>
-            </div>
-
-            <div className="px-6 py-4">
-              {election.email_sent && (
-                <div className="mb-4 bg-yellow-500/10 border border-yellow-500/30 rounded-sm p-3">
-                  <p className="text-sm text-yellow-700 dark:text-yellow-300">
-                    Ballot emails were previously sent{election.email_sent_at ? ` on ${formatDateTime(election.email_sent_at, tz)}` : ''}.
-                    Sending again will generate new voting tokens for all eligible voters.
-                  </p>
-                </div>
-              )}
-
-              {sendEmailError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
-                  <p className="text-sm text-red-700 dark:text-red-300">{sendEmailError}</p>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <p className="text-sm text-theme-text-secondary">
-                  {election.eligible_voters && election.eligible_voters.length > 0
-                    ? `This will send ballot emails to the ${election.eligible_voters.length} member(s) on the eligible voters list.`
-                    : 'This will send ballot emails to all active members in the organization.'}
-                  {' '}Members whose roles or attendance do not match any ballot item requirements will be skipped, with reasons shown after sending.
-                </p>
-
-                <div>
-                  <label htmlFor="ballot-email-subject" className="block text-sm font-medium text-theme-text-secondary">
-                    Custom Subject Line <span className="text-xs text-theme-text-muted">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    id="ballot-email-subject"
-                    value={emailSubject}
-                    onChange={(e) => setEmailSubject(e.target.value)}
-                    placeholder={`Vote Now: ${election.title}`}
-                    aria-label="Custom subject line"
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="ballot-email-message" className="block text-sm font-medium text-theme-text-secondary">
-                    Additional Message <span className="text-xs text-theme-text-muted">(optional)</span>
-                  </label>
-                  <textarea
-                    id="ballot-email-message"
-                    value={emailMessage}
-                    onChange={(e) => setEmailMessage(e.target.value)}
-                    rows={3}
-                    placeholder="Include any additional instructions or context for voters..."
-                    aria-label="Additional message"
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
-                  />
-                </div>
-
-                <label className="flex items-start gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={sendEligibilitySummary}
-                    onChange={(e) => setSendEligibilitySummary(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-theme-input-border text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-theme-text-secondary">
-                    Email me a summary of who received ballots and who was skipped (with reasons)
-                  </span>
-                </label>
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowSendEmailModal(false);
-                    setEmailSubject('');
-                    setEmailMessage('');
-                    setSendEmailError(null);
-                  }}
-                  disabled={isSendingEmails}
-                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleSendBallotEmails(); }}
-                  disabled={isSendingEmails}
-                  className="btn-primary disabled:opacity-50"
-                >
-                  {isSendingEmails ? 'Sending...' : 'Send Ballots'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <SendBallotEmailsModal
+          election={election}
+          sending={isSendingEmails}
+          error={sendEmailError}
+          onSubmit={(payload) => { void handleSendBallotEmails(payload); }}
+          onClose={() => { setShowSendEmailModal(false); setSendEmailError(null); }}
+          timezone={tz}
+        />
       )}
 
-      {/* Remind Non-Voters Modal */}
       {showRemindModal && election && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="remind-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRemindModal(false); setRemindError(null); } }}
-        >
-          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="remind-modal-title" className="text-lg font-medium text-theme-text-primary">
-                Remind Non-Voters
-              </h3>
-            </div>
-
-            <div className="px-6 py-4">
-              <div className="mb-4 bg-amber-500/10 border border-amber-500/30 rounded-sm p-3">
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  {nonVoterCount} eligible voter{nonVoterCount !== 1 ? 's have' : ' has'} not yet voted.
-                  This will resend ballot emails with new voting links to only those members.
-                </p>
-              </div>
-
-              {remindError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
-                  <p className="text-sm text-red-700 dark:text-red-300">{remindError}</p>
-                </div>
-              )}
-
-              <div>
-                <label htmlFor="remind-message" className="block text-sm font-medium text-theme-text-secondary">
-                  Reminder Message <span className="text-xs text-theme-text-muted">(optional)</span>
-                </label>
-                <textarea
-                  id="remind-message"
-                  value={remindMessage}
-                  onChange={(e) => setRemindMessage(e.target.value)}
-                  rows={3}
-                  placeholder="This is a reminder to cast your vote. The voting window will be closing soon."
-                  aria-label="Reminder message"
-                  className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
-                />
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRemindModal(false);
-                    setRemindMessage('');
-                    setRemindError(null);
-                  }}
-                  disabled={isSendingReminders}
-                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleSendReminders(); }}
-                  disabled={isSendingReminders}
-                  className="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {isSendingReminders ? 'Sending...' : `Send Reminders (${nonVoterCount})`}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <RemindNonVotersModal
+          nonVoterCount={nonVoterCount}
+          sending={isSendingReminders}
+          error={remindError}
+          onSubmit={(message) => { void handleSendReminders(message); }}
+          onClose={() => { setShowRemindModal(false); setRemindError(null); }}
+        />
       )}
 
-      {/* Delete Election Modal */}
       {showDeleteModal && election && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="delete-election-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowDeleteModal(false); setDeleteReason(''); setDeleteError(null); } }}
-        >
-          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
-            <div className={`px-6 py-4 border-b ${isDraft ? 'border-theme-surface-border' : 'border-red-500/30 bg-red-500/10'}`}>
-              <h3 id="delete-election-modal-title" className={`text-lg font-medium ${isDraft ? 'text-theme-text-primary' : 'text-red-700 dark:text-red-300'}`}>
-                {isDraft ? 'Delete Draft Election' : 'DELETE ACTIVE ELECTION'}
-              </h3>
-            </div>
-
-            <div className="px-6 py-4">
-              {/* Critical warning for non-draft elections */}
-              {!isDraft && (
-                <div className="bg-red-500/10 border-l-4 border-red-600 p-4 mb-4" role="alert" aria-live="assertive">
-                  <div className="flex">
-                    <div className="shrink-0">
-                      <svg className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <div className="ml-3">
-                      <h3 className="text-sm font-bold text-red-700 dark:text-red-300">
-                        CRITICAL: This is a destructive, irreversible action
-                      </h3>
-                      <div className="mt-2 text-sm text-red-700 dark:text-red-300">
-                        <p>Deleting this {election.status.toUpperCase()} election will:</p>
-                        <ul className="list-disc list-inside mt-1 space-y-1">
-                          <li><strong>Permanently destroy</strong> the election and all associated data</li>
-                          <li>Send <strong>CRITICAL alert emails</strong> to all leadership members (Chief, President, Vice President, Secretary)</li>
-                          <li>Create a <strong>CRITICAL severity</strong> audit trail entry</li>
-                          {election.total_votes && election.total_votes > 0 && (
-                            <li>Destroy <strong>{election.total_votes} votes</strong> that have already been cast</li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isDraft && (
-                <p className="text-sm text-theme-text-secondary mb-4">
-                  Are you sure you want to delete this draft election? This action cannot be undone.
-                </p>
-              )}
-
-              {deleteError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
-                  <p className="text-sm text-red-700 dark:text-red-300">{deleteError}</p>
-                </div>
-              )}
-
-              {/* Reason input for non-draft elections */}
-              {!isDraft && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-theme-text-secondary">
-                      Current Status
-                    </label>
-                    <div className="mt-1 text-sm font-semibold text-red-700 dark:text-red-400">
-                      {election.status.toUpperCase()}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label htmlFor="delete-election-reason" className="block text-sm font-medium text-theme-text-secondary">
-                      Reason for Deletion <span aria-hidden="true">*</span> <span className="text-xs text-theme-text-muted">(minimum 10 characters)</span>
-                    </label>
-                    <textarea
-                      id="delete-election-reason"
-                      value={deleteReason}
-                      onChange={(e) => setDeleteReason(e.target.value)}
-                      rows={4}
-                      placeholder="Provide a detailed reason why this active election must be deleted..."
-                      className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
-                      required
-                      aria-required="true"
-                    />
-                    <p className="mt-1 text-xs text-red-700 dark:text-red-400">
-                      This reason will be emailed to ALL leadership members and permanently logged in the audit trail.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    setDeleteReason('');
-                    setDeleteError(null);
-                  }}
-                  disabled={isDeleting}
-                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleDeleteElection(); }}
-                  disabled={isDeleting || (!isDraft && deleteReason.trim().length < 10)}
-                  className={`px-4 py-2 text-white rounded-md disabled:opacity-50 ${
-                    isDraft
-                      ? 'bg-theme-surface-hover hover:bg-theme-surface-secondary'
-                      : 'bg-red-800 hover:bg-red-900'
-                  }`}
-                >
-                  {isDeleting
-                    ? 'Deleting...'
-                    : isDraft
-                    ? 'Delete Draft'
-                    : 'Permanently Delete Election'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DeleteElectionModal
+          election={election}
+          isDraft={isDraft}
+          deleting={isDeleting}
+          error={deleteError}
+          onSubmit={(reason) => { void handleDeleteElection(reason); }}
+          onClose={() => { setShowDeleteModal(false); setDeleteError(null); }}
+        />
       )}
 
-      {/* Extend Time Modal */}
       {showExtendModal && election && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="extend-election-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowExtendModal(false); setNewEndDate(''); setExtendError(null); } }}
-        >
-          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="extend-election-modal-title" className="text-lg font-medium text-theme-text-primary">Extend Election Time</h3>
-            </div>
-
-            <div className="px-6 py-4">
-              {extendError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
-                  <p className="text-sm text-red-700 dark:text-red-300">{extendError}</p>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary">
-                    Current End Time
-                  </label>
-                  <div className="mt-1 text-sm text-theme-text-primary">
-                    {formatDateTime(election.end_date, tz)}
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="extend-new-end-time" className="block text-sm font-medium text-theme-text-secondary">
-                    New End Time
-                  </label>
-                  <DateTimeQuarterHour
-                    id="extend-new-end-time"
-                    value={newEndDate}
-                    onChange={(val) => setNewEndDate(val)}
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
-                  />
-
-                  <div className="mt-2">
-                    <p className="text-xs text-theme-text-muted mb-2">Quick extend:</p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => extendByHours(1)}
-                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover"
-                      >
-                        +1 Hour
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => extendByHours(2)}
-                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover"
-                      >
-                        +2 Hours
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => extendByHours(4)}
-                        className="px-3 py-1 text-xs bg-theme-surface text-theme-text-secondary rounded-sm hover:bg-theme-surface-hover"
-                      >
-                        +4 Hours
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => extendToEndOfDay()}
-                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-sm hover:bg-blue-200 dark:bg-blue-500/20 dark:text-blue-400 dark:hover:bg-blue-500/30"
-                      >
-                        End of Day
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowExtendModal(false);
-                    setNewEndDate('');
-                    setExtendError(null);
-                  }}
-                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleExtendElection(); }}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
-                >
-                  Extend Election
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ExtendElectionModal
+          currentEndDate={election.end_date}
+          error={extendError}
+          onSubmit={(newEndDate) => { void handleExtendElection(newEndDate); }}
+          onClose={() => { setShowExtendModal(false); setExtendError(null); }}
+          timezone={tz}
+        />
       )}
 
-      {/* Ballot Preview Modal */}
       {showPreview && election && (
-        <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="ballot-preview-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') setShowPreview(false); }}
-        >
-          <div className="bg-theme-surface-secondary rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Preview Banner */}
-            <div className="sticky top-0 z-10 bg-amber-500 text-amber-900 px-4 py-2 text-center text-sm font-bold">
-              BALLOT PREVIEW — This is how voters will see the ballot
-            </div>
-
-            {/* Ballot Header (matches BallotVotingPage) */}
-            <div className="bg-red-700 text-white">
-              <div className="px-6 py-6 text-center">
-                <h3 id="ballot-preview-title" className="text-xl font-bold">{election.title}</h3>
-                {election.description && (
-                  <p className="mt-2 text-red-100">{election.description}</p>
-                )}
-                {election.meeting_date && (
-                  <p className="mt-1 text-red-200 text-sm">
-                    Meeting Date: {formatDate(election.meeting_date, tz)}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Ballot Instructions */}
-            <div className="px-6 pt-6">
-              <p className="text-theme-text-secondary text-sm">
-                Please review each item below and make your selection. You may vote for the
-                presented option, write in an alternative, or abstain from voting on any item.
-              </p>
-            </div>
-
-            {/* Ballot Items */}
-            <div className="px-6 py-6 space-y-6">
-              {(election.ballot_items || []).length === 0 ? (
-                <div className="text-center py-8 text-theme-text-muted">
-                  No ballot items have been added yet.
-                </div>
-              ) : (
-                (election.ballot_items || []).map((item, index) => {
-                  const itemCandidates = getPreviewCandidatesForItem(item);
-                  const isApprovalType = item.vote_type === VoteType.APPROVAL;
-
-                  return (
-                    <div
-                      key={item.id}
-                      className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden"
-                    >
-                      {/* Item Header */}
-                      <div className="bg-theme-surface-secondary px-6 py-4 border-b border-theme-surface-border">
-                        <div className="flex items-start gap-3">
-                          <span className="shrink-0 w-8 h-8 bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400 rounded-full flex items-center justify-center text-sm font-bold">
-                            {index + 1}
-                          </span>
-                          <div>
-                            <h4 className="font-semibold text-theme-text-primary">{item.title}</h4>
-                            {item.description && (
-                              <p className="mt-1 text-sm text-theme-text-muted">{item.description}</p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Voting Options (disabled/preview) */}
-                      <fieldset className="px-6 py-4 space-y-3">
-                        <legend className="sr-only">Voting options for {item.title}</legend>
-                        {isApprovalType ? (
-                          <>
-                            {/* Show linked candidates/prospective members for approval items */}
-                            {itemCandidates.length > 0 && (
-                              <div className="mb-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
-                                <p className="text-xs font-medium text-blue-700 dark:text-blue-400 mb-1.5">
-                                  {item.type === BallotItemType.MEMBERSHIP_APPROVAL ? 'Prospective Member' : 'Candidate'}{itemCandidates.length !== 1 ? 's' : ''}:
-                                </p>
-                                {itemCandidates.map((candidate) => (
-                                  <div key={candidate.id} className="flex items-center gap-2 py-1">
-                                    <span className="font-medium text-theme-text-primary text-sm">{candidate.name}</span>
-                                    {candidate.statement && (
-                                      <span className="text-xs text-theme-text-muted">— {candidate.statement}</span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                              <input type="radio" disabled className="w-4 h-4 text-green-600" aria-label="Approve" />
-                              <span className="font-medium text-theme-text-primary">Approve</span>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                              <input type="radio" disabled className="w-4 h-4 text-red-600" aria-label="Deny" />
-                              <span className="font-medium text-theme-text-primary">Deny</span>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            {itemCandidates.length > 0 ? (
-                              itemCandidates.map((candidate) => (
-                                <div key={candidate.id} className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                                  <input type="radio" disabled className="w-4 h-4 text-blue-600" aria-label={candidate.name} />
-                                  <div>
-                                    <span className="font-medium text-theme-text-primary">{candidate.name}</span>
-                                    {candidate.statement && (
-                                      <p className="text-sm text-theme-text-muted mt-0.5">{candidate.statement}</p>
-                                    )}
-                                  </div>
-                                </div>
-                              ))
-                            ) : (
-                              <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm">
-                                No candidates added for this position yet.
-                              </div>
-                            )}
-                          </>
-                        )}
-
-                        {election.allow_write_ins && (
-                          <div className="p-3 rounded-lg border border-theme-surface-border">
-                            <div className="flex items-center gap-3">
-                              <input type="radio" disabled className="w-4 h-4 text-purple-600" aria-label="Write-in" />
-                              <span className="font-medium text-theme-text-primary">Write-in</span>
-                            </div>
-                            <input
-                              type="text"
-                              disabled
-                              placeholder="Enter name or option..."
-                              className="mt-2 ml-7 block w-[calc(100%-1.75rem)] border border-theme-surface-border rounded-md py-2 px-3 text-sm bg-theme-input-bg text-theme-text-muted opacity-50 cursor-not-allowed"
-                            />
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-3 p-3 rounded-lg border border-theme-surface-border">
-                          <input type="radio" disabled className="w-4 h-4 text-theme-text-muted" aria-label="Abstain" />
-                          <span className="text-theme-text-muted">Abstain (Do not vote on this item)</span>
-                        </div>
-                      </fieldset>
-
-                      {/* Item metadata for admin */}
-                      <div className="px-6 py-2 bg-theme-surface-secondary border-t border-theme-surface-border flex flex-wrap gap-2">
-                        <span className="text-xs px-2 py-0.5 rounded-sm bg-theme-surface-hover text-theme-text-muted">
-                          {item.type?.replace('_', ' ')}
-                        </span>
-                        <span className="text-xs px-2 py-0.5 rounded-sm bg-theme-surface-hover text-theme-text-muted">
-                          {isApprovalType ? 'Yes/No vote' : 'Candidate selection'}
-                        </span>
-                        {item.require_attendance && (
-                          <span className="text-xs px-2 py-0.5 rounded-sm bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
-                            Requires attendance
-                          </span>
-                        )}
-                        {item.eligible_voter_types && !item.eligible_voter_types.includes('all') && (
-                          <span className="text-xs px-2 py-0.5 rounded-sm bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
-                            Restricted: {item.eligible_voter_types.join(', ')}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-
-              {/* Preview-only Submit Button (disabled) */}
-              {(election.ballot_items || []).length > 0 && (
-                <div className="text-center pt-4">
-                  <button
-                    type="button"
-                    disabled
-                    className="px-8 py-3 bg-red-700 text-white text-lg font-semibold rounded-lg opacity-50 cursor-not-allowed"
-                  >
-                    Submit Ballot
-                  </button>
-                  <p className="mt-2 text-sm text-theme-text-muted">
-                    You will have a chance to review your choices before they are submitted.
-                  </p>
-                </div>
-              )}
-
-              {/* Security notice (matches BallotVotingPage) */}
-              <div className="mt-6 text-center text-xs text-theme-text-muted">
-                <p>Your vote is anonymous and securely recorded.</p>
-                <p>This voting link is unique to you. Do not share it with others.</p>
-              </div>
-            </div>
-
-            {/* Election info summary (admin-only context) */}
-            <div className="px-6 py-4 bg-theme-surface border-t border-theme-surface-border">
-              <h4 className="text-xs font-semibold text-theme-text-muted uppercase tracking-wider mb-2">Election Details</h4>
-              <div className="flex flex-wrap gap-2">
-                <span className="text-xs px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-secondary">
-                  {election.voting_method?.replace(/_/g, ' ')}
-                </span>
-                <span className="text-xs px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-secondary">
-                  {election.victory_condition?.replace(/_/g, ' ')}
-                  {election.victory_percentage ? ` (${election.victory_percentage}%)` : ''}
-                </span>
-                {election.anonymous_voting && (
-                  <span className="text-xs px-2 py-1 rounded-sm bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400">
-                    Anonymous
-                  </span>
-                )}
-                {election.allow_write_ins && (
-                  <span className="text-xs px-2 py-1 rounded-sm bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-400">
-                    Write-ins allowed
-                  </span>
-                )}
-                {election.quorum_type && election.quorum_type !== 'none' && (
-                  <span className="text-xs px-2 py-1 rounded-sm bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
-                    Quorum: {election.quorum_value}{election.quorum_type === 'percentage' ? '%' : ' members'}
-                  </span>
-                )}
-                {election.positions && election.positions.length > 0 && (
-                  <span className="text-xs px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-secondary">
-                    {election.positions.length} position{election.positions.length !== 1 ? 's' : ''}: {election.positions.join(', ')}
-                  </span>
-                )}
-                <span className="text-xs px-2 py-1 rounded-sm bg-theme-surface-hover text-theme-text-secondary">
-                  {previewCandidates.length} candidate{previewCandidates.length !== 1 ? 's' : ''} total
-                </span>
-              </div>
-            </div>
-
-            {/* Close button */}
-            <div className="sticky bottom-0 bg-theme-surface-secondary border-t border-theme-surface-border px-6 py-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowPreview(false)}
-                className="px-6 py-2 bg-theme-surface-secondary text-theme-text-primary border border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
-              >
-                Close Preview
-              </button>
-            </div>
-          </div>
-        </div>
+        <BallotPreviewModal
+          election={election}
+          candidates={previewCandidates}
+          onClose={() => setShowPreview(false)}
+          timezone={tz}
+        />
       )}
 
-      {/* Rollback Modal */}
       {showRollbackModal && election && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="rollback-election-modal-title"
-          onKeyDown={(e) => { if (e.key === 'Escape') { setShowRollbackModal(false); setRollbackReason(''); setRollbackError(null); } }}
-        >
-          <div className="bg-theme-surface-modal rounded-lg shadow-xl max-w-lg w-full">
-            <div className="px-6 py-4 border-b border-theme-surface-border">
-              <h3 id="rollback-election-modal-title" className="text-lg font-medium text-theme-text-primary">Rollback Election</h3>
-            </div>
-
-            <div className="px-6 py-4">
-              {/* Warning Message */}
-              <div className="bg-orange-500/10 border-l-4 border-orange-500 p-4 mb-4">
-                <div className="flex">
-                  <div className="shrink-0">
-                    <svg className="h-5 w-5 text-orange-700 dark:text-orange-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-orange-700 dark:text-orange-300">
-                      This action requires careful consideration
-                    </h3>
-                    <div className="mt-2 text-sm text-orange-700 dark:text-orange-300">
-                      <p>Rolling back this election will:</p>
-                      <ul className="list-disc list-inside mt-1 space-y-1">
-                        <li>Change the election status from <strong>{election.status.toUpperCase()}</strong> to <strong>{election.status === ElectionStatus.CLOSED ? 'OPEN' : 'DRAFT'}</strong></li>
-                        <li>Send email notifications to all leadership members</li>
-                        <li>Create an audit trail entry with your reason</li>
-                        {election.status === ElectionStatus.CLOSED && <li>Allow voting to resume (for closed&rarr;open)</li>}
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {rollbackError && (
-                <div className="mb-4 bg-red-500/10 border border-red-500/30 rounded-sm p-3" role="alert" aria-live="assertive">
-                  <p className="text-sm text-red-700 dark:text-red-300">{rollbackError}</p>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary">
-                    Current Status
-                  </label>
-                  <div className="mt-1 text-sm font-semibold text-theme-text-primary">
-                    {election.status.toUpperCase()}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-theme-text-secondary">
-                    New Status After Rollback
-                  </label>
-                  <div className="mt-1 text-sm font-semibold text-green-600">
-                    {election.status === ElectionStatus.CLOSED ? 'OPEN' : 'DRAFT'}
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="rollback-reason" className="block text-sm font-medium text-theme-text-secondary">
-                    Reason for Rollback <span aria-hidden="true">*</span> <span className="text-xs text-theme-text-muted">(minimum 10 characters)</span>
-                  </label>
-                  <textarea
-                    id="rollback-reason"
-                    value={rollbackReason}
-                    onChange={(e) => setRollbackReason(e.target.value)}
-                    rows={4}
-                    placeholder="Example: Vote counting error discovered, need to recount all ballots..."
-                    className="mt-1 block w-full bg-theme-input-bg border border-theme-input-border rounded-md shadow-xs py-2 px-3 text-theme-text-primary focus:outline-hidden focus:ring-theme-focus-ring focus:border-theme-focus-ring"
-                    required
-                    aria-required="true"
-                  />
-                  <p className="mt-1 text-xs text-theme-text-muted">
-                    This reason will be sent to all leadership members and logged in the audit trail.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowRollbackModal(false);
-                    setRollbackReason('');
-                    setRollbackError(null);
-                  }}
-                  disabled={isRollingBack}
-                  className="px-4 py-2 border border-theme-surface-border rounded-md text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleRollbackElection(); }}
-                  disabled={isRollingBack || rollbackReason.trim().length < 10}
-                  className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
-                >
-                  {isRollingBack ? 'Rolling Back...' : 'Confirm Rollback'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <RollbackElectionModal
+          currentStatus={election.status.toUpperCase()}
+          targetStatus={election.status === ElectionStatus.CLOSED ? 'OPEN' : 'DRAFT'}
+          rolling={isRollingBack}
+          error={rollbackError}
+          onSubmit={(reason) => { void handleRollbackElection(reason); }}
+          onClose={() => { setShowRollbackModal(false); setRollbackError(null); }}
+        />
       )}
     </div>
     </div>
