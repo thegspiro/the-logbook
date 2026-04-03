@@ -16,6 +16,7 @@ import {
   Bell,
   LayoutTemplate,
   Shield,
+  FileBarChart,
 } from "lucide-react";
 import type { ShiftTemplateRecord } from "../services/api";
 import type { ShiftSettings } from "../types/shiftSettings";
@@ -32,10 +33,11 @@ import { DepartmentDefaultsCard } from "./DepartmentDefaultsCard";
 import { PositionNamesCard } from "./PositionNamesCard";
 import { EquipmentCheckTemplateList } from "./EquipmentCheckTemplateList";
 import { EligibilitySettingsCard } from "./EligibilitySettingsCard";
+import { ShiftReportsSettingsPanel } from "./ShiftReportsSettingsPanel";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type SettingsTab = "general" | "apparatus" | "notifications" | "equipment" | "eligibility";
+export type SettingsTab = "general" | "apparatus" | "notifications" | "equipment" | "eligibility" | "shift-reports";
 
 const SETTINGS_TABS: {
   id: SettingsTab;
@@ -47,6 +49,7 @@ const SETTINGS_TABS: {
   { id: "eligibility", label: "Eligibility", icon: Shield },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "equipment", label: "Equipment", icon: ClipboardCheck },
+  { id: "shift-reports", label: "Shift Reports", icon: FileBarChart },
 ];
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -358,6 +361,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
           </div>
 
           <EquipmentCheckTemplateList />
+        </div>
+      )}
+
+      {/* ─── Shift Reports Tab ─── */}
+      {activeTab === "shift-reports" && (
+        <div className="space-y-6">
+          <ShiftReportsSettingsPanel />
         </div>
       )}
 

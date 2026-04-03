@@ -91,6 +91,20 @@ export interface EquipmentCheckSettings {
   blockShiftStartOnFail: boolean;
 }
 
+// ─── Shift report & post-shift validation settings (org.settings) ───────────
+
+export interface ShiftReportSettings {
+  checklist_timing: {
+    start_of_shift_enabled: boolean;
+    end_of_shift_enabled: boolean;
+  };
+  post_shift_validation: {
+    enabled: boolean;
+    require_officer_report: boolean;
+    validation_window_hours: number;
+  };
+}
+
 export interface ShiftSettings {
   defaultDurationHours: number;
   defaultMinStaffing: number;
