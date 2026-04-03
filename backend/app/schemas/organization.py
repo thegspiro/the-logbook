@@ -311,6 +311,49 @@ class SchedulingNotificationSettings(BaseModel):
     )
 
 
+class ChecklistTimingSettings(BaseModel):
+    """Controls which checklist windows are active for shifts."""
+
+    start_of_shift_enabled: bool = Field(
+        default=True,
+        description="Prompt members to complete equipment checks at shift start",
+    )
+    end_of_shift_enabled: bool = Field(
+        default=True,
+        description="Remind members to complete equipment checks before shift end",
+    )
+
+
+class PostShiftValidationSettings(BaseModel):
+    """Controls post-shift validation behavior."""
+
+    enabled: bool = Field(
+        default=True,
+        description="Send validation reminders to shift officers after shift ends",
+    )
+    require_officer_report: bool = Field(
+        default=False,
+        description="Require a shift completion report before finalization",
+    )
+    validation_window_hours: int = Field(
+        default=2,
+        ge=1,
+        le=24,
+        description="Hours after shift end to send the validation reminder",
+    )
+
+
+class ShiftReportSettings(BaseModel):
+    """Organization-level shift report and checklist timing settings."""
+
+    checklist_timing: ChecklistTimingSettings = Field(
+        default_factory=ChecklistTimingSettings,
+    )
+    post_shift_validation: PostShiftValidationSettings = Field(
+        default_factory=PostShiftValidationSettings,
+    )
+
+
 class MemberDropNotificationSettings(BaseModel):
     """
     Configuration for notifications sent when a member is dropped.
@@ -745,6 +788,7 @@ class OrganizationSettingsUpdate(BaseModel):
     modules: Optional[ModuleSettingsUpdate] = None
     it_team: Optional[ITTeamSettings] = None
     scheduling: Optional[SchedulingNotificationSettings] = None
+    shift_reports: Optional[ShiftReportSettings] = None
     member_drop_notifications: Optional[MemberDropNotificationSettings] = None
     membership_tiers: Optional[MembershipTierSettings] = None
     membership_id: Optional[MembershipIdSettings] = None

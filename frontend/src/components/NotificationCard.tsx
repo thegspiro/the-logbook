@@ -119,7 +119,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
     return actions;
   }
 
-  // Post-shift validation — offer "View Shift" and "Start Checklist"
+  // Post-shift validation — offer "View Shift", optionally "Start Checklist" and "File Report"
   if (category === 'shift_validation') {
     actions.push({
       label: 'View Shift',
@@ -131,6 +131,14 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
         label: 'Start Checklist',
         icon: <ClipboardCheck className="w-3.5 h-3.5" />,
         url: '/scheduling?tab=equipment-checks',
+      });
+    }
+    const shiftId = typeof metadata?.shift_id === 'string' ? metadata.shift_id : '';
+    if (shiftId) {
+      actions.push({
+        label: 'File Report',
+        icon: <FileText className="w-3.5 h-3.5" />,
+        url: `/scheduling?tab=shift-reports&shift=${shiftId}`,
       });
     }
     return actions;

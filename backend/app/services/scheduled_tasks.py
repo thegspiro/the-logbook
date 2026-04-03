@@ -938,7 +938,6 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
     from app.services.email_service import EmailService, build_email_logo_html
 
     now = datetime.now(dt_timezone.utc)
-    lookback = now - timedelta(hours=2)
 
     orgs = await db.execute(select(Organization))
     organizations = list(orgs.scalars().all())
@@ -952,6 +951,16 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
         org_emails = 0
 
         try:
+            sr_cfg = (org.settings or {}).get("shift_reports", {})
+            psv_cfg = sr_cfg.get("post_shift_validation", {})
+            if not psv_cfg.get("enabled", True):
+                continue
+
+            window_hours = psv_cfg.get(
+                "validation_window_hours", 2
+            )
+            lookback = now - timedelta(hours=window_hours)
+
             shifts_result = await db.execute(
                 select(Shift)
                 .where(Shift.organization_id == str(org.id))
@@ -1138,6 +1147,11 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         f"report{'s' if missing_reports != 1 else ''} "
                         f"still needed."
                     )
+                if psv_cfg.get("require_officer_report", False):
+                    message += (
+                        " A shift completion report is required "
+                        "before this shift can be finalized."
+                    )
 
                 # In-app notification
                 try:
@@ -1151,7 +1165,6 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         message=message,
                         action_url=(
                             f"/scheduling?shift={shift.id}"
-                            f"&tab=equipment-checks"
                         ),
                         metadata={
                             "shift_id": str(shift.id),
@@ -1181,7 +1194,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 wants_email = prefs.get("email_notifications", True)
                 if wants_email and officer.email:
                     try:
-                        full_url = f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}&tab=equipment-checks"
+                        full_url = f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
                         e_first = _html.escape(officer.first_name or "")
                         e_shift_date = _html.escape(shift_date_str)
                         _logo = build_email_logo_html(org)
@@ -1343,6 +1356,12 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
             if not reminder_cfg.get("enabled", True):
                 continue
 
+            sr_cfg = (org.settings or {}).get("shift_reports", {})
+            ct_cfg = sr_cfg.get("checklist_timing", {})
+            start_checklists_enabled = ct_cfg.get(
+                "start_of_shift_enabled", True
+            )
+
             lookahead_hours = reminder_cfg.get("lookahead_hours", 2)
             lookahead_end = now + timedelta(hours=lookahead_hours)
 
@@ -1386,7 +1405,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # Fetch equipment check templates for the apparatus
                 checklist_names: list[str] = []
-                if shift.apparatus_id:
+                if shift.apparatus_id and start_checklists_enabled:
                     tmpl_result = await db.execute(
                         select(EquipmentCheckTemplate)
                         .where(
@@ -1490,16 +1509,24 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # In-app notification for each assigned member
                 shift_action_url = (
-                    f"/scheduling?shift={shift.id}"
+                    f"/scheduling?tab=equipment-checks"
+                    f"&shift={shift.id}"
                 )
                 shift_start_iso = (
                     shift.start_time.isoformat()
                     if shift.start_time
                     else None
                 )
+                shift_end_iso = (
+                    shift.end_time.isoformat()
+                    if shift.end_time
+                    else None
+                )
                 shift_metadata = {}
                 if shift_start_iso:
                     shift_metadata["shift_start_time"] = shift_start_iso
+                if shift_end_iso:
+                    shift_metadata["shift_end_time"] = shift_end_iso
                 if shift.id:
                     shift_metadata["shift_id"] = str(shift.id)
 
@@ -1697,6 +1724,11 @@ async def run_end_of_shift_checklist_reminders(
                 "shift_reminders", {}
             )
             if not reminder_cfg.get("enabled", True):
+                continue
+
+            sr_cfg = (org.settings or {}).get("shift_reports", {})
+            ct_cfg = sr_cfg.get("checklist_timing", {})
+            if not ct_cfg.get("end_of_shift_enabled", True):
                 continue
 
             lookahead_end = now + timedelta(hours=1)

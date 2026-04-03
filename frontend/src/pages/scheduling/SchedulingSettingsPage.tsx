@@ -12,7 +12,7 @@ import { ShiftSettingsPanel } from "../../modules/scheduling/components/ShiftSet
 import type { SettingsTab } from "../../modules/scheduling/components/ShiftSettingsPanel";
 import { useSchedulingStore } from "../../modules/scheduling/store/schedulingStore";
 
-const VALID_TABS: SettingsTab[] = ["general", "apparatus", "eligibility", "notifications", "equipment"];
+const VALID_TABS: SettingsTab[] = ["general", "apparatus", "eligibility", "notifications", "equipment", "shift-reports"];
 
 const SchedulingSettingsPage: React.FC = () => {
   const navigate = useNavigate();

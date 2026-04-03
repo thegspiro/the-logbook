@@ -18,6 +18,7 @@ import {
 import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
+import { schedulingService } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { SubmissionStatus } from '../../constants/enums';
 import type {
@@ -68,7 +69,10 @@ export const ShiftReportsTab: React.FC = () => {
   const canManage = checkPermission('training.manage');
   const [searchParams] = useSearchParams();
 
+  const linkedShiftId = searchParams.get('shift') || undefined;
+
   const initialView = (): ViewMode => {
+    if (linkedShiftId && canManage) return 'create';
     const viewParam = searchParams.get('view');
     if (viewParam === 'drafts' && canManage) return 'drafts';
     return canManage ? 'filed-by-me' : 'my-reports';
@@ -85,7 +89,9 @@ export const ShiftReportsTab: React.FC = () => {
   const [memberSearch, setMemberSearch] = useState('');
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [linkedShiftLabel, setLinkedShiftLabel] = useState<string | null>(null);
   const [form, setForm] = useState<Partial<ShiftCompletionReportCreate>>({
+    shift_id: linkedShiftId,
     shift_date: getTodayLocalDate(tz),
     hours_on_shift: 0,
     calls_responded: 0,
@@ -136,6 +142,33 @@ export const ShiftReportsTab: React.FC = () => {
   const skillOptions = config?.shift_review_default_skills?.length
     ? config.shift_review_default_skills
     : DEFAULT_SKILLS;
+  const taskDefaults = config?.shift_review_default_tasks ?? [];
+
+  // Pre-fill form when navigated with a linked shift ID
+  useEffect(() => {
+    if (!linkedShiftId || viewMode !== 'create') return;
+    let cancelled = false;
+    const prefill = async () => {
+      try {
+        const shift = await schedulingService.getShift(linkedShiftId);
+        if (cancelled) return;
+        const shiftDate = shift.shift_date ?? getTodayLocalDate(tz);
+        setLinkedShiftLabel(
+          `${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`,
+        );
+        setForm(prev => ({
+          ...prev,
+          shift_id: linkedShiftId,
+          shift_date: shiftDate,
+          calls_responded: shift.call_count || prev.calls_responded,
+        }));
+      } catch {
+        // Shift may not exist — continue with defaults
+      }
+    };
+    void prefill();
+    return () => { cancelled = true; };
+  }, [linkedShiftId, viewMode, tz]);
 
   const loadReports = useCallback(async () => {
     setLoading(true);
@@ -275,6 +308,7 @@ export const ShiftReportsTab: React.FC = () => {
     setSubmitting(true);
     try {
       const payload: ShiftCompletionReportCreate = {
+        shift_id: form.shift_id || undefined,
         trainee_id: form.trainee_id,
         shift_date: form.shift_date,
         hours_on_shift: form.hours_on_shift,
@@ -289,7 +323,9 @@ export const ShiftReportsTab: React.FC = () => {
       };
       await shiftCompletionService.createReport(payload);
       toast.success('Shift report submitted');
+      setLinkedShiftLabel(null);
       setForm({
+        shift_id: undefined,
         shift_date: getTodayLocalDate(tz),
         hours_on_shift: 0,
         calls_responded: 0,
@@ -1030,6 +1066,14 @@ export const ShiftReportsTab: React.FC = () => {
         <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-6 space-y-5">
           <h3 className="text-lg font-semibold text-theme-text-primary">New Shift Completion Report</h3>
 
+          {/* Linked shift banner */}
+          {linkedShiftLabel && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/5 border border-blue-500/20 rounded-lg text-sm text-blue-700 dark:text-blue-400">
+              <FileText className="w-4 h-4 shrink-0" />
+              Filing report for shift: <span className="font-medium">{linkedShiftLabel}</span>
+            </div>
+          )}
+
           {/* Trainee Selection */}
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Trainee *</label>
@@ -1188,6 +1232,27 @@ export const ShiftReportsTab: React.FC = () => {
                 <Plus className="w-3 h-3" /> Add Task
               </button>
             </div>
+            {/* Quick-add from configured defaults */}
+            {taskDefaults.length > 0 && (form.tasks_performed || []).length === 0 && (
+              <div className="mb-2">
+                <p className="text-xs text-theme-text-muted mb-1.5">Quick add from defaults:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {taskDefaults.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setForm(prev => ({
+                        ...prev,
+                        tasks_performed: [...(prev.tasks_performed || []), { task: t, description: '' }],
+                      }))}
+                      className="px-2 py-1 text-xs rounded-full border border-violet-500/20 bg-violet-500/5 text-violet-700 dark:text-violet-400 hover:bg-violet-500/15 transition-colors"
+                    >
+                      + {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {(form.tasks_performed || []).map((task, i) => (
                 <div key={i} className="space-y-1">

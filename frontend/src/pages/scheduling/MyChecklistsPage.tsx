@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ClipboardCheck,
   CheckCircle,
@@ -85,6 +85,9 @@ export const MyChecklistsPage: React.FC = () => {
   const timezone = useTimezone();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('scheduling.manage') || checkPermission('equipment_check.manage');
+
+  const [searchParams] = useSearchParams();
+  const highlightShiftId = searchParams.get('shift') || undefined;
 
   // Active checklists
   const [loading, setLoading] = useState(true);
@@ -410,16 +413,28 @@ export const MyChecklistsPage: React.FC = () => {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {activeChecklists
               .filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter)
+              .slice()
+              .sort((a, b) => {
+                if (!highlightShiftId) return 0;
+                const aMatch = a.shiftId === highlightShiftId ? 0 : 1;
+                const bMatch = b.shiftId === highlightShiftId ? 0 : 1;
+                return aMatch - bMatch;
+              })
               .map((checklist) => {
                 const total = checklist.totalItems ?? 0;
                 const completed = checklist.completedItems ?? 0;
                 const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
                 const isStarted = checklist.status === 'in_progress' || checklist.status === 'incomplete';
+                const isHighlighted = highlightShiftId === checklist.shiftId;
 
                 return (
                   <div
                     key={`${checklist.shiftId}-${checklist.templateId}`}
-                    className="rounded-lg border border-theme-surface-border bg-theme-surface p-4"
+                    className={`rounded-lg border p-4 ${
+                      isHighlighted
+                        ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20'
+                        : 'border-theme-surface-border bg-theme-surface'
+                    }`}
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <div className="flex items-center gap-2">
