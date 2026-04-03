@@ -715,6 +715,68 @@ POST   /api/v1/training/programs/programs/{id}/bulk-enroll
 PATCH  /api/v1/training/programs/progress/{id}
 ```
 
+### Shift Completion Reports *(2026-03-28)*
+
+```
+POST   /api/v1/training/shift-reports                                  # Create report
+GET    /api/v1/training/shift-reports/my-reports                       # Trainee's approved reports
+GET    /api/v1/training/shift-reports/my-stats                         # Trainee's aggregate stats
+GET    /api/v1/training/shift-reports/officer-analytics                # Org-wide analytics
+GET    /api/v1/training/shift-reports/by-officer                       # Reports filed by current officer
+GET    /api/v1/training/shift-reports/pending-review                   # Reports awaiting review
+GET    /api/v1/training/shift-reports/drafts                           # Auto-created drafts
+GET    /api/v1/training/shift-reports/all                              # All org reports (filtered)
+GET    /api/v1/training/shift-reports/trainee/{trainee_id}             # Reports for trainee
+GET    /api/v1/training/shift-reports/trainee/{trainee_id}/stats       # Stats for trainee
+GET    /api/v1/training/shift-reports/shift-preview/{shift_id}/{trainee_id}  # Auto-populate preview
+GET    /api/v1/training/shift-reports/{report_id}                      # Get single report
+PUT    /api/v1/training/shift-reports/{report_id}                      # Update draft
+POST   /api/v1/training/shift-reports/{report_id}/acknowledge          # Trainee acknowledge
+POST   /api/v1/training/shift-reports/{report_id}/review               # Officer review (approve/flag/redact)
+```
+
+**ShiftCompletionReport Model:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID, PK | Report identifier |
+| `organization_id` | FK → organizations | Org scoping |
+| `shift_id` | FK → shifts, nullable | Optional link to source shift |
+| `shift_date` | Date, indexed | When the shift occurred |
+| `trainee_id` | FK → users, indexed | Trainee being evaluated |
+| `officer_id` | FK → users, indexed | Officer filing the report |
+| `hours_on_shift` | Float | Shift duration in hours |
+| `calls_responded` | Integer, default=0 | Number of calls |
+| `call_types` | JSON | Array of incident type strings |
+| `performance_rating` | Integer, 1-5 | Rating scale (optional) |
+| `areas_of_strength` | EncryptedText | AES-256 encrypted |
+| `areas_for_improvement` | EncryptedText | AES-256 encrypted |
+| `officer_narrative` | EncryptedText | Free-form assessment |
+| `skills_observed` | JSON | `[{skill_name, demonstrated, notes, comment}]` |
+| `tasks_performed` | JSON | `[{task, description, comment}]` |
+| `enrollment_id` | FK → program_enrollments, nullable | Linked enrollment |
+| `requirements_progressed` | JSON | `[{requirement_progress_id, value_added}]` |
+| `data_sources` | JSON | Audit: `{"hours_on_shift": "shift_attendance", ...}` |
+| `review_status` | String | `draft`, `pending_review`, `approved`, `flagged` |
+| `reviewed_by` | FK → users, nullable | Reviewer |
+| `reviewed_at` | DateTime, nullable | Review timestamp |
+| `reviewer_notes` | EncryptedText | Never exposed to trainee |
+| `trainee_acknowledged` | Boolean, default=False | Acknowledgment flag |
+| `trainee_acknowledged_at` | DateTime, nullable | Acknowledgment timestamp |
+| `trainee_comments` | Text, nullable | Trainee feedback |
+
+**Pipeline Progress Logic:**
+
+When a report is created or transitions from `draft` to `approved`/`pending_review`, the service calls `_update_requirement_progress()`:
+
+1. Finds active enrollments for the trainee
+2. For each active requirement (`NOT_STARTED` or `IN_PROGRESS`):
+   - `SHIFTS` type: adds 1.0
+   - `CALLS` type: if `required_call_types` specified, counts matching calls (case-insensitive); otherwise counts all
+   - `HOURS` type: adds `hours_on_shift`
+3. Updates `RequirementProgress.progress_value`
+4. Tracks call type breakdown in `progress_notes`
+
 ## Database Migrations
 
 ### Initial Training System

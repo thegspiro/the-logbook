@@ -359,6 +359,37 @@ The Logbook now runs scheduled tasks (shift reminders, notification cleanup, ove
 
 ---
 
+## HIPAA Audit Logging Expansion *(2026-03-29)*
+
+The following modules now include comprehensive `log_audit_event()` calls for HIPAA compliance:
+
+| Module | Events Logged |
+|--------|---------------|
+| **Medical Screening** | Requirement creation/update/delete, screening record creation/update/delete (category: "medical") |
+| **Documents** | Document uploaded (with filename, MIME type, file size), document deleted (severity: "warning") |
+| **Membership Pipeline** | Pipeline created/deleted, prospect created/advanced/transferred (includes name/email in metadata) |
+| **Messages** | Message creation and deletion |
+
+All audit events are appended to the tamper-proof SHA-256 hash chain in the `audit_logs` table.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "medical" events showing recent medical screening audit entries with timestamps, user, and event details._
+
+## Pagination Standardization *(2026-03-29)*
+
+Previously unbounded list endpoints now accept `skip` and `limit` pagination parameters to prevent performance degradation with large datasets:
+
+| Module | Endpoints Paginated |
+|--------|---------------------|
+| **Finance** | Fiscal years, budget categories, budgets, approval chains, purchase requests, expense reports, check requests, member dues |
+| **Grants** | Opportunities, applications, budget items, expenditures |
+| **Medical Screening** | Requirements, records |
+| **Member Leaves** | Leave of absence list (user-specific and org-wide) |
+| **Training Waivers** | Waiver list |
+| **Operational Ranks** | Ranks list |
+| **Training Sessions** | Calendar listing |
+
+---
+
 ## Navigation Improvements (2026-03-24)
 
 ### Hardcoded Back Navigation

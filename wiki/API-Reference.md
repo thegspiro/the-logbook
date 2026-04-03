@@ -137,6 +137,39 @@ GET    /api/v1/equipment-checks/reports/trends               # Item trend histor
 GET    /api/v1/equipment-checks/reports/export               # CSV/PDF export
 ```
 
+## Shift Completion Reports *(2026-03-28)*
+
+```
+POST   /api/v1/training/shift-reports                                  # Create shift completion report
+GET    /api/v1/training/shift-reports/my-reports                       # Trainee's approved reports
+GET    /api/v1/training/shift-reports/my-stats                         # Trainee's aggregate statistics
+GET    /api/v1/training/shift-reports/officer-analytics                # Org-wide officer analytics
+GET    /api/v1/training/shift-reports/by-officer                       # Reports filed by current officer
+GET    /api/v1/training/shift-reports/pending-review                   # Reports awaiting review
+GET    /api/v1/training/shift-reports/drafts                           # Auto-created drafts from finalization
+GET    /api/v1/training/shift-reports/all                              # All org reports (filtered, paginated)
+GET    /api/v1/training/shift-reports/trainee/{trainee_id}             # Reports for specific trainee
+GET    /api/v1/training/shift-reports/trainee/{trainee_id}/stats       # Stats for specific trainee
+GET    /api/v1/training/shift-reports/shift-preview/{shift_id}/{trainee_id}  # Auto-populate preview
+GET    /api/v1/training/shift-reports/{report_id}                      # Get specific report
+PUT    /api/v1/training/shift-reports/{report_id}                      # Update draft report
+POST   /api/v1/training/shift-reports/{report_id}/acknowledge          # Trainee acknowledges report
+POST   /api/v1/training/shift-reports/{report_id}/review               # Officer reviews (approve/flag/redact)
+```
+
+## Shift Finalization *(2026-03-28)*
+
+```
+POST   /api/v1/scheduling/shifts/{id}/finalize                         # Finalize shift (snapshot data, create draft reports)
+```
+
+## Election Results & Verification *(2026-03-29)*
+
+```
+POST   /api/v1/elections/{id}/send-report                              # Email election results to voters
+GET    /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification (rate-limited)
+```
+
 ## Department Messages *(2026-03-23)*
 
 ```

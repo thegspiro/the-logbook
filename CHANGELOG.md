@@ -7,6 +7,208 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Frontend Pattern Consolidation — Shared Hooks, Modals & Components (2026-03-30)
+
+- **useEmailListInput hook**: New shared hook at `hooks/useEmailListInput.ts` consolidates duplicate email list input logic (add/remove/validate) from ScheduleEmailForm, TemplateEditor, and SchedulingNotificationsPanel. Provides `validateEmailList()`, `parseEmailList()`, and stateful `useEmailListInput()` for managed email list inputs
+- **APIKeysTab modal consolidation**: Replaced 3 custom modal implementations in APIKeysTab with the shared Modal component, gaining focus trapping, consistent escape/backdrop handling, and reduced code (-92 lines net)
+- **PipelineTable shared SortableHeader**: Replaced local SortableHeader implementation in PipelineTable with shared `components/ux/SortableHeader` component. Removed unused ChevronUp/ChevronDown/ChevronsUpDown icon imports
+- **SchedulingNotificationsPanel simplification**: Replaced 4 separate ccInput state variables and 8 add/remove handler functions with 4 `useEmailListInput` hook calls, reducing ~50 lines of boilerplate
+
+**New Shared Modules:**
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/hooks/useEmailListInput.ts` | Reusable email list input hook with validation, add/remove, and state management |
+
+### Error Handling Standardization & Pagination (2026-03-30)
+
+- **safe_error_detail() coverage**: Replaced 7 raw error f-strings in `event_requests.py` with `safe_error_detail()` wrapper to prevent internal error detail leakage to clients
+- **Pagination added to operational_ranks**: `GET /api/v1/operational-ranks/ranks` now accepts PaginationParams with skip/limit
+- **Pagination added to training_sessions**: Calendar listing endpoint now accepts PaginationParams
+- **Pagination added to member_leaves**: `GET /api/v1/member-leaves` and `GET /api/v1/member-leaves/{user_id}` now accept PaginationParams with skip/limit filtering
+- **Pagination added to training_waivers**: `GET /api/v1/training-waivers` now accepts PaginationParams applied at the SQL level (offset/limit)
+- **Unused import cleanup**: Removed unused `EvocLevel` import in apparatus_service.py, `settings` import in scheduled_tasks.py
+
+### Audit Logging, Pagination & XSS Prevention (2026-03-29)
+
+- **HIPAA audit logging — medical screening**: Added `log_audit_event()` calls for medical screening requirement and record creation/update/delete operations with "medical" event category
+- **HIPAA audit logging — documents**: Added audit events for `document_uploaded` (filename, MIME type, file size) and `document_deleted` with appropriate severity levels
+- **HIPAA audit logging — membership pipeline**: Added audit events for pipeline created/deleted, prospect created/advanced/transferred including name and email in event metadata
+- **HIPAA audit logging — messages**: Added audit events for message creation and deletion
+- **Pagination — finance endpoints**: Added PaginationParams to 8 finance endpoints: `list_fiscal_years`, `list_budget_categories`, `list_budgets`, `list_approval_chains`, `list_purchase_requests`, `list_expense_reports`, `list_check_requests`, `list_member_dues`
+- **Pagination — grants endpoints**: Added PaginationParams to 4 grants endpoints: `list_opportunities`, `list_applications`, `list_budget_items`, `list_expenditures`
+- **Pagination — medical screening**: Added PaginationParams to `list_requirements` and `list_records`
+- **SimpleMarkdown component**: Replaced `dangerouslySetInnerHTML` in EventDetailPage with a new React-based SimpleMarkdown component (`utils/simpleMarkdown.ts`). Supports bold, italic, links, bullet lists, and newlines via token-based parsing. Safe URL validation allows only `http://`, `https://`, and `mailto:` schemes
+- **User model indexes**: Added composite index on `(organization_id, status, deleted_at)`, plus indexes on `created_at` and `last_login_at` for performance
+
+**New Frontend Components:**
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| `SimpleMarkdown` | `frontend/src/utils/simpleMarkdown.ts` | React-based safe markdown renderer replacing dangerouslySetInnerHTML |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| SimpleMarkdown with unsupported URL scheme (javascript:) | URL not rendered as link; displayed as plain text |
+| SimpleMarkdown with nested formatting (**bold *italic***) | Outer formatting applied; nesting handled gracefully |
+| Pagination with skip beyond total results | Returns empty array |
+| Audit event logging failure | Logged at ERROR level but does not block the primary operation |
+
+### Shift Report Analytics — Officer & Trainee Dashboards (2026-03-29)
+
+- **Officer analytics dashboard**: New `GET /api/v1/training/shift-reports/officer-analytics` endpoint returns org-wide analytics: total reports, hours, calls, average rating, per-trainee breakdown table, status counts (draft/pending/approved/flagged), and monthly trend data. Rendered as card metrics + data table in ShiftReportsTab
+- **Trainee stats dashboard**: New `GET /api/v1/training/shift-reports/my-stats` endpoint returns individual trainee statistics: total reports, hours, calls, average rating, and monthly breakdown. Displayed in a personal stats card in ShiftReportsTab
+- **ShiftReportsTab multi-view**: ShiftReportsTab expanded with 5 view modes: my-reports (trainee's received reports), filed-by-me (officer's filed reports), pending-review, drafts, and create. View mode selector rendered as tab buttons
+- **Officer filed reports**: New `GET /api/v1/training/shift-reports/by-officer` endpoint returns all reports filed by the current officer
+- **Per-trainee drill-down**: New `GET /api/v1/training/shift-reports/trainee/{trainee_id}` and `/trainee/{trainee_id}/stats` endpoints for officer access to individual trainee report history and statistics
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/training/shift-reports/officer-analytics` | Org-wide shift report analytics for officers |
+| `GET` | `/api/v1/training/shift-reports/my-stats` | Individual trainee shift report statistics |
+| `GET` | `/api/v1/training/shift-reports/by-officer` | Reports filed by current officer |
+| `GET` | `/api/v1/training/shift-reports/trainee/{trainee_id}` | Reports for specific trainee |
+| `GET` | `/api/v1/training/shift-reports/trainee/{trainee_id}/stats` | Stats for specific trainee |
+
+**New Frontend Types:**
+
+| Type | Location | Description |
+|------|----------|-------------|
+| `TraineeShiftStats` | `types/training.ts` | Total reports, hours, calls, avg_rating, monthly breakdown |
+| `MonthlyShiftData` | `types/training.ts` | Per-month aggregation: month, reports, hours, calls |
+| `OfficerShiftAnalytics` | `types/training.ts` | Org-wide totals + per-trainee table + status counts + monthly trend |
+| `OfficerAnalyticsTrainee` | `types/training.ts` | Per-trainee row: trainee_id, name, reports, hours, calls, avg_rating |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Officer with no filed reports | Analytics dashboard shows zeroed metrics with "No reports yet" message |
+| Trainee with no received reports | Stats card hidden; "No reports" empty state shown |
+| Monthly breakdown with gap months | Missing months not interpolated; chart shows only months with data |
+| Status counts with no drafts | Draft count shows 0; draft tab still accessible but empty |
+
+### Elections Module Fixes — N+1 Queries, Schema Gaps & Report Pipeline (2026-03-29)
+
+- **N+1 query fix — _sync_package_statuses()**: Batch-fetches candidate names in a single query instead of per-candidate lookups during package status synchronization
+- **N+1 query fix — get_eligibility_roster()**: Batch-computes voter hashes upfront with IN clause instead of per-user hash computation
+- **ForensicsResponse schema**: Replaced untyped `Dict[str, Any]` with properly typed nested models for `deleted_votes`, `voting_tokens`, `audit_log`, `anomaly_detection`, and `voting_timeline`
+- **bulkCastVotes response type**: Corrected from `{ success: boolean; votes_cast: number }` to `Vote[]` to match backend's `list[VoteResponse]` return type
+- **bulkCastVotes payload shape**: Fixed to `{ election_id, votes: [{position: candidate_id}] }` structure
+- **sendReport endpoint**: New `POST /api/v1/elections/{id}/send-report` endpoint sends formatted election results email to eligible voters
+- **verifyReceipt endpoint**: New `GET /api/v1/elections/{id}/verify-receipt` endpoint for public vote receipt verification with rate limiting
+- **PublishResultsPanel fix**: Connected to dedicated `/send-report` endpoint instead of misusing `sendBallotEmail`
+- **Frontend type additions**: New `ElectionReportResponse` and `VoteReceiptResponse` interfaces in `types/election.ts`
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/elections/{id}/send-report` | Email election results to eligible voters |
+| `GET` | `/api/v1/elections/{id}/verify-receipt` | Public vote receipt verification (rate-limited) |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| verify-receipt with invalid receipt code | Returns 404 with generic "receipt not found" (no timing oracle) |
+| send-report for open election | Blocked; only allowed for closed/certified elections |
+| Bulk cast with mismatched position IDs | Returns 422 with per-position validation errors |
+
+### Critical Bug Fixes — Security, Forms & Error Handling (2026-03-29)
+
+- **Analytics user_id spoofing fix (security)**: Changed analytics event endpoint from accepting `data.get("user_id")` to always using `current_user.id`, preventing privilege escalation where any authenticated user could log events as another user
+- **Analytics schema validation**: Replaced raw `dict` parameter with Pydantic `AnalyticsEventCreate` model with typed `event_type`, `event_id`, and `metadata` fields
+- **Form value coercion (~15 instances)**: Fixed `??` (nullish coalescing) → `||` (logical OR) on form string values across TemplatePreview, EmailTemplatesPage, ITTeamBackupAccess, NavigationChoice, ApplicantDetailDrawer, ProspectiveMembersPage, FormsPage, ReviewSubmissionsPage, and ShiftReportsTab to prevent 422 errors from empty string submission
+- **Meetings error handling**: Replaced 8 raw error f-strings in `meetings.py` with `safe_error_detail()` to prevent internal error detail leakage
+
+### Shift Completion Pipeline — End-to-End Enrichment (2026-03-28)
+
+- **Shift finalization workflow**: New `POST /api/v1/scheduling/shifts/{id}/finalize` endpoint. Validates shift has ended and equipment checks are complete, snapshots call_count and total_hours on the shift record, computes per-member call_count on ShiftAttendance records, sets `is_finalized=true` with `finalized_at` and `finalized_by`, and auto-creates draft ShiftCompletionReports for all attendees with active training program enrollments
+- **Finalized shift protection**: Finalized shifts cannot be edited or deleted. Shifts with associated completion reports cannot be deleted. API returns 400 with descriptive error messages
+- **Pre-finalization checklist (frontend)**: Modal validates end-of-shift equipment checks are complete before allowing finalization. Shows attendance count and call count summary. Disables finalize button if equipment checks incomplete
+- **Auto-populate trainee call data**: `GET /api/v1/training/shift-reports/shift-preview/{shift_id}/{trainee_id}` queries ShiftAttendance for duration and ShiftCall records for call count and call types. Returns `{hours_on_shift, calls_responded, call_types}` for pre-filling the report form
+- **Draft reports auto-created on finalization**: ShiftCompletionReports created with `review_status="draft"` during finalization do not trigger pipeline progress. Progress deferred until officer completes the draft and transitions to `approved` or `pending_review`
+- **Audit trail (data_sources)**: Each ShiftCompletionReport stores a `data_sources` JSON field tracking which fields were auto-populated from shift data vs manually entered (e.g., `{"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}`)
+- **Duplicate prevention**: Unique constraint on `(shift_id, trainee_id)` prevents duplicate reports. Attempting to create a second report returns a descriptive error
+- **Failure isolation**: Draft auto-creation logs per-trainee errors but continues processing remaining attendees
+- **Configurable call types, skills, and tasks**: ShiftCompletionReport now supports `skills_observed` (array of `{skill_name, demonstrated, notes, comment}`) and `tasks_performed` (array of `{task, description, comment}`) JSON fields for detailed performance tracking
+- **End-of-shift UX features**: Finalize button on ShiftDetailPanel for past unfinalised shifts. Auto-checkout of remaining attendees on finalization. Draft reports view in ShiftReportsTab for officers to complete auto-created drafts. Post-finalization notifications listing number of drafts created
+- **End-of-shift checklist reminders**: Enriched post-shift notifications include equipment check completion status and link to outstanding checklists
+- **Shift call_count and total_hours tracking**: New `call_count` (Integer) and `total_hours` (Float) columns on the `shifts` table snapshot aggregate values at finalization time
+- **Per-member call_count**: New `call_count` (Integer) column on `shift_attendance` table tracks each member's individual call participation count at finalization
+- **Call type matching for pipeline progress**: When updating requirement progress, call-type requirements match against the report's `call_types` array. Case-insensitive matching with breakdown tracking in `progress_notes`
+- **Report review workflow**: Officers can review reports via `POST /{report_id}/review` with `approved` or `flagged` status. Optional field redaction clears sensitive content before trainee visibility. Reviewer notes (EncryptedText) are never exposed to trainees
+- **Trainee acknowledgment**: Trainees acknowledge received reports via `POST /{report_id}/acknowledge` with optional comments. Timestamps recorded for compliance tracking
+- **Shift notification bug fixes**: Fixed apparatus type filter matching, deep-link URL construction, and notification metadata population for shift-related notifications
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/scheduling/shifts/{id}/finalize` | Finalize shift with data snapshots and draft report creation |
+| `GET` | `/api/v1/training/shift-reports/shift-preview/{shift_id}/{trainee_id}` | Auto-populated report data preview |
+| `POST` | `/api/v1/training/shift-reports` | Create shift completion report |
+| `PUT` | `/api/v1/training/shift-reports/{report_id}` | Update draft report |
+| `GET` | `/api/v1/training/shift-reports/my-reports` | Trainee's approved reports |
+| `GET` | `/api/v1/training/shift-reports/drafts` | Auto-created drafts awaiting officer completion |
+| `GET` | `/api/v1/training/shift-reports/pending-review` | Reports awaiting review |
+| `GET` | `/api/v1/training/shift-reports/all` | All org reports with filtering and pagination |
+| `GET` | `/api/v1/training/shift-reports/{report_id}` | Single report detail |
+| `POST` | `/api/v1/training/shift-reports/{report_id}/acknowledge` | Trainee acknowledges report |
+| `POST` | `/api/v1/training/shift-reports/{report_id}/review` | Officer reviews report (approve/flag/redact) |
+
+**Data Model Changes:**
+
+| Table/Field | Change | Description |
+|-------------|--------|-------------|
+| `shifts.call_count` | New column (Integer, nullable) | Aggregate call count snapshot at finalization |
+| `shifts.total_hours` | New column (Float, nullable) | Total attendance hours snapshot at finalization |
+| `shifts.is_finalized` | New column (Boolean, default=False) | Finalization state flag |
+| `shifts.finalized_at` | New column (DateTime, nullable) | Finalization timestamp |
+| `shifts.finalized_by` | New column (FK → users, nullable) | Officer who finalized |
+| `shift_attendance.call_count` | New column (Integer, nullable) | Per-member call participation count |
+| `shift_completion_reports` | New table | Full shift completion report with encrypted evaluation fields |
+| `shift_completion_reports.skills_observed` | JSON column | Array of `{skill_name, demonstrated, notes, comment}` |
+| `shift_completion_reports.tasks_performed` | JSON column | Array of `{task, description, comment}` |
+| `shift_completion_reports.data_sources` | JSON column | Audit trail tracking auto-populated vs manual fields |
+| `shift_completion_reports.review_status` | String column | `draft`, `pending_review`, `approved`, `flagged` |
+| `shift_completion_reports.redacted_fields` | JSON column | List of field names redacted by reviewer |
+
+**New Frontend Types:**
+
+| Type | Location | Description |
+|------|----------|-------------|
+| `ShiftCompletionReport` | `types/training.ts` | Full report with evaluation, review, and acknowledgment fields |
+| `ShiftCompletionReportCreate` | `types/training.ts` | Report creation payload |
+| `SkillObservation` | `types/training.ts` | `{skill_name, demonstrated, notes, comment}` |
+| `TaskPerformed` | `types/training.ts` | `{task, description, comment}` |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Finalize shift with incomplete end-of-shift equipment checks | Blocked with "Complete equipment checks before finalizing" error |
+| Finalize shift that hasn't ended yet | Blocked with "Shift must have ended before finalization" error |
+| Finalize already-finalized shift | Returns 400 "Shift is already finalized" |
+| Delete finalized shift | Returns 400 "Cannot delete a finalized shift" |
+| Delete shift with completion reports | Returns 400 "Cannot delete a shift with completion reports" |
+| Duplicate report for same shift + trainee | Unique constraint error: "A report already exists for this trainee on this shift" |
+| Draft report auto-creation fails for one trainee | Error logged; remaining trainees still get draft reports |
+| Draft → approved transition | Triggers deferred pipeline progress update |
+| Report review with field redaction | Specified fields cleared (set to null) before approval |
+| Trainee views report with reviewer_notes | reviewer_notes field never exposed to trainee |
+| Call type requirement with specific types | Case-insensitive match: "Medical" matches "medical" call type |
+| Auto-populate preview for trainee not on shift | Returns zeroed data with informational message |
+| Shift with no ShiftCall records | calls_responded defaults to 0; call_types empty array |
+| Report filed without shift_id | Saved as ad hoc report; no auto-population available |
+| Visibility config hides performance_rating | Rating field hidden in trainee's my-reports view |
+| Report review_required=true in org config | Reports created with `pending_review` status instead of `approved` |
+
 ### Notification Cards — Expandable UI, Pinned Sort, Deep-Linking & Metadata (2026-03-26)
 
 - **Expandable notification cards**: NotificationCard component redesigned with expand/collapse behavior. Cards show a summary preview when collapsed and full details when expanded. Smooth CSS transitions on expand

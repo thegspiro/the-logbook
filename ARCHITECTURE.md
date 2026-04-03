@@ -1,6 +1,6 @@
 # The Logbook — Complete Architecture Reference
 
-> **Generated:** 2026-03-23
+> **Generated:** 2026-03-31
 > **Purpose:** Master reference for all connection points, data models, API routes, frontend pages, services, stores, data paths, and data sharing across the application.
 
 ---
@@ -34,7 +34,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Browser / PWA                             │
-│  React 18 + TypeScript + Vite + Tailwind + Zustand + React Router│
+│  React 19 + TypeScript + Vite + Tailwind + Zustand + React Router│
 └──────────────────────────┬──────────────────────────────────────┘
                            │ httpOnly cookies (auth)
                            │ CSRF double-submit
@@ -118,7 +118,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/training/external` | `external_training.py` | external-training | 15 |
 | `/api/v1/training/module-config` | `training_module_config.py` | training-module-config | 4 |
 | `/api/v1/training/skills-testing` | `skills_testing.py` | skills-testing | 16 |
-| `/api/v1/training/shift-reports` | `shift_completion.py` | shift-completion | 11 |
+| `/api/v1/training/shift-reports` | `shift_completion.py` | shift-completion | 16 |
 | `/api/v1/training/recertification` | `training_enhancements.py` | training-recertification | 5 |
 | `/api/v1/training/instructors` | `training_enhancements.py` | training-instructors | 5 |
 | `/api/v1/training/effectiveness` | `training_enhancements.py` | training-effectiveness | 3 |
@@ -127,7 +127,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/training/competency` | `training_enhancements.py` | training-competency | 5 |
 | `/api/v1/training/reports` | `training_enhancements.py` | training-reports | 2 |
 | `/api/v1/compliance` | `training_enhancements.py` | compliance-officer | 7 |
-| `/api/v1/elections` | `elections.py` | elections | ~34 |
+| `/api/v1/elections` | `elections.py` | elections | ~36 |
 | `/api/v1/inventory` | `inventory.py` | inventory | ~52 + 1 WS |
 | `/api/v1/forms` | `forms.py` | forms | 21 |
 | `/api/v1/email-templates` | `email_templates.py` | email-templates | 10 |
@@ -135,7 +135,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/documents` | `documents.py` | documents | 11 |
 | `/api/v1/meetings` | `meetings.py` | meetings | 17 |
 | `/api/v1/minutes-records` | `minutes.py` | minutes | 25 |
-| `/api/v1/scheduling` | `scheduling.py` | scheduling | ~45 |
+| `/api/v1/scheduling` | `scheduling.py` | scheduling | ~46 |
 | `/api/v1/reports` | `reports.py` | reports | 7 |
 | `/api/v1/notifications` | `notifications.py` | notifications | 12 |
 | `/api/v1/messages` | `messages.py` | messages | 11 |
@@ -149,7 +149,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/operational-ranks` | `operational_ranks.py` | operational-ranks | 7 |
 | `/api/v1/onboarding` | `onboarding.py` | onboarding | 25 |
 | `/api/v1/public-portal` | `public_portal_admin.py` | public-portal-admin | 13 |
-| **Total** | | | **~825+** |
+| **Total** | | | **~835+** |
 
 ### Key Cross-Module API Endpoints
 
@@ -175,6 +175,11 @@ These endpoints bridge data across modules:
 | `/users/{user_id}/property-return-report` | GET | Property return preview | Users + Inventory |
 | `/equipment-checks/shifts/{shift_id}/checklists` | GET | Applicable checklists for shift | Equipment Checks + Scheduling + Apparatus |
 | `/equipment-checks/reports/compliance` | GET | Apparatus compliance stats | Equipment Checks + Apparatus |
+| `/scheduling/shifts/{id}/finalize` | POST | Finalize shift, snapshot data, auto-create draft reports | Scheduling + Training + Equipment Checks |
+| `/training/shift-reports/shift-preview/{shift_id}/{trainee_id}` | GET | Auto-populate report from shift data | Training + Scheduling |
+| `/training/shift-reports/officer-analytics` | GET | Org-wide shift report analytics | Training + Users |
+| `/elections/{id}/send-report` | POST | Email election results to voters | Elections + Email |
+| `/elections/{id}/verify-receipt` | GET | Public vote receipt verification | Elections (public, rate-limited) |
 
 ---
 
@@ -187,7 +192,7 @@ These endpoints bridge data across modules:
 | `user.py` | Organization, User, Role, Session, MemberLeaveOfAbsence | organizations, users, roles, sessions, user_roles, member_leaves_of_absence |
 | `event.py` | Event, EventRSVP, EventExternalAttendee | events, event_attendees, event_external_attendees |
 | `event_request.py` | EventRequest, EventRequestActivity, EventRequestEmailTemplate | event_requests, event_request_activities, event_request_email_templates |
-| `training.py` | TrainingCategory, TrainingCourse, TrainingRecord, TrainingRequirement, TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport, Shift, ShiftAttendance, ShiftCall | training_categories, training_courses, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls |
+| `training.py` | TrainingCategory, TrainingCourse, TrainingRecord, TrainingRequirement, TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport, Shift, ShiftAttendance, ShiftCall, ShiftCompletionReport | training_categories, training_courses, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls, shift_completion_reports |
 | `skills_testing.py` | SkillTemplate, SkillTest | skill_templates, skill_tests |
 | `election.py` | Election, Candidate, Vote, VotingToken | elections, candidates, ballots, voting_tokens |
 | `inventory.py` | InventoryCategory, InventoryItem, ItemAssignment, CheckOutRecord, MaintenanceRecord, StorageArea | inventory_categories, inventory_items, item_assignments, inventory_checkouts, maintenance_records, storage_areas |
@@ -240,7 +245,8 @@ Organization ─┬─< User ─┬─< EventRSVP
               ├─< TrainingRequirement
               │
               ├─< Shift ─┬─< ShiftAttendance
-              │           └─< ShiftCall
+              │           ├─< ShiftCall
+              │           └─< ShiftCompletionReport ─< User (trainee + officer)
               │
               ├─< Election ─┬─< Candidate
               │              ├─< Vote
@@ -314,7 +320,7 @@ Organization ─┬─< User ─┬─< EventRSVP
 | `notification.py` | NotificationChannel | in_app, email, sms, push |
 | `membership_pipeline.py` | ProspectStatus | active, accepted, rejected, withdrawn, on_hold, expired |
 | `membership_pipeline.py` | PipelineStepType | application, document_upload, background_check, interview, training, election_vote, committee_review, orientation, custom |
-| `apparatus.py` | CheckType | pass_fail, present, functional, quantity, level, date_lot, reading |
+| `apparatus.py` | CheckType | pass_fail, present, functional, quantity, level, date_lot, reading, text |
 | `apparatus.py` | TemplateType | equipment, vehicle, combined |
 | `apparatus.py` | CheckTiming | start_of_shift, end_of_shift |
 | `admin_hours.py` | AdminHoursEntryStatus | pending, approved, rejected |
@@ -351,9 +357,9 @@ All services in `backend/app/services/`:
 | `training_compliance.py` | TrainingComplianceService | TrainingRecord, TrainingRequirement | get_compliance_matrix, get_expiring_certs |
 | `training_module_config_service.py` | TrainingModuleConfigService | — | get_config, update_config, get_visibility |
 | `external_training_service.py` | ExternalTrainingService | ExternalTrainingProvider, ExternalTrainingSyncLog | create_provider, test_connection, trigger_sync, import_records |
-| `shift_completion_service.py` | ShiftCompletionService | ShiftCompletionReport | create_report, review_report, get_reports |
+| `shift_completion_service.py` | ShiftCompletionService | ShiftCompletionReport | create_report, update_report, review_report, acknowledge_report, get_reports_for_trainee, get_reports_by_officer, get_all_reports, get_reports_by_status, get_trainee_stats, get_officer_analytics |
 | `skills_testing_service.py` | SkillsTestingService | SkillTemplate, SkillTest | create_template, publish_template, create_test, complete_test, calculate_score |
-| `scheduling_service.py` | SchedulingService | Shift, ShiftAttendance, ShiftCall, ShiftTemplate, ShiftPattern, ShiftAssignment, ShiftSwapRequest, ShiftTimeOff | create_shift, manage_attendance, create_template, create_pattern, generate_shifts, manage_assignments, manage_swap_requests, manage_time_off, get_reports |
+| `scheduling_service.py` | SchedulingService | Shift, ShiftAttendance, ShiftCall, ShiftTemplate, ShiftPattern, ShiftAssignment, ShiftSwapRequest, ShiftTimeOff | create_shift, manage_attendance, create_template, create_pattern, generate_shifts, manage_assignments, manage_swap_requests, manage_time_off, get_reports, finalize_shift |
 | `election_service.py` | ElectionService | Election, Candidate, Vote, VotingToken | create_election, open_election, close_election, cast_vote, get_results, verify_integrity, manage_proxy_voting |
 | `inventory_service.py` | InventoryService | InventoryItem, InventoryCategory, ItemAssignment, CheckOutRecord | create_item, assign_item, checkout, checkin, get_summary, import_csv, generate_labels |
 | `apparatus_service.py` | ApparatusService | Apparatus, ApparatusType, ApparatusStatus, ApparatusMaintenance | create_apparatus, manage_types, manage_statuses, manage_maintenance, manage_fuel_logs, manage_operators, manage_equipment |
@@ -765,10 +771,10 @@ Creates axios instances with:
 | `member.ts` | Member, MemberStatus, MemberLeave, MembershipTier |
 | `role.ts` | Role, Permission, PermissionCategory |
 | `event.ts` | Event, EventRSVP, EventTemplate, EventSettings, ExternalAttendee |
-| `training.ts` | TrainingRecord, TrainingCourse, TrainingRequirement, TrainingSession, TrainingProgram, ProgramPhase, ProgramEnrollment, RecertificationPathway, CompetencyMatrix, InstructorQualification, TrainingEffectivenessEvaluation, MultiAgencyTraining, XAPIStatement, ComplianceForecast, ISOReadiness, ComplianceAttestation, AnnualComplianceReport |
+| `training.ts` | TrainingRecord, TrainingCourse, TrainingRequirement, TrainingSession, TrainingProgram, ProgramPhase, ProgramEnrollment, RecertificationPathway, CompetencyMatrix, InstructorQualification, TrainingEffectivenessEvaluation, MultiAgencyTraining, XAPIStatement, ComplianceForecast, ISOReadiness, ComplianceAttestation, AnnualComplianceReport, ShiftCompletionReport, ShiftCompletionReportCreate, TraineeShiftStats, MonthlyShiftData, OfficerShiftAnalytics, OfficerAnalyticsTrainee, SkillObservation, TaskPerformed |
 | `scanner.ts` | MemberIdPayload, isMemberIdPayload |
 | `scheduling.ts` | Shift, ShiftTemplate, ShiftPattern, ShiftAssignment, SwapRequest, TimeOff |
-| `election.ts` | Election, Candidate, Vote, ElectionResults, BallotItem |
+| `election.ts` | Election, Candidate, Vote, ElectionResults, BallotItem, ElectionReportResponse, VoteReceiptResponse |
 | `document.ts` | Document, DocumentFolder |
 | `minutes.ts` | MeetingMinutes, Motion, ActionItem, MinutesTemplate |
 | `skillsTesting.ts` | SkillTemplate, SkillTest, SkillItem, TestResult |
@@ -893,6 +899,9 @@ HIPAA exclusions (UNCACHEABLE_PREFIXES):
 | Events | Analytics | Event stats | `GET /events/{id}/analytics` |
 | Training | Users | Compliance per member | `GET /training/compliance-summary/{user_id}` |
 | Training | Scheduling | Shift completion reports | `POST /training/shift-reports` |
+| Scheduling | Training | Shift finalization → draft report creation | `POST /scheduling/shifts/{id}/finalize` auto-creates draft ShiftCompletionReports |
+| Training | Scheduling | Auto-populate report from shift data | `GET /training/shift-reports/shift-preview/{shift_id}/{trainee_id}` |
+| Elections | Events | Import event attendees as ballot recipients | Election detail → select linked event → import checked-in attendees |
 | Training | Training (Multi-Agency) | Joint training sessions across orgs | `POST /training/multi-agency` |
 | Training | External LRS | xAPI statement delivery | `POST /training/xapi/statements` |
 | Training | Compliance | ISO readiness, attestations, annual reports | `GET /compliance/iso-readiness`, `POST /compliance/attestations` |
@@ -963,6 +972,9 @@ Location (universal "place picker")
 | Pipeline advancement | Prospective Members | in_app |
 | Admin hours pending | Admin Hours | in_app |
 | Equipment check failure | Scheduling/Equipment Check | in_app, email |
+| Shift finalized — draft reports created | Scheduling/Training | in_app |
+| Shift report reviewed | Training | in_app |
+| End-of-shift checklist reminder | Scheduling | in_app |
 | Department message (persistent) | Notifications | in_app (stays until admin clears) |
 | Department message (normal) | Notifications | in_app (dismissible by member) |
 
@@ -1183,6 +1195,11 @@ All permissions follow dot notation: `resource.action`
 | `utils/errorHandling.ts` | `toAppError()`, `getErrorMessage()` |
 | `utils/dateFormatting.ts` | Timezone-aware date/time formatting |
 | `utils/lazyWithRetry.ts` | Retry-capable `React.lazy()` for chunk loading |
+| `utils/simpleMarkdown.ts` | React-based safe markdown renderer (bold, italic, links, lists) — replaces dangerouslySetInnerHTML |
+| `utils/colorContrast.ts` | WCAG AA contrast ratio calculation, accessible text color generation |
+| `hooks/useEmailListInput.ts` | Shared email list input hook with validation, add/remove, and state management |
+| `hooks/useHtml5Scanner.ts` | Reusable HTML5 QR/barcode scanner hook with camera fallback logic |
+| `hooks/useNotificationPoller.ts` | Smart notification polling with Page Visibility API pause/resume |
 | `constants/config.ts` | `API_TIMEOUT_MS`, `DEFAULT_PAGE_SIZE`, etc. |
 | `constants/enums.ts` | All `as const` enum objects + status badge colors |
 | `contexts/ThemeContext.tsx` | Dark mode / high-contrast theme management |
@@ -1216,6 +1233,8 @@ The `WebSocketManager` (`core/websocket_manager.py`) manages connections per org
 | `close_stale_sessions` | Hourly | Auto-closes admin hours sessions that have been open too long |
 | `advance_membership_tiers` | Weekly | Checks and advances member tier progression |
 | `purge_inactive_prospects` | Weekly | Archives inactive prospective members past timeout |
+| `send_shift_reminders` | Every 30 min | Sends start-of-shift reminders within configurable lookahead window (default 2 hours). Includes equipment checklist info |
+| `cleanup_old_notifications` | Daily | Purges read notifications older than configurable retention period |
 
 ### Admin API for Tasks
 

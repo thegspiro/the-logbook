@@ -1208,6 +1208,52 @@ The election detail page's Upcoming Meetings list now includes quick-action butt
 | Minutes with no linked election | Election section not displayed |
 | Importing from event with 100+ attendees | All attendees processed; progress indicator shown |
 
+## Elections — Performance Fixes & Result Verification *(2026-03-29)*
+
+### N+1 Query Fixes
+
+Two backend performance issues were resolved:
+
+- **`_sync_package_statuses()`**: Previously queried candidate names individually per candidate during ballot package synchronization. Now batch-fetches all candidate names in a single query.
+- **`get_eligibility_roster()`**: Previously computed voter hashes per user individually. Now batch-computes all voter hashes upfront using an IN clause.
+
+These fixes improve response times for elections with large voter pools (100+ members).
+
+### Typed Forensics Schema
+
+The election forensics endpoint response (`ForensicsResponse`) was using untyped `Dict[str, Any]` for several nested fields. These are now properly typed with dedicated models for `deleted_votes`, `voting_tokens`, `audit_log`, `anomaly_detection`, and `voting_timeline`, improving API documentation and client-side type safety.
+
+### Vote Receipt Verification
+
+A new public endpoint allows voters to verify their vote receipt:
+
+```
+GET /api/v1/elections/{id}/verify-receipt?receipt=<receipt_code>
+```
+
+This endpoint is **rate-limited** to prevent brute-force attacks. It returns verification status without revealing vote content.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the vote receipt verification page showing the receipt input field, verify button, and a success/failure status message._
+
+### Send Report Endpoint
+
+A dedicated endpoint for emailing election results to eligible voters:
+
+```
+POST /api/v1/elections/{id}/send-report
+```
+
+This replaces the previous workaround of reusing the `sendBallotEmail` endpoint for result distribution. Only available for closed/certified elections.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| verify-receipt with invalid receipt code | Returns 404 with generic "receipt not found" (no timing oracle to prevent enumeration) |
+| send-report for open election | Blocked — only allowed for closed or certified elections |
+| Bulk cast with mismatched position IDs | Returns 422 with per-position validation errors |
+| Large election (500+ voters) in eligibility roster | Batch query resolves in single round-trip instead of N+1 |
+
 ---
 
 **Previous:** [Shifts & Scheduling](./03-scheduling.md) | **Next:** [Inventory Management](./05-inventory.md)

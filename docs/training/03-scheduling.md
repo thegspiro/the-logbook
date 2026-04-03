@@ -632,6 +632,50 @@ Reports can be exported as **CSV** or **PDF**.
 | Template cloning | Deep clones compartments and items to another apparatus |
 | Serial/lot number update | Submitting new serial/lot updates the template item for future reference |
 
+### Shift Finalization *(2026-03-28)*
+
+After a shift ends, officers finalize the shift to lock in data and trigger training pipeline integration.
+
+#### How to Finalize a Shift
+
+1. Open the **Shift Detail Panel** for a past, un-finalized shift
+2. Click **"Finalize Shift"** — a pre-finalization checklist modal appears
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the pre-finalization checklist modal showing the equipment check validation status (green checkmark or red X), attendance count, call count, and the Finalize button at the bottom._
+
+3. The checklist validates:
+   - **End-of-shift equipment checks** must be completed (blocks finalization if incomplete)
+   - Attendance summary and call count shown for reference
+4. Click **Finalize** to confirm
+
+#### What Happens on Finalization
+
+| Action | Description |
+|--------|-------------|
+| **Data snapshots** | `call_count` and `total_hours` frozen on the shift record |
+| **Per-member call counts** | Each member's individual call participation count computed from ShiftCall records and stored on their ShiftAttendance record |
+| **Shift locked** | `is_finalized=true`, `finalized_at` timestamp, `finalized_by` officer ID set |
+| **Draft reports created** | ShiftCompletionReport drafts auto-created for all attendees with active training program enrollments |
+| **Notification sent** | Officer receives notification with count of drafts created |
+
+After finalization, a green badge shows "Shift finalized on [date]".
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the ShiftDetailPanel after finalization showing the green "Finalized" badge with timestamp and the locked state (no edit buttons)._
+
+#### Shift Finalization Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| End-of-shift equipment checks incomplete | Finalization blocked; Finalize button disabled with tooltip explaining why |
+| Start-of-shift checks incomplete | Does not block finalization |
+| Shift has not ended yet | Finalize button not shown for future/in-progress shifts |
+| Already finalized shift | Finalize button replaced with finalized badge |
+| Editing a finalized shift | Blocked — edit controls hidden after finalization |
+| Deleting a finalized shift | Blocked — returns "Cannot delete a finalized shift" error |
+| Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error |
+| Draft creation fails for one trainee | Error logged; remaining trainees still get draft reports |
+| Attendee with no active enrollment | No draft created for that attendee |
+
 ### Structured Position Slots & Decline Handling
 
 Shifts now define required and optional position slots. When a member declines or is removed from a shift:
