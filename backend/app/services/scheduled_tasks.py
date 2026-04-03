@@ -1149,8 +1149,23 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         category="shift_validation",
                         subject=subject,
                         message=message,
-                        action_url=f"/scheduling?shift={shift.id}",
-                        metadata={"shift_id": str(shift.id)},
+                        action_url=(
+                            f"/scheduling?shift={shift.id}"
+                            f"&tab=equipment-checks"
+                        ),
+                        metadata={
+                            "shift_id": str(shift.id),
+                            "shift_start_time": (
+                                shift.start_time.isoformat()
+                                if shift.start_time
+                                else None
+                            ),
+                            "shift_end_time": (
+                                shift.end_time.isoformat()
+                                if shift.end_time
+                                else None
+                            ),
+                        },
                         delivered=True,
                     )
                     db.add(in_app_log)
@@ -1166,7 +1181,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 wants_email = prefs.get("email_notifications", True)
                 if wants_email and officer.email:
                     try:
-                        full_url = f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
+                        full_url = f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}&tab=equipment-checks"
                         e_first = _html.escape(officer.first_name or "")
                         e_shift_date = _html.escape(shift_date_str)
                         _logo = build_email_logo_html(org)
@@ -1860,10 +1875,21 @@ async def run_end_of_shift_checklist_reminders(
 
                 shift_action_url = (
                     f"/scheduling?shift={shift.id}"
+                    f"&tab=equipment-checks"
                 )
                 shift_metadata = {
                     "shift_id": str(shift.id),
                     "reminder_type": "end_of_shift_checklist",
+                    "shift_start_time": (
+                        shift.start_time.isoformat()
+                        if shift.start_time
+                        else None
+                    ),
+                    "shift_end_time": (
+                        shift.end_time.isoformat()
+                        if shift.end_time
+                        else None
+                    ),
                 }
 
                 for mid in member_ids:

@@ -71,17 +71,27 @@ interface CtaAction {
 }
 
 function isChecklistWindowActive(metadata: Record<string, unknown> | undefined): boolean {
-  const startTime = metadata?.shift_start_time;
-  if (typeof startTime !== 'string') return false;
-
-  const shiftStart = new Date(startTime).getTime();
-  if (Number.isNaN(shiftStart)) return false;
-
   const now = Date.now();
   const hours24 = 24 * 60 * 60 * 1000;
   const hours2 = 2 * 60 * 60 * 1000;
 
-  return now >= shiftStart - hours24 && now <= shiftStart + hours2;
+  const endTime = metadata?.shift_end_time;
+  if (typeof endTime === 'string') {
+    const shiftEnd = new Date(endTime).getTime();
+    if (!Number.isNaN(shiftEnd) && now >= shiftEnd - hours2 && now <= shiftEnd + hours2) {
+      return true;
+    }
+  }
+
+  const startTime = metadata?.shift_start_time;
+  if (typeof startTime === 'string') {
+    const shiftStart = new Date(startTime).getTime();
+    if (!Number.isNaN(shiftStart) && now >= shiftStart - hours24 && now <= shiftStart + hours2) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
@@ -94,6 +104,23 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
 
   // Shift reminder — offer "View Shift" and conditionally "Start Checklist"
   if (category === 'shift_reminder') {
+    actions.push({
+      label: 'View Shift',
+      icon: <ExternalLink className="w-3.5 h-3.5" />,
+      url: actionUrl,
+    });
+    if (isChecklistWindowActive(metadata)) {
+      actions.push({
+        label: 'Start Checklist',
+        icon: <ClipboardCheck className="w-3.5 h-3.5" />,
+        url: '/scheduling?tab=equipment-checks',
+      });
+    }
+    return actions;
+  }
+
+  // Post-shift validation — offer "View Shift" and "Start Checklist"
+  if (category === 'shift_validation') {
     actions.push({
       label: 'View Shift',
       icon: <ExternalLink className="w-3.5 h-3.5" />,
