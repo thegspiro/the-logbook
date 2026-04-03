@@ -176,3 +176,4 @@ Desktop.ini
 # Custom
 /data/
 /secrets/
+.claude/

@@ -4,24 +4,7 @@
  * Modal for configuring a pipeline stage's type and requirements.
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-  arrayMove,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   FileText,
@@ -35,17 +18,14 @@ import {
   CalendarCheck,
   Globe,
   Loader2,
-  AlertCircle,
   Mail,
   UserCheck,
   ClipboardList,
   MessageSquare,
   Users,
   Stethoscope,
-  GripVertical,
-  Eye,
 } from 'lucide-react';
-import { StageType as StageTypeConst, VotingMethod, VictoryCondition } from '../../../constants/enums';
+import { StageType as StageTypeConst, VotingMethod } from '../../../constants/enums';
 import type {
   PipelineStage,
   PipelineStageCreate,
@@ -53,13 +33,10 @@ import type {
   FormStageConfig,
   DocumentStageConfig,
   ElectionStageConfig,
-  ElectionPackageFieldConfig,
   ManualApprovalConfig,
-  MeetingStageConfig,
   MeetingType,
   StatusPageToggleConfig,
   AutomatedEmailStageConfig,
-  AutomatedEmailSection,
   ReferenceCheckConfig,
   ChecklistConfig,
   ChecklistItemConfig,
@@ -68,7 +45,7 @@ import type {
   MedicalScreeningStageConfig,
   StageConfig,
 } from '../types';
-import { DEFAULT_ELECTION_PACKAGE_FIELDS, EMAIL_BUILTIN_SECTION_IDS, DEFAULT_EMAIL_SECTION_ORDER } from '../types';
+import { DEFAULT_EMAIL_SECTION_ORDER } from '../types';
 import { formsService } from '@/services/formsServices';
 import type { FormDef } from '@/services/inventoryService';
 import { pipelineService } from '../services/api';
@@ -78,6 +55,11 @@ import type { EventListItem } from '@/types/event';
 import { getEventTypeLabel } from '@/utils/eventHelpers';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import FormSubmissionConfig from './stage-config/FormSubmissionConfig';
+import ElectionVoteConfig from './stage-config/ElectionVoteConfig';
+import MeetingConfig from './stage-config/MeetingConfig';
+import AutomatedEmailConfig from './stage-config/AutomatedEmailConfig';
+import ReferenceCheckStageConfig from './stage-config/ReferenceCheckConfig';
 
 interface StageConfigModalProps {
   isOpen: boolean;
@@ -304,31 +286,6 @@ const STAGE_PRESETS: StagePreset[] = [
   },
 ];
 
-const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
-  {
-    value: 'chief_meeting',
-    label: 'Meeting with Chief',
-    description: 'One-on-one or small group meeting with the chief.',
-  },
-  {
-    value: 'president_meeting',
-    label: 'Meeting with President',
-    description: 'One-on-one meeting with the department president.',
-  },
-  { value: 'informational', label: 'Informational Meeting', description: 'General info session about the department.' },
-  { value: 'business_meeting', label: 'Business Meeting', description: 'Attend a regular business meeting.' },
-  { value: 'other', label: 'Other', description: 'Custom meeting type.' },
-];
-
-const EVENT_TYPE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'business_meeting', label: 'Business Meeting' },
-  { value: 'training', label: 'Training' },
-  { value: 'public_education', label: 'Public Education' },
-  { value: 'social', label: 'Social' },
-  { value: 'fundraiser', label: 'Fundraiser' },
-  { value: 'ceremony', label: 'Ceremony' },
-  { value: 'other', label: 'Other' },
-];
 
 const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   form_submission: () => ({ form_id: '', form_name: '' }),
@@ -378,141 +335,6 @@ const DEFAULT_CONFIGS: Record<StageType, () => StageConfig> = {
   }),
 };
 
-// ── Email Preview Component ────────────────────────────────────
-interface EmailPreviewProps {
-  config: AutomatedEmailStageConfig;
-  sectionOrder: string[];
-}
-
-const EmailPreview: React.FC<EmailPreviewProps> = ({ config, sectionOrder }) => {
-  const enabledSections = sectionOrder.filter((sid) => {
-    if (sid === EMAIL_BUILTIN_SECTION_IDS.WELCOME) return config.include_welcome;
-    if (sid === EMAIL_BUILTIN_SECTION_IDS.FAQ_LINK) return config.include_faq_link;
-    if (sid === EMAIL_BUILTIN_SECTION_IDS.NEXT_MEETING) return config.include_next_meeting;
-    if (sid === EMAIL_BUILTIN_SECTION_IDS.STATUS_TRACKER) return config.include_status_tracker;
-    const custom = (config.custom_sections ?? []).find((s) => s.id === sid);
-    return custom?.enabled && (custom.title || custom.content);
-  });
-
-  return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white text-left text-sm shadow-sm" style={{ maxWidth: 480 }}>
-      {/* Header */}
-      <div className="bg-red-600 px-5 py-4 text-center">
-        <span className="text-lg font-bold text-white">Organization Name</span>
-      </div>
-      {/* Content */}
-      <div className="space-y-4 bg-gray-50 p-5 text-gray-700" style={{ lineHeight: 1.6 }}>
-        <p className="m-0">Hi Prospect,</p>
-        {enabledSections.length === 0 && (
-          <p className="m-0 italic text-gray-400">Your membership application has been updated.</p>
-        )}
-        {enabledSections.map((sid) => {
-          if (sid === EMAIL_BUILTIN_SECTION_IDS.WELCOME) {
-            return (
-              <p key={sid} className="m-0">
-                {config.welcome_message || <span className="italic text-gray-400">Welcome message...</span>}
-              </p>
-            );
-          }
-          if (sid === EMAIL_BUILTIN_SECTION_IDS.FAQ_LINK) {
-            return (
-              <span
-                key={sid}
-                className="my-3 inline-block rounded-md bg-blue-600 px-5 py-2.5 text-sm text-white no-underline"
-              >
-                View Membership FAQ
-              </span>
-            );
-          }
-          if (sid === EMAIL_BUILTIN_SECTION_IDS.NEXT_MEETING) {
-            return (
-              <div key={sid} className="rounded-md border border-gray-200 bg-white p-4">
-                <strong>Next Meeting</strong>
-                <br />
-                {config.next_meeting_event_type ? (
-                  <span className="text-gray-500">Event details will be fetched automatically</span>
-                ) : config.next_meeting_details ? (
-                  <span>{config.next_meeting_details}</span>
-                ) : (
-                  <span className="italic text-gray-400">Meeting details...</span>
-                )}
-              </div>
-            );
-          }
-          if (sid === EMAIL_BUILTIN_SECTION_IDS.STATUS_TRACKER) {
-            return (
-              <span
-                key={sid}
-                className="my-3 inline-block rounded-md bg-blue-600 px-5 py-2.5 text-sm text-white no-underline"
-              >
-                Track Your Application
-              </span>
-            );
-          }
-          // Custom section
-          const custom = (config.custom_sections ?? []).find((s) => s.id === sid);
-          if (!custom) return null;
-          return (
-            <div key={sid} className="rounded-md border border-gray-200 bg-white p-4">
-              {custom.title && (
-                <>
-                  <strong>{custom.title}</strong>
-                  <br />
-                </>
-              )}
-              {custom.content || <span className="italic text-gray-400">Section content...</span>}
-            </div>
-          );
-        })}
-      </div>
-      {/* Footer */}
-      <div className="px-5 py-3 text-center text-xs text-gray-400">
-        This email was sent by Organization Name.
-      </div>
-    </div>
-  );
-};
-
-// ── Sortable email section wrapper ─────────────────────────────
-interface SortableEmailSectionProps {
-  id: string;
-  children: React.ReactNode;
-}
-
-const SortableEmailSection: React.FC<SortableEmailSectionProps> = ({ id, children }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 10 : undefined,
-  };
-
-  return (
-    <div ref={setNodeRef} style={style} className="group/section relative">
-      <button
-        type="button"
-        className="text-theme-text-muted absolute top-4 -left-1 shrink-0 cursor-grab opacity-0 transition-opacity group-hover/section:opacity-100 active:cursor-grabbing touch-none"
-        aria-label="Drag to reorder section"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <div className="pl-5">
-        {children}
-      </div>
-    </div>
-  );
-};
 
 export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   isOpen,
@@ -541,114 +363,6 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [customCategories, setCustomCategories] = useState<string[]>([]);
-  const customSectionsEndRef = useRef<HTMLDivElement>(null);
-
-  /** Generate a unique ID for custom sections (works in non-secure contexts too). */
-  const generateSectionId = useCallback(
-    () =>
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `cs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`,
-    [],
-  );
-
-  /** Add a new custom section and scroll it into view. */
-  const handleAddCustomSection = useCallback(() => {
-    const newSection: AutomatedEmailSection = {
-      id: generateSectionId(),
-      title: '',
-      content: '',
-      enabled: true,
-    };
-    setConfig((prev) => {
-      const email = prev as AutomatedEmailStageConfig;
-      return {
-        ...email,
-        custom_sections: [...(email.custom_sections ?? []), newSection],
-        section_order: [...(email.section_order ?? DEFAULT_EMAIL_SECTION_ORDER), newSection.id],
-      };
-    });
-    // Scroll the new section into view after the next render
-    requestAnimationFrame(() => {
-      customSectionsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-  }, [generateSectionId]);
-
-  /** Remove a custom section by index. */
-  const handleRemoveCustomSection = useCallback((removeIdx: number) => {
-    setConfig((prev) => {
-      const email = prev as AutomatedEmailStageConfig;
-      const sections = email.custom_sections ?? [];
-      const removedSection = sections[removeIdx];
-      const removedId = removedSection?.id;
-      return {
-        ...email,
-        custom_sections: sections.filter((_, i) => i !== removeIdx),
-        section_order: removedId
-          ? (email.section_order ?? DEFAULT_EMAIL_SECTION_ORDER).filter((id) => id !== removedId)
-          : email.section_order,
-      };
-    });
-  }, []);
-
-  /** Update a single field on a custom section. */
-  const handleUpdateCustomSection = useCallback(
-    (idx: number, field: keyof AutomatedEmailSection, value: string | boolean) => {
-      setConfig((prev) => {
-        const email = prev as AutomatedEmailStageConfig;
-        const sections = [...(email.custom_sections ?? [])];
-        const item = sections[idx];
-        if (item) {
-          sections[idx] = { ...item, [field]: value };
-        }
-        return { ...email, custom_sections: sections };
-      });
-    },
-    [],
-  );
-
-  // ── Drag-and-drop for email section reordering ──
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  /** Compute the effective section order, filling in any missing IDs for backward compat. */
-  const sectionOrderStored = (config as AutomatedEmailStageConfig).section_order;
-  const customSectionIds = (config as AutomatedEmailStageConfig).custom_sections;
-  const effectiveSectionOrder = useMemo(() => {
-    const stored = sectionOrderStored ?? [];
-    const customIds = (customSectionIds ?? []).map((s) => s.id);
-    const allIds = [...DEFAULT_EMAIL_SECTION_ORDER, ...customIds];
-    // Start with stored order, then append any IDs not yet present
-    const order = [...stored];
-    const orderSet = new Set(stored);
-    for (const id of allIds) {
-      if (!orderSet.has(id)) {
-        order.push(id);
-        orderSet.add(id);
-      }
-    }
-    // Remove IDs that no longer exist (deleted custom sections)
-    const validIds = new Set(allIds);
-    return order.filter((id) => validIds.has(id));
-  }, [sectionOrderStored, customSectionIds]);
-
-  const handleEmailSectionDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-      const oldIndex = effectiveSectionOrder.indexOf(String(active.id));
-      const newIndex = effectiveSectionOrder.indexOf(String(over.id));
-      if (oldIndex === -1 || newIndex === -1) return;
-      const reordered = arrayMove(effectiveSectionOrder, oldIndex, newIndex);
-      setConfig((prev) => ({
-        ...(prev as AutomatedEmailStageConfig),
-        section_order: reordered,
-      }));
-    },
-    [effectiveSectionOrder],
-  );
 
   // Fetch published forms when the modal opens
   useEffect(() => {
@@ -928,11 +642,23 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   const handleSave = () => {
     if (!validate()) return;
 
-    // Ensure section_order is always persisted for email stages
-    const finalConfig =
-      stageType === StageTypeConst.AUTOMATED_EMAIL
-        ? { ...(config as AutomatedEmailStageConfig), section_order: effectiveSectionOrder }
-        : config;
+    let finalConfig = config;
+    if (stageType === StageTypeConst.AUTOMATED_EMAIL) {
+      const emailCfg = config as AutomatedEmailStageConfig;
+      const stored = emailCfg.section_order ?? [];
+      const customIds = (emailCfg.custom_sections ?? []).map((s) => s.id);
+      const allIds = [...DEFAULT_EMAIL_SECTION_ORDER, ...customIds];
+      const order = [...stored];
+      const orderSet = new Set(stored);
+      for (const id of allIds) {
+        if (!orderSet.has(id)) {
+          order.push(id);
+          orderSet.add(id);
+        }
+      }
+      const validIds = new Set(allIds);
+      finalConfig = { ...emailCfg, section_order: order.filter((id) => validIds.has(id)) };
+    }
 
     const stageData: PipelineStageCreate = {
       name: name.trim(),
@@ -953,12 +679,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   if (!isOpen) return null;
 
   const docConfig = config as DocumentStageConfig;
-  const electionConfig = config as ElectionStageConfig;
   const approvalConfig = config as ManualApprovalConfig;
-  const meetingConfig = config as MeetingStageConfig;
   const statusPageConfig = config as StatusPageToggleConfig;
-  const emailConfig = config as AutomatedEmailStageConfig;
-  const referenceCheckConfig = config as ReferenceCheckConfig;
   const checklistConfig = config as ChecklistConfig;
   const interviewReqConfig = config as InterviewRequirementConfig;
   const multiApprovalConfig = config as MultiApprovalConfig;
@@ -1094,168 +816,20 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
             {/* Form Submission Config */}
             {stageType === StageTypeConst.FORM_SUBMISSION && (
-              <div>
-                <label htmlFor="stage-form-id" className="text-theme-text-muted mb-2 block text-sm">
-                  Form
-                </label>
-                {formsLoading ? (
-                  <div className="text-theme-text-muted flex items-center gap-2 py-2.5 text-sm">
-                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                    Loading forms...
-                  </div>
-                ) : formsError ? (
-                  <div className="flex items-center gap-2 py-2.5 text-sm text-red-700 dark:text-red-400">
-                    <AlertCircle className="h-4 w-4" aria-hidden="true" />
-                    {formsError}
-                    <button
-                      type="button"
-                      onClick={retryLoadForms}
-                      className="text-red-700 underline hover:no-underline dark:text-red-400"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <select
-                      id="stage-form-id"
-                      value={(config as FormStageConfig).form_id}
-                      onChange={(e) => {
-                        const formId = e.target.value;
-                        const selectedForm = availableForms.find((f) => f.id === formId);
-                        setConfig({
-                          ...config,
-                          form_id: formId,
-                          form_name: selectedForm?.name ?? '',
-                        } as FormStageConfig);
-                        setErrors((prev) => ({ ...prev, form_id: '' }));
-                        setFormValidation(null);
-                        if (formId) {
-                          setFormValidationLoading(true);
-                          void pipelineService.validateFormForPipeline(formId).then(
-                            (result) => {
-                              setFormValidation(result);
-                              setFormValidationLoading(false);
-                            },
-                            () => {
-                              setFormValidationLoading(false);
-                            }
-                          );
-                        }
-                      }}
-                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                    >
-                      <option value="">Select a form...</option>
-                      {availableForms.map((form) => (
-                        <option key={form.id} value={form.id}>
-                          {form.name}
-                          {form.category ? ` (${form.category})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    {availableForms.length === 0 && (
-                      <p className="text-theme-text-muted mt-1 text-xs">
-                        No published forms found. Create and publish a form in the Forms module first.
-                      </p>
-                    )}
-                  </>
-                )}
-                {errors.form_id && <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.form_id}</p>}
-
-                {/* Integration type status */}
-                {(config as FormStageConfig).form_id && (() => {
-                  const selected = availableForms.find((f) => f.id === (config as FormStageConfig).form_id);
-                  if (!selected) return null;
-                  if (selected.integration_type === 'membership_interest') {
-                    return (
-                      <p className="mt-2 flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
-                        <CheckCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                        Configured for membership pipeline (label-based mapping)
-                      </p>
-                    );
-                  }
-                  return (
-                    <p className="text-theme-text-muted mt-2 text-xs">
-                      This form will be auto-configured for the membership pipeline when you save.
-                    </p>
-                  );
-                })()}
-
-                {/* Form-to-pipeline field validation */}
-                {formValidationLoading && (
-                  <div className="text-theme-text-muted mt-3 flex items-center gap-2 text-sm">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                    Checking field compatibility...
-                  </div>
-                )}
-                {formValidation && !formValidationLoading && (
-                  <div
-                    className={`mt-3 rounded-lg border p-3 text-sm ${
-                      formValidation.valid
-                        ? 'border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-900/20'
-                        : 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20'
-                    }`}
-                  >
-                    <p
-                      className={`mb-1.5 font-medium ${
-                        formValidation.valid
-                          ? 'text-green-800 dark:text-green-300'
-                          : 'text-amber-800 dark:text-amber-300'
-                      }`}
-                    >
-                      {formValidation.valid ? 'All required fields detected' : 'Missing required fields'}
-                    </p>
-                    <ul className="space-y-0.5">
-                      {(['first_name', 'last_name', 'email'] as const).map((field) => {
-                        const mapped = formValidation.mapped_fields[field];
-                        const friendly: Record<string, string> = {
-                          first_name: 'First Name',
-                          last_name: 'Last Name',
-                          email: 'Email',
-                        };
-                        return (
-                          <li key={field} className="flex items-center gap-1.5">
-                            {mapped ? (
-                              <>
-                                <CheckCircle className="h-3.5 w-3.5 shrink-0 text-green-600 dark:text-green-400" />
-                                <span className="text-green-800 dark:text-green-300">
-                                  {friendly[field]}{' '}
-                                  <span className="text-green-600/70 dark:text-green-400/70">
-                                    — mapped from &ldquo;{mapped.label}&rdquo;
-                                  </span>
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                                <span className="text-amber-800 dark:text-amber-300">
-                                  {friendly[field]} — not found
-                                </span>
-                              </>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {formValidation.suggestions.length > 0 && (
-                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{formValidation.suggestions[0]}</p>
-                    )}
-                  </div>
-                )}
-
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm mt-4">
-                  <input
-                    type="checkbox"
-                    checked={(config as FormStageConfig).auto_advance ?? false}
-                    onChange={(e) => setConfig({ ...(config as FormStageConfig), auto_advance: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Auto-advance when form is submitted
-                </label>
-                <p className="text-theme-text-muted text-xs ml-6">
-                  Automatically complete this step and advance the prospect when the linked form is submitted.
-                </p>
-              </div>
+              <FormSubmissionConfig
+                config={config}
+                setConfig={setConfig}
+                errors={errors}
+                setErrors={setErrors}
+                availableForms={availableForms}
+                formsLoading={formsLoading}
+                formsError={formsError}
+                retryLoadForms={retryLoadForms}
+                formValidation={formValidation}
+                formValidationLoading={formValidationLoading}
+                setFormValidation={setFormValidation}
+                setFormValidationLoading={setFormValidationLoading}
+              />
             )}
 
             {/* Document Upload Config */}
@@ -1334,284 +908,22 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
             {/* Meeting Config */}
             {stageType === StageTypeConst.MEETING && (
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="stage-meeting-type" className="text-theme-text-muted mb-2 block text-sm">
-                    Meeting Type
-                  </label>
-                  <select
-                    id="stage-meeting-type"
-                    value={meetingConfig.meeting_type}
-                    onChange={(e) => setConfig({ ...meetingConfig, meeting_type: e.target.value as MeetingType })}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  >
-                    {MEETING_TYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-theme-text-muted mt-1 text-xs">
-                    {MEETING_TYPE_OPTIONS.find((o) => o.value === meetingConfig.meeting_type)?.description}
-                  </p>
-                </div>
-                <div>
-                  <label htmlFor="stage-meeting-event-type" className="text-theme-text-muted mb-2 block text-sm">
-                    Auto-Link Event Type
-                  </label>
-                  <select
-                    id="stage-meeting-event-type"
-                    value={meetingConfig.linked_event_type ?? ''}
-                    onChange={(e) => {
-                      const eventType = e.target.value || undefined;
-                      const nextEvent = eventType ? getNextEventForType(eventType, meetingConfig.linked_event_category) : undefined;
-                      setConfig({
-                        ...meetingConfig,
-                        linked_event_type: eventType,
-                        linked_event_category: eventType ? meetingConfig.linked_event_category : undefined,
-                        linked_event_id: nextEvent?.id,
-                      });
-                    }}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  >
-                    <option value="">None — enter details manually</option>
-                    {EVENT_TYPE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        Next {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-theme-text-muted mt-1 text-xs">
-                    When this stage activates, the next upcoming event of this type will be auto-linked.
-                  </p>
-                </div>
-                {meetingConfig.linked_event_type && customCategories.length > 0 && (
-                  <div>
-                    <label htmlFor="stage-meeting-event-category" className="text-theme-text-muted mb-2 block text-sm">
-                      Event Category (optional)
-                    </label>
-                    <select
-                      id="stage-meeting-event-category"
-                      value={meetingConfig.linked_event_category ?? ''}
-                      onChange={(e) => {
-                        const category = e.target.value || undefined;
-                        const nextEvent = getNextEventForType(meetingConfig.linked_event_type ?? '', category);
-                        setConfig({
-                          ...meetingConfig,
-                          linked_event_category: category,
-                          linked_event_id: nextEvent?.id,
-                        });
-                      }}
-                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                    >
-                      <option value="">Any category</option>
-                      {customCategories.map((cat) => (
-                        <option key={cat} value={cat}>
-                          {cat}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Narrow auto-linking to events with this specific category (e.g., &quot;Information Session&quot;).
-                    </p>
-                  </div>
-                )}
-                {meetingConfig.linked_event_type && (
-                  <div>
-                    {renderEventPreview(meetingConfig.linked_event_type, meetingConfig.linked_event_category)}
-                  </div>
-                )}
-                <div>
-                  <label htmlFor="stage-meeting-description" className="text-theme-text-muted mb-2 block text-sm">
-                    Meeting Details (optional)
-                  </label>
-                  <textarea
-                    id="stage-meeting-description"
-                    value={meetingConfig.meeting_description ?? ''}
-                    onChange={(e) => setConfig({ ...meetingConfig, meeting_description: e.target.value })}
-                    placeholder="e.g., Meet with Chief Smith to discuss expectations and department culture..."
-                    rows={2}
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  />
-                </div>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm mt-4">
-                  <input
-                    type="checkbox"
-                    checked={meetingConfig.auto_advance ?? false}
-                    onChange={(e) => setConfig({ ...meetingConfig, auto_advance: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Auto-advance when attendance is recorded
-                </label>
-                <p className="text-theme-text-muted text-xs ml-6">
-                  Automatically complete this step and advance the prospect when their attendance is recorded at the linked event.
-                </p>
-              </div>
+              <MeetingConfig
+                config={config}
+                setConfig={setConfig}
+                customCategories={customCategories}
+                getNextEventForType={getNextEventForType}
+                renderEventPreview={renderEventPreview}
+              />
             )}
 
             {/* Election Vote Config */}
             {stageType === StageTypeConst.ELECTION_VOTE && (
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="stage-voting-method" className="text-theme-text-muted mb-2 block text-sm">
-                    Voting Method
-                  </label>
-                  <select
-                    id="stage-voting-method"
-                    value={electionConfig.voting_method}
-                    onChange={(e) =>
-                      setConfig({
-                        ...electionConfig,
-                        voting_method: e.target.value as ElectionStageConfig['voting_method'],
-                      })
-                    }
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  >
-                    <option value="simple_majority">Simple Majority</option>
-                    <option value="approval">Approval Voting</option>
-                    <option value="supermajority">Supermajority</option>
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="stage-victory-condition" className="text-theme-text-muted mb-2 block text-sm">
-                    Victory Condition
-                  </label>
-                  <select
-                    id="stage-victory-condition"
-                    value={electionConfig.victory_condition}
-                    onChange={(e) =>
-                      setConfig({
-                        ...electionConfig,
-                        victory_condition: e.target.value as ElectionStageConfig['victory_condition'],
-                      })
-                    }
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  >
-                    <option value="most_votes">Most Votes</option>
-                    <option value="majority">Majority (&gt;50%)</option>
-                    <option value="supermajority">Supermajority</option>
-                  </select>
-                </div>
-                {electionConfig.victory_condition === VictoryCondition.SUPERMAJORITY && (
-                  <div>
-                    <label htmlFor="stage-victory-percentage" className="text-theme-text-muted mb-2 block text-sm">
-                      Required Percentage
-                    </label>
-                    <input
-                      id="stage-victory-percentage"
-                      type="number"
-                      min={51}
-                      max={100}
-                      value={electionConfig.victory_percentage ?? 67}
-                      onChange={(e) => setConfig({ ...electionConfig, victory_percentage: Number(e.target.value) })}
-                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
-                    />
-                    <span className="text-theme-text-muted ml-2 text-sm">%</span>
-                  </div>
-                )}
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={electionConfig.anonymous_voting}
-                    onChange={(e) => setConfig({ ...electionConfig, anonymous_voting: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Anonymous voting
-                </label>
-
-                {/* Election Package Fields */}
-                <div className="border-theme-surface-border mt-4 border-t pt-4">
-                  <h4 className="text-theme-text-secondary mb-2 text-sm font-medium">Election Package Contents</h4>
-                  <p className="text-theme-text-muted mb-3 text-xs">
-                    Choose what applicant information is included in the election package for voters and the secretary.
-                  </p>
-                  {(() => {
-                    const fields: ElectionPackageFieldConfig = electionConfig.package_fields ?? {
-                      ...DEFAULT_ELECTION_PACKAGE_FIELDS,
-                    };
-                    const updateField = (key: keyof ElectionPackageFieldConfig, value: boolean | string) => {
-                      setConfig({
-                        ...electionConfig,
-                        package_fields: { ...fields, [key]: value },
-                      });
-                    };
-                    return (
-                      <div className="space-y-2">
-                        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={fields.include_email}
-                            onChange={(e) => updateField('include_email', e.target.checked)}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                          />
-                          Include email address
-                        </label>
-                        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={fields.include_phone}
-                            onChange={(e) => updateField('include_phone', e.target.checked)}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                          />
-                          Include phone number
-                        </label>
-                        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={fields.include_address}
-                            onChange={(e) => updateField('include_address', e.target.checked)}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                          />
-                          Include address
-                        </label>
-                        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={fields.include_date_of_birth}
-                            onChange={(e) => updateField('include_date_of_birth', e.target.checked)}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                          />
-                          Include date of birth
-                        </label>
-                        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={fields.include_documents}
-                            onChange={(e) => updateField('include_documents', e.target.checked)}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                          />
-                          Include uploaded documents
-                        </label>
-                        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={fields.include_stage_history}
-                            onChange={(e) => updateField('include_stage_history', e.target.checked)}
-                            className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                          />
-                          Include stage completion history
-                        </label>
-                        <div className="pt-1">
-                          <label
-                            htmlFor="stage-custom-note-prompt"
-                            className="text-theme-text-muted mb-1 block text-xs"
-                          >
-                            Custom note prompt (optional)
-                          </label>
-                          <input
-                            id="stage-custom-note-prompt"
-                            type="text"
-                            value={fields.custom_note_prompt ?? ''}
-                            onChange={(e) => updateField('custom_note_prompt', e.target.value)}
-                            placeholder="e.g., Please describe the applicant's qualifications..."
-                            className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-hidden"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
+              <ElectionVoteConfig
+                config={config}
+                setConfig={setConfig}
+                errors={errors}
+              />
             )}
 
             {/* Manual Approval Config */}
@@ -1676,385 +988,24 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
 
             {/* Automated Email Config */}
             {stageType === StageTypeConst.AUTOMATED_EMAIL && (
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="stage-email-subject" className="text-theme-text-muted mb-2 block text-sm">
-                    Email Subject
-                  </label>
-                  <input
-                    id="stage-email-subject"
-                    type="text"
-                    value={emailConfig.email_subject}
-                    onChange={(e) => setConfig({ ...emailConfig, email_subject: e.target.value })}
-                    placeholder="e.g., Welcome to the Membership Process"
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  />
-                  {errors.email_subject && (
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.email_subject}</p>
-                  )}
-                </div>
-
-                <p className="text-theme-text-muted text-xs">
-                  Configure the sections to include in the email. Drag sections to reorder them. The prospect's name
-                  will be used as the greeting automatically.
-                </p>
-
-                <DndContext
-                  sensors={dndSensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleEmailSectionDragEnd}
-                >
-                  <SortableContext items={effectiveSectionOrder} strategy={verticalListSortingStrategy}>
-                    {effectiveSectionOrder.map((sectionId) => {
-                      // ── Built-in: Welcome ──
-                      if (sectionId === EMAIL_BUILTIN_SECTION_IDS.WELCOME) {
-                        return (
-                          <SortableEmailSection key={sectionId} id={sectionId}>
-                            <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
-                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                                <input
-                                  type="checkbox"
-                                  checked={emailConfig.include_welcome}
-                                  onChange={(e) => setConfig({ ...emailConfig, include_welcome: e.target.checked })}
-                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                                />
-                                Welcome Message
-                              </label>
-                              {emailConfig.include_welcome && (
-                                <>
-                                  <textarea
-                                    value={emailConfig.welcome_message ?? ''}
-                                    onChange={(e) => setConfig({ ...emailConfig, welcome_message: e.target.value })}
-                                    placeholder="Thank you for your interest in joining our department! We look forward to getting to know you through this process."
-                                    rows={3}
-                                    aria-label="Welcome message content"
-                                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                                  />
-                                  {errors.welcome_message && (
-                                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.welcome_message}</p>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </SortableEmailSection>
-                        );
-                      }
-
-                      // ── Built-in: FAQ Link ──
-                      if (sectionId === EMAIL_BUILTIN_SECTION_IDS.FAQ_LINK) {
-                        return (
-                          <SortableEmailSection key={sectionId} id={sectionId}>
-                            <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
-                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                                <input
-                                  type="checkbox"
-                                  checked={emailConfig.include_faq_link}
-                                  onChange={(e) => setConfig({ ...emailConfig, include_faq_link: e.target.checked })}
-                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                                />
-                                Membership FAQ Link
-                              </label>
-                              {emailConfig.include_faq_link && (
-                                <input
-                                  type="url"
-                                  value={emailConfig.faq_url ?? ''}
-                                  onChange={(e) => setConfig({ ...emailConfig, faq_url: e.target.value })}
-                                  placeholder="https://your-department.com/membership-faq"
-                                  aria-label="FAQ URL"
-                                  className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                                />
-                              )}
-                            </div>
-                          </SortableEmailSection>
-                        );
-                      }
-
-                      // ── Built-in: Next Meeting ──
-                      if (sectionId === EMAIL_BUILTIN_SECTION_IDS.NEXT_MEETING) {
-                        return (
-                          <SortableEmailSection key={sectionId} id={sectionId}>
-                            <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
-                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                                <input
-                                  type="checkbox"
-                                  checked={emailConfig.include_next_meeting}
-                                  onChange={(e) => setConfig({ ...emailConfig, include_next_meeting: e.target.checked })}
-                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                                />
-                                Next Meeting Details
-                              </label>
-                              {emailConfig.include_next_meeting && (
-                                <div className="space-y-3">
-                                  <div>
-                                    <label
-                                      htmlFor="email-meeting-event-type"
-                                      className="text-theme-text-muted mb-1.5 block text-xs"
-                                    >
-                                      Pull from upcoming event
-                                    </label>
-                                    <select
-                                      id="email-meeting-event-type"
-                                      value={emailConfig.next_meeting_event_type ?? ''}
-                                      onChange={(e) => {
-                                        const eventType = e.target.value || undefined;
-                                        const nextEvent = eventType ? getNextEventForType(eventType) : undefined;
-                                        setConfig({
-                                          ...emailConfig,
-                                          next_meeting_event_type: eventType,
-                                          next_meeting_event_id: nextEvent?.id,
-                                        });
-                                      }}
-                                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 text-sm focus:ring-2 focus:outline-hidden"
-                                    >
-                                      <option value="">None — enter details manually</option>
-                                      {EVENT_TYPE_OPTIONS.map((opt) => (
-                                        <option key={opt.value} value={opt.value}>
-                                          Next {opt.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    {renderEventPreview(emailConfig.next_meeting_event_type)}
-                                  </div>
-                                  <div>
-                                    <label htmlFor="email-meeting-details" className="text-theme-text-muted mb-1.5 block text-xs">
-                                      {emailConfig.next_meeting_event_type ? 'Additional details (optional)' : 'Meeting details'}
-                                    </label>
-                                    <textarea
-                                      id="email-meeting-details"
-                                      value={emailConfig.next_meeting_details ?? ''}
-                                      onChange={(e) => setConfig({ ...emailConfig, next_meeting_details: e.target.value })}
-                                      placeholder={
-                                        emailConfig.next_meeting_event_type
-                                          ? 'Any extra info to include alongside the event details...'
-                                          : 'Our next informational meeting is on the first Monday of the month at 7 PM at Station 1. All prospective members are encouraged to attend.'
-                                      }
-                                      rows={2}
-                                      aria-label="Next meeting details"
-                                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </SortableEmailSection>
-                        );
-                      }
-
-                      // ── Built-in: Status Tracker ──
-                      if (sectionId === EMAIL_BUILTIN_SECTION_IDS.STATUS_TRACKER) {
-                        return (
-                          <SortableEmailSection key={sectionId} id={sectionId}>
-                            <div className="border-theme-surface-border space-y-2 rounded-lg border p-4">
-                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                                <input
-                                  type="checkbox"
-                                  checked={emailConfig.include_status_tracker}
-                                  onChange={(e) => setConfig({ ...emailConfig, include_status_tracker: e.target.checked })}
-                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                                />
-                                Application Tracker Link
-                              </label>
-                              <p className="text-theme-text-muted ml-6 text-xs">
-                                Includes a link to the prospect's public status page so they can track their application progress.
-                                Requires the public status page to be enabled.
-                              </p>
-                            </div>
-                          </SortableEmailSection>
-                        );
-                      }
-
-                      // ── Custom Section ──
-                      const customSections = emailConfig.custom_sections ?? [];
-                      const customIdx = customSections.findIndex((s) => s.id === sectionId);
-                      const section = customSections[customIdx];
-                      if (!section) return null;
-
-                      return (
-                        <SortableEmailSection key={sectionId} id={sectionId}>
-                          <div className="border-theme-surface-border space-y-3 rounded-lg border p-4">
-                            <div className="flex items-center justify-between">
-                              <label className="text-theme-text-secondary flex items-center gap-2 text-sm font-medium">
-                                <input
-                                  type="checkbox"
-                                  checked={section.enabled}
-                                  onChange={(e) => handleUpdateCustomSection(customIdx, 'enabled', e.target.checked)}
-                                  className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                                />
-                                Custom Section
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveCustomSection(customIdx)}
-                                className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                                aria-label={`Remove custom section ${customIdx + 1}`}
-                              >
-                                <Trash2 className="h-4 w-4" aria-hidden="true" />
-                              </button>
-                            </div>
-                            <input
-                              type="text"
-                              value={section.title}
-                              onChange={(e) => handleUpdateCustomSection(customIdx, 'title', e.target.value)}
-                              placeholder="Section title"
-                              aria-label={`Custom section ${customIdx + 1} title`}
-                              className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 text-sm focus:ring-2 focus:outline-hidden"
-                            />
-                            <textarea
-                              value={section.content}
-                              onChange={(e) => handleUpdateCustomSection(customIdx, 'content', e.target.value)}
-                              placeholder="Section content..."
-                              rows={2}
-                              aria-label={`Custom section ${customIdx + 1} content`}
-                              className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 text-sm focus:ring-2 focus:outline-hidden"
-                            />
-                          </div>
-                        </SortableEmailSection>
-                      );
-                    })}
-                  </SortableContext>
-                </DndContext>
-
-                <div ref={customSectionsEndRef} />
-                <button
-                  type="button"
-                  onClick={handleAddCustomSection}
-                  className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  <Plus className="h-3 w-3" aria-hidden="true" /> Add custom section
-                </button>
-
-                {/* Email Preview */}
-                <div className="border-theme-surface-border mt-2 border-t pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowEmailPreview((v) => !v)}
-                    className="text-theme-text-secondary flex items-center gap-1.5 text-sm font-medium"
-                    aria-expanded={showEmailPreview}
-                  >
-                    <Eye className="h-4 w-4" aria-hidden="true" />
-                    {showEmailPreview ? 'Hide Preview' : 'Show Preview'}
-                  </button>
-                  {showEmailPreview && (
-                    <div className="mt-3 flex justify-center" data-testid="email-preview">
-                      <EmailPreview config={emailConfig} sectionOrder={effectiveSectionOrder} />
-                    </div>
-                  )}
-                </div>
-              </div>
+              <AutomatedEmailConfig
+                config={config}
+                setConfig={setConfig}
+                errors={errors}
+                showEmailPreview={showEmailPreview}
+                setShowEmailPreview={setShowEmailPreview}
+                getNextEventForType={getNextEventForType}
+                renderEventPreview={renderEventPreview}
+              />
             )}
 
             {/* Reference Check Config */}
             {stageType === StageTypeConst.REFERENCE_CHECK && (
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="stage-ref-count" className="text-theme-text-muted mb-2 block text-sm">
-                    Required Number of References
-                  </label>
-                  <input
-                    id="stage-ref-count"
-                    type="number"
-                    min={1}
-                    max={10}
-                    value={referenceCheckConfig.required_count}
-                    onChange={(e) =>
-                      setConfig({ ...referenceCheckConfig, required_count: Number(e.target.value) })
-                    }
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-32 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
-                  />
-                  {errors.required_count && (
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.required_count}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="text-theme-text-muted mb-2 block text-sm">Reference Types</label>
-                  {referenceCheckConfig.reference_types.map((refType, idx) => (
-                    <div key={idx} className="mb-2 flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={refType}
-                        onChange={(e) => {
-                          const updated = [...referenceCheckConfig.reference_types];
-                          updated[idx] = e.target.value;
-                          setConfig({ ...referenceCheckConfig, reference_types: updated });
-                        }}
-                        placeholder="e.g., Professional, Personal, Supervisor"
-                        aria-label={`Reference type ${idx + 1}`}
-                        className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring flex-1 rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
-                      />
-                      {referenceCheckConfig.reference_types.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = referenceCheckConfig.reference_types.filter((_, i) => i !== idx);
-                            setConfig({ ...referenceCheckConfig, reference_types: updated });
-                          }}
-                          className="text-theme-text-muted transition-colors hover:text-red-700 dark:hover:text-red-400"
-                          aria-label={`Remove reference type ${idx + 1}`}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setConfig({
-                        ...referenceCheckConfig,
-                        reference_types: [...referenceCheckConfig.reference_types, ''],
-                      })
-                    }
-                    className="flex items-center gap-1 text-sm text-red-700 transition-colors hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                  >
-                    <Plus className="h-3 w-3" aria-hidden="true" /> Add reference type
-                  </button>
-                  {errors.reference_types && (
-                    <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.reference_types}</p>
-                  )}
-                </div>
-                <div>
-                  <label htmlFor="stage-ref-method" className="text-theme-text-muted mb-2 block text-sm">
-                    Collection Method
-                  </label>
-                  <select
-                    id="stage-ref-method"
-                    value={referenceCheckConfig.collect_method}
-                    onChange={(e) =>
-                      setConfig({
-                        ...referenceCheckConfig,
-                        collect_method: e.target.value as 'form' | 'manual',
-                      })
-                    }
-                    className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
-                  >
-                    <option value="manual">Manual — coordinator enters reference info</option>
-                    <option value="form">Form — prospect submits reference contacts</option>
-                  </select>
-                </div>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={referenceCheckConfig.require_all_before_advance}
-                    onChange={(e) =>
-                      setConfig({ ...referenceCheckConfig, require_all_before_advance: e.target.checked })
-                    }
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Require all references verified before advancing
-                </label>
-                <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={referenceCheckConfig.auto_advance ?? false}
-                    onChange={(e) => setConfig({ ...referenceCheckConfig, auto_advance: e.target.checked })}
-                    className="border-theme-surface-border bg-theme-surface-hover focus:ring-theme-focus-ring rounded-sm text-red-700 dark:text-red-500"
-                  />
-                  Auto-advance when all references are verified
-                </label>
-                <p className="text-theme-text-muted text-xs ml-6">
-                  Automatically complete this step and advance the prospect when the required number of references are verified.
-                </p>
-              </div>
+              <ReferenceCheckStageConfig
+                config={config}
+                setConfig={setConfig}
+                errors={errors}
+              />
             )}
 
             {/* Checklist Config */}

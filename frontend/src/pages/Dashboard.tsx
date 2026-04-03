@@ -3,6 +3,8 @@ import toast from "react-hot-toast";
 import { formatRelativeTime } from "../hooks/useRelativeTime";
 import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { PullToRefreshIndicator } from "../components/PullToRefreshIndicator";
+import DashboardStatCard from "../components/dashboard/DashboardStatCard";
+import DashboardCardHeader from "../components/dashboard/DashboardCardHeader";
 import {
   Bell,
   Calendar,
@@ -629,134 +631,62 @@ const Dashboard: React.FC = () => {
               role="region"
               aria-label="Department overview"
             >
-              <div className="card p-3 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                      Active Members
-                    </p>
-                    {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                    ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
-                        {adminSummary?.active_members ?? 0}
-                      </p>
-                    )}
-                  </div>
-                  <Users className="w-8 h-8 text-blue-700 dark:text-blue-400" aria-hidden="true" />
-                </div>
-                <p className="text-theme-text-muted text-xs mt-2">
-                  {adminSummary?.total_members ?? 0} total
-                </p>
-              </div>
+              <DashboardStatCard
+                label="Active Members"
+                value={adminSummary?.active_members ?? 0}
+                icon={Users}
+                iconColor="text-blue-700 dark:text-blue-400"
+                description={`${adminSummary?.total_members ?? 0} total`}
+                loading={loadingAdmin}
+              />
 
-              <div className="card p-3 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                      Training Compliance
-                    </p>
-                    {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                    ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
-                        {adminSummary?.training_completion_pct ?? 0}%
-                      </p>
-                    )}
-                  </div>
-                  <GraduationCap className="w-8 h-8 text-green-700 dark:text-green-400" aria-hidden="true" />
-                </div>
-                <p className="text-theme-text-muted text-xs mt-2">
-                  {adminSummary?.recent_training_hours ?? 0} hrs last 30 days
-                </p>
-              </div>
+              <DashboardStatCard
+                label="Training Compliance"
+                value={`${adminSummary?.training_completion_pct ?? 0}%`}
+                icon={GraduationCap}
+                iconColor="text-green-700 dark:text-green-400"
+                description={`${adminSummary?.recent_training_hours ?? 0} hrs last 30 days`}
+                loading={loadingAdmin}
+              />
 
-              <div className="card p-3 sm:p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                      Upcoming Events
-                    </p>
-                    {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                    ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
-                        {adminSummary?.upcoming_events_count ?? 0}
-                      </p>
-                    )}
-                  </div>
-                  <Calendar className="w-8 h-8 text-purple-700 dark:text-purple-400" aria-hidden="true" />
-                </div>
-                <p className="text-theme-text-muted text-xs mt-2">Scheduled</p>
-              </div>
+              <DashboardStatCard
+                label="Upcoming Events"
+                value={adminSummary?.upcoming_events_count ?? 0}
+                icon={Calendar}
+                iconColor="text-purple-700 dark:text-purple-400"
+                description="Scheduled"
+                loading={loadingAdmin}
+              />
 
-              <div
-                className="card cursor-pointer hover:border-red-500/50 p-3 sm:p-5 transition-colors"
-                onClick={() => navigate("/action-items")}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") navigate("/action-items");
-                }}
-                aria-label={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ""}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                      Action Items
-                    </p>
-                    {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                    ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
-                        {adminSummary?.open_action_items ?? 0}
-                      </p>
-                    )}
-                  </div>
-                  {(adminSummary?.overdue_action_items ?? 0) > 0 ? (
-                    <AlertTriangle className="w-8 h-8 text-red-700 dark:text-red-400" aria-hidden="true" />
-                  ) : (
-                    <ClipboardList className="w-8 h-8 text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
-                  )}
-                </div>
-                <p className="text-theme-text-muted text-xs mt-2">
-                  {(adminSummary?.overdue_action_items ?? 0) > 0
+              <DashboardStatCard
+                label="Action Items"
+                value={adminSummary?.open_action_items ?? 0}
+                icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
+                iconColor={(adminSummary?.overdue_action_items ?? 0) > 0 ? "text-red-700 dark:text-red-400" : "text-yellow-700 dark:text-yellow-400"}
+                description={
+                  (adminSummary?.overdue_action_items ?? 0) > 0
                     ? `${adminSummary?.overdue_action_items} overdue`
-                    : "All on track"}
-                </p>
-              </div>
+                    : "All on track"
+                }
+                loading={loadingAdmin}
+                onClick={() => navigate("/action-items")}
+                ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ""}`}
+              />
 
-              <div
-                className="card cursor-pointer hover:border-red-500/50 p-3 sm:p-5 transition-colors"
-                onClick={() => navigate("/admin-hours/manage")}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") navigate("/admin-hours/manage");
-                }}
-                aria-label={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ""}`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                      Admin Hours
-                    </p>
-                    {loadingAdmin ? (
-                      <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                    ) : (
-                      <p className="text-theme-text-primary text-2xl font-bold mt-1">
-                        {adminSummary?.recent_admin_hours ?? 0}
-                      </p>
-                    )}
-                  </div>
-                  <ClipboardCheck className="w-8 h-8 text-indigo-700 dark:text-indigo-400" aria-hidden="true" />
-                </div>
-                <p className="text-theme-text-muted text-xs mt-2">
-                  {(adminSummary?.pending_admin_hours_approvals ?? 0) > 0
+              <DashboardStatCard
+                label="Admin Hours"
+                value={adminSummary?.recent_admin_hours ?? 0}
+                icon={ClipboardCheck}
+                iconColor="text-indigo-700 dark:text-indigo-400"
+                description={
+                  (adminSummary?.pending_admin_hours_approvals ?? 0) > 0
                     ? `${adminSummary?.pending_admin_hours_approvals} pending approval`
-                    : "Last 30 days"}
-                </p>
-              </div>
+                    : "Last 30 days"
+                }
+                loading={loadingAdmin}
+                onClick={() => navigate("/admin-hours/manage")}
+                ariaLabel={`Admin Hours: ${adminSummary?.recent_admin_hours ?? 0}${(adminSummary?.pending_admin_hours_approvals ?? 0) > 0 ? `, ${adminSummary?.pending_admin_hours_approvals} pending approval` : ""}`}
+              />
             </div>
           </div>
         )}
@@ -767,108 +697,61 @@ const Dashboard: React.FC = () => {
           role="region"
           aria-label="Hours summary"
         >
-          <div className="card p-3 sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                  Total Hours
-                </p>
-                {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                ) : (
-                  <p className="text-theme-text-primary text-2xl font-bold mt-1">
-                    {totalHours}
-                  </p>
-                )}
-              </div>
-              <Clock className="w-8 h-8 text-blue-700 dark:text-blue-400" aria-hidden="true" />
-            </div>
-            <p className="text-theme-text-muted text-xs mt-2">This month</p>
-          </div>
+          <DashboardStatCard
+            label="Total Hours"
+            value={totalHours}
+            icon={Clock}
+            iconColor="text-blue-700 dark:text-blue-400"
+            description="This month"
+            loading={loadingHours}
+          />
 
-          <div className="card p-3 sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                  Training
-                </p>
-                {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                ) : (
-                  <p className="text-green-700 dark:text-green-400 text-2xl font-bold mt-1">
-                    {hours.training}
-                  </p>
-                )}
-              </div>
-              <BookOpen className="w-8 h-8 text-green-700 dark:text-green-400" aria-hidden="true" />
-            </div>
-            <p className="text-theme-text-muted text-xs mt-2">Training hours</p>
-          </div>
+          <DashboardStatCard
+            label="Training"
+            value={hours.training}
+            icon={BookOpen}
+            iconColor="text-green-700 dark:text-green-400"
+            description="Training hours"
+            loading={loadingHours}
+            valueColor="text-green-700 dark:text-green-400"
+          />
 
-          <div className="card p-3 sm:p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                  Standby
-                </p>
-                {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                ) : (
-                  <p className="text-yellow-700 dark:text-yellow-400 text-2xl font-bold mt-1">
-                    {hours.standby}
-                  </p>
-                )}
-              </div>
-              <Shield className="w-8 h-8 text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
-            </div>
-            <p className="text-theme-text-muted text-xs mt-2">Standby hours</p>
-          </div>
+          <DashboardStatCard
+            label="Standby"
+            value={hours.standby}
+            icon={Shield}
+            iconColor="text-yellow-700 dark:text-yellow-400"
+            description="Standby hours"
+            loading={loadingHours}
+            valueColor="text-yellow-700 dark:text-yellow-400"
+          />
 
-          <div
-            className="card cursor-pointer hover:border-purple-500/40 p-3 sm:p-5 transition-colors"
+          <DashboardStatCard
+            label="Administrative"
+            value={hours.administrative}
+            icon={Briefcase}
+            iconColor="text-purple-700 dark:text-purple-400"
+            description="Admin hours"
+            loading={loadingHours}
+            valueColor="text-purple-700 dark:text-purple-400"
             onClick={() => navigate("/admin-hours")}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") navigate("/admin-hours");
-            }}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-theme-text-secondary text-xs font-medium uppercase">
-                  Administrative
-                </p>
-                {loadingHours ? (
-                  <div className="mt-1 h-8 w-14 bg-theme-surface-hover animate-pulse rounded-sm"></div>
-                ) : (
-                  <p className="text-purple-700 dark:text-purple-400 text-2xl font-bold mt-1">
-                    {hours.administrative}
-                  </p>
-                )}
-              </div>
-              <Briefcase
-                className="w-8 h-8 text-purple-700 dark:text-purple-400"
-                aria-hidden="true"
-              />
-            </div>
-            <p className="text-theme-text-muted text-xs mt-2">Admin hours</p>
-          </div>
+            hoverClass="hover:border-purple-500/40"
+          />
         </div>
 
         {/* Department Messages — always visible, prominent */}
         {!loadingMessages && deptMessages.length > 0 && (
           <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Megaphone className="w-5 h-5 text-amber-700 dark:text-amber-400" aria-hidden="true" />
-                <span>Department Messages</span>
-                {deptMsgUnread > 0 && (
-                  <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`${deptMsgUnread} new messages`}>
-                    {deptMsgUnread} new
-                  </span>
-                )}
-              </h3>
-            </div>
+            <DashboardCardHeader
+              icon={Megaphone}
+              iconColor="text-amber-700 dark:text-amber-400"
+              title="Department Messages"
+              badge={deptMsgUnread > 0 ? {
+                content: `${deptMsgUnread} new`,
+                ariaLabel: `${deptMsgUnread} new messages`,
+                color: "bg-amber-500 text-white",
+              } : undefined}
+            />
             <div className="space-y-3">
               {deptMessages.map((msg) => {
                 const priorityStyles = {
@@ -993,18 +876,18 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-8 mb-6 sm:mb-8">
           {/* Notifications */}
           <div className="card p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Bell className="w-5 h-5 text-red-700 dark:text-red-400" aria-hidden="true" />
-                <span>Notifications</span>
-                {unreadCount > 0 && (
-                  <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full" aria-label={`${unreadCount} unread`}>
-                    {unreadCount}
-                  </span>
-                )}
-              </h3>
-              <div className="flex items-center space-x-2">
-                {unreadCount > 0 && (
+            <DashboardCardHeader
+              icon={Bell}
+              iconColor="text-red-700 dark:text-red-400"
+              title="Notifications"
+              badge={unreadCount > 0 ? {
+                content: unreadCount,
+                ariaLabel: `${unreadCount} unread`,
+                color: "bg-red-500 text-white",
+              } : undefined}
+              onViewAll={() => navigate("/notifications?tab=inbox")}
+              extraActions={
+                unreadCount > 0 ? (
                   <button
                     onClick={() => void markAllNotificationsRead()}
                     className="text-theme-text-muted hover:text-theme-text-primary text-xs flex items-center space-x-1 transition-colors py-2 px-2 -mr-1 rounded"
@@ -1013,16 +896,9 @@ const Dashboard: React.FC = () => {
                     <CheckCheck className="w-3.5 h-3.5" />
                     <span>Clear All</span>
                   </button>
-                )}
-                <button
-                  onClick={() => navigate("/notifications?tab=inbox")}
-                  className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
-                >
-                  <span>View All</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
+                ) : undefined
+              }
+            />
 
             {loadingNotifications ? (
               <div className="space-y-3">
@@ -1084,19 +960,13 @@ const Dashboard: React.FC = () => {
 
           {/* My Upcoming Shifts */}
           <div className="card p-4 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <Calendar className="w-5 h-5 text-blue-700 dark:text-blue-400" aria-hidden="true" />
-                <span>My Upcoming Shifts</span>
-              </h3>
-              <button
-                onClick={() => navigate("/scheduling")}
-                className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
-              >
-                <span>View Schedule</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            <DashboardCardHeader
+              icon={Calendar}
+              iconColor="text-blue-700 dark:text-blue-400"
+              title="My Upcoming Shifts"
+              viewAllLabel="View Schedule"
+              onViewAll={() => navigate("/scheduling")}
+            />
 
             {loadingMyShifts ? (
               <div className="space-y-3">
@@ -1151,19 +1021,14 @@ const Dashboard: React.FC = () => {
 
         {/* Open Shifts */}
         <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-              <CalendarPlus className="w-5 h-5 text-green-700 dark:text-green-400" aria-hidden="true" />
-              <span>Open Shifts</span>
-            </h3>
-            <button
-              onClick={() => navigate("/scheduling")}
-              className="text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 text-sm flex items-center space-x-1 py-2 pl-2"
-            >
-              <span>View Schedule</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          <DashboardCardHeader
+            icon={CalendarPlus}
+            iconColor="text-green-700 dark:text-green-400"
+            title="Open Shifts"
+            viewAllLabel="View Schedule"
+            viewAllColor="text-green-700 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300"
+            onViewAll={() => navigate("/scheduling")}
+          />
 
           {loadingOpenShifts ? (
             <div className="space-y-3">
@@ -1279,19 +1144,12 @@ const Dashboard: React.FC = () => {
 
         {/* Upcoming Events */}
         <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-              <Calendar className="w-5 h-5 text-purple-700 dark:text-purple-400" aria-hidden="true" />
-              <span>Upcoming Events</span>
-            </h3>
-            <button
-              onClick={() => navigate("/events")}
-              className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
-            >
-              <span>View All</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          <DashboardCardHeader
+            icon={Calendar}
+            iconColor="text-purple-700 dark:text-purple-400"
+            title="Upcoming Events"
+            onViewAll={() => navigate("/events")}
+          />
 
           {loadingUpcomingEvents ? (
             <div className="space-y-3">
@@ -1396,19 +1254,15 @@ const Dashboard: React.FC = () => {
         {/* Quick Access: My ID Card */}
         {currentUser?.id && (
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <CreditCard className="w-5 h-5 text-blue-500" aria-hidden="true" />
-                <span>My ID Card</span>
-              </h3>
-              <button
-                onClick={() => navigate(`/members/${currentUser.id}/id-card`)}
-                className="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm flex items-center space-x-1 py-2 pl-2"
-              >
-                <span>View</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            <DashboardCardHeader
+              icon={CreditCard}
+              iconColor="text-blue-500"
+              title="My ID Card"
+              viewAllLabel="View"
+              viewAllColor="text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+              onViewAll={() => navigate(`/members/${currentUser.id}/id-card`)}
+              className="flex items-center justify-between"
+            />
             <p className="text-sm text-theme-text-muted mt-2">
               Show your digital member ID card with QR code and barcode for
               quick identification.
@@ -1425,19 +1279,14 @@ const Dashboard: React.FC = () => {
         {/* Quick Access: Meeting Minutes */}
         {checkPermission("meetings.manage") && (
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <ClipboardList className="w-5 h-5 text-cyan-500" aria-hidden="true" />
-                <span>Meeting Minutes</span>
-              </h3>
-              <button
-                onClick={() => navigate("/minutes")}
-                className="text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300 text-sm flex items-center space-x-1 py-2 pl-2"
-              >
-                <span>View All</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            <DashboardCardHeader
+              icon={ClipboardList}
+              iconColor="text-cyan-500"
+              title="Meeting Minutes"
+              viewAllColor="text-cyan-700 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300"
+              onViewAll={() => navigate("/minutes")}
+              className="flex items-center justify-between"
+            />
             <p className="text-sm text-theme-text-muted mt-2">
               Record, review, and publish meeting minutes. Track motions, votes,
               and action items.
@@ -1462,19 +1311,12 @@ const Dashboard: React.FC = () => {
         {/* Training Progress */}
         {!loadingTraining && enrollments.length > 0 && (
           <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                <GraduationCap className="w-5 h-5 text-red-500" aria-hidden="true" />
-                <span>My Training Progress</span>
-              </h3>
-              <button
-                onClick={() => navigate("/training/my-training")}
-                className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm flex items-center space-x-1 py-2 pl-2"
-              >
-                <span>View All</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            <DashboardCardHeader
+              icon={GraduationCap}
+              iconColor="text-red-500"
+              title="My Training Progress"
+              onViewAll={() => navigate("/training/my-training")}
+            />
 
             <div className="space-y-3">
               {enrollments.slice(0, 3).map((enrollment) => {
@@ -1607,23 +1449,13 @@ const Dashboard: React.FC = () => {
           inventorySummary &&
           inventorySummary.total_items > 0 && (
             <div className="card mb-6 p-4 sm:mb-8 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold text-theme-text-primary flex items-center space-x-2">
-                  <Package className="w-5 h-5 text-emerald-500" aria-hidden="true" />
-                  <span>
-                    {isInventoryAdmin
-                      ? "Equipment & Inventory"
-                      : "My Equipment"}
-                  </span>
-                </h3>
-                <button
-                  onClick={() => navigate("/inventory")}
-                  className="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 text-sm flex items-center space-x-1 py-2 pl-2"
-                >
-                  <span>View All</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
+              <DashboardCardHeader
+                icon={Package}
+                iconColor="text-emerald-500"
+                title={isInventoryAdmin ? "Equipment & Inventory" : "My Equipment"}
+                viewAllColor="text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300"
+                onViewAll={() => navigate("/inventory")}
+              />
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                 <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">

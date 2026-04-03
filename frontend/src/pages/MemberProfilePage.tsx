@@ -43,6 +43,10 @@ import type { TrainingRecord, ComplianceSummary } from "../types/training";
 import { AVAILABLE_MODULES } from "../types/modules";
 import { MAX_AVATAR_SIZE } from "../constants/config";
 import { UserStatus } from "../constants/enums";
+import TrainingSection from "../components/member-profile/TrainingSection";
+import AdminHoursSection from "../components/member-profile/AdminHoursSection";
+import ContactInfoSection from "../components/member-profile/ContactInfoSection";
+import EmergencyContactsSection from "../components/member-profile/EmergencyContactsSection";
 
 // Types for inventory data
 interface InventoryItem {
@@ -58,6 +62,20 @@ interface InventoryItem {
 function isModuleEnabled(moduleId: string): boolean {
   const mod = AVAILABLE_MODULES.find((m) => m.id === moduleId);
   return mod?.enabled ?? false;
+}
+
+function isExpiringSoon(record: TrainingRecord): boolean {
+  if (!record.expiration_date) return false;
+  const expDate = new Date(record.expiration_date);
+  const now = new Date();
+  const daysUntilExpiry =
+    (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+  return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
+}
+
+function isExpired(record: TrainingRecord): boolean {
+  if (!record.expiration_date) return false;
+  return new Date(record.expiration_date) < new Date();
 }
 
 export const MemberProfilePage: React.FC = () => {
@@ -291,38 +309,6 @@ export const MemberProfilePage: React.FC = () => {
     } finally {
       setStatusChanging(false);
     }
-  };
-
-  const getTrainingStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400";
-      case "in_progress":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400";
-      case "scheduled":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400";
-      case "failed":
-        return "bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400";
-      case "cancelled":
-        return "bg-theme-surface-secondary text-theme-text-muted";
-      default:
-        return "bg-theme-surface-secondary text-theme-text-secondary";
-    }
-  };
-
-  /** Check if a training record's certification is expiring within 90 days. */
-  const isExpiringSoon = (record: TrainingRecord): boolean => {
-    if (!record.expiration_date) return false;
-    const expDate = new Date(record.expiration_date);
-    const now = new Date();
-    const daysUntilExpiry =
-      (expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
-    return daysUntilExpiry > 0 && daysUntilExpiry <= 90;
-  };
-
-  const isExpired = (record: TrainingRecord): boolean => {
-    if (!record.expiration_date) return false;
-    return new Date(record.expiration_date) < new Date();
   };
 
   const handleEditClick = () => {
@@ -737,320 +723,21 @@ export const MemberProfilePage: React.FC = () => {
           <div className="lg:col-span-2 space-y-6">
             {/* Training & Certifications */}
             {trainingEnabled && (
-              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-                {/* Compliance Summary Card */}
-                {complianceSummary && (
-                  <div className="mb-6">
-                    <div
-                      className={`rounded-lg p-4 border ${
-                        complianceSummary.compliance_status === "exempt"
-                          ? "border-theme-surface-border bg-theme-surface-secondary"
-                          : complianceSummary.compliance_status === "green"
-                            ? "border-green-500/30 bg-green-500/5"
-                            : complianceSummary.compliance_status === "yellow"
-                              ? "border-yellow-500/30 bg-yellow-500/5"
-                              : "border-red-500/30 bg-red-500/5"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-theme-text-primary uppercase tracking-wider">
-                          Compliance Summary
-                        </h3>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            complianceSummary.compliance_status === "exempt"
-                              ? "bg-theme-surface-secondary text-theme-text-muted"
-                              : complianceSummary.compliance_status === "green"
-                                ? "bg-green-500/20 text-green-700 dark:text-green-400"
-                                : complianceSummary.compliance_status === "yellow"
-                                  ? "bg-yellow-500/20 text-yellow-700 dark:text-yellow-400"
-                                  : "bg-red-500/20 text-red-700 dark:text-red-400"
-                          }`}
-                        >
-                          {complianceSummary.compliance_label}
-                        </span>
-                      </div>
-                      {complianceSummary.is_exempt ? (
-                        <p className="text-sm text-theme-text-muted">
-                          This member is exempt from compliance requirements
-                          (training hours, certificates, shifts, and admin
-                          hours).
-                        </p>
-                      ) : (
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                          <div>
-                            <p className="text-xs text-theme-text-muted">
-                              Requirements
-                            </p>
-                            <p className="text-lg font-semibold text-theme-text-primary">
-                              {complianceSummary.requirements_met}/
-                              {complianceSummary.requirements_total}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-theme-text-muted">
-                              Hours (YTD)
-                            </p>
-                            <p className="text-lg font-semibold text-theme-text-primary">
-                              {complianceSummary.hours_this_year.toFixed(1)}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-theme-text-muted">
-                              Active Certs
-                            </p>
-                            <p className="text-lg font-semibold text-theme-text-primary">
-                              {complianceSummary.active_certifications}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-theme-text-muted">
-                              Expiring Soon
-                            </p>
-                            <p
-                              className={`text-lg font-semibold ${
-                                complianceSummary.certs_expiring_soon > 0
-                                  ? "text-yellow-700 dark:text-yellow-400"
-                                  : complianceSummary.certs_expired > 0
-                                    ? "text-red-700 dark:text-red-400"
-                                    : "text-theme-text-primary"
-                              }`}
-                            >
-                              {complianceSummary.certs_expiring_soon}
-                              {complianceSummary.certs_expired > 0 && (
-                                <span className="text-red-700 dark:text-red-400 text-sm ml-1">
-                                  ({complianceSummary.certs_expired} expired)
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-theme-text-primary">
-                    Training & Certifications
-                  </h2>
-                  <Link
-                    to={`/members/${userId}/training`}
-                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                  >
-                    View Full History
-                  </Link>
-                </div>
-                {trainingsLoading ? (
-                  <div className="flex items-center justify-center h-24">
-                    <div className="text-sm text-theme-text-muted">
-                      Loading training records...
-                    </div>
-                  </div>
-                ) : trainings.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-theme-text-muted">
-                      No training records found.
-                    </p>
-                    <p className="text-xs text-theme-text-muted mt-1">
-                      Training records will appear here as they are completed.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {/* Show only the 5 most recent/important records */}
-                    {trainings.slice(0, 5).map((training) => (
-                      <div
-                        key={training.id}
-                        className="border border-theme-surface-border rounded-lg p-4 hover:border-theme-surface-border transition-colors"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h3 className="font-medium text-theme-text-primary">
-                              {training.course_name}
-                            </h3>
-                            {training.certification_number && (
-                              <p className="text-sm text-theme-text-secondary mt-1">
-                                Cert #: {training.certification_number}
-                              </p>
-                            )}
-                            <div className="flex flex-wrap gap-4 mt-2 text-sm text-theme-text-secondary">
-                              {training.completion_date && (
-                                <span>
-                                  Completed:{" "}
-                                  {formatDate(training.completion_date, tz)}
-                                </span>
-                              )}
-                              {training.expiration_date && (
-                                <span
-                                  className={
-                                    isExpired(training)
-                                      ? "text-red-700 dark:text-red-400"
-                                      : isExpiringSoon(training)
-                                        ? "text-yellow-700 dark:text-yellow-400"
-                                        : ""
-                                  }
-                                >
-                                  Expires:{" "}
-                                  {formatDate(training.expiration_date, tz)}
-                                </span>
-                              )}
-                              {training.hours_completed > 0 && (
-                                <span>{training.hours_completed} hrs</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-xs font-medium ${getTrainingStatusColor(
-                                training.status,
-                              )}`}
-                            >
-                              {training.status.replace("_", " ")}
-                            </span>
-                            {isExpired(training) && (
-                              <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400">
-                                expired
-                              </span>
-                            )}
-                            {!isExpired(training) &&
-                              isExpiringSoon(training) && (
-                                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400">
-                                  expiring soon
-                                </span>
-                              )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {trainings.length > 5 && (
-                      <Link
-                        to={`/members/${userId}/training`}
-                        className="block text-center py-3 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
-                      >
-                        View all {trainings.length} training records →
-                      </Link>
-                    )}
-                  </div>
-                )}
-              </div>
+              <TrainingSection
+                userId={userId ?? ""}
+                trainings={trainings}
+                trainingsLoading={trainingsLoading}
+                complianceSummary={complianceSummary}
+                tz={tz}
+              />
             )}
 
             {/* Admin Hours Summary */}
             {adminHoursSummary && adminHoursSummary.totalEntries > 0 && (
-              <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-theme-text-primary">
-                    Administrative Hours
-                  </h2>
-                  <Link
-                    to="/admin-hours"
-                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                  >
-                    View Details
-                  </Link>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                  <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-theme-text-primary">
-                      {adminHoursSummary.totalHours.toFixed(1)}
-                    </p>
-                    <p className="text-xs text-theme-text-muted">Total Hours</p>
-                  </div>
-                  <div className="bg-theme-surface-secondary rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-theme-text-primary">
-                      {adminHoursSummary.totalEntries}
-                    </p>
-                    <p className="text-xs text-theme-text-muted">Entries</p>
-                  </div>
-                </div>
-                {adminHoursSummary.byCategory.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs text-theme-text-muted uppercase font-medium">
-                      By Category
-                    </p>
-                    {adminHoursSummary.byCategory.map((cat) => (
-                      <div
-                        key={cat.categoryId}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <div className="flex items-center gap-2">
-                          {cat.categoryColor && (
-                            <span
-                              className="w-2.5 h-2.5 rounded-full"
-                              style={{ backgroundColor: cat.categoryColor }}
-                            />
-                          )}
-                          <span className="text-theme-text-secondary">
-                            {cat.categoryName}
-                          </span>
-                        </div>
-                        <span className="font-medium text-theme-text-primary">
-                          {cat.totalHours.toFixed(1)} hrs
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {adminHoursCompliance.length > 0 && (
-                  <div className="space-y-3 mt-4 pt-4 border-t border-theme-surface-border">
-                    <p className="text-xs text-theme-text-muted uppercase font-medium">
-                      Yearly Requirements
-                    </p>
-                    {adminHoursCompliance.map((req) => {
-                      const pct = req.requiredHours > 0
-                        ? Math.min(100, (req.loggedHours / req.requiredHours) * 100)
-                        : 0;
-                      const barColor =
-                        req.status === 'compliant'
-                          ? 'bg-green-500'
-                          : req.status === 'at_risk'
-                            ? 'bg-yellow-500'
-                            : 'bg-red-500';
-                      return (
-                        <div key={req.categoryId} className="space-y-1">
-                          <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-2">
-                              {req.categoryColor && (
-                                <span
-                                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                                  style={{ backgroundColor: req.categoryColor }}
-                                />
-                              )}
-                              <span className="text-theme-text-secondary">
-                                {req.categoryName}
-                              </span>
-                            </div>
-                            <span className="font-medium text-theme-text-primary">
-                              {req.loggedHours} / {req.requiredHours} hrs
-                            </span>
-                          </div>
-                          <div className="w-full h-2 bg-theme-surface-secondary rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${barColor}`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-theme-text-muted capitalize">
-                              {req.frequency}
-                            </span>
-                            <span className={`text-xs font-medium ${
-                              req.status === 'compliant'
-                                ? 'text-green-500'
-                                : req.status === 'at_risk'
-                                  ? 'text-yellow-500'
-                                  : 'text-red-500'
-                            }`}>
-                              {req.status === 'compliant' ? 'Complete' : req.status === 'at_risk' ? 'At Risk' : 'Incomplete'}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <AdminHoursSection
+                adminHoursSummary={adminHoursSummary}
+                adminHoursCompliance={adminHoursCompliance}
+              />
             )}
             {adminHoursLoading && (
               <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
@@ -1139,163 +826,19 @@ export const MemberProfilePage: React.FC = () => {
           {/* Right Column - Contact & Additional Info */}
           <div className="space-y-6">
             {/* Contact Information */}
-            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-theme-text-primary">
-                  Contact Information
-                </h2>
-                {canEdit && !isEditing && (
-                  <button
-                    onClick={handleEditClick}
-                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-
-              {!isEditing ? (
-                <div className="space-y-3">
-                  {user.email && (
-                    <div>
-                      <p className="text-xs text-theme-text-muted uppercase font-medium">
-                        Email
-                      </p>
-                      <p className="text-sm text-theme-text-primary mt-1">
-                        {user.email}
-                      </p>
-                    </div>
-                  )}
-                  {user.phone && (
-                    <div>
-                      <p className="text-xs text-theme-text-muted uppercase font-medium">
-                        Phone
-                      </p>
-                      <p className="text-sm text-theme-text-primary mt-1">
-                        {user.phone}
-                      </p>
-                    </div>
-                  )}
-                  {user.mobile && (
-                    <div>
-                      <p className="text-xs text-theme-text-muted uppercase font-medium">
-                        Mobile
-                      </p>
-                      <p className="text-sm text-theme-text-primary mt-1">
-                        {user.mobile}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={editForm.email}
-                      onChange={(e) =>
-                        handleFormChange("email", e.target.value)
-                      }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-                      Phone
-                    </label>
-                    <input
-                      type="tel"
-                      value={editForm.phone}
-                      onChange={(e) =>
-                        handleFormChange("phone", e.target.value)
-                      }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
-                      Mobile
-                    </label>
-                    <input
-                      type="tel"
-                      value={editForm.mobile}
-                      onChange={(e) =>
-                        handleFormChange("mobile", e.target.value)
-                      }
-                      className="form-input w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                    />
-                  </div>
-
-                  <div className="pt-4 border-t border-theme-surface-border">
-                    <label className="block text-xs text-theme-text-muted uppercase font-medium mb-3">
-                      Notification Preferences
-                    </label>
-                    <div className="space-y-2">
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editForm.notification_preferences?.email}
-                          onChange={() => handleNotificationToggle("email")}
-                          className="form-checkbox border-theme-surface-border"
-                        />
-                        <span className="ml-2 text-sm text-theme-text-secondary">
-                          Email notifications
-                        </span>
-                      </label>
-                      <label className="flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editForm.notification_preferences?.sms}
-                          onChange={() => handleNotificationToggle("sms")}
-                          className="form-checkbox border-theme-surface-border"
-                        />
-                        <span className="ml-2 text-sm text-theme-text-secondary">
-                          SMS notifications
-                        </span>
-                      </label>
-                      <label className="flex items-center cursor-not-allowed opacity-50">
-                        <input
-                          type="checkbox"
-                          checked={false}
-                          disabled
-                          className="form-checkbox border-theme-surface-border"
-                        />
-                        <span className="ml-2 text-sm text-theme-text-secondary">
-                          Push notifications
-                          <span className="ml-1 text-xs text-theme-text-muted">(coming soon)</span>
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2 pt-4">
-                    <button
-                      onClick={() => {
-                        void handleSaveContact();
-                      }}
-                      disabled={saving}
-                      className="btn-info disabled:cursor-not-allowed flex-1 font-medium rounded-md text-sm"
-                    >
-                      {saving ? "Saving..." : "Save Changes"}
-                    </button>
-                    <button
-                      onClick={handleCancelEdit}
-                      disabled={saving}
-                      className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-
-                  {error && (
-                    <div className="mt-2 text-sm text-red-700 dark:text-red-400">{error}</div>
-                  )}
-                </div>
-              )}
-            </div>
+            <ContactInfoSection
+              user={user}
+              canEdit={canEdit}
+              isEditing={isEditing}
+              saving={saving}
+              error={error}
+              editForm={editForm}
+              onEditClick={handleEditClick}
+              onCancelEdit={handleCancelEdit}
+              onSaveContact={handleSaveContact}
+              onFormChange={handleFormChange}
+              onNotificationToggle={handleNotificationToggle}
+            />
 
             {/* Address & Personal Email */}
             <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
@@ -1482,169 +1025,20 @@ export const MemberProfilePage: React.FC = () => {
             </div>
 
             {/* Emergency Contacts */}
-            <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-theme-text-primary">
-                  Emergency Contacts
-                </h2>
-                {canEdit && !editingContacts && (
-                  <button
-                    onClick={handleEditEmergencyContacts}
-                    className="text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-              {!editingContacts ? (
-                <div className="space-y-3">
-                  {user.emergency_contacts &&
-                  user.emergency_contacts.length > 0 ? (
-                    user.emergency_contacts.map((ec, i) => (
-                      <div
-                        key={i}
-                        className="border border-theme-surface-border rounded-lg p-3"
-                      >
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-theme-text-primary">
-                            {ec.name}
-                          </p>
-                          {ec.is_primary && (
-                            <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400 rounded-sm">
-                              Primary
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-theme-text-secondary mt-1">
-                          {ec.relationship}
-                        </p>
-                        <p className="text-xs text-theme-text-secondary">
-                          {ec.phone}
-                        </p>
-                        {ec.email && (
-                          <p className="text-xs text-theme-text-secondary">
-                            {ec.email}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-theme-text-muted">
-                      No emergency contacts on file.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {contactsForm.map((ec, i) => (
-                    <div
-                      key={i}
-                      className="border border-theme-surface-border rounded-lg p-3 space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-theme-text-muted">
-                          Contact {i + 1}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <label className="flex items-center gap-1 text-xs text-theme-text-secondary cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={ec.is_primary}
-                              onChange={(e) =>
-                                handleContactChange(
-                                  i,
-                                  "is_primary",
-                                  e.target.checked,
-                                )
-                              }
-                              className="h-3 w-3 text-blue-600 focus:ring-theme-focus-ring border-theme-surface-border rounded-sm"
-                            />
-                            Primary
-                          </label>
-                          {contactsForm.length > 1 && (
-                            <button
-                              onClick={() => handleRemoveContact(i)}
-                              className="text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-xs"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input
-                          type="text"
-                          placeholder="Name *"
-                          value={ec.name}
-                          onChange={(e) =>
-                            handleContactChange(i, "name", e.target.value)
-                          }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded-sm text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Relationship"
-                          value={ec.relationship}
-                          onChange={(e) =>
-                            handleContactChange(
-                              i,
-                              "relationship",
-                              e.target.value,
-                            )
-                          }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded-sm text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input
-                          type="tel"
-                          placeholder="Phone *"
-                          value={ec.phone}
-                          onChange={(e) =>
-                            handleContactChange(i, "phone", e.target.value)
-                          }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded-sm text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                        />
-                        <input
-                          type="email"
-                          placeholder="Email"
-                          value={ec.email || ""}
-                          onChange={(e) =>
-                            handleContactChange(i, "email", e.target.value)
-                          }
-                          className="px-2 py-1.5 border border-theme-surface-border rounded-sm text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
-                        />
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    onClick={handleAddContact}
-                    className="w-full px-3 py-2 text-sm text-blue-700 dark:text-blue-400 border border-dashed border-theme-surface-border rounded-md hover:bg-theme-surface-hover"
-                  >
-                    + Add Contact
-                  </button>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        void handleSaveEmergencyContacts();
-                      }}
-                      disabled={savingContacts}
-                      className="btn-info flex-1 font-medium rounded-md text-sm"
-                    >
-                      {savingContacts ? "Saving..." : "Save"}
-                    </button>
-                    <button
-                      onClick={() => setEditingContacts(false)}
-                      disabled={savingContacts}
-                      className="flex-1 px-4 py-2 bg-theme-surface text-theme-text-secondary text-sm font-medium border border-theme-surface-border rounded-md hover:bg-theme-surface-hover disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  {error && <div className="text-sm text-red-700 dark:text-red-400">{error}</div>}
-                </div>
-              )}
-            </div>
+            <EmergencyContactsSection
+              user={user}
+              canEdit={canEdit}
+              editingContacts={editingContacts}
+              savingContacts={savingContacts}
+              error={error}
+              contactsForm={contactsForm}
+              onEditEmergencyContacts={handleEditEmergencyContacts}
+              onSaveEmergencyContacts={handleSaveEmergencyContacts}
+              onCancelEditContacts={() => setEditingContacts(false)}
+              onAddContact={handleAddContact}
+              onRemoveContact={handleRemoveContact}
+              onContactChange={handleContactChange}
+            />
 
             {/* Employment Info */}
             <div className="bg-theme-surface backdrop-blur-xs shadow-sm rounded-lg p-6">
