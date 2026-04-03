@@ -323,7 +323,9 @@ export const ShiftReportsTab: React.FC = () => {
       };
       await shiftCompletionService.createReport(payload);
       toast.success('Shift report submitted');
+      setLinkedShiftLabel(null);
       setForm({
+        shift_id: undefined,
         shift_date: getTodayLocalDate(tz),
         hours_on_shift: 0,
         calls_responded: 0,

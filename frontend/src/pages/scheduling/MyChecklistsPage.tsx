@@ -413,7 +413,8 @@ export const MyChecklistsPage: React.FC = () => {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {activeChecklists
               .filter((c) => timingFilter === 'all' || c.checkTiming === timingFilter)
-              .toSorted((a, b) => {
+              .slice()
+              .sort((a, b) => {
                 if (!highlightShiftId) return 0;
                 const aMatch = a.shiftId === highlightShiftId ? 0 : 1;
                 const bMatch = b.shiftId === highlightShiftId ? 0 : 1;
