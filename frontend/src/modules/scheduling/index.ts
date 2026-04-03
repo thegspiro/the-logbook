@@ -80,6 +80,9 @@ export type {
   ItemTrendEntry,
 } from "./types/equipmentCheck";
 
+// Settings Types
+export type { ShiftReportSettings } from "./types/shiftSettings";
+
 // Components
 export { ShiftSettingsPanel } from "./components/ShiftSettingsPanel";
 export { SchedulingNotificationsPanel } from "./components/SchedulingNotificationsPanel";

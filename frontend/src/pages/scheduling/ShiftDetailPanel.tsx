@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
   Loader2, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
@@ -50,6 +51,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   onClose,
   onRefresh,
 }) => {
+  const navigate = useNavigate();
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
@@ -1369,6 +1371,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               </div>
             </div>
           )}
+
+          {/* Quick Actions — checklists and shift report */}
+          {(() => {
+            const shiftEnded = shift.end_time && new Date(shift.end_time).getTime() <= Date.now();
+            const isOfficer = user?.id === shift.shift_officer_id;
+            const showReportBtn = shiftEnded && (isOfficer || canManage);
+            const showChecklistLink = equipmentCheckSummaries.some(s => !s.isCompleted);
+
+            if (!showReportBtn && !showChecklistLink) return null;
+
+            return (
+              <div className="flex flex-wrap gap-2">
+                {showChecklistLink && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      navigate(`/scheduling?tab=equipment-checks&shift=${shift.id}`);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-700 dark:text-violet-400 hover:bg-violet-500/20 transition-colors"
+                  >
+                    <ClipboardCheck className="w-3.5 h-3.5" />
+                    Complete Checklists
+                  </button>
+                )}
+                {showReportBtn && (
+                  <button
+                    onClick={() => {
+                      onClose();
+                      navigate(`/scheduling?tab=shift-reports&shift=${shift.id}`);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                    File Shift Report
+                  </button>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Equipment Checks */}
           {equipmentCheckSummaries.length > 0 && (
