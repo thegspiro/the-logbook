@@ -1490,16 +1490,24 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # In-app notification for each assigned member
                 shift_action_url = (
-                    f"/scheduling?shift={shift.id}"
+                    f"/scheduling?tab=equipment-checks"
+                    f"&shift={shift.id}"
                 )
                 shift_start_iso = (
                     shift.start_time.isoformat()
                     if shift.start_time
                     else None
                 )
+                shift_end_iso = (
+                    shift.end_time.isoformat()
+                    if shift.end_time
+                    else None
+                )
                 shift_metadata = {}
                 if shift_start_iso:
                     shift_metadata["shift_start_time"] = shift_start_iso
+                if shift_end_iso:
+                    shift_metadata["shift_end_time"] = shift_end_iso
                 if shift.id:
                     shift_metadata["shift_id"] = str(shift.id)
 

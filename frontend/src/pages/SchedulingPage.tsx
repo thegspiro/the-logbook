@@ -265,10 +265,14 @@ const SchedulingPage: React.FC = () => {
   // Shift detail panel
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
 
-  // Deep-link: open shift detail panel when ?shift=<id> is in the URL
+  // Deep-link: open shift detail panel when ?shift=<id> is in the URL.
+  // Skip if a specific tab is targeted (e.g. equipment-checks from a notification)
+  // so the shift panel doesn't obscure the tab content.
   useEffect(() => {
     const shiftId = searchParams.get('shift');
+    const targetTab = searchParams.get('tab');
     if (!shiftId || selectedShift) return;
+    if (targetTab && targetTab !== 'schedule') return;
 
     let cancelled = false;
     const openShift = async () => {
@@ -276,12 +280,10 @@ const SchedulingPage: React.FC = () => {
         const shift = await schedulingService.getShift(shiftId);
         if (!cancelled) {
           setSelectedShift(shift);
-          // Clear the param so closing the panel doesn't re-open it
           searchParams.delete('shift');
           setSearchParams(searchParams, { replace: true });
         }
       } catch {
-        // Shift may have been deleted — silently clear the param
         searchParams.delete('shift');
         setSearchParams(searchParams, { replace: true });
       }
