@@ -46,6 +46,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `training_waivers` | Training requirement waivers (auto-linked from LOA or manual) |
 | `training_submissions` | Self-reported training pending review |
 | `shift_completion_reports` | Post-shift training reports with encrypted evaluation fields, review workflow (`draft`/`pending_review`/`approved`/`flagged`), trainee acknowledgment, skills observed, tasks performed, call type tracking, pipeline progress linkage, and audit trail (`data_sources`) *(updated 2026-03-28)* |
+| `training_module_configs` | Module configuration including trainee visibility settings (`show_*`), report form section toggles (`form_show_*`), per-apparatus-type skills/tasks mappings, rating scale customization, and shift review defaults *(updated 2026-04-04)* |
 
 ### Membership
 
@@ -78,7 +79,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `equipment_check_templates` | Master equipment check templates with timing and position assignment *(2026-03-19)* |
 | `check_template_compartments` | Named sections within a template, nested via `parent_compartment_id` *(2026-03-19)* |
 | `check_template_items` | Individual check items with type, expiration, serial/lot tracking *(2026-03-19)* |
-| `shift_equipment_checks` | Submitted check records linked to shifts *(2026-03-19)* |
+| `shift_equipment_checks` | Submitted check records linked to shifts; `shift_id` nullable for standalone ad-hoc checks; composite indexes on `(shift_id, template_id)` *(updated 2026-04-04)* |
 | `shift_equipment_check_items` | Individual item results within a submitted check *(2026-03-19)* |
 
 ### Inventory
@@ -191,6 +192,38 @@ All data is scoped by `organization_id`. Key constraints:
 - Unique constraints are org-scoped (e.g., `UniqueConstraint("organization_id", "barcode")`)
 - All queries filter by the current user's organization
 - Cross-org data access is prevented at the service layer
+
+---
+
+## Recent Schema Changes (2026-04-04)
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `training_module_configs` | `form_show_performance_rating` | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle performance rating section on report creation form |
+| `training_module_configs` | `form_show_areas_of_strength` | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle strengths section on report creation form |
+| `training_module_configs` | `form_show_areas_for_improvement` | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle improvement section on report creation form |
+| `training_module_configs` | `form_show_officer_narrative` | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle narrative section on report creation form |
+| `training_module_configs` | `form_show_skills_observed` | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle skills section on report creation form |
+| `training_module_configs` | `form_show_tasks_performed` | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle tasks section on report creation form |
+| `training_module_configs` | `form_show_call_types` | Boolean (NOT NULL, default 1) | `20260404_0200` | Toggle call types section on report creation form |
+| `training_module_configs` | `apparatus_type_skills` | JSON (nullable) | `20260404_0300` | Per-apparatus-type skill lists for shift reports |
+| `training_module_configs` | `apparatus_type_tasks` | JSON (nullable) | `20260404_0300` | Per-apparatus-type task lists for shift reports |
+| `requirement_progress` | `started_at` | DateTime(tz, nullable) | `20260404_0500` | Timestamp when requirement transitions to IN_PROGRESS |
+
+### Column Modifications
+
+| Table | Column | Change | Migration | Reason |
+|-------|--------|--------|-----------|--------|
+| `shift_equipment_checks` | `shift_id` | Made nullable | `20260404_0100` | Support standalone ad-hoc equipment checks without an active shift |
+
+### New Indexes
+
+| Table | Index | Columns | Migration |
+|-------|-------|---------|-----------|
+| `shift_equipment_checks` | Composite | `(shift_id, template_id)` | `20260404_0400` |
+| `shift_equipment_check_items` | Composite | `(check_id, template_item_id)` | `20260404_0400` |
 
 ---
 

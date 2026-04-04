@@ -305,4 +305,99 @@ GET    /api/v1/scheduling/shifts/{id}/unavailable-members  # Unavailable user ID
 
 ---
 
+## Shift Reports Settings & Form Customization (2026-04-04)
+
+### Shift Reports Settings Panel
+
+A new **Shift Reports** sub-tab within Scheduling Settings provides centralized configuration for the shift completion report workflow, including checklist timing, post-shift validation, form section toggles, apparatus-specific skills/tasks, and rating scale customization.
+
+**Settings stored in `org.settings["shift_reports"]`:**
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `checklist_timing.start_of_shift_enabled` | `true` | Start-of-shift equipment checklists active |
+| `checklist_timing.end_of_shift_enabled` | `true` | End-of-shift equipment checklists active |
+| `post_shift_validation.enabled` | `true` | Post-shift validation reminders active |
+| `post_shift_validation.require_officer_report` | `false` | Mandatory shift completion report per shift |
+| `post_shift_validation.validation_window_hours` | `2` | Hours after shift end for validation reminders |
+
+### Report Form Section Toggles
+
+Controls which optional sections appear on the shift completion report form (stored on `training_module_configs`):
+
+| Toggle | Default | Controls |
+|--------|---------|----------|
+| `form_show_performance_rating` | `true` | Rating stars/scale |
+| `form_show_areas_of_strength` | `true` | Strengths text field |
+| `form_show_areas_for_improvement` | `true` | Improvement areas text field |
+| `form_show_officer_narrative` | `true` | Free-form officer assessment |
+| `form_show_skills_observed` | `true` | Structured skills checklist |
+| `form_show_tasks_performed` | `true` | Structured tasks list |
+| `form_show_call_types` | `true` | Call type selection |
+
+These toggles are **separate** from the existing `show_*` visibility columns, which control what trainees see after submission.
+
+### Per-Apparatus-Type Skills and Tasks
+
+New JSON columns on `training_module_configs` map apparatus types to specific skills and tasks:
+
+- **`apparatus_type_skills`** — e.g., `{"engine": ["Pump operations", "Hose deployment"], "ladder": ["Aerial operations", "Ventilation"]}`
+- **`apparatus_type_tasks`** — e.g., `{"engine": ["Pump test", "Hose load inventory"], "ladder": ["Aerial extension test"]}`
+
+When filing a report linked to a shift with an assigned apparatus, the form auto-populates the skills and tasks checklist from the apparatus type mapping. Falls back to org-wide defaults when no type-specific mapping exists.
+
+### Rating Scale Customization
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `rating_label` | "Performance Rating" | Custom label for the rating input |
+| `rating_scale_type` | "stars" | "stars" or "descriptive" |
+| `rating_scale_labels` | `null` | Custom labels per level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`) |
+
+### Save as Draft
+
+Officers can save incomplete reports as drafts. Drafts do not trigger training pipeline progress until completed and transitioned to `approved` or `pending_review`.
+
+### Auto-Filter Trainee List
+
+When a shift report is linked to a specific shift, the trainee dropdown filters to show only members assigned to that shift. Ad-hoc reports (no shift linked) show the full member list.
+
+### Bug Fixes (2026-04-04)
+
+| Issue | Fix |
+|-------|-----|
+| Standalone checklist submission failing | Made `shift_id` nullable in `shift_equipment_checks` for ad-hoc checks |
+| Equipment check empty templates | Return "No items to check" instead of empty form |
+| Equipment check duplicate submissions | Added composite unique constraint on shift + apparatus + timing |
+| Equipment check status logic | Corrected pass/fail computation for mixed check types |
+| Shift report with assignment but no attendance | Gracefully handles missing attendance; allows manual hour entry |
+| Report shift_date mismatch | Validates report date matches linked shift's actual date |
+| Pipeline enrollment field name | Fixed incorrect field reference causing 500 errors |
+| Requirement progress started_at | Added missing column referenced by training program service |
+| NotificationLog metadata attribute | Renamed from reserved `metadata` to `notification_metadata` |
+| Post-shift validation notification UX | Fixed "Start Checklist" / "View Shift" button logic |
+| Notification deep-linking | Shift check notifications now link to checklist page |
+| Equipment check query performance | Added composite indexes on `(shift_id, template_id)` and `(check_id, template_item_id)` |
+
+### Component Architecture (2026-04-03)
+
+ShiftTemplatesPage decomposed into focused components:
+- `TemplateFormModal` — Create/edit shift template
+- `PatternFormModal` — Create/edit shift pattern
+- `GenerateShiftsModal` — Bulk generate shifts from pattern
+- `shiftTemplateTypes.ts` — Shared TypeScript types for template/pattern forms
+
+### Edge Cases (2026-04-04)
+
+| Scenario | Behavior |
+|----------|----------|
+| All form sections toggled off | Core fields (trainee, date, hours, calls) remain; form submittable |
+| Apparatus type with no mapped skills | Falls back to org-wide defaults; empty if none configured |
+| Draft saved with missing fields | Validation deferred until final submission |
+| Standalone equipment check (no shift) | Saved with `shift_id=NULL`; not linked to shift finalization |
+| Descriptive rating with no labels | Falls back to numeric display (1-5) |
+| Duplicate equipment check | Blocked by composite constraint; descriptive error returned |
+
+---
+
 **See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus)

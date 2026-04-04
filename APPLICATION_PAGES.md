@@ -209,8 +209,11 @@ Requires `training.manage` permission. Tab-based admin interface.
 | `shift-reports` | Shift Reports |
 | `integrations` | Integrations |
 | `import` | Import History |
+| `enhancements` | Enhancements |
 
 > The **Training Waivers** tab (within Officer Dashboard) shows all training waivers with summary cards, status filtering, and source tracking (Auto LOA vs Manual).
+>
+> The **Enhancements** tab provides access to recertification pathway management, instructor qualification tracking, training effectiveness evaluations (Kirkpatrick model), multi-agency session coordination, and compliance officer tools.
 
 **Legacy redirects:**
 - `/training/officer` → `/training/admin?tab=dashboard`
@@ -305,6 +308,18 @@ Tab-based interface with the following views:
 | `/scheduling/settings` | Scheduling Settings | `scheduling.manage` |
 
 > Admin tabs have been extracted into dedicated routed pages with back navigation. The tab-based interface remains functional but links navigate to full pages.
+
+### Scheduling Settings Sub-Tabs *(2026-04-04)*
+
+The Scheduling Settings page uses a tabbed sub-navigation:
+
+| Sub-Tab | Description |
+|---------|-------------|
+| Shift Settings | Default durations, positions, apparatus type defaults, staffing rules |
+| Notifications | Email recipients and notification preferences for shift events |
+| Shift Reports | Checklist timing windows, post-shift validation, officer report requirements, training module defaults (call types, skills, tasks), per-apparatus-type skill/task mappings, rating scale customization, and report form section toggles |
+
+> The **Shift Reports** settings tab links to the Training Module Configuration for defaults (call types, skills, tasks) and provides an inline UI for managing per-apparatus-type skill and task mappings. Changes to form section toggles control which sections officers see when filing shift completion reports.
 
 ### Equipment Check Pages (2026-03-19)
 

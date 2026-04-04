@@ -765,17 +765,64 @@ POST   /api/v1/training/shift-reports/{report_id}/review               # Officer
 | `trainee_acknowledged_at` | DateTime, nullable | Acknowledgment timestamp |
 | `trainee_comments` | Text, nullable | Trainee feedback |
 
+**Save as Draft:**
+
+The `save_as_draft: true` flag on `ShiftCompletionReportCreate` saves the report with `review_status: "draft"` without triggering pipeline progress. Progress is deferred until the draft is completed and transitions to `approved` or `pending_review`.
+
 **Pipeline Progress Logic:**
 
-When a report is created or transitions from `draft` to `approved`/`pending_review`, the service calls `_update_requirement_progress()`:
+When a report is created (non-draft) or transitions from `draft` to `approved`/`pending_review`, the service calls `_update_requirement_progress()`:
 
 1. Finds active enrollments for the trainee
 2. For each active requirement (`NOT_STARTED` or `IN_PROGRESS`):
    - `SHIFTS` type: adds 1.0
    - `CALLS` type: if `required_call_types` specified, counts matching calls (case-insensitive); otherwise counts all
    - `HOURS` type: adds `hours_on_shift`
-3. Updates `RequirementProgress.progress_value`
-4. Tracks call type breakdown in `progress_notes`
+3. Sets `started_at` on `RequirementProgress` when transitioning from `NOT_STARTED` to `IN_PROGRESS`
+4. Updates `RequirementProgress.progress_value`
+5. Tracks call type breakdown in `progress_notes`
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Report `shift_date` doesn't match linked shift date | Validation error returned |
+| Trainee has assignment but no attendance | Auto-populate returns zeros; manual entry allowed |
+| Duplicate report for same shift + trainee | Blocked by unique constraint; descriptive error |
+| Draft saved with missing required fields | Accepted; validation deferred to final submission |
+| Equipment check `shift_id` is NULL | Standalone ad-hoc check; not linked to shift finalization |
+
+### Module Configuration
+
+```
+GET    /api/v1/training/module-config/config               # Get module config
+PUT    /api/v1/training/module-config/config               # Update module config
+GET    /api/v1/training/module-config/visibility           # Get member visibility settings
+GET    /api/v1/training/module-config/my-training          # Get my training summary config
+```
+
+**TrainingModuleConfig Model (key fields):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `show_*` columns | Boolean | Trainee visibility controls (what trainees see after report submission) |
+| `form_show_performance_rating` | Boolean | Toggle performance rating on report creation form *(2026-04-04)* |
+| `form_show_areas_of_strength` | Boolean | Toggle strengths section on report creation form *(2026-04-04)* |
+| `form_show_areas_for_improvement` | Boolean | Toggle improvement section on report creation form *(2026-04-04)* |
+| `form_show_officer_narrative` | Boolean | Toggle narrative on report creation form *(2026-04-04)* |
+| `form_show_skills_observed` | Boolean | Toggle skills checklist on report creation form *(2026-04-04)* |
+| `form_show_tasks_performed` | Boolean | Toggle tasks list on report creation form *(2026-04-04)* |
+| `form_show_call_types` | Boolean | Toggle call type selection on report creation form *(2026-04-04)* |
+| `apparatus_type_skills` | JSON | Per-apparatus-type skill lists (e.g., `{"engine": ["Pump ops"]}`) *(2026-04-04)* |
+| `apparatus_type_tasks` | JSON | Per-apparatus-type task lists *(2026-04-04)* |
+| `rating_label` | String | Custom label for performance rating *(2026-04-04)* |
+| `rating_scale_type` | String | "stars" or "descriptive" *(2026-04-04)* |
+| `rating_scale_labels` | JSON | Custom labels per level *(2026-04-04)* |
+| `shift_review_call_types` | JSON | Default call types list |
+| `shift_review_default_skills` | JSON | Default skills list |
+| `shift_review_default_tasks` | JSON | Default tasks list |
+| `report_review_required` | Boolean | Whether reports need reviewer approval |
+| `report_review_role` | String | Role required for review (default: training_officer) |
 
 ## Database Migrations
 
@@ -832,6 +879,15 @@ Adds to `training_requirements`:
 - `period_start_month` (Integer): Start month for calendar period (1-12)
 - `period_start_day` (Integer): Start day for calendar period (1-31)
 - `category_ids` (JSON): Array of category UUIDs that satisfy this requirement
+
+### Report Form & Apparatus Mappings (2026-04-04)
+
+**Files:**
+- `20260404_0100_fix_shift_equipment_checks_shift_id_nullable.py` — Makes `shift_id` nullable on `shift_equipment_checks` for standalone ad-hoc checks
+- `20260404_0200_add_report_form_section_toggles.py` — Adds 7 `form_show_*` boolean columns to `training_module_configs`
+- `20260404_0300_add_apparatus_type_skills_tasks.py` — Adds `apparatus_type_skills` and `apparatus_type_tasks` JSON columns
+- `20260404_0400_add_equipment_check_composite_indexes.py` — Adds composite indexes for query performance
+- `20260404_0500_add_requirement_progress_started_at.py` — Adds `started_at` DateTime column to `requirement_progress`
 
 ## Registry Data Files
 
