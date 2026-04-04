@@ -664,7 +664,7 @@ const ShiftReportPage: React.FC = () => {
             </div>
 
             {/* Call Types */}
-            {callsResponded > 0 && (
+            {(moduleConfig?.form_show_call_types ?? true) && callsResponded > 0 && (
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Call Types</label>
                 <div className="flex flex-wrap gap-1 mb-2">
@@ -728,12 +728,15 @@ const ShiftReportPage: React.FC = () => {
             )}
 
             {/* Performance Rating */}
+            {(moduleConfig?.form_show_performance_rating ?? true) && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-2">Performance Rating</label>
               <StarRating value={rating} onChange={setRating} />
             </div>
+            )}
 
             {/* Narrative Fields */}
+            {(moduleConfig?.form_show_officer_narrative ?? true) && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Officer Narrative</label>
               <textarea
@@ -744,8 +747,11 @@ const ShiftReportPage: React.FC = () => {
                 className="form-input w-full"
               />
             </div>
+            )}
 
+            {((moduleConfig?.form_show_areas_of_strength ?? true) || (moduleConfig?.form_show_areas_for_improvement ?? true)) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(moduleConfig?.form_show_areas_of_strength ?? true) && (
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
                 <textarea
@@ -756,6 +762,8 @@ const ShiftReportPage: React.FC = () => {
                   className="form-input w-full"
                 />
               </div>
+              )}
+              {(moduleConfig?.form_show_areas_for_improvement ?? true) && (
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
                 <textarea
@@ -766,9 +774,12 @@ const ShiftReportPage: React.FC = () => {
                   className="form-input w-full"
                 />
               </div>
+              )}
             </div>
+            )}
 
             {/* Skills Observed */}
+            {(moduleConfig?.form_show_skills_observed ?? true) && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-theme-text-secondary">Skills Observed</label>
@@ -800,8 +811,10 @@ const ShiftReportPage: React.FC = () => {
                 </div>
               ))}
             </div>
+            )}
 
             {/* Tasks Performed */}
+            {(moduleConfig?.form_show_tasks_performed ?? true) && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-theme-text-secondary">Tasks Performed</label>
@@ -831,6 +844,7 @@ const ShiftReportPage: React.FC = () => {
                 </div>
               ))}
             </div>
+            )}
 
             {/* Submit */}
             <div className="flex items-center justify-between pt-4 border-t border-theme-surface-border">

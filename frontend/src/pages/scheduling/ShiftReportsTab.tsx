@@ -1181,7 +1181,7 @@ export const ShiftReportsTab: React.FC = () => {
           </div>
 
           {/* Call Types */}
-          {(form.calls_responded || 0) > 0 && (
+          {(config?.form_show_call_types ?? true) && (form.calls_responded || 0) > 0 && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-2">Call Types</label>
               <div className="flex flex-wrap gap-2">
@@ -1201,10 +1201,12 @@ export const ShiftReportsTab: React.FC = () => {
           )}
 
           {/* Performance Rating (configurable scale) */}
-          {renderRatingInput()}
+          {(config?.form_show_performance_rating ?? true) && renderRatingInput()}
 
           {/* Narrative Fields */}
+          {((config?.form_show_areas_of_strength ?? true) || (config?.form_show_areas_for_improvement ?? true)) && (
           <div className="form-grid-2">
+            {(config?.form_show_areas_of_strength ?? true) && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
               <textarea rows={3} value={form.areas_of_strength || ''}
@@ -1213,6 +1215,8 @@ export const ShiftReportsTab: React.FC = () => {
                 className="form-input focus:ring-violet-500 resize-none text-sm"
               />
             </div>
+            )}
+            {(config?.form_show_areas_for_improvement ?? true) && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
               <textarea rows={3} value={form.areas_for_improvement || ''}
@@ -1221,8 +1225,11 @@ export const ShiftReportsTab: React.FC = () => {
                 className="form-input focus:ring-violet-500 resize-none text-sm"
               />
             </div>
+            )}
           </div>
+          )}
 
+          {(config?.form_show_officer_narrative ?? true) && (
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Officer Narrative</label>
             <textarea rows={4} value={form.officer_narrative || ''}
@@ -1231,8 +1238,10 @@ export const ShiftReportsTab: React.FC = () => {
               className="form-input focus:ring-violet-500 resize-none text-sm"
             />
           </div>
+          )}
 
           {/* Skills Observed with Comments */}
+          {(config?.form_show_skills_observed ?? true) && (
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-2">Skills Observed</label>
             <div className="space-y-2">
@@ -1265,8 +1274,10 @@ export const ShiftReportsTab: React.FC = () => {
               })}
             </div>
           </div>
+          )}
 
           {/* Tasks Performed with Comments */}
+          {(config?.form_show_tasks_performed ?? true) && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium text-theme-text-secondary">Tasks Performed</label>
@@ -1326,6 +1337,7 @@ export const ShiftReportsTab: React.FC = () => {
               ))}
             </div>
           </div>
+          )}
 
           {/* Submit */}
           <div className="flex items-center gap-3 pt-2">

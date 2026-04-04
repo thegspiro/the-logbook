@@ -19,6 +19,7 @@ import {
   Clock,
   Plus,
   X,
+  SlidersHorizontal,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { organizationService } from "../../../services/api";
@@ -398,6 +399,88 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* ── Report Form Sections ── */}
+      {trainingConfig && (
+        <div className={cardClass}>
+          <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4" /> Report Form Sections
+          </h3>
+          <p className="text-sm text-theme-text-muted mb-4">
+            Choose which optional sections appear on the shift completion report
+            form when officers file a new report. Core fields (trainee, date,
+            hours) are always shown.
+          </p>
+
+          <div className="space-y-3">
+            {([
+              {
+                field: "form_show_performance_rating" as const,
+                label: "Performance Rating",
+                desc: "Star or competency rating for the trainee.",
+              },
+              {
+                field: "form_show_areas_of_strength" as const,
+                label: "Areas of Strength",
+                desc: "Free-text field for positive feedback.",
+              },
+              {
+                field: "form_show_areas_for_improvement" as const,
+                label: "Areas for Improvement",
+                desc: "Free-text field for developmental feedback.",
+              },
+              {
+                field: "form_show_officer_narrative" as const,
+                label: "Officer Narrative",
+                desc: "General observations and overall assessment.",
+              },
+              {
+                field: "form_show_call_types" as const,
+                label: "Call / Incident Types",
+                desc: "Categorize calls responded during the shift.",
+              },
+              {
+                field: "form_show_skills_observed" as const,
+                label: "Skills Observed",
+                desc: "Checklist of skills demonstrated on shift.",
+              },
+              {
+                field: "form_show_tasks_performed" as const,
+                label: "Tasks Performed",
+                desc: "Track tasks completed during the shift.",
+              },
+            ]).map(({ field, label, desc }) => (
+              <label key={field} className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={trainingConfig[field] ?? true}
+                  onChange={(e) => {
+                    const updates = { [field]: e.target.checked };
+                    void (async () => {
+                      setSavingTraining(true);
+                      try {
+                        const result = await trainingModuleConfigService.updateConfig(updates);
+                        setTrainingConfig(result);
+                        toast.success(`${label} ${e.target.checked ? "enabled" : "disabled"}`);
+                      } catch (err: unknown) {
+                        toast.error(getErrorMessage(err, "Failed to update"));
+                      } finally {
+                        setSavingTraining(false);
+                      }
+                    })();
+                  }}
+                  disabled={savingTraining}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-sm font-medium text-theme-text-primary">{label}</span>
+                  <p className="text-xs text-theme-text-muted">{desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Review Settings (from training module) ── */}
       {trainingConfig && (

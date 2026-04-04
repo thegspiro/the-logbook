@@ -52,6 +52,15 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     rating_scale_type: str = "stars"
     rating_scale_labels: Optional[dict] = None
 
+    # Report form sections
+    form_show_performance_rating: bool = True
+    form_show_areas_of_strength: bool = True
+    form_show_areas_for_improvement: bool = True
+    form_show_officer_narrative: bool = True
+    form_show_skills_observed: bool = True
+    form_show_tasks_performed: bool = True
+    form_show_call_types: bool = True
+
     # Shift review defaults
     shift_review_call_types: Optional[List[str]] = None
     shift_review_default_skills: Optional[List[str]] = None
@@ -65,7 +74,10 @@ class TrainingModuleConfigResponse(UTCResponseBase):
 
 
 class TrainingModuleConfigUpdate(BaseModel):
-    """Update schema — all fields optional so departments can change one at a time."""
+    """Update schema for training module config.
+
+    All fields optional so departments can change one at a time.
+    """
 
     show_training_history: Optional[bool] = None
     show_training_hours: Optional[bool] = None
@@ -95,6 +107,15 @@ class TrainingModuleConfigUpdate(BaseModel):
     rating_label: Optional[str] = Field(None, max_length=100)
     rating_scale_type: Optional[str] = Field(None, max_length=20)
     rating_scale_labels: Optional[dict] = None
+
+    # Report form sections
+    form_show_performance_rating: Optional[bool] = None
+    form_show_areas_of_strength: Optional[bool] = None
+    form_show_areas_for_improvement: Optional[bool] = None
+    form_show_officer_narrative: Optional[bool] = None
+    form_show_skills_observed: Optional[bool] = None
+    form_show_tasks_performed: Optional[bool] = None
+    form_show_call_types: Optional[bool] = None
 
     # Shift review defaults
     shift_review_call_types: Optional[List[str]] = None

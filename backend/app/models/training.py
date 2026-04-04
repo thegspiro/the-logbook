@@ -1464,6 +1464,29 @@ class TrainingModuleConfig(Base):
         JSON, nullable=True
     )  # {"1":"Unsatisfactory","2":"Developing","3":"Competent","4":"Proficient","5":"Exemplary"}
 
+    # Report form sections — which optional sections appear on the form
+    form_show_performance_rating = Column(
+        Boolean, default=True
+    )
+    form_show_areas_of_strength = Column(
+        Boolean, default=True
+    )
+    form_show_areas_for_improvement = Column(
+        Boolean, default=True
+    )
+    form_show_officer_narrative = Column(
+        Boolean, default=True
+    )
+    form_show_skills_observed = Column(
+        Boolean, default=True
+    )
+    form_show_tasks_performed = Column(
+        Boolean, default=True
+    )
+    form_show_call_types = Column(
+        Boolean, default=True
+    )
+
     # Shift review defaults (configurable by training officers)
     shift_review_call_types = Column(
         JSON, nullable=True
