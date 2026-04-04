@@ -320,11 +320,15 @@ class ShiftCompletionService:
                     required_call_types = requirement.required_call_types or []
                     if required_call_types and call_types:
                         # Count only calls matching the required types
-                        required_lower = [rct.lower() for rct in required_call_types]
+                        required_lower = [
+                            rct.lower()
+                            for rct in required_call_types
+                        ]
                         matching_calls = [
                             ct
                             for ct in call_types
-                            if isinstance(ct, str) and ct.lower() in required_lower
+                            if isinstance(ct, str)
+                            and ct.lower() in required_lower
                         ]
                         value_to_add = float(len(matching_calls))
                         if matching_calls:
@@ -342,7 +346,9 @@ class ShiftCompletionService:
                     continue
 
                 if value_to_add > 0:
-                    from app.schemas.training_program import RequirementProgressUpdate
+                    from app.schemas.training_program import (
+                        RequirementProgressUpdate,
+                    )
 
                     new_value = (progress.progress_value or 0) + value_to_add
 
@@ -354,7 +360,9 @@ class ShiftCompletionService:
                             {
                                 "date": str(date.today()),
                                 "types": call_type_detail["matched_types"],
-                                "count": len(call_type_detail["matched_types"]),
+                                "count": len(
+                                    call_type_detail["matched_types"]
+                                ),
                             }
                         )
                         notes["call_type_history"] = call_type_history
@@ -362,7 +370,10 @@ class ShiftCompletionService:
                         # Build running totals per call type
                         type_totals = notes.get("call_type_totals", {})
                         for ct in call_type_detail["matched_types"]:
-                            type_totals[ct.lower()] = type_totals.get(ct.lower(), 0) + 1
+                            ct_key = ct.lower()
+                            type_totals[ct_key] = (
+                                type_totals.get(ct_key, 0) + 1
+                            )
                         notes["call_type_totals"] = type_totals
 
                     update_data = RequirementProgressUpdate(
@@ -393,10 +404,14 @@ class ShiftCompletionService:
 
         return requirements_progressed
 
-    async def get_report(self, report_id: str) -> Optional[ShiftCompletionReport]:
+    async def get_report(
+        self, report_id: str
+    ) -> Optional[ShiftCompletionReport]:
         """Get a single shift completion report."""
         result = await self.db.execute(
-            select(ShiftCompletionReport).where(ShiftCompletionReport.id == report_id)
+            select(ShiftCompletionReport).where(
+                ShiftCompletionReport.id == report_id
+            )
         )
         return result.scalar_one_or_none()
 
@@ -519,7 +534,10 @@ class ShiftCompletionService:
         """Get all shift completion reports for the organization."""
         query = (
             select(ShiftCompletionReport)
-            .where(ShiftCompletionReport.organization_id == str(organization_id))
+            .where(
+                ShiftCompletionReport.organization_id
+                == str(organization_id)
+            )
             .order_by(ShiftCompletionReport.shift_date.desc())
             .limit(limit)
             .offset(offset)
@@ -795,7 +813,10 @@ class ShiftCompletionService:
         trainees = [
             {
                 "trainee_id": r.trainee_id,
-                "name": f"{r.first_name or ''} {r.last_name or ''}".strip() or "Unknown",
+                "name": (
+                    f"{r.first_name or ''}"
+                    f" {r.last_name or ''}"
+                ).strip() or "Unknown",
                 "reports": r.reports or 0,
                 "hours": float(r.hours or 0),
                 "calls": int(r.calls or 0),
