@@ -554,13 +554,17 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   // Rating input that adapts to scale type
+  const ratingLevelCount = useMemo(() => {
+    return Object.keys(ratingScaleLabels).length || 5;
+  }, [ratingScaleLabels]);
+
   const renderRatingInput = () => {
     if (ratingScaleType === 'stars') {
       return (
         <div>
           <label className="block text-sm font-medium text-theme-text-secondary mb-2">{ratingLabel}</label>
           <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map(i => (
+            {Array.from({ length: 5 }, (_, i) => i + 1).map(i => (
               <button key={i} onClick={() => setForm(prev => ({ ...prev, performance_rating: i }))}
                 className="p-1 transition-colors"
               >
@@ -583,12 +587,15 @@ export const ShiftReportsTab: React.FC = () => {
       );
     }
 
-    // Competency or custom: show labeled buttons
+    const levels = Array.from(
+      { length: ratingLevelCount },
+      (_, i) => i + 1,
+    );
     return (
       <div>
         <label className="block text-sm font-medium text-theme-text-secondary mb-2">{ratingLabel}</label>
         <div className="flex flex-wrap gap-2">
-          {[1, 2, 3, 4, 5].map(i => {
+          {levels.map(i => {
             const label = ratingScaleLabels[String(i)] || `Level ${i}`;
             const isSelected = form.performance_rating === i;
             return (
