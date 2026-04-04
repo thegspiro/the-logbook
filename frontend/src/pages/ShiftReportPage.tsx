@@ -321,18 +321,6 @@ const ShiftReportPage: React.FC = () => {
     }
   };
 
-  const addSkill = () => {
-    setSkills([...skills, { skill_name: '', demonstrated: false }]);
-  };
-
-  const updateSkill = (index: number, updates: Partial<SkillObservation>) => {
-    setSkills(skills.map((s, i) => i === index ? { ...s, ...updates } : s));
-  };
-
-  const removeSkill = (index: number) => {
-    setSkills(skills.filter((_, i) => i !== index));
-  };
-
   const addTask = () => {
     setTasks([...tasks, { task: '' }]);
   };
