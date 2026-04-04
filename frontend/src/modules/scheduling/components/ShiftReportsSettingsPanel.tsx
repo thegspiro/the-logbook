@@ -46,6 +46,136 @@ const DEFAULT_SETTINGS: ShiftReportSettings = {
   },
 };
 
+const SAMPLE_CALL_TYPES = [
+  "Structure Fire", "Vehicle Fire", "Brush/Wildland",
+  "EMS/Medical", "Motor Vehicle Accident", "Hazmat",
+  "Rescue/Extrication", "Alarm Investigation",
+  "Water Rescue", "Public Assist", "Other",
+];
+
+const SAMPLE_SKILLS = [
+  "SCBA donning/doffing", "Hose deployment",
+  "Ladder operations", "Search and rescue",
+  "Ventilation", "Radio communications",
+  "Scene size-up", "Knot tying",
+  "Forcible entry", "Patient assessment",
+  "CPR/AED", "Vitals monitoring",
+  "Apparatus check-off",
+];
+
+const SAMPLE_TASKS = [
+  "Apparatus check-off", "Station duties",
+  "Equipment inventory", "Hydrant inspection",
+  "Pre-plan review", "Map/district familiarization",
+  "Training drill participation",
+  "Report writing", "PPE inspection",
+];
+
+const SAMPLE_APPARATUS_SKILLS: Record<string, string[]> = {
+  engine: [
+    "Pump operations", "Hose deployment",
+    "Hydrant connection", "Drafting",
+    "Foam operations", "Attack line advancement",
+    "Water supply establishment",
+    "Apparatus positioning",
+  ],
+  ladder: [
+    "Aerial operations", "Ladder placement",
+    "Ventilation (vertical)", "Roof operations",
+    "Forcible entry", "Ground ladder deployment",
+    "Elevated master stream",
+    "Building size-up",
+  ],
+  ambulance: [
+    "Patient assessment", "Vitals monitoring",
+    "CPR/AED", "Airway management",
+    "IV/IO access", "Splinting/immobilization",
+    "Medication administration",
+    "Patient packaging/transport",
+    "12-lead ECG interpretation",
+  ],
+  rescue: [
+    "Vehicle extrication", "Confined space entry",
+    "Rope rescue (high/low angle)",
+    "Structural collapse operations",
+    "Trench rescue", "Water rescue",
+    "Stabilization techniques",
+    "Cribbing and shoring",
+  ],
+  tanker: [
+    "Water shuttle operations", "Portable tank setup",
+    "Drafting from portable tank",
+    "Dump valve operations",
+    "Tanker positioning",
+    "Water supply calculation",
+  ],
+  hazmat: [
+    "HazMat identification (placards/SDS)",
+    "Level A/B suit donning",
+    "Decontamination setup",
+    "Air monitoring", "Containment/damming",
+    "ERG reference and zone establishment",
+  ],
+  brush: [
+    "Wildland fire line construction",
+    "Pump and roll operations",
+    "Foam application (Class A)",
+    "Mop-up techniques",
+    "Weather observation and reporting",
+  ],
+  chief: [
+    "Incident command establishment",
+    "Resource management",
+    "Accountability tracking",
+    "Strategic decision-making",
+    "Interagency coordination",
+  ],
+  boat: [
+    "Vessel operation and navigation",
+    "Water rescue swimmer deployment",
+    "Throw bag / reach techniques",
+    "Towing and anchoring",
+  ],
+};
+
+const SAMPLE_APPARATUS_TASKS: Record<string, string[]> = {
+  engine: [
+    "Pump test / pressure check",
+    "Hose load inspection",
+    "Nozzle and appliance check",
+    "Tank fill verification",
+  ],
+  ladder: [
+    "Aerial function test",
+    "Ground ladder inventory",
+    "Hydraulic system check",
+    "Outrigger/stabilizer inspection",
+  ],
+  ambulance: [
+    "Medication expiration check",
+    "Monitor/defibrillator test",
+    "Oxygen supply verification",
+    "Stretcher and restraint check",
+    "BLS/ALS supply restock",
+  ],
+  rescue: [
+    "Extrication tool function test",
+    "Rope and harness inspection",
+    "Air supply verification",
+    "Cribbing inventory",
+  ],
+  tanker: [
+    "Tank integrity check",
+    "Dump valve function test",
+    "Portable tank condition check",
+  ],
+  hazmat: [
+    "Detection equipment calibration",
+    "PPE suit integrity check",
+    "Decon supplies inventory",
+  ],
+};
+
 const checkboxClass =
   "w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500";
 const cardClass =
@@ -124,11 +254,33 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       try {
         const config = await trainingModuleConfigService.getConfig();
         setTrainingConfig(config);
-        setCallTypes(config.shift_review_call_types ?? []);
-        setSkills(config.shift_review_default_skills ?? []);
-        setTasks(config.shift_review_default_tasks ?? []);
-        setAppTypeSkills(config.apparatus_type_skills ?? {});
-        setAppTypeTasks(config.apparatus_type_tasks ?? {});
+        setCallTypes(
+          config.shift_review_call_types?.length
+            ? config.shift_review_call_types
+            : SAMPLE_CALL_TYPES,
+        );
+        setSkills(
+          config.shift_review_default_skills?.length
+            ? config.shift_review_default_skills
+            : SAMPLE_SKILLS,
+        );
+        setTasks(
+          config.shift_review_default_tasks?.length
+            ? config.shift_review_default_tasks
+            : SAMPLE_TASKS,
+        );
+        setAppTypeSkills(
+          config.apparatus_type_skills &&
+            Object.keys(config.apparatus_type_skills).length > 0
+            ? config.apparatus_type_skills
+            : SAMPLE_APPARATUS_SKILLS,
+        );
+        setAppTypeTasks(
+          config.apparatus_type_tasks &&
+            Object.keys(config.apparatus_type_tasks).length > 0
+            ? config.apparatus_type_tasks
+            : SAMPLE_APPARATUS_TASKS,
+        );
         setRatingLabels(
           config.rating_scale_labels ?? {
             "1": "Needs Improvement",
@@ -151,16 +303,28 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
     schedulingService
       .getBasicApparatus({ is_active: true })
       .then((list) => {
-        const types = [
-          ...new Set(list.map((a) => a.apparatus_type)),
+        const fromApi = list.map((a) => a.apparatus_type);
+        const sampleTypes = Object.keys(
+          SAMPLE_APPARATUS_SKILLS,
+        );
+        const merged = [
+          ...new Set([...fromApi, ...sampleTypes]),
         ];
-        types.sort();
-        setApparatusTypes(types);
-        if (types.length > 0 && !selectedAppType) {
-          setSelectedAppType(types[0] ?? "");
+        merged.sort();
+        setApparatusTypes(merged);
+        if (merged.length > 0 && !selectedAppType) {
+          setSelectedAppType(merged[0] ?? "");
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        const fallback = Object.keys(
+          SAMPLE_APPARATUS_SKILLS,
+        ).sort();
+        setApparatusTypes(fallback);
+        if (fallback.length > 0 && !selectedAppType) {
+          setSelectedAppType(fallback[0] ?? "");
+        }
+      });
   }, []);
 
   // ── Save handlers ──
