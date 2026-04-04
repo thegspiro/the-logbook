@@ -177,8 +177,8 @@ class NotificationLog(Base):
         String(500), nullable=True
     )  # Frontend route to navigate to on click
 
-    # Structured data for frontend rendering (e.g. shift_start_time)
-    metadata = Column(JSON, nullable=True)
+    # "metadata" is reserved by SQLAlchemy Declarative; map via Column("metadata")
+    notification_metadata = Column("metadata", JSON, nullable=True)
 
     # Lifecycle
     expires_at = Column(DateTime(timezone=True), nullable=True, index=True)

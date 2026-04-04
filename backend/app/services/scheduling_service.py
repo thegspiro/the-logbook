@@ -1858,7 +1858,7 @@ class SchedulingService:
                 subject="New Shift Assignment",
                 message=message,
                 action_url=f"/scheduling?shift={shift_id}",
-                metadata=notif_metadata,
+                notification_metadata=notif_metadata,
                 delivered=True,
             )
             self.db.add(notif)
@@ -3746,7 +3746,7 @@ class SchedulingService:
                 subject=subject,
                 message=message,
                 action_url="/scheduling?tab=shift-reports&view=drafts",
-                metadata={
+                notification_metadata={
                     "shift_id": str(shift.id),
                     "draft_count": draft_count,
                 },
