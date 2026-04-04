@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Plus,
   Trash2,
+  Save,
   Send,
   FileText,
   TrendingUp,
@@ -216,6 +217,7 @@ const ShiftReportPage: React.FC = () => {
   const [tasks, setTasks] = useState<TaskPerformed[]>([]);
   const [enrollmentId, setEnrollmentId] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -327,6 +329,65 @@ const ShiftReportPage: React.FC = () => {
     setTasks(tasks.filter((_, i) => i !== index));
   };
 
+  const buildReportData = (
+    asDraft: boolean,
+  ): ShiftCompletionReportCreate => {
+    const filteredSkills = skills.filter(
+      (s) => s.skill_name.trim(),
+    );
+    const filteredTasks = tasks.filter((t) => t.task.trim());
+    return {
+      shift_date: shiftDate,
+      trainee_id: traineeId,
+      hours_on_shift: hoursOnShift,
+      calls_responded: callsResponded,
+      call_types:
+        callTypes.length > 0 ? callTypes : undefined,
+      performance_rating:
+        rating > 0 ? rating : undefined,
+      ...(selectedShiftId
+        ? { shift_id: selectedShiftId }
+        : {}),
+      ...(strengths
+        ? { areas_of_strength: strengths }
+        : {}),
+      ...(improvements
+        ? { areas_for_improvement: improvements }
+        : {}),
+      ...(narrative
+        ? { officer_narrative: narrative }
+        : {}),
+      skills_observed:
+        filteredSkills.length > 0
+          ? filteredSkills
+          : undefined,
+      tasks_performed:
+        filteredTasks.length > 0
+          ? filteredTasks
+          : undefined,
+      ...(enrollmentId
+        ? { enrollment_id: enrollmentId }
+        : {}),
+      ...(asDraft ? { save_as_draft: true } : {}),
+    };
+  };
+
+  const resetForm = () => {
+    setTraineeId('');
+    setSelectedShiftId('');
+    setAutoPopulated({});
+    setHoursOnShift(0);
+    setCallsResponded(0);
+    setCallTypes([]);
+    setRating(0);
+    setStrengths('');
+    setImprovements('');
+    setNarrative('');
+    setSkills([]);
+    setTasks([]);
+    setEnrollmentId('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!traineeId || !hoursOnShift) {
@@ -336,52 +397,57 @@ const ShiftReportPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const data: ShiftCompletionReportCreate = {
-        shift_date: shiftDate,
-        trainee_id: traineeId,
-        hours_on_shift: hoursOnShift,
-        calls_responded: callsResponded,
-        call_types: callTypes.length > 0 ? callTypes : undefined,
-        performance_rating: rating > 0 ? rating : undefined,
-        ...(selectedShiftId ? { shift_id: selectedShiftId } : {}),
-        ...(strengths ? { areas_of_strength: strengths } : {}),
-        ...(improvements ? { areas_for_improvement: improvements } : {}),
-        ...(narrative ? { officer_narrative: narrative } : {}),
-        skills_observed: skills.filter((s) => s.skill_name.trim()).length > 0 ? skills.filter((s) => s.skill_name.trim()) : undefined,
-        tasks_performed: tasks.filter((t) => t.task.trim()).length > 0 ? tasks.filter((t) => t.task.trim()) : undefined,
-        ...(enrollmentId ? { enrollment_id: enrollmentId } : {}),
-      };
-
-      const result = await shiftCompletionService.createReport(data);
-      const progressCount = result.requirements_progressed?.length || 0;
+      const result = await shiftCompletionService.createReport(
+        buildReportData(false),
+      );
+      const progressCount =
+        result.requirements_progressed?.length || 0;
       toast.success(
         progressCount > 0
           ? `Report filed! Updated ${progressCount} pipeline requirement(s).`
-          : 'Shift completion report filed!'
+          : 'Shift completion report filed!',
       );
-
-      // Reset form
-      setTraineeId('');
-      setSelectedShiftId('');
-      setAutoPopulated({});
-      setHoursOnShift(0);
-      setCallsResponded(0);
-      setCallTypes([]);
-      setRating(0);
-      setStrengths('');
-      setImprovements('');
-      setNarrative('');
-      setSkills([]);
-      setTasks([]);
-      setEnrollmentId('');
+      resetForm();
       void loadData();
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (
+          err as {
+            response?: { data?: { detail?: string } };
+          }
+        )?.response?.data?.detail ||
         'Failed to submit report';
       toast.error(msg);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!traineeId || !hoursOnShift) {
+      toast.error('Please select a trainee and enter hours');
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      await shiftCompletionService.createReport(
+        buildReportData(true),
+      );
+      toast.success('Draft saved');
+      resetForm();
+      void loadData();
+    } catch (err: unknown) {
+      const msg =
+        (
+          err as {
+            response?: { data?: { detail?: string } };
+          }
+        )?.response?.data?.detail ||
+        'Failed to save draft';
+      toast.error(msg);
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -773,14 +839,25 @@ const ShiftReportPage: React.FC = () => {
                   ? 'Hours and calls will automatically update pipeline requirements.'
                   : 'Will update any active pipeline requirements for this trainee.'}
               </p>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="btn-primary flex font-medium items-center px-5 space-x-2 text-sm"
-              >
-                <Send className="w-4 h-4" />
-                <span>{submitting ? 'Filing...' : 'File Report'}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { void handleSaveDraft(); }}
+                  disabled={savingDraft || submitting}
+                  className="flex font-medium items-center px-4 py-2 space-x-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 transition-colors"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingDraft ? 'Saving...' : 'Save as Draft'}</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || savingDraft}
+                  className="btn-primary flex font-medium items-center px-5 space-x-2 text-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{submitting ? 'Filing...' : 'File Report'}</span>
+                </button>
+              </div>
             </div>
           </form>
         )}

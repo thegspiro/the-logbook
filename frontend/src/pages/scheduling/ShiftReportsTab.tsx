@@ -13,7 +13,7 @@ import {
   FileText, Plus, Loader2, Star, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
   Shield, Eye, EyeOff, MessageSquare, ClipboardCheck, Pencil,
-  BarChart3, TrendingUp, Users,
+  BarChart3, TrendingUp, Users, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
@@ -291,58 +291,102 @@ export const ShiftReportsTab: React.FC = () => {
     }));
   };
 
-  const handleSubmit = async () => {
+  const buildNewPayload = (
+    asDraft: boolean,
+  ): ShiftCompletionReportCreate => ({
+    shift_id: form.shift_id || undefined,
+    trainee_id: form.trainee_id ?? '',
+    shift_date: form.shift_date,
+    hours_on_shift: form.hours_on_shift ?? 0,
+    calls_responded: form.calls_responded || 0,
+    call_types: form.call_types?.length
+      ? form.call_types
+      : undefined,
+    performance_rating:
+      form.performance_rating || undefined,
+    areas_of_strength:
+      form.areas_of_strength || undefined,
+    areas_for_improvement:
+      form.areas_for_improvement || undefined,
+    officer_narrative:
+      form.officer_narrative || undefined,
+    skills_observed: form.skills_observed?.length
+      ? form.skills_observed
+      : undefined,
+    tasks_performed:
+      form.tasks_performed?.filter(
+        (t) => t.task.trim(),
+      ) || undefined,
+    ...(asDraft ? { save_as_draft: true } : {}),
+  });
+
+  const resetNewForm = () => {
+    setLinkedShiftLabel(null);
+    setForm({
+      shift_id: undefined,
+      shift_date: getTodayLocalDate(tz),
+      hours_on_shift: 0,
+      calls_responded: 0,
+      call_types: [],
+      performance_rating: undefined,
+      areas_of_strength: '',
+      areas_for_improvement: '',
+      officer_narrative: '',
+      skills_observed: [],
+      tasks_performed: [],
+      trainee_id: '',
+    });
+  };
+
+  const validateNewForm = (): boolean => {
     if (!form.trainee_id) {
       toast.error('Please select a trainee');
-      return;
+      return false;
     }
     if (!form.shift_date) {
       toast.error('Please enter the shift date');
-      return;
+      return false;
     }
     if (!form.hours_on_shift || form.hours_on_shift <= 0) {
       toast.error('Please enter hours on shift');
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateNewForm()) return;
 
     setSubmitting(true);
     try {
-      const payload: ShiftCompletionReportCreate = {
-        shift_id: form.shift_id || undefined,
-        trainee_id: form.trainee_id,
-        shift_date: form.shift_date,
-        hours_on_shift: form.hours_on_shift,
-        calls_responded: form.calls_responded || 0,
-        call_types: form.call_types?.length ? form.call_types : undefined,
-        performance_rating: form.performance_rating || undefined,
-        areas_of_strength: form.areas_of_strength || undefined,
-        areas_for_improvement: form.areas_for_improvement || undefined,
-        officer_narrative: form.officer_narrative || undefined,
-        skills_observed: form.skills_observed?.length ? form.skills_observed : undefined,
-        tasks_performed: form.tasks_performed?.filter(t => t.task.trim()) || undefined,
-      };
-      await shiftCompletionService.createReport(payload);
+      await shiftCompletionService.createReport(
+        buildNewPayload(false),
+      );
       toast.success('Shift report submitted');
-      setLinkedShiftLabel(null);
-      setForm({
-        shift_id: undefined,
-        shift_date: getTodayLocalDate(tz),
-        hours_on_shift: 0,
-        calls_responded: 0,
-        call_types: [],
-        performance_rating: undefined,
-        areas_of_strength: '',
-        areas_for_improvement: '',
-        officer_narrative: '',
-        skills_observed: [],
-        tasks_performed: [],
-        trainee_id: '',
-      });
+      resetNewForm();
       setViewMode('filed-by-me');
     } catch {
       toast.error('Failed to submit shift report');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSaveNewDraft = async () => {
+    if (!validateNewForm()) return;
+
+    setSavingDraft(true);
+    try {
+      await shiftCompletionService.createReport(
+        buildNewPayload(true),
+      );
+      toast.success('Draft saved');
+      resetNewForm();
+      setViewMode('drafts');
+    } catch {
+      toast.error('Failed to save draft');
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -1285,7 +1329,13 @@ export const ShiftReportsTab: React.FC = () => {
 
           {/* Submit */}
           <div className="flex items-center gap-3 pt-2">
-            <button onClick={() => { void handleSubmit(); }} disabled={submitting}
+            <button onClick={() => { void handleSaveNewDraft(); }} disabled={savingDraft || submitting}
+              className="px-5 py-2.5 text-sm font-medium border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+            >
+              {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save as Draft
+            </button>
+            <button onClick={() => { void handleSubmit(); }} disabled={submitting || savingDraft}
               className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}

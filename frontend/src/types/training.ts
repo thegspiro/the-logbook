@@ -1156,6 +1156,7 @@ export interface ShiftCompletionReportCreate {
   skills_observed?: SkillObservation[] | undefined;
   tasks_performed?: TaskPerformed[] | undefined;
   enrollment_id?: string | undefined;
+  save_as_draft?: boolean | undefined;
 }
 
 export interface ShiftCompletionReport {
