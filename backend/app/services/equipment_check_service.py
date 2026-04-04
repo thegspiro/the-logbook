@@ -511,10 +511,36 @@ class EquipmentCheckService:
         items_data = data.pop("items", [])
         template_id = data.get("template_id")
 
+        if not items_data:
+            raise ValueError(
+                "At least one checklist item is required"
+            )
+
+        # Prevent duplicate submission for same shift+template
+        if template_id:
+            existing = (
+                await self.db.execute(
+                    select(ShiftEquipmentCheck.id).where(
+                        ShiftEquipmentCheck.shift_id
+                        == shift_id,
+                        ShiftEquipmentCheck.template_id
+                        == template_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing:
+                raise ValueError(
+                    "A check for this template has already "
+                    "been submitted for this shift"
+                )
+
         # Compute aggregate counts
         total = len(items_data)
-        completed = sum(1 for i in items_data if i.get("status") != "not_checked")
-        failed = sum(1 for i in items_data if i.get("status") == "fail")
+        completed = sum(
+            1
+            for i in items_data
+            if i.get("status") != "not_checked"
+        )
 
         # Auto-fail expired items and under-quantity items
         for item in items_data:
@@ -522,17 +548,25 @@ class EquipmentCheckService:
                 item["status"] = "fail"
             req_qty = item.get("required_quantity")
             found_qty = item.get("quantity_found")
-            if req_qty is not None and found_qty is not None and found_qty < req_qty:
+            if (
+                req_qty is not None
+                and found_qty is not None
+                and found_qty < req_qty
+            ):
                 item["status"] = "fail"
 
         # Recount after auto-fail
-        failed = sum(1 for i in items_data if i.get("status") == "fail")
-        if failed == 0 and completed == total:
-            overall_status = "pass"
-        else:
-            overall_status = "fail"
+        failed = sum(
+            1
+            for i in items_data
+            if i.get("status") == "fail"
+        )
         if completed < total:
             overall_status = "incomplete"
+        elif failed > 0:
+            overall_status = "fail"
+        else:
+            overall_status = "pass"
 
         check = ShiftEquipmentCheck(
             id=generate_uuid(),
@@ -697,14 +731,16 @@ class EquipmentCheckService:
 
         items_data = data.pop("items", [])
 
+        if not items_data:
+            raise ValueError(
+                "At least one checklist item is required"
+            )
+
         total = len(items_data)
         completed = sum(
             1
             for i in items_data
             if i.get("status") != "not_checked"
-        )
-        failed = sum(
-            1 for i in items_data if i.get("status") == "fail"
         )
 
         for item in items_data:
@@ -720,14 +756,16 @@ class EquipmentCheckService:
                 item["status"] = "fail"
 
         failed = sum(
-            1 for i in items_data if i.get("status") == "fail"
+            1
+            for i in items_data
+            if i.get("status") == "fail"
         )
-        if failed == 0 and completed == total:
-            overall_status = "pass"
-        else:
-            overall_status = "fail"
         if completed < total:
             overall_status = "incomplete"
+        elif failed > 0:
+            overall_status = "fail"
+        else:
+            overall_status = "pass"
 
         check = ShiftEquipmentCheck(
             id=generate_uuid(),

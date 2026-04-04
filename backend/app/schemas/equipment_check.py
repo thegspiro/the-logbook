@@ -247,7 +247,7 @@ class CheckItemResultSubmit(BaseModel):
     compartment_name: str = Field(..., max_length=200)
     item_name: str = Field(..., max_length=200)
     check_type: Optional[str] = Field(None, max_length=30)
-    status: str = Field(..., max_length=30)  # pass, fail, not_checked
+    status: str = Field(..., pattern=r"^(pass|fail|not_checked)$")
     quantity_found: Optional[int] = None
     required_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
@@ -268,20 +268,24 @@ class ShiftEquipmentCheckCreate(BaseModel):
 
     template_id: str
     check_timing: str = Field(..., max_length=30)
-    items: List[CheckItemResultSubmit]
+    items: List[CheckItemResultSubmit] = Field(
+        ..., min_length=1
+    )
     notes: Optional[str] = None
     signature_data: Optional[str] = None
 
 
 class StandaloneEquipmentCheckCreate(BaseModel):
-    """Schema for submitting a standalone equipment check (no shift)."""
+    """Schema for standalone equipment check (no shift)."""
 
     template_id: str
     apparatus_id: Optional[str] = None
     check_timing: str = Field(
         default="start_of_shift", max_length=30
     )
-    items: List[CheckItemResultSubmit]
+    items: List[CheckItemResultSubmit] = Field(
+        ..., min_length=1
+    )
     notes: Optional[str] = None
     signature_data: Optional[str] = None
 
