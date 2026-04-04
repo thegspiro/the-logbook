@@ -173,8 +173,8 @@ def upgrade() -> None:
         sa.Column(
             "shift_id",
             sa.String(36),
-            sa.ForeignKey("shifts.id", ondelete="CASCADE"),
-            nullable=False,
+            sa.ForeignKey("shifts.id", ondelete="SET NULL"),
+            nullable=True,
             index=True,
         ),
         sa.Column(
