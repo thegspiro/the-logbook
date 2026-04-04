@@ -1250,6 +1250,8 @@ export interface TrainingModuleConfig {
   rating_label: string;
   rating_scale_type: string;  // stars, competency, custom
   rating_scale_labels?: Record<string, string>;  // {"1":"Unsatisfactory","2":"Developing",...}
+  apparatus_type_skills?: Record<string, string[]>;
+  apparatus_type_tasks?: Record<string, string[]>;
   form_show_performance_rating: boolean;
   form_show_areas_of_strength: boolean;
   form_show_areas_for_improvement: boolean;

@@ -92,6 +92,7 @@ export const ShiftReportsTab: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [linkedShiftLabel, setLinkedShiftLabel] = useState<string | null>(null);
   const [shiftAssignments, setShiftAssignments] = useState<Assignment[]>([]);
+  const [shiftApparatusType, setShiftApparatusType] = useState<string | null>(null);
   const [showAllMembers, setShowAllMembers] = useState(false);
   const [form, setForm] = useState<Partial<ShiftCompletionReportCreate>>({
     shift_id: linkedShiftId,
@@ -142,10 +143,26 @@ export const ShiftReportsTab: React.FC = () => {
   const callTypeOptions = config?.shift_review_call_types?.length
     ? config.shift_review_call_types
     : DEFAULT_CALL_TYPE_OPTIONS;
-  const skillOptions = config?.shift_review_default_skills?.length
-    ? config.shift_review_default_skills
-    : DEFAULT_SKILLS;
-  const taskDefaults = config?.shift_review_default_tasks ?? [];
+
+  const skillOptions = useMemo(() => {
+    if (shiftApparatusType && config?.apparatus_type_skills) {
+      const typeSkills =
+        config.apparatus_type_skills[shiftApparatusType];
+      if (typeSkills?.length) return typeSkills;
+    }
+    return config?.shift_review_default_skills?.length
+      ? config.shift_review_default_skills
+      : DEFAULT_SKILLS;
+  }, [config, shiftApparatusType]);
+
+  const taskDefaults = useMemo(() => {
+    if (shiftApparatusType && config?.apparatus_type_tasks) {
+      const typeTasks =
+        config.apparatus_type_tasks[shiftApparatusType];
+      if (typeTasks?.length) return typeTasks;
+    }
+    return config?.shift_review_default_tasks ?? [];
+  }, [config, shiftApparatusType]);
 
   // Pre-fill form when navigated with a linked shift ID
   useEffect(() => {
@@ -163,6 +180,7 @@ export const ShiftReportsTab: React.FC = () => {
           `${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`,
         );
         setShiftAssignments(assignments);
+        setShiftApparatusType(shift.apparatus_type ?? null);
         setShowAllMembers(false);
         setForm(prev => ({
           ...prev,

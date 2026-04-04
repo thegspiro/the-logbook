@@ -174,6 +174,7 @@ class SchedulingService:
             a = apparatus_map[aid]
             shift_dict["apparatus_name"] = a.name
             shift_dict["apparatus_unit_number"] = a.unit_number
+            shift_dict["apparatus_type"] = a.apparatus_type
             app_slots = self.normalize_positions(a.positions)
             shift_dict["apparatus_positions"] = app_slots or shift_slots or None
             if shift_dict.get("min_staffing") is None:
@@ -181,6 +182,7 @@ class SchedulingService:
         else:
             shift_dict["apparatus_name"] = None
             shift_dict["apparatus_unit_number"] = None
+            shift_dict["apparatus_type"] = None
             shift_dict["apparatus_positions"] = shift_slots or None
             if shift_dict.get("min_staffing") is None:
                 shift_dict["min_staffing"] = None

@@ -90,6 +90,7 @@ export interface ShiftRecord {
   apparatus_id?: string;
   apparatus_name?: string;
   apparatus_unit_number?: string;
+  apparatus_type?: string;
   positions?: PositionSlot[] | null;
   apparatus_positions?: PositionSlot[] | null;
   min_staffing?: number | null;

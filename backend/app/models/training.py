@@ -1464,6 +1464,11 @@ class TrainingModuleConfig(Base):
         JSON, nullable=True
     )  # {"1":"Unsatisfactory","2":"Developing","3":"Competent","4":"Proficient","5":"Exemplary"}
 
+    # Per-apparatus-type skills and tasks mapping
+    # {"engine": ["Pump operations", ...], "ladder": ["Ventilation", ...]}
+    apparatus_type_skills = Column(JSON, nullable=True)
+    apparatus_type_tasks = Column(JSON, nullable=True)
+
     # Report form sections — which optional sections appear on the form
     form_show_performance_rating = Column(
         Boolean, default=True
