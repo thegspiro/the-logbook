@@ -20,6 +20,7 @@ from app.models.training import (
     RequirementProgressStatus,
     RequirementType,
     Shift,
+    ShiftAssignment,
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
@@ -131,10 +132,25 @@ class ShiftCompletionService:
                 )
             ).scalar_one_or_none()
             if not att_check:
-                raise ValueError(
-                    "Trainee has no attendance record for "
-                    "this shift"
+                assignment = (
+                    await self.db.execute(
+                        select(ShiftAssignment.id).where(
+                            ShiftAssignment.shift_id == shift_id,
+                            ShiftAssignment.user_id == trainee_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if not assignment:
+                    raise ValueError(
+                        "Trainee has no attendance or "
+                        "assignment record for this shift"
+                    )
+                attendance = ShiftAttendance(
+                    shift_id=shift_id,
+                    user_id=trainee_id,
                 )
+                self.db.add(attendance)
+                await self.db.flush()
 
             existing = (
                 await self.db.execute(
