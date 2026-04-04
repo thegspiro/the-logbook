@@ -123,6 +123,12 @@ class ShiftCompletionService:
                     "Shift not found in this organization"
                 )
 
+            if shift.shift_date != shift_date:
+                raise ValueError(
+                    "Report date does not match the "
+                    "linked shift date"
+                )
+
             att_check = (
                 await self.db.execute(
                     select(ShiftAttendance.id).where(
