@@ -19,6 +19,7 @@ import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import type { Assignment } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { SubmissionStatus } from '../../constants/enums';
 import type {
@@ -90,6 +91,8 @@ export const ShiftReportsTab: React.FC = () => {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [linkedShiftLabel, setLinkedShiftLabel] = useState<string | null>(null);
+  const [shiftAssignments, setShiftAssignments] = useState<Assignment[]>([]);
+  const [showAllMembers, setShowAllMembers] = useState(false);
   const [form, setForm] = useState<Partial<ShiftCompletionReportCreate>>({
     shift_id: linkedShiftId,
     shift_date: getTodayLocalDate(tz),
@@ -150,12 +153,17 @@ export const ShiftReportsTab: React.FC = () => {
     let cancelled = false;
     const prefill = async () => {
       try {
-        const shift = await schedulingService.getShift(linkedShiftId);
+        const [shift, assignments] = await Promise.all([
+          schedulingService.getShift(linkedShiftId),
+          schedulingService.getShiftAssignments(linkedShiftId),
+        ]);
         if (cancelled) return;
         const shiftDate = shift.shift_date ?? getTodayLocalDate(tz);
         setLinkedShiftLabel(
           `${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`,
         );
+        setShiftAssignments(assignments);
+        setShowAllMembers(false);
         setForm(prev => ({
           ...prev,
           shift_id: linkedShiftId,
@@ -222,13 +230,33 @@ export const ShiftReportsTab: React.FC = () => {
   }, [viewMode, members.length]);
 
   const filteredMembers = useMemo(() => {
-    if (!memberSearch) return members;
-    const q = memberSearch.toLowerCase();
-    return members.filter(m =>
-      (m.full_name || `${m.first_name} ${m.last_name}`).toLowerCase().includes(q)
-      || m.username.toLowerCase().includes(q)
+    const assignedIds = new Set(
+      shiftAssignments.map((a) => a.user_id),
     );
-  }, [members, memberSearch]);
+    const hasShiftFilter =
+      linkedShiftId && assignedIds.size > 0 && !showAllMembers;
+    const base = hasShiftFilter
+      ? members.filter((m) => assignedIds.has(m.id))
+      : members;
+    if (!memberSearch) return base;
+    const q = memberSearch.toLowerCase();
+    return base.filter(
+      (m) =>
+        (
+          m.full_name ||
+          `${m.first_name} ${m.last_name}`
+        )
+          .toLowerCase()
+          .includes(q) ||
+        m.username.toLowerCase().includes(q),
+    );
+  }, [
+    members,
+    memberSearch,
+    shiftAssignments,
+    linkedShiftId,
+    showAllMembers,
+  ]);
 
   const toggleCallType = (
     setter: React.Dispatch<React.SetStateAction<Partial<ShiftCompletionReportCreate>>>,
@@ -1120,12 +1148,29 @@ export const ShiftReportsTab: React.FC = () => {
 
           {/* Trainee Selection */}
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Trainee *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-theme-text-secondary">Trainee *</label>
+              {linkedShiftId && shiftAssignments.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllMembers(!showAllMembers)}
+                  className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                >
+                  {showAllMembers
+                    ? `Show shift members only (${shiftAssignments.length})`
+                    : 'Show all members'}
+                </button>
+              )}
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
               <input
                 type="text"
-                aria-label="Search members..." placeholder="Search members..."
+                aria-label="Search members..." placeholder={
+                  linkedShiftId && shiftAssignments.length > 0 && !showAllMembers
+                    ? `Search shift members (${shiftAssignments.length})...`
+                    : 'Search members...'
+                }
                 value={memberSearch}
                 onChange={e => setMemberSearch(e.target.value)}
                 className="form-input focus:ring-violet-500 pl-9 pr-3 text-sm"
