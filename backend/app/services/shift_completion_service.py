@@ -205,7 +205,7 @@ class ShiftCompletionService:
                 await self.db.execute(
                     select(ProgramEnrollment).where(
                         ProgramEnrollment.id == enrollment_id,
-                        ProgramEnrollment.member_id
+                        ProgramEnrollment.user_id
                         == trainee_id,
                     )
                 )

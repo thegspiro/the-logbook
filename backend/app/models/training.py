@@ -1123,28 +1123,42 @@ class RequirementProgress(Base):
     progress_percentage = Column(Float, default=0.0)  # Calculated percentage
 
     # Details
-    progress_notes = Column(JSON)  # Track specific items completed, timestamps, etc.
+    progress_notes = Column(JSON)
 
     # Completion
+    started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     verified_at = Column(DateTime(timezone=True))
-    verified_by = Column(String(36), ForeignKey("users.id"))  # Officer who verified
+    verified_by = Column(
+        String(36), ForeignKey("users.id")
+    )
     verification_notes = Column(Text)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     updated_at = Column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     # Relationships
     enrollment = relationship(
-        "ProgramEnrollment", back_populates="requirement_progress"
+        "ProgramEnrollment",
+        back_populates="requirement_progress",
     )
 
     __table_args__ = (
-        Index("idx_progress_enrollment", "enrollment_id", "status"),
-        Index("idx_progress_requirement", "requirement_id"),
+        Index(
+            "idx_progress_enrollment",
+            "enrollment_id",
+            "status",
+        ),
+        Index(
+            "idx_progress_requirement", "requirement_id"
+        ),
     )
 
     def __repr__(self):
