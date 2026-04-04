@@ -16,7 +16,7 @@ class SkillObservation(BaseModel):
     skill_name: str
     demonstrated: bool = False
     notes: Optional[str] = None
-    comment: Optional[str] = None  # Officer comment on this specific skill observation
+    comment: Optional[str] = None
 
 
 class TaskPerformed(BaseModel):
@@ -55,6 +55,7 @@ class ShiftCompletionReportCreate(BaseModel):
     )
 
     enrollment_id: Optional[str] = None
+    save_as_draft: bool = False
 
     @field_validator("shift_date")
     @classmethod
@@ -84,7 +85,7 @@ class TraineeAcknowledgment(BaseModel):
 class ReportReview(BaseModel):
     review_status: str  # approved, flagged
     reviewer_notes: Optional[str] = None
-    redact_fields: Optional[List[str]] = None  # field names to clear before approving
+    redact_fields: Optional[List[str]] = None
 
 
 class ShiftCompletionReportResponse(UTCResponseBase):

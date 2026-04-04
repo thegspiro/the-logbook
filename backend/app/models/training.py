@@ -1464,6 +1464,34 @@ class TrainingModuleConfig(Base):
         JSON, nullable=True
     )  # {"1":"Unsatisfactory","2":"Developing","3":"Competent","4":"Proficient","5":"Exemplary"}
 
+    # Per-apparatus-type skills and tasks mapping
+    # {"engine": ["Pump operations", ...], "ladder": ["Ventilation", ...]}
+    apparatus_type_skills = Column(JSON, nullable=True)
+    apparatus_type_tasks = Column(JSON, nullable=True)
+
+    # Report form sections — which optional sections appear on the form
+    form_show_performance_rating = Column(
+        Boolean, default=True
+    )
+    form_show_areas_of_strength = Column(
+        Boolean, default=True
+    )
+    form_show_areas_for_improvement = Column(
+        Boolean, default=True
+    )
+    form_show_officer_narrative = Column(
+        Boolean, default=True
+    )
+    form_show_skills_observed = Column(
+        Boolean, default=True
+    )
+    form_show_tasks_performed = Column(
+        Boolean, default=True
+    )
+    form_show_call_types = Column(
+        Boolean, default=True
+    )
+
     # Shift review defaults (configurable by training officers)
     shift_review_call_types = Column(
         JSON, nullable=True
@@ -3589,7 +3617,24 @@ class ShiftEquipmentCheck(Base):
         Index("idx_shift_equip_check_shift", "shift_id"),
         Index("idx_shift_equip_check_org", "organization_id"),
         Index("idx_shift_equip_check_user", "checked_by"),
-        Index("idx_shift_equip_check_template", "template_id"),
+        Index(
+            "idx_shift_equip_check_template", "template_id"
+        ),
+        Index(
+            "idx_shift_equip_check_org_date",
+            "organization_id",
+            "checked_at",
+        ),
+        Index(
+            "idx_shift_equip_check_shift_tmpl",
+            "shift_id",
+            "template_id",
+        ),
+        Index(
+            "idx_shift_equip_check_shift_timing",
+            "shift_id",
+            "check_timing",
+        ),
     )
 
     def __repr__(self):

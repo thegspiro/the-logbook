@@ -13,12 +13,13 @@ import {
   FileText, Plus, Loader2, Star, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
   Shield, Eye, EyeOff, MessageSquare, ClipboardCheck, Pencil,
-  BarChart3, TrendingUp, Users,
+  BarChart3, TrendingUp, Users, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import type { Assignment } from '../../types/scheduling';
 import { useAuthStore } from '../../stores/authStore';
 import { SubmissionStatus } from '../../constants/enums';
 import type {
@@ -90,6 +91,9 @@ export const ShiftReportsTab: React.FC = () => {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [linkedShiftLabel, setLinkedShiftLabel] = useState<string | null>(null);
+  const [shiftAssignments, setShiftAssignments] = useState<Assignment[]>([]);
+  const [shiftApparatusType, setShiftApparatusType] = useState<string | null>(null);
+  const [showAllMembers, setShowAllMembers] = useState(false);
   const [form, setForm] = useState<Partial<ShiftCompletionReportCreate>>({
     shift_id: linkedShiftId,
     shift_date: getTodayLocalDate(tz),
@@ -124,6 +128,15 @@ export const ShiftReportsTab: React.FC = () => {
   // Analytics state
   const [traineeStats, setTraineeStats] = useState<TraineeShiftStats | null>(null);
   const [officerAnalytics, setOfficerAnalytics] = useState<OfficerShiftAnalytics | null>(null);
+  const [draftBadgeCount, setDraftBadgeCount] = useState(0);
+
+  // Load draft count badge for managers
+  useEffect(() => {
+    if (!canManage) return;
+    shiftCompletionService.getDraftReports()
+      .then((drafts) => setDraftBadgeCount(drafts.length))
+      .catch(() => {});
+  }, [canManage, viewMode]);
 
   // Load config for visibility and rating settings
   useEffect(() => {
@@ -139,10 +152,26 @@ export const ShiftReportsTab: React.FC = () => {
   const callTypeOptions = config?.shift_review_call_types?.length
     ? config.shift_review_call_types
     : DEFAULT_CALL_TYPE_OPTIONS;
-  const skillOptions = config?.shift_review_default_skills?.length
-    ? config.shift_review_default_skills
-    : DEFAULT_SKILLS;
-  const taskDefaults = config?.shift_review_default_tasks ?? [];
+
+  const skillOptions = useMemo(() => {
+    if (shiftApparatusType && config?.apparatus_type_skills) {
+      const typeSkills =
+        config.apparatus_type_skills[shiftApparatusType];
+      if (typeSkills?.length) return typeSkills;
+    }
+    return config?.shift_review_default_skills?.length
+      ? config.shift_review_default_skills
+      : DEFAULT_SKILLS;
+  }, [config, shiftApparatusType]);
+
+  const taskDefaults = useMemo(() => {
+    if (shiftApparatusType && config?.apparatus_type_tasks) {
+      const typeTasks =
+        config.apparatus_type_tasks[shiftApparatusType];
+      if (typeTasks?.length) return typeTasks;
+    }
+    return config?.shift_review_default_tasks ?? [];
+  }, [config, shiftApparatusType]);
 
   // Pre-fill form when navigated with a linked shift ID
   useEffect(() => {
@@ -150,12 +179,18 @@ export const ShiftReportsTab: React.FC = () => {
     let cancelled = false;
     const prefill = async () => {
       try {
-        const shift = await schedulingService.getShift(linkedShiftId);
+        const [shift, assignments] = await Promise.all([
+          schedulingService.getShift(linkedShiftId),
+          schedulingService.getShiftAssignments(linkedShiftId),
+        ]);
         if (cancelled) return;
         const shiftDate = shift.shift_date ?? getTodayLocalDate(tz);
         setLinkedShiftLabel(
           `${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`,
         );
+        setShiftAssignments(assignments);
+        setShiftApparatusType(shift.apparatus_type ?? null);
+        setShowAllMembers(false);
         setForm(prev => ({
           ...prev,
           shift_id: linkedShiftId,
@@ -222,13 +257,33 @@ export const ShiftReportsTab: React.FC = () => {
   }, [viewMode, members.length]);
 
   const filteredMembers = useMemo(() => {
-    if (!memberSearch) return members;
-    const q = memberSearch.toLowerCase();
-    return members.filter(m =>
-      (m.full_name || `${m.first_name} ${m.last_name}`).toLowerCase().includes(q)
-      || m.username.toLowerCase().includes(q)
+    const assignedIds = new Set(
+      shiftAssignments.map((a) => a.user_id),
     );
-  }, [members, memberSearch]);
+    const hasShiftFilter =
+      linkedShiftId && assignedIds.size > 0 && !showAllMembers;
+    const base = hasShiftFilter
+      ? members.filter((m) => assignedIds.has(m.id))
+      : members;
+    if (!memberSearch) return base;
+    const q = memberSearch.toLowerCase();
+    return base.filter(
+      (m) =>
+        (
+          m.full_name ||
+          `${m.first_name} ${m.last_name}`
+        )
+          .toLowerCase()
+          .includes(q) ||
+        m.username.toLowerCase().includes(q),
+    );
+  }, [
+    members,
+    memberSearch,
+    shiftAssignments,
+    linkedShiftId,
+    showAllMembers,
+  ]);
 
   const toggleCallType = (
     setter: React.Dispatch<React.SetStateAction<Partial<ShiftCompletionReportCreate>>>,
@@ -291,58 +346,102 @@ export const ShiftReportsTab: React.FC = () => {
     }));
   };
 
-  const handleSubmit = async () => {
+  const buildNewPayload = (
+    asDraft: boolean,
+  ): ShiftCompletionReportCreate => ({
+    shift_id: form.shift_id || undefined,
+    trainee_id: form.trainee_id ?? '',
+    shift_date: form.shift_date,
+    hours_on_shift: form.hours_on_shift ?? 0,
+    calls_responded: form.calls_responded || 0,
+    call_types: form.call_types?.length
+      ? form.call_types
+      : undefined,
+    performance_rating:
+      form.performance_rating || undefined,
+    areas_of_strength:
+      form.areas_of_strength || undefined,
+    areas_for_improvement:
+      form.areas_for_improvement || undefined,
+    officer_narrative:
+      form.officer_narrative || undefined,
+    skills_observed: form.skills_observed?.length
+      ? form.skills_observed
+      : undefined,
+    tasks_performed:
+      form.tasks_performed?.filter(
+        (t) => t.task.trim(),
+      ) || undefined,
+    ...(asDraft ? { save_as_draft: true } : {}),
+  });
+
+  const resetNewForm = () => {
+    setLinkedShiftLabel(null);
+    setForm({
+      shift_id: undefined,
+      shift_date: getTodayLocalDate(tz),
+      hours_on_shift: 0,
+      calls_responded: 0,
+      call_types: [],
+      performance_rating: undefined,
+      areas_of_strength: '',
+      areas_for_improvement: '',
+      officer_narrative: '',
+      skills_observed: [],
+      tasks_performed: [],
+      trainee_id: '',
+    });
+  };
+
+  const validateNewForm = (): boolean => {
     if (!form.trainee_id) {
       toast.error('Please select a trainee');
-      return;
+      return false;
     }
     if (!form.shift_date) {
       toast.error('Please enter the shift date');
-      return;
+      return false;
     }
     if (!form.hours_on_shift || form.hours_on_shift <= 0) {
       toast.error('Please enter hours on shift');
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateNewForm()) return;
 
     setSubmitting(true);
     try {
-      const payload: ShiftCompletionReportCreate = {
-        shift_id: form.shift_id || undefined,
-        trainee_id: form.trainee_id,
-        shift_date: form.shift_date,
-        hours_on_shift: form.hours_on_shift,
-        calls_responded: form.calls_responded || 0,
-        call_types: form.call_types?.length ? form.call_types : undefined,
-        performance_rating: form.performance_rating || undefined,
-        areas_of_strength: form.areas_of_strength || undefined,
-        areas_for_improvement: form.areas_for_improvement || undefined,
-        officer_narrative: form.officer_narrative || undefined,
-        skills_observed: form.skills_observed?.length ? form.skills_observed : undefined,
-        tasks_performed: form.tasks_performed?.filter(t => t.task.trim()) || undefined,
-      };
-      await shiftCompletionService.createReport(payload);
+      await shiftCompletionService.createReport(
+        buildNewPayload(false),
+      );
       toast.success('Shift report submitted');
-      setLinkedShiftLabel(null);
-      setForm({
-        shift_id: undefined,
-        shift_date: getTodayLocalDate(tz),
-        hours_on_shift: 0,
-        calls_responded: 0,
-        call_types: [],
-        performance_rating: undefined,
-        areas_of_strength: '',
-        areas_for_improvement: '',
-        officer_narrative: '',
-        skills_observed: [],
-        tasks_performed: [],
-        trainee_id: '',
-      });
+      resetNewForm();
       setViewMode('filed-by-me');
     } catch {
       toast.error('Failed to submit shift report');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSaveNewDraft = async () => {
+    if (!validateNewForm()) return;
+
+    setSavingDraft(true);
+    try {
+      await shiftCompletionService.createReport(
+        buildNewPayload(true),
+      );
+      toast.success('Draft saved');
+      resetNewForm();
+      setViewMode('drafts');
+    } catch {
+      toast.error('Failed to save draft');
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -464,13 +563,17 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   // Rating input that adapts to scale type
+  const ratingLevelCount = useMemo(() => {
+    return Object.keys(ratingScaleLabels).length || 5;
+  }, [ratingScaleLabels]);
+
   const renderRatingInput = () => {
     if (ratingScaleType === 'stars') {
       return (
         <div>
           <label className="block text-sm font-medium text-theme-text-secondary mb-2">{ratingLabel}</label>
           <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map(i => (
+            {Array.from({ length: 5 }, (_, i) => i + 1).map(i => (
               <button key={i} onClick={() => setForm(prev => ({ ...prev, performance_rating: i }))}
                 className="p-1 transition-colors"
               >
@@ -493,12 +596,15 @@ export const ShiftReportsTab: React.FC = () => {
       );
     }
 
-    // Competency or custom: show labeled buttons
+    const levels = Array.from(
+      { length: ratingLevelCount },
+      (_, i) => i + 1,
+    );
     return (
       <div>
         <label className="block text-sm font-medium text-theme-text-secondary mb-2">{ratingLabel}</label>
         <div className="flex flex-wrap gap-2">
-          {[1, 2, 3, 4, 5].map(i => {
+          {levels.map(i => {
             const label = ratingScaleLabels[String(i)] || `Level ${i}`;
             const isSelected = form.performance_rating === i;
             return (
@@ -1034,6 +1140,11 @@ export const ShiftReportsTab: React.FC = () => {
               }`}
             >
               <FileText className="w-3.5 h-3.5" /> Drafts
+              {draftBadgeCount > 0 && viewMode !== 'drafts' && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs font-bold rounded-full bg-blue-500 text-white leading-none">
+                  {draftBadgeCount}
+                </span>
+              )}
             </button>
           )}
           {canManage && (
@@ -1076,12 +1187,29 @@ export const ShiftReportsTab: React.FC = () => {
 
           {/* Trainee Selection */}
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Trainee *</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-theme-text-secondary">Trainee *</label>
+              {linkedShiftId && shiftAssignments.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllMembers(!showAllMembers)}
+                  className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                >
+                  {showAllMembers
+                    ? `Show shift members only (${shiftAssignments.length})`
+                    : 'Show all members'}
+                </button>
+              )}
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
               <input
                 type="text"
-                aria-label="Search members..." placeholder="Search members..."
+                aria-label="Search members..." placeholder={
+                  linkedShiftId && shiftAssignments.length > 0 && !showAllMembers
+                    ? `Search shift members (${shiftAssignments.length})...`
+                    : 'Search members...'
+                }
                 value={memberSearch}
                 onChange={e => setMemberSearch(e.target.value)}
                 className="form-input focus:ring-violet-500 pl-9 pr-3 text-sm"
@@ -1137,7 +1265,7 @@ export const ShiftReportsTab: React.FC = () => {
           </div>
 
           {/* Call Types */}
-          {(form.calls_responded || 0) > 0 && (
+          {(config?.form_show_call_types ?? true) && (form.calls_responded || 0) > 0 && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-2">Call Types</label>
               <div className="flex flex-wrap gap-2">
@@ -1157,10 +1285,12 @@ export const ShiftReportsTab: React.FC = () => {
           )}
 
           {/* Performance Rating (configurable scale) */}
-          {renderRatingInput()}
+          {(config?.form_show_performance_rating ?? true) && renderRatingInput()}
 
           {/* Narrative Fields */}
+          {((config?.form_show_areas_of_strength ?? true) || (config?.form_show_areas_for_improvement ?? true)) && (
           <div className="form-grid-2">
+            {(config?.form_show_areas_of_strength ?? true) && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
               <textarea rows={3} value={form.areas_of_strength || ''}
@@ -1169,6 +1299,8 @@ export const ShiftReportsTab: React.FC = () => {
                 className="form-input focus:ring-violet-500 resize-none text-sm"
               />
             </div>
+            )}
+            {(config?.form_show_areas_for_improvement ?? true) && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
               <textarea rows={3} value={form.areas_for_improvement || ''}
@@ -1177,8 +1309,11 @@ export const ShiftReportsTab: React.FC = () => {
                 className="form-input focus:ring-violet-500 resize-none text-sm"
               />
             </div>
+            )}
           </div>
+          )}
 
+          {(config?.form_show_officer_narrative ?? true) && (
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Officer Narrative</label>
             <textarea rows={4} value={form.officer_narrative || ''}
@@ -1187,8 +1322,10 @@ export const ShiftReportsTab: React.FC = () => {
               className="form-input focus:ring-violet-500 resize-none text-sm"
             />
           </div>
+          )}
 
           {/* Skills Observed with Comments */}
+          {(config?.form_show_skills_observed ?? true) && (
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-2">Skills Observed</label>
             <div className="space-y-2">
@@ -1221,8 +1358,10 @@ export const ShiftReportsTab: React.FC = () => {
               })}
             </div>
           </div>
+          )}
 
           {/* Tasks Performed with Comments */}
+          {(config?.form_show_tasks_performed ?? true) && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium text-theme-text-secondary">Tasks Performed</label>
@@ -1282,10 +1421,17 @@ export const ShiftReportsTab: React.FC = () => {
               ))}
             </div>
           </div>
+          )}
 
           {/* Submit */}
           <div className="flex items-center gap-3 pt-2">
-            <button onClick={() => { void handleSubmit(); }} disabled={submitting}
+            <button onClick={() => { void handleSaveNewDraft(); }} disabled={savingDraft || submitting}
+              className="px-5 py-2.5 text-sm font-medium border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+            >
+              {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save as Draft
+            </button>
+            <button onClick={() => { void handleSubmit(); }} disabled={submitting || savingDraft}
               className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
             >
               {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
@@ -1303,6 +1449,33 @@ export const ShiftReportsTab: React.FC = () => {
       {/* Reports List */}
       {viewMode !== 'create' && (
         <>
+          {viewMode === 'drafts' && !loading && reports.length > 0 && (
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-theme-text-muted">
+                {reports.length} draft{reports.length !== 1 ? 's' : ''} pending
+              </p>
+              <button
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      const result = await shiftCompletionService.submitAllDrafts();
+                      toast.success(
+                        `Submitted ${result.submitted} of ${result.total} drafts`,
+                      );
+                      void loadReports();
+                      setDraftBadgeCount(0);
+                    } catch {
+                      toast.error('Failed to submit drafts');
+                    }
+                  })();
+                }}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2 transition-colors"
+              >
+                <Check className="w-4 h-4" />
+                Submit All Drafts
+              </button>
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />

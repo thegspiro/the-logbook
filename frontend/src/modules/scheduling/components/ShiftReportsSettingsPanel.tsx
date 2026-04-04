@@ -19,10 +19,15 @@ import {
   Clock,
   Plus,
   X,
+  SlidersHorizontal,
+  Truck,
+  Star,
+  Pencil,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { organizationService } from "../../../services/api";
 import { trainingModuleConfigService } from "../../../services/trainingServices";
+import { schedulingService } from "../services/api";
 import { getErrorMessage } from "../../../utils/errorHandling";
 import type { ShiftReportSettings } from "../types/shiftSettings";
 import type { TrainingModuleConfig } from "../../../types/training";
@@ -67,6 +72,30 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   const [newSkill, setNewSkill] = useState("");
   const [newTask, setNewTask] = useState("");
 
+  // Per-apparatus-type mapping
+  const [apparatusTypes, setApparatusTypes] = useState<string[]>([]);
+  const [selectedAppType, setSelectedAppType] = useState("");
+  const [appTypeSkills, setAppTypeSkills] = useState<
+    Record<string, string[]>
+  >({});
+  const [appTypeTasks, setAppTypeTasks] = useState<
+    Record<string, string[]>
+  >({});
+  const [newAppSkill, setNewAppSkill] = useState("");
+  const [newAppTask, setNewAppTask] = useState("");
+  const [savingAppType, setSavingAppType] = useState(false);
+  const [editingAppItem, setEditingAppItem] = useState<{
+    type: "skill" | "task";
+    index: number;
+    value: string;
+  } | null>(null);
+
+  // Rating scale editor
+  const [ratingLabels, setRatingLabels] = useState<
+    Record<string, string>
+  >({});
+  const [savingRating, setSavingRating] = useState(false);
+
   // ── Load settings ──
 
   useEffect(() => {
@@ -98,6 +127,17 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         setCallTypes(config.shift_review_call_types ?? []);
         setSkills(config.shift_review_default_skills ?? []);
         setTasks(config.shift_review_default_tasks ?? []);
+        setAppTypeSkills(config.apparatus_type_skills ?? {});
+        setAppTypeTasks(config.apparatus_type_tasks ?? {});
+        setRatingLabels(
+          config.rating_scale_labels ?? {
+            "1": "Needs Improvement",
+            "2": "Developing",
+            "3": "Meets Expectations",
+            "4": "Exceeds Expectations",
+            "5": "Outstanding",
+          },
+        );
       } catch {
         // Training module may not be enabled
       } finally {
@@ -105,6 +145,22 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       }
     };
     void load();
+  }, []);
+
+  useEffect(() => {
+    schedulingService
+      .getBasicApparatus({ is_active: true })
+      .then((list) => {
+        const types = [
+          ...new Set(list.map((a) => a.apparatus_type)),
+        ];
+        types.sort();
+        setApparatusTypes(types);
+        if (types.length > 0 && !selectedAppType) {
+          setSelectedAppType(types[0] ?? "");
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // ── Save handlers ──
@@ -138,6 +194,25 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       setSavingTraining(false);
     }
   }, [callTypes, skills, tasks]);
+
+  const saveAppTypeMapping = useCallback(async (
+    updatedSkills: Record<string, string[]>,
+    updatedTasks: Record<string, string[]>,
+  ) => {
+    setSavingAppType(true);
+    try {
+      const result = await trainingModuleConfigService.updateConfig({
+        apparatus_type_skills: updatedSkills,
+        apparatus_type_tasks: updatedTasks,
+      });
+      setTrainingConfig(result);
+      toast.success("Apparatus skills/tasks saved");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to save"));
+    } finally {
+      setSavingAppType(false);
+    }
+  }, []);
 
   // ── Checklist timing helpers ──
 
@@ -399,6 +474,440 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         )}
       </div>
 
+      {/* ── Apparatus-Type Skills & Tasks ── */}
+      {trainingConfig && apparatusTypes.length > 0 && (
+        <div className={cardClass}>
+          <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
+            <Truck className="w-4 h-4" /> Skills &amp; Tasks by Apparatus Type
+          </h3>
+          <p className="text-sm text-theme-text-muted mb-4">
+            Assign specific skills and tasks to each apparatus type. When an officer files
+            a report linked to a shift, the form will show skills and tasks relevant to
+            that shift&apos;s apparatus instead of the general defaults above.
+          </p>
+
+          {/* Type selector */}
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {apparatusTypes.map((t) => (
+              <button
+                key={t}
+                onClick={() => setSelectedAppType(t)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium capitalize transition-colors ${
+                  selectedAppType === t
+                    ? "bg-violet-600 text-white"
+                    : "bg-theme-surface-hover text-theme-text-muted hover:text-theme-text-primary"
+                }`}
+              >
+                {t}
+                {(appTypeSkills[t]?.length || appTypeTasks[t]?.length)
+                  ? ` (${(appTypeSkills[t]?.length ?? 0) + (appTypeTasks[t]?.length ?? 0)})`
+                  : ""}
+              </button>
+            ))}
+          </div>
+
+          {selectedAppType && (
+            <div className="space-y-5 border-t border-theme-surface-border pt-4">
+              {/* Skills for selected type */}
+              <div>
+                <p className="text-sm font-medium text-theme-text-primary mb-1">
+                  Skills for <span className="capitalize">{selectedAppType}</span>
+                </p>
+                <p className="text-xs text-theme-text-muted mb-2">
+                  These override the general defaults when a shift uses this apparatus type.
+                  Leave empty to use the general defaults.
+                </p>
+
+                {/* Existing skills */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {(appTypeSkills[selectedAppType] ?? []).map((s, i) => {
+                    const isEditing =
+                      editingAppItem?.type === "skill" &&
+                      editingAppItem.index === i;
+                    if (isEditing) {
+                      return (
+                        <input
+                          key={i}
+                          autoFocus
+                          type="text"
+                          value={editingAppItem.value}
+                          onChange={(e) =>
+                            setEditingAppItem({
+                              ...editingAppItem,
+                              value: e.target.value,
+                            })
+                          }
+                          onBlur={() => {
+                            const trimmed =
+                              editingAppItem.value.trim();
+                            if (trimmed) {
+                              const updated = {
+                                ...appTypeSkills,
+                              };
+                              const list = [
+                                ...(updated[selectedAppType] ??
+                                  []),
+                              ];
+                              list[i] = trimmed;
+                              updated[selectedAppType] = list;
+                              setAppTypeSkills(updated);
+                            }
+                            setEditingAppItem(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              (
+                                e.target as HTMLInputElement
+                              ).blur();
+                            }
+                            if (e.key === "Escape") {
+                              setEditingAppItem(null);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-full text-xs font-medium border-2 border-violet-500 bg-theme-surface text-theme-text-primary w-48 focus:outline-hidden"
+                        />
+                      );
+                    }
+                    return (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20"
+                      >
+                        {s}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingAppItem({
+                              type: "skill",
+                              index: i,
+                              value: s,
+                            })
+                          }
+                          className="hover:text-violet-500"
+                          title="Edit"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = {
+                              ...appTypeSkills,
+                            };
+                            updated[selectedAppType] = (
+                              updated[selectedAppType] ?? []
+                            ).filter((_, idx) => idx !== i);
+                            setAppTypeSkills(updated);
+                          }}
+                          className="hover:text-red-500"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* Add skill input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newAppSkill}
+                    onChange={(e) => setNewAppSkill(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const trimmed = newAppSkill.trim();
+                        if (!trimmed) return;
+                        const current = appTypeSkills[selectedAppType] ?? [];
+                        if (current.includes(trimmed)) return;
+                        const updated = { ...appTypeSkills, [selectedAppType]: [...current, trimmed] };
+                        setAppTypeSkills(updated);
+                        setNewAppSkill("");
+                      }
+                    }}
+                    placeholder="e.g. Pump operations"
+                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = newAppSkill.trim();
+                      if (!trimmed) return;
+                      const current = appTypeSkills[selectedAppType] ?? [];
+                      if (current.includes(trimmed)) return;
+                      const updated = { ...appTypeSkills, [selectedAppType]: [...current, trimmed] };
+                      setAppTypeSkills(updated);
+                      setNewAppSkill("");
+                    }}
+                    disabled={!newAppSkill.trim()}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-theme-surface-hover text-theme-text-secondary hover:bg-theme-surface-secondary disabled:opacity-40 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add
+                  </button>
+                </div>
+
+                {/* Quick copy from defaults */}
+                {skills.length > 0 && (appTypeSkills[selectedAppType] ?? []).length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppTypeSkills({ ...appTypeSkills, [selectedAppType]: [...skills] });
+                    }}
+                    className="mt-2 text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                  >
+                    Copy from general defaults ({skills.length} skills)
+                  </button>
+                )}
+              </div>
+
+              {/* Tasks for selected type */}
+              <div>
+                <p className="text-sm font-medium text-theme-text-primary mb-1">
+                  Tasks for <span className="capitalize">{selectedAppType}</span>
+                </p>
+
+                {/* Existing tasks */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {(appTypeTasks[selectedAppType] ?? []).map((t, i) => {
+                    const isEditing =
+                      editingAppItem?.type === "task" &&
+                      editingAppItem.index === i;
+                    if (isEditing) {
+                      return (
+                        <input
+                          key={i}
+                          autoFocus
+                          type="text"
+                          value={editingAppItem.value}
+                          onChange={(e) =>
+                            setEditingAppItem({
+                              ...editingAppItem,
+                              value: e.target.value,
+                            })
+                          }
+                          onBlur={() => {
+                            const trimmed =
+                              editingAppItem.value.trim();
+                            if (trimmed) {
+                              const updated = {
+                                ...appTypeTasks,
+                              };
+                              const list = [
+                                ...(updated[selectedAppType] ??
+                                  []),
+                              ];
+                              list[i] = trimmed;
+                              updated[selectedAppType] = list;
+                              setAppTypeTasks(updated);
+                            }
+                            setEditingAppItem(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              (
+                                e.target as HTMLInputElement
+                              ).blur();
+                            }
+                            if (e.key === "Escape") {
+                              setEditingAppItem(null);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-full text-xs font-medium border-2 border-violet-500 bg-theme-surface text-theme-text-primary w-48 focus:outline-hidden"
+                        />
+                      );
+                    }
+                    return (
+                      <span
+                        key={i}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
+                      >
+                        {t}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingAppItem({
+                              type: "task",
+                              index: i,
+                              value: t,
+                            })
+                          }
+                          className="hover:text-violet-500"
+                          title="Edit"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = {
+                              ...appTypeTasks,
+                            };
+                            updated[selectedAppType] = (
+                              updated[selectedAppType] ?? []
+                            ).filter((_, idx) => idx !== i);
+                            setAppTypeTasks(updated);
+                          }}
+                          className="hover:text-red-500"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+
+                {/* Add task input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newAppTask}
+                    onChange={(e) => setNewAppTask(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const trimmed = newAppTask.trim();
+                        if (!trimmed) return;
+                        const current = appTypeTasks[selectedAppType] ?? [];
+                        if (current.includes(trimmed)) return;
+                        const updated = { ...appTypeTasks, [selectedAppType]: [...current, trimmed] };
+                        setAppTypeTasks(updated);
+                        setNewAppTask("");
+                      }
+                    }}
+                    placeholder="e.g. Apparatus check-off"
+                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const trimmed = newAppTask.trim();
+                      if (!trimmed) return;
+                      const current = appTypeTasks[selectedAppType] ?? [];
+                      if (current.includes(trimmed)) return;
+                      const updated = { ...appTypeTasks, [selectedAppType]: [...current, trimmed] };
+                      setAppTypeTasks(updated);
+                      setNewAppTask("");
+                    }}
+                    disabled={!newAppTask.trim()}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-theme-surface-hover text-theme-text-secondary hover:bg-theme-surface-secondary disabled:opacity-40 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add
+                  </button>
+                </div>
+
+                {/* Quick copy from defaults */}
+                {tasks.length > 0 && (appTypeTasks[selectedAppType] ?? []).length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAppTypeTasks({ ...appTypeTasks, [selectedAppType]: [...tasks] });
+                    }}
+                    className="mt-2 text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                  >
+                    Copy from general defaults ({tasks.length} tasks)
+                  </button>
+                )}
+              </div>
+
+              {/* Save button */}
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => void saveAppTypeMapping(appTypeSkills, appTypeTasks)}
+                  disabled={savingAppType}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                >
+                  {savingAppType && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Save Apparatus Skills &amp; Tasks
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Report Form Sections ── */}
+      {trainingConfig && (
+        <div className={cardClass}>
+          <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4" /> Report Form Sections
+          </h3>
+          <p className="text-sm text-theme-text-muted mb-4">
+            Choose which optional sections appear on the shift completion report
+            form when officers file a new report. Core fields (trainee, date,
+            hours) are always shown.
+          </p>
+
+          <div className="space-y-3">
+            {([
+              {
+                field: "form_show_performance_rating" as const,
+                label: "Performance Rating",
+                desc: "Star or competency rating for the trainee.",
+              },
+              {
+                field: "form_show_areas_of_strength" as const,
+                label: "Areas of Strength",
+                desc: "Free-text field for positive feedback.",
+              },
+              {
+                field: "form_show_areas_for_improvement" as const,
+                label: "Areas for Improvement",
+                desc: "Free-text field for developmental feedback.",
+              },
+              {
+                field: "form_show_officer_narrative" as const,
+                label: "Officer Narrative",
+                desc: "General observations and overall assessment.",
+              },
+              {
+                field: "form_show_call_types" as const,
+                label: "Call / Incident Types",
+                desc: "Categorize calls responded during the shift.",
+              },
+              {
+                field: "form_show_skills_observed" as const,
+                label: "Skills Observed",
+                desc: "Checklist of skills demonstrated on shift.",
+              },
+              {
+                field: "form_show_tasks_performed" as const,
+                label: "Tasks Performed",
+                desc: "Track tasks completed during the shift.",
+              },
+            ]).map(({ field, label, desc }) => (
+              <label key={field} className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={trainingConfig[field] ?? true}
+                  onChange={(e) => {
+                    const updates = { [field]: e.target.checked };
+                    void (async () => {
+                      setSavingTraining(true);
+                      try {
+                        const result = await trainingModuleConfigService.updateConfig(updates);
+                        setTrainingConfig(result);
+                        toast.success(`${label} ${e.target.checked ? "enabled" : "disabled"}`);
+                      } catch (err: unknown) {
+                        toast.error(getErrorMessage(err, "Failed to update"));
+                      } finally {
+                        setSavingTraining(false);
+                      }
+                    })();
+                  }}
+                  disabled={savingTraining}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-sm font-medium text-theme-text-primary">{label}</span>
+                  <p className="text-xs text-theme-text-muted">{desc}</p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Review Settings (from training module) ── */}
       {trainingConfig && (
         <div className={cardClass}>
@@ -472,6 +981,197 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Rating Scale ── */}
+      {trainingConfig && (
+        <div className={cardClass}>
+          <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
+            <Star className="w-4 h-4" /> Rating Scale
+          </h3>
+          <p className="text-sm text-theme-text-muted mb-4">
+            Define the rating levels officers use when evaluating trainees.
+            You can add, remove, rename, and reorder levels. Each level
+            gets a numeric value starting at 1.
+          </p>
+
+          {/* Scale type */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-theme-text-primary mb-1">
+              Display style
+            </label>
+            <div className="flex gap-2">
+              {(["competency", "stars"] as const).map((st) => (
+                <button
+                  key={st}
+                  onClick={() => {
+                    void (async () => {
+                      setSavingRating(true);
+                      try {
+                        const result =
+                          await trainingModuleConfigService.updateConfig({
+                            rating_scale_type: st,
+                          });
+                        setTrainingConfig(result);
+                        toast.success("Display style updated");
+                      } catch (err: unknown) {
+                        toast.error(
+                          getErrorMessage(err, "Failed to update"),
+                        );
+                      } finally {
+                        setSavingRating(false);
+                      }
+                    })();
+                  }}
+                  disabled={savingRating}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    trainingConfig.rating_scale_type === st
+                      ? "bg-violet-600 text-white border-violet-600"
+                      : "bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30"
+                  }`}
+                >
+                  {st === "stars" ? "Stars (1-5)" : "Labeled Bubbles"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Custom label */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-theme-text-primary mb-1">
+              Field label
+            </label>
+            <input
+              type="text"
+              value={trainingConfig.rating_label}
+              onChange={(e) => {
+                const val = e.target.value;
+                setTrainingConfig((prev) =>
+                  prev ? { ...prev, rating_label: val } : prev,
+                );
+              }}
+              onBlur={() => {
+                void (async () => {
+                  setSavingRating(true);
+                  try {
+                    const result =
+                      await trainingModuleConfigService.updateConfig({
+                        rating_label: trainingConfig.rating_label,
+                      });
+                    setTrainingConfig(result);
+                  } catch (err: unknown) {
+                    toast.error(
+                      getErrorMessage(err, "Failed to update"),
+                    );
+                  } finally {
+                    setSavingRating(false);
+                  }
+                })();
+              }}
+              className="w-64 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
+            />
+          </div>
+
+          {/* Level labels editor */}
+          {trainingConfig.rating_scale_type !== "stars" && (
+            <div>
+              <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                Rating levels
+              </label>
+              <div className="space-y-2">
+                {Object.keys(ratingLabels)
+                  .sort((a, b) => Number(a) - Number(b))
+                  .map((key) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <span className="w-8 h-8 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-400 text-sm font-bold flex items-center justify-center shrink-0">
+                        {key}
+                      </span>
+                      <input
+                        type="text"
+                        value={ratingLabels[key] ?? ""}
+                        onChange={(e) =>
+                          setRatingLabels((prev) => ({
+                            ...prev,
+                            [key]: e.target.value,
+                          }))
+                        }
+                        className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
+                        placeholder={`Level ${key} label`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...ratingLabels };
+                          delete updated[key];
+                          const renumbered: Record<string, string> =
+                            {};
+                          Object.values(updated)
+                            .sort()
+                            .forEach((v, i) => {
+                              renumbered[String(i + 1)] = v;
+                            });
+                          setRatingLabels(renumbered);
+                        }}
+                        disabled={Object.keys(ratingLabels).length <= 2}
+                        className="p-1.5 text-theme-text-muted hover:text-red-500 disabled:opacity-30 transition-colors"
+                        title="Remove level"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const nextKey = String(
+                    Object.keys(ratingLabels).length + 1,
+                  );
+                  setRatingLabels((prev) => ({
+                    ...prev,
+                    [nextKey]: "",
+                  }));
+                }}
+                className="mt-2 text-xs text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Add level
+              </button>
+
+              {/* Save */}
+              <div className="flex justify-end pt-3">
+                <button
+                  onClick={() => {
+                    void (async () => {
+                      setSavingRating(true);
+                      try {
+                        const result =
+                          await trainingModuleConfigService.updateConfig({
+                            rating_scale_labels: ratingLabels,
+                          });
+                        setTrainingConfig(result);
+                        toast.success("Rating scale saved");
+                      } catch (err: unknown) {
+                        toast.error(
+                          getErrorMessage(err, "Failed to save"),
+                        );
+                      } finally {
+                        setSavingRating(false);
+                      }
+                    })();
+                  }}
+                  disabled={savingRating}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                >
+                  {savingRating && (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  )}
+                  Save Rating Scale
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1156,6 +1156,7 @@ export interface ShiftCompletionReportCreate {
   skills_observed?: SkillObservation[] | undefined;
   tasks_performed?: TaskPerformed[] | undefined;
   enrollment_id?: string | undefined;
+  save_as_draft?: boolean | undefined;
 }
 
 export interface ShiftCompletionReport {
@@ -1249,6 +1250,15 @@ export interface TrainingModuleConfig {
   rating_label: string;
   rating_scale_type: string;  // stars, competency, custom
   rating_scale_labels?: Record<string, string>;  // {"1":"Unsatisfactory","2":"Developing",...}
+  apparatus_type_skills?: Record<string, string[]>;
+  apparatus_type_tasks?: Record<string, string[]>;
+  form_show_performance_rating: boolean;
+  form_show_areas_of_strength: boolean;
+  form_show_areas_for_improvement: boolean;
+  form_show_officer_narrative: boolean;
+  form_show_skills_observed: boolean;
+  form_show_tasks_performed: boolean;
+  form_show_call_types: boolean;
   shift_review_call_types?: string[];
   shift_review_default_skills?: string[];
   shift_review_default_tasks?: string[];

@@ -22,7 +22,9 @@ from app.schemas.shift_completion import (
     TraineeAcknowledgment,
 )
 from app.services.shift_completion_service import ShiftCompletionService
-from app.services.training_module_config_service import TrainingModuleConfigService
+from app.services.training_module_config_service import (
+    TrainingModuleConfigService,
+)
 
 router = APIRouter()
 
@@ -62,14 +64,21 @@ async def create_shift_report(
 ):
     """
     Submit a shift completion report for a trainee.
-    Auto-updates pipeline requirement progress for shift/call/hour-based requirements.
+    Auto-updates pipeline requirement progress.
     Only shift officers / training officers can submit.
     If report_review_required is enabled, sets review_status to pending_review.
     """
     # Check if review is required for this organization
     config_service = TrainingModuleConfigService(db)
-    config = await config_service.get_config(current_user.organization_id)
-    review_status = "pending_review" if config.report_review_required else "approved"
+    config = await config_service.get_config(
+        current_user.organization_id
+    )
+    if data.save_as_draft:
+        review_status = "draft"
+    elif config.report_review_required:
+        review_status = "pending_review"
+    else:
+        review_status = "approved"
 
     service = ShiftCompletionService(db)
     try:
@@ -77,7 +86,10 @@ async def create_shift_report(
             organization_id=current_user.organization_id,
             officer_id=current_user.id,
             review_status=review_status,
-            **data.model_dump(exclude_unset=True),
+            **data.model_dump(
+                exclude_unset=True,
+                exclude={"save_as_draft"},
+            ),
         )
         return report
     except ValueError as e:
@@ -181,7 +193,10 @@ async def get_reports_by_officer(
     )
 
 
-@router.get("/trainee/{trainee_id}", response_model=list[ShiftCompletionReportResponse])
+@router.get(
+    "/trainee/{trainee_id}",
+    response_model=list[ShiftCompletionReportResponse],
+)
 async def get_reports_for_trainee(
     trainee_id: str,
     start_date: date | None = Query(None),
@@ -189,7 +204,7 @@ async def get_reports_for_trainee(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
-    """Get all shift completion reports for a specific trainee (officers only)."""
+    """Get all reports for a specific trainee (officers only)."""
     service = ShiftCompletionService(db)
     return await service.get_reports_for_trainee(
         organization_id=current_user.organization_id,
@@ -241,7 +256,10 @@ async def get_all_reports(
     )
 
 
-@router.get("/pending-review", response_model=list[ShiftCompletionReportResponse])
+@router.get(
+    "/pending-review",
+    response_model=list[ShiftCompletionReportResponse],
+)
 async def get_pending_review_reports(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
@@ -271,7 +289,62 @@ async def get_draft_reports(
     )
 
 
-@router.get("/{report_id}", response_model=ShiftCompletionReportResponse)
+@router.post("/drafts/submit-all")
+async def submit_all_drafts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("training.manage")
+    ),
+):
+    """Submit all draft reports at once.
+
+    Transitions each draft to pending_review or approved based
+    on the org's review workflow setting, and triggers deferred
+    pipeline progress for each.
+    """
+    config_service = TrainingModuleConfigService(db)
+    config = await config_service.get_config(
+        current_user.organization_id
+    )
+    target_status = (
+        "pending_review"
+        if config.report_review_required
+        else "approved"
+    )
+
+    service = ShiftCompletionService(db)
+    drafts = await service.get_reports_by_status(
+        organization_id=current_user.organization_id,
+        review_status="draft",
+    )
+
+    submitted = 0
+    for draft in drafts:
+        try:
+            await service.update_report(
+                report_id=draft.id,
+                organization_id=(
+                    current_user.organization_id
+                ),
+                officer_id=str(current_user.id),
+                updates={
+                    "review_status": target_status,
+                },
+            )
+            submitted += 1
+        except ValueError:
+            continue
+
+    return {
+        "submitted": submitted,
+        "total": len(drafts),
+    }
+
+
+@router.get(
+    "/{report_id}",
+    response_model=ShiftCompletionReportResponse,
+)
 async def get_shift_report(
     report_id: str,
     db: AsyncSession = Depends(get_db),
@@ -319,7 +392,10 @@ async def update_shift_report(
     return report
 
 
-@router.post("/{report_id}/acknowledge", response_model=ShiftCompletionReportResponse)
+@router.post(
+    "/{report_id}/acknowledge",
+    response_model=ShiftCompletionReportResponse,
+)
 async def acknowledge_report(
     report_id: str,
     ack: TraineeAcknowledgment,
@@ -335,20 +411,27 @@ async def acknowledge_report(
     )
     if not report:
         raise HTTPException(
-            status_code=404, detail="Report not found or not your report"
+            status_code=404,
+            detail="Report not found or not your report",
         )
     return report
 
 
-@router.post("/{report_id}/review", response_model=ShiftCompletionReportResponse)
+@router.post(
+    "/{report_id}/review",
+    response_model=ShiftCompletionReportResponse,
+)
 async def review_report(
     report_id: str,
     review: ReportReview,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
-    """Review a shift completion report — approve, flag, or redact fields.
-    Redacting clears specified fields before making the report visible to trainee."""
+    """Review a shift completion report.
+
+    Approve, flag, or redact fields. Redacting clears specified
+    fields before making the report visible to trainee.
+    """
     service = ShiftCompletionService(db)
     report = await service.review_report(
         report_id=report_id,

@@ -12,6 +12,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.notification import (
+    NotificationCategory,
+    NotificationChannel,
+    NotificationLog,
+)
 from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
@@ -20,6 +25,7 @@ from app.models.training import (
     RequirementProgressStatus,
     RequirementType,
     Shift,
+    ShiftAssignment,
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
@@ -122,6 +128,12 @@ class ShiftCompletionService:
                     "Shift not found in this organization"
                 )
 
+            if shift.shift_date != shift_date:
+                raise ValueError(
+                    "Report date does not match the "
+                    "linked shift date"
+                )
+
             att_check = (
                 await self.db.execute(
                     select(ShiftAttendance.id).where(
@@ -131,10 +143,25 @@ class ShiftCompletionService:
                 )
             ).scalar_one_or_none()
             if not att_check:
-                raise ValueError(
-                    "Trainee has no attendance record for "
-                    "this shift"
+                assignment = (
+                    await self.db.execute(
+                        select(ShiftAssignment.id).where(
+                            ShiftAssignment.shift_id == shift_id,
+                            ShiftAssignment.user_id == trainee_id,
+                        )
+                    )
+                ).scalar_one_or_none()
+                if not assignment:
+                    raise ValueError(
+                        "Trainee has no attendance or "
+                        "assignment record for this shift"
+                    )
+                attendance = ShiftAttendance(
+                    shift_id=shift_id,
+                    user_id=trainee_id,
                 )
+                self.db.add(attendance)
+                await self.db.flush()
 
             existing = (
                 await self.db.execute(
@@ -171,6 +198,23 @@ class ShiftCompletionService:
             if actual_hours:
                 hours_on_shift = actual_hours
                 data_sources["hours_on_shift"] = "shift_attendance"
+
+        # Validate enrollment_id if provided
+        if enrollment_id:
+            enrollment = (
+                await self.db.execute(
+                    select(ProgramEnrollment).where(
+                        ProgramEnrollment.id == enrollment_id,
+                        ProgramEnrollment.member_id
+                        == trainee_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if not enrollment:
+                raise ValueError(
+                    "Enrollment not found or does not "
+                    "belong to this trainee"
+                )
 
         report = ShiftCompletionReport(
             organization_id=str(organization_id),
@@ -231,7 +275,40 @@ class ShiftCompletionService:
         if commit:
             await self.db.commit()
             await self.db.refresh(report)
+
+        if review_status == "approved":
+            await self._notify_trainee_report_ready(
+                organization_id=organization_id,
+                trainee_id=trainee_id,
+                shift_date=shift_date,
+            )
+
         return report
+
+    async def _notify_trainee_report_ready(
+        self,
+        organization_id: UUID,
+        trainee_id: str,
+        shift_date: date,
+    ) -> None:
+        """Send in-app notification to trainee."""
+        try:
+            notification = NotificationLog(
+                organization_id=str(organization_id),
+                recipient_id=trainee_id,
+                channel=NotificationChannel.IN_APP,
+                category=NotificationCategory.TRAINING,
+                subject="Shift report ready for review",
+                message=(
+                    f"A shift completion report for "
+                    f"{shift_date} is ready for your "
+                    f"review and acknowledgment."
+                ),
+            )
+            self.db.add(notification)
+            await self.db.commit()
+        except Exception:
+            pass
 
     async def _update_requirement_progress(
         self,
@@ -304,11 +381,15 @@ class ShiftCompletionService:
                     required_call_types = requirement.required_call_types or []
                     if required_call_types and call_types:
                         # Count only calls matching the required types
-                        required_lower = [rct.lower() for rct in required_call_types]
+                        required_lower = [
+                            rct.lower()
+                            for rct in required_call_types
+                        ]
                         matching_calls = [
                             ct
                             for ct in call_types
-                            if isinstance(ct, str) and ct.lower() in required_lower
+                            if isinstance(ct, str)
+                            and ct.lower() in required_lower
                         ]
                         value_to_add = float(len(matching_calls))
                         if matching_calls:
@@ -326,7 +407,9 @@ class ShiftCompletionService:
                     continue
 
                 if value_to_add > 0:
-                    from app.schemas.training_program import RequirementProgressUpdate
+                    from app.schemas.training_program import (
+                        RequirementProgressUpdate,
+                    )
 
                     new_value = (progress.progress_value or 0) + value_to_add
 
@@ -338,7 +421,9 @@ class ShiftCompletionService:
                             {
                                 "date": str(date.today()),
                                 "types": call_type_detail["matched_types"],
-                                "count": len(call_type_detail["matched_types"]),
+                                "count": len(
+                                    call_type_detail["matched_types"]
+                                ),
                             }
                         )
                         notes["call_type_history"] = call_type_history
@@ -346,7 +431,10 @@ class ShiftCompletionService:
                         # Build running totals per call type
                         type_totals = notes.get("call_type_totals", {})
                         for ct in call_type_detail["matched_types"]:
-                            type_totals[ct.lower()] = type_totals.get(ct.lower(), 0) + 1
+                            ct_key = ct.lower()
+                            type_totals[ct_key] = (
+                                type_totals.get(ct_key, 0) + 1
+                            )
                         notes["call_type_totals"] = type_totals
 
                     update_data = RequirementProgressUpdate(
@@ -377,10 +465,14 @@ class ShiftCompletionService:
 
         return requirements_progressed
 
-    async def get_report(self, report_id: str) -> Optional[ShiftCompletionReport]:
+    async def get_report(
+        self, report_id: str
+    ) -> Optional[ShiftCompletionReport]:
         """Get a single shift completion report."""
         result = await self.db.execute(
-            select(ShiftCompletionReport).where(ShiftCompletionReport.id == report_id)
+            select(ShiftCompletionReport).where(
+                ShiftCompletionReport.id == report_id
+            )
         )
         return result.scalar_one_or_none()
 
@@ -503,7 +595,10 @@ class ShiftCompletionService:
         """Get all shift completion reports for the organization."""
         query = (
             select(ShiftCompletionReport)
-            .where(ShiftCompletionReport.organization_id == str(organization_id))
+            .where(
+                ShiftCompletionReport.organization_id
+                == str(organization_id)
+            )
             .order_by(ShiftCompletionReport.shift_date.desc())
             .limit(limit)
             .offset(offset)
@@ -597,13 +692,24 @@ class ShiftCompletionService:
             report.reviewer_notes = reviewer_notes
 
         # Trigger deferred training progress when draft is activated
-        if was_draft and review_status in ("approved", "pending_review"):
+        if was_draft and review_status in (
+            "approved",
+            "pending_review",
+        ):
             await self._trigger_deferred_progress(
                 report, reviewer_id,
             )
 
         await self.db.commit()
         await self.db.refresh(report)
+
+        if review_status == "approved":
+            await self._notify_trainee_report_ready(
+                organization_id=organization_id,
+                trainee_id=report.trainee_id,
+                shift_date=report.shift_date,
+            )
+
         return report
 
     async def get_trainee_stats(
@@ -779,7 +885,10 @@ class ShiftCompletionService:
         trainees = [
             {
                 "trainee_id": r.trainee_id,
-                "name": f"{r.first_name or ''} {r.last_name or ''}".strip() or "Unknown",
+                "name": (
+                    f"{r.first_name or ''}"
+                    f" {r.last_name or ''}"
+                ).strip() or "Unknown",
                 "reports": r.reports or 0,
                 "hours": float(r.hours or 0),
                 "calls": int(r.calls or 0),

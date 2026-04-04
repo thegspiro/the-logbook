@@ -511,10 +511,36 @@ class EquipmentCheckService:
         items_data = data.pop("items", [])
         template_id = data.get("template_id")
 
+        if not items_data:
+            raise ValueError(
+                "At least one checklist item is required"
+            )
+
+        # Prevent duplicate submission for same shift+template
+        if template_id:
+            existing = (
+                await self.db.execute(
+                    select(ShiftEquipmentCheck.id).where(
+                        ShiftEquipmentCheck.shift_id
+                        == shift_id,
+                        ShiftEquipmentCheck.template_id
+                        == template_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if existing:
+                raise ValueError(
+                    "A check for this template has already "
+                    "been submitted for this shift"
+                )
+
         # Compute aggregate counts
         total = len(items_data)
-        completed = sum(1 for i in items_data if i.get("status") != "not_checked")
-        failed = sum(1 for i in items_data if i.get("status") == "fail")
+        completed = sum(
+            1
+            for i in items_data
+            if i.get("status") != "not_checked"
+        )
 
         # Auto-fail expired items and under-quantity items
         for item in items_data:
@@ -522,17 +548,25 @@ class EquipmentCheckService:
                 item["status"] = "fail"
             req_qty = item.get("required_quantity")
             found_qty = item.get("quantity_found")
-            if req_qty is not None and found_qty is not None and found_qty < req_qty:
+            if (
+                req_qty is not None
+                and found_qty is not None
+                and found_qty < req_qty
+            ):
                 item["status"] = "fail"
 
         # Recount after auto-fail
-        failed = sum(1 for i in items_data if i.get("status") == "fail")
-        if failed == 0 and completed == total:
-            overall_status = "pass"
-        else:
-            overall_status = "fail"
+        failed = sum(
+            1
+            for i in items_data
+            if i.get("status") == "fail"
+        )
         if completed < total:
             overall_status = "incomplete"
+        elif failed > 0:
+            overall_status = "fail"
+        else:
+            overall_status = "pass"
 
         check = ShiftEquipmentCheck(
             id=generate_uuid(),
@@ -542,7 +576,9 @@ class EquipmentCheckService:
             apparatus_id=shift.apparatus_id,
             checked_by=checked_by,
             checked_at=datetime.now(timezone.utc),
-            check_timing=data.get("check_timing", "start_of_shift"),
+            check_timing=data.get(
+                "check_timing", "start_of_shift"
+            ),
             overall_status=overall_status,
             total_items=total,
             completed_items=completed,
@@ -551,11 +587,37 @@ class EquipmentCheckService:
             signature_data=data.get("signature_data"),
         )
         self.db.add(check)
-        await self.db.flush()
+
+        # Validate submitted items belong to the template
+        submitted_ids = {
+            i.get("template_item_id")
+            for i in items_data
+            if i.get("template_item_id")
+        }
+        if template_id and submitted_ids:
+            valid_result = await self.db.execute(
+                select(CheckTemplateItem.id)
+                .join(CheckTemplateCompartment)
+                .where(
+                    CheckTemplateCompartment.template_id
+                    == template_id
+                )
+            )
+            valid_ids = {
+                str(r) for r in valid_result.scalars().all()
+            }
+            invalid = submitted_ids - valid_ids
+            if invalid:
+                raise ValueError(
+                    f"Items do not belong to template: "
+                    f"{', '.join(invalid)}"
+                )
 
         # Collect template item IDs for serial update lookups
         template_item_ids = [
-            i.get("template_item_id") for i in items_data if i.get("template_item_id")
+            i.get("template_item_id")
+            for i in items_data
+            if i.get("template_item_id")
         ]
         template_items_map: Dict[str, CheckTemplateItem] = {}
         if template_item_ids:
@@ -668,8 +730,14 @@ class EquipmentCheckService:
                 warning_items=warning_items,
             )
 
-        await self.db.commit()
-        return await self.get_check(check.id, organization_id)
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        return await self.get_check(
+            check.id, organization_id
+        )
 
     async def submit_standalone_check(
         self,
@@ -697,14 +765,16 @@ class EquipmentCheckService:
 
         items_data = data.pop("items", [])
 
+        if not items_data:
+            raise ValueError(
+                "At least one checklist item is required"
+            )
+
         total = len(items_data)
         completed = sum(
             1
             for i in items_data
             if i.get("status") != "not_checked"
-        )
-        failed = sum(
-            1 for i in items_data if i.get("status") == "fail"
         )
 
         for item in items_data:
@@ -720,14 +790,16 @@ class EquipmentCheckService:
                 item["status"] = "fail"
 
         failed = sum(
-            1 for i in items_data if i.get("status") == "fail"
+            1
+            for i in items_data
+            if i.get("status") == "fail"
         )
-        if failed == 0 and completed == total:
-            overall_status = "pass"
-        else:
-            overall_status = "fail"
         if completed < total:
             overall_status = "incomplete"
+        elif failed > 0:
+            overall_status = "fail"
+        else:
+            overall_status = "pass"
 
         check = ShiftEquipmentCheck(
             id=generate_uuid(),
@@ -838,8 +910,109 @@ class EquipmentCheckService:
                     apparatus.has_deficiency = False
                     apparatus.deficiency_since = None
 
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+        return await self.get_check(
+            check.id, organization_id
+        )
+
+    async def complete_incomplete_check(
+        self,
+        check_id: str,
+        organization_id: str,
+        checked_by: str,
+        data: Dict[str, Any],
+    ) -> ShiftEquipmentCheck:
+        """Complete remaining items on an incomplete check."""
+        result = await self.db.execute(
+            select(ShiftEquipmentCheck)
+            .where(
+                ShiftEquipmentCheck.id == check_id,
+                ShiftEquipmentCheck.organization_id
+                == organization_id,
+            )
+            .options(
+                selectinload(ShiftEquipmentCheck.items)
+            )
+        )
+        check = result.scalars().first()
+        if not check:
+            raise ValueError("Check not found")
+        if check.overall_status != "incomplete":
+            raise ValueError(
+                "Only incomplete checks can be updated"
+            )
+
+        items_data = data.get("items", [])
+        if not items_data:
+            raise ValueError(
+                "At least one item is required"
+            )
+
+        existing_map: Dict[str, ShiftEquipmentCheckItem] = {
+            item.template_item_id: item
+            for item in check.items
+            if item.template_item_id
+        }
+
+        for item_data in items_data:
+            tmpl_id = item_data.get("template_item_id")
+            existing = existing_map.get(tmpl_id) if tmpl_id else None
+            if existing and existing.status == "not_checked":
+                existing.status = item_data.get(
+                    "status", "not_checked"
+                )
+                existing.quantity_found = item_data.get(
+                    "quantity_found", existing.quantity_found
+                )
+                existing.level_reading = item_data.get(
+                    "level_reading", existing.level_reading
+                )
+                existing.notes = item_data.get(
+                    "notes", existing.notes
+                )
+                existing.serial_found = item_data.get(
+                    "serial_found", existing.serial_found
+                )
+                existing.lot_found = item_data.get(
+                    "lot_found", existing.lot_found
+                )
+                existing.is_expired = item_data.get(
+                    "is_expired", existing.is_expired
+                )
+
+        all_items = check.items
+        total = len(all_items)
+        completed = sum(
+            1 for i in all_items
+            if i.status != "not_checked"
+        )
+        failed = sum(
+            1 for i in all_items if i.status == "fail"
+        )
+
+        if completed < total:
+            check.overall_status = "incomplete"
+        elif failed > 0:
+            check.overall_status = "fail"
+        else:
+            check.overall_status = "pass"
+
+        check.completed_items = completed
+        check.failed_items = failed
+
+        if data.get("notes"):
+            check.notes = data["notes"]
+        if data.get("signature_data"):
+            check.signature_data = data["signature_data"]
+
         await self.db.commit()
-        return await self.get_check(check.id, organization_id)
+        return await self.get_check(
+            check.id, organization_id
+        )
 
     async def get_checks_for_shift(
         self,

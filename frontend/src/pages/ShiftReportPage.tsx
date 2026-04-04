@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Plus,
   Trash2,
+  Save,
   Send,
   FileText,
   TrendingUp,
@@ -25,6 +26,7 @@ import {
 } from '../services/api';
 import { schedulingService } from '../modules/scheduling/services/api';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
+import type { Assignment } from '../types/scheduling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 import type {
@@ -216,6 +218,9 @@ const ShiftReportPage: React.FC = () => {
   const [tasks, setTasks] = useState<TaskPerformed[]>([]);
   const [enrollmentId, setEnrollmentId] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [shiftAssignments, setShiftAssignments] = useState<Assignment[]>([]);
+  const [showAllMembers, setShowAllMembers] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -259,6 +264,19 @@ const ShiftReportPage: React.FC = () => {
       .catch(() => setAvailableShifts([]))
       .finally(() => setLoadingShifts(false));
   }, [shiftDate]);
+
+  // Load shift assignments when a shift is selected
+  useEffect(() => {
+    if (!selectedShiftId) {
+      setShiftAssignments([]);
+      setShowAllMembers(false);
+      return;
+    }
+    schedulingService
+      .getShiftAssignments(selectedShiftId)
+      .then(setShiftAssignments)
+      .catch(() => setShiftAssignments([]));
+  }, [selectedShiftId]);
 
   // Preview auto-populated data when shift + trainee selected
   useEffect(() => {
@@ -327,6 +345,65 @@ const ShiftReportPage: React.FC = () => {
     setTasks(tasks.filter((_, i) => i !== index));
   };
 
+  const buildReportData = (
+    asDraft: boolean,
+  ): ShiftCompletionReportCreate => {
+    const filteredSkills = skills.filter(
+      (s) => s.skill_name.trim(),
+    );
+    const filteredTasks = tasks.filter((t) => t.task.trim());
+    return {
+      shift_date: shiftDate,
+      trainee_id: traineeId,
+      hours_on_shift: hoursOnShift,
+      calls_responded: callsResponded,
+      call_types:
+        callTypes.length > 0 ? callTypes : undefined,
+      performance_rating:
+        rating > 0 ? rating : undefined,
+      ...(selectedShiftId
+        ? { shift_id: selectedShiftId }
+        : {}),
+      ...(strengths
+        ? { areas_of_strength: strengths }
+        : {}),
+      ...(improvements
+        ? { areas_for_improvement: improvements }
+        : {}),
+      ...(narrative
+        ? { officer_narrative: narrative }
+        : {}),
+      skills_observed:
+        filteredSkills.length > 0
+          ? filteredSkills
+          : undefined,
+      tasks_performed:
+        filteredTasks.length > 0
+          ? filteredTasks
+          : undefined,
+      ...(enrollmentId
+        ? { enrollment_id: enrollmentId }
+        : {}),
+      ...(asDraft ? { save_as_draft: true } : {}),
+    };
+  };
+
+  const resetForm = () => {
+    setTraineeId('');
+    setSelectedShiftId('');
+    setAutoPopulated({});
+    setHoursOnShift(0);
+    setCallsResponded(0);
+    setCallTypes([]);
+    setRating(0);
+    setStrengths('');
+    setImprovements('');
+    setNarrative('');
+    setSkills([]);
+    setTasks([]);
+    setEnrollmentId('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!traineeId || !hoursOnShift) {
@@ -336,52 +413,57 @@ const ShiftReportPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const data: ShiftCompletionReportCreate = {
-        shift_date: shiftDate,
-        trainee_id: traineeId,
-        hours_on_shift: hoursOnShift,
-        calls_responded: callsResponded,
-        call_types: callTypes.length > 0 ? callTypes : undefined,
-        performance_rating: rating > 0 ? rating : undefined,
-        ...(selectedShiftId ? { shift_id: selectedShiftId } : {}),
-        ...(strengths ? { areas_of_strength: strengths } : {}),
-        ...(improvements ? { areas_for_improvement: improvements } : {}),
-        ...(narrative ? { officer_narrative: narrative } : {}),
-        skills_observed: skills.filter((s) => s.skill_name.trim()).length > 0 ? skills.filter((s) => s.skill_name.trim()) : undefined,
-        tasks_performed: tasks.filter((t) => t.task.trim()).length > 0 ? tasks.filter((t) => t.task.trim()) : undefined,
-        ...(enrollmentId ? { enrollment_id: enrollmentId } : {}),
-      };
-
-      const result = await shiftCompletionService.createReport(data);
-      const progressCount = result.requirements_progressed?.length || 0;
+      const result = await shiftCompletionService.createReport(
+        buildReportData(false),
+      );
+      const progressCount =
+        result.requirements_progressed?.length || 0;
       toast.success(
         progressCount > 0
           ? `Report filed! Updated ${progressCount} pipeline requirement(s).`
-          : 'Shift completion report filed!'
+          : 'Shift completion report filed!',
       );
-
-      // Reset form
-      setTraineeId('');
-      setSelectedShiftId('');
-      setAutoPopulated({});
-      setHoursOnShift(0);
-      setCallsResponded(0);
-      setCallTypes([]);
-      setRating(0);
-      setStrengths('');
-      setImprovements('');
-      setNarrative('');
-      setSkills([]);
-      setTasks([]);
-      setEnrollmentId('');
+      resetForm();
       void loadData();
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        (
+          err as {
+            response?: { data?: { detail?: string } };
+          }
+        )?.response?.data?.detail ||
         'Failed to submit report';
       toast.error(msg);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    if (!traineeId || !hoursOnShift) {
+      toast.error('Please select a trainee and enter hours');
+      return;
+    }
+
+    setSavingDraft(true);
+    try {
+      await shiftCompletionService.createReport(
+        buildReportData(true),
+      );
+      toast.success('Draft saved');
+      resetForm();
+      void loadData();
+    } catch (err: unknown) {
+      const msg =
+        (
+          err as {
+            response?: { data?: { detail?: string } };
+          }
+        )?.response?.data?.detail ||
+        'Failed to save draft';
+      toast.error(msg);
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -396,13 +478,91 @@ const ShiftReportPage: React.FC = () => {
   };
 
   const DEFAULT_CALL_TYPES = [
-    'Structure Fire', 'Wildland Fire', 'Vehicle Fire',
-    'Medical - ALS', 'Medical - BLS', 'MVA',
-    'Hazmat', 'Rescue', 'Public Assist',
+    'Structure Fire', 'Vehicle Fire', 'Brush/Wildland',
+    'EMS/Medical', 'Motor Vehicle Accident', 'Hazmat',
+    'Rescue/Extrication', 'Alarm Investigation',
+    'Public Assist', 'Other',
   ];
   const callTypeOptions = moduleConfig?.shift_review_call_types?.length
     ? moduleConfig.shift_review_call_types
     : DEFAULT_CALL_TYPES;
+
+  const DEFAULT_SKILLS = [
+    'SCBA donning/doffing', 'Hose deployment',
+    'Ladder operations', 'Search and rescue',
+    'Ventilation', 'Pump operations',
+    'Patient assessment', 'CPR/AED',
+    'Vitals monitoring', 'Radio communications',
+    'Scene size-up', 'Apparatus check-off',
+  ];
+
+  const ratingLabel =
+    moduleConfig?.rating_label || 'Performance Rating';
+  const ratingScaleType =
+    moduleConfig?.rating_scale_type || 'stars';
+  const ratingScaleLabels: Record<string, string> =
+    moduleConfig?.rating_scale_labels ?? {
+      '1': 'Unsatisfactory',
+      '2': 'Developing',
+      '3': 'Competent',
+      '4': 'Proficient',
+      '5': 'Exemplary',
+    };
+
+  const selectedShift = availableShifts.find(
+    (s) => s.id === selectedShiftId,
+  );
+  const shiftApparatusType =
+    selectedShift?.apparatus_type ?? null;
+
+  const skillOptions = useMemo(() => {
+    if (
+      shiftApparatusType &&
+      moduleConfig?.apparatus_type_skills
+    ) {
+      const typeSkills =
+        moduleConfig.apparatus_type_skills[
+          shiftApparatusType
+        ];
+      if (typeSkills?.length) return typeSkills;
+    }
+    return moduleConfig?.shift_review_default_skills?.length
+      ? moduleConfig.shift_review_default_skills
+      : DEFAULT_SKILLS;
+  }, [moduleConfig, shiftApparatusType]);
+
+  const taskDefaults = useMemo(() => {
+    if (
+      shiftApparatusType &&
+      moduleConfig?.apparatus_type_tasks
+    ) {
+      const typeTasks =
+        moduleConfig.apparatus_type_tasks[
+          shiftApparatusType
+        ];
+      if (typeTasks?.length) return typeTasks;
+    }
+    return moduleConfig?.shift_review_default_tasks ?? [];
+  }, [moduleConfig, shiftApparatusType]);
+
+  const filteredMembers = useMemo(() => {
+    const assignedIds = new Set(
+      shiftAssignments.map((a) => a.user_id),
+    );
+    if (
+      selectedShiftId &&
+      assignedIds.size > 0 &&
+      !showAllMembers
+    ) {
+      return members.filter((m) => assignedIds.has(m.id));
+    }
+    return members;
+  }, [
+    members,
+    shiftAssignments,
+    selectedShiftId,
+    showAllMembers,
+  ]);
 
   return (
     <div className="min-h-screen">
@@ -484,15 +644,32 @@ const ShiftReportPage: React.FC = () => {
             {/* Trainee + Date */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Trainee <span className="text-red-700 dark:text-red-400">*</span></label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-sm font-medium text-theme-text-secondary">Trainee <span className="text-red-700 dark:text-red-400">*</span></label>
+                  {selectedShiftId && shiftAssignments.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllMembers(!showAllMembers)}
+                      className="text-xs text-red-700 dark:text-red-400 hover:underline"
+                    >
+                      {showAllMembers
+                        ? `Shift members only (${shiftAssignments.length})`
+                        : 'Show all members'}
+                    </button>
+                  )}
+                </div>
                 <select
                   value={traineeId}
                   onChange={(e) => setTraineeId(e.target.value)}
                   className="form-input w-full"
                   required
                 >
-                  <option value="">Select a trainee...</option>
-                  {members.map((m) => (
+                  <option value="">
+                    {selectedShiftId && shiftAssignments.length > 0 && !showAllMembers
+                      ? `Select from shift members (${filteredMembers.length})...`
+                      : 'Select a trainee...'}
+                  </option>
+                  {filteredMembers.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username}
                     </option>
@@ -598,7 +775,7 @@ const ShiftReportPage: React.FC = () => {
             </div>
 
             {/* Call Types */}
-            {callsResponded > 0 && (
+            {(moduleConfig?.form_show_call_types ?? true) && callsResponded > 0 && (
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Call Types</label>
                 <div className="flex flex-wrap gap-1 mb-2">
@@ -662,12 +839,41 @@ const ShiftReportPage: React.FC = () => {
             )}
 
             {/* Performance Rating */}
+            {(moduleConfig?.form_show_performance_rating ?? true) && (
             <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Performance Rating</label>
-              <StarRating value={rating} onChange={setRating} />
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">{ratingLabel}</label>
+              {ratingScaleType === 'stars' ? (
+                <StarRating value={rating} onChange={setRating} />
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {Array.from(
+                    { length: Object.keys(ratingScaleLabels).length || 5 },
+                    (_, i) => i + 1,
+                  ).map((i) => {
+                    const label = ratingScaleLabels[String(i)] || `Level ${i}`;
+                    const isSelected = rating === i;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setRating(isSelected ? 0 : i)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                          isSelected
+                            ? 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 ring-1 ring-red-500/30'
+                            : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-red-500/30'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+            )}
 
             {/* Narrative Fields */}
+            {(moduleConfig?.form_show_officer_narrative ?? true) && (
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">Officer Narrative</label>
               <textarea
@@ -678,8 +884,11 @@ const ShiftReportPage: React.FC = () => {
                 className="form-input w-full"
               />
             </div>
+            )}
 
+            {((moduleConfig?.form_show_areas_of_strength ?? true) || (moduleConfig?.form_show_areas_for_improvement ?? true)) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(moduleConfig?.form_show_areas_of_strength ?? true) && (
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
                 <textarea
@@ -690,6 +899,8 @@ const ShiftReportPage: React.FC = () => {
                   className="form-input w-full"
                 />
               </div>
+              )}
+              {(moduleConfig?.form_show_areas_for_improvement ?? true) && (
               <div>
                 <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
                 <textarea
@@ -700,42 +911,63 @@ const ShiftReportPage: React.FC = () => {
                   className="form-input w-full"
                 />
               </div>
+              )}
             </div>
+            )}
 
             {/* Skills Observed */}
+            {(moduleConfig?.form_show_skills_observed ?? true) && (
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-theme-text-secondary">Skills Observed</label>
-                <button type="button" onClick={addSkill} className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 flex items-center space-x-1">
-                  <Plus className="w-3 h-3" /><span>Add Skill</span>
-                </button>
+              <label className="text-sm font-medium text-theme-text-secondary block mb-2">Skills Observed</label>
+              {shiftApparatusType && (
+                <p className="text-xs text-theme-text-muted mb-2">
+                  Showing skills for <span className="capitalize font-medium">{shiftApparatusType}</span>
+                </p>
+              )}
+              <div className="space-y-2">
+                {skillOptions.map((skillName) => {
+                  const selected = skills.find(
+                    (s) => s.skill_name === skillName,
+                  );
+                  return (
+                    <div key={skillName}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selected) {
+                            setSkills(
+                              skills.filter(
+                                (s) =>
+                                  s.skill_name !== skillName,
+                              ),
+                            );
+                          } else {
+                            setSkills([
+                              ...skills,
+                              {
+                                skill_name: skillName,
+                                demonstrated: true,
+                              },
+                            ]);
+                          }
+                        }}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          selected
+                            ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
+                            : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
+                        }`}
+                      >
+                        {selected ? '\u2713 ' : ''}{skillName}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-              {skills.map((skill, i) => (
-                <div key={i} className="flex items-center space-x-2 mb-2">
-                  <input
-                    type="text"
-                    value={skill.skill_name}
-                    onChange={(e) => updateSkill(i, { skill_name: e.target.value })}
-                    placeholder="Skill name"
-                    className="form-input flex-1"
-                  />
-                  <label className="flex items-center space-x-1">
-                    <input
-                      type="checkbox"
-                      checked={skill.demonstrated}
-                      onChange={(e) => updateSkill(i, { demonstrated: e.target.checked })}
-                      className="w-4 h-4 rounded-sm border-theme-surface-border bg-theme-surface text-green-600"
-                    />
-                    <span className="text-xs text-theme-text-muted">Demo'd</span>
-                  </label>
-                  <button type="button" onClick={() => removeSkill(i)} className="text-theme-text-muted hover:text-red-800 dark:hover:text-red-400">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
             </div>
+            )}
 
             {/* Tasks Performed */}
+            {(moduleConfig?.form_show_tasks_performed ?? true) && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-medium text-theme-text-secondary">Tasks Performed</label>
@@ -743,6 +975,24 @@ const ShiftReportPage: React.FC = () => {
                   <Plus className="w-3 h-3" /><span>Add Task</span>
                 </button>
               </div>
+              {/* Quick-add from defaults */}
+              {taskDefaults.length > 0 && tasks.length === 0 && (
+                <div className="mb-2">
+                  <p className="text-xs text-theme-text-muted mb-1.5">Quick add from defaults:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {taskDefaults.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTasks([...tasks, { task: t }])}
+                        className="px-2 py-1 text-xs rounded-full border border-red-500/20 bg-red-500/5 text-red-700 dark:text-red-400 hover:bg-red-500/15 transition-colors"
+                      >
+                        + {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {tasks.map((task, i) => (
                 <div key={i} className="flex items-center space-x-2 mb-2">
                   <input
@@ -765,6 +1015,7 @@ const ShiftReportPage: React.FC = () => {
                 </div>
               ))}
             </div>
+            )}
 
             {/* Submit */}
             <div className="flex items-center justify-between pt-4 border-t border-theme-surface-border">
@@ -773,14 +1024,25 @@ const ShiftReportPage: React.FC = () => {
                   ? 'Hours and calls will automatically update pipeline requirements.'
                   : 'Will update any active pipeline requirements for this trainee.'}
               </p>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="btn-primary flex font-medium items-center px-5 space-x-2 text-sm"
-              >
-                <Send className="w-4 h-4" />
-                <span>{submitting ? 'Filing...' : 'File Report'}</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { void handleSaveDraft(); }}
+                  disabled={savingDraft || submitting}
+                  className="flex font-medium items-center px-4 py-2 space-x-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 transition-colors"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{savingDraft ? 'Saving...' : 'Save as Draft'}</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || savingDraft}
+                  className="btn-primary flex font-medium items-center px-5 space-x-2 text-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{submitting ? 'Filing...' : 'File Report'}</span>
+                </button>
+              </div>
             </div>
           </form>
         )}

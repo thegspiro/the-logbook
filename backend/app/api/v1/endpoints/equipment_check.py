@@ -31,6 +31,7 @@ from app.schemas.equipment_check import (
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
     ComplianceReportResponse,
+    EquipmentCheckCompleteItems,
     EquipmentCheckTemplateCreate,
     EquipmentCheckTemplateResponse,
     EquipmentCheckTemplateUpdate,
@@ -576,6 +577,33 @@ async def submit_standalone_check(
     except ValueError as e:
         raise HTTPException(
             status_code=400, detail=safe_error_detail(e)
+        )
+
+
+@router.put(
+    "/checks/{check_id}/complete",
+    response_model=ShiftEquipmentCheckResponse,
+)
+async def complete_incomplete_check(
+    check_id: str,
+    data: EquipmentCheckCompleteItems,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Complete remaining items on an incomplete check."""
+    service = EquipmentCheckService(db)
+    try:
+        check = await service.complete_incomplete_check(
+            check_id=check_id,
+            organization_id=current_user.organization_id,
+            checked_by=str(current_user.id),
+            data=data.model_dump(exclude_unset=True),
+        )
+        return check
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=safe_error_detail(e),
         )
 
 
