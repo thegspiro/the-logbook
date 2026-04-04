@@ -290,6 +290,16 @@ class StandaloneEquipmentCheckCreate(BaseModel):
     signature_data: Optional[str] = None
 
 
+class EquipmentCheckCompleteItems(BaseModel):
+    """Schema for completing remaining items on an incomplete check."""
+
+    items: List[CheckItemResultSubmit] = Field(
+        ..., min_length=1
+    )
+    notes: Optional[str] = None
+    signature_data: Optional[str] = None
+
+
 class ShiftEquipmentCheckItemResponse(UTCResponseBase):
     """Response schema for a single check item result."""
 

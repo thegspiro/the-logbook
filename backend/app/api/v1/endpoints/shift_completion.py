@@ -289,7 +289,62 @@ async def get_draft_reports(
     )
 
 
-@router.get("/{report_id}", response_model=ShiftCompletionReportResponse)
+@router.post("/drafts/submit-all")
+async def submit_all_drafts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("training.manage")
+    ),
+):
+    """Submit all draft reports at once.
+
+    Transitions each draft to pending_review or approved based
+    on the org's review workflow setting, and triggers deferred
+    pipeline progress for each.
+    """
+    config_service = TrainingModuleConfigService(db)
+    config = await config_service.get_config(
+        current_user.organization_id
+    )
+    target_status = (
+        "pending_review"
+        if config.report_review_required
+        else "approved"
+    )
+
+    service = ShiftCompletionService(db)
+    drafts = await service.get_reports_by_status(
+        organization_id=current_user.organization_id,
+        review_status="draft",
+    )
+
+    submitted = 0
+    for draft in drafts:
+        try:
+            await service.update_report(
+                report_id=draft.id,
+                organization_id=(
+                    current_user.organization_id
+                ),
+                officer_id=str(current_user.id),
+                updates={
+                    "review_status": target_status,
+                },
+            )
+            submitted += 1
+        except ValueError:
+            continue
+
+    return {
+        "submitted": submitted,
+        "total": len(drafts),
+    }
+
+
+@router.get(
+    "/{report_id}",
+    response_model=ShiftCompletionReportResponse,
+)
 async def get_shift_report(
     report_id: str,
     db: AsyncSession = Depends(get_db),

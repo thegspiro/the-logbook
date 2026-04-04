@@ -12,6 +12,11 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.notification import (
+    NotificationCategory,
+    NotificationChannel,
+    NotificationLog,
+)
 from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
@@ -194,6 +199,23 @@ class ShiftCompletionService:
                 hours_on_shift = actual_hours
                 data_sources["hours_on_shift"] = "shift_attendance"
 
+        # Validate enrollment_id if provided
+        if enrollment_id:
+            enrollment = (
+                await self.db.execute(
+                    select(ProgramEnrollment).where(
+                        ProgramEnrollment.id == enrollment_id,
+                        ProgramEnrollment.member_id
+                        == trainee_id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if not enrollment:
+                raise ValueError(
+                    "Enrollment not found or does not "
+                    "belong to this trainee"
+                )
+
         report = ShiftCompletionReport(
             organization_id=str(organization_id),
             officer_id=str(officer_id),
@@ -253,7 +275,40 @@ class ShiftCompletionService:
         if commit:
             await self.db.commit()
             await self.db.refresh(report)
+
+        if review_status == "approved":
+            await self._notify_trainee_report_ready(
+                organization_id=organization_id,
+                trainee_id=trainee_id,
+                shift_date=shift_date,
+            )
+
         return report
+
+    async def _notify_trainee_report_ready(
+        self,
+        organization_id: UUID,
+        trainee_id: str,
+        shift_date: date,
+    ) -> None:
+        """Send in-app notification to trainee."""
+        try:
+            notification = NotificationLog(
+                organization_id=str(organization_id),
+                recipient_id=trainee_id,
+                channel=NotificationChannel.IN_APP,
+                category=NotificationCategory.TRAINING,
+                subject="Shift report ready for review",
+                message=(
+                    f"A shift completion report for "
+                    f"{shift_date} is ready for your "
+                    f"review and acknowledgment."
+                ),
+            )
+            self.db.add(notification)
+            await self.db.commit()
+        except Exception:
+            pass
 
     async def _update_requirement_progress(
         self,
@@ -637,13 +692,24 @@ class ShiftCompletionService:
             report.reviewer_notes = reviewer_notes
 
         # Trigger deferred training progress when draft is activated
-        if was_draft and review_status in ("approved", "pending_review"):
+        if was_draft and review_status in (
+            "approved",
+            "pending_review",
+        ):
             await self._trigger_deferred_progress(
                 report, reviewer_id,
             )
 
         await self.db.commit()
         await self.db.refresh(report)
+
+        if review_status == "approved":
+            await self._notify_trainee_report_ready(
+                organization_id=organization_id,
+                trainee_id=report.trainee_id,
+                shift_date=report.shift_date,
+            )
+
         return report
 
     async def get_trainee_stats(

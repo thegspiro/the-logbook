@@ -128,6 +128,15 @@ export const ShiftReportsTab: React.FC = () => {
   // Analytics state
   const [traineeStats, setTraineeStats] = useState<TraineeShiftStats | null>(null);
   const [officerAnalytics, setOfficerAnalytics] = useState<OfficerShiftAnalytics | null>(null);
+  const [draftBadgeCount, setDraftBadgeCount] = useState(0);
+
+  // Load draft count badge for managers
+  useEffect(() => {
+    if (!canManage) return;
+    shiftCompletionService.getDraftReports()
+      .then((drafts) => setDraftBadgeCount(drafts.length))
+      .catch(() => {});
+  }, [canManage, viewMode]);
 
   // Load config for visibility and rating settings
   useEffect(() => {
@@ -1131,6 +1140,11 @@ export const ShiftReportsTab: React.FC = () => {
               }`}
             >
               <FileText className="w-3.5 h-3.5" /> Drafts
+              {draftBadgeCount > 0 && viewMode !== 'drafts' && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs font-bold rounded-full bg-blue-500 text-white leading-none">
+                  {draftBadgeCount}
+                </span>
+              )}
             </button>
           )}
           {canManage && (
@@ -1435,6 +1449,33 @@ export const ShiftReportsTab: React.FC = () => {
       {/* Reports List */}
       {viewMode !== 'create' && (
         <>
+          {viewMode === 'drafts' && !loading && reports.length > 0 && (
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-theme-text-muted">
+                {reports.length} draft{reports.length !== 1 ? 's' : ''} pending
+              </p>
+              <button
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      const result = await shiftCompletionService.submitAllDrafts();
+                      toast.success(
+                        `Submitted ${result.submitted} of ${result.total} drafts`,
+                      );
+                      void loadReports();
+                      setDraftBadgeCount(0);
+                    } catch {
+                      toast.error('Failed to submit drafts');
+                    }
+                  })();
+                }}
+                className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium inline-flex items-center gap-2 transition-colors"
+              >
+                <Check className="w-4 h-4" />
+                Submit All Drafts
+              </button>
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center justify-center py-20" role="status" aria-live="polite">
               <Loader2 className="w-8 h-8 animate-spin text-theme-text-muted" />

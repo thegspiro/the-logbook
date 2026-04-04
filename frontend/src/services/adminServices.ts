@@ -589,6 +589,11 @@ export const shiftCompletionService = {
     return response.data;
   },
 
+  async submitAllDrafts(): Promise<{ submitted: number; total: number }> {
+    const response = await api.post<{ submitted: number; total: number }>('/training/shift-reports/drafts/submit-all');
+    return response.data;
+  },
+
   async updateReport(reportId: string, data: Partial<import('../types/training').ShiftCompletionReportCreate> & { review_status?: string }): Promise<import('../types/training').ShiftCompletionReport> {
     const response = await api.put<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}`, data);
     return response.data;

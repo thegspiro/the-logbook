@@ -3617,7 +3617,24 @@ class ShiftEquipmentCheck(Base):
         Index("idx_shift_equip_check_shift", "shift_id"),
         Index("idx_shift_equip_check_org", "organization_id"),
         Index("idx_shift_equip_check_user", "checked_by"),
-        Index("idx_shift_equip_check_template", "template_id"),
+        Index(
+            "idx_shift_equip_check_template", "template_id"
+        ),
+        Index(
+            "idx_shift_equip_check_org_date",
+            "organization_id",
+            "checked_at",
+        ),
+        Index(
+            "idx_shift_equip_check_shift_tmpl",
+            "shift_id",
+            "template_id",
+        ),
+        Index(
+            "idx_shift_equip_check_shift_timing",
+            "shift_id",
+            "check_timing",
+        ),
     )
 
     def __repr__(self):
