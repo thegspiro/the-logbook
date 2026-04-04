@@ -1544,7 +1544,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             subject=subject,
                             message=message,
                             action_url=shift_action_url,
-                            metadata=shift_metadata or None,
+                            notification_metadata=shift_metadata or None,
                             delivered=True,
                         )
                         db.add(notif)
@@ -1935,7 +1935,7 @@ async def run_end_of_shift_checklist_reminders(
                             subject=subject,
                             message=message,
                             action_url=shift_action_url,
-                            metadata=shift_metadata,
+                            notification_metadata=shift_metadata,
                             delivered=True,
                         )
                         db.add(notif)

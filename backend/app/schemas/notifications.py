@@ -93,11 +93,13 @@ class NotificationLogResponse(UTCResponseBase):
     pinned: bool = False
     error: Optional[str] = None
     action_url: Optional[str] = None
-    metadata: Optional[Any] = None
+    notification_metadata: Optional[Any] = Field(
+        default=None, serialization_alias="metadata"
+    )
     expires_at: Optional[datetime] = None
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class NotificationLogsListResponse(BaseModel):
