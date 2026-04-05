@@ -291,6 +291,24 @@ const ShiftReportPage: React.FC = () => {
         if (preview.hours_on_shift && preview.hours_on_shift > 0) {
           setHoursOnShift(preview.hours_on_shift);
           populated['hours_on_shift'] = true;
+        } else {
+          const shift = availableShifts.find(
+            (s) => s.id === selectedShiftId,
+          );
+          if (shift?.start_time && shift?.end_time) {
+            const start = new Date(
+              shift.start_time,
+            ).getTime();
+            const end = new Date(shift.end_time).getTime();
+            if (end > start) {
+              const hrs =
+                Math.round(
+                  ((end - start) / 3600000) * 100,
+                ) / 100;
+              setHoursOnShift(hrs);
+              populated['hours_on_shift'] = true;
+            }
+          }
         }
         if (preview.calls_responded > 0) {
           setCallsResponded(preview.calls_responded);
