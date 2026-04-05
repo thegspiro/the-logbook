@@ -565,6 +565,35 @@ async def get_active_shift_for_apparatus(
     return shift_dict
 
 
+@router.get("/my-attendance-history")
+async def get_my_attendance_history(
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the current member's attendance history."""
+    from app.models.training import Shift, ShiftAttendance
+
+    result = await db.execute(
+        select(ShiftAttendance)
+        .join(
+            Shift,
+            ShiftAttendance.shift_id == Shift.id,
+        )
+        .where(
+            ShiftAttendance.user_id
+            == str(current_user.id),
+            Shift.organization_id
+            == str(current_user.organization_id),
+        )
+        .order_by(ShiftAttendance.created_at.desc())
+        .limit(limit)
+    )
+    records = list(result.scalars().all())
+    service = SchedulingService(db)
+    return await service.enrich_attendance_records(records)
+
+
 @router.get(
     "/shifts/{shift_id}/my-attendance",
     response_model=ShiftAttendanceResponse,

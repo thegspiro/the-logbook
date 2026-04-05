@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   Clock, Check, XCircle, ArrowLeftRight, CalendarOff,
   Loader2, ChevronDown, AlertTriangle,
-  Bell,
+  Bell, LogIn, LogOut,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -30,6 +30,11 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'upcoming' | 'past'>('upcoming');
+
+  // Attendance history for hours display
+  const [attendanceMap, setAttendanceMap] = useState<
+    Map<string, { checked_in_at?: string; checked_out_at?: string; duration_minutes?: number }>
+  >(new Map());
 
   // Swap request modal
   const [showSwapModal, setShowSwapModal] = useState(false);
@@ -60,8 +65,16 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const assignData = await schedulingService.getMyAssignments();
+      const [assignData, attHistory] = await Promise.all([
+        schedulingService.getMyAssignments(),
+        schedulingService.getMyAttendanceHistory().catch(() => []),
+      ]);
       setAssignments(assignData);
+      const map = new Map<string, typeof attHistory[0]>();
+      for (const att of attHistory) {
+        map.set(att.shift_id, att);
+      }
+      setAttendanceMap(map);
     } catch {
       toast.error('Failed to load your shifts');
     } finally {
@@ -287,6 +300,42 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         </div>
       </div>
 
+      {/* Hours summary for past shifts */}
+      {view === 'past' && attendanceMap.size > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-3 text-center">
+            <p className="text-xl font-bold text-theme-text-primary">
+              {Math.round(
+                [...attendanceMap.values()]
+                  .filter(a => a.duration_minutes)
+                  .reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0) / 60 * 10
+              ) / 10}
+            </p>
+            <p className="text-xs text-theme-text-muted">Total Hours</p>
+          </div>
+          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-3 text-center">
+            <p className="text-xl font-bold text-theme-text-primary">
+              {[...attendanceMap.values()].filter(a => a.checked_in_at).length}
+            </p>
+            <p className="text-xs text-theme-text-muted">Shifts Logged</p>
+          </div>
+          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-3 text-center">
+            <p className="text-xl font-bold text-theme-text-primary">
+              {attendanceMap.size > 0
+                ? Math.round(
+                    [...attendanceMap.values()]
+                      .filter(a => a.duration_minutes)
+                      .reduce((sum, a) => sum + (a.duration_minutes ?? 0), 0)
+                    / [...attendanceMap.values()].filter(a => a.duration_minutes).length
+                    / 60 * 10
+                  ) / 10 || 0
+                : 0}
+            </p>
+            <p className="text-xs text-theme-text-muted">Avg Hours/Shift</p>
+          </div>
+        </div>
+      )}
+
       {/* Bulk action bar */}
       {view === 'upcoming' && pendingAssigned.length > 1 && (
         <div className="flex items-center justify-between gap-3 p-3 bg-theme-surface-hover/50 border border-theme-surface-border rounded-lg">
@@ -356,13 +405,33 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                       <p className="text-xs sm:text-sm text-theme-text-secondary">
                         {shift?.start_time ? `${formatTime(shift.start_time, tz)}${shift.end_time ? ` - ${formatTime(shift.end_time, tz)}` : ''}` : ''}
                       </p>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <p className="text-xs text-theme-text-muted capitalize">
                           Position: {assignment.position}
                         </p>
                         <span className={`px-2 py-0.5 text-[10px] sm:hidden font-medium rounded-full border capitalize ${statusColor}`}>
                           {assignment.status}
                         </span>
+                        {(() => {
+                          const att = shift ? attendanceMap.get(shift.id) : undefined;
+                          if (!att) return null;
+                          if (att.checked_out_at && att.duration_minutes) {
+                            const hrs = Math.round((att.duration_minutes / 60) * 10) / 10;
+                            return (
+                              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-green-500/10 text-green-700 dark:text-green-400 inline-flex items-center gap-1">
+                                <Clock className="w-3 h-3" /> {hrs}h
+                              </span>
+                            );
+                          }
+                          if (att.checked_in_at) {
+                            return (
+                              <span className="px-2 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 inline-flex items-center gap-1">
+                                <LogIn className="w-3 h-3" /> Checked in
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     </div>
                   </div>

@@ -122,6 +122,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     checked_out_at?: string;
     duration_minutes?: number;
   } | null>(null);
+  const [allAttendance, setAllAttendance] = useState<
+    import('../../modules/scheduling/services/api').ShiftAttendanceRecord[]
+  >([]);
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -180,15 +183,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const load = async () => {
       setLoading(true);
       try {
-        const [assignData, checkData, attendanceData] = await Promise.all([
+        const [assignData, checkData, attendanceData, allAttData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
           schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
           schedulingService.getMyAttendance(shift.id),
+          schedulingService.getShiftAttendance(shift.id).catch(() => []),
         ]);
         if (!cancelled) {
           setAssignments(assignData);
           setEquipmentCheckSummaries(checkData);
           setMyAttendance(attendanceData);
+          setAllAttendance(allAttData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -530,6 +535,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   const isUserAssigned = activeAssignments.some(a => a.user_id === user?.id);
 
+  const attendanceByUser = useMemo(() => {
+    const map = new Map<string, typeof allAttendance[0]>();
+    for (const att of allAttendance) {
+      map.set(att.user_id, att);
+    }
+    return map;
+  }, [allAttendance]);
+
   // Build crew board data: for each apparatus position, find the assignment(s) filling it
   const crewBoard = useMemo(() => {
     if (!hasApparatusPositions) return null;
@@ -788,11 +801,40 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </div>
                 ) : null}
 
-                {/* Attendance summary — warn only */}
-                <div className="flex items-center gap-2 p-2 bg-theme-surface border border-theme-surface-border rounded-md">
-                  <Users className="w-4 h-4 text-theme-text-muted shrink-0" />
-                  <span className="text-theme-text-secondary">{activeAssignments.length} active assignment(s)</span>
-                </div>
+                {/* Attendance check-in/out summary */}
+                {(() => {
+                  const checkedIn = allAttendance.filter(a => a.checked_in_at);
+                  const checkedOut = allAttendance.filter(a => a.checked_out_at);
+                  const totalAssigned = activeAssignments.length;
+                  const allOut = checkedOut.length >= totalAssigned && totalAssigned > 0;
+                  return (
+                    <div className={`flex items-start gap-2 p-2 rounded-md border ${
+                      allOut
+                        ? 'bg-green-500/10 border-green-500/20'
+                        : checkedIn.length > 0
+                        ? 'bg-amber-500/10 border-amber-500/20'
+                        : 'bg-theme-surface border-theme-surface-border'
+                    }`}>
+                      <Users className={`w-4 h-4 mt-0.5 shrink-0 ${allOut ? 'text-green-600' : checkedIn.length > 0 ? 'text-amber-600' : 'text-theme-text-muted'}`} />
+                      <div>
+                        <span className="text-theme-text-secondary text-sm">
+                          {checkedIn.length} of {totalAssigned} checked in
+                          {checkedOut.length > 0 && `, ${checkedOut.length} checked out`}
+                        </span>
+                        {checkedIn.length < totalAssigned && totalAssigned > 0 && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                            {totalAssigned - checkedIn.length} member(s) have not checked in
+                          </p>
+                        )}
+                        {checkedIn.length > checkedOut.length && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                            {checkedIn.length - checkedOut.length} member(s) still on shift
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Call count */}
                 {shift.call_count !== undefined && shift.call_count !== null && (
@@ -1098,6 +1140,26 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
                             {assignment.status || 'assigned'}
                           </span>
+                          {(() => {
+                            const att = attendanceByUser.get(assignment.user_id);
+                            if (!att) return null;
+                            if (att.checked_out_at) {
+                              const hrs = Math.round(((att.duration_minutes ?? 0) / 60) * 10) / 10;
+                              return (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/10 text-green-700 dark:text-green-400" title={`In: ${new Date(att.checked_in_at ?? '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} Out: ${new Date(att.checked_out_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}>
+                                  {hrs}h
+                                </span>
+                              );
+                            }
+                            if (att.checked_in_at) {
+                              return (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400" title={`Checked in at ${new Date(att.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}>
+                                  <LogIn className="w-3 h-3 inline" />
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                           {assignment.user_id === user?.id && assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
                             <>
                               <button onClick={() => { void handleConfirm(assignment.id); }}

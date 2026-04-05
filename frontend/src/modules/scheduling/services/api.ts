@@ -383,6 +383,15 @@ export const schedulingService = {
     return response.data;
   },
 
+  // Attendance history
+  async getMyAttendanceHistory(limit = 50): Promise<ShiftAttendanceRecord[]> {
+    const response = await api.get<ShiftAttendanceRecord[]>(
+      '/scheduling/my-attendance-history',
+      { params: { limit } },
+    );
+    return response.data;
+  },
+
   // Active shift lookup
   async getActiveShiftForApparatus(apparatusId: string): Promise<ShiftRecord> {
     const response = await api.get<ShiftRecord>(
