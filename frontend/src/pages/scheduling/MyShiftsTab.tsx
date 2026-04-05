@@ -9,7 +9,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   Clock, Check, XCircle, ArrowLeftRight, CalendarOff,
   Loader2, ChevronDown, AlertTriangle,
-  Bell, LogIn, LogOut,
+  Bell, LogIn,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
