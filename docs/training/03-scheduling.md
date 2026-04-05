@@ -36,7 +36,7 @@ Navigate to **Shift Scheduling** in the sidebar. The scheduling page is organize
 | **Requests** | Time-off and swap requests |
 | **Shift Templates** | Reusable shift configurations |
 | **Reports** | Hours, coverage, and compliance reports |
-| **Settings** | Notification preferences, shift rules, and coverage settings |
+| **Settings** | Notification preferences, shift rules, coverage settings, and shift report configuration (section toggles, apparatus skills/tasks, rating scale) |
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Scheduling page showing the tab bar at the top with all seven tabs, and the Schedule (calendar) tab active showing a monthly calendar view with color-coded shifts]_
@@ -675,6 +675,105 @@ After finalization, a green badge shows "Shift finalized on [date]".
 | Deleting a shift with completion reports | Blocked — returns "Cannot delete a shift with completion reports" error |
 | Draft creation fails for one trainee | Error logged; remaining trainees still get draft reports |
 | Attendee with no active enrollment | No draft created for that attendee |
+
+### Shift Reports Settings *(2026-04-04)*
+
+Navigate to **Scheduling > Settings > Shift Reports** to configure the shift completion report workflow. This settings tab connects the scheduling module to the training module and controls how officers file post-shift reports.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports Settings tab showing three cards: "Checklist Timing" with start/end toggles, "Post-Shift Validation" with enable/require/window settings, and "Report Form Sections" with toggle switches._
+
+#### Checklist Timing
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Start of shift enabled | On | Whether start-of-shift equipment checklists are prompted |
+| End of shift enabled | On | Whether end-of-shift equipment checklists are prompted |
+
+#### Post-Shift Validation
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Enabled | On | Whether post-shift validation reminders are sent |
+| Require officer report | Off | Whether a shift completion report is mandatory after every shift |
+| Validation window (hours) | 2 | How many hours after shift end validation reminders are active |
+
+#### Report Form Section Toggles
+
+Controls which optional sections appear on the shift completion report form when officers file reports. These are separate from the trainee visibility settings in Training Module Configuration.
+
+| Section | Default | What Officers See |
+|---------|---------|-------------------|
+| Performance Rating | On | Star rating or descriptive scale |
+| Areas of Strength | On | Free-text field for positive observations |
+| Areas for Improvement | On | Free-text field for development areas |
+| Officer Narrative | On | Extended assessment text area |
+| Skills Observed | On | Checklist of demonstrated skills |
+| Tasks Performed | On | Checklist of completed tasks |
+| Call Types | On | Multi-select of incident types responded to |
+
+> **[SCREENSHOT NEEDED]:** _Screenshot showing the "Report Form Sections" card with 7 toggle switches, some on (green) and some off (grey), demonstrating how officers can customize which sections appear when filing reports._
+
+**When to toggle sections off:**
+- Small volunteer departments may not need detailed skills tracking — toggle off Skills Observed and Tasks Performed
+- Departments that don't track call types separately can toggle off Call Types
+- If your department uses a separate evaluation system, toggle off Performance Rating
+- Toggling off a section hides it completely from the report form; officers cannot enter data for hidden sections
+
+#### Per-Apparatus-Type Skills and Tasks
+
+Below the toggles, the settings panel shows apparatus-type-specific skill and task mappings. These determine which skills and tasks appear in the report form based on the shift's assigned apparatus.
+
+1. Expand an apparatus type accordion (Engine, Ladder, Ambulance, Rescue, etc.)
+2. View the current skills and tasks mapped to that type
+3. Add new skills/tasks using the text input and "+" button
+4. Remove skills/tasks by clicking the "×" button
+5. Changes save when you click **Save** at the bottom of the settings panel
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the per-apparatus skills/tasks accordion, with "Engine" expanded showing skills like "Pump operations", "Hose deployment", "Hydrant connection" and a text input with "+" button for adding new skills._
+
+**How this connects to the report form:**
+- Officer opens the report form for a trainee on an Engine shift
+- The Skills Observed section pre-populates with engine-specific skills (pump ops, hose deployment, etc.)
+- The Tasks Performed section pre-populates with engine-specific tasks
+- Officer checks off which skills were demonstrated and which tasks were completed
+- If the shift has no linked apparatus or the type has no mappings, org-wide defaults are used
+
+#### Rating Scale Customization
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Rating Label | "Performance Rating" | Text shown above the rating input |
+| Scale Type | Stars | "Stars" (1-5 star icons) or "Descriptive" (labeled buttons) |
+| Scale Labels | (none) | Custom labels per level (e.g., 1="Needs Improvement", 5="Exceptional") |
+
+> **[SCREENSHOT NEEDED]:** _Screenshot showing the rating scale customization section with a dropdown for scale type (Stars vs Descriptive), a text input for the rating label, and a table of 5 rows for custom labels per level._
+
+#### Save as Draft
+
+Officers can save incomplete reports as drafts by clicking **Save as Draft** instead of submitting:
+
+- Drafts appear in the **Drafts** view of the Shift Reports tab
+- No training pipeline progress is triggered for drafts
+- Officers can return to complete drafts at any time
+- On final submission, deferred pipeline progress is applied
+
+#### Auto-Filter Trainee List
+
+When filing a report linked to a specific shift, the trainee dropdown automatically shows only members assigned to that shift. This prevents filing reports for members who weren't on duty. For ad-hoc reports (no shift selected), the full member list is available.
+
+#### Shift Report Settings Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| All form sections toggled off | Core fields (trainee, date, hours, calls) remain; form is still submittable |
+| Apparatus type with no mapped skills | Falls back to org-wide default skills; if none, section is empty |
+| Save as draft with incomplete data | Saved; required field validation deferred to final submission |
+| Trainee list with no shift linked | Full member list shown (ad-hoc mode) |
+| Descriptive rating with no custom labels | Falls back to numeric display (1-5) |
+| Trainee has shift assignment but no attendance | Auto-populate returns zeros; officer enters hours manually |
+| Report shift_date doesn't match linked shift | Validation error returned |
+
+---
 
 ### Structured Position Slots & Decline Handling
 

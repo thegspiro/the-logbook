@@ -452,8 +452,63 @@ Training officers can control what trainees see via **Training Module Configurat
 | `show_shift_reports` | Whether the shift reports section appears at all |
 | `report_review_required` | Whether reports require reviewer approval before trainee visibility |
 | `rating_label` | Custom label for the performance rating (e.g., "Performance", "Readiness") |
-| `rating_scale_type` | Rating scale type (numeric, descriptive) |
-| `rating_scale_labels` | Custom labels for each rating level |
+| `rating_scale_type` | Rating scale type: "stars" (star icons) or "descriptive" (labeled buttons) |
+| `rating_scale_labels` | Custom labels for each rating level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`) |
+
+### Report Form Section Toggles *(2026-04-04)*
+
+Separate from trainee visibility, officers can control which **optional sections appear on the report creation form** itself:
+
+| Toggle | Default | Controls |
+|--------|---------|----------|
+| `form_show_performance_rating` | On | Performance rating stars/scale on the form |
+| `form_show_areas_of_strength` | On | Strengths text field on the form |
+| `form_show_areas_for_improvement` | On | Improvement text field on the form |
+| `form_show_officer_narrative` | On | Free-form officer assessment on the form |
+| `form_show_skills_observed` | On | Structured skills checklist on the form |
+| `form_show_tasks_performed` | On | Structured tasks checklist on the form |
+| `form_show_call_types` | On | Call type selection on the form |
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports Settings panel showing the "Report Form Sections" card with toggle switches for each section (performance rating, strengths, improvement, narrative, skills, tasks, call types), showing some toggled on and some toggled off._
+
+These toggles are managed in **Scheduling > Settings > Shift Reports**. When a section is toggled off, it is hidden from the report creation form entirely — officers do not see it and cannot enter data for it. The trainee visibility settings (above) are separate and control what trainees see after a report is filed.
+
+### Per-Apparatus-Type Skills and Tasks *(2026-04-04)*
+
+The report form can auto-populate skills and tasks relevant to the specific apparatus type used during the shift. For example, if a trainee worked on an engine company, the skills checklist might show "Pump operations", "Hose deployment", and "Hydrant connection" rather than generic skills.
+
+**How it works:**
+1. Navigate to **Scheduling > Settings > Shift Reports** to configure per-apparatus-type mappings
+2. Expand an apparatus type (e.g., Engine, Ladder, Ambulance) in the accordion
+3. Add or remove skills and tasks specific to that apparatus type
+4. When an officer files a report linked to a shift with that apparatus type, the form pre-populates the relevant skills and tasks
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports Settings panel showing the "Per-Apparatus Skills & Tasks" accordion, with one type (e.g., "Engine") expanded showing a list of skills like "Pump operations", "Hose deployment", "Hydrant connection" with add/remove buttons._
+
+If no mapping exists for the shift's apparatus type, the system falls back to the org-wide default skills and tasks lists. If neither exists, the skills/tasks sections are empty (but still visible unless toggled off via form section toggles).
+
+### Save as Draft *(2026-04-04)*
+
+Officers can save incomplete shift completion reports as drafts:
+
+1. Begin filling in the report form
+2. Click **Save as Draft** instead of Submit
+3. The report is saved with `review_status: "draft"` — no pipeline progress is triggered
+4. Return to the **Drafts** view in the Shift Reports tab to see all saved drafts
+5. Click **Edit** on a draft to complete it
+6. On final submission, the report transitions to `approved` or `pending_review`, and deferred pipeline progress is applied
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing the two action buttons at the bottom: "Save as Draft" (outlined/secondary) and "Submit Report" (primary/filled), with the form partially completed._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Drafts view in ShiftReportsTab showing a list of saved draft reports with shift date, trainee name, auto-populated hours/calls, and an "Edit" button to complete each draft._
+
+### Auto-Filter Trainee List *(2026-04-04)*
+
+When filing a shift report and linking it to a specific shift, the trainee dropdown automatically filters to show only members who were assigned to that shift. This prevents accidentally filing a report for someone who wasn't on duty.
+
+For ad-hoc reports (no shift selected), the full member list is shown.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form showing the trainee dropdown with a smaller filtered list (only 4-5 names) when a shift is selected, with a note or badge saying "Filtered to shift members"._
 
 ### Edge Cases
 
@@ -461,12 +516,18 @@ Training officers can control what trainees see via **Training Module Configurat
 - **Finalization blocking:** Shifts cannot be finalized if end-of-shift equipment checks are incomplete. Start-of-shift checks do not block finalization.
 - **Finalized shift protection:** Finalized shifts cannot be edited or deleted. Shifts with associated completion reports also cannot be deleted.
 - **Draft pipeline deferral:** Draft reports do not trigger training pipeline progress on creation. Progress is deferred until the draft is completed and transitions to `approved` or `pending_review`.
+- **Save as draft with missing fields:** Drafts can be saved with incomplete data — validation of required fields is deferred until the final submission.
 - **Field redaction:** When a reviewer redacts fields, those field values are set to null before the report becomes visible to the trainee. The original values are not recoverable.
 - **Reviewer notes privacy:** The `reviewer_notes` field (encrypted at rest) is never exposed to the trainee in any view or API response.
 - **Auto-populate edge case:** If the trainee is not found in the shift's attendance records, the preview returns zeroed data. If there are no ShiftCall records, calls_responded defaults to 0 and call_types is empty.
+- **Trainee with assignment but no attendance:** If a trainee has a shift assignment but no attendance record (e.g., they were assigned but didn't check in), the auto-populate returns zeros and the officer can manually enter hours.
+- **Report shift_date validation:** When a report is linked to a specific shift, the report's `shift_date` must match the linked shift's actual date. A mismatch returns a validation error.
 - **Call type matching:** Requirements with `required_call_types` use case-insensitive matching. "Medical" in a requirement matches "medical" in a call type. The system tracks matched types in `progress_notes` for audit.
 - **Ad hoc reports:** Reports filed without a `shift_id` are saved as ad hoc reports — no auto-population is available, and they appear in reports as "ad hoc".
 - **Failure isolation during finalization:** If draft auto-creation fails for one trainee, the error is logged and processing continues for remaining attendees.
+- **All form sections toggled off:** When all optional sections are disabled, only core fields (trainee, shift date, hours, calls) remain on the form. The form is still submittable.
+- **Apparatus type with no mapped skills:** Falls back to org-wide default skills list. If no defaults exist either, the skills section appears empty (unless toggled off).
+- **Descriptive rating with no custom labels:** Falls back to numeric display (1-5) instead of showing empty labels.
 
 ---
 

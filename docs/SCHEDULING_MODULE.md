@@ -41,7 +41,12 @@ frontend/src/modules/scheduling/
 │   └── schedulingStore.test.ts     # Store unit tests
 ├── components/
 │   ├── ShiftSettingsPanel.tsx       # Scheduling configuration panel
-│   └── SchedulingNotificationsPanel.tsx  # Notification management
+│   ├── ShiftReportsSettingsPanel.tsx # Shift report and post-shift validation settings
+│   ├── SchedulingNotificationsPanel.tsx  # Notification management
+│   ├── TemplateFormModal.tsx        # Create/edit shift template modal
+│   ├── PatternFormModal.tsx         # Create/edit shift pattern modal
+│   ├── GenerateShiftsModal.tsx      # Bulk generate shifts from pattern
+│   └── shiftTemplateTypes.ts        # TypeScript types for template/pattern forms
 
 frontend/src/pages/
 ├── SchedulingPage.tsx              # Main 7-tab hub (slim orchestrator)
@@ -477,6 +482,99 @@ The scheduling module connects to the training module through **Shift Completion
 10. **Trainee Stats**: Personal stats dashboard with total hours, calls, average rating, and monthly breakdown (`GET /training/shift-reports/my-stats`) *(2026-03-29)*
 
 This integration allows training officers to document field observations, automatically advance trainees through their training programs based on shift activity, and track department-wide training progress through analytical dashboards.
+
+### Shift Reports Settings *(2026-04-04)*
+
+The **Shift Reports** settings tab (within Scheduling Settings) provides centralized configuration for the shift completion report workflow:
+
+#### Checklist Timing Windows
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `start_of_shift_enabled` | `true` | Whether start-of-shift equipment checklists are active |
+| `end_of_shift_enabled` | `true` | Whether end-of-shift equipment checklists are active |
+
+#### Post-Shift Validation
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `enabled` | `true` | Whether post-shift validation reminders are active |
+| `require_officer_report` | `false` | Whether a shift completion report is mandatory after every shift |
+| `validation_window_hours` | `2` | Hours after shift end during which validation reminders are sent |
+
+#### Report Form Section Toggles
+
+Controls which optional sections appear on the shift completion report form (separate from trainee visibility):
+
+| Toggle | Default | Controls |
+|--------|---------|----------|
+| `form_show_performance_rating` | `true` | Performance rating stars/scale |
+| `form_show_areas_of_strength` | `true` | Strengths text field |
+| `form_show_areas_for_improvement` | `true` | Improvement text field |
+| `form_show_officer_narrative` | `true` | Free-form officer assessment |
+| `form_show_skills_observed` | `true` | Structured skills checklist |
+| `form_show_tasks_performed` | `true` | Structured tasks checklist |
+| `form_show_call_types` | `true` | Call type selection |
+
+#### Per-Apparatus-Type Skills and Tasks
+
+Maps apparatus types to specific skills and tasks so the report form auto-populates relevant items based on the shift's assigned apparatus. Configured via an accordion UI in the settings panel.
+
+**Example mapping:**
+
+| Apparatus Type | Skills | Tasks |
+|----------------|--------|-------|
+| Engine | Pump operations, Hose deployment, Hydrant connection, Drafting, Foam operations, Attack line advancement, Water supply establishment, Apparatus positioning | Pump test, Hose load inventory, Nozzle inspection, Hydrant flow check |
+| Ladder | Aerial operations, Ground ladder deployment, Ventilation, Rescue, Elevated stream operations, Tower bucket operations | Aerial extension test, Ground ladder inventory, Outrigger inspection, Bucket inspection |
+| Ambulance | Patient assessment, CPR/AED, IV access, Medication administration, Airway management, Splinting/immobilization | Drug box inventory, Oxygen supply check, AED test, Stretcher inspection |
+
+Departments can edit, add, or remove skills and tasks per apparatus type. When no mapping exists for a given type, the system falls back to the org-wide default skills and tasks lists.
+
+#### Rating Scale Customization
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `rating_label` | "Performance Rating" | Label displayed above the rating input |
+| `rating_scale_type` | "stars" | Display type: "stars" (star icons) or "descriptive" (labeled buttons) |
+| `rating_scale_labels` | `null` | Custom labels per rating level (e.g., `{1: "Needs Improvement", 2: "Developing", 3: "Competent", 4: "Proficient", 5: "Exceptional"}`) |
+
+#### Save as Draft
+
+Officers can save incomplete reports as drafts by enabling the `save_as_draft` flag on submission. Drafts:
+- Do not trigger training pipeline progress
+- Appear in the officer's **Drafts** view in ShiftReportsTab
+- Can be edited and completed at any time
+- Transition to `approved` or `pending_review` status on final submission, at which point pipeline progress is applied
+
+#### Data Flow: Settings → Report Form
+
+```
+Scheduling Settings (ShiftReportsSettingsPanel)
+    ↓ saves to org.settings["shift_reports"]
+Checklist timing & post-shift validation
+
+Training Module Config (training_module_configs table)
+    ↓ provides
+Form section toggles (form_show_*)
+    ↓ controls
+Report form UI (which sections are visible to officers)
+
+Training Module Config (apparatus_type_skills / apparatus_type_tasks)
+    ↓ filtered by
+Shift's apparatus type
+    ↓ populates
+Skills and tasks checklists on the report form
+```
+
+#### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| All form sections toggled off | Only core fields (trainee, date, hours, calls) remain; form still submittable |
+| Apparatus type with no mapped skills | Falls back to org-wide default skills; if none, skills section is empty |
+| Save as draft with missing fields | Saved successfully; validation deferred until final submission |
+| Trainee list when linked to a shift | Auto-filters to only show shift members; ad-hoc reports show full member list |
+| Rating scale "descriptive" with no labels | Falls back to numeric display (1-5) |
 
 ---
 

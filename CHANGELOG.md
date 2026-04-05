@@ -7,6 +7,137 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Shift Report Settings, Form Customization & Apparatus-Specific Skills (2026-04-04)
+
+- **Shift Reports Settings Panel**: New `ShiftReportsSettingsPanel` component in `modules/scheduling/components/` controls checklist timing windows (start/end of shift), post-shift validation settings (enabled, require_officer_report, validation_window_hours), and surfaces training module defaults (call types, skills, tasks). Accessible from **Scheduling > Settings > Shift Reports** and from the Shift Detail Panel settings link
+- **Report form section toggles**: 7 new `form_show_*` boolean columns on `training_module_configs` table control which optional sections appear on the shift completion report creation form. These are separate from the existing `show_*` visibility columns which control what trainees see after submission. Toggleable sections: performance rating, areas of strength, areas for improvement, officer narrative, skills observed, tasks performed, call types
+- **Per-apparatus-type skills and tasks mapping**: New `apparatus_type_skills` and `apparatus_type_tasks` JSON columns on `training_module_configs`. Maps apparatus types (engine, ladder, rescue, ambulance, etc.) to specific skills and tasks so the shift completion report form auto-populates relevant items based on the shift's assigned apparatus. Editable from ShiftReportsSettingsPanel with per-type accordion UI
+- **Customizable rating scale**: `rating_label`, `rating_scale_type` (stars/descriptive), and `rating_scale_labels` fields on module config allow departments to customize the performance rating display (e.g., custom labels per 1-5 level)
+- **Save as Draft button**: Officers can save incomplete shift completion reports as drafts via `save_as_draft: true` on the create schema. Drafts do not trigger pipeline progress. Officers return to drafts from the Drafts view in ShiftReportsTab
+- **Auto-filter trainee list**: When a shift report is linked to a shift, the trainee dropdown filters to only show members assigned to that shift. Falls back to full member list for ad-hoc reports
+- **Shift reports deep-linking**: Shift Reports tab connected between scheduling and training modules. Navigation from scheduling settings links directly to training shift reports and vice versa
+- **ShiftReportPage feature parity**: Standalone `/shift-report` page brought to full feature parity with the embedded ShiftReportsTab — same draft support, section toggles, apparatus-specific skills/tasks, and rating customization
+- **Training feedback defaults seeded**: Sample skills, tasks, and apparatus-type mappings auto-populated for new organizations via seed migration
+
+**New Frontend Components:**
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| `ShiftReportsSettingsPanel` | `modules/scheduling/components/ShiftReportsSettingsPanel.tsx` | Shift report and post-shift validation settings with training defaults display |
+
+**New Database Columns:**
+
+| Table | Column | Type | Description |
+|-------|--------|------|-------------|
+| `training_module_configs` | `form_show_performance_rating` | Boolean | Toggle performance rating on report form |
+| `training_module_configs` | `form_show_areas_of_strength` | Boolean | Toggle strengths section on report form |
+| `training_module_configs` | `form_show_areas_for_improvement` | Boolean | Toggle improvement section on report form |
+| `training_module_configs` | `form_show_officer_narrative` | Boolean | Toggle narrative section on report form |
+| `training_module_configs` | `form_show_skills_observed` | Boolean | Toggle skills section on report form |
+| `training_module_configs` | `form_show_tasks_performed` | Boolean | Toggle tasks section on report form |
+| `training_module_configs` | `form_show_call_types` | Boolean | Toggle call types section on report form |
+| `training_module_configs` | `apparatus_type_skills` | JSON | Per-apparatus-type skill lists (e.g., engine → pump ops, hose deployment) |
+| `training_module_configs` | `apparatus_type_tasks` | JSON | Per-apparatus-type task lists (e.g., engine → hydrant connection, drafting) |
+| `training_module_configs` | `rating_label` | String | Custom label for performance rating (default: "Performance Rating") |
+| `training_module_configs` | `rating_scale_type` | String | Rating display type: "stars" or "descriptive" |
+| `training_module_configs` | `rating_scale_labels` | JSON | Custom labels per rating level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`) |
+| `requirement_progress` | `started_at` | DateTime(tz) | Timestamp when requirement progress transitions to IN_PROGRESS |
+| `shift_equipment_checks` | `shift_id` | String (nullable) | Made nullable to support standalone (ad-hoc) equipment checks without an active shift |
+
+**New Alembic Migrations:**
+
+| Revision | Description |
+|----------|-------------|
+| `20260404_0100` | Make `shift_equipment_checks.shift_id` nullable for standalone checks |
+| `20260404_0200` | Add `form_show_*` section toggle columns to `training_module_configs` |
+| `20260404_0300` | Add `apparatus_type_skills` and `apparatus_type_tasks` JSON columns |
+| `20260404_0400` | Add composite indexes on `shift_equipment_checks` and `shift_equipment_check_items` for query performance |
+| `20260404_0500` | Add `started_at` column to `requirement_progress` |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Report form with all sections toggled off | Only core fields (trainee, shift date, hours, calls) remain; form is still submittable |
+| Apparatus type with no mapped skills | Falls back to org-wide default skills list; if none configured, skills section is empty |
+| Save as draft with missing required fields | Draft saved successfully — validation deferred until final submission |
+| Trainee list filter with no shift linked | Full member list shown (ad-hoc report mode) |
+| Standalone equipment check (no shift) | Check saved with `shift_id=NULL`; appears in reports but not linked to shift finalization |
+| Rating scale type "descriptive" with no labels | Falls back to numeric display (1-5) |
+| Duplicate equipment check for same shift+apparatus | Prevented by composite unique constraint; returns descriptive error |
+| Equipment check with empty template (no items) | Returns empty checklist; submission blocked with "No items to check" message |
+
+### Bug Fixes (2026-04-04)
+
+- **Standalone checklist submission**: Made `shift_id` nullable in `shift_equipment_checks` table so members can perform ad-hoc equipment checks without an active shift (migration `20260404_0100`)
+- **Equipment check empty checklists**: Fixed bug where templates with no items produced empty check forms with no user feedback
+- **Equipment check status logic**: Corrected pass/fail status computation when items have mixed check types
+- **Equipment check duplicates**: Added composite unique constraint to prevent duplicate checks for the same shift + apparatus + timing combination
+- **Shift report submission with assignment but no attendance**: Fixed error when trainee has a shift assignment but no attendance record — the system now gracefully handles missing attendance data and allows manual hour entry
+- **Report shift_date validation**: Reports linked to a specific shift now validate that the report's `shift_date` matches the linked shift's actual date, preventing data mismatches
+- **Pipeline enrollment field name**: Fixed incorrect field name reference in enrollment lookups that caused 500 errors during pipeline progress updates
+- **Requirement progress started_at column**: Added missing `started_at` column that the training program service referenced when transitioning requirements to IN_PROGRESS status
+- **NotificationLog reserved attribute**: Renamed SQLAlchemy model attribute from `metadata` (reserved by SQLAlchemy Base) to `notification_metadata` on the `NotificationLog` model, fixing container startup crashes
+- **Post-shift validation UX**: Fixed notification card action buttons to correctly show "Start Checklist" during shift windows and "View Shift" outside them
+- **Notification deep-linking**: Fixed shift check notifications to link directly to the checklist page instead of the generic scheduling page
+- **Start-of-shift notification improvements**: Enriched notification metadata with checklist count and apparatus info for better context in notification cards
+- **Equipment check composite indexes**: Added database indexes on `(shift_id, template_id)` and `(check_id, template_item_id)` for query performance on large datasets
+
+### Training Admin Enhancements (2026-04-04)
+
+- **TrainingEnhancementsTab**: Wired up create modals for recertification pathways, instructor qualifications, effectiveness evaluations, and multi-agency sessions. Connected the effectiveness scoring section to the evaluation API
+- **Unused code cleanup**: Removed unused skill helper functions from ShiftReportPage
+
+### Frontend Architecture — Component Extraction (2026-04-03)
+
+Large-page components decomposed into focused, maintainable sub-components:
+
+- **EventDetailPage** (9 modals extracted): `EventCancelModal`, `EventCancelSeriesModal`, `EventCheckInModal`, `EventDeleteConfirmModal`, `EventEndConfirmModal`, `EventOverrideAttendanceModal`, `EventRSVPModal`, `EventRecordTimesModal`, `EventSaveTemplateModal` → `components/event-detail/`. Form state internalized in cancel/delete modals to reduce prop sprawl. Double-fetch on check-in removed
+- **ElectionDetailPage** (6 modals extracted): `BallotPreviewModal`, `DeleteElectionModal`, `ExtendElectionModal`, `RemindNonVotersModal`, `RollbackElectionModal`, `SendBallotEmailsModal` → `components/election-detail/`
+- **MemberProfilePage** (4 sections extracted): `AdminHoursSection`, `ContactInfoSection`, `EmergencyContactsSection`, `TrainingSection` → `components/member-profile/`
+- **SettingsPage** (4 sections extracted): `AuthSettingsSection`, `EmailSettingsSection`, `RanksSettingsSection`, `StorageSettingsSection` → `components/settings/`
+- **Dashboard** (2 components extracted): `DashboardStatCard`, `DashboardCardHeader` → `components/dashboard/`
+- **ShiftTemplatesPage** (3 modals + types extracted): `TemplateFormModal`, `PatternFormModal`, `GenerateShiftsModal`, `shiftTemplateTypes.ts` → `modules/scheduling/components/`
+- **StageConfigModal** (5 configs extracted): `AutomatedEmailConfig`, `ElectionVoteConfig`, `FormSubmissionConfig`, `MeetingConfig`, `ReferenceCheckConfig` → `components/stage-config/`
+
+**New Frontend Components:**
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| `EventCancelModal` | `components/event-detail/EventCancelModal.tsx` | Cancel single event with reason |
+| `EventCancelSeriesModal` | `components/event-detail/EventCancelSeriesModal.tsx` | Cancel recurring event series |
+| `EventCheckInModal` | `components/event-detail/EventCheckInModal.tsx` | QR/manual check-in modal |
+| `EventDeleteConfirmModal` | `components/event-detail/EventDeleteConfirmModal.tsx` | Delete event confirmation |
+| `EventEndConfirmModal` | `components/event-detail/EventEndConfirmModal.tsx` | End event early confirmation |
+| `EventOverrideAttendanceModal` | `components/event-detail/EventOverrideAttendanceModal.tsx` | Override attendance records |
+| `EventRSVPModal` | `components/event-detail/EventRSVPModal.tsx` | RSVP management |
+| `EventRecordTimesModal` | `components/event-detail/EventRecordTimesModal.tsx` | Record check-in/out times |
+| `EventSaveTemplateModal` | `components/event-detail/EventSaveTemplateModal.tsx` | Save event as template |
+| `BallotPreviewModal` | `components/election-detail/BallotPreviewModal.tsx` | Preview ballot layout |
+| `DeleteElectionModal` | `components/election-detail/DeleteElectionModal.tsx` | Delete election confirmation |
+| `ExtendElectionModal` | `components/election-detail/ExtendElectionModal.tsx` | Extend election voting period |
+| `RemindNonVotersModal` | `components/election-detail/RemindNonVotersModal.tsx` | Send reminder to non-voters |
+| `RollbackElectionModal` | `components/election-detail/RollbackElectionModal.tsx` | Rollback election status |
+| `SendBallotEmailsModal` | `components/election-detail/SendBallotEmailsModal.tsx` | Send ballot email notifications |
+| `AdminHoursSection` | `components/member-profile/AdminHoursSection.tsx` | Admin hours management tab |
+| `ContactInfoSection` | `components/member-profile/ContactInfoSection.tsx` | Member contact information |
+| `EmergencyContactsSection` | `components/member-profile/EmergencyContactsSection.tsx` | Emergency contacts management |
+| `TrainingSection` | `components/member-profile/TrainingSection.tsx` | Training history and records |
+| `AuthSettingsSection` | `components/settings/AuthSettingsSection.tsx` | Authentication settings |
+| `EmailSettingsSection` | `components/settings/EmailSettingsSection.tsx` | Email configuration settings |
+| `RanksSettingsSection` | `components/settings/RanksSettingsSection.tsx` | Rank management settings |
+| `StorageSettingsSection` | `components/settings/StorageSettingsSection.tsx` | File storage settings |
+| `DashboardStatCard` | `components/dashboard/DashboardStatCard.tsx` | Reusable metric card for dashboard |
+| `DashboardCardHeader` | `components/dashboard/DashboardCardHeader.tsx` | Reusable card header with icon |
+| `TemplateFormModal` | `modules/scheduling/components/TemplateFormModal.tsx` | Create/edit shift template |
+| `PatternFormModal` | `modules/scheduling/components/PatternFormModal.tsx` | Create/edit shift pattern |
+| `GenerateShiftsModal` | `modules/scheduling/components/GenerateShiftsModal.tsx` | Bulk generate shifts from pattern |
+| `AutomatedEmailConfig` | `components/stage-config/AutomatedEmailConfig.tsx` | Pipeline automated email stage config |
+| `ElectionVoteConfig` | `components/stage-config/ElectionVoteConfig.tsx` | Pipeline election vote stage config |
+| `FormSubmissionConfig` | `components/stage-config/FormSubmissionConfig.tsx` | Pipeline form submission stage config |
+| `MeetingConfig` | `components/stage-config/MeetingConfig.tsx` | Pipeline meeting stage config |
+| `ReferenceCheckConfig` | `components/stage-config/ReferenceCheckConfig.tsx` | Pipeline reference check stage config |
+
 ### Frontend Pattern Consolidation — Shared Hooks, Modals & Components (2026-03-30)
 
 - **useEmailListInput hook**: New shared hook at `hooks/useEmailListInput.ts` consolidates duplicate email list input logic (add/remove/validate) from ScheduleEmailForm, TemplateEditor, and SchedulingNotificationsPanel. Provides `validateEmailList()`, `parseEmailList()`, and stateful `useEmailListInput()` for managed email list inputs

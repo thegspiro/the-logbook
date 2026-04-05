@@ -591,6 +591,93 @@ The training module uses 16 exported service objects in `frontend/src/services/t
 
 ---
 
+## Shift Report Form Customization (2026-04-04)
+
+### Report Form Section Toggles
+
+Seven new `form_show_*` boolean columns on `training_module_configs` control which optional sections appear on the shift completion report **creation form**. These are separate from the existing `show_*` columns, which control what **trainees** see after submission.
+
+| Toggle | Default | Controls |
+|--------|---------|----------|
+| `form_show_performance_rating` | `true` | Performance rating stars/scale |
+| `form_show_areas_of_strength` | `true` | Strengths text field |
+| `form_show_areas_for_improvement` | `true` | Improvement areas text field |
+| `form_show_officer_narrative` | `true` | Free-form officer assessment |
+| `form_show_skills_observed` | `true` | Structured skills checklist |
+| `form_show_tasks_performed` | `true` | Structured tasks list |
+| `form_show_call_types` | `true` | Call type selection |
+
+### Per-Apparatus-Type Skills and Tasks
+
+Two new JSON columns map apparatus types to specific skills and tasks:
+
+- **`apparatus_type_skills`** — Maps apparatus types to skill lists (e.g., `{"engine": ["Pump operations", "Hose deployment"]}`)
+- **`apparatus_type_tasks`** — Maps apparatus types to task lists (e.g., `{"engine": ["Pump test", "Hose load inventory"]}`)
+
+When filing a report linked to a shift with an assigned apparatus, the form auto-populates the skills and tasks checklist from the apparatus type mapping. Falls back to org-wide defaults (`shift_review_default_skills` / `shift_review_default_tasks`) when no type-specific mapping exists.
+
+Managed via the **ShiftReportsSettingsPanel** in Scheduling Settings, with a per-type accordion UI for editing.
+
+### Rating Scale Customization
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `rating_label` | "Performance Rating" | Custom label for the rating input |
+| `rating_scale_type` | "stars" | "stars" (star icons) or "descriptive" (labeled buttons) |
+| `rating_scale_labels` | `null` | Custom labels per level (e.g., `{1: "Needs Improvement", 5: "Exceptional"}`) |
+
+### Save as Draft
+
+The `save_as_draft` flag on `ShiftCompletionReportCreate` allows officers to save incomplete reports. Drafts:
+- Do not trigger training pipeline progress
+- Appear in the officer's **Drafts** view in ShiftReportsTab
+- Transition to `approved` or `pending_review` on final submission, triggering deferred pipeline progress
+
+### Auto-Filter Trainee List
+
+When a shift report is linked to a shift, the trainee dropdown filters to shift members only. Ad-hoc reports show the full member list.
+
+### Seed Defaults
+
+New organizations are seeded with sample skills, tasks, and apparatus-type mappings via a seed migration. Sample data includes fire service skills by apparatus type (engine, ladder, rescue, ambulance, tanker, brush, hazmat, tower).
+
+### New Database Columns (2026-04-04)
+
+| Table | Column | Type | Description |
+|-------|--------|------|-------------|
+| `training_module_configs` | `form_show_performance_rating` | Boolean | Toggle rating on report form |
+| `training_module_configs` | `form_show_areas_of_strength` | Boolean | Toggle strengths on report form |
+| `training_module_configs` | `form_show_areas_for_improvement` | Boolean | Toggle improvement on report form |
+| `training_module_configs` | `form_show_officer_narrative` | Boolean | Toggle narrative on report form |
+| `training_module_configs` | `form_show_skills_observed` | Boolean | Toggle skills on report form |
+| `training_module_configs` | `form_show_tasks_performed` | Boolean | Toggle tasks on report form |
+| `training_module_configs` | `form_show_call_types` | Boolean | Toggle call types on report form |
+| `training_module_configs` | `apparatus_type_skills` | JSON | Per-type skill lists |
+| `training_module_configs` | `apparatus_type_tasks` | JSON | Per-type task lists |
+| `training_module_configs` | `rating_label` | String | Custom rating label |
+| `training_module_configs` | `rating_scale_type` | String | Rating display type |
+| `training_module_configs` | `rating_scale_labels` | JSON | Custom labels per level |
+| `requirement_progress` | `started_at` | DateTime(tz) | When requirement transitioned to IN_PROGRESS |
+
+### Training Admin Enhancements (2026-04-04)
+
+- Create modals wired up on the Enhancements tab for recertification pathways, instructor qualifications, effectiveness evaluations, and multi-agency sessions
+- Effectiveness scoring section connected to the evaluation API
+
+### Edge Cases (2026-04-04)
+
+| Scenario | Behavior |
+|----------|----------|
+| All form sections toggled off | Core fields (trainee, date, hours, calls) remain; form submittable |
+| Apparatus type with no mapped skills | Falls back to org-wide defaults; empty if none configured |
+| Draft saved with missing fields | Validation deferred until final submission |
+| Trainee list when linked to a shift | Auto-filters to shift members; ad-hoc reports show full list |
+| Descriptive rating with no labels | Falls back to numeric display (1-5) |
+| Report shift_date vs linked shift date mismatch | Returns validation error |
+| Trainee with shift assignment but no attendance | Allows manual hour entry; auto-populate returns zeros |
+
+---
+
 ## Related Documentation
 
 - **[Skills Testing Training Guide](../docs/training/09-skills-testing.md)** — Skills testing user guide with realistic NREMT example
