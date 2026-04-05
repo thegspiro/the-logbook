@@ -1325,8 +1325,12 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                       }
                     })();
                   }}
-                  disabled={savingRating}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 disabled:opacity-50 transition-colors"
+                  disabled={savingRating || JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                    JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})
+                      ? "bg-violet-600/30 text-violet-300 cursor-default"
+                      : "bg-violet-600 text-white hover:bg-violet-700"
+                  } disabled:opacity-50`}
                 >
                   {savingRating && (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
