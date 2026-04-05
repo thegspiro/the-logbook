@@ -40,6 +40,10 @@ const EquipmentCheckReportsPage = lazyWithRetry(
   () => import('../../pages/scheduling/EquipmentCheckReportsPage'),
 );
 
+const ShiftCheckInPage = lazyWithRetry(
+  () => import('../../pages/scheduling/ShiftCheckInPage'),
+);
+
 export const getSchedulingRoutes = () => {
   return (
     <React.Fragment>
@@ -118,6 +122,14 @@ export const getSchedulingRoutes = () => {
             <ProtectedRoute requiredPermission="scheduling.manage">
               <EquipmentCheckReportsPage />
             </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/checkin"
+        element={
+          <Suspense fallback={null}>
+            <ShiftCheckInPage />
           </Suspense>
         }
       />

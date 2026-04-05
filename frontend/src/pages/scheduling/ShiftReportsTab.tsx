@@ -193,7 +193,9 @@ export const ShiftReportsTab: React.FC = () => {
         setShowAllMembers(false);
         setForm(prev => {
           let hours = prev.hours_on_shift ?? 0;
-          if (shift.start_time && shift.end_time) {
+          if (shift.total_hours && shift.total_hours > 0) {
+            hours = Math.round(shift.total_hours * 100) / 100;
+          } else if (shift.start_time && shift.end_time) {
             const start = new Date(shift.start_time).getTime();
             const end = new Date(shift.end_time).getTime();
             if (end > start) {

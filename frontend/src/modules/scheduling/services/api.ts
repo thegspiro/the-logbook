@@ -383,6 +383,30 @@ export const schedulingService = {
     return response.data;
   },
 
+  // Shift Check-In / Check-Out
+  async checkIn(shiftId: string): Promise<ShiftAttendanceRecord> {
+    const response = await api.post<ShiftAttendanceRecord>(
+      `/scheduling/shifts/${shiftId}/check-in`,
+    );
+    return response.data;
+  },
+  async checkOut(shiftId: string): Promise<ShiftAttendanceRecord> {
+    const response = await api.post<ShiftAttendanceRecord>(
+      `/scheduling/shifts/${shiftId}/check-out`,
+    );
+    return response.data;
+  },
+  async getMyAttendance(shiftId: string): Promise<ShiftAttendanceRecord | null> {
+    try {
+      const response = await api.get<ShiftAttendanceRecord>(
+        `/scheduling/shifts/${shiftId}/my-attendance`,
+      );
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
+
   // Swap Requests
   async getSwapRequests(params?: SwapRequestFilters): Promise<SchedulingSwapRequest[]> {
     const response = await api.get<SchedulingSwapRequest[]>('/scheduling/swap-requests', { params });

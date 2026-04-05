@@ -17,8 +17,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
   Loader2, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
-  ClipboardCheck, CheckCircle2, AlertTriangle,
+  ClipboardCheck, CheckCircle2, AlertTriangle, LogIn, LogOut, QrCode,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -115,6 +116,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const setPendingFlag = (key: keyof typeof pending, value: boolean) =>
     setPending(prev => ({ ...prev, [key]: value }));
 
+  // Attendance check-in/check-out state
+  const [myAttendance, setMyAttendance] = useState<{
+    checked_in_at?: string;
+    checked_out_at?: string;
+    duration_minutes?: number;
+  } | null>(null);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+
   // UI visibility toggles
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFinalizeChecklist, setShowFinalizeChecklist] = useState(false);
@@ -169,13 +180,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const load = async () => {
       setLoading(true);
       try {
-        const [assignData, checkData] = await Promise.all([
+        const [assignData, checkData, attendanceData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
           schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
+          schedulingService.getMyAttendance(shift.id),
         ]);
         if (!cancelled) {
           setAssignments(assignData);
           setEquipmentCheckSummaries(checkData);
+          setMyAttendance(attendanceData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -1346,10 +1359,93 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Sign Up confirmation for already-assigned members */}
-          {!isPast && isUserAssigned && (
-            <div className="p-3 bg-green-500/5 border border-green-500/20 rounded-lg flex items-center gap-2">
-              <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
-              <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
+          {isUserAssigned && (
+            <div className="p-3 bg-green-500/5 border border-green-500/20 rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
+              </div>
+
+              {/* Check-in / Check-out buttons */}
+              {!shift.is_finalized && (
+                <div className="flex items-center gap-2 pt-1">
+                  {!myAttendance?.checked_in_at ? (
+                    <button
+                      onClick={async () => {
+                        setCheckingIn(true);
+                        try {
+                          const result = await schedulingService.checkIn(shift.id);
+                          setMyAttendance(result);
+                          toast.success('Checked in');
+                        } catch {
+                          toast.error('Failed to check in');
+                        } finally {
+                          setCheckingIn(false);
+                        }
+                      }}
+                      disabled={checkingIn}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      {checkingIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
+                      Check In
+                    </button>
+                  ) : !myAttendance?.checked_out_at ? (
+                    <>
+                      <span className="text-xs text-green-700 dark:text-green-400">
+                        Checked in at {new Date(myAttendance.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          setCheckingOut(true);
+                          try {
+                            const result = await schedulingService.checkOut(shift.id);
+                            setMyAttendance(result);
+                            toast.success(`Checked out (${Math.round((result.duration_minutes ?? 0) / 60 * 10) / 10} hrs)`);
+                          } catch {
+                            toast.error('Failed to check out');
+                          } finally {
+                            setCheckingOut(false);
+                          }
+                        }}
+                        disabled={checkingOut}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        {checkingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                        Check Out
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-theme-text-muted">
+                      {Math.round((myAttendance.duration_minutes ?? 0) / 60 * 10) / 10} hrs recorded
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* QR Code for shift check-in (officers) */}
+          {canAssign && (
+            <div>
+              <button
+                onClick={() => setShowQR(!showQR)}
+                className="inline-flex items-center gap-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                {showQR ? 'Hide' : 'Show'} Check-In QR Code
+              </button>
+              {showQR && (
+                <div className="mt-2 p-4 bg-white rounded-lg border border-theme-surface-border inline-block">
+                  <QRCodeSVG
+                    value={`${window.location.origin}/scheduling/checkin?shift=${shift.id}`}
+                    size={160}
+                    level="M"
+                  />
+                  <p className="text-xs text-center text-gray-500 mt-2">
+                    Scan to check in/out
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
