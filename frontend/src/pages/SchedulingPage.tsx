@@ -283,7 +283,7 @@ const SchedulingPage: React.FC = () => {
   useEffect(() => {
     const shiftId = searchParams.get('shift');
     const targetTab = searchParams.get('tab');
-    if (!shiftId || selectedShift) return;
+    if (!shiftId) return;
     if (targetTab && targetTab !== 'schedule') return;
 
     let cancelled = false;
