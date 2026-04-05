@@ -29,9 +29,67 @@ import { organizationService } from "../../../services/api";
 import { trainingModuleConfigService } from "../../../services/trainingServices";
 import { schedulingService } from "../services/api";
 import { getErrorMessage } from "../../../utils/errorHandling";
-import { Collapsible } from "../../../components/ux/Collapsible";
 import type { ShiftReportSettings } from "../types/shiftSettings";
 import type { TrainingModuleConfig } from "../../../types/training";
+
+type SectionKey =
+  | "checklist-timing"
+  | "post-shift"
+  | "training-defaults"
+  | "apparatus-skills"
+  | "form-sections"
+  | "review-workflow"
+  | "rating-scale";
+
+const SECTIONS: {
+  key: SectionKey;
+  label: string;
+  icon: React.ElementType;
+  description: string;
+}[] = [
+  {
+    key: "checklist-timing",
+    label: "Checklist Timing",
+    icon: ClipboardCheck,
+    description: "Start/end of shift checklist windows",
+  },
+  {
+    key: "post-shift",
+    label: "Post-Shift Validation",
+    icon: FileText,
+    description: "Officer review after shift ends",
+  },
+  {
+    key: "training-defaults",
+    label: "Feedback Defaults",
+    icon: GraduationCap,
+    description: "Call types, skills, and tasks",
+  },
+  {
+    key: "apparatus-skills",
+    label: "Apparatus Skills",
+    icon: Truck,
+    description: "Skills & tasks per apparatus type",
+  },
+  {
+    key: "form-sections",
+    label: "Form Sections",
+    icon: SlidersHorizontal,
+    description: "Show/hide report form fields",
+  },
+  {
+    key: "review-workflow",
+    label: "Review Workflow",
+    icon: Clock,
+    description: "Report approval requirements",
+  },
+  {
+    key: "rating-scale",
+    label: "Rating Scale",
+    icon: Star,
+    description: "Rating levels and display style",
+  },
+];
 
 // ─── Defaults ──────────────────────────────────────────────────────────────
 
@@ -182,6 +240,7 @@ const checkboxClass =
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export const ShiftReportsSettingsPanel: React.FC = () => {
+  const [activeSection, setActiveSection] = useState<SectionKey>("checklist-timing");
   const [settings, setSettings] = useState<ShiftReportSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -440,13 +499,11 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
     );
   }
 
-  return (
-    <div className="space-y-3">
-      {/* ── Checklist Timing ── */}
-      <Collapsible
-        title={<span className="flex items-center gap-2 text-base font-semibold"><ClipboardCheck className="w-4 h-4" /> Checklist Timing</span>}
-        defaultOpen={false}
-      >
+  const renderSection = () => {
+    switch (activeSection) {
+      case "checklist-timing":
+        return (
+          <div>
         <p className="text-sm text-theme-text-muted mb-4">
           Choose which checklist windows are active for shifts. Equipment check templates
           are assigned per apparatus on the Equipment tab — these toggles control whether
@@ -486,13 +543,11 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
             </div>
           </label>
         </div>
-      </Collapsible>
-
-      {/* ── Post-Shift Validation ── */}
-      <Collapsible
-        title={<span className="flex items-center gap-2 text-base font-semibold"><FileText className="w-4 h-4" /> Post-Shift Validation</span>}
-        defaultOpen={false}
-      >
+          </div>
+        );
+      case "post-shift":
+        return (
+          <div>
         <p className="text-sm text-theme-text-muted mb-4">
           After a shift ends, the shift officer can be notified to validate attendance,
           review hours, and confirm call counts before the shift is finalized.
@@ -559,13 +614,11 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
             </>
           )}
         </div>
-      </Collapsible>
-
-      {/* ── Training Feedback Defaults ── */}
-      <Collapsible
-        title={<span className="flex items-center gap-2 text-base font-semibold"><GraduationCap className="w-4 h-4" /> Training Feedback Defaults</span>}
-        defaultOpen={false}
-      >
+          </div>
+        );
+      case "training-defaults":
+        return (
+          <div>
         <p className="text-sm text-theme-text-muted mb-4">
           Define the default call types, skills, and tasks that appear on the officer&apos;s
           shift completion report form. Officers can add to these lists when filing a report.
@@ -634,14 +687,12 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
             )}
           </div>
         )}
-      </Collapsible>
-
-      {/* ── Apparatus-Type Skills & Tasks ── */}
-      {trainingConfig && apparatusTypes.length > 0 && (
-        <Collapsible
-          title={<span className="flex items-center gap-2 text-base font-semibold"><Truck className="w-4 h-4" /> Skills &amp; Tasks by Apparatus Type</span>}
-          defaultOpen={false}
-        >
+          </div>
+        );
+      case "apparatus-skills":
+        if (!trainingConfig || apparatusTypes.length === 0) return null;
+        return (
+          <div>
           <p className="text-sm text-theme-text-muted mb-4">
             Assign specific skills and tasks to each apparatus type. When an officer files
             a report linked to a shift, the form will show skills and tasks relevant to
@@ -985,15 +1036,12 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </div>
             </div>
           )}
-        </Collapsible>
-      )}
-
-      {/* ── Report Form Sections ── */}
-      {trainingConfig && (
-        <Collapsible
-          title={<span className="flex items-center gap-2 text-base font-semibold"><SlidersHorizontal className="w-4 h-4" /> Report Form Sections</span>}
-          defaultOpen={false}
-        >
+          </div>
+        );
+      case "form-sections":
+        if (!trainingConfig) return null;
+        return (
+          <div>
           <p className="text-sm text-theme-text-muted mb-4">
             Choose which optional sections appear on the shift completion report
             form when officers file a new report. Core fields (trainee, date,
@@ -1067,15 +1115,12 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </label>
             ))}
           </div>
-        </Collapsible>
-      )}
-
-      {/* ── Review Settings (from training module) ── */}
-      {trainingConfig && (
-        <Collapsible
-          title={<span className="flex items-center gap-2 text-base font-semibold"><Clock className="w-4 h-4" /> Report Review Workflow</span>}
-          defaultOpen={false}
-        >
+          </div>
+        );
+      case "review-workflow":
+        if (!trainingConfig) return null;
+        return (
+          <div>
           <p className="text-sm text-theme-text-muted mb-4">
             Controls whether shift completion reports require approval before the trainee can see them.
           </p>
@@ -1143,15 +1188,12 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </div>
             )}
           </div>
-        </Collapsible>
-      )}
-
-      {/* ── Rating Scale ── */}
-      {trainingConfig && (
-        <Collapsible
-          title={<span className="flex items-center gap-2 text-base font-semibold"><Star className="w-4 h-4" /> Rating Scale</span>}
-          defaultOpen={false}
-        >
+          </div>
+        );
+      case "rating-scale":
+        if (!trainingConfig) return null;
+        return (
+          <div>
           <p className="text-sm text-theme-text-muted mb-4">
             Define the rating levels officers use when evaluating trainees.
             You can add, remove, rename, and reorder levels. Each level
@@ -1338,8 +1380,74 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </div>
             </div>
           )}
-        </Collapsible>
-      )}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="flex flex-col md:flex-row gap-6">
+      {/* Mobile: horizontal scrollable tabs */}
+      <nav className="md:hidden -mx-4 px-4 border-b border-theme-surface-border" aria-label="Shift report settings sections">
+        <div className="flex overflow-x-auto scrollbar-thin scroll-smooth gap-1 pb-2">
+          {SECTIONS.map(({ key, label, icon: Icon }) => {
+            const isActive = activeSection === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveSection(key)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
+                    : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
+                }`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <Icon className={`w-4 h-4 shrink-0 ${isActive ? "" : "text-theme-text-muted"}`} />
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Desktop: sidebar */}
+      <nav className="hidden md:block md:w-52 shrink-0" aria-label="Shift report settings sections">
+        <div className="md:sticky md:top-24 space-y-1">
+          {SECTIONS.map(({ key, label, icon: Icon, description }) => {
+            const isActive = activeSection === key;
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveSection(key)}
+                className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
+                  isActive
+                    ? "bg-violet-500/10 text-violet-700 dark:text-violet-400"
+                    : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
+                }`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${isActive ? "" : "text-theme-text-muted"}`} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className={`text-xs ${isActive ? "text-violet-600/70 dark:text-violet-400/70" : "text-theme-text-muted"}`}>
+                    {description}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Content panel */}
+      <main className="flex-1 min-w-0">
+        <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-6">
+          {renderSection()}
+        </div>
+      </main>
     </div>
   );
 };
