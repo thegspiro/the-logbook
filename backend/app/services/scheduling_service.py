@@ -448,6 +448,76 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    async def get_active_shift_for_apparatus(
+        self,
+        apparatus_id: str,
+        organization_id: UUID,
+    ) -> Optional[Shift]:
+        """Find the current or next upcoming shift for an apparatus.
+
+        Looks for a non-finalized shift whose date is today
+        (or the most recent past shift if none today), then
+        falls back to the next future shift.
+        """
+        today = date.today()
+        now = datetime.now(timezone.utc)
+
+        today_shift = (
+            await self.db.execute(
+                select(Shift)
+                .where(
+                    Shift.apparatus_id == apparatus_id,
+                    Shift.organization_id == str(
+                        organization_id
+                    ),
+                    Shift.shift_date == today,
+                    Shift.is_finalized == False,  # noqa: E712
+                )
+                .order_by(Shift.start_time.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if today_shift:
+            return today_shift
+
+        recent_shift = (
+            await self.db.execute(
+                select(Shift)
+                .where(
+                    Shift.apparatus_id == apparatus_id,
+                    Shift.organization_id == str(
+                        organization_id
+                    ),
+                    Shift.is_finalized == False,  # noqa: E712
+                    Shift.end_time >= now - timedelta(hours=2),
+                )
+                .order_by(Shift.start_time.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if recent_shift:
+            return recent_shift
+
+        upcoming = (
+            await self.db.execute(
+                select(Shift)
+                .where(
+                    Shift.apparatus_id == apparatus_id,
+                    Shift.organization_id == str(
+                        organization_id
+                    ),
+                    Shift.shift_date > today,
+                    Shift.is_finalized == False,  # noqa: E712
+                )
+                .order_by(Shift.start_time.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        return upcoming
+
     async def _sync_officer_assignment(
         self, shift: "Shift", officer_id: str, organization_id: UUID
     ) -> None:

@@ -1424,8 +1424,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             </div>
           )}
 
-          {/* QR Code for shift check-in (officers) */}
-          {canAssign && (
+          {/* QR Code for apparatus check-in (officers) */}
+          {canAssign && shift.apparatus_id && (
             <div>
               <button
                 onClick={() => setShowQR(!showQR)}
@@ -1437,13 +1437,24 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               {showQR && (
                 <div className="mt-2 p-4 bg-white rounded-lg border border-theme-surface-border inline-block">
                   <QRCodeSVG
-                    value={`${window.location.origin}/scheduling/checkin?shift=${shift.id}`}
+                    value={`${window.location.origin}/scheduling/checkin?apparatus=${shift.apparatus_id}`}
                     size={160}
                     level="M"
                   />
                   <p className="text-xs text-center text-gray-500 mt-2">
-                    Scan to check in/out
+                    {shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus'} &mdash; permanent code
                   </p>
+                  <button
+                    onClick={() => {
+                      window.open(
+                        `/scheduling/checkin/print?apparatus=${shift.apparatus_id}&name=${encodeURIComponent(shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus')}`,
+                        '_blank',
+                      );
+                    }}
+                    className="mt-2 w-full text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                  >
+                    Print QR Card
+                  </button>
                 </div>
               )}
             </div>

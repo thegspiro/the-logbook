@@ -44,6 +44,10 @@ const ShiftCheckInPage = lazyWithRetry(
   () => import('../../pages/scheduling/ShiftCheckInPage'),
 );
 
+const ShiftCheckInPrintPage = lazyWithRetry(
+  () => import('../../pages/scheduling/ShiftCheckInPrintPage'),
+);
+
 export const getSchedulingRoutes = () => {
   return (
     <React.Fragment>
@@ -130,6 +134,14 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ShiftCheckInPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/checkin/print"
+        element={
+          <Suspense fallback={null}>
+            <ShiftCheckInPrintPage />
           </Suspense>
         }
       />

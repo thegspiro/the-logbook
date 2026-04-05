@@ -383,6 +383,14 @@ export const schedulingService = {
     return response.data;
   },
 
+  // Active shift lookup
+  async getActiveShiftForApparatus(apparatusId: string): Promise<ShiftRecord> {
+    const response = await api.get<ShiftRecord>(
+      `/scheduling/apparatus/${apparatusId}/active-shift`,
+    );
+    return response.data;
+  },
+
   // Shift Check-In / Check-Out
   async checkIn(shiftId: string): Promise<ShiftAttendanceRecord> {
     const response = await api.post<ShiftAttendanceRecord>(

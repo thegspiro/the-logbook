@@ -25,10 +25,13 @@ const ShiftCheckInPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tz = useTimezone();
-  const shiftId = searchParams.get('shift') || '';
+  const paramShiftId = searchParams.get('shift') || '';
+  const paramApparatusId = searchParams.get('apparatus') || '';
 
+  const [resolvedShiftId, setResolvedShiftId] = useState(paramShiftId);
   const [shift, setShift] = useState<ShiftRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [noActiveShift, setNoActiveShift] = useState(false);
   const [attendance, setAttendance] = useState<{
     checked_in_at?: string;
     checked_out_at?: string;
@@ -37,15 +40,28 @@ const ShiftCheckInPage: React.FC = () => {
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    if (!shiftId) {
+    if (!paramShiftId && !paramApparatusId) {
       setLoading(false);
       return;
     }
     const load = async () => {
       try {
+        let sid = paramShiftId;
+        if (!sid && paramApparatusId) {
+          const activeShift = await schedulingService
+            .getActiveShiftForApparatus(paramApparatusId)
+            .catch(() => null);
+          if (!activeShift) {
+            setNoActiveShift(true);
+            setLoading(false);
+            return;
+          }
+          sid = activeShift.id;
+        }
+        setResolvedShiftId(sid);
         const [shiftData, attendanceData] = await Promise.all([
-          schedulingService.getShift(shiftId),
-          schedulingService.getMyAttendance(shiftId),
+          schedulingService.getShift(sid),
+          schedulingService.getMyAttendance(sid),
         ]);
         setShift(shiftData);
         setAttendance(attendanceData);
@@ -56,12 +72,12 @@ const ShiftCheckInPage: React.FC = () => {
       }
     };
     void load();
-  }, [shiftId]);
+  }, [paramShiftId, paramApparatusId]);
 
   const handleCheckIn = async () => {
     setProcessing(true);
     try {
-      const result = await schedulingService.checkIn(shiftId);
+      const result = await schedulingService.checkIn(resolvedShiftId);
       setAttendance(result);
       toast.success('Checked in successfully');
     } catch {
@@ -74,7 +90,7 @@ const ShiftCheckInPage: React.FC = () => {
   const handleCheckOut = async () => {
     setProcessing(true);
     try {
-      const result = await schedulingService.checkOut(shiftId);
+      const result = await schedulingService.checkOut(resolvedShiftId);
       setAttendance(result);
       const hrs = Math.round(
         ((result.duration_minutes ?? 0) / 60) * 10,
@@ -95,7 +111,31 @@ const ShiftCheckInPage: React.FC = () => {
     );
   }
 
-  if (!shiftId || !shift) {
+  if (noActiveShift) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4">
+        <div className="text-center">
+          <Clock className="w-12 h-12 text-amber-500 mx-auto mb-3" />
+          <h1 className="text-xl font-bold text-theme-text-primary mb-1">
+            No Active Shift
+          </h1>
+          <p className="text-theme-text-muted text-sm mb-4">
+            There is no active or upcoming shift for this
+            apparatus right now. Check back closer to your
+            shift start time.
+          </p>
+          <button
+            onClick={() => navigate('/scheduling')}
+            className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-700 transition-colors"
+          >
+            Go to Scheduling
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!shift) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4">
         <div className="text-center">
@@ -104,7 +144,8 @@ const ShiftCheckInPage: React.FC = () => {
             Shift Not Found
           </h1>
           <p className="text-theme-text-muted text-sm mb-4">
-            This QR code may be expired or invalid.
+            This QR code may be invalid or you may not have
+            access to this shift.
           </p>
           <button
             onClick={() => navigate('/scheduling')}

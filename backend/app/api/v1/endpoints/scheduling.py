@@ -537,6 +537,34 @@ async def member_check_out(
     return enriched[0]
 
 
+@router.get("/apparatus/{apparatus_id}/active-shift")
+async def get_active_shift_for_apparatus(
+    apparatus_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Find the active or next upcoming shift for an apparatus."""
+    service = SchedulingService(db)
+    shift = await service.get_active_shift_for_apparatus(
+        apparatus_id=apparatus_id,
+        organization_id=current_user.organization_id,
+    )
+    if not shift:
+        raise HTTPException(
+            status_code=404,
+            detail="No active shift found for this apparatus",
+        )
+    shift_dict = {
+        c.name: getattr(shift, c.name)
+        for c in shift.__table__.columns
+    }
+    apparatus_map = await service._get_apparatus_map(
+        current_user.organization_id
+    )
+    service._enrich_shift_dict(shift_dict, apparatus_map)
+    return shift_dict
+
+
 @router.get(
     "/shifts/{shift_id}/my-attendance",
     response_model=ShiftAttendanceResponse,
