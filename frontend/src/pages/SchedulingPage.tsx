@@ -249,6 +249,18 @@ const SchedulingPage: React.FC = () => {
       : 'schedule'
   );
 
+  // Sync tab state when URL query param changes
+  useEffect(() => {
+    const tabParam = (searchParams.get('tab') || 'schedule') as TabId;
+    const validTabs: TabId[] = [
+      'schedule', 'my-shifts', 'open-shifts',
+      'requests', 'equipment-checks', 'shift-reports',
+    ];
+    if (validTabs.includes(tabParam) && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams]);
+
   // Calendar state
   const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [currentDate, setCurrentDate] = useState(new Date());
