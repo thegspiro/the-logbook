@@ -29,6 +29,7 @@ import { organizationService } from "../../../services/api";
 import { trainingModuleConfigService } from "../../../services/trainingServices";
 import { schedulingService } from "../services/api";
 import { getErrorMessage } from "../../../utils/errorHandling";
+import { Collapsible } from "../../../components/ux/Collapsible";
 import type { ShiftReportSettings } from "../types/shiftSettings";
 import type { TrainingModuleConfig } from "../../../types/training";
 
@@ -178,9 +179,6 @@ const SAMPLE_APPARATUS_TASKS: Record<string, string[]> = {
 
 const checkboxClass =
   "w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500";
-const cardClass =
-  "bg-theme-surface border border-theme-surface-border rounded-xl p-5";
-
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export const ShiftReportsSettingsPanel: React.FC = () => {
@@ -443,12 +441,12 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {/* ── Checklist Timing ── */}
-      <div className={cardClass}>
-        <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
-          <ClipboardCheck className="w-4 h-4" /> Checklist Timing
-        </h3>
+      <Collapsible
+        title={<span className="flex items-center gap-2 text-base font-semibold"><ClipboardCheck className="w-4 h-4" /> Checklist Timing</span>}
+        defaultOpen={false}
+      >
         <p className="text-sm text-theme-text-muted mb-4">
           Choose which checklist windows are active for shifts. Equipment check templates
           are assigned per apparatus on the Equipment tab — these toggles control whether
@@ -488,13 +486,13 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
             </div>
           </label>
         </div>
-      </div>
+      </Collapsible>
 
       {/* ── Post-Shift Validation ── */}
-      <div className={cardClass}>
-        <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
-          <FileText className="w-4 h-4" /> Post-Shift Validation
-        </h3>
+      <Collapsible
+        title={<span className="flex items-center gap-2 text-base font-semibold"><FileText className="w-4 h-4" /> Post-Shift Validation</span>}
+        defaultOpen={false}
+      >
         <p className="text-sm text-theme-text-muted mb-4">
           After a shift ends, the shift officer can be notified to validate attendance,
           review hours, and confirm call counts before the shift is finalized.
@@ -561,13 +559,13 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
             </>
           )}
         </div>
-      </div>
+      </Collapsible>
 
       {/* ── Training Feedback Defaults ── */}
-      <div className={cardClass}>
-        <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
-          <GraduationCap className="w-4 h-4" /> Training Feedback Defaults
-        </h3>
+      <Collapsible
+        title={<span className="flex items-center gap-2 text-base font-semibold"><GraduationCap className="w-4 h-4" /> Training Feedback Defaults</span>}
+        defaultOpen={false}
+      >
         <p className="text-sm text-theme-text-muted mb-4">
           Define the default call types, skills, and tasks that appear on the officer&apos;s
           shift completion report form. Officers can add to these lists when filing a report.
@@ -636,14 +634,14 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
             )}
           </div>
         )}
-      </div>
+      </Collapsible>
 
       {/* ── Apparatus-Type Skills & Tasks ── */}
       {trainingConfig && apparatusTypes.length > 0 && (
-        <div className={cardClass}>
-          <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
-            <Truck className="w-4 h-4" /> Skills &amp; Tasks by Apparatus Type
-          </h3>
+        <Collapsible
+          title={<span className="flex items-center gap-2 text-base font-semibold"><Truck className="w-4 h-4" /> Skills &amp; Tasks by Apparatus Type</span>}
+          defaultOpen={false}
+        >
           <p className="text-sm text-theme-text-muted mb-4">
             Assign specific skills and tasks to each apparatus type. When an officer files
             a report linked to a shift, the form will show skills and tasks relevant to
@@ -987,15 +985,15 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+        </Collapsible>
       )}
 
       {/* ── Report Form Sections ── */}
       {trainingConfig && (
-        <div className={cardClass}>
-          <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
-            <SlidersHorizontal className="w-4 h-4" /> Report Form Sections
-          </h3>
+        <Collapsible
+          title={<span className="flex items-center gap-2 text-base font-semibold"><SlidersHorizontal className="w-4 h-4" /> Report Form Sections</span>}
+          defaultOpen={false}
+        >
           <p className="text-sm text-theme-text-muted mb-4">
             Choose which optional sections appear on the shift completion report
             form when officers file a new report. Core fields (trainee, date,
@@ -1069,15 +1067,15 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </label>
             ))}
           </div>
-        </div>
+        </Collapsible>
       )}
 
       {/* ── Review Settings (from training module) ── */}
       {trainingConfig && (
-        <div className={cardClass}>
-          <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
-            <Clock className="w-4 h-4" /> Report Review Workflow
-          </h3>
+        <Collapsible
+          title={<span className="flex items-center gap-2 text-base font-semibold"><Clock className="w-4 h-4" /> Report Review Workflow</span>}
+          defaultOpen={false}
+        >
           <p className="text-sm text-theme-text-muted mb-4">
             Controls whether shift completion reports require approval before the trainee can see them.
           </p>
@@ -1145,15 +1143,15 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
+        </Collapsible>
       )}
 
       {/* ── Rating Scale ── */}
       {trainingConfig && (
-        <div className={cardClass}>
-          <h3 className="text-base font-semibold text-theme-text-primary mb-1 flex items-center gap-2">
-            <Star className="w-4 h-4" /> Rating Scale
-          </h3>
+        <Collapsible
+          title={<span className="flex items-center gap-2 text-base font-semibold"><Star className="w-4 h-4" /> Rating Scale</span>}
+          defaultOpen={false}
+        >
           <p className="text-sm text-theme-text-muted mb-4">
             Define the rating levels officers use when evaluating trainees.
             You can add, remove, rename, and reorder levels. Each level
@@ -1340,7 +1338,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+        </Collapsible>
       )}
     </div>
   );
