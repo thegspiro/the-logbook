@@ -6,7 +6,7 @@ including automatic pipeline requirement progress updates.
 """
 
 from datetime import date, datetime, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -18,7 +18,9 @@ from app.models.notification import (
     NotificationLog,
 )
 from app.models.training import (
+    CompetencyLevel,
     EnrollmentStatus,
+    MemberCompetency,
     ProgramEnrollment,
     ProgramRequirement,
     RequirementProgress,
@@ -29,6 +31,8 @@ from app.models.training import (
     ShiftAttendance,
     ShiftCall,
     ShiftCompletionReport,
+    SkillCheckoff,
+    SkillEvaluation,
     TrainingRequirement,
 )
 from app.services.training_program_service import TrainingProgramService
@@ -257,6 +261,16 @@ class ShiftCompletionService:
         # since the officer hasn't reviewed the data yet.  Progress
         # will be triggered when the draft is completed/approved.
         if review_status != "draft":
+            matched_skill_ids = (
+                await self._create_skill_checkoffs(
+                    organization_id=organization_id,
+                    trainee_id=trainee_id,
+                    officer_id=officer_id,
+                    skills_observed=skills_observed,
+                    shift_id=shift_id,
+                )
+            )
+
             requirements_progressed = (
                 await self._update_requirement_progress(
                     organization_id=organization_id,
@@ -266,11 +280,14 @@ class ShiftCompletionService:
                     call_types=call_types,
                     enrollment_id=enrollment_id,
                     officer_id=officer_id,
+                    matched_skill_ids=matched_skill_ids,
                 )
             )
 
             if requirements_progressed:
-                report.requirements_progressed = requirements_progressed
+                report.requirements_progressed = (
+                    requirements_progressed
+                )
 
         if commit:
             await self.db.commit()
@@ -310,6 +327,181 @@ class ShiftCompletionService:
         except Exception:
             pass
 
+    async def _resolve_skill_evaluations(
+        self,
+        organization_id: UUID,
+        skill_names: List[str],
+    ) -> Dict[str, str]:
+        """Match skill names to SkillEvaluation IDs.
+
+        Returns a dict mapping lowercase skill name to
+        SkillEvaluation ID. Uses case-insensitive matching.
+        """
+        if not skill_names:
+            return {}
+
+        result = await self.db.execute(
+            select(SkillEvaluation).where(
+                SkillEvaluation.organization_id == str(
+                    organization_id
+                ),
+                SkillEvaluation.active == True,  # noqa: E712
+            )
+        )
+        all_skills = result.scalars().all()
+
+        skill_map: Dict[str, str] = {}
+        eval_by_lower = {
+            se.name.lower(): str(se.id)
+            for se in all_skills
+        }
+        for name in skill_names:
+            match = eval_by_lower.get(name.lower())
+            if match:
+                skill_map[name.lower()] = match
+        return skill_map
+
+    async def _create_skill_checkoffs(
+        self,
+        organization_id: UUID,
+        trainee_id: str,
+        officer_id: UUID,
+        skills_observed: Optional[list],
+        shift_id: Optional[str] = None,
+    ) -> List[str]:
+        """Create SkillCheckoff records for demonstrated skills.
+
+        Returns list of matched SkillEvaluation IDs.
+        """
+        if not skills_observed:
+            return []
+
+        demonstrated = [
+            s for s in skills_observed
+            if (
+                s.get("demonstrated")
+                if isinstance(s, dict)
+                else getattr(s, "demonstrated", False)
+            )
+        ]
+        if not demonstrated:
+            return []
+
+        names = [
+            s.get("skill_name", "")
+            if isinstance(s, dict)
+            else getattr(s, "skill_name", "")
+            for s in demonstrated
+        ]
+        skill_map = await self._resolve_skill_evaluations(
+            organization_id, names
+        )
+        if not skill_map:
+            return []
+
+        matched_ids: List[str] = []
+        for skill in demonstrated:
+            name = (
+                skill.get("skill_name", "")
+                if isinstance(skill, dict)
+                else getattr(skill, "skill_name", "")
+            )
+            notes = (
+                skill.get("notes", "")
+                if isinstance(skill, dict)
+                else getattr(skill, "notes", "")
+            )
+            comment = (
+                skill.get("comment", "")
+                if isinstance(skill, dict)
+                else getattr(skill, "comment", "")
+            )
+            eval_id = skill_map.get(name.lower())
+            if not eval_id:
+                continue
+
+            checkoff = SkillCheckoff(
+                organization_id=str(organization_id),
+                user_id=trainee_id,
+                skill_evaluation_id=eval_id,
+                evaluator_id=str(officer_id),
+                status="passed",
+                notes=comment or notes or None,
+            )
+            self.db.add(checkoff)
+            matched_ids.append(eval_id)
+
+            await self._update_member_competency(
+                organization_id=organization_id,
+                user_id=trainee_id,
+                skill_evaluation_id=eval_id,
+                evaluator_id=str(officer_id),
+            )
+
+        return matched_ids
+
+    async def _update_member_competency(
+        self,
+        organization_id: UUID,
+        user_id: str,
+        skill_evaluation_id: str,
+        evaluator_id: str,
+    ) -> None:
+        """Update MemberCompetency when a skill is observed."""
+        result = await self.db.execute(
+            select(MemberCompetency).where(
+                MemberCompetency.user_id == user_id,
+                MemberCompetency.skill_evaluation_id
+                == skill_evaluation_id,
+                MemberCompetency.organization_id
+                == str(organization_id),
+            )
+        )
+        comp = result.scalar_one_or_none()
+
+        now = datetime.now(timezone.utc)
+
+        if not comp:
+            comp = MemberCompetency(
+                organization_id=str(organization_id),
+                user_id=user_id,
+                skill_evaluation_id=skill_evaluation_id,
+                current_level=CompetencyLevel.NOVICE,
+                last_evaluated_at=now,
+                last_evaluator_id=evaluator_id,
+                evaluation_count=1,
+                score_history=[{
+                    "date": now.isoformat(),
+                    "source": "shift_observation",
+                    "level": CompetencyLevel.NOVICE.value,
+                }],
+            )
+            self.db.add(comp)
+            return
+
+        comp.previous_level = comp.current_level
+        comp.last_evaluated_at = now
+        comp.last_evaluator_id = evaluator_id
+        comp.evaluation_count = (
+            (comp.evaluation_count or 0) + 1
+        )
+
+        levels = list(CompetencyLevel)
+        current_idx = levels.index(comp.current_level)
+        max_from_observation = levels.index(
+            CompetencyLevel.COMPETENT
+        )
+        if current_idx < max_from_observation:
+            comp.current_level = levels[current_idx + 1]
+
+        history = comp.score_history or []
+        history.append({
+            "date": now.isoformat(),
+            "source": "shift_observation",
+            "level": comp.current_level.value,
+        })
+        comp.score_history = history[-10:]
+
     async def _update_requirement_progress(
         self,
         organization_id: UUID,
@@ -319,6 +511,7 @@ class ShiftCompletionService:
         call_types: Optional[list],
         enrollment_id: Optional[str],
         officer_id: UUID,
+        matched_skill_ids: Optional[List[str]] = None,
     ) -> list:
         """
         Find active enrollment requirements for the trainee and
@@ -401,8 +594,28 @@ class ShiftCompletionService:
                         # No specific types required — count all calls
                         value_to_add = float(calls_responded)
                 elif requirement.requirement_type == RequirementType.HOURS:
-                    # Add shift hours toward hour-based requirements
                     value_to_add = hours_on_shift
+                elif (
+                    requirement.requirement_type
+                    == RequirementType.SKILLS_EVALUATION
+                    and matched_skill_ids
+                ):
+                    req_skills = (
+                        requirement.required_skills or []
+                    )
+                    if req_skills:
+                        newly_matched = [
+                            sid
+                            for sid in matched_skill_ids
+                            if sid in req_skills
+                        ]
+                        value_to_add = float(
+                            len(newly_matched)
+                        )
+                    else:
+                        value_to_add = float(
+                            len(matched_skill_ids)
+                        )
                 else:
                     continue
 
@@ -522,21 +735,36 @@ class ShiftCompletionService:
         report: ShiftCompletionReport,
         officer_id: str,
     ) -> None:
-        """Trigger training pipeline progress that was deferred when
-        a report was created as a draft."""
+        """Trigger training pipeline progress that was deferred
+        when a report was created as a draft."""
+        org_id = UUID(report.organization_id)
+
+        matched_skill_ids = (
+            await self._create_skill_checkoffs(
+                organization_id=org_id,
+                trainee_id=report.trainee_id,
+                officer_id=UUID(officer_id),
+                skills_observed=report.skills_observed,
+                shift_id=report.shift_id,
+            )
+        )
+
         requirements_progressed = (
             await self._update_requirement_progress(
-                organization_id=UUID(report.organization_id),
+                organization_id=org_id,
                 trainee_id=report.trainee_id,
                 hours_on_shift=report.hours_on_shift,
                 calls_responded=report.calls_responded,
                 call_types=report.call_types,
                 enrollment_id=report.enrollment_id,
                 officer_id=UUID(officer_id),
+                matched_skill_ids=matched_skill_ids,
             )
         )
         if requirements_progressed:
-            report.requirements_progressed = requirements_progressed
+            report.requirements_progressed = (
+                requirements_progressed
+            )
 
     async def get_reports_for_trainee(
         self,

@@ -448,6 +448,76 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    async def get_active_shift_for_apparatus(
+        self,
+        apparatus_id: str,
+        organization_id: UUID,
+    ) -> Optional[Shift]:
+        """Find the current or next upcoming shift for an apparatus.
+
+        Looks for a non-finalized shift whose date is today
+        (or the most recent past shift if none today), then
+        falls back to the next future shift.
+        """
+        today = date.today()
+        now = datetime.now(timezone.utc)
+
+        today_shift = (
+            await self.db.execute(
+                select(Shift)
+                .where(
+                    Shift.apparatus_id == apparatus_id,
+                    Shift.organization_id == str(
+                        organization_id
+                    ),
+                    Shift.shift_date == today,
+                    Shift.is_finalized == False,  # noqa: E712
+                )
+                .order_by(Shift.start_time.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if today_shift:
+            return today_shift
+
+        recent_shift = (
+            await self.db.execute(
+                select(Shift)
+                .where(
+                    Shift.apparatus_id == apparatus_id,
+                    Shift.organization_id == str(
+                        organization_id
+                    ),
+                    Shift.is_finalized == False,  # noqa: E712
+                    Shift.end_time >= now - timedelta(hours=2),
+                )
+                .order_by(Shift.start_time.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        if recent_shift:
+            return recent_shift
+
+        upcoming = (
+            await self.db.execute(
+                select(Shift)
+                .where(
+                    Shift.apparatus_id == apparatus_id,
+                    Shift.organization_id == str(
+                        organization_id
+                    ),
+                    Shift.shift_date > today,
+                    Shift.is_finalized == False,  # noqa: E712
+                )
+                .order_by(Shift.start_time.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+
+        return upcoming
+
     async def _sync_officer_assignment(
         self, shift: "Shift", officer_id: str, organization_id: UUID
     ) -> None:
@@ -656,6 +726,114 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def member_check_in(
+        self,
+        shift_id: str,
+        user_id: str,
+        organization_id: UUID,
+    ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
+        """Member self-service check-in for a shift."""
+        shift = await self.get_shift_by_id(
+            shift_id, organization_id
+        )
+        if not shift:
+            return None, "Shift not found"
+        if shift.is_finalized:
+            return None, "Shift is already finalized"
+
+        existing = (
+            await self.db.execute(
+                select(ShiftAttendance).where(
+                    ShiftAttendance.shift_id == str(
+                        shift_id
+                    ),
+                    ShiftAttendance.user_id == user_id,
+                )
+            )
+        ).scalar_one_or_none()
+
+        now = datetime.now(timezone.utc)
+        if existing:
+            if existing.checked_in_at:
+                return None, "Already checked in"
+            existing.checked_in_at = now
+            await self.db.commit()
+            await self.db.refresh(existing)
+            return existing, None
+
+        attendance = ShiftAttendance(
+            shift_id=str(shift_id),
+            user_id=user_id,
+            checked_in_at=now,
+        )
+        self.db.add(attendance)
+        await self.db.commit()
+        await self.db.refresh(attendance)
+        return attendance, None
+
+    async def member_check_out(
+        self,
+        shift_id: str,
+        user_id: str,
+        organization_id: UUID,
+    ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
+        """Member self-service check-out for a shift."""
+        shift = await self.get_shift_by_id(
+            shift_id, organization_id
+        )
+        if not shift:
+            return None, "Shift not found"
+        if shift.is_finalized:
+            return None, "Shift is already finalized"
+
+        existing = (
+            await self.db.execute(
+                select(ShiftAttendance).where(
+                    ShiftAttendance.shift_id == str(
+                        shift_id
+                    ),
+                    ShiftAttendance.user_id == user_id,
+                )
+            )
+        ).scalar_one_or_none()
+
+        if not existing:
+            return None, "No check-in found for this shift"
+        if not existing.checked_in_at:
+            return None, "Must check in before checking out"
+        if existing.checked_out_at:
+            return None, "Already checked out"
+
+        now = datetime.now(timezone.utc)
+        existing.checked_out_at = now
+        delta = now - existing.checked_in_at
+        existing.duration_minutes = int(
+            delta.total_seconds() / 60
+        )
+        await self.db.commit()
+        await self.db.refresh(existing)
+        return existing, None
+
+    async def get_my_attendance(
+        self,
+        shift_id: str,
+        user_id: str,
+        organization_id: UUID,
+    ) -> Optional[ShiftAttendance]:
+        """Get a member's attendance record for a shift."""
+        shift = await self.get_shift_by_id(
+            shift_id, organization_id
+        )
+        if not shift:
+            return None
+        result = await self.db.execute(
+            select(ShiftAttendance).where(
+                ShiftAttendance.shift_id == str(shift_id),
+                ShiftAttendance.user_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
 
     async def remove_attendance(
         self, attendance_id: UUID, organization_id: UUID

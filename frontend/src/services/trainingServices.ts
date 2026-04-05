@@ -802,6 +802,11 @@ export const trainingModuleConfigService = {
     const response = await api.get<import('../types/training').MyTrainingSummary>('/training/module-config/my-training');
     return response.data;
   },
+
+  async getSkillNames(): Promise<{ id: string; name: string; category: string | null }[]> {
+    const response = await api.get<{ id: string; name: string; category: string | null }[]>('/training/module-config/skill-names');
+    return response.data;
+  },
 };
 
 // ============================================

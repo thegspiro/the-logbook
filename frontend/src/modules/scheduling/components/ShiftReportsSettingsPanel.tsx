@@ -248,6 +248,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   const [trainingConfig, setTrainingConfig] = useState<TrainingModuleConfig | null>(null);
   const [loadingTraining, setLoadingTraining] = useState(true);
   const [savingTraining, setSavingTraining] = useState(false);
+  const [skillEvalNames, setSkillEvalNames] = useState<Set<string>>(new Set());
 
   // Editable lists for training defaults
   const [callTypes, setCallTypes] = useState<string[]>([]);
@@ -354,6 +355,17 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
       }
     };
     void load();
+  }, []);
+
+  useEffect(() => {
+    trainingModuleConfigService
+      .getSkillNames()
+      .then((names) => {
+        setSkillEvalNames(
+          new Set(names.map((n) => n.name.toLowerCase())),
+        );
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -781,10 +793,16 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                         />
                       );
                     }
+                    const isLinked = skillEvalNames.has(s.toLowerCase());
                     return (
                       <span
                         key={i}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20"
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                          isLinked
+                            ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
+                            : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                        }`}
+                        title={isLinked ? "Linked to training skill evaluation" : "No matching skill evaluation found — won't track competency"}
                       >
                         {s}
                         <button
@@ -871,6 +889,15 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   >
                     Copy from general defaults ({skills.length} skills)
                   </button>
+                )}
+
+                {skillEvalNames.size > 0 && (appTypeSkills[selectedAppType] ?? []).length > 0 && (
+                  <p className="mt-2 text-[10px] text-theme-text-muted">
+                    <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-1" />
+                    Linked to training module
+                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 ml-2 mr-1" />
+                    No matching skill evaluation
+                  </p>
                 )}
               </div>
 

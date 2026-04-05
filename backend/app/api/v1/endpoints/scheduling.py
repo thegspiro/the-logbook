@@ -479,6 +479,149 @@ async def remove_attendance(
 
 
 # ============================================
+# Member Self-Service Check-In / Check-Out
+# ============================================
+
+
+@router.post(
+    "/shifts/{shift_id}/check-in",
+    response_model=ShiftAttendanceResponse,
+)
+async def member_check_in(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Member self-service check-in for a shift."""
+    service = SchedulingService(db)
+    result, error = await service.member_check_in(
+        shift_id=str(shift_id),
+        user_id=str(current_user.id),
+        organization_id=current_user.organization_id,
+    )
+    if not result:
+        raise HTTPException(
+            status_code=400,
+            detail=error or "Unable to check in",
+        )
+    enriched = await service.enrich_attendance_records(
+        [result]
+    )
+    return enriched[0]
+
+
+@router.post(
+    "/shifts/{shift_id}/check-out",
+    response_model=ShiftAttendanceResponse,
+)
+async def member_check_out(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Member self-service check-out for a shift."""
+    service = SchedulingService(db)
+    result, error = await service.member_check_out(
+        shift_id=str(shift_id),
+        user_id=str(current_user.id),
+        organization_id=current_user.organization_id,
+    )
+    if not result:
+        raise HTTPException(
+            status_code=400,
+            detail=error or "Unable to check out",
+        )
+    enriched = await service.enrich_attendance_records(
+        [result]
+    )
+    return enriched[0]
+
+
+@router.get("/apparatus/{apparatus_id}/active-shift")
+async def get_active_shift_for_apparatus(
+    apparatus_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Find the active or next upcoming shift for an apparatus."""
+    service = SchedulingService(db)
+    shift = await service.get_active_shift_for_apparatus(
+        apparatus_id=apparatus_id,
+        organization_id=current_user.organization_id,
+    )
+    if not shift:
+        raise HTTPException(
+            status_code=404,
+            detail="No active shift found for this apparatus",
+        )
+    shift_dict = {
+        c.name: getattr(shift, c.name)
+        for c in shift.__table__.columns
+    }
+    apparatus_map = await service._get_apparatus_map(
+        current_user.organization_id
+    )
+    service._enrich_shift_dict(shift_dict, apparatus_map)
+    return shift_dict
+
+
+@router.get("/my-attendance-history")
+async def get_my_attendance_history(
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the current member's attendance history."""
+    from app.models.training import Shift, ShiftAttendance
+
+    result = await db.execute(
+        select(ShiftAttendance)
+        .join(
+            Shift,
+            ShiftAttendance.shift_id == Shift.id,
+        )
+        .where(
+            ShiftAttendance.user_id
+            == str(current_user.id),
+            Shift.organization_id
+            == str(current_user.organization_id),
+        )
+        .order_by(ShiftAttendance.created_at.desc())
+        .limit(limit)
+    )
+    records = list(result.scalars().all())
+    service = SchedulingService(db)
+    return await service.enrich_attendance_records(records)
+
+
+@router.get(
+    "/shifts/{shift_id}/my-attendance",
+    response_model=ShiftAttendanceResponse,
+)
+async def get_my_attendance(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get the current member's attendance for a shift."""
+    service = SchedulingService(db)
+    result = await service.get_my_attendance(
+        shift_id=str(shift_id),
+        user_id=str(current_user.id),
+        organization_id=current_user.organization_id,
+    )
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail="No attendance record found",
+        )
+    enriched = await service.enrich_attendance_records(
+        [result]
+    )
+    return enriched[0]
+
+
+# ============================================
 # Calendar View Endpoints
 # ============================================
 

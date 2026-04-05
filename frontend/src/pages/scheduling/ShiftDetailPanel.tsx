@@ -17,8 +17,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
   Loader2, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
-  ClipboardCheck, CheckCircle2, AlertTriangle,
+  ClipboardCheck, CheckCircle2, AlertTriangle, LogIn, LogOut, QrCode,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -115,6 +116,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const setPendingFlag = (key: keyof typeof pending, value: boolean) =>
     setPending(prev => ({ ...prev, [key]: value }));
 
+  // Attendance check-in/check-out state
+  const [myAttendance, setMyAttendance] = useState<{
+    checked_in_at?: string;
+    checked_out_at?: string;
+    duration_minutes?: number;
+  } | null>(null);
+  const [allAttendance, setAllAttendance] = useState<
+    import('../../modules/scheduling/services/api').ShiftAttendanceRecord[]
+  >([]);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+
   // UI visibility toggles
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFinalizeChecklist, setShowFinalizeChecklist] = useState(false);
@@ -169,13 +183,17 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const load = async () => {
       setLoading(true);
       try {
-        const [assignData, checkData] = await Promise.all([
+        const [assignData, checkData, attendanceData, allAttData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
           schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
+          schedulingService.getMyAttendance(shift.id),
+          schedulingService.getShiftAttendance(shift.id).catch(() => []),
         ]);
         if (!cancelled) {
           setAssignments(assignData);
           setEquipmentCheckSummaries(checkData);
+          setMyAttendance(attendanceData);
+          setAllAttendance(allAttData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -517,6 +535,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
   const isUserAssigned = activeAssignments.some(a => a.user_id === user?.id);
 
+  const attendanceByUser = useMemo(() => {
+    const map = new Map<string, typeof allAttendance[0]>();
+    for (const att of allAttendance) {
+      map.set(att.user_id, att);
+    }
+    return map;
+  }, [allAttendance]);
+
   // Build crew board data: for each apparatus position, find the assignment(s) filling it
   const crewBoard = useMemo(() => {
     if (!hasApparatusPositions) return null;
@@ -775,11 +801,40 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </div>
                 ) : null}
 
-                {/* Attendance summary — warn only */}
-                <div className="flex items-center gap-2 p-2 bg-theme-surface border border-theme-surface-border rounded-md">
-                  <Users className="w-4 h-4 text-theme-text-muted shrink-0" />
-                  <span className="text-theme-text-secondary">{activeAssignments.length} active assignment(s)</span>
-                </div>
+                {/* Attendance check-in/out summary */}
+                {(() => {
+                  const checkedIn = allAttendance.filter(a => a.checked_in_at);
+                  const checkedOut = allAttendance.filter(a => a.checked_out_at);
+                  const totalAssigned = activeAssignments.length;
+                  const allOut = checkedOut.length >= totalAssigned && totalAssigned > 0;
+                  return (
+                    <div className={`flex items-start gap-2 p-2 rounded-md border ${
+                      allOut
+                        ? 'bg-green-500/10 border-green-500/20'
+                        : checkedIn.length > 0
+                        ? 'bg-amber-500/10 border-amber-500/20'
+                        : 'bg-theme-surface border-theme-surface-border'
+                    }`}>
+                      <Users className={`w-4 h-4 mt-0.5 shrink-0 ${allOut ? 'text-green-600' : checkedIn.length > 0 ? 'text-amber-600' : 'text-theme-text-muted'}`} />
+                      <div>
+                        <span className="text-theme-text-secondary text-sm">
+                          {checkedIn.length} of {totalAssigned} checked in
+                          {checkedOut.length > 0 && `, ${checkedOut.length} checked out`}
+                        </span>
+                        {checkedIn.length < totalAssigned && totalAssigned > 0 && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                            {totalAssigned - checkedIn.length} member(s) have not checked in
+                          </p>
+                        )}
+                        {checkedIn.length > checkedOut.length && (
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                            {checkedIn.length - checkedOut.length} member(s) still on shift
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Call count */}
                 {shift.call_count !== undefined && shift.call_count !== null && (
@@ -1085,6 +1140,26 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                           <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
                             {assignment.status || 'assigned'}
                           </span>
+                          {(() => {
+                            const att = attendanceByUser.get(assignment.user_id);
+                            if (!att) return null;
+                            if (att.checked_out_at) {
+                              const hrs = Math.round(((att.duration_minutes ?? 0) / 60) * 10) / 10;
+                              return (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/10 text-green-700 dark:text-green-400" title={`In: ${new Date(att.checked_in_at ?? '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} Out: ${new Date(att.checked_out_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}>
+                                  {hrs}h
+                                </span>
+                              );
+                            }
+                            if (att.checked_in_at) {
+                              return (
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400" title={`Checked in at ${new Date(att.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}>
+                                  <LogIn className="w-3 h-3 inline" />
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
                           {assignment.user_id === user?.id && assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
                             <>
                               <button onClick={() => { void handleConfirm(assignment.id); }}
@@ -1346,10 +1421,104 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Sign Up confirmation for already-assigned members */}
-          {!isPast && isUserAssigned && (
-            <div className="p-3 bg-green-500/5 border border-green-500/20 rounded-lg flex items-center gap-2">
-              <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
-              <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
+          {isUserAssigned && (
+            <div className="p-3 bg-green-500/5 border border-green-500/20 rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
+              </div>
+
+              {/* Check-in / Check-out buttons */}
+              {!shift.is_finalized && (
+                <div className="flex items-center gap-2 pt-1">
+                  {!myAttendance?.checked_in_at ? (
+                    <button
+                      onClick={async () => {
+                        setCheckingIn(true);
+                        try {
+                          const result = await schedulingService.checkIn(shift.id);
+                          setMyAttendance(result);
+                          toast.success('Checked in');
+                        } catch {
+                          toast.error('Failed to check in');
+                        } finally {
+                          setCheckingIn(false);
+                        }
+                      }}
+                      disabled={checkingIn}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                    >
+                      {checkingIn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
+                      Check In
+                    </button>
+                  ) : !myAttendance?.checked_out_at ? (
+                    <>
+                      <span className="text-xs text-green-700 dark:text-green-400">
+                        Checked in at {new Date(myAttendance.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          setCheckingOut(true);
+                          try {
+                            const result = await schedulingService.checkOut(shift.id);
+                            setMyAttendance(result);
+                            toast.success(`Checked out (${Math.round((result.duration_minutes ?? 0) / 60 * 10) / 10} hrs)`);
+                          } catch {
+                            toast.error('Failed to check out');
+                          } finally {
+                            setCheckingOut(false);
+                          }
+                        }}
+                        disabled={checkingOut}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        {checkingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                        Check Out
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-theme-text-muted">
+                      {Math.round((myAttendance.duration_minutes ?? 0) / 60 * 10) / 10} hrs recorded
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* QR Code for apparatus check-in (officers) */}
+          {canAssign && shift.apparatus_id && (
+            <div>
+              <button
+                onClick={() => setShowQR(!showQR)}
+                className="inline-flex items-center gap-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                {showQR ? 'Hide' : 'Show'} Check-In QR Code
+              </button>
+              {showQR && (
+                <div className="mt-2 p-4 bg-white rounded-lg border border-theme-surface-border inline-block">
+                  <QRCodeSVG
+                    value={`${window.location.origin}/scheduling/checkin?apparatus=${shift.apparatus_id}`}
+                    size={160}
+                    level="M"
+                  />
+                  <p className="text-xs text-center text-gray-500 mt-2">
+                    {shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus'} &mdash; permanent code
+                  </p>
+                  <button
+                    onClick={() => {
+                      window.open(
+                        `/scheduling/checkin/print?apparatus=${shift.apparatus_id}&name=${encodeURIComponent(shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus')}`,
+                        '_blank',
+                      );
+                    }}
+                    className="mt-2 w-full text-xs text-violet-600 dark:text-violet-400 hover:underline"
+                  >
+                    Print QR Card
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

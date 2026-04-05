@@ -22,6 +22,7 @@ from app.models.training import (
     ProgramEnrollment,
     RequirementProgress,
     ShiftCompletionReport,
+    SkillEvaluation,
     TrainingRecord,
     TrainingRequirement,
     TrainingStatus,
@@ -444,3 +445,38 @@ async def get_my_training_summary(
         ]
 
     return result
+
+
+@router.get("/skill-names")
+async def get_skill_evaluation_names(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("training.manage")
+    ),
+):
+    """Return a list of active SkillEvaluation names.
+
+    Used by the settings panel to show which apparatus-type
+    skill names match formal SkillEvaluation records.
+    """
+    result = await db.execute(
+        select(
+            SkillEvaluation.id,
+            SkillEvaluation.name,
+            SkillEvaluation.category,
+        )
+        .where(
+            SkillEvaluation.organization_id
+            == str(current_user.organization_id),
+            SkillEvaluation.active == True,  # noqa: E712
+        )
+        .order_by(SkillEvaluation.name)
+    )
+    return [
+        {
+            "id": row.id,
+            "name": row.name,
+            "category": row.category,
+        }
+        for row in result.all()
+    ]

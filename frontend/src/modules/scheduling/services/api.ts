@@ -383,6 +383,47 @@ export const schedulingService = {
     return response.data;
   },
 
+  // Attendance history
+  async getMyAttendanceHistory(limit = 50): Promise<ShiftAttendanceRecord[]> {
+    const response = await api.get<ShiftAttendanceRecord[]>(
+      '/scheduling/my-attendance-history',
+      { params: { limit } },
+    );
+    return response.data;
+  },
+
+  // Active shift lookup
+  async getActiveShiftForApparatus(apparatusId: string): Promise<ShiftRecord> {
+    const response = await api.get<ShiftRecord>(
+      `/scheduling/apparatus/${apparatusId}/active-shift`,
+    );
+    return response.data;
+  },
+
+  // Shift Check-In / Check-Out
+  async checkIn(shiftId: string): Promise<ShiftAttendanceRecord> {
+    const response = await api.post<ShiftAttendanceRecord>(
+      `/scheduling/shifts/${shiftId}/check-in`,
+    );
+    return response.data;
+  },
+  async checkOut(shiftId: string): Promise<ShiftAttendanceRecord> {
+    const response = await api.post<ShiftAttendanceRecord>(
+      `/scheduling/shifts/${shiftId}/check-out`,
+    );
+    return response.data;
+  },
+  async getMyAttendance(shiftId: string): Promise<ShiftAttendanceRecord | null> {
+    try {
+      const response = await api.get<ShiftAttendanceRecord>(
+        `/scheduling/shifts/${shiftId}/my-attendance`,
+      );
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
+
   // Swap Requests
   async getSwapRequests(params?: SwapRequestFilters): Promise<SchedulingSwapRequest[]> {
     const response = await api.get<SchedulingSwapRequest[]>('/scheduling/swap-requests', { params });

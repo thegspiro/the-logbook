@@ -191,12 +191,28 @@ export const ShiftReportsTab: React.FC = () => {
         setShiftAssignments(assignments);
         setShiftApparatusType(shift.apparatus_type ?? null);
         setShowAllMembers(false);
-        setForm(prev => ({
-          ...prev,
-          shift_id: linkedShiftId,
-          shift_date: shiftDate,
-          calls_responded: shift.call_count || prev.calls_responded,
-        }));
+        setForm(prev => {
+          let hours = prev.hours_on_shift ?? 0;
+          if (shift.total_hours && shift.total_hours > 0) {
+            hours = Math.round(shift.total_hours * 100) / 100;
+          } else if (shift.start_time && shift.end_time) {
+            const start = new Date(shift.start_time).getTime();
+            const end = new Date(shift.end_time).getTime();
+            if (end > start) {
+              hours = Math.round(
+                ((end - start) / 3600000) * 100,
+              ) / 100;
+            }
+          }
+          return {
+            ...prev,
+            shift_id: linkedShiftId,
+            shift_date: shiftDate,
+            hours_on_shift: hours,
+            calls_responded:
+              shift.call_count || prev.calls_responded,
+          };
+        });
       } catch {
         // Shift may not exist — continue with defaults
       }
