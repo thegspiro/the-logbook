@@ -367,7 +367,7 @@ export const ShiftReportsTab: React.FC = () => {
   ): ShiftCompletionReportCreate => ({
     shift_id: form.shift_id || undefined,
     trainee_id: form.trainee_id ?? '',
-    shift_date: form.shift_date,
+    shift_date: form.shift_date ?? getTodayLocalDate(tz),
     hours_on_shift: form.hours_on_shift ?? 0,
     calls_responded: form.calls_responded || 0,
     call_types: form.call_types?.length
