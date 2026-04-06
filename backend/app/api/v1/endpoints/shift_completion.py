@@ -16,6 +16,7 @@ from app.api.dependencies import (
     get_current_user,
     require_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -95,6 +96,22 @@ async def create_shift_report(
                 exclude_unset=True,
                 exclude={"save_as_draft"},
             ),
+        )
+        await log_audit_event(
+            db=db,
+            event_type="shift_report_created",
+            event_category="training",
+            severity="info",
+            event_data={
+                "report_id": str(report.id),
+                "trainee_id": data.trainee_id,
+                "shift_date": str(data.shift_date),
+                "shift_id": data.shift_id,
+                "review_status": review_status,
+                "hours_on_shift": data.hours_on_shift,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
         return report
     except ValueError as e:
@@ -340,6 +357,21 @@ async def submit_all_drafts(
         except ValueError:
             continue
 
+    if submitted > 0:
+        await log_audit_event(
+            db=db,
+            event_type="shift_reports_bulk_submitted",
+            event_category="training",
+            severity="info",
+            event_data={
+                "submitted_count": submitted,
+                "total_drafts": len(drafts),
+                "target_status": target_status,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
     return {
         "submitted": submitted,
         "total": len(drafts),
@@ -412,16 +444,29 @@ async def update_shift_report(
     """
     service = ShiftCompletionService(db)
     try:
+        update_fields = data.model_dump(exclude_unset=True)
         report = await service.update_report(
             report_id=report_id,
             organization_id=current_user.organization_id,
             officer_id=str(current_user.id),
-            updates=data.model_dump(exclude_unset=True),
+            updates=update_fields,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    await log_audit_event(
+        db=db,
+        event_type="shift_report_updated",
+        event_category="training",
+        severity="info",
+        event_data={
+            "report_id": report_id,
+            "updated_fields": list(update_fields.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return report
 
 
@@ -447,6 +492,18 @@ async def acknowledge_report(
             status_code=404,
             detail="Report not found or not your report",
         )
+    await log_audit_event(
+        db=db,
+        event_type="shift_report_acknowledged",
+        event_category="training",
+        severity="info",
+        event_data={
+            "report_id": report_id,
+            "has_comments": bool(ack.trainee_comments),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return report
 
 
@@ -476,4 +533,18 @@ async def review_report(
     )
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    await log_audit_event(
+        db=db,
+        event_type="shift_report_reviewed",
+        event_category="training",
+        severity="info",
+        event_data={
+            "report_id": report_id,
+            "review_status": review.review_status,
+            "redacted_fields": review.redact_fields,
+            "trainee_id": report.trainee_id,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return report
