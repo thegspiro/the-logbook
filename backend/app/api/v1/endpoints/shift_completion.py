@@ -10,7 +10,12 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
@@ -356,9 +361,37 @@ async def get_shift_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    # Access check: trainee or officer in same org
     if report.organization_id != str(current_user.organization_id):
         raise HTTPException(status_code=404, detail="Report not found")
+
+    user_id = str(current_user.id)
+    is_trainee = report.trainee_id == user_id
+    is_filing_officer = report.officer_id == user_id
+    user_perms = _collect_user_permissions(current_user)
+    has_manage = _has_permission("training.manage", user_perms)
+
+    if not (is_trainee or is_filing_officer or has_manage):
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    # Trainees without manage permission see visibility-filtered data
+    if is_trainee and not has_manage:
+        config_service = TrainingModuleConfigService(db)
+        config = await config_service.get_config(
+            current_user.organization_id
+        )
+        visibility = config.to_visibility_dict()
+
+        if not visibility.get("show_performance_rating", True):
+            report.performance_rating = None
+        if not visibility.get("show_officer_narrative", False):
+            report.officer_narrative = None
+        if not visibility.get("show_areas_of_strength", True):
+            report.areas_of_strength = None
+        if not visibility.get("show_areas_for_improvement", True):
+            report.areas_for_improvement = None
+        if not visibility.get("show_skills_observed", True):
+            report.skills_observed = None
+        report.reviewer_notes = None
 
     return report
 
