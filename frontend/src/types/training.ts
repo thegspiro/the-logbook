@@ -1144,7 +1144,7 @@ export interface TaskPerformed {
 
 export interface ShiftCompletionReportCreate {
   shift_id?: string | undefined;
-  shift_date?: string | undefined;
+  shift_date: string;
   trainee_id: string;
   hours_on_shift: number;
   calls_responded?: number | undefined;
