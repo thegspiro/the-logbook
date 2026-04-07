@@ -1166,7 +1166,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         action_url=(
                             f"/scheduling?shift={shift.id}"
                         ),
-                        metadata={
+                        notification_metadata={
                             "shift_id": str(shift.id),
                             "shift_start_time": (
                                 shift.start_time.isoformat()
@@ -3276,7 +3276,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                                 action_url=(
                                     f"/scheduling?shift={shift.id}"
                                 ),
-                                metadata={
+                                notification_metadata={
                                     "shift_id": str(shift.id),
                                 },
                                 delivered=True,

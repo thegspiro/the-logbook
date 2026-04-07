@@ -8,6 +8,7 @@ Auto-updates pipeline requirement progress for shift/call/hour requirements.
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -605,6 +606,7 @@ async def batch_review_reports(
                 )
             else:
                 failed += 1
-        except Exception:
+        except Exception as e:
+            logger.error(f"Batch review failed for report {report_id}: {e}")
             failed += 1
     return {"reviewed": reviewed, "failed": failed}
