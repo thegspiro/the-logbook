@@ -536,22 +536,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
             to="/dashboard"
             className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
           >
-            {logoPreview ? (
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
-                <img
-                  src={logoPreview}
-                  alt={`${departmentName} logo`}
-                  className="max-w-full max-h-full object-contain"
-                />
-              </div>
-            ) : (
-              <div
-                className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center"
-                aria-hidden="true"
-              >
-                <Home className="w-6 h-6 text-white" />
-              </div>
-            )}
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
+              <img
+                src={logoPreview || '/logo.png'}
+                alt={`${departmentName} logo`}
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
             <div className="ml-3 min-w-0 flex-1">
               <span className="text-theme-text-primary text-lg font-semibold wrap-break-word leading-tight">
                 {departmentName}
@@ -607,22 +598,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                     to="/dashboard"
                     className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                   >
-                    {logoPreview ? (
-                      <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                        <img
-                          src={logoPreview}
-                          alt={`${departmentName} logo`}
-                          className="max-w-full max-h-full object-contain"
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center shrink-0"
-                        aria-hidden="true"
-                      >
-                        <Home className="w-6 h-6 text-white" />
-                      </div>
-                    )}
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                      <img
+                        src={logoPreview || '/logo.png'}
+                        alt={`${departmentName} logo`}
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
                   </Link>
                 </div>
                 <button
@@ -642,22 +624,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                   to="/dashboard"
                   className="flex items-center overflow-hidden focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-lg"
                 >
-                  {logoPreview ? (
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
-                      <img
-                        src={logoPreview}
-                        alt={`${departmentName} logo`}
-                        className="max-w-full max-h-full object-contain"
-                      />
-                    </div>
-                  ) : (
-                    <div
-                      className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center shrink-0"
-                      aria-hidden="true"
-                    >
-                      <Home className="w-6 h-6 text-white" />
-                    </div>
-                  )}
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden shrink-0">
+                    <img
+                      src={logoPreview || '/logo.png'}
+                      alt={`${departmentName} logo`}
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
                   <div className="ml-3 min-w-0">
                     <span className="text-theme-text-primary text-sm font-semibold block wrap-break-word leading-tight">
                       {departmentName}

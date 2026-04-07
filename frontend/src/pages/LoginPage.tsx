@@ -157,25 +157,15 @@ export const LoginPage: React.FC = () => {
     <main className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8 pb-24" id="main-content">
       <div className="max-w-md w-full space-y-8">
         <div>
-          {branding.logo ? (
-            <div className="flex justify-center">
-              <div className="h-36 max-w-[18rem] rounded-lg overflow-hidden shadow-md flex items-center justify-center">
-                <img
-                  src={branding.logo}
-                  alt={branding.name ? `${branding.name} logo` : 'Organization logo'}
-                  className="max-h-full max-w-full object-contain"
-                />
-              </div>
+          <div className="flex justify-center">
+            <div className="h-36 max-w-[18rem] rounded-lg overflow-hidden shadow-md flex items-center justify-center">
+              <img
+                src={branding.logo || '/logo.png'}
+                alt={branding.name ? `${branding.name} logo` : 'The Logbook logo'}
+                className="max-h-full max-w-full object-contain"
+              />
             </div>
-          ) : (
-            <div className="flex justify-center">
-              <div className="h-36 w-36 rounded-lg bg-red-600 flex items-center justify-center shadow-md">
-                <svg className="h-16 w-16 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0h4" />
-                </svg>
-              </div>
-            </div>
-          )}
+          </div>
           <h1 className="mt-4 text-center text-3xl font-extrabold text-theme-text-primary">
             {branding.name ? `Sign in to ${branding.name}` : 'Sign in to your account'}
           </h1>
