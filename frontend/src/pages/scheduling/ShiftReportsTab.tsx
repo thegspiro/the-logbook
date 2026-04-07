@@ -40,6 +40,7 @@ import {
   REVIEW_STATUS_STYLES,
 } from '../../modules/scheduling/components/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -434,8 +435,8 @@ export const ShiftReportsTab: React.FC = () => {
       toast.success('Shift report submitted');
       resetNewForm();
       setViewMode('filed-by-me');
-    } catch {
-      toast.error('Failed to submit shift report');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to submit shift report'));
     } finally {
       setSubmitting(false);
     }
@@ -452,8 +453,8 @@ export const ShiftReportsTab: React.FC = () => {
       toast.success('Draft saved');
       resetNewForm();
       setViewMode('drafts');
-    } catch {
-      toast.error('Failed to save draft');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save draft'));
     } finally {
       setSavingDraft(false);
     }
@@ -468,8 +469,8 @@ export const ShiftReportsTab: React.FC = () => {
       setAckReportId(null);
       setAckComments('');
       void loadReports();
-    } catch {
-      toast.error('Failed to acknowledge report');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to acknowledge report'));
     } finally {
       setAcknowledging(false);
     }
@@ -489,8 +490,8 @@ export const ShiftReportsTab: React.FC = () => {
       setReviewNotes('');
       setRedactFields([]);
       void loadReports();
-    } catch {
-      toast.error('Failed to review report');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to review report'));
     } finally {
       setReviewing(false);
     }
@@ -507,8 +508,8 @@ export const ShiftReportsTab: React.FC = () => {
       toast.success(`${result.reviewed} report${result.reviewed !== 1 ? 's' : ''} ${action === SubmissionStatus.APPROVED ? 'approved' : 'flagged'}`);
       setSelectedReportIds(new Set());
       void loadReports();
-    } catch {
-      toast.error('Failed to batch review reports');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to batch review reports'));
     } finally {
       setBatchReviewing(false);
     }
@@ -568,8 +569,8 @@ export const ShiftReportsTab: React.FC = () => {
       toast.success(submit ? 'Report submitted' : 'Draft saved');
       setEditingDraftId(null);
       void loadReports();
-    } catch {
-      toast.error('Failed to save report');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save report'));
     } finally {
       setSavingDraft(false);
     }
@@ -1504,8 +1505,8 @@ export const ShiftReportsTab: React.FC = () => {
                       );
                       void loadReports();
                       setDraftBadgeCount(0);
-                    } catch {
-                      toast.error('Failed to submit drafts');
+                    } catch (err: unknown) {
+                      toast.error(getErrorMessage(err, 'Failed to submit drafts'));
                     }
                   })();
                 }}
