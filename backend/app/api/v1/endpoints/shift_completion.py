@@ -37,6 +37,21 @@ from app.services.training_module_config_service import (
 router = APIRouter()
 
 
+def _apply_trainee_visibility(report, visibility: dict) -> None:
+    """Strip fields from a report that the trainee should not see."""
+    if not visibility.get("show_performance_rating", True):
+        report.performance_rating = None
+    if not visibility.get("show_officer_narrative", False):
+        report.officer_narrative = None
+    if not visibility.get("show_areas_of_strength", True):
+        report.areas_of_strength = None
+    if not visibility.get("show_areas_for_improvement", True):
+        report.areas_for_improvement = None
+    if not visibility.get("show_skills_observed", True):
+        report.skills_observed = None
+    report.reviewer_notes = None
+
+
 @router.get("/shift-preview/{shift_id}/{trainee_id}")
 async def preview_shift_data(
     shift_id: str,
@@ -146,18 +161,7 @@ async def get_my_shift_reports(
     # Strip sensitive fields based on visibility config
     visibility = config.to_visibility_dict()
     for report in reports:
-        if not visibility.get("show_performance_rating", True):
-            report.performance_rating = None
-        if not visibility.get("show_officer_narrative", False):
-            report.officer_narrative = None
-        if not visibility.get("show_areas_of_strength", True):
-            report.areas_of_strength = None
-        if not visibility.get("show_areas_for_improvement", True):
-            report.areas_for_improvement = None
-        if not visibility.get("show_skills_observed", True):
-            report.skills_observed = None
-        # Never expose reviewer notes to trainees
-        report.reviewer_notes = None
+        _apply_trainee_visibility(report, visibility)
 
     return reports
 
@@ -280,6 +284,43 @@ async def get_all_reports(
     )
 
 
+async def _get_reports_by_review_status(
+    review_status: str,
+    db: AsyncSession,
+    current_user: User,
+) -> list:
+    """Shared implementation for fetching reports by review status."""
+    valid_statuses = {"pending_review", "flagged", "draft"}
+    if review_status not in valid_statuses:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid review_status. Must be one of: "
+            f"{', '.join(sorted(valid_statuses))}",
+        )
+    service = ShiftCompletionService(db)
+    return await service.get_reports_by_status(
+        organization_id=current_user.organization_id,
+        review_status=review_status,
+    )
+
+
+@router.get(
+    "/by-status",
+    response_model=list[ShiftCompletionReportResponse],
+)
+async def get_reports_by_status(
+    review_status: str = Query(
+        ..., description="Filter by review status: pending_review, flagged, or draft"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Get shift completion reports filtered by review status."""
+    return await _get_reports_by_review_status(
+        review_status, db, current_user
+    )
+
+
 @router.get(
     "/pending-review",
     response_model=list[ShiftCompletionReportResponse],
@@ -289,10 +330,8 @@ async def get_pending_review_reports(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """Get shift completion reports pending review for this organization."""
-    service = ShiftCompletionService(db)
-    return await service.get_reports_by_status(
-        organization_id=current_user.organization_id,
-        review_status="pending_review",
+    return await _get_reports_by_review_status(
+        "pending_review", db, current_user
     )
 
 
@@ -305,10 +344,8 @@ async def get_flagged_reports(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """Get shift completion reports that have been flagged for follow-up."""
-    service = ShiftCompletionService(db)
-    return await service.get_reports_by_status(
-        organization_id=current_user.organization_id,
-        review_status="flagged",
+    return await _get_reports_by_review_status(
+        "flagged", db, current_user
     )
 
 
@@ -322,10 +359,8 @@ async def get_draft_reports(
     Drafts are created automatically when a shift is finalized for
     trainees with active program enrollments.
     """
-    service = ShiftCompletionService(db)
-    return await service.get_reports_by_status(
-        organization_id=current_user.organization_id,
-        review_status="draft",
+    return await _get_reports_by_review_status(
+        "draft", db, current_user
     )
 
 
@@ -430,18 +465,7 @@ async def get_shift_report(
             current_user.organization_id
         )
         visibility = config.to_visibility_dict()
-
-        if not visibility.get("show_performance_rating", True):
-            report.performance_rating = None
-        if not visibility.get("show_officer_narrative", False):
-            report.officer_narrative = None
-        if not visibility.get("show_areas_of_strength", True):
-            report.areas_of_strength = None
-        if not visibility.get("show_areas_for_improvement", True):
-            report.areas_for_improvement = None
-        if not visibility.get("show_skills_observed", True):
-            report.skills_observed = None
-        report.reviewer_notes = None
+        _apply_trainee_visibility(report, visibility)
 
     return report
 
