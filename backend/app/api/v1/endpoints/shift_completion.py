@@ -23,6 +23,8 @@ from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.shift_completion import (
     BatchReviewRequest,
+    BatchShiftReportCreate,
+    BatchShiftReportResponse,
     ReportReview,
     ShiftCompletionReportCreate,
     ShiftCompletionReportResponse,
@@ -127,6 +129,94 @@ async def create_shift_report(
         return report
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+
+@router.get("/shift-crew/{shift_id}")
+async def get_shift_crew_status(
+    shift_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Get crew members for a shift with enrollment and report status."""
+    service = ShiftCompletionService(db)
+    return await service.get_shift_crew_status(
+        current_user.organization_id, shift_id
+    )
+
+
+@router.post(
+    "/batch",
+    response_model=BatchShiftReportResponse,
+    status_code=201,
+)
+async def batch_create_shift_reports(
+    data: BatchShiftReportCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Create shift reports for all crew members on a shift.
+
+    Non-trainees get hours/calls credit only.
+    Trainees with evaluations get full evaluation data.
+    """
+    config_service = TrainingModuleConfigService(db)
+    config = await config_service.get_config(
+        current_user.organization_id
+    )
+    if data.save_as_draft:
+        review_status = "draft"
+    elif config.report_review_required:
+        review_status = "pending_review"
+    else:
+        review_status = "approved"
+
+    service = ShiftCompletionService(db)
+    try:
+        result = await service.batch_create_reports(
+            organization_id=current_user.organization_id,
+            officer_id=current_user.id,
+            shift_id=data.shift_id,
+            shift_date=data.shift_date,
+            hours_on_shift=data.hours_on_shift,
+            calls_responded=data.calls_responded,
+            call_types=data.call_types,
+            officer_narrative=data.officer_narrative,
+            crew_member_ids=data.crew_member_ids,
+            trainee_evaluations=(
+                [
+                    e.model_dump()
+                    for e in data.trainee_evaluations
+                ]
+                if data.trainee_evaluations
+                else None
+            ),
+            review_status=review_status,
+        )
+        await log_audit_event(
+            db=db,
+            event_type="shift_report_batch_created",
+            event_category="training",
+            severity="info",
+            event_data={
+                "shift_id": data.shift_id,
+                "shift_date": str(data.shift_date),
+                "crew_count": len(data.crew_member_ids),
+                "created": result["created"],
+                "skipped": result["skipped"],
+                "review_status": review_status,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=safe_error_detail(e)
+        )
 
 
 @router.get("/my-reports", response_model=list[ShiftCompletionReportResponse])

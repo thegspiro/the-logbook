@@ -101,6 +101,11 @@ const ReportCard: React.FC<{
           <div className="text-xs text-theme-text-muted">
             Filed by: {memberMap[report.officer_id] || 'Unknown Officer'} on {formatDate(report.created_at, tz)}
           </div>
+          {(report.reviewer_name || report.reviewed_by) && (
+            <div className="text-xs text-theme-text-muted">
+              Reviewed by: {report.reviewer_name || memberMap[report.reviewed_by || ''] || 'Unknown'}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -271,7 +276,9 @@ const ShiftReportPage: React.FC = () => {
   };
 
   const addTask = () => {
-    setTasks([...tasks, { task: '' }]);
+    const addedNames = new Set(tasks.map(t => t.task.toLowerCase()));
+    const nextDefault = taskDefaults.find(t => !addedNames.has(t.toLowerCase()));
+    setTasks([...tasks, { task: nextDefault || '' }]);
   };
 
   const updateTask = (index: number, updates: Partial<TaskPerformed>) => {
@@ -846,13 +853,13 @@ const ShiftReportPage: React.FC = () => {
                   Showing skills for <span className="capitalize font-medium">{shiftApparatusType}</span>
                 </p>
               )}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {skillOptions.map((skillName) => {
                   const selected = skills.find(
                     (s) => s.skill_name === skillName,
                   );
                   return (
-                    <div key={skillName}>
+                    <div key={skillName} className="pb-1">
                       <button
                         type="button"
                         onClick={() => {
@@ -882,36 +889,38 @@ const ShiftReportPage: React.FC = () => {
                         {selected ? '\u2713 ' : ''}{skillName}
                       </button>
                       {selected && (
-                        <div className="mt-1 ml-4 space-y-1.5">
+                        <div className="mt-2 ml-4 space-y-2">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-theme-text-muted">Score:</span>
-                            {([
-                              { n: 1, tip: 'Needs work' },
-                              { n: 2, tip: 'Developing' },
-                              { n: 3, tip: 'Competent' },
-                              { n: 4, tip: 'Proficient' },
-                              { n: 5, tip: 'Excellent' },
-                            ] as const).map(({ n, tip }) => (
-                              <button
-                                key={n}
-                                type="button"
-                                title={tip}
-                                onClick={() => {
-                                  setSkills(skills.map(s =>
-                                    s.skill_name === skillName
-                                      ? { ...s, score: s.score === n ? undefined : n }
-                                      : s
-                                  ));
-                                }}
-                                className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
-                                  selected.score === n
-                                    ? 'bg-violet-600 text-white border-violet-700'
-                                    : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
-                                }`}
-                              >
-                                {n}
-                              </button>
-                            ))}
+                            {([1, 2, 3, 4, 5] as const).map((n) => {
+                              const label = ratingScaleLabels[String(n)] || `Level ${n}`;
+                              return (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  title={label}
+                                  onClick={() => {
+                                    setSkills(skills.map(s =>
+                                      s.skill_name === skillName
+                                        ? { ...s, score: s.score === n ? undefined : n }
+                                        : s
+                                    ));
+                                  }}
+                                  className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
+                                    selected.score === n
+                                      ? 'bg-violet-600 text-white border-violet-700'
+                                      : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
+                                  }`}
+                                >
+                                  {n}
+                                </button>
+                              );
+                            })}
+                            {selected.score && (
+                              <span className="text-xs text-violet-600 dark:text-violet-400 font-medium ml-1">
+                                {ratingScaleLabels[String(selected.score)] || `Level ${selected.score}`}
+                              </span>
+                            )}
                           </div>
                           <input
                             type="text"
@@ -944,23 +953,27 @@ const ShiftReportPage: React.FC = () => {
                 </button>
               </div>
               {/* Quick-add from defaults */}
-              {taskDefaults.length > 0 && tasks.length === 0 && (
-                <div className="mb-2">
-                  <p className="text-xs text-theme-text-muted mb-1.5">Quick add from defaults:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {taskDefaults.map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setTasks([...tasks, { task: t }])}
-                        className="px-2 py-1 text-xs rounded-full border border-red-500/20 bg-red-500/5 text-red-700 dark:text-red-400 hover:bg-red-500/15 transition-colors"
-                      >
-                        + {t}
-                      </button>
-                    ))}
+              {taskDefaults.length > 0 && (() => {
+                const addedNames = new Set(tasks.map(t => t.task.toLowerCase()));
+                const remaining = taskDefaults.filter(t => !addedNames.has(t.toLowerCase()));
+                return remaining.length > 0 ? (
+                  <div className="mb-2">
+                    <p className="text-xs text-theme-text-muted mb-1.5">Quick add from defaults:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {remaining.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTasks([...tasks, { task: t }])}
+                          className="px-2 py-1 text-xs rounded-full border border-red-500/20 bg-red-500/5 text-red-700 dark:text-red-400 hover:bg-red-500/15 transition-colors"
+                        >
+                          + {t}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : null;
+              })()}
               {tasks.map((task, i) => (
                 <div key={i} className="flex items-center space-x-2 mb-2">
                   <input

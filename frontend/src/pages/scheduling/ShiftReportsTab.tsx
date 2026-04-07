@@ -19,12 +19,15 @@ import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
-import type { Assignment } from '../../types/scheduling';
+import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { SubmissionStatus } from '../../constants/enums';
 import type {
+  BatchShiftReportCreate,
+  CrewMemberEvaluation,
   ShiftCompletionReport,
   ShiftCompletionReportCreate,
+  ShiftCrewMember,
   TaskPerformed,
   TrainingModuleConfig,
   TraineeShiftStats,
@@ -40,6 +43,7 @@ import {
   REVIEW_STATUS_STYLES,
 } from '../../modules/scheduling/components/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
+import { getErrorMessage } from '../../utils/errorHandling';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -66,13 +70,9 @@ export const ShiftReportsTab: React.FC = () => {
 
   // Create form state
   const [members, setMembers] = useState<User[]>([]);
-  const [memberSearch, setMemberSearch] = useState('');
-  const [loadingMembers, setLoadingMembers] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [linkedShiftLabel, setLinkedShiftLabel] = useState<string | null>(null);
-  const [shiftAssignments, setShiftAssignments] = useState<Assignment[]>([]);
   const [shiftApparatusType, setShiftApparatusType] = useState<string | null>(null);
-  const [showAllMembers, setShowAllMembers] = useState(false);
   const [form, setForm] = useState<Partial<ShiftCompletionReportCreate>>({
     shift_id: linkedShiftId,
     shift_date: getTodayLocalDate(tz),
@@ -88,6 +88,17 @@ export const ShiftReportsTab: React.FC = () => {
     trainee_id: '',
   });
 
+  // Batch create state
+  const [crewMembers, setCrewMembers] = useState<ShiftCrewMember[]>([]);
+  const [selectedCrewIds, setSelectedCrewIds] = useState<Set<string>>(new Set());
+  const [traineeEvals, setTraineeEvals] = useState<Record<string, CrewMemberEvaluation>>({});
+  const [expandedTraineeId, setExpandedTraineeId] = useState<string | null>(null);
+  const [crewRemarks, setCrewRemarks] = useState<Record<string, string>>({});
+  const [loadingCrew, setLoadingCrew] = useState(false);
+  const [shiftList, setShiftList] = useState<ShiftRecord[]>([]);
+  const [loadingShifts, setLoadingShifts] = useState(false);
+  const [shiftSearchQuery, setShiftSearchQuery] = useState('');
+
   // Acknowledge modal
   const [ackReportId, setAckReportId] = useState<string | null>(null);
   const [ackComments, setAckComments] = useState('');
@@ -102,6 +113,7 @@ export const ShiftReportsTab: React.FC = () => {
   // Batch review selection
   const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
   const [batchReviewing, setBatchReviewing] = useState(false);
+  const [batchReviewNotes, setBatchReviewNotes] = useState('');
 
   // Draft edit state
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
@@ -156,53 +168,64 @@ export const ShiftReportsTab: React.FC = () => {
     return config?.shift_review_default_tasks ?? [];
   }, [config, shiftApparatusType]);
 
+  // Load crew status when a shift is selected
+  const loadCrewForShift = useCallback(async (shiftId: string) => {
+    setLoadingCrew(true);
+    try {
+      const crew = await shiftCompletionService.getShiftCrewStatus(shiftId);
+      setCrewMembers(crew);
+      const eligible = crew.filter(m => !m.has_existing_report);
+      setSelectedCrewIds(new Set(eligible.map(m => m.user_id)));
+      setTraineeEvals({});
+      setCrewRemarks({});
+      setExpandedTraineeId(null);
+    } catch {
+      toast.error('Failed to load crew');
+    } finally {
+      setLoadingCrew(false);
+    }
+  }, []);
+
   // Pre-fill form when navigated with a linked shift ID
   useEffect(() => {
     if (!linkedShiftId || viewMode !== 'create') return;
     let cancelled = false;
     const prefill = async () => {
       try {
-        const [shift, assignments] = await Promise.all([
-          schedulingService.getShift(linkedShiftId),
-          schedulingService.getShiftAssignments(linkedShiftId),
-        ]);
+        const shift = await schedulingService.getShift(linkedShiftId);
         if (cancelled) return;
         const shiftDate = shift.shift_date ?? getTodayLocalDate(tz);
         setLinkedShiftLabel(
           `${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shiftDate}`,
         );
-        setShiftAssignments(assignments);
         setShiftApparatusType(shift.apparatus_type ?? null);
-        setShowAllMembers(false);
-        setForm(prev => {
-          let hours = prev.hours_on_shift ?? 0;
-          if (shift.total_hours && shift.total_hours > 0) {
-            hours = Math.round(shift.total_hours * 100) / 100;
-          } else if (shift.start_time && shift.end_time) {
-            const start = new Date(shift.start_time).getTime();
-            const end = new Date(shift.end_time).getTime();
-            if (end > start) {
-              hours = Math.round(
-                ((end - start) / 3600000) * 100,
-              ) / 100;
-            }
+        let hours = 0;
+        if (shift.total_hours && shift.total_hours > 0) {
+          hours = Math.round(shift.total_hours * 100) / 100;
+        } else if (shift.start_time && shift.end_time) {
+          const start = new Date(shift.start_time).getTime();
+          const end = new Date(shift.end_time).getTime();
+          if (end > start) {
+            hours = Math.round(
+              ((end - start) / 3600000) * 100,
+            ) / 100;
           }
-          return {
-            ...prev,
-            shift_id: linkedShiftId,
-            shift_date: shiftDate,
-            hours_on_shift: hours,
-            calls_responded:
-              shift.call_count || prev.calls_responded,
-          };
-        });
+        }
+        setForm(prev => ({
+          ...prev,
+          shift_id: linkedShiftId,
+          shift_date: shiftDate,
+          hours_on_shift: hours,
+          calls_responded: shift.call_count || prev.calls_responded,
+        }));
+        await loadCrewForShift(linkedShiftId);
       } catch {
         // Shift may not exist — continue with defaults
       }
     };
     void prefill();
     return () => { cancelled = true; };
-  }, [linkedShiftId, viewMode, tz]);
+  }, [linkedShiftId, viewMode, tz, loadCrewForShift]);
 
   const loadReports = useCallback(async () => {
     setLoading(true);
@@ -248,45 +271,31 @@ export const ShiftReportsTab: React.FC = () => {
     }
   }, [viewMode, canManage]);
 
-  // Load members when switching to create mode
+  // Load members for draft edit forms
   useEffect(() => {
     if (viewMode === 'create' && members.length === 0) {
-      setLoadingMembers(true);
       userService.getUsers()
         .then(setMembers)
-        .catch(() => toast.error('Failed to load members'))
-        .finally(() => setLoadingMembers(false));
+        .catch(() => { /* members needed for draft edit */ });
     }
   }, [viewMode, members.length]);
 
-  const filteredMembers = useMemo(() => {
-    const assignedIds = new Set(
-      shiftAssignments.map((a) => a.user_id),
-    );
-    const hasShiftFilter =
-      linkedShiftId && assignedIds.size > 0 && !showAllMembers;
-    const base = hasShiftFilter
-      ? members.filter((m) => assignedIds.has(m.id))
-      : members;
-    if (!memberSearch) return base;
-    const q = memberSearch.toLowerCase();
-    return base.filter(
-      (m) =>
-        (
-          m.full_name ||
-          `${m.first_name} ${m.last_name}`
-        )
-          .toLowerCase()
-          .includes(q) ||
-        m.username.toLowerCase().includes(q),
-    );
-  }, [
-    members,
-    memberSearch,
-    shiftAssignments,
-    linkedShiftId,
-    showAllMembers,
-  ]);
+  // Load recent shifts when entering create mode without a linked shift
+  useEffect(() => {
+    if (viewMode !== 'create' || linkedShiftId) return;
+    setLoadingShifts(true);
+    const today = new Date();
+    const twoWeeksAgo = new Date(today);
+    twoWeeksAgo.setDate(today.getDate() - 14);
+    schedulingService.getShifts({
+      start_date: twoWeeksAgo.toISOString().split('T')[0] ?? '',
+      end_date: today.toISOString().split('T')[0] ?? '',
+      limit: 50,
+    })
+      .then(res => setShiftList(res.shifts))
+      .catch(() => { /* shifts not critical */ })
+      .finally(() => setLoadingShifts(false));
+  }, [viewMode, linkedShiftId]);
 
   const toggleCallType = (
     setter: React.Dispatch<React.SetStateAction<Partial<ShiftCompletionReportCreate>>>,
@@ -316,76 +325,6 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   const handleToggleCallType = (type: string) => toggleCallType(setForm, type);
-  const handleToggleSkill = (skillName: string) => toggleSkill(setForm, skillName);
-
-  const handleUpdateSkillComment = (skillName: string, comment: string) => {
-    setForm(prev => {
-      const skills = (prev.skills_observed || []).map(s =>
-        s.skill_name === skillName ? { ...s, comment: comment || undefined } : s
-      );
-      return { ...prev, skills_observed: skills };
-    });
-  };
-
-  const handleUpdateSkillScore = (skillName: string, score: number | undefined) => {
-    setForm(prev => {
-      const skills = (prev.skills_observed || []).map(s =>
-        s.skill_name === skillName ? { ...s, score } : s
-      );
-      return { ...prev, skills_observed: skills };
-    });
-  };
-
-  const handleAddTask = () => {
-    setForm(prev => ({
-      ...prev,
-      tasks_performed: [...(prev.tasks_performed || []), { task: '', description: '' }],
-    }));
-  };
-
-  const handleUpdateTask = (index: number, field: keyof TaskPerformed, value: string) => {
-    setForm(prev => {
-      const tasks = [...(prev.tasks_performed || [])];
-      tasks[index] = { ...tasks[index], [field]: value } as TaskPerformed;
-      return { ...prev, tasks_performed: tasks };
-    });
-  };
-
-  const handleRemoveTask = (index: number) => {
-    setForm(prev => ({
-      ...prev,
-      tasks_performed: (prev.tasks_performed || []).filter((_, i) => i !== index),
-    }));
-  };
-
-  const buildNewPayload = (
-    asDraft: boolean,
-  ): ShiftCompletionReportCreate => ({
-    shift_id: form.shift_id || undefined,
-    trainee_id: form.trainee_id ?? '',
-    shift_date: form.shift_date ?? getTodayLocalDate(tz),
-    hours_on_shift: form.hours_on_shift ?? 0,
-    calls_responded: form.calls_responded || 0,
-    call_types: form.call_types?.length
-      ? form.call_types
-      : undefined,
-    performance_rating:
-      form.performance_rating || undefined,
-    areas_of_strength:
-      form.areas_of_strength || undefined,
-    areas_for_improvement:
-      form.areas_for_improvement || undefined,
-    officer_narrative:
-      form.officer_narrative || undefined,
-    skills_observed: form.skills_observed?.length
-      ? form.skills_observed
-      : undefined,
-    tasks_performed:
-      form.tasks_performed?.filter(
-        (t) => t.task.trim(),
-      ) || undefined,
-    ...(asDraft ? { save_as_draft: true } : {}),
-  });
 
   const resetNewForm = () => {
     setLinkedShiftLabel(null);
@@ -405,54 +344,119 @@ export const ShiftReportsTab: React.FC = () => {
     });
   };
 
-  const validateNewForm = (): boolean => {
-    if (!form.trainee_id) {
-      toast.error('Please select a trainee');
-      return false;
+  // Batch workflow handlers
+  const handleSelectShift = async (shift: ShiftRecord) => {
+    setForm(prev => ({
+      ...prev,
+      shift_id: shift.id,
+      shift_date: shift.shift_date,
+      hours_on_shift: shift.total_hours || 0,
+      calls_responded: shift.call_count || 0,
+    }));
+    setLinkedShiftLabel(
+      `${shift.apparatus_name ? `${shift.apparatus_name} — ` : ''}${shift.shift_date}`,
+    );
+    setShiftApparatusType(shift.apparatus_type ?? null);
+    await loadCrewForShift(shift.id);
+  };
+
+  const toggleCrewMember = (userId: string) => {
+    setSelectedCrewIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  const updateTraineeEval = (userId: string, field: keyof CrewMemberEvaluation, value: unknown) => {
+    setTraineeEvals(prev => ({
+      ...prev,
+      [userId]: { ...prev[userId], user_id: userId, [field]: value } as CrewMemberEvaluation,
+    }));
+  };
+
+  const handleBatchSubmit = async (asDraft: boolean) => {
+    if (!form.shift_id) {
+      toast.error('Please select a shift');
+      return;
     }
-    if (!form.shift_date) {
-      toast.error('Please enter the shift date');
-      return false;
+    if (selectedCrewIds.size === 0) {
+      toast.error('Please select at least one crew member');
+      return;
     }
     if (!form.hours_on_shift || form.hours_on_shift <= 0) {
       toast.error('Please enter hours on shift');
-      return false;
+      return;
     }
-    return true;
-  };
 
-  const handleSubmit = async () => {
-    if (!validateNewForm()) return;
+    const traineeIds = crewMembers
+      .filter(m => m.has_active_enrollment && selectedCrewIds.has(m.user_id))
+      .map(m => m.user_id);
 
-    setSubmitting(true);
-    try {
-      await shiftCompletionService.createReport(
-        buildNewPayload(false),
+    const evaluations: CrewMemberEvaluation[] = traineeIds
+      .map(id => {
+        const ev = traineeEvals[id];
+        return {
+          user_id: id,
+          performance_rating: ev?.performance_rating,
+          areas_of_strength: ev?.areas_of_strength || undefined,
+          areas_for_improvement: ev?.areas_for_improvement || undefined,
+          remarks: crewRemarks[id] || ev?.remarks || undefined,
+          skills_observed: ev?.skills_observed?.length ? ev.skills_observed : undefined,
+          tasks_performed: ev?.tasks_performed?.filter(t => t.task.trim()) || undefined,
+          enrollment_id: crewMembers.find(m => m.user_id === id)?.enrollment_id,
+        };
+      })
+      .filter(ev =>
+        ev.performance_rating || ev.areas_of_strength || ev.areas_for_improvement ||
+        ev.remarks || ev.skills_observed || ev.tasks_performed
       );
-      toast.success('Shift report submitted');
+
+    const nonTraineeRemarks = Array.from(selectedCrewIds)
+      .filter(id => !traineeIds.includes(id) && crewRemarks[id])
+      .map(id => ({
+        user_id: id,
+        remarks: crewRemarks[id],
+      }));
+
+    const allEvaluations = [...evaluations, ...nonTraineeRemarks.map(r => ({
+      user_id: r.user_id,
+      remarks: r.remarks,
+    } as CrewMemberEvaluation))];
+
+    const payload: BatchShiftReportCreate = {
+      shift_id: form.shift_id ?? '',
+      shift_date: form.shift_date ?? '',
+      hours_on_shift: form.hours_on_shift ?? 0,
+      calls_responded: form.calls_responded ?? 0,
+      ...(form.call_types?.length ? { call_types: form.call_types } : {}),
+      ...(form.officer_narrative ? { officer_narrative: form.officer_narrative } : {}),
+      crew_member_ids: Array.from(selectedCrewIds),
+      ...(allEvaluations.length > 0 ? { trainee_evaluations: allEvaluations } : {}),
+      save_as_draft: asDraft,
+    };
+
+    if (asDraft) setSavingDraft(true);
+    else setSubmitting(true);
+
+    try {
+      const result = await shiftCompletionService.batchCreateReports(payload);
+      const msg = asDraft
+        ? `Saved ${result.created} draft${result.created !== 1 ? 's' : ''}`
+        : `Submitted ${result.created} report${result.created !== 1 ? 's' : ''}`;
+      toast.success(result.skipped > 0 ? `${msg} (${result.skipped} skipped — already reported)` : msg);
       resetNewForm();
-      setViewMode('filed-by-me');
-    } catch {
-      toast.error('Failed to submit shift report');
+      setCrewMembers([]);
+      setSelectedCrewIds(new Set());
+      setTraineeEvals({});
+      setCrewRemarks({});
+      setExpandedTraineeId(null);
+      setViewMode(asDraft ? 'drafts' : 'filed-by-me');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, asDraft ? 'Failed to save drafts' : 'Failed to submit reports'));
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleSaveNewDraft = async () => {
-    if (!validateNewForm()) return;
-
-    setSavingDraft(true);
-    try {
-      await shiftCompletionService.createReport(
-        buildNewPayload(true),
-      );
-      toast.success('Draft saved');
-      resetNewForm();
-      setViewMode('drafts');
-    } catch {
-      toast.error('Failed to save draft');
-    } finally {
       setSavingDraft(false);
     }
   };
@@ -466,8 +470,8 @@ export const ShiftReportsTab: React.FC = () => {
       setAckReportId(null);
       setAckComments('');
       void loadReports();
-    } catch {
-      toast.error('Failed to acknowledge report');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to acknowledge report'));
     } finally {
       setAcknowledging(false);
     }
@@ -487,8 +491,8 @@ export const ShiftReportsTab: React.FC = () => {
       setReviewNotes('');
       setRedactFields([]);
       void loadReports();
-    } catch {
-      toast.error('Failed to review report');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to review report'));
     } finally {
       setReviewing(false);
     }
@@ -496,17 +500,23 @@ export const ShiftReportsTab: React.FC = () => {
 
   const handleBatchReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
     if (selectedReportIds.size === 0) return;
+    if (action === 'flagged' && !batchReviewNotes.trim()) {
+      toast.error('Please add a comment explaining why these reports are being flagged');
+      return;
+    }
     setBatchReviewing(true);
     try {
       const result = await shiftCompletionService.batchReviewReports({
         report_ids: Array.from(selectedReportIds),
         review_status: action,
+        reviewer_notes: batchReviewNotes.trim() || undefined,
       });
       toast.success(`${result.reviewed} report${result.reviewed !== 1 ? 's' : ''} ${action === SubmissionStatus.APPROVED ? 'approved' : 'flagged'}`);
       setSelectedReportIds(new Set());
+      setBatchReviewNotes('');
       void loadReports();
-    } catch {
-      toast.error('Failed to batch review reports');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to batch review reports'));
     } finally {
       setBatchReviewing(false);
     }
@@ -566,8 +576,8 @@ export const ShiftReportsTab: React.FC = () => {
       toast.success(submit ? 'Report submitted' : 'Draft saved');
       setEditingDraftId(null);
       void loadReports();
-    } catch {
-      toast.error('Failed to save report');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save report'));
     } finally {
       setSavingDraft(false);
     }
@@ -608,65 +618,6 @@ export const ShiftReportsTab: React.FC = () => {
   const ratingLevelCount = useMemo(() => {
     return Object.keys(ratingScaleLabels).length || 5;
   }, [ratingScaleLabels]);
-
-  const renderRatingInput = () => {
-    if (ratingScaleType === 'stars') {
-      return (
-        <div>
-          <label className="block text-sm font-medium text-theme-text-secondary mb-2">{ratingLabel}</label>
-          <div className="flex items-center gap-1">
-            {Array.from({ length: 5 }, (_, i) => i + 1).map(i => (
-              <button key={i} onClick={() => setForm(prev => ({ ...prev, performance_rating: i }))}
-                className="p-1 transition-colors"
-              >
-                <Star className={`w-6 h-6 ${
-                  i <= (form.performance_rating || 0)
-                    ? 'fill-amber-400 text-amber-700 dark:text-amber-400'
-                    : 'text-theme-text-muted hover:text-amber-800 dark:hover:text-amber-300'
-                }`} />
-              </button>
-            ))}
-            {form.performance_rating && (
-              <button onClick={() => setForm(prev => ({ ...prev, performance_rating: undefined }))}
-                className="ml-2 text-xs text-theme-text-muted hover:text-theme-text-primary"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    }
-
-    const levels = Array.from(
-      { length: ratingLevelCount },
-      (_, i) => i + 1,
-    );
-    return (
-      <div>
-        <label className="block text-sm font-medium text-theme-text-secondary mb-2">{ratingLabel}</label>
-        <div className="flex flex-wrap gap-2">
-          {levels.map(i => {
-            const label = ratingScaleLabels[String(i)] || `Level ${i}`;
-            const isSelected = form.performance_rating === i;
-            return (
-              <button
-                key={i}
-                onClick={() => setForm(prev => ({ ...prev, performance_rating: isSelected ? undefined : i }))}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                  isSelected
-                    ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30 ring-1 ring-violet-500/30'
-                    : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
-                }`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
 
   const renderTraineeDashboard = () => {
     if (!traineeStats || traineeStats.total_reports === 0) return null;
@@ -863,10 +814,29 @@ export const ShiftReportsTab: React.FC = () => {
                     <UserIcon className="w-3 h-3" /> {report.officer_name}
                   </span>
                 )}
+                {report.reviewer_name && (
+                  <span className="flex items-center gap-1 text-xs text-theme-text-muted">
+                    <Shield className="w-3 h-3" /> Reviewed by {report.reviewer_name}
+                  </span>
+                )}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {/* Aging indicator for pending/flagged */}
+            {(report.review_status === 'pending_review' || report.review_status === 'flagged') && (() => {
+              const days = Math.floor((Date.now() - new Date(report.created_at).getTime()) / 86400000);
+              if (days < 1) return null;
+              return (
+                <span className={`text-xs font-medium ${
+                  days >= 7 ? 'text-red-600 dark:text-red-400'
+                    : days >= 3 ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-theme-text-muted'
+                }`}>
+                  {days}d
+                </span>
+              );
+            })()}
             {/* Review status badge */}
             {report.review_status !== SubmissionStatus.APPROVED && (
               <span className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} border border-current/20 rounded-full`}>
@@ -893,13 +863,58 @@ export const ShiftReportsTab: React.FC = () => {
               <ReportContentDisplay report={report} />
             </div>
 
-            {/* Reviewer notes (only for officers viewing, never for trainees) */}
+            {/* Reviewer comment (visible to officers, not trainees) */}
             {canManage && report.reviewer_notes && (
-              <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
-                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <Shield className="w-3 h-3" /> Reviewer Notes (Internal)
+              <div className={`p-3 rounded-lg ${
+                report.review_status === 'flagged'
+                  ? 'bg-red-500/5 border border-red-500/20'
+                  : 'bg-amber-500/5 border border-amber-500/20'
+              }`}>
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 flex items-center gap-1 ${
+                  report.review_status === 'flagged'
+                    ? 'text-red-700 dark:text-red-400'
+                    : 'text-amber-700 dark:text-amber-400'
+                }`}>
+                  <Shield className="w-3 h-3" />
+                  {report.review_status === 'flagged' ? 'Reviewer Comment — Flagged' : 'Reviewer Comment'}
+                  {report.reviewer_name && (
+                    <span className="normal-case font-normal ml-1">by {report.reviewer_name}</span>
+                  )}
                 </p>
                 <p className="text-sm text-theme-text-primary">{report.reviewer_notes}</p>
+              </div>
+            )}
+
+            {/* Review history timeline */}
+            {canManage && report.review_history && report.review_history.length > 1 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Review History
+                </p>
+                <div className="space-y-1 pl-2 border-l-2 border-theme-surface-border">
+                  {report.review_history.map((entry, i) => (
+                    <div key={i} className="pl-3 py-1">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className={`font-medium capitalize ${
+                          entry.status === 'approved' ? 'text-green-700 dark:text-green-400'
+                            : entry.status === 'flagged' ? 'text-red-700 dark:text-red-400'
+                            : 'text-theme-text-secondary'
+                        }`}>
+                          {entry.status === 'pending_review' ? 'Submitted' : entry.status}
+                        </span>
+                        {entry.reviewer_name && (
+                          <span className="text-theme-text-muted">by {entry.reviewer_name}</span>
+                        )}
+                        <span className="text-theme-text-muted">
+                          {formatDateCustom(entry.timestamp, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }, tz)}
+                        </span>
+                      </div>
+                      {entry.notes && (
+                        <p className="text-xs text-theme-text-muted mt-0.5 italic">&quot;{entry.notes}&quot;</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -914,14 +929,24 @@ export const ShiftReportsTab: React.FC = () => {
                 </button>
               </div>
             )}
-            {viewMode === 'flagged' && report.review_status === 'flagged' && (
-              <div className="pt-2 flex items-center gap-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
-                  className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
-                >
-                  <ClipboardCheck className="w-4 h-4" /> Re-Review Report
-                </button>
+            {canManage && report.review_status === 'flagged' && !isReviewMode && (
+              <div className="pt-2 space-y-3">
+                <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
+                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Flagged for Review
+                  </p>
+                  <p className="text-sm text-theme-text-secondary">
+                    This report has been flagged and requires attention. You can re-review it to approve or add notes.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
+                    className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <ClipboardCheck className="w-4 h-4" /> Re-Review Report
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1165,301 +1190,449 @@ export const ShiftReportsTab: React.FC = () => {
         </div>
       )}
 
-      {/* Create Form */}
+      {/* Create Form — Shift-first batch workflow */}
       {viewMode === 'create' && (
         <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-6 space-y-5">
           <h3 className="text-lg font-semibold text-theme-text-primary">New Shift Completion Report</h3>
 
-          {/* Linked shift banner */}
-          {linkedShiftLabel && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/5 border border-blue-500/20 rounded-lg text-sm text-blue-700 dark:text-blue-400">
-              <FileText className="w-4 h-4 shrink-0" />
-              Filing report for shift: <span className="font-medium">{linkedShiftLabel}</span>
-            </div>
-          )}
-
-          {/* Trainee Selection */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium text-theme-text-secondary">Trainee *</label>
-              {linkedShiftId && shiftAssignments.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAllMembers(!showAllMembers)}
-                  className="text-xs text-violet-600 dark:text-violet-400 hover:underline"
-                >
-                  {showAllMembers
-                    ? `Show shift members only (${shiftAssignments.length})`
-                    : 'Show all members'}
-                </button>
-              )}
-            </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
-              <input
-                type="text"
-                aria-label="Search members..." placeholder={
-                  linkedShiftId && shiftAssignments.length > 0 && !showAllMembers
-                    ? `Search shift members (${shiftAssignments.length})...`
-                    : 'Search members...'
-                }
-                value={memberSearch}
-                onChange={e => setMemberSearch(e.target.value)}
-                className="form-input focus:ring-violet-500 pl-9 pr-3 text-sm"
-              />
-            </div>
-            {loadingMembers ? (
-              <div className="flex items-center gap-2 mt-2 text-sm text-theme-text-muted" role="status" aria-live="polite">
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading members...
+          {/* Step 1: Shift Selection */}
+          {!form.shift_id ? (
+            <div>
+              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Select a Shift *</label>
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+                <input
+                  type="text"
+                  placeholder="Search shifts by apparatus or date..."
+                  value={shiftSearchQuery}
+                  onChange={e => setShiftSearchQuery(e.target.value)}
+                  className="form-input focus:ring-violet-500 pl-9 pr-3 text-sm"
+                />
               </div>
-            ) : (
-              <div className="mt-2 max-h-40 overflow-y-auto space-y-1">
-                {filteredMembers.slice(0, 20).map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => { setForm(prev => ({ ...prev, trainee_id: m.id })); setMemberSearch(m.full_name || `${m.first_name} ${m.last_name}`); }}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
-                      form.trainee_id === m.id
-                        ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-500/20'
-                        : 'hover:bg-theme-surface-hover text-theme-text-primary'
-                    }`}
-                  >
-                    <UserIcon className="w-4 h-4 shrink-0" />
-                    {m.full_name || `${m.first_name} ${m.last_name}`}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Date and Hours */}
-          <div className="form-grid-3">
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Date *</label>
-              <input type="date" value={form.shift_date || ''}
-                onChange={e => setForm(prev => ({ ...prev, shift_date: e.target.value }))}
-                className="form-input focus:ring-violet-500 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Hours on Shift *</label>
-              <input type="number" min="0.5" max="48" step="0.5" value={form.hours_on_shift || ''}
-                onChange={e => setForm(prev => ({ ...prev, hours_on_shift: parseFloat(e.target.value) || 0 }))}
-                className="form-input focus:ring-violet-500 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Calls Responded</label>
-              <input type="number" min="0" value={form.calls_responded || 0}
-                onChange={e => setForm(prev => ({ ...prev, calls_responded: parseInt(e.target.value) || 0 }))}
-                className="form-input focus:ring-violet-500 text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Call Types */}
-          {(config?.form_show_call_types ?? true) && (form.calls_responded || 0) > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">Call Types</label>
-              <div className="flex flex-wrap gap-2">
-                {callTypeOptions.map(type => (
-                  <button key={type} onClick={() => handleToggleCallType(type)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      form.call_types?.includes(type)
-                        ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30'
-                        : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Performance Rating (configurable scale) */}
-          {(config?.form_show_performance_rating ?? true) && renderRatingInput()}
-
-          {/* Narrative Fields */}
-          {((config?.form_show_areas_of_strength ?? true) || (config?.form_show_areas_for_improvement ?? true)) && (
-          <div className="form-grid-2">
-            {(config?.form_show_areas_of_strength ?? true) && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
-              <textarea rows={3} value={form.areas_of_strength || ''}
-                onChange={e => setForm(prev => ({ ...prev, areas_of_strength: e.target.value }))}
-                placeholder="What did the trainee do well?"
-                className="form-input focus:ring-violet-500 resize-none text-sm"
-              />
-            </div>
-            )}
-            {(config?.form_show_areas_for_improvement ?? true) && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
-              <textarea rows={3} value={form.areas_for_improvement || ''}
-                onChange={e => setForm(prev => ({ ...prev, areas_for_improvement: e.target.value }))}
-                placeholder="What should the trainee work on?"
-                className="form-input focus:ring-violet-500 resize-none text-sm"
-              />
-            </div>
-            )}
-          </div>
-          )}
-
-          {(config?.form_show_officer_narrative ?? true) && (
-          <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Officer Narrative</label>
-            <textarea rows={4} value={form.officer_narrative || ''}
-              onChange={e => setForm(prev => ({ ...prev, officer_narrative: e.target.value }))}
-              placeholder="General observations, notes, and overall assessment..."
-              className="form-input focus:ring-violet-500 resize-none text-sm"
-            />
-          </div>
-          )}
-
-          {/* Skills Observed with Comments */}
-          {(config?.form_show_skills_observed ?? true) && (
-          <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-2">Skills Observed</label>
-            <div className="space-y-2">
-              {skillOptions.map(skill => {
-                const selected = form.skills_observed?.find(s => s.skill_name === skill);
-                return (
-                  <div key={skill}>
-                    <button onClick={() => handleToggleSkill(skill)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                        selected
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
-                          : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
-                      }`}
-                    >
-                      {selected ? '✓ ' : ''}{skill}
-                    </button>
-                    {selected && (
-                      <div className="mt-1 ml-4 space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs text-theme-text-muted">Score:</span>
-                          {([
-                            { n: 1, tip: 'Needs work' },
-                            { n: 2, tip: 'Developing' },
-                            { n: 3, tip: 'Competent' },
-                            { n: 4, tip: 'Proficient' },
-                            { n: 5, tip: 'Excellent' },
-                          ] as const).map(({ n, tip }) => (
-                            <button
-                              key={n}
-                              type="button"
-                              title={tip}
-                              onClick={() => handleUpdateSkillScore(skill, selected.score === n ? undefined : n)}
-                              className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
-                                selected.score === n
-                                  ? 'bg-violet-500 text-white border-violet-600'
-                                  : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
-                              }`}
-                            >
-                              {n}
-                            </button>
-                          ))}
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Add comment on this skill..."
-                          value={selected.comment || ''}
-                          onChange={e => handleUpdateSkillComment(skill, e.target.value)}
-                          className="form-input focus:ring-violet-500 max-w-md py-1.5 text-xs"
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          )}
-
-          {/* Tasks Performed with Comments */}
-          {(config?.form_show_tasks_performed ?? true) && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-sm font-medium text-theme-text-secondary">Tasks Performed</label>
-              <button onClick={handleAddTask}
-                className="text-xs text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1"
-              >
-                <Plus className="w-3 h-3" /> Add Task
-              </button>
-            </div>
-            {/* Quick-add from configured defaults */}
-            {taskDefaults.length > 0 && (form.tasks_performed || []).length === 0 && (
-              <div className="mb-2">
-                <p className="text-xs text-theme-text-muted mb-1.5">Quick add from defaults:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {taskDefaults.map((t) => (
+              {loadingShifts ? (
+                <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4" role="status">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Loading recent shifts...
+                </div>
+              ) : (
+                <div className="max-h-60 overflow-y-auto space-y-1">
+                  {shiftList
+                    .filter(s => {
+                      if (!shiftSearchQuery) return true;
+                      const q = shiftSearchQuery.toLowerCase();
+                      return (s.apparatus_name ?? '').toLowerCase().includes(q)
+                        || (s.shift_date ?? '').includes(q)
+                        || (s.shift_officer_name ?? '').toLowerCase().includes(q);
+                    })
+                    .map(shift => (
                     <button
-                      key={t}
+                      key={shift.id}
                       type="button"
-                      onClick={() => setForm(prev => ({
-                        ...prev,
-                        tasks_performed: [...(prev.tasks_performed || []), { task: t, description: '' }],
-                      }))}
-                      className="px-2 py-1 text-xs rounded-full border border-violet-500/20 bg-violet-500/5 text-violet-700 dark:text-violet-400 hover:bg-violet-500/15 transition-colors"
+                      onClick={() => { void handleSelectShift(shift); }}
+                      className="w-full text-left px-4 py-3 rounded-lg text-sm hover:bg-theme-surface-hover transition-colors flex items-center justify-between border border-transparent hover:border-violet-500/20"
                     >
-                      + {t}
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
+                          <FileText className="w-4 h-4 text-violet-500" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-theme-text-primary">
+                            {shift.apparatus_name || 'Shift'} — {shift.shift_date}
+                          </p>
+                          <p className="text-xs text-theme-text-muted">
+                            {shift.attendee_count} member{shift.attendee_count !== 1 ? 's' : ''}
+                            {shift.call_count > 0 ? ` · ${shift.call_count} call${shift.call_count !== 1 ? 's' : ''}` : ''}
+                            {shift.total_hours ? ` · ${shift.total_hours}h` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <ChevronDown className="w-4 h-4 text-theme-text-muted -rotate-90" />
                     </button>
                   ))}
+                  {shiftList.length === 0 && (
+                    <p className="text-sm text-theme-text-muted text-center py-6">No recent shifts found.</p>
+                  )}
+                </div>
+              )}
+              <div className="flex items-center gap-3 pt-4">
+                <button onClick={() => setViewMode(canManage ? 'filed-by-me' : 'my-reports')}
+                  className="px-4 py-2 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Selected shift banner */}
+              <div className="flex items-center justify-between px-3 py-2 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-400">
+                  <FileText className="w-4 h-4 shrink-0" />
+                  Shift: <span className="font-medium">{linkedShiftLabel}</span>
+                </div>
+                {!linkedShiftId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm(prev => ({ ...prev, shift_id: undefined }));
+                      setLinkedShiftLabel(null);
+                      setCrewMembers([]);
+                      setSelectedCrewIds(new Set());
+                    }}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Change shift
+                  </button>
+                )}
+              </div>
+
+              {/* Step 2: Shift-Level Data */}
+              <div className="form-grid-3">
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Date</label>
+                  <input type="date" value={form.shift_date || ''} readOnly
+                    className="form-input text-sm bg-theme-surface-hover cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Hours on Shift *</label>
+                  <input type="number" min="0.5" max="48" step="0.5" value={form.hours_on_shift || ''}
+                    onChange={e => setForm(prev => ({ ...prev, hours_on_shift: parseFloat(e.target.value) || 0 }))}
+                    className="form-input focus:ring-violet-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-1">Calls Responded</label>
+                  <input type="number" min="0" value={form.calls_responded || 0}
+                    onChange={e => setForm(prev => ({ ...prev, calls_responded: parseInt(e.target.value) || 0 }))}
+                    className="form-input focus:ring-violet-500 text-sm"
+                  />
                 </div>
               </div>
-            )}
-            <div className="space-y-3">
-              {(form.tasks_performed || []).map((task, i) => (
-                <div key={i} className="space-y-1">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 form-grid-2">
-                      <input type="text" placeholder="Task name" value={task.task}
-                        onChange={e => handleUpdateTask(i, 'task', e.target.value)}
-                        className="form-input focus:ring-violet-500 text-sm"
-                      />
-                      <input type="text" placeholder="Description (optional)" value={task.description || ''}
-                        onChange={e => handleUpdateTask(i, 'description', e.target.value)}
-                        className="form-input focus:ring-violet-500 text-sm"
-                      />
-                    </div>
-                    <button onClick={() => handleRemoveTask(i)} className="p-2 text-theme-text-muted hover:text-red-500 transition-colors">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="ml-0">
-                    <input type="text" placeholder="Officer comment on this task..."
-                      value={task.comment || ''}
-                      onChange={e => handleUpdateTask(i, 'comment', e.target.value)}
-                      className="form-input focus:ring-violet-500 py-1.5 text-xs"
-                    />
+
+              {/* Call Types */}
+              {(config?.form_show_call_types ?? true) && (form.calls_responded || 0) > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-theme-text-secondary mb-2">Call Types</label>
+                  <div className="flex flex-wrap gap-2">
+                    {callTypeOptions.map(type => (
+                      <button key={type} type="button" onClick={() => handleToggleCallType(type)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                          form.call_types?.includes(type)
+                            ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30'
+                            : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-          )}
+              )}
 
-          {/* Submit */}
-          <div className="flex items-center gap-3 pt-2">
-            <button onClick={() => { void handleSaveNewDraft(); }} disabled={savingDraft || submitting}
-              className="px-5 py-2.5 text-sm font-medium border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
-            >
-              {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save as Draft
-            </button>
-            <button onClick={() => { void handleSubmit(); }} disabled={submitting || savingDraft}
-              className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
-            >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              Submit Report
-            </button>
-            <button onClick={() => setViewMode(canManage ? 'filed-by-me' : 'my-reports')}
-              className="px-4 py-2.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
+              {/* Officer Narrative (shift-level) */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Overall Shift Narrative</label>
+                <textarea rows={3} value={form.officer_narrative || ''}
+                  onChange={e => setForm(prev => ({ ...prev, officer_narrative: e.target.value }))}
+                  placeholder="General observations about the shift for leadership review..."
+                  className="form-input focus:ring-violet-500 resize-none text-sm"
+                />
+              </div>
+
+              {/* Step 3: Crew Members */}
+              <div>
+                <label className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  Crew Members
+                  {crewMembers.length > 0 && (
+                    <span className="ml-2 text-xs font-normal text-theme-text-muted">
+                      ({selectedCrewIds.size} of {crewMembers.filter(m => !m.has_existing_report).length} selected)
+                    </span>
+                  )}
+                </label>
+                {loadingCrew ? (
+                  <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4" role="status">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading crew...
+                  </div>
+                ) : crewMembers.length === 0 ? (
+                  <p className="text-sm text-theme-text-muted py-4">No crew members assigned to this shift.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {crewMembers.map(member => {
+                      const isTrainee = member.has_active_enrollment;
+                      const isReported = member.has_existing_report;
+                      const isSelected = selectedCrewIds.has(member.user_id);
+                      const isExpanded = expandedTraineeId === member.user_id;
+                      const eval_ = traineeEvals[member.user_id];
+
+                      if (isReported) {
+                        return (
+                          <div key={member.user_id} className="flex items-center gap-3 px-4 py-3 rounded-lg bg-theme-surface-hover opacity-60">
+                            <Check className="w-4 h-4 text-green-600 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm text-theme-text-muted line-through">{member.user_name}</span>
+                              <span className="text-xs text-theme-text-muted ml-2">Already reported</span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={member.user_id} className={`border rounded-lg transition-colors ${
+                          isSelected
+                            ? isTrainee ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface'
+                            : 'border-theme-surface-border bg-theme-surface opacity-60'
+                        }`}>
+                          {/* Member header row */}
+                          <div className="flex items-center gap-3 px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleCrewMember(member.user_id)}
+                              className="form-checkbox shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-theme-text-primary">{member.user_name}</span>
+                                <span className="text-xs text-theme-text-muted capitalize">{member.position}</span>
+                                {isTrainee && (
+                                  <span className="px-2 py-0.5 text-xs font-medium bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-500/20 rounded-full">
+                                    Trainee — {member.program_name}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            {/* Remarks for non-trainees */}
+                            {!isTrainee && isSelected && (
+                              <input
+                                type="text"
+                                placeholder="Remarks (optional)"
+                                value={crewRemarks[member.user_id] || ''}
+                                onChange={e => setCrewRemarks(prev => ({ ...prev, [member.user_id]: e.target.value }))}
+                                className="form-input focus:ring-violet-500 text-xs py-1.5 max-w-xs"
+                              />
+                            )}
+                            {/* Expand/collapse for trainees */}
+                            {isTrainee && isSelected && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedTraineeId(isExpanded ? null : member.user_id)}
+                                className="text-xs text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-1"
+                              >
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                Evaluate
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Trainee evaluation panel */}
+                          {isTrainee && isSelected && isExpanded && (
+                            <div className="px-4 pb-4 border-t border-theme-surface-border space-y-4 pt-3">
+                              {/* Per-trainee remarks */}
+                              <div>
+                                <label className="block text-xs font-medium text-theme-text-secondary mb-1">Remarks for {member.user_name}</label>
+                                <input
+                                  type="text"
+                                  placeholder="Individual remarks for this trainee..."
+                                  value={crewRemarks[member.user_id] || ''}
+                                  onChange={e => setCrewRemarks(prev => ({ ...prev, [member.user_id]: e.target.value }))}
+                                  className="form-input focus:ring-violet-500 text-sm"
+                                />
+                              </div>
+
+                              {/* Performance Rating */}
+                              {(config?.form_show_performance_rating ?? true) && (
+                                <div>
+                                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">{ratingLabel}</label>
+                                  <div className="flex items-center gap-1">
+                                    {Array.from({ length: ratingLevelCount }, (_, i) => i + 1).map(val => {
+                                      const label = ratingScaleLabels[String(val)] || `Level ${val}`;
+                                      const isActive = (eval_?.performance_rating ?? 0) >= val;
+                                      return ratingScaleType === 'stars' ? (
+                                        <button key={val} type="button"
+                                          onClick={() => updateTraineeEval(member.user_id, 'performance_rating', val)}
+                                          className="p-0.5"
+                                          title={label}
+                                        >
+                                          <Star className={`w-5 h-5 ${isActive ? 'fill-amber-400 text-amber-400' : 'text-theme-text-muted hover:text-amber-300'}`} />
+                                        </button>
+                                      ) : (
+                                        <button key={val} type="button"
+                                          onClick={() => updateTraineeEval(member.user_id, 'performance_rating', eval_?.performance_rating === val ? undefined : val)}
+                                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                                            eval_?.performance_rating === val
+                                              ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30'
+                                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
+                                          }`}
+                                        >
+                                          {label}
+                                        </button>
+                                      );
+                                    })}
+                                    {eval_?.performance_rating && ratingScaleType === 'stars' && (
+                                      <span className="text-xs text-theme-text-muted ml-1">
+                                        {ratingScaleLabels[String(eval_.performance_rating)] || `Level ${eval_.performance_rating}`}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Narrative Fields */}
+                              {((config?.form_show_areas_of_strength ?? true) || (config?.form_show_areas_for_improvement ?? true)) && (
+                                <div className="form-grid-2">
+                                  {(config?.form_show_areas_of_strength ?? true) && (
+                                    <div>
+                                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
+                                      <textarea rows={2} value={eval_?.areas_of_strength || ''}
+                                        onChange={e => updateTraineeEval(member.user_id, 'areas_of_strength', e.target.value)}
+                                        placeholder="What did they do well?"
+                                        className="form-input focus:ring-violet-500 resize-none text-sm"
+                                      />
+                                    </div>
+                                  )}
+                                  {(config?.form_show_areas_for_improvement ?? true) && (
+                                    <div>
+                                      <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
+                                      <textarea rows={2} value={eval_?.areas_for_improvement || ''}
+                                        onChange={e => updateTraineeEval(member.user_id, 'areas_for_improvement', e.target.value)}
+                                        placeholder="What should they work on?"
+                                        className="form-input focus:ring-violet-500 resize-none text-sm"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Skills Observed */}
+                              {(config?.form_show_skills_observed ?? true) && (
+                                <div>
+                                  <label className="block text-xs font-medium text-theme-text-secondary mb-1">Skills Observed</label>
+                                  <div className="space-y-2">
+                                    {skillOptions.map(skill => {
+                                      const skills = eval_?.skills_observed || [];
+                                      const selected = skills.find(s => s.skill_name === skill);
+                                      return (
+                                        <div key={skill}>
+                                          <button type="button" onClick={() => {
+                                            const current = eval_?.skills_observed || [];
+                                            const exists = current.find(s => s.skill_name === skill);
+                                            updateTraineeEval(member.user_id, 'skills_observed',
+                                              exists ? current.filter(s => s.skill_name !== skill)
+                                                : [...current, { skill_name: skill, demonstrated: true }]
+                                            );
+                                          }}
+                                            className={`px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                                              selected
+                                                ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
+                                                : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
+                                            }`}
+                                          >
+                                            {selected ? '\u2713 ' : ''}{skill}
+                                          </button>
+                                          {selected && (
+                                            <div className="mt-1 ml-4 flex items-center gap-1.5">
+                                              <span className="text-xs text-theme-text-muted">Score:</span>
+                                              {([1, 2, 3, 4, 5] as const).map(n => {
+                                                const tip = ratingScaleLabels[String(n)] || `Level ${n}`;
+                                                return (
+                                                  <button key={n} type="button" title={tip}
+                                                    onClick={() => {
+                                                      const updated = (eval_?.skills_observed || []).map(s =>
+                                                        s.skill_name === skill ? { ...s, score: s.score === n ? undefined : n } : s
+                                                      );
+                                                      updateTraineeEval(member.user_id, 'skills_observed', updated);
+                                                    }}
+                                                    className={`w-5 h-5 rounded text-xs font-medium border transition-colors ${
+                                                      selected.score === n
+                                                        ? 'bg-violet-500 text-white border-violet-600'
+                                                        : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
+                                                    }`}
+                                                  >
+                                                    {n}
+                                                  </button>
+                                                );
+                                              })}
+                                              {selected.score && (
+                                                <span className="text-xs text-violet-600 dark:text-violet-400 font-medium">
+                                                  {ratingScaleLabels[String(selected.score)] || `Level ${selected.score}`}
+                                                </span>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Tasks Performed */}
+                              {(config?.form_show_tasks_performed ?? true) && (
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <label className="text-xs font-medium text-theme-text-secondary">Tasks Performed</label>
+                                    <button type="button" onClick={() => {
+                                      const current = eval_?.tasks_performed || [];
+                                      const addedNames = new Set(current.map(t => t.task.toLowerCase()));
+                                      const nextDefault = taskDefaults.find(t => !addedNames.has(t.toLowerCase()));
+                                      updateTraineeEval(member.user_id, 'tasks_performed', [...current, { task: nextDefault || '', description: '' }]);
+                                    }}
+                                      className="text-xs text-violet-600 dark:text-violet-400 hover:underline inline-flex items-center gap-0.5"
+                                    >
+                                      <Plus className="w-3 h-3" /> Add
+                                    </button>
+                                  </div>
+                                  {(eval_?.tasks_performed || []).map((task, i) => (
+                                    <div key={i} className="flex items-center gap-2 mb-1">
+                                      <input type="text" placeholder="Task name" value={task.task}
+                                        onChange={e => {
+                                          const updated = [...(eval_?.tasks_performed || [])];
+                                          updated[i] = { ...updated[i], task: e.target.value } as TaskPerformed;
+                                          updateTraineeEval(member.user_id, 'tasks_performed', updated);
+                                        }}
+                                        className="form-input focus:ring-violet-500 text-xs flex-1 py-1.5"
+                                      />
+                                      <button type="button" onClick={() => {
+                                        updateTraineeEval(member.user_id, 'tasks_performed',
+                                          (eval_?.tasks_performed || []).filter((_, j) => j !== i));
+                                      }} className="p-1 text-theme-text-muted hover:text-red-500">
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Submit */}
+              <div className="flex items-center gap-3 pt-2 border-t border-theme-surface-border">
+                <button onClick={() => { void handleBatchSubmit(true); }} disabled={savingDraft || submitting}
+                  className="px-5 py-2.5 text-sm font-medium border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+                >
+                  {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                  Save as Draft
+                </button>
+                <button onClick={() => { void handleBatchSubmit(false); }} disabled={submitting || savingDraft}
+                  className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                  Submit Report{selectedCrewIds.size > 1 ? `s (${selectedCrewIds.size})` : ''}
+                </button>
+                <button onClick={() => setViewMode(canManage ? 'filed-by-me' : 'my-reports')}
+                  className="px-4 py-2.5 text-sm text-theme-text-muted hover:text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1481,8 +1654,8 @@ export const ShiftReportsTab: React.FC = () => {
                       );
                       void loadReports();
                       setDraftBadgeCount(0);
-                    } catch {
-                      toast.error('Failed to submit drafts');
+                    } catch (err: unknown) {
+                      toast.error(getErrorMessage(err, 'Failed to submit drafts'));
                     }
                   })();
                 }}
@@ -1522,45 +1695,68 @@ export const ShiftReportsTab: React.FC = () => {
             </div>
           ) : (
             <>
-              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
-                <div className="flex items-center justify-between p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3">
-                  <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedReportIds.size === reports.length && reports.length > 0}
-                      onChange={() => {
-                        if (selectedReportIds.size === reports.length) {
-                          setSelectedReportIds(new Set());
-                        } else {
-                          setSelectedReportIds(new Set(reports.map(r => r.id)));
-                        }
-                      }}
-                      className="form-checkbox"
-                    />
-                    Select all ({reports.length})
-                  </label>
-                  {selectedReportIds.size > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-theme-text-muted">{selectedReportIds.size} selected</span>
-                      {viewMode === 'flagged' && (
-                        <button
-                          onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
-                          disabled={batchReviewing}
-                          className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
-                        >
-                          {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                          Approve Selected
-                        </button>
+              {/* Review summary dashboard */}
+              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 0 && (() => {
+                const byOfficer = new Map<string, number>();
+                let oldestDays = 0;
+                const now = Date.now();
+                for (const r of reports) {
+                  const name = r.officer_name || 'Unknown';
+                  byOfficer.set(name, (byOfficer.get(name) ?? 0) + 1);
+                  const age = Math.floor((now - new Date(r.created_at).getTime()) / 86400000);
+                  if (age > oldestDays) oldestDays = age;
+                }
+                return (
+                  <div className="p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-theme-text-primary flex items-center gap-1.5">
+                        <BarChart3 className="w-4 h-4 text-violet-500" />
+                        {viewMode === 'pending-review' ? 'Pending Review' : 'Flagged Reports'} — {reports.length} report{reports.length !== 1 ? 's' : ''}
+                      </h4>
+                      {oldestDays > 0 && (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          oldestDays >= 7 ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                            : oldestDays >= 3 ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                            : 'bg-theme-surface-hover text-theme-text-muted'
+                        }`}>
+                          Oldest: {oldestDays}d ago
+                        </span>
                       )}
-                      {viewMode === 'pending-review' && (
-                        <>
-                          <button
-                            onClick={() => { void handleBatchReview('flagged'); }}
-                            disabled={batchReviewing}
-                            className="btn-primary text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
-                          >
-                            <AlertCircle className="w-3 h-3" /> Flag Selected
-                          </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(byOfficer.entries()).map(([name, count]) => (
+                        <span key={name} className="text-xs bg-theme-surface-hover px-2 py-1 rounded-full text-theme-text-secondary">
+                          {name}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Batch review toolbar */}
+              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
+                <div className="p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedReportIds.size === reports.length && reports.length > 0}
+                        onChange={() => {
+                          if (selectedReportIds.size === reports.length) {
+                            setSelectedReportIds(new Set());
+                          } else {
+                            setSelectedReportIds(new Set(reports.map(r => r.id)));
+                          }
+                        }}
+                        className="form-checkbox"
+                      />
+                      Select all ({reports.length})
+                    </label>
+                    {selectedReportIds.size > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-theme-text-muted">{selectedReportIds.size} selected</span>
+                        {viewMode === 'flagged' && (
                           <button
                             onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
                             disabled={batchReviewing}
@@ -1569,9 +1765,37 @@ export const ShiftReportsTab: React.FC = () => {
                             {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                             Approve Selected
                           </button>
-                        </>
-                      )}
-                    </div>
+                        )}
+                        {viewMode === 'pending-review' && (
+                          <>
+                            <button
+                              onClick={() => { void handleBatchReview('flagged'); }}
+                              disabled={batchReviewing}
+                              className="btn-primary text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                            >
+                              <AlertCircle className="w-3 h-3" /> Flag Selected
+                            </button>
+                            <button
+                              onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
+                              disabled={batchReviewing}
+                              className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                            >
+                              {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                              Approve Selected
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {selectedReportIds.size > 0 && (
+                    <input
+                      type="text"
+                      placeholder={viewMode === 'pending-review' ? 'Add a comment for all selected reports (required for flagging)...' : 'Add a comment (optional)...'}
+                      value={batchReviewNotes}
+                      onChange={e => setBatchReviewNotes(e.target.value)}
+                      className="form-input focus:ring-violet-500 text-xs py-1.5"
+                    />
                   )}
                 </div>
               )}
@@ -1695,13 +1919,16 @@ export const ShiftReportsTab: React.FC = () => {
             {/* Reviewer notes */}
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Internal Notes (never shown to trainee)
+                Reviewer Comment
               </label>
               <textarea rows={3} value={reviewNotes}
                 onChange={e => setReviewNotes(e.target.value)}
-                placeholder="Notes about this review decision..."
+                placeholder="Add a comment about this report (visible to the filing officer)..."
                 className="form-input focus:ring-violet-500 resize-none text-sm"
               />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Visible to the officer who filed the report. Not shown to the trainee.
+              </p>
             </div>
 
             <div className="flex items-center gap-2 justify-end pt-2">
@@ -1710,10 +1937,16 @@ export const ShiftReportsTab: React.FC = () => {
               >
                 Cancel
               </button>
-              <button onClick={() => { void handleReview('flagged'); }} disabled={reviewing}
+              <button onClick={() => {
+                if (!reviewNotes.trim()) {
+                  toast.error('Please add a comment explaining why this report is being flagged');
+                  return;
+                }
+                void handleReview('flagged');
+              }} disabled={reviewing}
                 className="btn-primary font-medium gap-1.5 inline-flex items-center text-sm"
               >
-                <AlertCircle className="w-3.5 h-3.5" /> Flag
+                <AlertCircle className="w-3.5 h-3.5" /> Flag for Revision
               </button>
               <button onClick={() => { void handleReview(SubmissionStatus.APPROVED); }} disabled={reviewing}
                 className="btn-success font-medium gap-1.5 inline-flex items-center text-sm"

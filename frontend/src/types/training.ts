@@ -1183,13 +1183,62 @@ export interface ShiftCompletionReport {
   requirements_progressed?: { requirement_progress_id: string; value_added: number }[];
   review_status: string;  // draft, pending_review, approved, flagged
   reviewed_by?: string;
+  reviewer_name?: string;
   reviewed_at?: string;
   reviewer_notes?: string;
+  review_history?: ReviewHistoryEntry[];
   trainee_acknowledged: boolean;
   trainee_acknowledged_at?: string;
   trainee_comments?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ReviewHistoryEntry {
+  status: string;
+  reviewer_id: string;
+  reviewer_name?: string;
+  notes?: string;
+  timestamp: string;
+}
+
+export interface ShiftCrewMember {
+  user_id: string;
+  user_name: string;
+  position: string;
+  has_active_enrollment: boolean;
+  enrollment_id?: string;
+  program_name?: string;
+  has_existing_report: boolean;
+}
+
+export interface CrewMemberEvaluation {
+  user_id: string;
+  performance_rating?: number;
+  areas_of_strength?: string;
+  areas_for_improvement?: string;
+  remarks?: string;
+  skills_observed?: SkillObservation[];
+  tasks_performed?: TaskPerformed[];
+  enrollment_id?: string;
+}
+
+export interface BatchShiftReportCreate {
+  shift_id: string;
+  shift_date: string;
+  hours_on_shift: number;
+  calls_responded: number;
+  call_types?: string[];
+  officer_narrative?: string;
+  crew_member_ids: string[];
+  trainee_evaluations?: CrewMemberEvaluation[];
+  save_as_draft?: boolean;
+}
+
+export interface BatchShiftReportResponse {
+  created: number;
+  skipped: number;
+  report_ids: string[];
 }
 
 export interface MonthlyShiftData {

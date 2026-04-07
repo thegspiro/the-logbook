@@ -87,6 +87,50 @@ class BatchReviewRequest(BaseModel):
     reviewer_notes: Optional[str] = None
 
 
+class CrewMemberEvaluation(BaseModel):
+    """Per-trainee evaluation data for batch shift report."""
+    user_id: str
+    performance_rating: Optional[int] = Field(None, ge=1, le=5)
+    areas_of_strength: Optional[str] = None
+    areas_for_improvement: Optional[str] = None
+    remarks: Optional[str] = None
+    skills_observed: Optional[List[SkillObservation]] = Field(
+        None, max_length=100
+    )
+    tasks_performed: Optional[List[TaskPerformed]] = Field(
+        None, max_length=100
+    )
+    enrollment_id: Optional[str] = None
+
+
+class BatchShiftReportCreate(BaseModel):
+    """Create shift reports for all crew members on a shift."""
+    shift_id: str
+    shift_date: date
+    hours_on_shift: float = Field(gt=0, le=48)
+    calls_responded: int = Field(ge=0, default=0)
+    call_types: Optional[List[str]] = Field(None, max_length=50)
+    officer_narrative: Optional[str] = None
+    crew_member_ids: List[str] = Field(
+        ..., min_length=1, max_length=200
+    )
+    trainee_evaluations: Optional[List[CrewMemberEvaluation]] = None
+    save_as_draft: bool = False
+
+    @field_validator("shift_date")
+    @classmethod
+    def shift_date_not_future(cls, v: date) -> date:
+        if v > date.today():
+            raise ValueError("Shift date cannot be in the future")
+        return v
+
+
+class BatchShiftReportResponse(BaseModel):
+    created: int
+    skipped: int
+    report_ids: List[str]
+
+
 class ShiftCompletionReportResponse(UTCResponseBase):
     id: str
     organization_id: str
@@ -117,8 +161,10 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     # Review workflow
     review_status: str = "approved"
     reviewed_by: Optional[str] = None
+    reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     reviewer_notes: Optional[str] = None
+    review_history: Optional[List[Dict]] = None
 
     trainee_acknowledged: bool = False
     trainee_acknowledged_at: Optional[datetime] = None
