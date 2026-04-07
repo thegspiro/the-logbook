@@ -142,7 +142,7 @@ async def _enrich_shifts(
         )
         for row in hours_result.all():
             total_min = row[1]
-            hours_map[str(row[0])] = round(total_min / 60.0, 1)
+            hours_map[str(row[0])] = round(float(total_min) / 60.0, 1)
 
     enriched = []
     for s in shifts:
