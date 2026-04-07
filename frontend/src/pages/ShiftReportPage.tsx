@@ -846,13 +846,13 @@ const ShiftReportPage: React.FC = () => {
                   Showing skills for <span className="capitalize font-medium">{shiftApparatusType}</span>
                 </p>
               )}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {skillOptions.map((skillName) => {
                   const selected = skills.find(
                     (s) => s.skill_name === skillName,
                   );
                   return (
-                    <div key={skillName}>
+                    <div key={skillName} className="pb-1">
                       <button
                         type="button"
                         onClick={() => {
@@ -882,36 +882,38 @@ const ShiftReportPage: React.FC = () => {
                         {selected ? '\u2713 ' : ''}{skillName}
                       </button>
                       {selected && (
-                        <div className="mt-1 ml-4 space-y-1.5">
+                        <div className="mt-2 ml-4 space-y-2">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-theme-text-muted">Score:</span>
-                            {([
-                              { n: 1, tip: 'Needs work' },
-                              { n: 2, tip: 'Developing' },
-                              { n: 3, tip: 'Competent' },
-                              { n: 4, tip: 'Proficient' },
-                              { n: 5, tip: 'Excellent' },
-                            ] as const).map(({ n, tip }) => (
-                              <button
-                                key={n}
-                                type="button"
-                                title={tip}
-                                onClick={() => {
-                                  setSkills(skills.map(s =>
-                                    s.skill_name === skillName
-                                      ? { ...s, score: s.score === n ? undefined : n }
-                                      : s
-                                  ));
-                                }}
-                                className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
-                                  selected.score === n
-                                    ? 'bg-violet-600 text-white border-violet-700'
-                                    : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
-                                }`}
-                              >
-                                {n}
-                              </button>
-                            ))}
+                            {([1, 2, 3, 4, 5] as const).map((n) => {
+                              const label = ratingScaleLabels[String(n)] || `Level ${n}`;
+                              return (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  title={label}
+                                  onClick={() => {
+                                    setSkills(skills.map(s =>
+                                      s.skill_name === skillName
+                                        ? { ...s, score: s.score === n ? undefined : n }
+                                        : s
+                                    ));
+                                  }}
+                                  className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
+                                    selected.score === n
+                                      ? 'bg-violet-600 text-white border-violet-700'
+                                      : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
+                                  }`}
+                                >
+                                  {n}
+                                </button>
+                              );
+                            })}
+                            {selected.score && (
+                              <span className="text-xs text-violet-600 dark:text-violet-400 font-medium ml-1">
+                                {ratingScaleLabels[String(selected.score)] || `Level ${selected.score}`}
+                              </span>
+                            )}
                           </div>
                           <input
                             type="text"
