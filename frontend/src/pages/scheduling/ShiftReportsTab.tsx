@@ -34,7 +34,7 @@ import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateCustom, getTodayLocalDate } from '../../utils/dateFormatting';
 
-type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'drafts';
+type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
 const DEFAULT_CALL_TYPE_OPTIONS = [
   'Structure Fire', 'Vehicle Fire', 'Brush/Wildland',
@@ -232,6 +232,9 @@ export const ShiftReportsTab: React.FC = () => {
         setReports(data);
       } else if (viewMode === 'pending-review') {
         const data = await shiftCompletionService.getPendingReviewReports();
+        setReports(data);
+      } else if (viewMode === 'flagged') {
+        const data = await shiftCompletionService.getFlaggedReports();
         setReports(data);
       } else if (viewMode === 'drafts') {
         const data = await shiftCompletionService.getDraftReports();
@@ -962,14 +965,24 @@ export const ShiftReportsTab: React.FC = () => {
               </div>
             )}
 
-            {/* Review actions for pending-review mode */}
-            {isReviewMode && report.review_status === SubmissionStatus.PENDING_REVIEW && (
+            {/* Review actions for pending-review and flagged modes */}
+            {(isReviewMode && report.review_status === SubmissionStatus.PENDING_REVIEW) && (
               <div className="pt-2 flex items-center gap-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
                   className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
                 >
                   <ClipboardCheck className="w-4 h-4" /> Review Report
+                </button>
+              </div>
+            )}
+            {viewMode === 'flagged' && report.review_status === 'flagged' && (
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
+                  className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                >
+                  <ClipboardCheck className="w-4 h-4" /> Re-Review Report
                 </button>
               </div>
             )}
@@ -1162,6 +1175,16 @@ export const ShiftReportsTab: React.FC = () => {
               }`}
             >
               <ClipboardCheck className="w-3.5 h-3.5" /> Review Queue
+            </button>
+          )}
+          {canManage && config?.report_review_required && (
+            <button
+              onClick={() => setViewMode('flagged')}
+              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
+                viewMode === 'flagged' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+              }`}
+            >
+              <AlertCircle className="w-3.5 h-3.5" /> Flagged
             </button>
           )}
           {canManage && (
@@ -1535,6 +1558,7 @@ export const ShiftReportsTab: React.FC = () => {
               <h3 className="text-lg font-medium text-theme-text-primary mb-1">
                 {viewMode === 'my-reports' ? 'No reports for you yet' :
                  viewMode === 'pending-review' ? 'No reports pending review' :
+                 viewMode === 'flagged' ? 'No flagged reports' :
                  viewMode === 'drafts' ? 'No draft reports' :
                  'No reports filed yet'}
               </h3>
@@ -1543,6 +1567,8 @@ export const ShiftReportsTab: React.FC = () => {
                   ? 'Shift completion reports from your officers will appear here.'
                   : viewMode === 'pending-review'
                   ? 'All reports have been reviewed.'
+                  : viewMode === 'flagged'
+                  ? 'No reports have been flagged for follow-up.'
                   : viewMode === 'drafts'
                   ? 'Draft reports are auto-created when shifts are finalized. Complete them to track trainee progress.'
                   : 'Submit a shift report to track trainee progress.'
@@ -1591,9 +1617,11 @@ export const ShiftReportsTab: React.FC = () => {
       )}
 
       {/* Review Modal */}
-      {reviewReportId && (
+      {reviewReportId && (() => {
+        const reviewReport = reports.find(r => r.id === reviewReportId);
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Review Report">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-lg space-y-4">
+          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4">
             <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
               <ClipboardCheck className="w-5 h-5 text-violet-500" /> Review Report
             </h3>
@@ -1601,6 +1629,83 @@ export const ShiftReportsTab: React.FC = () => {
               Review this report before it becomes visible to the trainee.
               You can redact specific fields if they contain improper content.
             </p>
+
+            {/* Report content preview */}
+            {reviewReport && (
+              <div className="border border-theme-surface-border rounded-lg p-4 bg-theme-surface-hover space-y-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  <span className="flex items-center gap-1 text-theme-text-muted">
+                    <Clock className="w-3.5 h-3.5" /> {reviewReport.hours_on_shift}h
+                  </span>
+                  <span className="flex items-center gap-1 text-theme-text-muted">
+                    <Phone className="w-3.5 h-3.5" /> {reviewReport.calls_responded} calls
+                  </span>
+                  {reviewReport.performance_rating && renderRating(reviewReport.performance_rating)}
+                </div>
+
+                {reviewReport.call_types && reviewReport.call_types.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Call Types</p>
+                    <div className="flex flex-wrap gap-1">
+                      {reviewReport.call_types.map(type => (
+                        <span key={type} className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 rounded-full">{type}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {reviewReport.areas_of_strength && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Strengths</p>
+                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.areas_of_strength}</p>
+                  </div>
+                )}
+
+                {reviewReport.areas_for_improvement && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Areas for Improvement</p>
+                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.areas_for_improvement}</p>
+                  </div>
+                )}
+
+                {reviewReport.officer_narrative && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Officer Narrative</p>
+                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.officer_narrative}</p>
+                  </div>
+                )}
+
+                {reviewReport.skills_observed && reviewReport.skills_observed.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Skills Observed</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {reviewReport.skills_observed.map((skill, i) => (
+                        <span key={i} className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
+                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                          : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
+                        }`}>
+                          {skill.demonstrated ? '✓' : '○'} {skill.skill_name}{skill.score != null ? ` (${skill.score}/5)` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {reviewReport.tasks_performed && reviewReport.tasks_performed.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Tasks Performed</p>
+                    <ul className="space-y-0.5">
+                      {reviewReport.tasks_performed.map((task, i) => (
+                        <li key={i} className="text-sm text-theme-text-primary">
+                          <span className="font-medium">{task.task}</span>
+                          {task.description && <span className="text-theme-text-muted"> — {task.description}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Redaction checkboxes */}
             <div>
@@ -1663,7 +1768,8 @@ export const ShiftReportsTab: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

@@ -294,6 +294,22 @@ async def get_pending_review_reports(
     )
 
 
+@router.get(
+    "/flagged",
+    response_model=list[ShiftCompletionReportResponse],
+)
+async def get_flagged_reports(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Get shift completion reports that have been flagged for follow-up."""
+    service = ShiftCompletionService(db)
+    return await service.get_reports_by_status(
+        organization_id=current_user.organization_id,
+        review_status="flagged",
+    )
+
+
 @router.get("/drafts", response_model=list[ShiftCompletionReportResponse])
 async def get_draft_reports(
     db: AsyncSession = Depends(get_db),

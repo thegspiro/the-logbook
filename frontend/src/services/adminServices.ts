@@ -584,6 +584,11 @@ export const shiftCompletionService = {
     return response.data;
   },
 
+  async getFlaggedReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/flagged');
+    return response.data;
+  },
+
   async getDraftReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
     const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/drafts');
     return response.data;
