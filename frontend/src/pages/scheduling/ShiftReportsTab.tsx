@@ -757,22 +757,22 @@ export const ShiftReportsTab: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-theme-text-muted border-b border-theme-surface-border">
-                    <th className="pb-2 font-medium">Trainee</th>
-                    <th className="pb-2 font-medium text-right">Reports</th>
-                    <th className="pb-2 font-medium text-right">Hours</th>
-                    <th className="pb-2 font-medium text-right">Calls</th>
-                    <th className="pb-2 font-medium text-right">Avg Rating</th>
+                  <tr className="text-xs text-theme-text-muted border-b border-theme-surface-border">
+                    <th className="pb-2 font-medium text-left">Trainee</th>
+                    <th className="pb-2 pl-4 font-medium text-center">Reports</th>
+                    <th className="pb-2 pl-4 font-medium text-center">Hours</th>
+                    <th className="pb-2 pl-4 font-medium text-center">Calls</th>
+                    <th className="pb-2 pl-4 font-medium text-center">Avg Rating</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-theme-surface-border">
                   {officerAnalytics.trainees.map(t => (
                     <tr key={t.trainee_id} className="text-theme-text-primary">
-                      <td className="py-2 font-medium">{t.name}</td>
-                      <td className="py-2 text-right">{t.reports}</td>
-                      <td className="py-2 text-right">{t.hours.toFixed(1)}</td>
-                      <td className="py-2 text-right">{t.calls}</td>
-                      <td className="py-2 text-right">{t.avg_rating ?? '—'}</td>
+                      <td className="py-2 font-medium text-left">{t.name}</td>
+                      <td className="py-2 pl-4 text-center">{t.reports}</td>
+                      <td className="py-2 pl-4 text-center">{t.hours.toFixed(1)}</td>
+                      <td className="py-2 pl-4 text-center">{t.calls}</td>
+                      <td className="py-2 pl-4 text-center">{t.avg_rating ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
