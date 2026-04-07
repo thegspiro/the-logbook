@@ -15,6 +15,7 @@ from app.schemas.base import UTCResponseBase
 class SkillObservation(BaseModel):
     skill_name: str
     demonstrated: bool = False
+    score: Optional[int] = Field(None, ge=1, le=5)
     notes: Optional[str] = None
     comment: Optional[str] = None
 
@@ -88,6 +89,12 @@ class ReportReview(BaseModel):
     redact_fields: Optional[List[str]] = None
 
 
+class BatchReviewRequest(BaseModel):
+    report_ids: List[str] = Field(..., min_length=1, max_length=100)
+    review_status: str  # approved, flagged
+    reviewer_notes: Optional[str] = None
+
+
 class ShiftCompletionReportResponse(UTCResponseBase):
     id: str
     organization_id: str
@@ -95,6 +102,8 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     shift_date: date
     trainee_id: str
     officer_id: str
+    trainee_name: Optional[str] = None
+    officer_name: Optional[str] = None
 
     hours_on_shift: float
     calls_responded: int

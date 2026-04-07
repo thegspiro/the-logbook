@@ -584,6 +584,11 @@ export const shiftCompletionService = {
     return response.data;
   },
 
+  async getFlaggedReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
+    const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/flagged');
+    return response.data;
+  },
+
   async getDraftReports(): Promise<import('../types/training').ShiftCompletionReport[]> {
     const response = await api.get<import('../types/training').ShiftCompletionReport[]>('/training/shift-reports/drafts');
     return response.data;
@@ -601,6 +606,11 @@ export const shiftCompletionService = {
 
   async reviewReport(reportId: string, data: { review_status: string; reviewer_notes?: string | undefined; redact_fields?: string[] | undefined }): Promise<import('../types/training').ShiftCompletionReport> {
     const response = await api.post<import('../types/training').ShiftCompletionReport>(`/training/shift-reports/${reportId}/review`, data);
+    return response.data;
+  },
+
+  async batchReviewReports(data: { report_ids: string[]; review_status: string; reviewer_notes?: string }): Promise<{ reviewed: number; failed: number }> {
+    const response = await api.post<{ reviewed: number; failed: number }>('/training/shift-reports/batch-review', data);
     return response.data;
   },
 
