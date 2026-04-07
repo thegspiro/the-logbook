@@ -340,6 +340,15 @@ export const ShiftReportsTab: React.FC = () => {
     });
   };
 
+  const handleUpdateSkillScore = (skillName: string, score: number | undefined) => {
+    setForm(prev => {
+      const skills = (prev.skills_observed || []).map(s =>
+        s.skill_name === skillName ? { ...s, score } : s
+      );
+      return { ...prev, skills_observed: skills };
+    });
+  };
+
   const handleAddTask = () => {
     setForm(prev => ({
       ...prev,
@@ -889,12 +898,19 @@ export const ShiftReportsTab: React.FC = () => {
                 <div className="space-y-1.5">
                   {report.skills_observed.map((skill, i) => (
                     <div key={i}>
-                      <span className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
-                        ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
-                        : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
-                      }`}>
-                        {skill.demonstrated ? '✓' : '○'} {skill.skill_name}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
+                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                          : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
+                        }`}>
+                          {skill.demonstrated ? '✓' : '○'} {skill.skill_name}
+                        </span>
+                        {skill.score != null && (
+                          <span className="text-xs font-medium text-violet-600 dark:text-violet-400">
+                            {skill.score}/5
+                          </span>
+                        )}
+                      </div>
                       {skill.comment && (
                         <p className="mt-0.5 ml-2 text-xs text-theme-text-muted italic flex items-start gap-1">
                           <MessageSquare className="w-3 h-3 mt-0.5 shrink-0" />
@@ -1359,7 +1375,24 @@ export const ShiftReportsTab: React.FC = () => {
                       {selected ? '✓ ' : ''}{skill}
                     </button>
                     {selected && (
-                      <div className="mt-1 ml-4">
+                      <div className="mt-1 ml-4 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-theme-text-muted">Score:</span>
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => handleUpdateSkillScore(skill, selected.score === n ? undefined : n)}
+                              className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
+                                selected.score === n
+                                  ? 'bg-violet-500 text-white border-violet-600'
+                                  : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
+                              }`}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
                         <input
                           type="text"
                           placeholder="Add comment on this skill..."

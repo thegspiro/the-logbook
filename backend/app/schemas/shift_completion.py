@@ -15,6 +15,7 @@ from app.schemas.base import UTCResponseBase
 class SkillObservation(BaseModel):
     skill_name: str
     demonstrated: bool = False
+    score: Optional[int] = Field(None, ge=1, le=5)
     notes: Optional[str] = None
     comment: Optional[str] = None
 

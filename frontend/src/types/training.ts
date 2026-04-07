@@ -1132,6 +1132,7 @@ export interface SubmissionReviewRequest {
 export interface SkillObservation {
   skill_name: string;
   demonstrated: boolean;
+  score?: number | undefined;
   notes?: string;
   comment?: string | undefined;
 }
