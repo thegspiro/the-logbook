@@ -842,11 +842,23 @@ export const ShiftReportsTab: React.FC = () => {
               <ReportContentDisplay report={report} />
             </div>
 
-            {/* Reviewer notes (only for officers viewing, never for trainees) */}
+            {/* Reviewer comment (visible to officers, not trainees) */}
             {canManage && report.reviewer_notes && (
-              <div className="p-3 bg-amber-500/5 border border-amber-500/20 rounded-lg">
-                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1 flex items-center gap-1">
-                  <Shield className="w-3 h-3" /> Reviewer Notes (Internal)
+              <div className={`p-3 rounded-lg ${
+                report.review_status === 'flagged'
+                  ? 'bg-red-500/5 border border-red-500/20'
+                  : 'bg-amber-500/5 border border-amber-500/20'
+              }`}>
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-1 flex items-center gap-1 ${
+                  report.review_status === 'flagged'
+                    ? 'text-red-700 dark:text-red-400'
+                    : 'text-amber-700 dark:text-amber-400'
+                }`}>
+                  <Shield className="w-3 h-3" />
+                  {report.review_status === 'flagged' ? 'Reviewer Comment — Flagged' : 'Reviewer Comment'}
+                  {report.reviewer_name && (
+                    <span className="normal-case font-normal ml-1">by {report.reviewer_name}</span>
+                  )}
                 </p>
                 <p className="text-sm text-theme-text-primary">{report.reviewer_notes}</p>
               </div>
@@ -1802,13 +1814,16 @@ export const ShiftReportsTab: React.FC = () => {
             {/* Reviewer notes */}
             <div>
               <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                Internal Notes (never shown to trainee)
+                Reviewer Comment
               </label>
               <textarea rows={3} value={reviewNotes}
                 onChange={e => setReviewNotes(e.target.value)}
-                placeholder="Notes about this review decision..."
+                placeholder="Add a comment about this report (visible to the filing officer)..."
                 className="form-input focus:ring-violet-500 resize-none text-sm"
               />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Visible to the officer who filed the report. Not shown to the trainee.
+              </p>
             </div>
 
             <div className="flex items-center gap-2 justify-end pt-2">
@@ -1817,10 +1832,16 @@ export const ShiftReportsTab: React.FC = () => {
               >
                 Cancel
               </button>
-              <button onClick={() => { void handleReview('flagged'); }} disabled={reviewing}
+              <button onClick={() => {
+                if (!reviewNotes.trim()) {
+                  toast.error('Please add a comment explaining why this report is being flagged');
+                  return;
+                }
+                void handleReview('flagged');
+              }} disabled={reviewing}
                 className="btn-primary font-medium gap-1.5 inline-flex items-center text-sm"
               >
-                <AlertCircle className="w-3.5 h-3.5" /> Flag
+                <AlertCircle className="w-3.5 h-3.5" /> Flag for Revision
               </button>
               <button onClick={() => { void handleReview(SubmissionStatus.APPROVED); }} disabled={reviewing}
                 className="btn-success font-medium gap-1.5 inline-flex items-center text-sm"
