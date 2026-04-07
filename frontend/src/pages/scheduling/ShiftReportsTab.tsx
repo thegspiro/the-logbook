@@ -824,7 +824,9 @@ export const ShiftReportsTab: React.FC = () => {
               <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">{dateStr}</p>
+              <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">
+                {report.trainee_name ? `${report.trainee_name} — ` : ''}{dateStr}
+              </p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
                 <span className="flex items-center gap-1 text-xs text-theme-text-muted">
                   <Clock className="w-3 h-3" /> {report.hours_on_shift}h
@@ -833,6 +835,11 @@ export const ShiftReportsTab: React.FC = () => {
                   <Phone className="w-3 h-3" /> {report.calls_responded} calls
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
+                {report.officer_name && (
+                  <span className="flex items-center gap-1 text-xs text-theme-text-muted">
+                    <UserIcon className="w-3 h-3" /> {report.officer_name}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1633,6 +1640,18 @@ export const ShiftReportsTab: React.FC = () => {
             {/* Report content preview */}
             {reviewReport && (
               <div className="border border-theme-surface-border rounded-lg p-4 bg-theme-surface-hover space-y-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  {reviewReport.trainee_name && (
+                    <span className="flex items-center gap-1 font-medium text-theme-text-primary">
+                      <UserIcon className="w-3.5 h-3.5" /> {reviewReport.trainee_name}
+                    </span>
+                  )}
+                  {reviewReport.officer_name && (
+                    <span className="flex items-center gap-1 text-theme-text-muted">
+                      Filed by {reviewReport.officer_name}
+                    </span>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                   <span className="flex items-center gap-1 text-theme-text-muted">
                     <Clock className="w-3.5 h-3.5" /> {reviewReport.hours_on_shift}h

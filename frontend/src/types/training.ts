@@ -1167,6 +1167,8 @@ export interface ShiftCompletionReport {
   shift_date: string;
   trainee_id: string;
   officer_id: string;
+  trainee_name?: string;
+  officer_name?: string;
   hours_on_shift: number;
   calls_responded: number;
   call_types?: string[];

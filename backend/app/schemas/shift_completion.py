@@ -96,6 +96,8 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     shift_date: date
     trainee_id: str
     officer_id: str
+    trainee_name: Optional[str] = None
+    officer_name: Optional[str] = None
 
     hours_on_shift: float
     calls_responded: int
