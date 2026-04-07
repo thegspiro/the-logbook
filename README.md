@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/logo.png" alt="The Logbook" width="200" />
+</p>
+
 # The Logbook
 
 An open-source, modular intranet platform designed for fire departments, emergency services, healthcare organizations, and other institutions requiring secure internal communication and management systems.
