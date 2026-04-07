@@ -45,6 +45,11 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
+// Mock theme context
+vi.mock('../contexts/ThemeContext', () => ({
+  useTheme: () => ({ resolvedTheme: 'light', theme: 'light', setTheme: vi.fn() }),
+}));
+
 /** Helper: each tab label appears twice in the DOM (desktop + mobile spans). */
 function expectTabVisible(label: string) {
   const matches = screen.getAllByText(label);

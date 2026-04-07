@@ -10,7 +10,7 @@
  * - Report Exports (compliance CSV/PDF, forecasting)
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import {
   RefreshCw,
@@ -26,7 +26,11 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Modal } from '../components/Modal';
+import { EmptyState } from '../components/ux/EmptyState';
+import useLoadData from '../hooks/useLoadData';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import {
   recertificationService,
   competencyService,
@@ -372,6 +376,7 @@ const EXERCISE_TYPES = [
 ] as const;
 
 const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, onSaved }) => {
+  const tz = useTimezone();
   const [saving, setSaving] = useState(false);
   const [exerciseName, setExerciseName] = useState('');
   const [exerciseType, setExerciseType] = useState<MultiAgencyTrainingCreate['exercise_type']>('joint_training');
@@ -388,14 +393,14 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
       setExerciseName('');
       setExerciseType('joint_training');
       setDescription('');
-      setExerciseDate(new Date().toISOString().split('T')[0] ?? '');
+      setExerciseDate(getTodayLocalDate(tz));
       setLeadAgency('');
       setTotalParticipants('');
       setNimsCompliant(false);
       setOrgName('');
       setOrgRole('participant');
     }
-  }, [isOpen]);
+  }, [isOpen, tz]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -500,30 +505,16 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
 // ==================== Section Components ====================
 
 const RecertificationSection: React.FC = () => {
-  const [pathways, setPathways] = useState<RecertificationPathway[]>([]);
-  const [renewalTasks, setRenewalTasks] = useState<RenewalTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddModal, setShowAddModal] = useState(false);
-
-  useEffect(() => {
-    void loadData();
+  const loadRecertData = useCallback(async () => {
+    const [pathwaysData, tasksData] = await Promise.all([
+      recertificationService.getPathways(),
+      recertificationService.getMyRenewalTasks(),
+    ]);
+    return { pathways: pathwaysData, renewalTasks: tasksData };
   }, []);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [pathwaysData, tasksData] = await Promise.all([
-        recertificationService.getPathways(),
-        recertificationService.getMyRenewalTasks(),
-      ]);
-      setPathways(pathwaysData);
-      setRenewalTasks(tasksData);
-    } catch {
-      // Service may not be configured yet
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, loading, reload: loadData } = useLoadData(loadRecertData, { pathways: [] as RecertificationPathway[], renewalTasks: [] as RenewalTask[] });
+  const { pathways, renewalTasks } = data;
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const handleGenerateTasks = async () => {
     try {
@@ -568,13 +559,11 @@ const RecertificationSection: React.FC = () => {
       </div>
 
       {pathways.length === 0 ? (
-        <div className="card-secondary p-8 text-center">
-          <Award className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
-          <p className="text-theme-text-muted">No recertification pathways configured yet.</p>
-          <p className="text-sm text-theme-text-muted mt-1">
-            Create pathways to define how members renew expiring certifications.
-          </p>
-        </div>
+        <EmptyState
+          icon={Award}
+          title="No recertification pathways configured yet."
+          description="Create pathways to define how members renew expiring certifications."
+        />
       ) : (
         <div className="grid gap-4">
           {pathways.map((pathway) => (
@@ -642,24 +631,9 @@ const RecertificationSection: React.FC = () => {
 };
 
 const CompetencySection: React.FC = () => {
-  const [matrices, setMatrices] = useState<CompetencyMatrix[]>([]);
-  const [loading, setLoading] = useState(true);
+  const loadMatricesData = useCallback(() => competencyService.getMatrices(), []);
+  const { data: matrices, loading, reload: loadData } = useLoadData(loadMatricesData, [] as CompetencyMatrix[]);
   const [showAddModal, setShowAddModal] = useState(false);
-
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const data = await competencyService.getMatrices();
-      setMatrices(data);
-    } catch {
-      // Service may not be configured yet
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -702,13 +676,11 @@ const CompetencySection: React.FC = () => {
       </div>
 
       {matrices.length === 0 ? (
-        <div className="card-secondary p-8 text-center">
-          <TrendingUp className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
-          <p className="text-theme-text-muted">No competency matrices configured.</p>
-          <p className="text-sm text-theme-text-muted mt-1">
-            Create matrices to map positions to required skill levels per NFPA 1021/1041.
-          </p>
-        </div>
+        <EmptyState
+          icon={TrendingUp}
+          title="No competency matrices configured."
+          description="Create matrices to map positions to required skill levels per NFPA 1021/1041."
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {matrices.map((matrix) => (
@@ -729,24 +701,9 @@ const CompetencySection: React.FC = () => {
 };
 
 const InstructorsSection: React.FC = () => {
-  const [qualifications, setQualifications] = useState<InstructorQualification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const loadQualData = useCallback(() => instructorService.getQualifications(), []);
+  const { data: qualifications, loading, reload: loadData } = useLoadData(loadQualData, [] as InstructorQualification[]);
   const [showAddModal, setShowAddModal] = useState(false);
-
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const data = await instructorService.getQualifications();
-      setQualifications(data);
-    } catch {
-      // Service may not be configured yet
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -772,13 +729,11 @@ const InstructorsSection: React.FC = () => {
       </div>
 
       {qualifications.length === 0 ? (
-        <div className="card-secondary p-8 text-center">
-          <BookOpen className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
-          <p className="text-theme-text-muted">No instructor qualifications recorded.</p>
-          <p className="text-sm text-theme-text-muted mt-1">
-            Add qualifications to track who can instruct which courses and evaluate which skills.
-          </p>
-        </div>
+        <EmptyState
+          icon={BookOpen}
+          title="No instructor qualifications recorded."
+          description="Add qualifications to track who can instruct which courses and evaluate which skills."
+        />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -831,23 +786,9 @@ const KIRKPATRICK_LEVELS: { key: EvaluationLevel; level: string; desc: string; i
 ];
 
 const EffectivenessSection: React.FC = () => {
-  const [evaluations, setEvaluations] = useState<TrainingEffectivenessEvaluation[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const data = await effectivenessService.getEvaluations();
-      setEvaluations(data);
-    } catch {
-      // Service may not be configured yet
-    } finally {
-      setLoading(false);
-    }
-  };
+  const tz = useTimezone();
+  const loadEvalData = useCallback(() => effectivenessService.getEvaluations(), []);
+  const { data: evaluations, loading } = useLoadData(loadEvalData, [] as TrainingEffectivenessEvaluation[]);
 
   const countByLevel = (level: EvaluationLevel) =>
     evaluations.filter((ev) => ev.evaluation_level === level).length;
@@ -899,13 +840,11 @@ const EffectivenessSection: React.FC = () => {
       </div>
 
       {evaluations.length === 0 ? (
-        <div className="card-secondary p-6 text-center">
-          <BarChart3 className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
-          <p className="text-theme-text-muted">No effectiveness evaluations recorded yet.</p>
-          <p className="text-sm text-theme-text-muted mt-1">
-            Members can submit post-training surveys. Pre/post assessments measure knowledge gain.
-          </p>
-        </div>
+        <EmptyState
+          icon={BarChart3}
+          title="No effectiveness evaluations recorded yet."
+          description="Members can submit post-training surveys. Pre/post assessments measure knowledge gain."
+        />
       ) : (
         <div>
           <h4 className="text-sm font-medium text-theme-text-primary mb-3">Recent Evaluations</h4>
@@ -931,7 +870,7 @@ const EffectivenessSection: React.FC = () => {
                         </span>
                       ) : '-'}
                     </td>
-                    <td className="py-2 text-theme-text-muted">{ev.created_at.split('T')[0] ?? ''}</td>
+                    <td className="py-2 text-theme-text-muted">{formatDate(ev.created_at, tz)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -944,24 +883,9 @@ const EffectivenessSection: React.FC = () => {
 };
 
 const MultiAgencySection: React.FC = () => {
-  const [exercises, setExercises] = useState<MultiAgencyTraining[]>([]);
-  const [loading, setLoading] = useState(true);
+  const loadExerciseData = useCallback(() => multiAgencyService.getExercises(), []);
+  const { data: exercises, loading, reload: loadData } = useLoadData(loadExerciseData, [] as MultiAgencyTraining[]);
   const [showAddModal, setShowAddModal] = useState(false);
-
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      const data = await multiAgencyService.getExercises();
-      setExercises(data);
-    } catch {
-      // Service may not be configured yet
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -987,13 +911,11 @@ const MultiAgencySection: React.FC = () => {
       </div>
 
       {exercises.length === 0 ? (
-        <div className="card-secondary p-8 text-center">
-          <Globe className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
-          <p className="text-theme-text-muted">No multi-agency exercises recorded.</p>
-          <p className="text-sm text-theme-text-muted mt-1">
-            Log joint training exercises with other departments, mutual aid drills, and regional exercises.
-          </p>
-        </div>
+        <EmptyState
+          icon={Globe}
+          title="No multi-agency exercises recorded."
+          description="Log joint training exercises with other departments, mutual aid drills, and regional exercises."
+        />
       ) : (
         <div className="grid gap-4">
           {exercises.map((exercise) => (
@@ -1036,6 +958,7 @@ const MultiAgencySection: React.FC = () => {
 };
 
 const ReportsSection: React.FC = () => {
+  const tz = useTimezone();
   const [forecasts, setForecasts] = useState<ComplianceForecast[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -1050,7 +973,7 @@ const ReportsSection: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `training_report_${reportType}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `training_report_${reportType}_${getTodayLocalDate(tz)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('Report downloaded');

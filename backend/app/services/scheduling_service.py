@@ -37,8 +37,11 @@ from app.models.training import (
     TimeOffStatus,
     TrainingRequirement,
 )
+from loguru import logger
 from zoneinfo import ZoneInfo
 
+from app.core.utils import generate_uuid
+from app.models.notification import NotificationLog
 from app.models.user import MemberLeaveOfAbsence, Organization, Position, User, user_positions
 from app.services.member_leave_service import MemberLeaveService
 
@@ -63,6 +66,154 @@ class SchedulingService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    # ============================================
+    # Generic Helpers
+    # ============================================
+
+    @staticmethod
+    def _orm_to_dict(
+        record: Any,
+        name_map: Optional[Dict[str, str]] = None,
+        name_field: str = "user_id",
+        name_key: str = "user_name",
+    ) -> Dict[str, Any]:
+        """Convert an ORM record to a dict, optionally adding a resolved name.
+
+        ``name_map`` maps string IDs to display names.  When provided,
+        ``record.<name_field>`` is looked up and stored under ``name_key``.
+        """
+        d: Dict[str, Any] = {
+            c.key: getattr(record, c.key) for c in record.__table__.columns
+        }
+        if name_map is not None:
+            raw_id = getattr(record, name_field, None)
+            d[name_key] = name_map.get(str(raw_id)) if raw_id else None
+        return d
+
+    async def _crud_create(
+        self,
+        model_class: Any,
+        data_dict: dict,
+        org_id: UUID,
+        created_by: Optional[UUID] = None,
+    ) -> Tuple[Optional[Any], Optional[str]]:
+        """Generic create: instantiate *model_class*, add, commit, refresh."""
+        try:
+            kwargs: Dict[str, Any] = {"organization_id": org_id, **data_dict}
+            if created_by is not None:
+                kwargs["created_by"] = created_by
+            record = model_class(**kwargs)
+            self.db.add(record)
+            await self.db.commit()
+            await self.db.refresh(record)
+            return record, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def _crud_update(
+        self,
+        record: Any,
+        update_data: dict,
+        protected_fields: Optional[frozenset] = None,
+    ) -> Tuple[Optional[Any], Optional[str]]:
+        """Generic update: apply *update_data* to an existing ORM *record*,
+        skipping protected fields, then commit and refresh."""
+        try:
+            pf = protected_fields or self.PROTECTED_FIELDS
+            for key, value in update_data.items():
+                if key not in pf:
+                    setattr(record, key, value)
+            await self.db.commit()
+            await self.db.refresh(record)
+            return record, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def _crud_delete(
+        self,
+        record: Any,
+    ) -> Tuple[bool, Optional[str]]:
+        """Generic delete: remove *record*, commit."""
+        try:
+            await self.db.delete(record)
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            return False, str(e)
+
+    async def _send_notification(
+        self,
+        recipient_ids: set,
+        subject: str,
+        message: str,
+        category: str,
+        organization_id: UUID,
+        action_url: str = "",
+        notification_metadata: Optional[dict] = None,
+        send_email: bool = False,
+        email_subject: Optional[str] = None,
+        email_html_body: Optional[str] = None,
+        email_cc: Optional[list] = None,
+        email_template_type: Optional[str] = None,
+        org: Optional[Any] = None,
+    ) -> None:
+        """Create in-app NotificationLog records and optionally send email.
+
+        This is the shared backbone for all scheduling notification methods.
+        Failures are logged but never propagated.
+        """
+        try:
+            for rid in recipient_ids:
+                notif = NotificationLog(
+                    id=generate_uuid(),
+                    organization_id=str(organization_id),
+                    recipient_id=rid,
+                    channel="in_app",
+                    category=category,
+                    subject=subject,
+                    message=message,
+                    action_url=action_url,
+                    notification_metadata=notification_metadata,
+                    delivered=True,
+                )
+                self.db.add(notif)
+            await self.db.flush()
+
+            if send_email and org:
+                try:
+                    from app.services.email_service import EmailService
+
+                    recipient_result = await self.db.execute(
+                        select(User.email).where(
+                            User.id.in_(list(recipient_ids)),
+                            User.email.isnot(None),
+                        )
+                    )
+                    to_emails = [r[0] for r in recipient_result.all() if r[0]]
+                    if to_emails:
+                        email_svc = EmailService(organization=org)
+                        await email_svc.send_email(
+                            to_emails=to_emails,
+                            subject=email_subject or subject,
+                            html_body=email_html_body or f"<p>{message}</p>",
+                            cc_emails=email_cc or None,
+                            db=self.db,
+                            template_type=email_template_type or category,
+                        )
+                except Exception as email_err:
+                    logger.warning(
+                        "Notification email failed (category=%s): %s",
+                        category,
+                        email_err,
+                    )
+        except Exception as e:
+            logger.warning(
+                "Notification failed (category=%s): %s", category, e
+            )
 
     # ============================================
     # Position Helpers
@@ -204,12 +355,7 @@ class SchedulingService:
             return []
         user_ids = list({a.user_id for a in assignments if a.user_id})
         name_map = await self._get_user_name_map(user_ids)
-        result = []
-        for a in assignments:
-            d = {c.key: getattr(a, c.key) for c in a.__table__.columns}
-            d["user_name"] = name_map.get(str(a.user_id))
-            result.append(d)
-        return result
+        return [self._orm_to_dict(a, name_map) for a in assignments]
 
     async def enrich_assignments_with_shifts(
         self, assignments: List[ShiftAssignment], organization_id: UUID
@@ -242,8 +388,7 @@ class SchedulingService:
 
         result = []
         for a in assignments:
-            d = {c.key: getattr(a, c.key) for c in a.__table__.columns}
-            d["user_name"] = name_map.get(str(a.user_id))
+            d = self._orm_to_dict(a, name_map)
             d["shift"] = shift_map.get(str(a.shift_id))
             result.append(d)
         return result
@@ -285,7 +430,7 @@ class SchedulingService:
 
         result = []
         for sr in swap_requests:
-            d = {c.key: getattr(sr, c.key) for c in sr.__table__.columns}
+            d = self._orm_to_dict(sr)
             d["requesting_user_name"] = (
                 name_map.get(str(sr.requesting_user_id))
                 if sr.requesting_user_id
@@ -325,12 +470,7 @@ class SchedulingService:
             return []
         user_ids = list({t.user_id for t in time_off_requests if t.user_id})
         name_map = await self._get_user_name_map(user_ids)
-        result = []
-        for t in time_off_requests:
-            d = {c.key: getattr(t, c.key) for c in t.__table__.columns}
-            d["user_name"] = name_map.get(str(t.user_id))
-            result.append(d)
-        return result
+        return [self._orm_to_dict(t, name_map) for t in time_off_requests]
 
     async def enrich_attendance_records(
         self,
@@ -350,8 +490,7 @@ class SchedulingService:
         name_map = await self._get_user_name_map(user_ids)
         result = []
         for a in attendance_records:
-            d = {c.key: getattr(a, c.key) for c in a.__table__.columns}
-            d["user_name"] = name_map.get(str(a.user_id))
+            d = self._orm_to_dict(a, name_map)
             if member_call_counts is not None:
                 d["call_count"] = member_call_counts.get(
                     str(a.user_id), 0
@@ -1044,17 +1183,9 @@ class SchedulingService:
         self, organization_id: UUID, template_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[ShiftTemplate], Optional[str]]:
         """Create a new shift template"""
-        try:
-            template = ShiftTemplate(
-                organization_id=organization_id, created_by=created_by, **template_data
-            )
-            self.db.add(template)
-            await self.db.commit()
-            await self.db.refresh(template)
-            return template, None
-        except Exception as e:
-            await self.db.rollback()
-            return None, str(e)
+        return await self._crud_create(
+            ShiftTemplate, template_data, organization_id, created_by
+        )
 
     async def get_templates(
         self, organization_id: UUID, active_only: bool = True
@@ -1085,37 +1216,19 @@ class SchedulingService:
         self, template_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Tuple[Optional[ShiftTemplate], Optional[str]]:
         """Update a shift template"""
-        try:
-            template = await self.get_template_by_id(template_id, organization_id)
-            if not template:
-                return None, "Shift template not found"
-
-            for key, value in update_data.items():
-                if key not in self.PROTECTED_FIELDS:
-                    setattr(template, key, value)
-
-            await self.db.commit()
-            await self.db.refresh(template)
-            return template, None
-        except Exception as e:
-            await self.db.rollback()
-            return None, str(e)
+        template = await self.get_template_by_id(template_id, organization_id)
+        if not template:
+            return None, "Shift template not found"
+        return await self._crud_update(template, update_data)
 
     async def delete_template(
         self, template_id: UUID, organization_id: UUID
     ) -> Tuple[bool, Optional[str]]:
         """Delete a shift template"""
-        try:
-            template = await self.get_template_by_id(template_id, organization_id)
-            if not template:
-                return False, "Shift template not found"
-
-            await self.db.delete(template)
-            await self.db.commit()
-            return True, None
-        except Exception as e:
-            await self.db.rollback()
-            return False, str(e)
+        template = await self.get_template_by_id(template_id, organization_id)
+        if not template:
+            return False, "Shift template not found"
+        return await self._crud_delete(template)
 
     # ============================================
     # Shift Pattern Management
@@ -1125,17 +1238,9 @@ class SchedulingService:
         self, organization_id: UUID, pattern_data: Dict[str, Any], created_by: UUID
     ) -> Tuple[Optional[ShiftPattern], Optional[str]]:
         """Create a new shift pattern"""
-        try:
-            pattern = ShiftPattern(
-                organization_id=organization_id, created_by=created_by, **pattern_data
-            )
-            self.db.add(pattern)
-            await self.db.commit()
-            await self.db.refresh(pattern)
-            return pattern, None
-        except Exception as e:
-            await self.db.rollback()
-            return None, str(e)
+        return await self._crud_create(
+            ShiftPattern, pattern_data, organization_id, created_by
+        )
 
     async def get_patterns(
         self, organization_id: UUID, active_only: bool = True
@@ -1166,37 +1271,19 @@ class SchedulingService:
         self, pattern_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Tuple[Optional[ShiftPattern], Optional[str]]:
         """Update a shift pattern"""
-        try:
-            pattern = await self.get_pattern_by_id(pattern_id, organization_id)
-            if not pattern:
-                return None, "Shift pattern not found"
-
-            for key, value in update_data.items():
-                if key not in self.PROTECTED_FIELDS:
-                    setattr(pattern, key, value)
-
-            await self.db.commit()
-            await self.db.refresh(pattern)
-            return pattern, None
-        except Exception as e:
-            await self.db.rollback()
-            return None, str(e)
+        pattern = await self.get_pattern_by_id(pattern_id, organization_id)
+        if not pattern:
+            return None, "Shift pattern not found"
+        return await self._crud_update(pattern, update_data)
 
     async def delete_pattern(
         self, pattern_id: UUID, organization_id: UUID
     ) -> Tuple[bool, Optional[str]]:
         """Delete a shift pattern"""
-        try:
-            pattern = await self.get_pattern_by_id(pattern_id, organization_id)
-            if not pattern:
-                return False, "Shift pattern not found"
-
-            await self.db.delete(pattern)
-            await self.db.commit()
-            return True, None
-        except Exception as e:
-            await self.db.rollback()
-            return False, str(e)
+        pattern = await self.get_pattern_by_id(pattern_id, organization_id)
+        if not pattern:
+            return False, "Shift pattern not found"
+        return await self._crud_delete(pattern)
 
     async def generate_shifts_from_pattern(
         self,
@@ -1780,13 +1867,9 @@ class SchedulingService:
 
         Reads ``org.settings["scheduling"]`` to decide who to notify
         and whether to send email.  Failures are logged but never
-        propagated — the caller should not fail because of a
-        notification error.
+        propagated.
         """
-        from loguru import logger
-
         try:
-            # Load org + settings
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == str(organization_id))
             )
@@ -1798,7 +1881,6 @@ class SchedulingService:
             if not sched_cfg.get("notify_on_decline", True):
                 return
 
-            # Load shift
             shift_result = await self.db.execute(
                 select(Shift).where(Shift.id == str(shift_id))
             )
@@ -1806,7 +1888,6 @@ class SchedulingService:
             if not shift:
                 return
 
-            # Load user who declined
             user_result = await self.db.execute(
                 select(User).where(User.id == str(user_id))
             )
@@ -1817,18 +1898,15 @@ class SchedulingService:
                 last = declined_user.last_name or ""
                 user_name = f"{first} {last}".strip() or "Unknown"
 
-            # Collect recipient user IDs
             recipient_ids: set[str] = set()
 
-            # Shift officer
             if sched_cfg.get("notify_shift_officer", True):
                 if shift.shift_officer_id:
                     recipient_ids.add(str(shift.shift_officer_id))
 
-            # Users with matching roles
             notify_roles = sched_cfg.get("notify_roles", [])
             if notify_roles:
-                from app.models.user import Role, user_positions
+                from app.models.user import Role
 
                 role_result = await self.db.execute(
                     select(user_positions.c.user_id)
@@ -1844,13 +1922,9 @@ class SchedulingService:
                 for row in role_result.all():
                     recipient_ids.add(str(row[0]))
 
-            # Don't notify the user who declined
             recipient_ids.discard(str(user_id))
             if not recipient_ids:
                 return
-
-            from app.core.utils import generate_uuid
-            from app.models.notification import NotificationLog
 
             shift_date_str = (
                 shift.shift_date.isoformat() if shift.shift_date else "unknown date"
@@ -1861,58 +1935,34 @@ class SchedulingService:
                 f"This position is now open."
             )
 
-            for rid in recipient_ids:
-                notif = NotificationLog(
-                    id=generate_uuid(),
-                    organization_id=str(organization_id),
-                    recipient_id=rid,
-                    channel="in_app",
-                    category="shift_decline",
-                    subject="Shift Coverage Needed",
-                    message=message,
-                    action_url=f"/scheduling?shift={shift_id}",
-                    delivered=True,
-                )
-                self.db.add(notif)
-            await self.db.flush()
+            wants_email = sched_cfg.get("send_email", False)
+            email_subj = (
+                f"Shift Coverage Needed \u2014 "
+                f"{position} on {shift_date_str}"
+            )
+            email_html = (
+                f"<p>{message}</p>"
+                f"<p>Please log in to the scheduling "
+                f"module to assign a replacement.</p>"
+            )
 
-            # Optional email
-            if sched_cfg.get("send_email", False):
-                try:
-                    from app.services.email_service import EmailService
-
-                    recipient_result = await self.db.execute(
-                        select(User.email).where(
-                            User.id.in_(list(recipient_ids)),
-                            User.email.isnot(None),
-                        )
-                    )
-                    to_emails = [r[0] for r in recipient_result.all() if r[0]]
-                    cc_emails = sched_cfg.get("cc_emails", [])
-                    if to_emails:
-                        email_svc = EmailService(organization=org)
-                        subject = (
-                            f"Shift Coverage Needed \u2014 "
-                            f"{position} on {shift_date_str}"
-                        )
-                        html_body = (
-                            f"<p>{message}</p>"
-                            f"<p>Please log in to the scheduling "
-                            f"module to assign a replacement.</p>"
-                        )
-                        await email_svc.send_email(
-                            to_emails=to_emails,
-                            subject=subject,
-                            html_body=html_body,
-                            cc_emails=cc_emails or None,
-                            db=self.db,
-                            template_type="shift_decline",
-                        )
-                except Exception as email_err:
-                    logger.warning(f"Shift decline email failed: {email_err}")
+            await self._send_notification(
+                recipient_ids=recipient_ids,
+                subject="Shift Coverage Needed",
+                message=message,
+                category="shift_decline",
+                organization_id=organization_id,
+                action_url=f"/scheduling?shift={shift_id}",
+                send_email=wants_email,
+                email_subject=email_subj,
+                email_html_body=email_html,
+                email_cc=sched_cfg.get("cc_emails", []),
+                email_template_type="shift_decline",
+                org=org,
+            )
 
         except Exception as e:
-            logger.warning(f"Shift decline notification failed: {e}")
+            logger.warning("Shift decline notification failed: %s", e)
 
     async def _notify_shift_assignment(
         self,
@@ -1928,8 +1978,6 @@ class SchedulingService:
         whether to notify and whether to send email.  Failures are
         logged but never propagated.
         """
-        from loguru import logger
-
         try:
             org_result = await self.db.execute(
                 select(Organization).where(Organization.id == str(organization_id))
@@ -1954,9 +2002,7 @@ class SchedulingService:
             )
             position_label = position or "unspecified"
 
-            from app.core.utils import generate_uuid
-            from app.models.apparatus import EquipmentCheckTemplate
-            from app.models.notification import NotificationLog
+            from app.services.scheduled_tasks import resolve_check_templates
 
             org_tz = ZoneInfo(
                 org.timezone if org.timezone else "America/New_York"
@@ -1976,45 +2022,13 @@ class SchedulingService:
 
             checklist_names: list[str] = []
             if shift.apparatus_id:
-                tmpl_result = await self.db.execute(
-                    select(EquipmentCheckTemplate)
-                    .where(
-                        EquipmentCheckTemplate.organization_id
-                        == str(organization_id)
-                    )
-                    .where(
-                        EquipmentCheckTemplate.apparatus_id
-                        == str(shift.apparatus_id)
-                    )
-                    .where(
-                        EquipmentCheckTemplate.check_timing
-                        == "start_of_shift"
-                    )
-                    .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
-                    .order_by(EquipmentCheckTemplate.sort_order)
+                templates = await resolve_check_templates(
+                    self.db,
+                    str(organization_id),
+                    str(shift.apparatus_id),
+                    "start_of_shift",
                 )
-                templates = list(tmpl_result.scalars().all())
                 checklist_names = [t.name for t in templates]
-
-                if not checklist_names:
-                    type_result = await self.db.execute(
-                        select(EquipmentCheckTemplate)
-                        .where(
-                            EquipmentCheckTemplate.organization_id
-                            == str(organization_id)
-                        )
-                        .where(
-                            EquipmentCheckTemplate.apparatus_id.is_(None)
-                        )
-                        .where(
-                            EquipmentCheckTemplate.check_timing
-                            == "start_of_shift"
-                        )
-                        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
-                        .order_by(EquipmentCheckTemplate.sort_order)
-                    )
-                    type_templates = list(type_result.scalars().all())
-                    checklist_names = [t.name for t in type_templates]
 
             if checklist_names:
                 checklist_list = ", ".join(checklist_names)
@@ -2023,64 +2037,41 @@ class SchedulingService:
                     f"{checklist_list}."
                 )
 
-            notif_metadata = {"shift_id": str(shift_id)}
+            notif_metadata: dict = {"shift_id": str(shift_id)}
             if shift.start_time:
                 notif_metadata["shift_start_time"] = (
                     shift.start_time.isoformat()
                 )
 
-            notif = NotificationLog(
-                id=generate_uuid(),
-                organization_id=str(organization_id),
-                recipient_id=str(user_id),
-                channel="in_app",
-                category="shift_assignment",
+            wants_email = assign_cfg.get("send_email", False)
+            email_subj = (
+                f"Shift Assignment \u2014 "
+                f"{position_label} on {shift_date_str}"
+            )
+            email_html = (
+                f"<p>{message}</p>"
+                f"<p>Please log in to the scheduling "
+                f"module to confirm or decline this assignment.</p>"
+            )
+
+            await self._send_notification(
+                recipient_ids={str(user_id)},
                 subject="New Shift Assignment",
                 message=message,
+                category="shift_assignment",
+                organization_id=organization_id,
                 action_url=f"/scheduling?shift={shift_id}",
                 notification_metadata=notif_metadata,
-                delivered=True,
+                send_email=wants_email,
+                email_subject=email_subj,
+                email_html_body=email_html,
+                email_cc=assign_cfg.get("cc_emails", []),
+                email_template_type="shift_assignment",
+                org=org,
             )
-            self.db.add(notif)
-            await self.db.flush()
-
-            if assign_cfg.get("send_email", False):
-                try:
-                    from app.services.email_service import EmailService
-
-                    user_result = await self.db.execute(
-                        select(User.email).where(
-                            User.id == str(user_id),
-                            User.email.isnot(None),
-                        )
-                    )
-                    row = user_result.one_or_none()
-                    to_email = row[0] if row else None
-                    cc_emails = assign_cfg.get("cc_emails", [])
-                    if to_email:
-                        email_svc = EmailService(organization=org)
-                        subject = (
-                            f"Shift Assignment \u2014 "
-                            f"{position_label} on {shift_date_str}"
-                        )
-                        html_body = (
-                            f"<p>{message}</p>"
-                            f"<p>Please log in to the scheduling "
-                            f"module to confirm or decline this assignment.</p>"
-                        )
-                        await email_svc.send_email(
-                            to_emails=[to_email],
-                            subject=subject,
-                            html_body=html_body,
-                            cc_emails=cc_emails or None,
-                            db=self.db,
-                            template_type="shift_assignment",
-                        )
-                except Exception as email_err:
-                    logger.warning(f"Shift assignment email failed: {email_err}")
 
         except Exception as e:
-            logger.warning(f"Shift assignment notification failed: {e}")
+            logger.warning("Shift assignment notification failed: %s", e)
 
     async def _notify_swap_request(
         self,
@@ -2088,22 +2079,7 @@ class SchedulingService:
         organization_id: UUID,
     ) -> None:
         """Notify the target user (or shift officer) about a new swap request."""
-        from loguru import logger
-
         try:
-            from app.core.utils import generate_uuid
-            from app.models.notification import NotificationLog
-
-            org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == str(organization_id)
-                )
-            )
-            org = org_result.scalar_one_or_none()
-            if not org:
-                return
-
-            # Load requesting user name
             req_result = await self.db.execute(
                 select(User).where(
                     User.id == str(swap_request.requesting_user_id)
@@ -2116,7 +2092,6 @@ class SchedulingService:
                 last = req_user.last_name or ""
                 req_name = f"{first} {last}".strip() or "A member"
 
-            # Load offering shift date
             shift_result = await self.db.execute(
                 select(Shift).where(
                     Shift.id == str(swap_request.offering_shift_id)
@@ -2131,11 +2106,9 @@ class SchedulingService:
 
             recipient_ids: set[str] = set()
 
-            # Notify target user if specified
             if swap_request.target_user_id:
                 recipient_ids.add(str(swap_request.target_user_id))
             elif offering_shift and offering_shift.shift_officer_id:
-                # Open request — notify the shift officer
                 recipient_ids.add(str(offering_shift.shift_officer_id))
 
             recipient_ids.discard(str(swap_request.requesting_user_id))
@@ -2148,23 +2121,17 @@ class SchedulingService:
                 f"Please review and respond."
             )
 
-            for rid in recipient_ids:
-                notif = NotificationLog(
-                    id=generate_uuid(),
-                    organization_id=str(organization_id),
-                    recipient_id=rid,
-                    channel="in_app",
-                    category="shift_swap",
-                    subject="Shift Swap Request",
-                    message=message,
-                    action_url=f"/scheduling?shift={swap_request.offering_shift_id}",
-                    delivered=True,
-                )
-                self.db.add(notif)
-            await self.db.flush()
+            await self._send_notification(
+                recipient_ids=recipient_ids,
+                subject="Shift Swap Request",
+                message=message,
+                category="shift_swap",
+                organization_id=organization_id,
+                action_url=f"/scheduling?shift={swap_request.offering_shift_id}",
+            )
 
         except Exception as e:
-            logger.warning(f"Swap request notification failed: {e}")
+            logger.warning("Swap request notification failed: %s", e)
 
     async def _notify_swap_reviewed(
         self,
@@ -2173,12 +2140,7 @@ class SchedulingService:
         status: SwapRequestStatus,
     ) -> None:
         """Notify the requesting user about swap approval/denial."""
-        from loguru import logger
-
         try:
-            from app.core.utils import generate_uuid
-            from app.models.notification import NotificationLog
-
             status_label = (
                 "approved" if status == SwapRequestStatus.APPROVED
                 else "denied"
@@ -2201,22 +2163,17 @@ class SchedulingService:
                 f"shift has been {status_label}."
             )
 
-            notif = NotificationLog(
-                id=generate_uuid(),
-                organization_id=str(organization_id),
-                recipient_id=str(swap_request.requesting_user_id),
-                channel="in_app",
-                category="shift_swap",
+            await self._send_notification(
+                recipient_ids={str(swap_request.requesting_user_id)},
                 subject=f"Swap Request {status_label.title()}",
                 message=message,
+                category="shift_swap",
+                organization_id=organization_id,
                 action_url=f"/scheduling?shift={swap_request.offering_shift_id}",
-                delivered=True,
             )
-            self.db.add(notif)
-            await self.db.flush()
 
         except Exception as e:
-            logger.warning(f"Swap review notification failed: {e}")
+            logger.warning("Swap review notification failed: %s", e)
 
     async def _notify_shift_confirmed(
         self,
@@ -2224,12 +2181,7 @@ class SchedulingService:
         organization_id: UUID,
     ) -> None:
         """Notify the shift officer when a member confirms their assignment."""
-        from loguru import logger
-
         try:
-            from app.core.utils import generate_uuid
-            from app.models.notification import NotificationLog
-
             shift_result = await self.db.execute(
                 select(Shift).where(
                     Shift.id == str(assignment.shift_id)
@@ -2239,7 +2191,6 @@ class SchedulingService:
             if not shift or not shift.shift_officer_id:
                 return
 
-            # Don't notify the officer about their own confirmation
             if str(shift.shift_officer_id) == str(assignment.user_id):
                 return
 
@@ -2266,22 +2217,17 @@ class SchedulingService:
                 f"on the {shift_date_str} shift."
             )
 
-            notif = NotificationLog(
-                id=generate_uuid(),
-                organization_id=str(organization_id),
-                recipient_id=str(shift.shift_officer_id),
-                channel="in_app",
-                category="shift_confirmation",
+            await self._send_notification(
+                recipient_ids={str(shift.shift_officer_id)},
                 subject="Shift Assignment Confirmed",
                 message=message,
+                category="shift_confirmation",
+                organization_id=organization_id,
                 action_url=f"/scheduling?shift={assignment.shift_id}",
-                delivered=True,
             )
-            self.db.add(notif)
-            await self.db.flush()
 
         except Exception as e:
-            logger.warning(f"Shift confirmation notification failed: {e}")
+            logger.warning("Shift confirmation notification failed: %s", e)
 
     async def _notify_time_off_reviewed(
         self,
@@ -2290,12 +2236,7 @@ class SchedulingService:
         status: TimeOffStatus,
     ) -> None:
         """Notify the member about their time-off request decision."""
-        from loguru import logger
-
         try:
-            from app.core.utils import generate_uuid
-            from app.models.notification import NotificationLog
-
             if not time_off.user_id:
                 return
 
@@ -2321,22 +2262,17 @@ class SchedulingService:
                 f"has been {status_label}."
             )
 
-            notif = NotificationLog(
-                id=generate_uuid(),
-                organization_id=str(organization_id),
-                recipient_id=str(time_off.user_id),
-                channel="in_app",
-                category="time_off",
+            await self._send_notification(
+                recipient_ids={str(time_off.user_id)},
                 subject=f"Time-Off Request {status_label.title()}",
                 message=message,
+                category="time_off",
+                organization_id=organization_id,
                 action_url="/scheduling",
-                delivered=True,
             )
-            self.db.add(notif)
-            await self.db.flush()
 
         except Exception as e:
-            logger.warning(f"Time-off review notification failed: {e}")
+            logger.warning("Time-off review notification failed: %s", e)
 
     # ============================================
     # Shift Swap Request Management
@@ -3800,8 +3736,6 @@ class SchedulingService:
         if not trainee_enrollments:
             return 0
 
-        from loguru import logger
-
         svc = ShiftCompletionService(self.db)
         created_count = 0
 
@@ -3867,15 +3801,8 @@ class SchedulingService:
         listing the draft reports that were auto-created."""
         import html as _html
 
-        from loguru import logger
-
         from app.core.config import settings
-        from app.core.utils import generate_uuid
-        from app.models.notification import (
-            NotificationChannel,
-            NotificationLog,
-        )
-        from app.models.user import User
+        from app.models.notification import NotificationChannel
         from app.services.email_service import (
             EmailService,
             build_email_logo_html,

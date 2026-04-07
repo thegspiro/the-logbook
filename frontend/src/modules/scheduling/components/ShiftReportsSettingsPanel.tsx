@@ -22,13 +22,20 @@ import {
   SlidersHorizontal,
   Truck,
   Star,
-  Pencil,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { organizationService } from "../../../services/api";
 import { trainingModuleConfigService } from "../../../services/trainingServices";
 import { schedulingService } from "../services/api";
 import { getErrorMessage } from "../../../utils/errorHandling";
+import EditableTagList from "./EditableTagList";
+import {
+  SAMPLE_CALL_TYPES,
+  SAMPLE_SKILLS,
+  SAMPLE_TASKS,
+  SAMPLE_APPARATUS_SKILLS,
+  SAMPLE_APPARATUS_TASKS,
+} from "../constants/shiftReportConstants";
 import type { ShiftReportSettings } from "../types/shiftSettings";
 import type { TrainingModuleConfig } from "../../../types/training";
 
@@ -105,135 +112,27 @@ const DEFAULT_SETTINGS: ShiftReportSettings = {
   },
 };
 
-const SAMPLE_CALL_TYPES = [
-  "Structure Fire", "Vehicle Fire", "Brush/Wildland",
-  "EMS/Medical", "Motor Vehicle Accident", "Hazmat",
-  "Rescue/Extrication", "Alarm Investigation",
-  "Water Rescue", "Public Assist", "Other",
-];
-
-const SAMPLE_SKILLS = [
-  "SCBA donning/doffing", "Hose deployment",
-  "Ladder operations", "Search and rescue",
-  "Ventilation", "Radio communications",
-  "Scene size-up", "Knot tying",
-  "Forcible entry", "Patient assessment",
-  "CPR/AED", "Vitals monitoring",
-  "Apparatus check-off",
-];
-
-const SAMPLE_TASKS = [
-  "Apparatus check-off", "Station duties",
-  "Equipment inventory", "Hydrant inspection",
-  "Pre-plan review", "Map/district familiarization",
-  "Training drill participation",
-  "Report writing", "PPE inspection",
-];
-
-const SAMPLE_APPARATUS_SKILLS: Record<string, string[]> = {
-  engine: [
-    "Pump operations", "Hose deployment",
-    "Hydrant connection", "Drafting",
-    "Foam operations", "Attack line advancement",
-    "Water supply establishment",
-    "Apparatus positioning",
-  ],
-  ladder: [
-    "Aerial operations", "Ladder placement",
-    "Ventilation (vertical)", "Roof operations",
-    "Forcible entry", "Ground ladder deployment",
-    "Elevated master stream",
-    "Building size-up",
-  ],
-  ambulance: [
-    "Patient assessment", "Vitals monitoring",
-    "CPR/AED", "Airway management",
-    "IV/IO access", "Splinting/immobilization",
-    "Medication administration",
-    "Patient packaging/transport",
-    "12-lead ECG interpretation",
-  ],
-  rescue: [
-    "Vehicle extrication", "Confined space entry",
-    "Rope rescue (high/low angle)",
-    "Structural collapse operations",
-    "Trench rescue", "Water rescue",
-    "Stabilization techniques",
-    "Cribbing and shoring",
-  ],
-  tanker: [
-    "Water shuttle operations", "Portable tank setup",
-    "Drafting from portable tank",
-    "Dump valve operations",
-    "Tanker positioning",
-    "Water supply calculation",
-  ],
-  hazmat: [
-    "HazMat identification (placards/SDS)",
-    "Level A/B suit donning",
-    "Decontamination setup",
-    "Air monitoring", "Containment/damming",
-    "ERG reference and zone establishment",
-  ],
-  brush: [
-    "Wildland fire line construction",
-    "Pump and roll operations",
-    "Foam application (Class A)",
-    "Mop-up techniques",
-    "Weather observation and reporting",
-  ],
-  chief: [
-    "Incident command establishment",
-    "Resource management",
-    "Accountability tracking",
-    "Strategic decision-making",
-    "Interagency coordination",
-  ],
-  boat: [
-    "Vessel operation and navigation",
-    "Water rescue swimmer deployment",
-    "Throw bag / reach techniques",
-    "Towing and anchoring",
-  ],
-};
-
-const SAMPLE_APPARATUS_TASKS: Record<string, string[]> = {
-  engine: [
-    "Pump test / pressure check",
-    "Hose load inspection",
-    "Nozzle and appliance check",
-    "Tank fill verification",
-  ],
-  ladder: [
-    "Aerial function test",
-    "Ground ladder inventory",
-    "Hydraulic system check",
-    "Outrigger/stabilizer inspection",
-  ],
-  ambulance: [
-    "Medication expiration check",
-    "Monitor/defibrillator test",
-    "Oxygen supply verification",
-    "Stretcher and restraint check",
-    "BLS/ALS supply restock",
-  ],
-  rescue: [
-    "Extrication tool function test",
-    "Rope and harness inspection",
-    "Air supply verification",
-    "Cribbing inventory",
-  ],
-  tanker: [
-    "Tank integrity check",
-    "Dump valve function test",
-    "Portable tank condition check",
-  ],
-  hazmat: [
-    "Detection equipment calibration",
-    "PPE suit integrity check",
-    "Decon supplies inventory",
-  ],
-};
+function useAsyncSave(): [
+  (fn: () => Promise<void>, successMsg: string, errorMsg: string) => Promise<void>,
+  boolean,
+] {
+  const [isSaving, setIsSaving] = useState(false);
+  const run = useCallback(
+    async (fn: () => Promise<void>, successMsg: string, errorMsg: string) => {
+      setIsSaving(true);
+      try {
+        await fn();
+        toast.success(successMsg);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, errorMsg));
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [],
+  );
+  return [run, isSaving];
+}
 
 const checkboxClass =
   "w-4 h-4 rounded border-theme-surface-border text-violet-600 focus:ring-violet-500";
@@ -243,11 +142,14 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   const [activeSection, setActiveSection] = useState<SectionKey>("checklist-timing");
   const [settings, setSettings] = useState<ShiftReportSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
   const [trainingConfig, setTrainingConfig] = useState<TrainingModuleConfig | null>(null);
   const [loadingTraining, setLoadingTraining] = useState(true);
-  const [savingTraining, setSavingTraining] = useState(false);
+
+  const [runSaveSettings, saving] = useAsyncSave();
+  const [runSaveTraining, savingTraining] = useAsyncSave();
+  const [runSaveAppType, savingAppType] = useAsyncSave();
+  const [runSaveRating, savingRating] = useAsyncSave();
   const [skillEvalNames, setSkillEvalNames] = useState<Set<string>>(new Set());
 
   // Editable lists for training defaults
@@ -269,20 +171,10 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   const [appTypeTasks, setAppTypeTasks] = useState<
     Record<string, string[]>
   >({});
-  const [newAppSkill, setNewAppSkill] = useState("");
-  const [newAppTask, setNewAppTask] = useState("");
-  const [savingAppType, setSavingAppType] = useState(false);
-  const [editingAppItem, setEditingAppItem] = useState<{
-    type: "skill" | "task";
-    index: number;
-    value: string;
-  } | null>(null);
-
   // Rating scale editor
   const [ratingLabels, setRatingLabels] = useState<
     Record<string, string>
   >({});
-  const [savingRating, setSavingRating] = useState(false);
 
   // ── Load settings ──
 
@@ -381,8 +273,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         ];
         merged.sort();
         setApparatusTypes(merged);
-        if (merged.length > 0 && !selectedAppType) {
-          setSelectedAppType(merged[0] ?? "");
+        if (merged.length > 0) {
+          setSelectedAppType((prev) => prev || (merged[0] ?? ""));
         }
       })
       .catch(() => {
@@ -390,8 +282,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
           SAMPLE_APPARATUS_SKILLS,
         ).sort();
         setApparatusTypes(fallback);
-        if (fallback.length > 0 && !selectedAppType) {
-          setSelectedAppType(fallback[0] ?? "");
+        if (fallback.length > 0) {
+          setSelectedAppType((prev) => prev || (fallback[0] ?? ""));
         }
       });
   }, []);
@@ -399,53 +291,47 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
   // ── Save handlers ──
 
   const saveSettings = useCallback(async (updated: ShiftReportSettings) => {
-    setSaving(true);
-    try {
-      await organizationService.updateSettings({ shift_reports: updated });
-      setSettings(updated);
-      toast.success("Shift report settings saved");
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, "Failed to save settings"));
-    } finally {
-      setSaving(false);
-    }
-  }, []);
+    await runSaveSettings(
+      async () => {
+        await organizationService.updateSettings({ shift_reports: updated });
+        setSettings(updated);
+      },
+      "Shift report settings saved",
+      "Failed to save settings",
+    );
+  }, [runSaveSettings]);
 
   const saveTrainingDefaults = useCallback(async () => {
-    setSavingTraining(true);
-    try {
-      const updated = await trainingModuleConfigService.updateConfig({
-        shift_review_call_types: callTypes,
-        shift_review_default_skills: skills,
-        shift_review_default_tasks: tasks,
-      });
-      setTrainingConfig(updated);
-      toast.success("Training feedback defaults saved");
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, "Failed to save training defaults"));
-    } finally {
-      setSavingTraining(false);
-    }
-  }, [callTypes, skills, tasks]);
+    await runSaveTraining(
+      async () => {
+        const result = await trainingModuleConfigService.updateConfig({
+          shift_review_call_types: callTypes,
+          shift_review_default_skills: skills,
+          shift_review_default_tasks: tasks,
+        });
+        setTrainingConfig(result);
+      },
+      "Training feedback defaults saved",
+      "Failed to save training defaults",
+    );
+  }, [callTypes, skills, tasks, runSaveTraining]);
 
   const saveAppTypeMapping = useCallback(async (
     updatedSkills: Record<string, string[]>,
     updatedTasks: Record<string, string[]>,
   ) => {
-    setSavingAppType(true);
-    try {
-      const result = await trainingModuleConfigService.updateConfig({
-        apparatus_type_skills: updatedSkills,
-        apparatus_type_tasks: updatedTasks,
-      });
-      setTrainingConfig(result);
-      toast.success("Apparatus skills/tasks saved");
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, "Failed to save"));
-    } finally {
-      setSavingAppType(false);
-    }
-  }, []);
+    await runSaveAppType(
+      async () => {
+        const result = await trainingModuleConfigService.updateConfig({
+          apparatus_type_skills: updatedSkills,
+          apparatus_type_tasks: updatedTasks,
+        });
+        setTrainingConfig(result);
+      },
+      "Apparatus skills/tasks saved",
+      "Failed to save",
+    );
+  }, [runSaveAppType]);
 
   // ── Checklist timing helpers ──
 
@@ -743,153 +629,27 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   Leave empty to use the general defaults.
                 </p>
 
-                {/* Existing skills */}
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {(appTypeSkills[selectedAppType] ?? []).map((s, i) => {
-                    const isEditing =
-                      editingAppItem?.type === "skill" &&
-                      editingAppItem.index === i;
-                    if (isEditing) {
-                      return (
-                        <input
-                          key={i}
-                          autoFocus
-                          type="text"
-                          value={editingAppItem.value}
-                          onChange={(e) =>
-                            setEditingAppItem({
-                              ...editingAppItem,
-                              value: e.target.value,
-                            })
-                          }
-                          onBlur={() => {
-                            const trimmed =
-                              editingAppItem.value.trim();
-                            if (trimmed) {
-                              const updated = {
-                                ...appTypeSkills,
-                              };
-                              const list = [
-                                ...(updated[selectedAppType] ??
-                                  []),
-                              ];
-                              list[i] = trimmed;
-                              updated[selectedAppType] = list;
-                              setAppTypeSkills(updated);
-                            }
-                            setEditingAppItem(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              (
-                                e.target as HTMLInputElement
-                              ).blur();
-                            }
-                            if (e.key === "Escape") {
-                              setEditingAppItem(null);
-                            }
-                          }}
-                          className="px-2.5 py-1 rounded-full text-xs font-medium border-2 border-violet-500 bg-theme-surface text-theme-text-primary w-48 focus:outline-hidden"
-                        />
-                      );
-                    }
-                    const isLinked = skillEvalNames.has(s.toLowerCase());
-                    return (
-                      <span
-                        key={i}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${
-                          isLinked
-                            ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
-                            : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
-                        }`}
-                        title={isLinked ? "Linked to training skill evaluation" : "No matching skill evaluation found — won't track competency"}
-                      >
-                        {s}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingAppItem({
-                              type: "skill",
-                              index: i,
-                              value: s,
-                            })
-                          }
-                          className="hover:text-violet-500"
-                          title="Edit"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = {
-                              ...appTypeSkills,
-                            };
-                            updated[selectedAppType] = (
-                              updated[selectedAppType] ?? []
-                            ).filter((_, idx) => idx !== i);
-                            setAppTypeSkills(updated);
-                          }}
-                          className="hover:text-red-500"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-
-                {/* Add skill input */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newAppSkill}
-                    onChange={(e) => setNewAppSkill(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const trimmed = newAppSkill.trim();
-                        if (!trimmed) return;
-                        const current = appTypeSkills[selectedAppType] ?? [];
-                        if (current.includes(trimmed)) return;
-                        const updated = { ...appTypeSkills, [selectedAppType]: [...current, trimmed] };
-                        setAppTypeSkills(updated);
-                        setNewAppSkill("");
-                      }
-                    }}
-                    placeholder="e.g. Pump operations"
-                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const trimmed = newAppSkill.trim();
-                      if (!trimmed) return;
-                      const current = appTypeSkills[selectedAppType] ?? [];
-                      if (current.includes(trimmed)) return;
-                      const updated = { ...appTypeSkills, [selectedAppType]: [...current, trimmed] };
-                      setAppTypeSkills(updated);
-                      setNewAppSkill("");
-                    }}
-                    disabled={!newAppSkill.trim()}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-theme-surface-hover text-theme-text-secondary hover:bg-theme-surface-secondary disabled:opacity-40 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add
-                  </button>
-                </div>
-
-                {/* Quick copy from defaults */}
-                {skills.length > 0 && (appTypeSkills[selectedAppType] ?? []).length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAppTypeSkills({ ...appTypeSkills, [selectedAppType]: [...skills] });
-                    }}
-                    className="mt-2 text-xs text-violet-600 dark:text-violet-400 hover:underline"
-                  >
-                    Copy from general defaults ({skills.length} skills)
-                  </button>
-                )}
+                <EditableTagList
+                  items={appTypeSkills[selectedAppType] ?? []}
+                  onItemsChange={(updated) =>
+                    setAppTypeSkills({ ...appTypeSkills, [selectedAppType]: updated })
+                  }
+                  placeholder="e.g. Pump operations"
+                  defaultSuggestions={skills}
+                  suggestionsLabel={`Copy from general defaults (${skills.length} skills)`}
+                  getTagClassName={(item) => {
+                    const isLinked = skillEvalNames.has(item.toLowerCase());
+                    return isLinked
+                      ? "bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20"
+                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20";
+                  }}
+                  getTagTitle={(item) => {
+                    const isLinked = skillEvalNames.has(item.toLowerCase());
+                    return isLinked
+                      ? "Linked to training skill evaluation"
+                      : "No matching skill evaluation found \u2014 won't track competency";
+                  }}
+                />
 
                 {skillEvalNames.size > 0 && (appTypeSkills[selectedAppType] ?? []).length > 0 && (
                   <p className="mt-2 text-[10px] text-theme-text-muted">
@@ -907,147 +667,15 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   Tasks for <span className="capitalize">{selectedAppType}</span>
                 </p>
 
-                {/* Existing tasks */}
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {(appTypeTasks[selectedAppType] ?? []).map((t, i) => {
-                    const isEditing =
-                      editingAppItem?.type === "task" &&
-                      editingAppItem.index === i;
-                    if (isEditing) {
-                      return (
-                        <input
-                          key={i}
-                          autoFocus
-                          type="text"
-                          value={editingAppItem.value}
-                          onChange={(e) =>
-                            setEditingAppItem({
-                              ...editingAppItem,
-                              value: e.target.value,
-                            })
-                          }
-                          onBlur={() => {
-                            const trimmed =
-                              editingAppItem.value.trim();
-                            if (trimmed) {
-                              const updated = {
-                                ...appTypeTasks,
-                              };
-                              const list = [
-                                ...(updated[selectedAppType] ??
-                                  []),
-                              ];
-                              list[i] = trimmed;
-                              updated[selectedAppType] = list;
-                              setAppTypeTasks(updated);
-                            }
-                            setEditingAppItem(null);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              (
-                                e.target as HTMLInputElement
-                              ).blur();
-                            }
-                            if (e.key === "Escape") {
-                              setEditingAppItem(null);
-                            }
-                          }}
-                          className="px-2.5 py-1 rounded-full text-xs font-medium border-2 border-violet-500 bg-theme-surface text-theme-text-primary w-48 focus:outline-hidden"
-                        />
-                      );
-                    }
-                    return (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
-                      >
-                        {t}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingAppItem({
-                              type: "task",
-                              index: i,
-                              value: t,
-                            })
-                          }
-                          className="hover:text-violet-500"
-                          title="Edit"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const updated = {
-                              ...appTypeTasks,
-                            };
-                            updated[selectedAppType] = (
-                              updated[selectedAppType] ?? []
-                            ).filter((_, idx) => idx !== i);
-                            setAppTypeTasks(updated);
-                          }}
-                          className="hover:text-red-500"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-
-                {/* Add task input */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newAppTask}
-                    onChange={(e) => setNewAppTask(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        const trimmed = newAppTask.trim();
-                        if (!trimmed) return;
-                        const current = appTypeTasks[selectedAppType] ?? [];
-                        if (current.includes(trimmed)) return;
-                        const updated = { ...appTypeTasks, [selectedAppType]: [...current, trimmed] };
-                        setAppTypeTasks(updated);
-                        setNewAppTask("");
-                      }
-                    }}
-                    placeholder="e.g. Apparatus check-off"
-                    className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const trimmed = newAppTask.trim();
-                      if (!trimmed) return;
-                      const current = appTypeTasks[selectedAppType] ?? [];
-                      if (current.includes(trimmed)) return;
-                      const updated = { ...appTypeTasks, [selectedAppType]: [...current, trimmed] };
-                      setAppTypeTasks(updated);
-                      setNewAppTask("");
-                    }}
-                    disabled={!newAppTask.trim()}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm rounded-lg bg-theme-surface-hover text-theme-text-secondary hover:bg-theme-surface-secondary disabled:opacity-40 transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Add
-                  </button>
-                </div>
-
-                {/* Quick copy from defaults */}
-                {tasks.length > 0 && (appTypeTasks[selectedAppType] ?? []).length === 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAppTypeTasks({ ...appTypeTasks, [selectedAppType]: [...tasks] });
-                    }}
-                    className="mt-2 text-xs text-violet-600 dark:text-violet-400 hover:underline"
-                  >
-                    Copy from general defaults ({tasks.length} tasks)
-                  </button>
-                )}
+                <EditableTagList
+                  items={appTypeTasks[selectedAppType] ?? []}
+                  onItemsChange={(updated) =>
+                    setAppTypeTasks({ ...appTypeTasks, [selectedAppType]: updated })
+                  }
+                  placeholder="e.g. Apparatus check-off"
+                  defaultSuggestions={tasks}
+                  suggestionsLabel={`Copy from general defaults (${tasks.length} tasks)`}
+                />
               </div>
 
               {/* Save button */}
@@ -1118,19 +746,15 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                   type="checkbox"
                   checked={trainingConfig[field] ?? true}
                   onChange={(e) => {
-                    const updates = { [field]: e.target.checked };
-                    void (async () => {
-                      setSavingTraining(true);
-                      try {
-                        const result = await trainingModuleConfigService.updateConfig(updates);
+                    const checked = e.target.checked;
+                    void runSaveTraining(
+                      async () => {
+                        const result = await trainingModuleConfigService.updateConfig({ [field]: checked });
                         setTrainingConfig(result);
-                        toast.success(`${label} ${e.target.checked ? "enabled" : "disabled"}`);
-                      } catch (err: unknown) {
-                        toast.error(getErrorMessage(err, "Failed to update"));
-                      } finally {
-                        setSavingTraining(false);
-                      }
-                    })();
+                      },
+                      `${label} ${checked ? "enabled" : "disabled"}`,
+                      "Failed to update",
+                    );
                   }}
                   disabled={savingTraining}
                   className={checkboxClass}
@@ -1158,19 +782,15 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 type="checkbox"
                 checked={trainingConfig.report_review_required}
                 onChange={(e) => {
-                  const updated = { report_review_required: e.target.checked };
-                  void (async () => {
-                    setSavingTraining(true);
-                    try {
-                      const result = await trainingModuleConfigService.updateConfig(updated);
+                  const checked = e.target.checked;
+                  void runSaveTraining(
+                    async () => {
+                      const result = await trainingModuleConfigService.updateConfig({ report_review_required: checked });
                       setTrainingConfig(result);
-                      toast.success("Review workflow updated");
-                    } catch (err: unknown) {
-                      toast.error(getErrorMessage(err, "Failed to update"));
-                    } finally {
-                      setSavingTraining(false);
-                    }
-                  })();
+                    },
+                    "Review workflow updated",
+                    "Failed to update",
+                  );
                 }}
                 disabled={savingTraining}
                 className={checkboxClass}
@@ -1191,19 +811,15 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 <select
                   value={trainingConfig.report_review_role}
                   onChange={(e) => {
-                    const updated = { report_review_role: e.target.value };
-                    void (async () => {
-                      setSavingTraining(true);
-                      try {
-                        const result = await trainingModuleConfigService.updateConfig(updated);
+                    const role = e.target.value;
+                    void runSaveTraining(
+                      async () => {
+                        const result = await trainingModuleConfigService.updateConfig({ report_review_role: role });
                         setTrainingConfig(result);
-                        toast.success("Reviewer role updated");
-                      } catch (err: unknown) {
-                        toast.error(getErrorMessage(err, "Failed to update"));
-                      } finally {
-                        setSavingTraining(false);
-                      }
-                    })();
+                      },
+                      "Reviewer role updated",
+                      "Failed to update",
+                    );
                   }}
                   disabled={savingTraining}
                   className="px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
@@ -1237,23 +853,14 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 <button
                   key={st}
                   onClick={() => {
-                    void (async () => {
-                      setSavingRating(true);
-                      try {
-                        const result =
-                          await trainingModuleConfigService.updateConfig({
-                            rating_scale_type: st,
-                          });
+                    void runSaveRating(
+                      async () => {
+                        const result = await trainingModuleConfigService.updateConfig({ rating_scale_type: st });
                         setTrainingConfig(result);
-                        toast.success("Display style updated");
-                      } catch (err: unknown) {
-                        toast.error(
-                          getErrorMessage(err, "Failed to update"),
-                        );
-                      } finally {
-                        setSavingRating(false);
-                      }
-                    })();
+                      },
+                      "Display style updated",
+                      "Failed to update",
+                    );
                   }}
                   disabled={savingRating}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
@@ -1283,22 +890,16 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 );
               }}
               onBlur={() => {
-                void (async () => {
-                  setSavingRating(true);
-                  try {
-                    const result =
-                      await trainingModuleConfigService.updateConfig({
-                        rating_label: trainingConfig.rating_label,
-                      });
+                void runSaveRating(
+                  async () => {
+                    const result = await trainingModuleConfigService.updateConfig({
+                      rating_label: trainingConfig.rating_label,
+                    });
                     setTrainingConfig(result);
-                  } catch (err: unknown) {
-                    toast.error(
-                      getErrorMessage(err, "Failed to update"),
-                    );
-                  } finally {
-                    setSavingRating(false);
-                  }
-                })();
+                  },
+                  "Rating label saved",
+                  "Failed to update",
+                );
               }}
               className="w-64 px-3 py-1.5 text-sm rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-2 focus:ring-violet-500"
             />
@@ -1374,23 +975,16 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               <div className="flex justify-end pt-3">
                 <button
                   onClick={() => {
-                    void (async () => {
-                      setSavingRating(true);
-                      try {
-                        const result =
-                          await trainingModuleConfigService.updateConfig({
-                            rating_scale_labels: ratingLabels,
-                          });
+                    void runSaveRating(
+                      async () => {
+                        const result = await trainingModuleConfigService.updateConfig({
+                          rating_scale_labels: ratingLabels,
+                        });
                         setTrainingConfig(result);
-                        toast.success("Rating scale saved");
-                      } catch (err: unknown) {
-                        toast.error(
-                          getErrorMessage(err, "Failed to save"),
-                        );
-                      } finally {
-                        setSavingRating(false);
-                      }
-                    })();
+                      },
+                      "Rating scale saved",
+                      "Failed to save",
+                    );
                   }}
                   disabled={savingRating || JSON.stringify(ratingLabels) === JSON.stringify(trainingConfig?.rating_scale_labels ?? {})}
                   className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${

@@ -4,7 +4,6 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft,
   ClipboardList,
-  Star,
   Clock,
   Phone,
   Calendar,
@@ -38,40 +37,9 @@ import type {
   ProgramEnrollment,
   TrainingModuleConfig,
 } from '../types/training';
-
-const SKILL_SCORE_LABELS: Record<number, string> = {
-  1: 'Needs work',
-  2: 'Developing',
-  3: 'Competent',
-  4: 'Proficient',
-  5: 'Excellent',
-};
-
-// ==================== Star Rating ====================
-
-const StarRating: React.FC<{
-  value: number;
-  onChange: (val: number) => void;
-  size?: 'sm' | 'md';
-}> = ({ value, onChange, size = 'md' }) => {
-  const sizeClass = size === 'sm' ? 'w-4 h-4' : 'w-6 h-6';
-  return (
-    <div className="flex items-center space-x-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button
-          key={star}
-          type="button"
-          onClick={() => onChange(star)}
-          className="focus:outline-hidden"
-        >
-          <Star
-            className={`${sizeClass} ${star <= value ? 'text-yellow-700 dark:text-yellow-400 fill-yellow-400' : 'text-theme-text-muted'}`}
-          />
-        </button>
-      ))}
-    </div>
-  );
-};
+import { DEFAULT_SKILLS, DEFAULT_CALL_TYPE_OPTIONS } from '../modules/scheduling/components/shiftReportConstants';
+import { StarRating } from '../modules/scheduling/components/StarRating';
+import { ReportContentDisplay } from '../modules/scheduling/components/ReportContentDisplay';
 
 // ==================== Report Card ====================
 
@@ -124,55 +92,10 @@ const ReportCard: React.FC<{
 
       {expanded && (
         <div className="px-4 pb-4 border-t border-theme-surface-border pt-3 space-y-3">
-          {report.officer_narrative && (
-            <div>
-              <span className="text-theme-text-muted text-xs">Officer Narrative</span>
-              <p className="text-theme-text-secondary text-sm">{report.officer_narrative}</p>
-            </div>
-          )}
-          {report.areas_of_strength && (
-            <div>
-              <span className="text-theme-text-muted text-xs">Strengths</span>
-              <p className="text-green-700 dark:text-green-300 text-sm">{report.areas_of_strength}</p>
-            </div>
-          )}
-          {report.areas_for_improvement && (
-            <div>
-              <span className="text-theme-text-muted text-xs">Areas for Improvement</span>
-              <p className="text-orange-700 dark:text-orange-300 text-sm">{report.areas_for_improvement}</p>
-            </div>
-          )}
-          {report.skills_observed && report.skills_observed.length > 0 && (
-            <div>
-              <span className="text-theme-text-muted text-xs">Skills Observed</span>
-              <div className="flex flex-wrap gap-1 mt-1">
-                {report.skills_observed.map((s, i) => (
-                  <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
-                    {s.skill_name}{s.score != null ? ` (${s.score}/5 — ${SKILL_SCORE_LABELS[s.score] ?? ''})` : ''}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {report.tasks_performed && report.tasks_performed.length > 0 && (
-            <div>
-              <span className="text-theme-text-muted text-xs">Tasks Performed</span>
-              <ul className="list-disc list-inside text-sm text-theme-text-secondary mt-1">
-                {report.tasks_performed.map((t, i) => (
-                  <li key={i}>{t.task}{t.description ? ` - ${t.description}` : ''}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <ReportContentDisplay report={report} />
           {report.requirements_progressed && report.requirements_progressed.length > 0 && (
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-sm p-2 text-xs text-blue-700 dark:text-blue-300">
               Updated {report.requirements_progressed.length} pipeline requirement(s)
-            </div>
-          )}
-          {report.trainee_comments && (
-            <div className="bg-theme-surface-secondary rounded-sm p-2">
-              <span className="text-theme-text-muted text-xs">Trainee Comments: </span>
-              <span className="text-theme-text-secondary text-sm">{report.trainee_comments}</span>
             </div>
           )}
           <div className="text-xs text-theme-text-muted">
@@ -329,7 +252,7 @@ const ShiftReportPage: React.FC = () => {
         setAutoPopulated(populated);
       })
       .catch(() => setAutoPopulated({}));
-  }, [selectedShiftId, traineeId]);
+  }, [selectedShiftId, traineeId, availableShifts]);
 
   // Load enrollments when trainee is selected
   useEffect(() => {
@@ -491,24 +414,9 @@ const ShiftReportPage: React.FC = () => {
     }
   };
 
-  const DEFAULT_CALL_TYPES = [
-    'Structure Fire', 'Vehicle Fire', 'Brush/Wildland',
-    'EMS/Medical', 'Motor Vehicle Accident', 'Hazmat',
-    'Rescue/Extrication', 'Alarm Investigation',
-    'Public Assist', 'Other',
-  ];
   const callTypeOptions = moduleConfig?.shift_review_call_types?.length
     ? moduleConfig.shift_review_call_types
-    : DEFAULT_CALL_TYPES;
-
-  const DEFAULT_SKILLS = [
-    'SCBA donning/doffing', 'Hose deployment',
-    'Ladder operations', 'Search and rescue',
-    'Ventilation', 'Pump operations',
-    'Patient assessment', 'CPR/AED',
-    'Vitals monitoring', 'Radio communications',
-    'Scene size-up', 'Apparatus check-off',
-  ];
+    : DEFAULT_CALL_TYPE_OPTIONS;
 
   const ratingLabel =
     moduleConfig?.rating_label || 'Performance Rating';

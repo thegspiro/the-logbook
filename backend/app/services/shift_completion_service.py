@@ -5,7 +5,10 @@ Business logic for shift officer reports on trainee experiences,
 including automatic pipeline requirement progress updates.
 """
 
+import copy
 from datetime import date, datetime, timezone
+
+from loguru import logger
 from typing import Dict, List, Optional
 from uuid import UUID
 
@@ -324,8 +327,8 @@ class ShiftCompletionService:
             )
             self.db.add(notification)
             await self.db.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"Failed to send trainee report notification: {e}")
 
     async def _resolve_skill_evaluations(
         self,
@@ -508,7 +511,7 @@ class ShiftCompletionService:
         if current_idx < max_from_observation:
             comp.current_level = levels[current_idx + 1]
 
-        history = comp.score_history or []
+        history = copy.deepcopy(comp.score_history or [])
         history.append({
             **history_entry,
             "level": comp.current_level.value,
@@ -640,7 +643,7 @@ class ShiftCompletionService:
                     new_value = (progress.progress_value or 0) + value_to_add
 
                     # Track call type breakdown in progress_notes
-                    notes = dict(progress.progress_notes or {})
+                    notes = copy.deepcopy(progress.progress_notes or {})
                     if call_type_detail:
                         call_type_history = notes.get("call_type_history", [])
                         call_type_history.append(

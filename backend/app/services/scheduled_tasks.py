@@ -208,124 +208,162 @@ SCHEDULE = {
 }
 
 
+async def _for_each_org(
+    db: AsyncSession,
+    task_name: str,
+    callback,
+) -> Dict[str, Any]:
+    """Run callback(db, org) for each org, collecting results and errors.
+
+    The callback must return an int (count of items processed).
+    """
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+    results = []
+    total = 0
+    for org in organizations:
+        try:
+            count = await callback(db, org)
+            total += count
+        except Exception as e:
+            logger.error(f"{task_name} failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+    return {"task": task_name, "total": total, "errors": results}
+
+
+async def resolve_check_templates(
+    db: AsyncSession,
+    organization_id: str,
+    apparatus_id: str,
+    check_timing: str,
+) -> list:
+    """Resolve equipment check templates for an apparatus with type fallback.
+
+    First looks for templates assigned directly to the apparatus. If none
+    are found, falls back to templates matching the apparatus's type code
+    that have no specific apparatus assigned.
+    """
+    from app.models.apparatus import (
+        Apparatus,
+        ApparatusType,
+        EquipmentCheckTemplate,
+    )
+
+    tmpl_result = await db.execute(
+        select(EquipmentCheckTemplate)
+        .where(
+            EquipmentCheckTemplate.organization_id
+            == str(organization_id)
+        )
+        .where(
+            EquipmentCheckTemplate.apparatus_id
+            == str(apparatus_id)
+        )
+        .where(
+            EquipmentCheckTemplate.check_timing
+            == check_timing
+        )
+        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+        .order_by(EquipmentCheckTemplate.sort_order)
+    )
+    templates = list(tmpl_result.scalars().all())
+
+    if templates:
+        return templates
+
+    # Fall back to apparatus-type templates
+    app_result = await db.execute(
+        select(Apparatus.apparatus_type_id).where(
+            Apparatus.id == str(apparatus_id)
+        )
+    )
+    app_type_id = app_result.scalar_one_or_none()
+
+    type_query = (
+        select(EquipmentCheckTemplate)
+        .where(
+            EquipmentCheckTemplate.organization_id
+            == str(organization_id)
+        )
+        .where(
+            EquipmentCheckTemplate.apparatus_id.is_(None)
+        )
+        .where(
+            EquipmentCheckTemplate.check_timing
+            == check_timing
+        )
+        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+    )
+    if app_type_id:
+        at_result = await db.execute(
+            select(ApparatusType.code).where(
+                ApparatusType.id == str(app_type_id)
+            )
+        )
+        at_code = at_result.scalar_one_or_none()
+        if at_code:
+            type_query = type_query.where(
+                EquipmentCheckTemplate.apparatus_type
+                == at_code
+            )
+
+    type_result = await db.execute(
+        type_query.order_by(
+            EquipmentCheckTemplate.sort_order
+        )
+    )
+    return list(type_result.scalars().all())
+
+
 async def run_cert_expiration_alerts(db: AsyncSession) -> Dict[str, Any]:
     """Run certification expiration alerts for all organizations."""
     from app.services.cert_alert_service import CertAlertService
 
-    orgs = await db.execute(select(Organization))
-    organizations = list(orgs.scalars().all())
+    async def _process(db_session, org):
+        service = CertAlertService(db_session)
+        result = await service.process_alerts(org.id)
+        return result.get("alerts_sent", 0)
 
-    total_sent = 0
-    results = []
-
-    for org in organizations:
-        try:
-            service = CertAlertService(db)
-            result = await service.process_alerts(org.id)
-            sent = result.get("alerts_sent", 0)
-            total_sent += sent
-            results.append({"org_id": str(org.id), "alerts_sent": sent})
-        except Exception as e:
-            logger.error(f"Cert alert failed for org {org.id}: {e}")
-            results.append({"org_id": str(org.id), "error": str(e)})
-
-    logger.info(
-        f"Cert expiration alerts complete: {total_sent} alerts sent across {len(organizations)} orgs"
-    )
-    return {
-        "task": "cert_expiration_alerts",
-        "total_alerts_sent": total_sent,
-        "organizations": results,
-    }
+    return await _for_each_org(db, "cert_expiration_alerts", _process)
 
 
 async def run_struggling_member_check(db: AsyncSession) -> Dict[str, Any]:
     """Detect members falling behind and send notifications."""
     from app.services.struggling_member_service import StrugglingMemberService
 
-    orgs = await db.execute(select(Organization))
-    organizations = list(orgs.scalars().all())
+    async def _process(db_session, org):
+        service = StrugglingMemberService(db_session)
+        result = await service.detect_and_notify(str(org.id))
+        return result.get("members_flagged", 0)
 
-    total_flagged = 0
-    results = []
-
-    for org in organizations:
-        try:
-            service = StrugglingMemberService(db)
-            result = await service.detect_and_notify(str(org.id))
-            flagged = result.get("members_flagged", 0)
-            total_flagged += flagged
-            results.append({"org_id": str(org.id), "members_flagged": flagged})
-        except Exception as e:
-            logger.error(f"Struggling member check failed for org {org.id}: {e}")
-            results.append({"org_id": str(org.id), "error": str(e)})
-
-    logger.info(f"Struggling member check complete: {total_flagged} members flagged")
-    return {
-        "task": "struggling_member_check",
-        "total_flagged": total_flagged,
-        "organizations": results,
-    }
+    return await _for_each_org(db, "struggling_member_check", _process)
 
 
 async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
     """Send deadline warnings for approaching enrollment deadlines."""
     from app.services.struggling_member_service import StrugglingMemberService
 
-    orgs = await db.execute(select(Organization))
-    organizations = list(orgs.scalars().all())
+    async def _process(db_session, org):
+        service = StrugglingMemberService(db_session)
+        result = await service.send_deadline_warnings(str(org.id))
+        return result.get("warnings_sent", 0)
 
-    total_warned = 0
-    results = []
-
-    for org in organizations:
-        try:
-            service = StrugglingMemberService(db)
-            result = await service.send_deadline_warnings(str(org.id))
-            warned = result.get("warnings_sent", 0)
-            total_warned += warned
-            results.append({"org_id": str(org.id), "warnings_sent": warned})
-        except Exception as e:
-            logger.error(f"Enrollment deadline warnings failed for org {org.id}: {e}")
-            results.append({"org_id": str(org.id), "error": str(e)})
-
-    return {
-        "task": "enrollment_deadline_warnings",
-        "total_warned": total_warned,
-        "organizations": results,
-    }
+    return await _for_each_org(db, "enrollment_deadline_warnings", _process)
 
 
 async def run_membership_tier_advance(db: AsyncSession) -> Dict[str, Any]:
     """Auto-advance all eligible members to higher tiers."""
     from app.services.membership_tier_service import MembershipTierService
 
-    orgs = await db.execute(select(Organization))
-    organizations = list(orgs.scalars().all())
+    async def _process(db_session, org):
+        service = MembershipTierService(db_session)
+        result = await service.advance_all(
+            organization_id=str(org.id),
+            performed_by="system",
+        )
+        return result.get("advanced", 0)
 
-    total_advanced = 0
-    results = []
-
-    for org in organizations:
-        try:
-            service = MembershipTierService(db)
-            result = await service.advance_all(
-                organization_id=str(org.id),
-                performed_by="system",
-            )
-            advanced = result.get("advanced", 0)
-            total_advanced += advanced
-            results.append({"org_id": str(org.id), "advanced": advanced})
-        except Exception as e:
-            logger.error(f"Tier advance failed for org {org.id}: {e}")
-            results.append({"org_id": str(org.id), "error": str(e)})
-
-    logger.info(f"Membership tier advance complete: {total_advanced} members advanced")
-    return {
-        "task": "membership_tier_advance",
-        "total_advanced": total_advanced,
-        "organizations": results,
-    }
+    return await _for_each_org(db, "membership_tier_advance", _process)
 
 
 async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
@@ -921,11 +959,6 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
     from app.core.config import settings
     from app.core.utils import generate_uuid
-    from app.models.apparatus import (
-        Apparatus,
-        ApparatusType,
-        EquipmentCheckTemplate,
-    )
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import (
         Shift,
@@ -1003,64 +1036,11 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 # Check for outstanding end-of-shift checklists
                 pending_checklists: list[str] = []
                 if shift.apparatus_id:
-                    eos_tmpl_result = await db.execute(
-                        select(EquipmentCheckTemplate)
-                        .where(
-                            EquipmentCheckTemplate.organization_id
-                            == str(org.id)
-                        )
-                        .where(
-                            EquipmentCheckTemplate.apparatus_id
-                            == str(shift.apparatus_id)
-                        )
-                        .where(
-                            EquipmentCheckTemplate.check_timing
-                            == "end_of_shift"
-                        )
-                        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
+                    eos_templates = await resolve_check_templates(
+                        db, str(org.id),
+                        str(shift.apparatus_id),
+                        "end_of_shift",
                     )
-                    eos_templates = list(eos_tmpl_result.scalars().all())
-
-                    if not eos_templates:
-                        app_result = await db.execute(
-                            select(Apparatus.apparatus_type_id).where(
-                                Apparatus.id == str(shift.apparatus_id)
-                            )
-                        )
-                        app_type_id = app_result.scalar_one_or_none()
-                        eos_type_query = (
-                            select(EquipmentCheckTemplate)
-                            .where(
-                                EquipmentCheckTemplate.organization_id
-                                == str(org.id)
-                            )
-                            .where(
-                                EquipmentCheckTemplate.apparatus_id.is_(
-                                    None
-                                )
-                            )
-                            .where(
-                                EquipmentCheckTemplate.check_timing
-                                == "end_of_shift"
-                            )
-                            .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
-                        )
-                        if app_type_id:
-                            at_result = await db.execute(
-                                select(ApparatusType.code).where(
-                                    ApparatusType.id == str(app_type_id)
-                                )
-                            )
-                            at_code = at_result.scalar_one_or_none()
-                            if at_code:
-                                eos_type_query = eos_type_query.where(
-                                    EquipmentCheckTemplate.apparatus_type
-                                    == at_code
-                                )
-                        eos_tmpl_result2 = await db.execute(eos_type_query)
-                        eos_templates = list(
-                            eos_tmpl_result2.scalars().all()
-                        )
 
                     if eos_templates:
                         eos_tmpl_ids = [str(t.id) for t in eos_templates]
@@ -1166,7 +1146,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         action_url=(
                             f"/scheduling?shift={shift.id}"
                         ),
-                        metadata={
+                        notification_metadata={
                             "shift_id": str(shift.id),
                             "shift_start_time": (
                                 shift.start_time.isoformat()
@@ -1329,11 +1309,6 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
     from app.core.config import settings
     from app.core.utils import generate_uuid
-    from app.models.apparatus import (
-        Apparatus,
-        ApparatusType,
-        EquipmentCheckTemplate,
-    )
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import Shift, ShiftAssignment
     from app.services.email_service import EmailService, build_email_logo_html
@@ -1406,77 +1381,12 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 # Fetch equipment check templates for the apparatus
                 checklist_names: list[str] = []
                 if shift.apparatus_id and start_checklists_enabled:
-                    tmpl_result = await db.execute(
-                        select(EquipmentCheckTemplate)
-                        .where(
-                            EquipmentCheckTemplate.organization_id
-                            == str(org.id)
-                        )
-                        .where(
-                            EquipmentCheckTemplate.apparatus_id
-                            == str(shift.apparatus_id)
-                        )
-                        .where(
-                            EquipmentCheckTemplate.check_timing
-                            == "start_of_shift"
-                        )
-                        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
-                        .order_by(EquipmentCheckTemplate.sort_order)
+                    templates = await resolve_check_templates(
+                        db, str(org.id),
+                        str(shift.apparatus_id),
+                        "start_of_shift",
                     )
-                    templates = list(tmpl_result.scalars().all())
                     checklist_names = [t.name for t in templates]
-
-                    # Fall back to apparatus-type templates if none
-                    # are assigned to the specific apparatus
-                    if not checklist_names:
-                        app_result = await db.execute(
-                            select(Apparatus.apparatus_type_id).where(
-                                Apparatus.id == str(shift.apparatus_id)
-                            )
-                        )
-                        app_type_id = app_result.scalar_one_or_none()
-
-                        type_query = (
-                            select(EquipmentCheckTemplate)
-                            .where(
-                                EquipmentCheckTemplate.organization_id
-                                == str(org.id)
-                            )
-                            .where(
-                                EquipmentCheckTemplate.apparatus_id.is_(None)
-                            )
-                            .where(
-                                EquipmentCheckTemplate.check_timing
-                                == "start_of_shift"
-                            )
-                            .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
-                        )
-                        if app_type_id:
-                            app_type_result = await db.execute(
-                                select(ApparatusType.code).where(
-                                    ApparatusType.id == str(app_type_id)
-                                )
-                            )
-                            app_type_code = (
-                                app_type_result.scalar_one_or_none()
-                            )
-                            if app_type_code:
-                                type_query = type_query.where(
-                                    EquipmentCheckTemplate.apparatus_type
-                                    == app_type_code
-                                )
-
-                        type_result = await db.execute(
-                            type_query.order_by(
-                                EquipmentCheckTemplate.sort_order
-                            )
-                        )
-                        type_templates = list(
-                            type_result.scalars().all()
-                        )
-                        checklist_names = [
-                            t.name for t in type_templates
-                        ]
 
                 shift_date_str = (
                     shift.shift_date.strftime("%b %d, %Y")
@@ -1696,11 +1606,6 @@ async def run_end_of_shift_checklist_reminders(
     from zoneinfo import ZoneInfo
 
     from app.core.utils import generate_uuid
-    from app.models.apparatus import (
-        Apparatus,
-        ApparatusType,
-        EquipmentCheckTemplate,
-    )
     from app.models.notification import NotificationChannel, NotificationLog
     from app.models.training import (
         Shift,
@@ -1759,72 +1664,11 @@ async def run_end_of_shift_checklist_reminders(
                     continue
 
                 # Find end-of-shift templates for this apparatus
-                tmpl_result = await db.execute(
-                    select(EquipmentCheckTemplate)
-                    .where(
-                        EquipmentCheckTemplate.organization_id
-                        == str(org.id)
-                    )
-                    .where(
-                        EquipmentCheckTemplate.apparatus_id
-                        == str(shift.apparatus_id)
-                    )
-                    .where(
-                        EquipmentCheckTemplate.check_timing
-                        == "end_of_shift"
-                    )
-                    .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
-                    .order_by(EquipmentCheckTemplate.sort_order)
+                eos_templates = await resolve_check_templates(
+                    db, str(org.id),
+                    str(shift.apparatus_id),
+                    "end_of_shift",
                 )
-                eos_templates = list(tmpl_result.scalars().all())
-
-                # Fallback to apparatus-type templates
-                if not eos_templates:
-                    app_result = await db.execute(
-                        select(Apparatus.apparatus_type_id).where(
-                            Apparatus.id == str(shift.apparatus_id)
-                        )
-                    )
-                    app_type_id = app_result.scalar_one_or_none()
-
-                    type_query = (
-                        select(EquipmentCheckTemplate)
-                        .where(
-                            EquipmentCheckTemplate.organization_id
-                            == str(org.id)
-                        )
-                        .where(
-                            EquipmentCheckTemplate.apparatus_id.is_(
-                                None
-                            )
-                        )
-                        .where(
-                            EquipmentCheckTemplate.check_timing
-                            == "end_of_shift"
-                        )
-                        .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
-                    )
-                    if app_type_id:
-                        at_result = await db.execute(
-                            select(ApparatusType.code).where(
-                                ApparatusType.id == str(app_type_id)
-                            )
-                        )
-                        at_code = at_result.scalar_one_or_none()
-                        if at_code:
-                            type_query = type_query.where(
-                                EquipmentCheckTemplate.apparatus_type
-                                == at_code
-                            )
-
-                    type_result = await db.execute(
-                        type_query.order_by(
-                            EquipmentCheckTemplate.sort_order
-                        )
-                    )
-                    eos_templates = list(
-                        type_result.scalars().all()
-                    )
 
                 if not eos_templates:
                     shift.activities = {
@@ -3276,7 +3120,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                                 action_url=(
                                     f"/scheduling?shift={shift.id}"
                                 ),
-                                metadata={
+                                notification_metadata={
                                     "shift_id": str(shift.id),
                                 },
                                 delivered=True,

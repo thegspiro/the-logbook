@@ -97,7 +97,7 @@ describe('ActiveSkillTestPage', () => {
       renderWithRouter(<ActiveSkillTestPage />);
 
       // Should show the loading spinner (test is null so it shows loading)
-      expect(screen.getByRole('status')).toBeInTheDocument();
+      expect(screen.getAllByRole('status').length).toBeGreaterThanOrEqual(1);
     });
   });
 

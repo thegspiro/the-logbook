@@ -46,10 +46,13 @@ describe('MyShiftsTab', () => {
     mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
   });
 
-  it('should render loading state initially', () => {
+  it('should render and resolve loading state', async () => {
     renderWithRouter(<MyShiftsTab onViewShift={mockOnViewShift} />);
-    // Component starts loading — Upcoming/Past toggle is not yet visible
-    expect(screen.queryByText(/^Upcoming/)).not.toBeInTheDocument();
+    // Mocked API resolves immediately, so the component transitions
+    // from loading to the loaded view within the same tick.
+    await waitFor(() => {
+      expect(screen.getByText(/^Upcoming/)).toBeInTheDocument();
+    });
   });
 
   it('should render empty state when no shifts', async () => {
