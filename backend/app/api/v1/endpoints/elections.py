@@ -95,9 +95,7 @@ def _ballot_vote_rate_limit(
     )
 
 
-async def _load_meeting_for_election(
-    db: AsyncSession, election: Election
-) -> None:
+async def _load_meeting_for_election(db: AsyncSession, election: Election) -> None:
     """Eagerly load the meeting relationship if not already loaded."""
     if election.meeting_id and not election.meeting:
         result = await db.execute(
@@ -183,8 +181,9 @@ async def list_elections(
     meeting_map: dict = {}
     if meeting_ids:
         meetings_result = await db.execute(
-            select(Meeting.id, Meeting.title, Meeting.meeting_date)
-            .where(Meeting.id.in_(meeting_ids))
+            select(Meeting.id, Meeting.title, Meeting.meeting_date).where(
+                Meeting.id.in_(meeting_ids)
+            )
         )
         for mid, mtitle, mdate in meetings_result.all():
             meeting_map[mid] = {"title": mtitle, "meeting_date": mdate}
@@ -1870,9 +1869,7 @@ async def import_meeting_attendees(
     **Requires permission: elections.manage**
     """
     service = ElectionService(db)
-    election = await service.get_election(
-        election_id, current_user.organization_id
-    )
+    election = await service.get_election(election_id, current_user.organization_id)
 
     if not election:
         raise HTTPException(
@@ -1899,8 +1896,7 @@ async def import_meeting_attendees(
             user_name = "Unknown"
             if ma.user:
                 user_name = (
-                    f"{ma.user.first_name} {ma.user.last_name}".strip()
-                    or ma.user.email
+                    f"{ma.user.first_name} {ma.user.last_name}".strip() or ma.user.email
                 )
             source_attendees.append((str(ma.user_id), user_name))
 
@@ -1955,12 +1951,14 @@ async def import_meeting_attendees(
             skipped += 1
             continue
 
-        current_attendees.append({
-            "user_id": user_id,
-            "name": user_name,
-            "checked_in_at": now_iso,
-            "checked_in_by": str(current_user.id),
-        })
+        current_attendees.append(
+            {
+                "user_id": user_id,
+                "name": user_name,
+                "checked_in_at": now_iso,
+                "checked_in_by": str(current_user.id),
+            }
+        )
         imported += 1
 
     election.attendees = current_attendees

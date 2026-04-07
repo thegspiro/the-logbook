@@ -134,7 +134,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Annual Compliance Report/)).toBeInTheDocument();
     });
 
-    expect(mockGetAnnualReport).toHaveBeenCalled();
+    expect(mockGetAnnualReport).toHaveBeenCalledWith();
   });
 
   it('can switch to ISO Readiness section', async () => {
@@ -147,7 +147,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/ISO\/FSRS Readiness Assessment/)).toBeInTheDocument();
     });
 
-    expect(mockGetISOReadiness).toHaveBeenCalled();
+    expect(mockGetISOReadiness).toHaveBeenCalledWith();
   });
 
   it('can switch to Record Quality section', async () => {
@@ -160,7 +160,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Training Record Quality/)).toBeInTheDocument();
     });
 
-    expect(mockGetRecordCompleteness).toHaveBeenCalled();
+    expect(mockGetRecordCompleteness).toHaveBeenCalledWith();
   });
 
   it('can switch to Attestations section', async () => {
@@ -173,7 +173,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Compliance Attestations/)).toBeInTheDocument();
     });
 
-    expect(mockGetAttestations).toHaveBeenCalled();
+    expect(mockGetAttestations).toHaveBeenCalledWith();
   });
 
   it('displays admin hours and total contributed hours in annual report', async () => {
@@ -209,6 +209,6 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText('No forecast data available.')).toBeInTheDocument();
     });
 
-    expect(mockGetComplianceForecast).toHaveBeenCalled();
+    expect(mockGetComplianceForecast).toHaveBeenCalledWith();
   });
 });

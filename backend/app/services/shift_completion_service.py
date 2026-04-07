@@ -124,22 +124,15 @@ class ShiftCompletionService:
                 await self.db.execute(
                     select(Shift).where(
                         Shift.id == shift_id,
-                        Shift.organization_id == str(
-                            organization_id
-                        ),
+                        Shift.organization_id == str(organization_id),
                     )
                 )
             ).scalar_one_or_none()
             if not shift:
-                raise ValueError(
-                    "Shift not found in this organization"
-                )
+                raise ValueError("Shift not found in this organization")
 
             if shift.shift_date != shift_date:
-                raise ValueError(
-                    "Report date does not match the "
-                    "linked shift date"
-                )
+                raise ValueError("Report date does not match the " "linked shift date")
 
             att_check = (
                 await self.db.execute(
@@ -173,25 +166,20 @@ class ShiftCompletionService:
             existing = (
                 await self.db.execute(
                     select(ShiftCompletionReport.id).where(
-                        ShiftCompletionReport.shift_id
-                        == shift_id,
-                        ShiftCompletionReport.trainee_id
-                        == trainee_id,
+                        ShiftCompletionReport.shift_id == shift_id,
+                        ShiftCompletionReport.trainee_id == trainee_id,
                     )
                 )
             ).scalar_one_or_none()
             if existing:
                 raise ValueError(
-                    "A report already exists for this "
-                    "trainee on this shift"
+                    "A report already exists for this " "trainee on this shift"
                 )
 
         # When linked to a shift, auto-populate from actual records
         if shift_id:
-            actual_calls, actual_types = (
-                await self._get_trainee_call_data_from_shift(
-                    shift_id, trainee_id
-                )
+            actual_calls, actual_types = await self._get_trainee_call_data_from_shift(
+                shift_id, trainee_id
             )
             calls_responded = actual_calls
             data_sources["calls_responded"] = "shift_calls"
@@ -212,15 +200,13 @@ class ShiftCompletionService:
                 await self.db.execute(
                     select(ProgramEnrollment).where(
                         ProgramEnrollment.id == enrollment_id,
-                        ProgramEnrollment.user_id
-                        == trainee_id,
+                        ProgramEnrollment.user_id == trainee_id,
                     )
                 )
             ).scalar_one_or_none()
             if not enrollment:
                 raise ValueError(
-                    "Enrollment not found or does not "
-                    "belong to this trainee"
+                    "Enrollment not found or does not " "belong to this trainee"
                 )
 
         report = ShiftCompletionReport(
@@ -264,33 +250,27 @@ class ShiftCompletionService:
         # since the officer hasn't reviewed the data yet.  Progress
         # will be triggered when the draft is completed/approved.
         if review_status != "draft":
-            matched_skill_ids = (
-                await self._create_skill_checkoffs(
-                    organization_id=organization_id,
-                    trainee_id=trainee_id,
-                    officer_id=officer_id,
-                    skills_observed=skills_observed,
-                    shift_id=shift_id,
-                )
+            matched_skill_ids = await self._create_skill_checkoffs(
+                organization_id=organization_id,
+                trainee_id=trainee_id,
+                officer_id=officer_id,
+                skills_observed=skills_observed,
+                shift_id=shift_id,
             )
 
-            requirements_progressed = (
-                await self._update_requirement_progress(
-                    organization_id=organization_id,
-                    trainee_id=trainee_id,
-                    hours_on_shift=hours_on_shift,
-                    calls_responded=calls_responded,
-                    call_types=call_types,
-                    enrollment_id=enrollment_id,
-                    officer_id=officer_id,
-                    matched_skill_ids=matched_skill_ids,
-                )
+            requirements_progressed = await self._update_requirement_progress(
+                organization_id=organization_id,
+                trainee_id=trainee_id,
+                hours_on_shift=hours_on_shift,
+                calls_responded=calls_responded,
+                call_types=call_types,
+                enrollment_id=enrollment_id,
+                officer_id=officer_id,
+                matched_skill_ids=matched_skill_ids,
             )
 
             if requirements_progressed:
-                report.requirements_progressed = (
-                    requirements_progressed
-                )
+                report.requirements_progressed = requirements_progressed
 
         if commit:
             await self.db.commit()
@@ -345,19 +325,14 @@ class ShiftCompletionService:
 
         result = await self.db.execute(
             select(SkillEvaluation).where(
-                SkillEvaluation.organization_id == str(
-                    organization_id
-                ),
+                SkillEvaluation.organization_id == str(organization_id),
                 SkillEvaluation.active == True,  # noqa: E712
             )
         )
         all_skills = result.scalars().all()
 
         skill_map: Dict[str, str] = {}
-        eval_by_lower = {
-            se.name.lower(): str(se.id)
-            for se in all_skills
-        }
+        eval_by_lower = {se.name.lower(): str(se.id) for se in all_skills}
         for name in skill_names:
             match = eval_by_lower.get(name.lower())
             if match:
@@ -380,7 +355,8 @@ class ShiftCompletionService:
             return []
 
         demonstrated = [
-            s for s in skills_observed
+            s
+            for s in skills_observed
             if (
                 s.get("demonstrated")
                 if isinstance(s, dict)
@@ -391,14 +367,14 @@ class ShiftCompletionService:
             return []
 
         names = [
-            s.get("skill_name", "")
-            if isinstance(s, dict)
-            else getattr(s, "skill_name", "")
+            (
+                s.get("skill_name", "")
+                if isinstance(s, dict)
+                else getattr(s, "skill_name", "")
+            )
             for s in demonstrated
         ]
-        skill_map = await self._resolve_skill_evaluations(
-            organization_id, names
-        )
+        skill_map = await self._resolve_skill_evaluations(organization_id, names)
         if not skill_map:
             return []
 
@@ -462,10 +438,8 @@ class ShiftCompletionService:
         result = await self.db.execute(
             select(MemberCompetency).where(
                 MemberCompetency.user_id == user_id,
-                MemberCompetency.skill_evaluation_id
-                == skill_evaluation_id,
-                MemberCompetency.organization_id
-                == str(organization_id),
+                MemberCompetency.skill_evaluation_id == skill_evaluation_id,
+                MemberCompetency.organization_id == str(organization_id),
             )
         )
         comp = result.scalar_one_or_none()
@@ -488,10 +462,12 @@ class ShiftCompletionService:
                 last_evaluated_at=now,
                 last_evaluator_id=evaluator_id,
                 evaluation_count=1,
-                score_history=[{
-                    **history_entry,
-                    "level": CompetencyLevel.NOVICE.value,
-                }],
+                score_history=[
+                    {
+                        **history_entry,
+                        "level": CompetencyLevel.NOVICE.value,
+                    }
+                ],
             )
             self.db.add(comp)
             return
@@ -499,23 +475,21 @@ class ShiftCompletionService:
         comp.previous_level = comp.current_level
         comp.last_evaluated_at = now
         comp.last_evaluator_id = evaluator_id
-        comp.evaluation_count = (
-            (comp.evaluation_count or 0) + 1
-        )
+        comp.evaluation_count = (comp.evaluation_count or 0) + 1
 
         levels = list(CompetencyLevel)
         current_idx = levels.index(comp.current_level)
-        max_from_observation = levels.index(
-            CompetencyLevel.COMPETENT
-        )
+        max_from_observation = levels.index(CompetencyLevel.COMPETENT)
         if current_idx < max_from_observation:
             comp.current_level = levels[current_idx + 1]
 
         history = copy.deepcopy(comp.score_history or [])
-        history.append({
-            **history_entry,
-            "level": comp.current_level.value,
-        })
+        history.append(
+            {
+                **history_entry,
+                "level": comp.current_level.value,
+            }
+        )
         comp.score_history = history[-10:]
 
     async def _update_requirement_progress(
@@ -590,15 +564,11 @@ class ShiftCompletionService:
                     required_call_types = requirement.required_call_types or []
                     if required_call_types and call_types:
                         # Count only calls matching the required types
-                        required_lower = [
-                            rct.lower()
-                            for rct in required_call_types
-                        ]
+                        required_lower = [rct.lower() for rct in required_call_types]
                         matching_calls = [
                             ct
                             for ct in call_types
-                            if isinstance(ct, str)
-                            and ct.lower() in required_lower
+                            if isinstance(ct, str) and ct.lower() in required_lower
                         ]
                         value_to_add = float(len(matching_calls))
                         if matching_calls:
@@ -612,26 +582,17 @@ class ShiftCompletionService:
                 elif requirement.requirement_type == RequirementType.HOURS:
                     value_to_add = hours_on_shift
                 elif (
-                    requirement.requirement_type
-                    == RequirementType.SKILLS_EVALUATION
+                    requirement.requirement_type == RequirementType.SKILLS_EVALUATION
                     and matched_skill_ids
                 ):
-                    req_skills = (
-                        requirement.required_skills or []
-                    )
+                    req_skills = requirement.required_skills or []
                     if req_skills:
                         newly_matched = [
-                            sid
-                            for sid in matched_skill_ids
-                            if sid in req_skills
+                            sid for sid in matched_skill_ids if sid in req_skills
                         ]
-                        value_to_add = float(
-                            len(newly_matched)
-                        )
+                        value_to_add = float(len(newly_matched))
                     else:
-                        value_to_add = float(
-                            len(matched_skill_ids)
-                        )
+                        value_to_add = float(len(matched_skill_ids))
                 else:
                     continue
 
@@ -650,9 +611,7 @@ class ShiftCompletionService:
                             {
                                 "date": str(date.today()),
                                 "types": call_type_detail["matched_types"],
-                                "count": len(
-                                    call_type_detail["matched_types"]
-                                ),
+                                "count": len(call_type_detail["matched_types"]),
                             }
                         )
                         notes["call_type_history"] = call_type_history
@@ -661,9 +620,7 @@ class ShiftCompletionService:
                         type_totals = notes.get("call_type_totals", {})
                         for ct in call_type_detail["matched_types"]:
                             ct_key = ct.lower()
-                            type_totals[ct_key] = (
-                                type_totals.get(ct_key, 0) + 1
-                            )
+                            type_totals[ct_key] = type_totals.get(ct_key, 0) + 1
                         notes["call_type_totals"] = type_totals
 
                     update_data = RequirementProgressUpdate(
@@ -694,14 +651,10 @@ class ShiftCompletionService:
 
         return requirements_progressed
 
-    async def get_report(
-        self, report_id: str
-    ) -> Optional[ShiftCompletionReport]:
+    async def get_report(self, report_id: str) -> Optional[ShiftCompletionReport]:
         """Get a single shift completion report."""
         result = await self.db.execute(
-            select(ShiftCompletionReport).where(
-                ShiftCompletionReport.id == report_id
-            )
+            select(ShiftCompletionReport).where(ShiftCompletionReport.id == report_id)
         )
         return result.scalar_one_or_none()
 
@@ -723,22 +676,24 @@ class ShiftCompletionService:
         if report.organization_id != str(organization_id):
             return None
         if report.officer_id != officer_id:
-            raise ValueError(
-                "Only the filing officer can update this report"
-            )
+            raise ValueError("Only the filing officer can update this report")
 
         was_draft = report.review_status == "draft"
 
         for field, value in updates.items():
             if hasattr(report, field) and field not in (
-                "id", "organization_id", "officer_id",
-                "trainee_id", "created_at",
+                "id",
+                "organization_id",
+                "officer_id",
+                "trainee_id",
+                "created_at",
             ):
                 setattr(report, field, value)
 
         # Trigger training progress when a draft is completed
         if was_draft and report.review_status in (
-            "approved", "pending_review",
+            "approved",
+            "pending_review",
         ):
             await self._trigger_deferred_progress(report, officer_id)
 
@@ -755,32 +710,26 @@ class ShiftCompletionService:
         when a report was created as a draft."""
         org_id = UUID(report.organization_id)
 
-        matched_skill_ids = (
-            await self._create_skill_checkoffs(
-                organization_id=org_id,
-                trainee_id=report.trainee_id,
-                officer_id=UUID(officer_id),
-                skills_observed=report.skills_observed,
-                shift_id=report.shift_id,
-            )
+        matched_skill_ids = await self._create_skill_checkoffs(
+            organization_id=org_id,
+            trainee_id=report.trainee_id,
+            officer_id=UUID(officer_id),
+            skills_observed=report.skills_observed,
+            shift_id=report.shift_id,
         )
 
-        requirements_progressed = (
-            await self._update_requirement_progress(
-                organization_id=org_id,
-                trainee_id=report.trainee_id,
-                hours_on_shift=report.hours_on_shift,
-                calls_responded=report.calls_responded,
-                call_types=report.call_types,
-                enrollment_id=report.enrollment_id,
-                officer_id=UUID(officer_id),
-                matched_skill_ids=matched_skill_ids,
-            )
+        requirements_progressed = await self._update_requirement_progress(
+            organization_id=org_id,
+            trainee_id=report.trainee_id,
+            hours_on_shift=report.hours_on_shift,
+            calls_responded=report.calls_responded,
+            call_types=report.call_types,
+            enrollment_id=report.enrollment_id,
+            officer_id=UUID(officer_id),
+            matched_skill_ids=matched_skill_ids,
         )
         if requirements_progressed:
-            report.requirements_progressed = (
-                requirements_progressed
-            )
+            report.requirements_progressed = requirements_progressed
 
     async def get_reports_for_trainee(
         self,
@@ -839,10 +788,7 @@ class ShiftCompletionService:
         """Get all shift completion reports for the organization."""
         query = (
             select(ShiftCompletionReport)
-            .where(
-                ShiftCompletionReport.organization_id
-                == str(organization_id)
-            )
+            .where(ShiftCompletionReport.organization_id == str(organization_id))
             .order_by(ShiftCompletionReport.shift_date.desc())
             .limit(limit)
             .offset(offset)
@@ -941,7 +887,8 @@ class ShiftCompletionService:
             "pending_review",
         ):
             await self._trigger_deferred_progress(
-                report, reviewer_id,
+                report,
+                reviewer_id,
             )
 
         await self.db.commit()
@@ -970,28 +917,16 @@ class ShiftCompletionService:
             ShiftCompletionReport.review_status != "draft",
         ]
         if start_date:
-            base_filter.append(
-                ShiftCompletionReport.shift_date >= start_date
-            )
+            base_filter.append(ShiftCompletionReport.shift_date >= start_date)
         if end_date:
-            base_filter.append(
-                ShiftCompletionReport.shift_date <= end_date
-            )
+            base_filter.append(ShiftCompletionReport.shift_date <= end_date)
 
         result = await self.db.execute(
             select(
-                func.count(ShiftCompletionReport.id).label(
-                    "total_reports"
-                ),
-                func.sum(
-                    ShiftCompletionReport.hours_on_shift
-                ).label("total_hours"),
-                func.sum(
-                    ShiftCompletionReport.calls_responded
-                ).label("total_calls"),
-                func.avg(
-                    ShiftCompletionReport.performance_rating
-                ).label("avg_rating"),
+                func.count(ShiftCompletionReport.id).label("total_reports"),
+                func.sum(ShiftCompletionReport.hours_on_shift).label("total_hours"),
+                func.sum(ShiftCompletionReport.calls_responded).label("total_calls"),
+                func.avg(ShiftCompletionReport.performance_rating).label("avg_rating"),
             ).where(*base_filter)
         )
         row = result.one()
@@ -999,18 +934,12 @@ class ShiftCompletionService:
         # Monthly breakdown for trend display
         monthly_result = await self.db.execute(
             select(
-                func.date_format(
-                    ShiftCompletionReport.shift_date, "%Y-%m"
-                ).label("month"),
-                func.count(ShiftCompletionReport.id).label(
-                    "reports"
+                func.date_format(ShiftCompletionReport.shift_date, "%Y-%m").label(
+                    "month"
                 ),
-                func.sum(
-                    ShiftCompletionReport.hours_on_shift
-                ).label("hours"),
-                func.sum(
-                    ShiftCompletionReport.calls_responded
-                ).label("calls"),
+                func.count(ShiftCompletionReport.id).label("reports"),
+                func.sum(ShiftCompletionReport.hours_on_shift).label("hours"),
+                func.sum(ShiftCompletionReport.calls_responded).label("calls"),
             )
             .where(*base_filter)
             .group_by("month")
@@ -1032,9 +961,7 @@ class ShiftCompletionService:
             "total_hours": float(row.total_hours or 0),
             "total_calls": int(row.total_calls or 0),
             "avg_rating": (
-                round(float(row.avg_rating or 0), 1)
-                if row.avg_rating
-                else None
+                round(float(row.avg_rating or 0), 1) if row.avg_rating else None
             ),
             "monthly": monthly,
         }
@@ -1049,8 +976,7 @@ class ShiftCompletionService:
         counts, and monthly trend data.
         """
         org_filter = [
-            ShiftCompletionReport.organization_id
-            == str(organization_id),
+            ShiftCompletionReport.organization_id == str(organization_id),
         ]
 
         # Aggregate totals (exclude drafts from counts)
@@ -1059,18 +985,10 @@ class ShiftCompletionService:
         ]
         totals_result = await self.db.execute(
             select(
-                func.count(ShiftCompletionReport.id).label(
-                    "total_reports"
-                ),
-                func.sum(
-                    ShiftCompletionReport.hours_on_shift
-                ).label("total_hours"),
-                func.sum(
-                    ShiftCompletionReport.calls_responded
-                ).label("total_calls"),
-                func.avg(
-                    ShiftCompletionReport.performance_rating
-                ).label("avg_rating"),
+                func.count(ShiftCompletionReport.id).label("total_reports"),
+                func.sum(ShiftCompletionReport.hours_on_shift).label("total_hours"),
+                func.sum(ShiftCompletionReport.calls_responded).label("total_calls"),
+                func.avg(ShiftCompletionReport.performance_rating).label("avg_rating"),
             ).where(*active_filter)
         )
         totals = totals_result.one()
@@ -1084,10 +1002,7 @@ class ShiftCompletionService:
             .where(*org_filter)
             .group_by(ShiftCompletionReport.review_status)
         )
-        status_counts = {
-            r.review_status: r.count
-            for r in status_result.all()
-        }
+        status_counts = {r.review_status: r.count for r in status_result.all()}
 
         # Per-trainee summary
         from app.models.user import User
@@ -1097,18 +1012,10 @@ class ShiftCompletionService:
                 ShiftCompletionReport.trainee_id,
                 User.first_name,
                 User.last_name,
-                func.count(ShiftCompletionReport.id).label(
-                    "reports"
-                ),
-                func.sum(
-                    ShiftCompletionReport.hours_on_shift
-                ).label("hours"),
-                func.sum(
-                    ShiftCompletionReport.calls_responded
-                ).label("calls"),
-                func.avg(
-                    ShiftCompletionReport.performance_rating
-                ).label("avg_rating"),
+                func.count(ShiftCompletionReport.id).label("reports"),
+                func.sum(ShiftCompletionReport.hours_on_shift).label("hours"),
+                func.sum(ShiftCompletionReport.calls_responded).label("calls"),
+                func.avg(ShiftCompletionReport.performance_rating).label("avg_rating"),
             )
             .join(
                 User,
@@ -1120,27 +1027,17 @@ class ShiftCompletionService:
                 User.first_name,
                 User.last_name,
             )
-            .order_by(
-                func.sum(
-                    ShiftCompletionReport.hours_on_shift
-                ).desc()
-            )
+            .order_by(func.sum(ShiftCompletionReport.hours_on_shift).desc())
         )
         trainees = [
             {
                 "trainee_id": r.trainee_id,
-                "name": (
-                    f"{r.first_name or ''}"
-                    f" {r.last_name or ''}"
-                ).strip() or "Unknown",
+                "name": (f"{r.first_name or ''}" f" {r.last_name or ''}").strip()
+                or "Unknown",
                 "reports": r.reports or 0,
                 "hours": float(r.hours or 0),
                 "calls": int(r.calls or 0),
-                "avg_rating": (
-                    round(float(r.avg_rating), 1)
-                    if r.avg_rating
-                    else None
-                ),
+                "avg_rating": (round(float(r.avg_rating), 1) if r.avg_rating else None),
             }
             for r in trainee_result.all()
         ]
@@ -1148,15 +1045,11 @@ class ShiftCompletionService:
         # Monthly trend (last 6 months)
         monthly_result = await self.db.execute(
             select(
-                func.date_format(
-                    ShiftCompletionReport.shift_date, "%Y-%m"
-                ).label("month"),
-                func.count(ShiftCompletionReport.id).label(
-                    "reports"
+                func.date_format(ShiftCompletionReport.shift_date, "%Y-%m").label(
+                    "month"
                 ),
-                func.sum(
-                    ShiftCompletionReport.hours_on_shift
-                ).label("hours"),
+                func.count(ShiftCompletionReport.id).label("reports"),
+                func.sum(ShiftCompletionReport.hours_on_shift).label("hours"),
             )
             .where(*active_filter)
             .group_by("month")
@@ -1177,9 +1070,7 @@ class ShiftCompletionService:
             "total_hours": float(totals.total_hours or 0),
             "total_calls": int(totals.total_calls or 0),
             "avg_rating": (
-                round(float(totals.avg_rating or 0), 1)
-                if totals.avg_rating
-                else None
+                round(float(totals.avg_rating or 0), 1) if totals.avg_rating else None
             ),
             "status_counts": status_counts,
             "trainees": trainees,

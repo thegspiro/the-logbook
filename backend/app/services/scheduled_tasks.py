@@ -251,18 +251,9 @@ async def resolve_check_templates(
 
     tmpl_result = await db.execute(
         select(EquipmentCheckTemplate)
-        .where(
-            EquipmentCheckTemplate.organization_id
-            == str(organization_id)
-        )
-        .where(
-            EquipmentCheckTemplate.apparatus_id
-            == str(apparatus_id)
-        )
-        .where(
-            EquipmentCheckTemplate.check_timing
-            == check_timing
-        )
+        .where(EquipmentCheckTemplate.organization_id == str(organization_id))
+        .where(EquipmentCheckTemplate.apparatus_id == str(apparatus_id))
+        .where(EquipmentCheckTemplate.check_timing == check_timing)
         .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
         .order_by(EquipmentCheckTemplate.sort_order)
     )
@@ -273,44 +264,29 @@ async def resolve_check_templates(
 
     # Fall back to apparatus-type templates
     app_result = await db.execute(
-        select(Apparatus.apparatus_type_id).where(
-            Apparatus.id == str(apparatus_id)
-        )
+        select(Apparatus.apparatus_type_id).where(Apparatus.id == str(apparatus_id))
     )
     app_type_id = app_result.scalar_one_or_none()
 
     type_query = (
         select(EquipmentCheckTemplate)
-        .where(
-            EquipmentCheckTemplate.organization_id
-            == str(organization_id)
-        )
-        .where(
-            EquipmentCheckTemplate.apparatus_id.is_(None)
-        )
-        .where(
-            EquipmentCheckTemplate.check_timing
-            == check_timing
-        )
+        .where(EquipmentCheckTemplate.organization_id == str(organization_id))
+        .where(EquipmentCheckTemplate.apparatus_id.is_(None))
+        .where(EquipmentCheckTemplate.check_timing == check_timing)
         .where(EquipmentCheckTemplate.is_active == True)  # noqa: E712
     )
     if app_type_id:
         at_result = await db.execute(
-            select(ApparatusType.code).where(
-                ApparatusType.id == str(app_type_id)
-            )
+            select(ApparatusType.code).where(ApparatusType.id == str(app_type_id))
         )
         at_code = at_result.scalar_one_or_none()
         if at_code:
             type_query = type_query.where(
-                EquipmentCheckTemplate.apparatus_type
-                == at_code
+                EquipmentCheckTemplate.apparatus_type == at_code
             )
 
     type_result = await db.execute(
-        type_query.order_by(
-            EquipmentCheckTemplate.sort_order
-        )
+        type_query.order_by(EquipmentCheckTemplate.sort_order)
     )
     return list(type_result.scalars().all())
 
@@ -989,9 +965,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
             if not psv_cfg.get("enabled", True):
                 continue
 
-            window_hours = psv_cfg.get(
-                "validation_window_hours", 2
-            )
+            window_hours = psv_cfg.get("validation_window_hours", 2)
             lookback = now - timedelta(hours=window_hours)
 
             shifts_result = await db.execute(
@@ -1037,7 +1011,8 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 pending_checklists: list[str] = []
                 if shift.apparatus_id:
                     eos_templates = await resolve_check_templates(
-                        db, str(org.id),
+                        db,
+                        str(org.id),
                         str(shift.apparatus_id),
                         "end_of_shift",
                     )
@@ -1046,51 +1021,33 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         eos_tmpl_ids = [str(t.id) for t in eos_templates]
                         done_result = await db.execute(
                             select(ShiftEquipmentCheck.template_id)
-                            .where(
-                                ShiftEquipmentCheck.shift_id
-                                == str(shift.id)
-                            )
-                            .where(
-                                ShiftEquipmentCheck.template_id.in_(
-                                    eos_tmpl_ids
-                                )
-                            )
+                            .where(ShiftEquipmentCheck.shift_id == str(shift.id))
+                            .where(ShiftEquipmentCheck.template_id.in_(eos_tmpl_ids))
                         )
-                        done_ids = {
-                            r[0] for r in done_result.all()
-                        }
+                        done_ids = {r[0] for r in done_result.all()}
                         pending_checklists = [
-                            t.name
-                            for t in eos_templates
-                            if str(t.id) not in done_ids
+                            t.name for t in eos_templates if str(t.id) not in done_ids
                         ]
 
                 # Check if any trainees on the shift still need
                 # a completion report from this officer
                 assign_result = await db.execute(
                     select(ShiftAssignment.user_id)
-                    .where(
-                        ShiftAssignment.shift_id == str(shift.id)
-                    )
+                    .where(ShiftAssignment.shift_id == str(shift.id))
                     .where(
                         ShiftAssignment.assignment_status.notin_(
                             ["declined", "cancelled"]
                         )
                     )
                 )
-                assigned_ids = [
-                    str(r[0]) for r in assign_result.all()
-                ]
+                assigned_ids = [str(r[0]) for r in assign_result.all()]
                 report_result = await db.execute(
                     select(ShiftCompletionReport.trainee_id).where(
                         ShiftCompletionReport.shift_id == str(shift.id),
-                        ShiftCompletionReport.officer_id
-                        == str(shift.shift_officer_id),
+                        ShiftCompletionReport.officer_id == str(shift.shift_officer_id),
                     )
                 )
-                reported_ids = {
-                    str(r[0]) for r in report_result.all()
-                }
+                reported_ids = {str(r[0]) for r in report_result.all()}
                 missing_reports = len(
                     [
                         uid
@@ -1143,9 +1100,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                         category="shift_validation",
                         subject=subject,
                         message=message,
-                        action_url=(
-                            f"/scheduling?shift={shift.id}"
-                        ),
+                        action_url=(f"/scheduling?shift={shift.id}"),
                         notification_metadata={
                             "shift_id": str(shift.id),
                             "shift_start_time": (
@@ -1154,9 +1109,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                                 else None
                             ),
                             "shift_end_time": (
-                                shift.end_time.isoformat()
-                                if shift.end_time
-                                else None
+                                shift.end_time.isoformat() if shift.end_time else None
                             ),
                         },
                         delivered=True,
@@ -1174,7 +1127,9 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                 wants_email = prefs.get("email_notifications", True)
                 if wants_email and officer.email:
                     try:
-                        full_url = f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
+                        full_url = (
+                            f"{settings.FRONTEND_URL}/scheduling?shift={shift.id}"
+                        )
                         e_first = _html.escape(officer.first_name or "")
                         e_shift_date = _html.escape(shift_date_str)
                         _logo = build_email_logo_html(org)
@@ -1333,18 +1288,12 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
             sr_cfg = (org.settings or {}).get("shift_reports", {})
             ct_cfg = sr_cfg.get("checklist_timing", {})
-            start_checklists_enabled = ct_cfg.get(
-                "start_of_shift_enabled", True
-            )
+            start_checklists_enabled = ct_cfg.get("start_of_shift_enabled", True)
 
             lookahead_hours = reminder_cfg.get("lookahead_hours", 2)
             lookahead_end = now + timedelta(hours=lookahead_hours)
 
-            org_tz = ZoneInfo(
-                org.timezone
-                if org.timezone
-                else "America/New_York"
-            )
+            org_tz = ZoneInfo(org.timezone if org.timezone else "America/New_York")
 
             shifts_result = await db.execute(
                 select(Shift)
@@ -1382,7 +1331,8 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 checklist_names: list[str] = []
                 if shift.apparatus_id and start_checklists_enabled:
                     templates = await resolve_check_templates(
-                        db, str(org.id),
+                        db,
+                        str(org.id),
                         str(shift.apparatus_id),
                         "start_of_shift",
                     )
@@ -1399,39 +1349,27 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     else ""
                 )
 
-                message = (
-                    f"Your shift on {shift_date_str} "
-                    f"starts at {start_str}."
-                )
+                message = f"Your shift on {shift_date_str} " f"starts at {start_str}."
                 if checklist_names:
                     checklist_list = ", ".join(checklist_names)
                     message += (
-                        f" Equipment checklists to complete: "
-                        f"{checklist_list}."
+                        f" Equipment checklists to complete: " f"{checklist_list}."
                     )
                 else:
                     message += (
-                        " No equipment checklists are assigned "
-                        "for this shift."
+                        " No equipment checklists are assigned " "for this shift."
                     )
 
                 subject = f"Shift Reminder \u2014 {shift_date_str} at {start_str}"
 
                 # In-app notification for each assigned member
                 shift_action_url = (
-                    f"/scheduling?tab=equipment-checks"
-                    f"&shift={shift.id}"
+                    f"/scheduling?tab=equipment-checks" f"&shift={shift.id}"
                 )
                 shift_start_iso = (
-                    shift.start_time.isoformat()
-                    if shift.start_time
-                    else None
+                    shift.start_time.isoformat() if shift.start_time else None
                 )
-                shift_end_iso = (
-                    shift.end_time.isoformat()
-                    if shift.end_time
-                    else None
-                )
+                shift_end_iso = shift.end_time.isoformat() if shift.end_time else None
                 shift_metadata = {}
                 if shift_start_iso:
                     shift_metadata["shift_start_time"] = shift_start_iso
@@ -1440,9 +1378,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 if shift.id:
                     shift_metadata["shift_id"] = str(shift.id)
 
-                member_ids = [
-                    str(a.user_id) for a in assignments if a.user_id
-                ]
+                member_ids = [str(a.user_id) for a in assignments if a.user_id]
                 for mid in member_ids:
                     try:
                         notif = NotificationLog(
@@ -1469,8 +1405,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 if reminder_cfg.get("send_email", False) and member_ids:
                     try:
                         user_result = await db.execute(
-                            select(User.id, User.email, User.first_name)
-                            .where(
+                            select(User.id, User.email, User.first_name).where(
                                 User.id.in_(member_ids),
                                 User.email.isnot(None),
                                 User.is_active == True,  # noqa: E712
@@ -1485,8 +1420,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                         checklist_html = ""
                         if checklist_names:
                             items = "".join(
-                                f"<li>{_html.escape(n)}</li>"
-                                for n in checklist_names
+                                f"<li>{_html.escape(n)}</li>" for n in checklist_names
                             )
                             checklist_html = (
                                 "<p><strong>Equipment checklists "
@@ -1509,7 +1443,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     subject=subject,
                                     html_body=(
                                         '<div style="font-family:'
-                                        'Arial,sans-serif;'
+                                        "Arial,sans-serif;"
                                         'max-width:600px;">'
                                         f"{_logo}"
                                         f"<p>Hi {e_first},</p>"
@@ -1537,15 +1471,13 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     org_emails += 1
                             except Exception as email_err:
                                 logger.error(
-                                    "Shift reminder email failed "
-                                    "for %s: %s",
+                                    "Shift reminder email failed " "for %s: %s",
                                     _redact_email(email),
                                     email_err,
                                 )
                     except Exception as e:
                         logger.error(
-                            "Failed to send shift reminder emails "
-                            "for shift %s: %s",
+                            "Failed to send shift reminder emails " "for shift %s: %s",
                             shift.id,
                             e,
                         )
@@ -1625,9 +1557,7 @@ async def run_end_of_shift_checklist_reminders(
         org_notifications = 0
 
         try:
-            reminder_cfg = (org.settings or {}).get(
-                "shift_reminders", {}
-            )
+            reminder_cfg = (org.settings or {}).get("shift_reminders", {})
             if not reminder_cfg.get("enabled", True):
                 continue
 
@@ -1638,9 +1568,7 @@ async def run_end_of_shift_checklist_reminders(
 
             lookahead_end = now + timedelta(hours=1)
 
-            org_tz = ZoneInfo(
-                org.timezone if org.timezone else "America/New_York"
-            )
+            org_tz = ZoneInfo(org.timezone if org.timezone else "America/New_York")
 
             shifts_result = await db.execute(
                 select(Shift)
@@ -1665,7 +1593,8 @@ async def run_end_of_shift_checklist_reminders(
 
                 # Find end-of-shift templates for this apparatus
                 eos_templates = await resolve_check_templates(
-                    db, str(org.id),
+                    db,
+                    str(org.id),
                     str(shift.apparatus_id),
                     "end_of_shift",
                 )
@@ -1681,21 +1610,11 @@ async def run_end_of_shift_checklist_reminders(
                 tmpl_ids = [str(t.id) for t in eos_templates]
                 done_result = await db.execute(
                     select(ShiftEquipmentCheck.template_id)
-                    .where(
-                        ShiftEquipmentCheck.shift_id
-                        == str(shift.id)
-                    )
-                    .where(
-                        ShiftEquipmentCheck.template_id.in_(
-                            tmpl_ids
-                        )
-                    )
+                    .where(ShiftEquipmentCheck.shift_id == str(shift.id))
+                    .where(ShiftEquipmentCheck.template_id.in_(tmpl_ids))
                 )
                 done_ids = {r[0] for r in done_result.all()}
-                pending = [
-                    t for t in eos_templates
-                    if str(t.id) not in done_ids
-                ]
+                pending = [t for t in eos_templates if str(t.id) not in done_ids]
 
                 if not pending:
                     shift.activities = {
@@ -1711,17 +1630,12 @@ async def run_end_of_shift_checklist_reminders(
                     else "Unknown"
                 )
                 end_str = (
-                    shift.end_time.astimezone(org_tz).strftime(
-                        "%H:%M"
-                    )
+                    shift.end_time.astimezone(org_tz).strftime("%H:%M")
                     if shift.end_time
                     else ""
                 )
 
-                subject = (
-                    f"End-of-Shift Checklists Due \u2014 "
-                    f"{shift_date_str}"
-                )
+                subject = f"End-of-Shift Checklists Due \u2014 " f"{shift_date_str}"
                 checklist_list = ", ".join(pending_names)
                 message = (
                     f"Your shift on {shift_date_str} ends at "
@@ -1733,9 +1647,7 @@ async def run_end_of_shift_checklist_reminders(
                 # Notify each assigned member
                 assign_result = await db.execute(
                     select(ShiftAssignment)
-                    .where(
-                        ShiftAssignment.shift_id == str(shift.id)
-                    )
+                    .where(ShiftAssignment.shift_id == str(shift.id))
                     .where(
                         ShiftAssignment.assignment_status.notin_(
                             ["declined", "cancelled"]
@@ -1743,28 +1655,19 @@ async def run_end_of_shift_checklist_reminders(
                     )
                 )
                 assignments = list(assign_result.scalars().all())
-                member_ids = [
-                    str(a.user_id)
-                    for a in assignments
-                    if a.user_id
-                ]
+                member_ids = [str(a.user_id) for a in assignments if a.user_id]
 
                 shift_action_url = (
-                    f"/scheduling?shift={shift.id}"
-                    f"&tab=equipment-checks"
+                    f"/scheduling?shift={shift.id}" f"&tab=equipment-checks"
                 )
                 shift_metadata = {
                     "shift_id": str(shift.id),
                     "reminder_type": "end_of_shift_checklist",
                     "shift_start_time": (
-                        shift.start_time.isoformat()
-                        if shift.start_time
-                        else None
+                        shift.start_time.isoformat() if shift.start_time else None
                     ),
                     "shift_end_time": (
-                        shift.end_time.isoformat()
-                        if shift.end_time
-                        else None
+                        shift.end_time.isoformat() if shift.end_time else None
                     ),
                 }
 
@@ -1802,14 +1705,11 @@ async def run_end_of_shift_checklist_reminders(
 
         except Exception as e:
             logger.error(
-                "End-of-shift checklist reminders failed "
-                "for org %s: %s",
+                "End-of-shift checklist reminders failed " "for org %s: %s",
                 org.id,
                 e,
             )
-            results.append(
-                {"org_id": str(org.id), "error": str(e)}
-            )
+            results.append({"org_id": str(org.id), "error": str(e)})
             continue
 
         total_notifications += org_notifications
@@ -1822,8 +1722,7 @@ async def run_end_of_shift_checklist_reminders(
             )
 
     logger.info(
-        "End-of-shift checklist reminders complete: "
-        "%d notifications across %d orgs",
+        "End-of-shift checklist reminders complete: " "%d notifications across %d orgs",
         total_notifications,
         len(organizations),
     )
@@ -2365,9 +2264,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 results.append({"org_id": str(org.id), "overdue": 0})
                 continue
 
-            org_tz = ZoneInfo(
-                org.timezone if org.timezone else "America/New_York"
-            )
+            org_tz = ZoneInfo(org.timezone if org.timezone else "America/New_York")
 
             # Group by member for individual notifications
             by_user: Dict[str, list] = {}
@@ -2389,8 +2286,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
                 for co in user_checkouts:
                     item_name = co.item.name if co.item else "Unknown"
                     due_date = (
-                        co.expected_return_at.astimezone(org_tz)
-                        .strftime("%B %d, %Y")
+                        co.expected_return_at.astimezone(org_tz).strftime("%B %d, %Y")
                         if co.expected_return_at
                         else "N/A"
                     )
@@ -3117,9 +3013,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                                     f"ended. Please check out to record "
                                     f"your hours accurately."
                                 ),
-                                action_url=(
-                                    f"/scheduling?shift={shift.id}"
-                                ),
+                                action_url=(f"/scheduling?shift={shift.id}"),
                                 notification_metadata={
                                     "shift_id": str(shift.id),
                                 },
@@ -3131,7 +3025,9 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                             logger.error(
                                 "Failed to send checkout reminder "
                                 "for user %s shift %s: %s",
-                                att.user_id, shift.id, e,
+                                att.user_id,
+                                shift.id,
+                                e,
                             )
 
                     shift.activities = {
@@ -3150,18 +3046,15 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                             att.checked_out_at = shift.end_time
                             checked_in = att.checked_in_at
                             if checked_in and shift.end_time:
-                                delta = (
-                                    shift.end_time - checked_in
-                                ).total_seconds()
-                                att.duration_minutes = max(
-                                    round(delta / 60.0, 1), 0
-                                )
+                                delta = (shift.end_time - checked_in).total_seconds()
+                                att.duration_minutes = max(round(delta / 60.0, 1), 0)
                             org_checkouts += 1
                         except Exception as e:
                             logger.error(
-                                "Failed to auto-checkout user %s "
-                                "shift %s: %s",
-                                att.user_id, shift.id, e,
+                                "Failed to auto-checkout user %s " "shift %s: %s",
+                                att.user_id,
+                                shift.id,
+                                e,
                             )
 
                     shift.activities = {
@@ -3172,15 +3065,18 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         except Exception as e:
             logger.error(
                 "shift_auto_checkout error for org %s: %s",
-                org.id, e,
+                org.id,
+                e,
             )
 
         if org_reminders > 0 or org_checkouts > 0:
-            results.append({
-                "org_id": str(org.id),
-                "reminders": org_reminders,
-                "auto_checkouts": org_checkouts,
-            })
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "reminders": org_reminders,
+                    "auto_checkouts": org_checkouts,
+                }
+            )
         total_reminders += org_reminders
         total_auto_checkouts += org_checkouts
 
@@ -3188,9 +3084,10 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         await db.commit()
 
     logger.info(
-        "Shift auto-checkout: %d reminders, %d auto-checkouts "
-        "across %d orgs",
-        total_reminders, total_auto_checkouts, len(results),
+        "Shift auto-checkout: %d reminders, %d auto-checkouts " "across %d orgs",
+        total_reminders,
+        total_auto_checkouts,
+        len(results),
     )
 
     return {

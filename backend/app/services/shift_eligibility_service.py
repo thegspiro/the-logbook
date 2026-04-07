@@ -268,10 +268,12 @@ class ShiftEligibilityService:
 
         warnings: List[Dict[str, Any]] = []
         if not result["eligible"] and result["warning"]:
-            warnings.append({
-                "type": "evoc_mismatch",
-                "message": result["warning"],
-                "severity": "warning",
-            })
+            warnings.append(
+                {
+                    "type": "evoc_mismatch",
+                    "message": result["warning"],
+                    "severity": "warning",
+                }
+            )
 
         return warnings

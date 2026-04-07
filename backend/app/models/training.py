@@ -1129,15 +1129,11 @@ class RequirementProgress(Base):
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     verified_at = Column(DateTime(timezone=True))
-    verified_by = Column(
-        String(36), ForeignKey("users.id")
-    )
+    verified_by = Column(String(36), ForeignKey("users.id"))
     verification_notes = Column(Text)
 
     # Timestamps
-    created_at = Column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -1156,9 +1152,7 @@ class RequirementProgress(Base):
             "enrollment_id",
             "status",
         ),
-        Index(
-            "idx_progress_requirement", "requirement_id"
-        ),
+        Index("idx_progress_requirement", "requirement_id"),
     )
 
     def __repr__(self):
@@ -1342,7 +1336,9 @@ class ShiftCompletionReport(Base):
     tasks_performed = Column(JSON)  # Array of { task, description }
 
     # Audit trail for auto-populated fields
-    data_sources = Column(JSON)  # e.g. {"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}
+    data_sources = Column(
+        JSON
+    )  # e.g. {"hours_on_shift": "shift_attendance", "calls_responded": "shift_calls"}
 
     # Pipeline linkage
     enrollment_id = Column(
@@ -1378,17 +1374,11 @@ class ShiftCompletionReport(Base):
     )
 
     # Relationships for name resolution
-    trainee = relationship(
-        "User", foreign_keys=[trainee_id], lazy="joined"
-    )
-    officer = relationship(
-        "User", foreign_keys=[officer_id], lazy="joined"
-    )
+    trainee = relationship("User", foreign_keys=[trainee_id], lazy="joined")
+    officer = relationship("User", foreign_keys=[officer_id], lazy="joined")
 
     __table_args__ = (
-        Index(
-            "idx_shift_report_trainee", "trainee_id", "shift_date"
-        ),
+        Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
         Index("idx_shift_report_officer", "officer_id"),
         Index("idx_shift_report_enrollment", "enrollment_id"),
         Index(
@@ -1500,27 +1490,13 @@ class TrainingModuleConfig(Base):
     apparatus_type_tasks = Column(JSON, nullable=True)
 
     # Report form sections — which optional sections appear on the form
-    form_show_performance_rating = Column(
-        Boolean, default=True
-    )
-    form_show_areas_of_strength = Column(
-        Boolean, default=True
-    )
-    form_show_areas_for_improvement = Column(
-        Boolean, default=True
-    )
-    form_show_officer_narrative = Column(
-        Boolean, default=True
-    )
-    form_show_skills_observed = Column(
-        Boolean, default=True
-    )
-    form_show_tasks_performed = Column(
-        Boolean, default=True
-    )
-    form_show_call_types = Column(
-        Boolean, default=True
-    )
+    form_show_performance_rating = Column(Boolean, default=True)
+    form_show_areas_of_strength = Column(Boolean, default=True)
+    form_show_areas_for_improvement = Column(Boolean, default=True)
+    form_show_officer_narrative = Column(Boolean, default=True)
+    form_show_skills_observed = Column(Boolean, default=True)
+    form_show_tasks_performed = Column(Boolean, default=True)
+    form_show_call_types = Column(Boolean, default=True)
 
     # Shift review defaults (configurable by training officers)
     shift_review_call_types = Column(
@@ -2268,9 +2244,7 @@ class Shift(Base):
     total_hours = Column(Float, nullable=True)
 
     # Finalization — officer formally closes the shift after review
-    is_finalized = Column(
-        Boolean, default=False, nullable=False, server_default="0"
-    )
+    is_finalized = Column(Boolean, default=False, nullable=False, server_default="0")
     finalized_at = Column(DateTime(timezone=True), nullable=True)
     finalized_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -3647,9 +3621,7 @@ class ShiftEquipmentCheck(Base):
         Index("idx_shift_equip_check_shift", "shift_id"),
         Index("idx_shift_equip_check_org", "organization_id"),
         Index("idx_shift_equip_check_user", "checked_by"),
-        Index(
-            "idx_shift_equip_check_template", "template_id"
-        ),
+        Index("idx_shift_equip_check_template", "template_id"),
         Index(
             "idx_shift_equip_check_org_date",
             "organization_id",

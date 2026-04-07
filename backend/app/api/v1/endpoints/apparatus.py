@@ -2959,14 +2959,22 @@ async def check_evoc_eligibility(
     return {
         "eligible": result["eligible"],
         "warning": result["warning"],
-        "requiredLevel": {
-            "id": result["required_level"].id,
-            "levelNumber": result["required_level"].level_number,
-            "name": result["required_level"].name,
-        } if result["required_level"] else None,
-        "userLevel": {
-            "id": result["user_level"].id,
-            "levelNumber": result["user_level"].level_number,
-            "name": result["user_level"].name,
-        } if result["user_level"] else None,
+        "requiredLevel": (
+            {
+                "id": result["required_level"].id,
+                "levelNumber": result["required_level"].level_number,
+                "name": result["required_level"].name,
+            }
+            if result["required_level"]
+            else None
+        ),
+        "userLevel": (
+            {
+                "id": result["user_level"].id,
+                "levelNumber": result["user_level"].level_number,
+                "name": result["user_level"].name,
+            }
+            if result["user_level"]
+            else None
+        ),
     }

@@ -125,9 +125,7 @@ async def seed_admin_hours_categories(
 
     Returns a mapping of category name -> category id.
     """
-    logger.info(
-        "Seeding admin hours categories for organization %s", organization_id
-    )
+    logger.info("Seeding admin hours categories for organization %s", organization_id)
     category_map: Dict[str, str] = {}
 
     for cat_data in DEFAULT_ADMIN_HOURS_CATEGORIES:
@@ -163,9 +161,7 @@ async def seed_admin_hours_categories(
         logger.info("Created admin hours category: %s", cat_data["name"])
 
     await db.flush()
-    logger.info(
-        "Admin hours categories seeded (%d total)", len(category_map)
-    )
+    logger.info("Admin hours categories seeded (%d total)", len(category_map))
     return category_map
 
 
@@ -240,9 +236,7 @@ async def seed_admin_hours_data(
     Top-level entry point that orchestrates category and mapping seeding.
     Returns a summary of what was created.
     """
-    category_map = await seed_admin_hours_categories(
-        db, organization_id, created_by
-    )
+    category_map = await seed_admin_hours_categories(db, organization_id, created_by)
     mappings_created = await seed_event_hour_mappings(
         db, organization_id, category_map, created_by
     )

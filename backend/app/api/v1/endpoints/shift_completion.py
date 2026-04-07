@@ -64,13 +64,9 @@ async def preview_shift_data(
     Returns hours, call count, and call types from actual records.
     """
     service = ShiftCompletionService(db)
-    hours = await service._get_trainee_hours_from_shift(
+    hours = await service._get_trainee_hours_from_shift(shift_id, trainee_id)
+    calls, call_types = await service._get_trainee_call_data_from_shift(
         shift_id, trainee_id
-    )
-    calls, call_types = (
-        await service._get_trainee_call_data_from_shift(
-            shift_id, trainee_id
-        )
     )
     return {
         "hours_on_shift": hours,
@@ -93,9 +89,7 @@ async def create_shift_report(
     """
     # Check if review is required for this organization
     config_service = TrainingModuleConfigService(db)
-    config = await config_service.get_config(
-        current_user.organization_id
-    )
+    config = await config_service.get_config(current_user.organization_id)
     if data.save_as_draft:
         review_status = "draft"
     elif config.report_review_required:
@@ -316,9 +310,7 @@ async def get_reports_by_status(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """Get shift completion reports filtered by review status."""
-    return await _get_reports_by_review_status(
-        review_status, db, current_user
-    )
+    return await _get_reports_by_review_status(review_status, db, current_user)
 
 
 @router.get(
@@ -330,9 +322,7 @@ async def get_pending_review_reports(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """Get shift completion reports pending review for this organization."""
-    return await _get_reports_by_review_status(
-        "pending_review", db, current_user
-    )
+    return await _get_reports_by_review_status("pending_review", db, current_user)
 
 
 @router.get(
@@ -344,9 +334,7 @@ async def get_flagged_reports(
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """Get shift completion reports that have been flagged for follow-up."""
-    return await _get_reports_by_review_status(
-        "flagged", db, current_user
-    )
+    return await _get_reports_by_review_status("flagged", db, current_user)
 
 
 @router.get("/drafts", response_model=list[ShiftCompletionReportResponse])
@@ -359,17 +347,13 @@ async def get_draft_reports(
     Drafts are created automatically when a shift is finalized for
     trainees with active program enrollments.
     """
-    return await _get_reports_by_review_status(
-        "draft", db, current_user
-    )
+    return await _get_reports_by_review_status("draft", db, current_user)
 
 
 @router.post("/drafts/submit-all")
 async def submit_all_drafts(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("training.manage")
-    ),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """Submit all draft reports at once.
 
@@ -378,14 +362,8 @@ async def submit_all_drafts(
     pipeline progress for each.
     """
     config_service = TrainingModuleConfigService(db)
-    config = await config_service.get_config(
-        current_user.organization_id
-    )
-    target_status = (
-        "pending_review"
-        if config.report_review_required
-        else "approved"
-    )
+    config = await config_service.get_config(current_user.organization_id)
+    target_status = "pending_review" if config.report_review_required else "approved"
 
     service = ShiftCompletionService(db)
     drafts = await service.get_reports_by_status(
@@ -398,9 +376,7 @@ async def submit_all_drafts(
         try:
             await service.update_report(
                 report_id=draft.id,
-                organization_id=(
-                    current_user.organization_id
-                ),
+                organization_id=(current_user.organization_id),
                 officer_id=str(current_user.id),
                 updates={
                     "review_status": target_status,
@@ -461,9 +437,7 @@ async def get_shift_report(
     # Trainees without manage permission see visibility-filtered data
     if is_trainee and not has_manage:
         config_service = TrainingModuleConfigService(db)
-        config = await config_service.get_config(
-            current_user.organization_id
-        )
+        config = await config_service.get_config(current_user.organization_id)
         visibility = config.to_visibility_dict()
         _apply_trainee_visibility(report, visibility)
 

@@ -1276,9 +1276,7 @@ class MembershipPipelineService:
                 )
             )
             if (existing.scalar() or 0) > 0:
-                raise ValueError(
-                    f"Username '{username}' is already taken"
-                )
+                raise ValueError(f"Username '{username}' is already taken")
 
         # Auto-assign membership ID if not manually provided
         if not membership_id:
@@ -3031,12 +3029,14 @@ class MembershipPipelineService:
         stage_history: List[Dict[str, Any]] = []
         for sp in prospect.step_progress or []:
             if sp.status == StepProgressStatus.COMPLETED and sp.step:
-                stage_history.append({
-                    "stage_name": sp.step.name,
-                    "completed_at": (
-                        str(sp.completed_at) if sp.completed_at else None
-                    ),
-                })
+                stage_history.append(
+                    {
+                        "stage_name": sp.step.name,
+                        "completed_at": (
+                            str(sp.completed_at) if sp.completed_at else None
+                        ),
+                    }
+                )
 
         # Build applicant snapshot — capture all relevant prospect data
         # so the election package is self-contained even if the prospect
@@ -3201,17 +3201,15 @@ class MembershipPipelineService:
         if not election:
             raise ValueError("Election not found")
         if election.status != ElectionStatus.DRAFT:
-            raise ValueError(
-                "Election must be in DRAFT status to add ballot items"
-            )
+            raise ValueError("Election must be in DRAFT status to add ballot items")
 
         snapshot = pkg.applicant_snapshot or {}
         first_name = snapshot.get("first_name", "")
         last_name = snapshot.get("last_name", "")
         full_name = f"{first_name} {last_name}".strip() or "Applicant"
-        membership_type = snapshot.get(
-            "desired_membership_type", "regular"
-        ) or "regular"
+        membership_type = (
+            snapshot.get("desired_membership_type", "regular") or "regular"
+        )
 
         # Build a ballot item title from the appropriate template
         if membership_type == "administrative":

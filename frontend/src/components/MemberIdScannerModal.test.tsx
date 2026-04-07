@@ -121,14 +121,14 @@ describe('MemberIdScannerModal', () => {
 
     await user.click(screen.getByRole('button', { name: /close scanner/i }));
 
-    expect(defaultProps.onClose).toHaveBeenCalled();
+    expect(defaultProps.onClose).toHaveBeenCalledWith();
   });
 
   it('should auto-start the scanner when opened', async () => {
     render(<MemberIdScannerModal {...defaultProps} />);
 
     await waitFor(() => {
-      expect(mockGetCameras).toHaveBeenCalled();
+      expect(mockGetCameras).toHaveBeenCalledWith();
     });
     await waitFor(() => {
       expect(mockStart).toHaveBeenCalledWith(

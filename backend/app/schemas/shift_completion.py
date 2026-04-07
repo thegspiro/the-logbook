@@ -37,23 +37,15 @@ class ShiftCompletionReportCreate(BaseModel):
     trainee_id: str
     hours_on_shift: float = Field(gt=0, le=48)
     calls_responded: int = Field(ge=0, default=0)
-    call_types: Optional[List[str]] = Field(
-        None, max_length=50
-    )
+    call_types: Optional[List[str]] = Field(None, max_length=50)
 
-    performance_rating: Optional[int] = Field(
-        None, ge=1, le=5
-    )
+    performance_rating: Optional[int] = Field(None, ge=1, le=5)
     areas_of_strength: Optional[str] = None
     areas_for_improvement: Optional[str] = None
     officer_narrative: Optional[str] = None
 
-    skills_observed: Optional[List[SkillObservation]] = Field(
-        None, max_length=100
-    )
-    tasks_performed: Optional[List[TaskPerformed]] = Field(
-        None, max_length=100
-    )
+    skills_observed: Optional[List[SkillObservation]] = Field(None, max_length=100)
+    tasks_performed: Optional[List[TaskPerformed]] = Field(None, max_length=100)
 
     enrollment_id: Optional[str] = None
     save_as_draft: bool = False

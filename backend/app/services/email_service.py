@@ -427,9 +427,7 @@ class EmailService:
             except Exception:
                 pass
         succeeded = sum(1 for r in results if r)
-        logger.info(
-            "Batch send complete: %d/%d succeeded", succeeded, len(results)
-        )
+        logger.info("Batch send complete: %d/%d succeeded", succeeded, len(results))
         return results
 
     def build_message(
@@ -465,9 +463,7 @@ class EmailService:
         msg["From"] = f"{safe_from_name} <{self._smtp_config['from_email']}>"
         msg["To"] = to_email
         msg["Subject"] = safe_subject
-        msg["Date"] = datetime.now(timezone.utc).strftime(
-            "%a, %d %b %Y %H:%M:%S +0000"
-        )
+        msg["Date"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
         msg["Message-ID"] = self._make_message_id()
         msg["MIME-Version"] = "1.0"
         msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
@@ -595,9 +591,7 @@ class EmailService:
                         msg.attach(MIMEText(text_body, "plain", "utf-8"))
                     msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-                msg["From"] = (
-                    f"{safe_from_name} <{self._smtp_config['from_email']}>"
-                )
+                msg["From"] = f"{safe_from_name} <{self._smtp_config['from_email']}>"
                 msg["To"] = to_email
                 msg["Subject"] = safe_subject
                 msg["Date"] = datetime.now(timezone.utc).strftime(
@@ -631,9 +625,7 @@ class EmailService:
                 success_count += 1
 
             except Exception as e:
-                logger.error(
-                    f"Failed to send email to {_redact_email(to_email)}: {e}"
-                )
+                logger.error(f"Failed to send email to {_redact_email(to_email)}: {e}")
                 failure_count += 1
 
         logger.info(
@@ -1498,7 +1490,8 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    "Failed to load IT password notification template, using default: %s", e
+                    "Failed to load IT password notification template, using default: %s",
+                    e,
                 )
 
         # Fall back to inline default if no template loaded
@@ -1781,7 +1774,8 @@ class EmailService:
                     )
             except Exception as e:
                 logger.warning(
-                    "Failed to load duplicate application template, using default: %s", e
+                    "Failed to load duplicate application template, using default: %s",
+                    e,
                 )
 
         if not subject:

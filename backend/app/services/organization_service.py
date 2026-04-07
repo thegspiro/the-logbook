@@ -392,9 +392,7 @@ class OrganizationService:
         org_settings = await self.get_organization_settings(organization_id)
         return org_settings.membership_id
 
-    async def generate_next_membership_id(
-        self, organization_id: UUID
-    ) -> Optional[str]:
+    async def generate_next_membership_id(self, organization_id: UUID) -> Optional[str]:
         """
         Generate the next membership ID for a new member.
 

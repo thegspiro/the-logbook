@@ -66,7 +66,7 @@ const getSurfaceBgRgb = (
   };
 
   if (typeof document === "undefined") {
-    return fallbacks[resolvedTheme] ?? fallbacks["light"]!;
+    return fallbacks[resolvedTheme] ?? fallbacks["light"] ?? { r: 255, g: 255, b: 255 };
   }
 
   try {
@@ -98,7 +98,7 @@ const getSurfaceBgRgb = (
         const gradFrom = getComputedStyle(document.documentElement)
           .getPropertyValue("--bg-gradient-from")
           .trim();
-        const base = hexToRgb(gradFrom) ?? (fallbacks[resolvedTheme] ?? fallbacks["light"]!);
+        const base = hexToRgb(gradFrom) ?? fallbacks[resolvedTheme] ?? fallbacks["light"] ?? { r: 255, g: 255, b: 255 };
         return {
           r: Math.round(fg.r * alpha + base.r * (1 - alpha)),
           g: Math.round(fg.g * alpha + base.g * (1 - alpha)),
@@ -112,7 +112,7 @@ const getSurfaceBgRgb = (
     // getComputedStyle can throw in edge-case environments
   }
 
-  return fallbacks[resolvedTheme] ?? fallbacks["light"]!;
+  return fallbacks[resolvedTheme] ?? fallbacks["light"] ?? { r: 255, g: 255, b: 255 };
 };
 
 /**

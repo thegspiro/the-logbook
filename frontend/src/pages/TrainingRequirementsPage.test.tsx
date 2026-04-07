@@ -65,7 +65,7 @@ describe('TrainingRequirementsPage', () => {
   it('renders the requirements page', async () => {
     renderWithRouter(<TrainingRequirementsPage />);
     await waitFor(() => {
-      expect(mockGetRequirements).toHaveBeenCalled();
+      expect(mockGetRequirements).toHaveBeenCalledWith();
     });
   });
 
@@ -79,7 +79,7 @@ describe('TrainingRequirementsPage', () => {
     mockGetRequirements.mockRejectedValue(new Error('Network error'));
     renderWithRouter(<TrainingRequirementsPage />);
     await waitFor(() => {
-      expect(mockGetRequirements).toHaveBeenCalled();
+      expect(mockGetRequirements).toHaveBeenCalledWith();
     });
     expect(document.body).toBeInTheDocument();
   });

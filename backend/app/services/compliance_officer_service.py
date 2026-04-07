@@ -600,12 +600,14 @@ class ContributedHoursService:
         )
         admin_by_category: List[Dict[str, Any]] = []
         for cat_id, cat_name, mins, count in cat_result:
-            admin_by_category.append({
-                "category_id": cat_id,
-                "category_name": cat_name,
-                "hours": round(float(mins) / 60.0, 1),
-                "entries": count,
-            })
+            admin_by_category.append(
+                {
+                    "category_id": cat_id,
+                    "category_name": cat_name,
+                    "hours": round(float(mins) / 60.0, 1),
+                    "entries": count,
+                }
+            )
 
         # Build per-member list
         total_training = 0.0
@@ -623,13 +625,15 @@ class ContributedHoursService:
                 f"{member.first_name or ''} {member.last_name or ''}".strip()
                 or "Unknown"
             )
-            member_list.append({
-                "user_id": str(member.id),
-                "name": name,
-                "training_hours": t_hrs,
-                "admin_hours": a_hrs,
-                "total_hours": combined,
-            })
+            member_list.append(
+                {
+                    "user_id": str(member.id),
+                    "name": name,
+                    "training_hours": t_hrs,
+                    "admin_hours": a_hrs,
+                    "total_hours": combined,
+                }
+            )
 
         member_list.sort(key=lambda m: m["total_hours"], reverse=True)
 
@@ -871,14 +875,11 @@ class AnnualComplianceReportService:
             mc["admin_hours_approved"] = user_admin.get("approved_hours", 0.0)
             mc["admin_hours_pending"] = user_admin.get("pending_hours", 0.0)
             mc["total_contributed_hours"] = round(
-                mc["hours_completed"]
-                + user_admin.get("approved_hours", 0.0),
+                mc["hours_completed"] + user_admin.get("approved_hours", 0.0),
                 1,
             )
 
-        total_admin_hours_approved = admin_hours_data.get(
-            "total_approved_hours", 0.0
-        )
+        total_admin_hours_approved = admin_hours_data.get("total_approved_hours", 0.0)
         total_contributed = round(total_hours + total_admin_hours_approved, 1)
 
         return {
@@ -934,18 +935,22 @@ class AnnualComplianceReportService:
                 "by_user": {},
             }
 
-        start_dt = datetime(start_date.year, start_date.month, start_date.day,
-                            tzinfo=timezone.utc)
-        end_dt = datetime(end_date.year, end_date.month, end_date.day,
-                          23, 59, 59, tzinfo=timezone.utc)
+        start_dt = datetime(
+            start_date.year, start_date.month, start_date.day, tzinfo=timezone.utc
+        )
+        end_dt = datetime(
+            end_date.year, end_date.month, end_date.day, 23, 59, 59, tzinfo=timezone.utc
+        )
 
         entries_result = await self.db.execute(
             select(AdminHoursEntry).where(
                 AdminHoursEntry.organization_id == organization_id,
-                AdminHoursEntry.status.in_([
-                    AdminHoursEntryStatus.APPROVED,
-                    AdminHoursEntryStatus.PENDING,
-                ]),
+                AdminHoursEntry.status.in_(
+                    [
+                        AdminHoursEntryStatus.APPROVED,
+                        AdminHoursEntryStatus.PENDING,
+                    ]
+                ),
                 AdminHoursEntry.duration_minutes.isnot(None),
                 AdminHoursEntry.clock_in_at >= start_dt,
                 AdminHoursEntry.clock_in_at <= end_dt,
@@ -995,20 +1000,20 @@ class AnnualComplianceReportService:
             user_mins[uid]["approved_hours"] = round(
                 user_mins[uid]["approved_hours"], 1
             )
-            user_mins[uid]["pending_hours"] = round(
-                user_mins[uid]["pending_hours"], 1
-            )
+            user_mins[uid]["pending_hours"] = round(user_mins[uid]["pending_hours"], 1)
 
         by_category: List[Dict[str, Any]] = []
         for cat_id, counts in cat_mins.items():
             cat = categories.get(cat_id)
-            by_category.append({
-                "category_id": cat_id,
-                "category_name": cat.name if cat else "Unknown",
-                "approved_hours": round(counts["approved"] / 60.0, 1),
-                "pending_hours": round(counts["pending"] / 60.0, 1),
-                "total_entries": counts["entries"],
-            })
+            by_category.append(
+                {
+                    "category_id": cat_id,
+                    "category_name": cat.name if cat else "Unknown",
+                    "approved_hours": round(counts["approved"] / 60.0, 1),
+                    "pending_hours": round(counts["pending"] / 60.0, 1),
+                    "total_entries": counts["entries"],
+                }
+            )
 
         return {
             "total_approved_hours": round(total_approved_mins / 60.0, 1),

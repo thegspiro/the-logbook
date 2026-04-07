@@ -149,7 +149,7 @@ describe('MessageHistoryList', () => {
     render(<MessageHistoryList templates={[]} />);
 
     await waitFor(() => {
-      expect(mockList).toHaveBeenCalled();
+      expect(mockList).toHaveBeenCalledWith();
     });
 
     const searchInput = screen.getByPlaceholderText('Search by subject or recipient...');

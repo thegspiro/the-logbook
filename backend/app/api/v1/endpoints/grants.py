@@ -92,7 +92,7 @@ async def list_opportunities(
             active_only=active_only,
             search=search,
         )
-        return opportunities[pagination.skip:pagination.skip + pagination.limit]
+        return opportunities[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -282,7 +282,7 @@ async def list_applications(
             priority=priority,
             assigned_to=str(assigned_to) if assigned_to else None,
         )
-        return applications[pagination.skip:pagination.skip + pagination.limit]
+        return applications[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -482,7 +482,7 @@ async def list_budget_items(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
         )
-        return items[pagination.skip:pagination.skip + pagination.limit]
+        return items[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -635,7 +635,7 @@ async def list_expenditures(
             application_id=str(app_id),
             organization_id=str(current_user.organization_id),
         )
-        return expenditures[pagination.skip:pagination.skip + pagination.limit]
+        return expenditures[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -796,7 +796,7 @@ async def list_compliance_tasks(
             status=status_filter,
             due_before=due_before,
         )
-        return tasks[pagination.skip:pagination.skip + pagination.limit]
+        return tasks[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -948,7 +948,7 @@ async def list_notes(
     try:
         service = GrantService(db)
         notes = await service.list_notes(application_id=str(app_id))
-        return notes[pagination.skip:pagination.skip + pagination.limit]
+        return notes[pagination.skip : pagination.skip + pagination.limit]
     except Exception as e:
         logger.error(f"Error listing grant notes: {e}")
         raise HTTPException(
@@ -1026,7 +1026,7 @@ async def list_campaigns(
             status=status_filter,
             campaign_type=campaign_type,
         )
-        return campaigns[pagination.skip:pagination.skip + pagination.limit]
+        return campaigns[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1214,7 +1214,7 @@ async def list_donors(
             donor_type=donor_type,
             search=search,
         )
-        return donors[pagination.skip:pagination.skip + pagination.limit]
+        return donors[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1373,7 +1373,7 @@ async def list_donations(
             start_date=start_date,
             end_date=end_date,
         )
-        return donations[pagination.skip:pagination.skip + pagination.limit]
+        return donations[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1493,7 +1493,7 @@ async def list_pledges(
             status=status_filter,
             campaign_id=str(campaign_id) if campaign_id else None,
         )
-        return pledges[pagination.skip:pagination.skip + pagination.limit]
+        return pledges[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1613,7 +1613,7 @@ async def list_fundraising_events(
             campaign_id=str(campaign_id) if campaign_id else None,
             status=status_filter,
         )
-        return events[pagination.skip:pagination.skip + pagination.limit]
+        return events[pagination.skip : pagination.skip + pagination.limit]
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

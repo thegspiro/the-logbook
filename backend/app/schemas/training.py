@@ -286,9 +286,7 @@ class TrainingRequirementCreate(TrainingRequirementBase):
             RequirementType.CALLS: ("required_calls", self.required_calls),
             RequirementType.KNOWLEDGE_TEST: ("passing_score", self.passing_score),
         }
-        field_name, value = checks.get(
-            self.requirement_type, (None, "skip")
-        )
+        field_name, value = checks.get(self.requirement_type, (None, "skip"))
         if value != "skip" and not value:
             raise ValueError(
                 f"{field_name} is required for requirement_type "

@@ -116,7 +116,7 @@ describe("MemberScanPage", () => {
     );
 
     await waitFor(() => {
-      expect(mockGetCameras).toHaveBeenCalled();
+      expect(mockGetCameras).toHaveBeenCalledWith();
     });
     await waitFor(() => {
       expect(mockStart).toHaveBeenCalledWith(

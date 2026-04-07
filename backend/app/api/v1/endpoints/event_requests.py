@@ -674,9 +674,7 @@ async def update_event_request_status(
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail=safe_error_detail(
-                ValueError(f"Invalid status: {update.status}")
-            ),
+            detail=safe_error_detail(ValueError(f"Invalid status: {update.status}")),
         )
 
     allowed = VALID_TRANSITIONS.get(event_request.status, [])
@@ -872,7 +870,9 @@ async def schedule_request(
         raise HTTPException(
             status_code=400,
             detail=safe_error_detail(
-                ValueError(f"Cannot schedule a request in {event_request.status.value} status")
+                ValueError(
+                    f"Cannot schedule a request in {event_request.status.value} status"
+                )
             ),
         )
 
@@ -1011,7 +1011,9 @@ async def postpone_request(
         raise HTTPException(
             status_code=400,
             detail=safe_error_detail(
-                ValueError(f"Cannot postpone a request in {event_request.status.value} status")
+                ValueError(
+                    f"Cannot postpone a request in {event_request.status.value} status"
+                )
             ),
         )
 
@@ -1092,7 +1094,9 @@ async def update_task_completion(
         raise HTTPException(
             status_code=400,
             detail=safe_error_detail(
-                ValueError(f"Cannot update tasks on a {event_request.status.value} request")
+                ValueError(
+                    f"Cannot update tasks on a {event_request.status.value} request"
+                )
             ),
         )
 

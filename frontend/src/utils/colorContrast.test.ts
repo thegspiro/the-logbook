@@ -85,9 +85,9 @@ describe("accessibleTextColor", () => {
           const rgb = hexToRgb(result);
           expect(rgb).toBeDefined();
 
-          const bg = surfaceBgs[theme]!;
+          const bg = surfaceBgs[theme] ?? { r: 255, g: 255, b: 255 };
           const bgLum = relativeLuminance(bg.r, bg.g, bg.b);
-          const textLum = relativeLuminance(rgb!.r, rgb!.g, rgb!.b);
+          const textLum = relativeLuminance(rgb?.r ?? 0, rgb?.g ?? 0, rgb?.b ?? 0);
           const ratio = contrastRatio(textLum, bgLum);
 
           expect(ratio).toBeGreaterThanOrEqual(4.5);

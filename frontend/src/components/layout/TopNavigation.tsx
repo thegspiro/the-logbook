@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog } from 'lucide-react';
+import { LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
@@ -232,19 +232,13 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         <div className="flex items-center justify-between h-16">
           {/* Logo and Department Name */}
           <a href="/dashboard" className="flex items-center focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 rounded-lg">
-            {logoPreview ? (
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
-                <img
-                  src={logoPreview}
-                  alt={`${departmentName} logo`}
-                  className="max-w-full max-h-full object-contain"
-                />
-              </div>
-            ) : (
-              <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center" aria-hidden="true">
-                <Home className="w-6 h-6 text-white" />
-              </div>
-            )}
+            <div className="w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden">
+              <img
+                src={logoPreview || '/logo.png'}
+                alt={`${departmentName} logo`}
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
             <div className="ml-3 min-w-0">
               <span className="text-theme-text-primary text-lg font-semibold wrap-break-word leading-tight">{departmentName}</span>
               <p className="text-theme-text-muted text-xs">Dashboard</p>

@@ -450,9 +450,7 @@ async def get_my_training_summary(
 @router.get("/skill-names")
 async def get_skill_evaluation_names(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("training.manage")
-    ),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """Return a list of active SkillEvaluation names.
 
@@ -466,8 +464,7 @@ async def get_skill_evaluation_names(
             SkillEvaluation.category,
         )
         .where(
-            SkillEvaluation.organization_id
-            == str(current_user.organization_id),
+            SkillEvaluation.organization_id == str(current_user.organization_id),
             SkillEvaluation.active == True,  # noqa: E712
         )
         .order_by(SkillEvaluation.name)

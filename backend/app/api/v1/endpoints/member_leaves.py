@@ -151,7 +151,7 @@ async def list_leaves_of_absence(
         user_id=user_id,
         active_only=active_only,
     )
-    paginated = leaves[pagination.skip:pagination.skip + pagination.limit]
+    paginated = leaves[pagination.skip : pagination.skip + pagination.limit]
     return [_to_response(leave) for leave in paginated]
 
 
@@ -192,7 +192,7 @@ async def get_member_leaves(
         user_id=user_id,
         active_only=active_only,
     )
-    paginated = leaves[pagination.skip:pagination.skip + pagination.limit]
+    paginated = leaves[pagination.skip : pagination.skip + pagination.limit]
     return [_to_response(leave) for leave in paginated]
 
 

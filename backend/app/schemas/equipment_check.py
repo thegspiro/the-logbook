@@ -268,9 +268,7 @@ class ShiftEquipmentCheckCreate(BaseModel):
 
     template_id: str
     check_timing: str = Field(..., max_length=30)
-    items: List[CheckItemResultSubmit] = Field(
-        ..., min_length=1
-    )
+    items: List[CheckItemResultSubmit] = Field(..., min_length=1)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
 
@@ -280,12 +278,8 @@ class StandaloneEquipmentCheckCreate(BaseModel):
 
     template_id: str
     apparatus_id: Optional[str] = None
-    check_timing: str = Field(
-        default="start_of_shift", max_length=30
-    )
-    items: List[CheckItemResultSubmit] = Field(
-        ..., min_length=1
-    )
+    check_timing: str = Field(default="start_of_shift", max_length=30)
+    items: List[CheckItemResultSubmit] = Field(..., min_length=1)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
 
@@ -293,9 +287,7 @@ class StandaloneEquipmentCheckCreate(BaseModel):
 class EquipmentCheckCompleteItems(BaseModel):
     """Schema for completing remaining items on an incomplete check."""
 
-    items: List[CheckItemResultSubmit] = Field(
-        ..., min_length=1
-    )
+    items: List[CheckItemResultSubmit] = Field(..., min_length=1)
     notes: Optional[str] = None
     signature_data: Optional[str] = None
 

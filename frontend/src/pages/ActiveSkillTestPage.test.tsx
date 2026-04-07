@@ -187,7 +187,7 @@ describe('ActiveSkillTestPage', () => {
 
       unmount();
 
-      expect(mockClearCurrentTest).toHaveBeenCalled();
+      expect(mockClearCurrentTest).toHaveBeenCalledWith();
     });
   });
 });

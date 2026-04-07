@@ -2687,7 +2687,9 @@ class InventoryService:
 
             c.setFont("Helvetica-Bold", 7)
             max_name_chars = int(label_w / (7 * 0.5))
-            name = item.name[:max_name_chars] + ("..." if len(item.name) > max_name_chars else "")
+            name = item.name[:max_name_chars] + (
+                "..." if len(item.name) > max_name_chars else ""
+            )
             c.drawString(x + 6, y + label_h - 12, name)
 
             info_parts = []
@@ -2707,7 +2709,10 @@ class InventoryService:
                 barcode_value, barWidth=bar_width_unit, barHeight=bar_height
             )
             max_barcode_width = label_w - 12 - 2 * quiet_zone
-            while barcode_obj.width > max_barcode_width and bar_width_unit > _MIN_BAR_WIDTH_INCH * inch:
+            while (
+                barcode_obj.width > max_barcode_width
+                and bar_width_unit > _MIN_BAR_WIDTH_INCH * inch
+            ):
                 bar_width_unit -= 0.001 * inch
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
@@ -2800,8 +2805,7 @@ class InventoryService:
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
                 while (
-                    barcode_obj.width > max_barcode_width
-                    and bar_width_unit > min_bar
+                    barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
                 ):
                     bar_width_unit -= 0.001 * inch
                     barcode_obj = code128.Code128(
@@ -2851,8 +2855,7 @@ class InventoryService:
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
                 while (
-                    barcode_obj.width > max_barcode_width
-                    and bar_width_unit > min_bar
+                    barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
                 ):
                     bar_width_unit -= 0.001 * inch
                     barcode_obj = code128.Code128(

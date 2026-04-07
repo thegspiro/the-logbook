@@ -133,9 +133,7 @@ async def _enrich_shifts(
         hours_result = await service.db.execute(
             select(
                 ShiftAttendance.shift_id,
-                func.coalesce(
-                    func.sum(ShiftAttendance.duration_minutes), 0
-                ),
+                func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0),
             )
             .where(ShiftAttendance.shift_id.in_(shift_ids))
             .group_by(ShiftAttendance.shift_id)
@@ -298,18 +296,14 @@ async def get_shift(
     member_call_counts = await service.compute_member_call_counts(shift_id)
 
     call_result = await service.db.execute(
-        select(func.count(ShiftCall.id)).where(
-            ShiftCall.shift_id == str(shift_id)
-        )
+        select(func.count(ShiftCall.id)).where(ShiftCall.shift_id == str(shift_id))
     )
     call_count = call_result.scalar() or 0
 
     total_min_result = await service.db.execute(
-        select(
-            func.coalesce(
-                func.sum(ShiftAttendance.duration_minutes), 0
-            )
-        ).where(ShiftAttendance.shift_id == str(shift_id))
+        select(func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0)).where(
+            ShiftAttendance.shift_id == str(shift_id)
+        )
     )
     total_min = total_min_result.scalar() or 0
     total_hours = round(total_min / 60.0, 1) if total_min > 0 else None
@@ -388,9 +382,7 @@ async def finalize_shift(
             status_code=400,
             detail=_safe_detail("Unable to finalize shift.", error),
         )
-    enriched = await _enrich_shifts(
-        service, current_user.organization_id, [shift]
-    )
+    enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
 
 
@@ -504,9 +496,7 @@ async def member_check_in(
             status_code=400,
             detail=error or "Unable to check in",
         )
-    enriched = await service.enrich_attendance_records(
-        [result]
-    )
+    enriched = await service.enrich_attendance_records([result])
     return enriched[0]
 
 
@@ -531,9 +521,7 @@ async def member_check_out(
             status_code=400,
             detail=error or "Unable to check out",
         )
-    enriched = await service.enrich_attendance_records(
-        [result]
-    )
+    enriched = await service.enrich_attendance_records([result])
     return enriched[0]
 
 
@@ -554,13 +542,8 @@ async def get_active_shift_for_apparatus(
             status_code=404,
             detail="No active shift found for this apparatus",
         )
-    shift_dict = {
-        c.name: getattr(shift, c.name)
-        for c in shift.__table__.columns
-    }
-    apparatus_map = await service._get_apparatus_map(
-        current_user.organization_id
-    )
+    shift_dict = {c.name: getattr(shift, c.name) for c in shift.__table__.columns}
+    apparatus_map = await service._get_apparatus_map(current_user.organization_id)
     service._enrich_shift_dict(shift_dict, apparatus_map)
     return shift_dict
 
@@ -581,10 +564,8 @@ async def get_my_attendance_history(
             ShiftAttendance.shift_id == Shift.id,
         )
         .where(
-            ShiftAttendance.user_id
-            == str(current_user.id),
-            Shift.organization_id
-            == str(current_user.organization_id),
+            ShiftAttendance.user_id == str(current_user.id),
+            Shift.organization_id == str(current_user.organization_id),
         )
         .order_by(ShiftAttendance.created_at.desc())
         .limit(limit)
@@ -615,9 +596,7 @@ async def get_my_attendance(
             status_code=404,
             detail="No attendance record found",
         )
-    enriched = await service.enrich_attendance_records(
-        [result]
-    )
+    enriched = await service.enrich_attendance_records([result])
     return enriched[0]
 
 
@@ -1053,6 +1032,7 @@ async def create_assignment(
     position = assignment_data.get("position", "")
     if position == "driver":
         from app.services.shift_eligibility_service import ShiftEligibilityService
+
         eligibility_svc = ShiftEligibilityService(db)
         evoc_warnings = await eligibility_svc.get_driver_assignment_warnings(
             user_id=str(assignment_data.get("user_id", "")),

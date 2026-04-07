@@ -2177,7 +2177,13 @@ class EmailTemplateService:
         logger.info(
             "Template updated id=%s fields=[%s] org=%s by=%s",
             template_id,
-            ",".join(sorted(k for k, v in fields.items() if v is not None and k in allowed_fields)),
+            ",".join(
+                sorted(
+                    k
+                    for k, v in fields.items()
+                    if v is not None and k in allowed_fields
+                )
+            ),
             organization_id,
             updated_by,
         )
