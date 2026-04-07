@@ -416,10 +416,14 @@ class EquipmentCheckService:
         checklists = []
         for tmpl in templates:
             check = existing_checks.get(tmpl.id)
+            is_completed = (
+                check is not None
+                and check.overall_status != "incomplete"
+            )
             checklists.append(
                 {
                     "template": tmpl,
-                    "is_completed": check is not None,
+                    "is_completed": is_completed,
                     "check": check,
                 }
             )
@@ -664,17 +668,27 @@ class EquipmentCheckService:
 
         # Prevent duplicate submission for same shift+template
         if template_id:
-            existing = (
-                await self.db.execute(
-                    select(ShiftEquipmentCheck.id).where(
-                        ShiftEquipmentCheck.shift_id
-                        == shift_id,
-                        ShiftEquipmentCheck.template_id
-                        == template_id,
-                    )
+            existing_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.shift_id
+                    == shift_id,
+                    ShiftEquipmentCheck.template_id
+                    == template_id,
                 )
-            ).scalar_one_or_none()
-            if existing:
+            )
+            existing_check = existing_result.scalars().first()
+            if existing_check:
+                if existing_check.overall_status == "incomplete":
+                    return await self.complete_incomplete_check(
+                        check_id=existing_check.id,
+                        organization_id=organization_id,
+                        checked_by=checked_by,
+                        data={
+                            "items": items_data,
+                            "notes": data.get("notes"),
+                            "signature_data": data.get("signature_data"),
+                        },
+                    )
                 raise ValueError(
                     "A check for this template has already "
                     "been submitted for this shift"
@@ -904,10 +918,13 @@ class EquipmentCheckService:
         for item_data in items_data:
             tmpl_id = item_data.get("template_item_id")
             existing = existing_map.get(tmpl_id) if tmpl_id else None
-            if existing and existing.status == "not_checked":
-                existing.status = item_data.get(
-                    "status", "not_checked"
-                )
+            if existing:
+                new_status = item_data.get("status", "not_checked")
+                if (
+                    existing.status == "not_checked"
+                    or new_status != "not_checked"
+                ):
+                    existing.status = new_status
                 existing.quantity_found = item_data.get(
                     "quantity_found", existing.quantity_found
                 )
@@ -1004,9 +1021,9 @@ class EquipmentCheckService:
         organization_id: str,
     ) -> List[Dict[str, Any]]:
         """Get pending + recently completed checklists for a user."""
-        # Get user's active shift assignments
+        # Get user's active shift assignments with shift data
         result = await self.db.execute(
-            select(ShiftAssignment)
+            select(ShiftAssignment, Shift)
             .join(Shift, Shift.id == ShiftAssignment.shift_id)
             .where(
                 ShiftAssignment.user_id == user_id,
@@ -1015,16 +1032,36 @@ class EquipmentCheckService:
             )
             .order_by(Shift.shift_date)
         )
-        assignments = list(result.scalars().all())
+        rows = list(result.all())
+
+        # Collect apparatus IDs for name lookup
+        apparatus_ids = {
+            row[1].apparatus_id
+            for row in rows
+            if row[1].apparatus_id
+        }
+        apparatus_map: Dict[str, str] = {}
+        if apparatus_ids:
+            app_result = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids)
+                )
+            )
+            for app_id, app_name in app_result.all():
+                apparatus_map[app_id] = app_name or ""
 
         checklists = []
-        for assignment in assignments:
+        for assignment, shift in rows:
             shift_checklists = await self.get_checklists_for_shift(
                 assignment.shift_id, user_id, organization_id
             )
+            apparatus_name = apparatus_map.get(
+                shift.apparatus_id or "", ""
+            )
             for cl in shift_checklists:
                 cl["shift_id"] = assignment.shift_id
-                cl["shift_date"] = None  # Enriched by endpoint
+                cl["shift_date"] = shift.shift_date
+                cl["apparatus_name"] = apparatus_name
                 checklists.append(cl)
 
         return checklists

@@ -66,6 +66,7 @@ interface EquipmentCheckFormProps {
   onComplete?: () => void;
   onBack?: () => void;
   previewMode?: boolean;
+  existingCheckId?: string | undefined;
 }
 
 interface ItemResult {
@@ -165,6 +166,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   onComplete,
   onBack,
   previewMode,
+  existingCheckId,
 }) => {
   const [results, setResults] = useState<Record<string, ItemResult>>({});
   const [collapsedCompartments, setCollapsedCompartments] = useState<Set<string>>(new Set());
@@ -532,6 +534,44 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   }, [template.id, template.apparatusId, previewMode]);
 
   // --------------------------------------------------------------------------
+  // Pre-populate from existing incomplete check (resume flow)
+  // --------------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!existingCheckId || previewMode) return;
+    let cancelled = false;
+    schedulingService
+      .getEquipmentCheck(existingCheckId)
+      .then((record) => {
+        if (cancelled) return;
+        const seed: Record<string, ItemResult> = {};
+        for (const item of record.items) {
+          if (!item.templateItemId) continue;
+          seed[item.templateItemId] = {
+            status: item.status,
+            quantityFound: item.quantityFound,
+            levelReading: item.levelReading,
+            serialNumber: item.serialNumber,
+            lotNumber: item.lotNumber,
+            serialFound: item.serialFound,
+            lotFound: item.lotFound,
+            notes: item.notes,
+          };
+        }
+        if (Object.keys(seed).length > 0) {
+          setResults(seed);
+        }
+        if (record.notes) {
+          setOverallNotes(record.notes);
+        }
+      })
+      .catch(() => {
+        toast.error('Failed to load existing check data');
+      });
+    return () => { cancelled = true; };
+  }, [existingCheckId, previewMode]);
+
+  // --------------------------------------------------------------------------
   // Unsaved changes warning
   // --------------------------------------------------------------------------
 
@@ -656,6 +696,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const handleSubmit = async () => {
+    if (checkedItems < totalItems) {
+      const uncheckedCount = totalItems - checkedItems;
+      const confirmed = window.confirm(
+        `${uncheckedCount} of ${totalItems} item${uncheckedCount === 1 ? '' : 's'} ha${uncheckedCount === 1 ? 's' : 've'} not been checked. ` +
+        `The report will be marked as incomplete.\n\nAre you sure you want to submit?`,
+      );
+      if (!confirmed) return;
+    }
+
     setSubmitting(true);
     try {
       // Collect items with photo files for post-submit upload

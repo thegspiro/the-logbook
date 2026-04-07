@@ -103,6 +103,7 @@ export const MyChecklistsPage: React.FC = () => {
   // Form state
   const [activeTemplate, setActiveTemplate] = useState<EquipmentCheckTemplate | null>(null);
   const [activeShiftId, setActiveShiftId] = useState<string | null>(null);
+  const [activeCheckId, setActiveCheckId] = useState<string | null>(null);
 
   // Standalone check template picker
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -173,6 +174,7 @@ export const MyChecklistsPage: React.FC = () => {
         const template = await schedulingService.getEquipmentCheckTemplate(checklist.templateId);
         setActiveTemplate(template);
         setActiveShiftId(checklist.shiftId);
+        setActiveCheckId(checklist.checkId || null);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load check template'));
       }
@@ -183,6 +185,7 @@ export const MyChecklistsPage: React.FC = () => {
   const handleComplete = useCallback(() => {
     setActiveTemplate(null);
     setActiveShiftId(null);
+    setActiveCheckId(null);
     toast.success('Equipment check submitted successfully');
     void fetchActiveChecklists();
     if (showHistory) {
@@ -194,6 +197,7 @@ export const MyChecklistsPage: React.FC = () => {
     if (!window.confirm('Leave this check? Your progress is saved as a draft and will be restored when you return.')) return;
     setActiveTemplate(null);
     setActiveShiftId(null);
+    setActiveCheckId(null);
   }, []);
 
   const handleOpenTemplatePicker = useCallback(async () => {
@@ -235,6 +239,25 @@ export const MyChecklistsPage: React.FC = () => {
     [],
   );
 
+  const handleResumeCheck = useCallback(
+    async (check: ShiftEquipmentCheckRecord) => {
+      if (!check.templateId) {
+        toast.error('Cannot resume: no template associated with this check');
+        return;
+      }
+      try {
+        const template = await schedulingService.getEquipmentCheckTemplate(check.templateId);
+        setActiveTemplate(template);
+        setActiveShiftId(check.shiftId || null);
+        setActiveCheckId(check.id);
+        setSelectedCheck(null);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to load check template'));
+      }
+    },
+    [],
+  );
+
   // ------------------------------------------------------------------
   // Render: Equipment check form
   // ------------------------------------------------------------------
@@ -253,6 +276,7 @@ export const MyChecklistsPage: React.FC = () => {
           template={activeTemplate}
           onComplete={handleComplete}
           onBack={handleBack}
+          existingCheckId={activeCheckId || undefined}
         />
       </Suspense>
     );
@@ -331,6 +355,21 @@ export const MyChecklistsPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {selectedCheck.overallStatus === 'incomplete' && (
+            <div className="mt-4 pt-4 border-t border-theme-surface-border">
+              <button
+                onClick={() => void handleResumeCheck(selectedCheck)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+              >
+                <Play className="h-4 w-4" />
+                Resume Check
+              </button>
+              <p className="mt-2 text-xs text-center text-theme-text-muted">
+                {selectedCheck.completedItems}/{selectedCheck.totalItems} items completed — pick up where you left off.
+              </p>
             </div>
           )}
         </div>

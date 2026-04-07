@@ -269,6 +269,7 @@ export interface ActiveChecklistRecord {
   status: string;
   totalItems?: number;
   completedItems?: number;
+  checkId?: string;
 }
 
 // SEC: Use the shared axios factory to ensure consistent auth (CSRF, cookie
