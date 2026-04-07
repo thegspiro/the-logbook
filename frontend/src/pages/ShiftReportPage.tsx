@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -11,33 +11,19 @@ import {
   ChevronUp,
   CheckCircle2,
   Plus,
-  Trash2,
-  Save,
   Send,
   FileText,
   TrendingUp,
-  Link,
-  Zap,
 } from 'lucide-react';
 import {
-  shiftCompletionService, userService, trainingProgramService,
-  trainingModuleConfigService,
+  shiftCompletionService, userService,
 } from '../services/api';
-import { schedulingService } from '../modules/scheduling/services/api';
-import type { ShiftRecord } from '../modules/scheduling/services/api';
-import type { Assignment } from '../types/scheduling';
 import { useTimezone } from '../hooks/useTimezone';
-import { formatDate, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
+import { formatDate } from '../utils/dateFormatting';
 import type {
   ShiftCompletionReport,
-  ShiftCompletionReportCreate,
-  SkillObservation,
-  TaskPerformed,
   TraineeShiftStats,
-  ProgramEnrollment,
-  TrainingModuleConfig,
 } from '../types/training';
-import { DEFAULT_SKILLS, DEFAULT_CALL_TYPE_OPTIONS } from '../modules/scheduling/components/shiftReportConstants';
 import { StarRating } from '../modules/scheduling/components/StarRating';
 import { ReportContentDisplay } from '../modules/scheduling/components/ReportContentDisplay';
 
@@ -124,39 +110,12 @@ interface SimpleUser {
 
 const ShiftReportPage: React.FC = () => {
   const navigate = useNavigate();
-  const tz = useTimezone();
   const [activeTab, setActiveTab] = useState<'new' | 'filed' | 'received'>('new');
-  const [members, setMembers] = useState<SimpleUser[]>([]);
-  const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
   const [filedReports, setFiledReports] = useState<ShiftCompletionReport[]>([]);
   const [receivedReports, setReceivedReports] = useState<ShiftCompletionReport[]>([]);
   const [myStats, setMyStats] = useState<TraineeShiftStats | null>(null);
-  const [moduleConfig, setModuleConfig] = useState<TrainingModuleConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [memberMap, setMemberMap] = useState<Record<string, string>>({});
-
-  // Form state
-  const [traineeId, setTraineeId] = useState('');
-  const [shiftDate, setShiftDate] = useState(() => getTodayLocalDate(tz));
-  const [selectedShiftId, setSelectedShiftId] = useState('');
-  const [availableShifts, setAvailableShifts] = useState<ShiftRecord[]>([]);
-  const [loadingShifts, setLoadingShifts] = useState(false);
-  const [autoPopulated, setAutoPopulated] = useState<Record<string, boolean>>({});
-  const [hoursOnShift, setHoursOnShift] = useState<number>(0);
-  const [callsResponded, setCallsResponded] = useState<number>(0);
-  const [callTypes, setCallTypes] = useState<string[]>([]);
-  const [callTypeInput, setCallTypeInput] = useState('');
-  const [rating, setRating] = useState<number>(0);
-  const [strengths, setStrengths] = useState('');
-  const [improvements, setImprovements] = useState('');
-  const [narrative, setNarrative] = useState('');
-  const [skills, setSkills] = useState<SkillObservation[]>([]);
-  const [tasks, setTasks] = useState<TaskPerformed[]>([]);
-  const [enrollmentId, setEnrollmentId] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [shiftAssignments, setShiftAssignments] = useState<Assignment[]>([]);
-  const [showAllMembers, setShowAllMembers] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -165,16 +124,13 @@ const ShiftReportPage: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [membersData, filedData, receivedData, statsData, configData] = await Promise.all([
+      const [membersData, filedData, receivedData, statsData] = await Promise.all([
         userService.getUsers(),
         shiftCompletionService.getReportsByOfficer().catch(() => []),
         shiftCompletionService.getMyReports().catch(() => []),
         shiftCompletionService.getMyStats().catch(() => null),
-        trainingModuleConfigService.getConfig().catch(() => null),
       ]);
 
-      setModuleConfig(configData);
-      setMembers(membersData as SimpleUser[]);
       const map: Record<string, string> = {};
       (membersData as SimpleUser[]).forEach((m) => {
         map[m.id] = m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username;
@@ -183,231 +139,10 @@ const ShiftReportPage: React.FC = () => {
       setFiledReports(filedData);
       setReceivedReports(receivedData);
       setMyStats(statsData);
-    } catch (_error) {
+    } catch {
       // Error silently handled - empty state shown
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Load shifts for the selected date
-  useEffect(() => {
-    if (!shiftDate) return;
-    setLoadingShifts(true);
-    schedulingService
-      .getShifts({ start_date: shiftDate, end_date: shiftDate })
-      .then((res) => setAvailableShifts(res.shifts))
-      .catch(() => setAvailableShifts([]))
-      .finally(() => setLoadingShifts(false));
-  }, [shiftDate]);
-
-  // Load shift assignments when a shift is selected
-  useEffect(() => {
-    if (!selectedShiftId) {
-      setShiftAssignments([]);
-      setShowAllMembers(false);
-      return;
-    }
-    schedulingService
-      .getShiftAssignments(selectedShiftId)
-      .then(setShiftAssignments)
-      .catch(() => setShiftAssignments([]));
-  }, [selectedShiftId]);
-
-  // Preview auto-populated data when shift + trainee selected
-  useEffect(() => {
-    if (!selectedShiftId || !traineeId) {
-      setAutoPopulated({});
-      return;
-    }
-    shiftCompletionService
-      .previewShiftData(selectedShiftId, traineeId)
-      .then((preview) => {
-        const populated: Record<string, boolean> = {};
-        if (preview.hours_on_shift && preview.hours_on_shift > 0) {
-          setHoursOnShift(preview.hours_on_shift);
-          populated['hours_on_shift'] = true;
-        } else {
-          const shift = availableShifts.find(
-            (s) => s.id === selectedShiftId,
-          );
-          if (shift?.start_time && shift?.end_time) {
-            const start = new Date(
-              shift.start_time,
-            ).getTime();
-            const end = new Date(shift.end_time).getTime();
-            if (end > start) {
-              const hrs =
-                Math.round(
-                  ((end - start) / 3600000) * 100,
-                ) / 100;
-              setHoursOnShift(hrs);
-              populated['hours_on_shift'] = true;
-            }
-          }
-        }
-        if (preview.calls_responded > 0) {
-          setCallsResponded(preview.calls_responded);
-          populated['calls_responded'] = true;
-        }
-        if (preview.call_types.length > 0) {
-          setCallTypes(preview.call_types);
-          populated['call_types'] = true;
-        }
-        setAutoPopulated(populated);
-      })
-      .catch(() => setAutoPopulated({}));
-  }, [selectedShiftId, traineeId, availableShifts]);
-
-  // Load enrollments when trainee is selected
-  useEffect(() => {
-    if (traineeId) {
-      trainingProgramService.getUserEnrollments(traineeId).then(setEnrollments).catch(() => setEnrollments([]));
-    } else {
-      setEnrollments([]);
-    }
-  }, [traineeId]);
-
-  const addCallType = () => {
-    if (callTypeInput.trim() && !callTypes.includes(callTypeInput.trim())) {
-      setCallTypes([...callTypes, callTypeInput.trim()]);
-      setCallTypeInput('');
-    }
-  };
-
-  const addTask = () => {
-    const addedNames = new Set(tasks.map(t => t.task.toLowerCase()));
-    const nextDefault = taskDefaults.find(t => !addedNames.has(t.toLowerCase()));
-    setTasks([...tasks, { task: nextDefault || '' }]);
-  };
-
-  const updateTask = (index: number, updates: Partial<TaskPerformed>) => {
-    setTasks(tasks.map((t, i) => i === index ? { ...t, ...updates } : t));
-  };
-
-  const removeTask = (index: number) => {
-    setTasks(tasks.filter((_, i) => i !== index));
-  };
-
-  const buildReportData = (
-    asDraft: boolean,
-  ): ShiftCompletionReportCreate => {
-    const filteredSkills = skills.filter(
-      (s) => s.skill_name.trim(),
-    );
-    const filteredTasks = tasks.filter((t) => t.task.trim());
-    return {
-      shift_date: shiftDate,
-      trainee_id: traineeId,
-      hours_on_shift: hoursOnShift,
-      calls_responded: callsResponded,
-      call_types:
-        callTypes.length > 0 ? callTypes : undefined,
-      performance_rating:
-        rating > 0 ? rating : undefined,
-      ...(selectedShiftId
-        ? { shift_id: selectedShiftId }
-        : {}),
-      ...(strengths
-        ? { areas_of_strength: strengths }
-        : {}),
-      ...(improvements
-        ? { areas_for_improvement: improvements }
-        : {}),
-      ...(narrative
-        ? { officer_narrative: narrative }
-        : {}),
-      skills_observed:
-        filteredSkills.length > 0
-          ? filteredSkills
-          : undefined,
-      tasks_performed:
-        filteredTasks.length > 0
-          ? filteredTasks
-          : undefined,
-      ...(enrollmentId
-        ? { enrollment_id: enrollmentId }
-        : {}),
-      ...(asDraft ? { save_as_draft: true } : {}),
-    };
-  };
-
-  const resetForm = () => {
-    setTraineeId('');
-    setSelectedShiftId('');
-    setAutoPopulated({});
-    setHoursOnShift(0);
-    setCallsResponded(0);
-    setCallTypes([]);
-    setRating(0);
-    setStrengths('');
-    setImprovements('');
-    setNarrative('');
-    setSkills([]);
-    setTasks([]);
-    setEnrollmentId('');
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!traineeId || !hoursOnShift) {
-      toast.error('Please select a trainee and enter hours');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const result = await shiftCompletionService.createReport(
-        buildReportData(false),
-      );
-      const progressCount =
-        result.requirements_progressed?.length || 0;
-      toast.success(
-        progressCount > 0
-          ? `Report filed! Updated ${progressCount} pipeline requirement(s).`
-          : 'Shift completion report filed!',
-      );
-      resetForm();
-      void loadData();
-    } catch (err: unknown) {
-      const msg =
-        (
-          err as {
-            response?: { data?: { detail?: string } };
-          }
-        )?.response?.data?.detail ||
-        'Failed to submit report';
-      toast.error(msg);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSaveDraft = async () => {
-    if (!traineeId || !hoursOnShift) {
-      toast.error('Please select a trainee and enter hours');
-      return;
-    }
-
-    setSavingDraft(true);
-    try {
-      await shiftCompletionService.createReport(
-        buildReportData(true),
-      );
-      toast.success('Draft saved');
-      resetForm();
-      void loadData();
-    } catch (err: unknown) {
-      const msg =
-        (
-          err as {
-            response?: { data?: { detail?: string } };
-          }
-        )?.response?.data?.detail ||
-        'Failed to save draft';
-      toast.error(msg);
-    } finally {
-      setSavingDraft(false);
     }
   };
 
@@ -420,78 +155,6 @@ const ShiftReportPage: React.FC = () => {
       toast.error('Failed to acknowledge report');
     }
   };
-
-  const callTypeOptions = moduleConfig?.shift_review_call_types?.length
-    ? moduleConfig.shift_review_call_types
-    : DEFAULT_CALL_TYPE_OPTIONS;
-
-  const ratingLabel =
-    moduleConfig?.rating_label || 'Performance Rating';
-  const ratingScaleType =
-    moduleConfig?.rating_scale_type || 'stars';
-  const ratingScaleLabels: Record<string, string> =
-    moduleConfig?.rating_scale_labels ?? {
-      '1': 'Unsatisfactory',
-      '2': 'Developing',
-      '3': 'Competent',
-      '4': 'Proficient',
-      '5': 'Exemplary',
-    };
-
-  const selectedShift = availableShifts.find(
-    (s) => s.id === selectedShiftId,
-  );
-  const shiftApparatusType =
-    selectedShift?.apparatus_type ?? null;
-
-  const skillOptions = useMemo(() => {
-    if (
-      shiftApparatusType &&
-      moduleConfig?.apparatus_type_skills
-    ) {
-      const typeSkills =
-        moduleConfig.apparatus_type_skills[
-          shiftApparatusType
-        ];
-      if (typeSkills?.length) return typeSkills;
-    }
-    return moduleConfig?.shift_review_default_skills?.length
-      ? moduleConfig.shift_review_default_skills
-      : DEFAULT_SKILLS;
-  }, [moduleConfig, shiftApparatusType]);
-
-  const taskDefaults = useMemo(() => {
-    if (
-      shiftApparatusType &&
-      moduleConfig?.apparatus_type_tasks
-    ) {
-      const typeTasks =
-        moduleConfig.apparatus_type_tasks[
-          shiftApparatusType
-        ];
-      if (typeTasks?.length) return typeTasks;
-    }
-    return moduleConfig?.shift_review_default_tasks ?? [];
-  }, [moduleConfig, shiftApparatusType]);
-
-  const filteredMembers = useMemo(() => {
-    const assignedIds = new Set(
-      shiftAssignments.map((a) => a.user_id),
-    );
-    if (
-      selectedShiftId &&
-      assignedIds.size > 0 &&
-      !showAllMembers
-    ) {
-      return members.filter((m) => assignedIds.has(m.id));
-    }
-    return members;
-  }, [
-    members,
-    shiftAssignments,
-    selectedShiftId,
-    showAllMembers,
-  ]);
 
   return (
     <div className="min-h-screen">
@@ -565,467 +228,22 @@ const ShiftReportPage: React.FC = () => {
           </button>
         </div>
 
-        {/* New Report Form */}
+        {/* New Report — redirect to Shift Scheduling */}
         {activeTab === 'new' && (
-          <form onSubmit={(e) => { void handleSubmit(e); }} className="bg-theme-surface rounded-lg border border-theme-surface-border p-6 space-y-5">
+          <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-8 text-center space-y-4">
+            <ClipboardList className="w-12 h-12 text-red-500 mx-auto" />
             <h2 className="text-lg font-semibold text-theme-text-primary">File Shift Completion Report</h2>
-
-            {/* Trainee + Date */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-sm font-medium text-theme-text-secondary">Trainee <span className="text-red-700 dark:text-red-400">*</span></label>
-                  {selectedShiftId && shiftAssignments.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllMembers(!showAllMembers)}
-                      className="text-xs text-red-700 dark:text-red-400 hover:underline"
-                    >
-                      {showAllMembers
-                        ? `Shift members only (${shiftAssignments.length})`
-                        : 'Show all members'}
-                    </button>
-                  )}
-                </div>
-                <select
-                  value={traineeId}
-                  onChange={(e) => setTraineeId(e.target.value)}
-                  className="form-input w-full"
-                  required
-                >
-                  <option value="">
-                    {selectedShiftId && shiftAssignments.length > 0 && !showAllMembers
-                      ? `Select from shift members (${filteredMembers.length})...`
-                      : 'Select a trainee...'}
-                  </option>
-                  {filteredMembers.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || m.username}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Date <span className="text-red-700 dark:text-red-400">*</span></label>
-                <input
-                  type="date"
-                  value={shiftDate}
-                  onChange={(e) => setShiftDate(e.target.value)}
-                  className="form-input w-full"
-                  required
-                  max={getTodayLocalDate(tz)}
-                />
-              </div>
-            </div>
-
-            {/* Link to Shift */}
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                <Link className="w-3.5 h-3.5 inline mr-1" />
-                Link to Shift (optional)
-              </label>
-              <select
-                value={selectedShiftId}
-                onChange={(e) => setSelectedShiftId(e.target.value)}
-                className="form-input w-full"
-                disabled={loadingShifts}
-              >
-                <option value="">
-                  {loadingShifts ? 'Loading shifts...' : 'No shift linked — manual entry'}
-                </option>
-                {availableShifts.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.apparatus_name || s.apparatus_unit_number || 'Shift'} — {formatTime(s.start_time, tz)}
-                    {s.end_time ? ` to ${formatTime(s.end_time, tz)}` : ''}
-                    {s.shift_officer_name ? ` (${s.shift_officer_name})` : ''}
-                  </option>
-                ))}
-              </select>
-              {selectedShiftId && Object.keys(autoPopulated).length > 0 && (
-                <div className="mt-1.5 flex items-center gap-1 text-xs text-blue-700 dark:text-blue-400">
-                  <Zap className="w-3 h-3" />
-                  <span>
-                    Auto-filled from shift records:{' '}
-                    {Object.keys(autoPopulated).map((k) => k.replace(/_/g, ' ')).join(', ')}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Hours + Calls */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                  Hours on Shift <span className="text-red-700 dark:text-red-400">*</span>
-                  {autoPopulated['hours_on_shift'] && (
-                    <span className="ml-1.5 text-xs font-normal text-blue-700 dark:text-blue-400">(auto)</span>
-                  )}
-                </label>
-                <input
-                  type="number"
-                  value={hoursOnShift || ''}
-                  onChange={(e) => {
-                    setHoursOnShift(parseFloat(e.target.value) || 0);
-                    setAutoPopulated((prev) => {
-                      const next = { ...prev };
-                      delete next['hours_on_shift'];
-                      return next;
-                    });
-                  }}
-                  className="form-input w-full"
-                  required
-                  min={0.5}
-                  max={48}
-                  step={0.5}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-                  Calls Responded
-                  {autoPopulated['calls_responded'] && (
-                    <span className="ml-1.5 text-xs font-normal text-blue-700 dark:text-blue-400">(auto)</span>
-                  )}
-                </label>
-                <input
-                  type="number"
-                  value={callsResponded || ''}
-                  onChange={(e) => {
-                    setCallsResponded(parseInt(e.target.value) || 0);
-                    setAutoPopulated((prev) => {
-                      const next = { ...prev };
-                      delete next['calls_responded'];
-                      return next;
-                    });
-                  }}
-                  className="form-input w-full"
-                  min={0}
-                />
-              </div>
-            </div>
-
-            {/* Call Types */}
-            {(moduleConfig?.form_show_call_types ?? true) && callsResponded > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Call Types</label>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {callTypeOptions.map((ct) => (
-                    <button
-                      key={ct}
-                      type="button"
-                      onClick={() => {
-                        if (callTypes.includes(ct)) {
-                          setCallTypes(callTypes.filter((t) => t !== ct));
-                        } else {
-                          setCallTypes([...callTypes, ct]);
-                        }
-                      }}
-                      className={`text-xs px-2 py-1 rounded transition-colors ${
-                        callTypes.includes(ct)
-                          ? 'bg-red-600 text-white'
-                          : 'bg-theme-surface-hover text-theme-text-muted hover:bg-theme-surface-secondary'
-                      }`}
-                    >
-                      {ct}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={callTypeInput}
-                    onChange={(e) => setCallTypeInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCallType(); } }}
-                    placeholder="Custom call type..."
-                    className="form-input flex-1"
-                  />
-                  <button type="button" onClick={addCallType} className="px-3 py-1.5 bg-theme-surface-secondary text-theme-text-primary rounded-sm text-sm hover:bg-theme-surface-hover">
-                    Add
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Pipeline Enrollment */}
-            {traineeId && enrollments.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Link to Pipeline (optional)</label>
-                <select
-                  value={enrollmentId}
-                  onChange={(e) => setEnrollmentId(e.target.value)}
-                  className="form-input w-full"
-                >
-                  <option value="">No specific pipeline</option>
-                  {enrollments.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.program?.name || 'Program'} ({Math.round(e.progress_percentage || 0)}% complete)
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-theme-text-muted mt-1">
-                  Shift hours and calls will automatically count toward pipeline requirements
-                </p>
-              </div>
-            )}
-
-            {/* Performance Rating */}
-            {(moduleConfig?.form_show_performance_rating ?? true) && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-2">{ratingLabel}</label>
-              {ratingScaleType === 'stars' ? (
-                <StarRating value={rating} onChange={setRating} />
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {Array.from(
-                    { length: Object.keys(ratingScaleLabels).length || 5 },
-                    (_, i) => i + 1,
-                  ).map((i) => {
-                    const label = ratingScaleLabels[String(i)] || `Level ${i}`;
-                    const isSelected = rating === i;
-                    return (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setRating(isSelected ? 0 : i)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                          isSelected
-                            ? 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30 ring-1 ring-red-500/30'
-                            : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-red-500/30'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            )}
-
-            {/* Narrative Fields */}
-            {(moduleConfig?.form_show_officer_narrative ?? true) && (
-            <div>
-              <label className="block text-sm font-medium text-theme-text-secondary mb-1">Officer Narrative</label>
-              <textarea
-                value={narrative}
-                onChange={(e) => setNarrative(e.target.value)}
-                rows={3}
-                placeholder="Describe the trainee's overall shift experience..."
-                className="form-input w-full"
-              />
-            </div>
-            )}
-
-            {((moduleConfig?.form_show_areas_of_strength ?? true) || (moduleConfig?.form_show_areas_for_improvement ?? true)) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {(moduleConfig?.form_show_areas_of_strength ?? true) && (
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas of Strength</label>
-                <textarea
-                  value={strengths}
-                  onChange={(e) => setStrengths(e.target.value)}
-                  rows={2}
-                  placeholder="What did the trainee do well?"
-                  className="form-input w-full"
-                />
-              </div>
-              )}
-              {(moduleConfig?.form_show_areas_for_improvement ?? true) && (
-              <div>
-                <label className="block text-sm font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
-                <textarea
-                  value={improvements}
-                  onChange={(e) => setImprovements(e.target.value)}
-                  rows={2}
-                  placeholder="Where can the trainee improve?"
-                  className="form-input w-full"
-                />
-              </div>
-              )}
-            </div>
-            )}
-
-            {/* Skills Observed */}
-            {(moduleConfig?.form_show_skills_observed ?? true) && (
-            <div>
-              <label className="text-sm font-medium text-theme-text-secondary block mb-2">Skills Observed</label>
-              {shiftApparatusType && (
-                <p className="text-xs text-theme-text-muted mb-2">
-                  Showing skills for <span className="capitalize font-medium">{shiftApparatusType}</span>
-                </p>
-              )}
-              <div className="space-y-3">
-                {skillOptions.map((skillName) => {
-                  const selected = skills.find(
-                    (s) => s.skill_name === skillName,
-                  );
-                  return (
-                    <div key={skillName} className="pb-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (selected) {
-                            setSkills(
-                              skills.filter(
-                                (s) =>
-                                  s.skill_name !== skillName,
-                              ),
-                            );
-                          } else {
-                            setSkills([
-                              ...skills,
-                              {
-                                skill_name: skillName,
-                                demonstrated: true,
-                              },
-                            ]);
-                          }
-                        }}
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                          selected
-                            ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
-                            : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-green-500/30'
-                        }`}
-                      >
-                        {selected ? '\u2713 ' : ''}{skillName}
-                      </button>
-                      {selected && (
-                        <div className="mt-2 ml-4 space-y-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-theme-text-muted">Score:</span>
-                            {([1, 2, 3, 4, 5] as const).map((n) => {
-                              const label = ratingScaleLabels[String(n)] || `Level ${n}`;
-                              return (
-                                <button
-                                  key={n}
-                                  type="button"
-                                  title={label}
-                                  onClick={() => {
-                                    setSkills(skills.map(s =>
-                                      s.skill_name === skillName
-                                        ? { ...s, score: s.score === n ? undefined : n }
-                                        : s
-                                    ));
-                                  }}
-                                  className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
-                                    selected.score === n
-                                      ? 'bg-violet-600 text-white border-violet-700'
-                                      : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
-                                  }`}
-                                >
-                                  {n}
-                                </button>
-                              );
-                            })}
-                            {selected.score && (
-                              <span className="text-xs text-violet-600 dark:text-violet-400 font-medium ml-1">
-                                {ratingScaleLabels[String(selected.score)] || `Level ${selected.score}`}
-                              </span>
-                            )}
-                          </div>
-                          <input
-                            type="text"
-                            placeholder="Add comment on this skill..."
-                            value={selected.comment || ''}
-                            onChange={e => {
-                              const comment = e.target.value || undefined;
-                              setSkills(skills.map(s =>
-                                s.skill_name === skillName ? { ...s, comment } : s
-                              ));
-                            }}
-                            className="w-full max-w-md py-1.5 px-2 text-xs border border-theme-surface-border rounded bg-theme-surface focus:ring-1 focus:ring-violet-500 focus:border-violet-500"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            )}
-
-            {/* Tasks Performed */}
-            {(moduleConfig?.form_show_tasks_performed ?? true) && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-medium text-theme-text-secondary">Tasks Performed</label>
-                <button type="button" onClick={addTask} className="text-xs text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 flex items-center space-x-1">
-                  <Plus className="w-3 h-3" /><span>Add Task</span>
-                </button>
-              </div>
-              {/* Quick-add from defaults */}
-              {taskDefaults.length > 0 && (() => {
-                const addedNames = new Set(tasks.map(t => t.task.toLowerCase()));
-                const remaining = taskDefaults.filter(t => !addedNames.has(t.toLowerCase()));
-                return remaining.length > 0 ? (
-                  <div className="mb-2">
-                    <p className="text-xs text-theme-text-muted mb-1.5">Quick add from defaults:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {remaining.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setTasks([...tasks, { task: t }])}
-                          className="px-2 py-1 text-xs rounded-full border border-red-500/20 bg-red-500/5 text-red-700 dark:text-red-400 hover:bg-red-500/15 transition-colors"
-                        >
-                          + {t}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null;
-              })()}
-              {tasks.map((task, i) => (
-                <div key={i} className="flex items-center space-x-2 mb-2">
-                  <input
-                    type="text"
-                    value={task.task}
-                    onChange={(e) => updateTask(i, { task: e.target.value })}
-                    placeholder="Task name"
-                    className="form-input flex-1"
-                  />
-                  <input
-                    type="text"
-                    value={task.description || ''}
-                    onChange={(e) => updateTask(i, { description: e.target.value || undefined })}
-                    placeholder="Notes (optional)"
-                    className="form-input flex-1"
-                  />
-                  <button type="button" onClick={() => removeTask(i)} className="text-theme-text-muted hover:text-red-800 dark:hover:text-red-400">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            )}
-
-            {/* Submit */}
-            <div className="flex items-center justify-between pt-4 border-t border-theme-surface-border">
-              <p className="text-xs text-theme-text-muted">
-                {enrollmentId
-                  ? 'Hours and calls will automatically update pipeline requirements.'
-                  : 'Will update any active pipeline requirements for this trainee.'}
-              </p>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => { void handleSaveDraft(); }}
-                  disabled={savingDraft || submitting}
-                  className="flex font-medium items-center px-4 py-2 space-x-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 transition-colors"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{savingDraft ? 'Saving...' : 'Save as Draft'}</span>
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting || savingDraft}
-                  className="btn-primary flex font-medium items-center px-5 space-x-2 text-sm"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>{submitting ? 'Filing...' : 'File Report'}</span>
-                </button>
-              </div>
-            </div>
-          </form>
+            <p className="text-sm text-theme-text-secondary max-w-md mx-auto">
+              Shift reports are now filed from the Shift Scheduling section. Select a shift, validate hours and calls for the entire crew, and evaluate trainees — all in one streamlined form.
+            </p>
+            <button
+              onClick={() => navigate('/scheduling?tab=shift-reports&view=create')}
+              className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium"
+            >
+              <Send className="w-4 h-4" />
+              Go to Shift Reports
+            </button>
+          </div>
         )}
 
         {/* Filed Reports */}
