@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import { Modal } from '../components/Modal';
 import { getErrorMessage } from '../utils/errorHandling';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import {
   recertificationService,
   competencyService,
@@ -372,6 +374,7 @@ const EXERCISE_TYPES = [
 ] as const;
 
 const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, onSaved }) => {
+  const tz = useTimezone();
   const [saving, setSaving] = useState(false);
   const [exerciseName, setExerciseName] = useState('');
   const [exerciseType, setExerciseType] = useState<MultiAgencyTrainingCreate['exercise_type']>('joint_training');
@@ -388,14 +391,14 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({ isOpen, onClose, on
       setExerciseName('');
       setExerciseType('joint_training');
       setDescription('');
-      setExerciseDate(new Date().toISOString().split('T')[0] ?? '');
+      setExerciseDate(getTodayLocalDate(tz));
       setLeadAgency('');
       setTotalParticipants('');
       setNimsCompliant(false);
       setOrgName('');
       setOrgRole('participant');
     }
-  }, [isOpen]);
+  }, [isOpen, tz]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -831,6 +834,7 @@ const KIRKPATRICK_LEVELS: { key: EvaluationLevel; level: string; desc: string; i
 ];
 
 const EffectivenessSection: React.FC = () => {
+  const tz = useTimezone();
   const [evaluations, setEvaluations] = useState<TrainingEffectivenessEvaluation[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -931,7 +935,7 @@ const EffectivenessSection: React.FC = () => {
                         </span>
                       ) : '-'}
                     </td>
-                    <td className="py-2 text-theme-text-muted">{ev.created_at.split('T')[0] ?? ''}</td>
+                    <td className="py-2 text-theme-text-muted">{formatDate(ev.created_at, tz)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1036,6 +1040,7 @@ const MultiAgencySection: React.FC = () => {
 };
 
 const ReportsSection: React.FC = () => {
+  const tz = useTimezone();
   const [forecasts, setForecasts] = useState<ComplianceForecast[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -1050,7 +1055,7 @@ const ReportsSection: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `training_report_${reportType}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.download = `training_report_${reportType}_${getTodayLocalDate(tz)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success('Report downloaded');
