@@ -565,7 +565,22 @@ Each preset includes the full section/step/point structure and critical criteria
 
 ---
 
-## 11. Open Questions
+## 11. Shift Report Skill Scoring Integration *(2026-04-07)*
+
+In addition to formal psychomotor evaluations, skills can be observed and scored during regular shift duty via **Shift Completion Reports**:
+
+- Officers assign a **1-5 score** (Needs work → Excellent) to each observed skill when filing shift reports
+- If the observed skill name matches a `SkillEvaluation` record, the score creates/updates a `SkillCheckoff` record, feeding the trainee's competency score history
+- The **Skill Linkage Status** feature in Scheduling Settings shows green (linked) or amber (unlinked) indicators for each apparatus-type skill
+- This provides continuous skill assessment data between formal evaluations, building a richer competency profile
+
+**Key difference from formal Skills Testing:** Shift report skill observations are lightweight (one score per skill, no sections or critical criteria) and happen during regular duty. Formal Skills Testing uses full skill sheet templates with sections, steps, critical criteria, pass/fail thresholds, and timed evaluations.
+
+**See also:** [Shift Completion Reports](../docs/training/02-training.md#shift-completion-reports) | [Skills Testing Training Guide](../docs/training/09-skills-testing.md)
+
+---
+
+## 12. Open Questions
 
 1. **Partial re-testing**: Should examiners be able to re-test only failed sections, or must the entire sheet be re-administered? (NREMT requires full re-test, but departments may differ)
 2. **Multi-examiner support**: Can a test be scored by multiple examiners simultaneously (e.g., one per station in a multi-station scenario)?

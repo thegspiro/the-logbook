@@ -507,6 +507,33 @@ Skills tests integrate with the broader training compliance system:
 - **Training Programs:** Skills evaluations can be assigned as phase requirements within structured programs (e.g., "Recruit Academy Phase 3 requires passing Trauma Assessment and Cardiac Arrest Management").
 - **Compliance Matrix:** Skills test completion status feeds into the department-wide compliance matrix view.
 
+### Integration with Shift Completion Reports *(2026-04-07)*
+
+Skills observed during shift completion reports now support **1-5 scoring** that connects to the formal skills tracking system:
+
+- When an officer files a shift completion report with observed skills, each skill can be scored 1-5 (Needs work → Excellent)
+- If the skill name matches a `SkillEvaluation` record in the training module, the score flows through to a `SkillCheckoff` record, updating the trainee's competency score history
+- The **Skill Linkage Status** feature in Scheduling Settings shows whether each apparatus-type skill is linked to a formal SkillEvaluation (green = linked, amber = unlinked)
+- Unlinked skills are still recorded in the shift report but do not feed into formal competency tracking
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form's skills section showing 3 skills with 1-5 score buttons (violet), one skill with score 4 selected, and a small green "linked" indicator badge next to the skill name._
+
+**Data flow:**
+
+```
+Shift Report filed with skill scores
+    ↓
+ShiftCompletionService checks SkillEvaluation records
+    ↓
+Matching skills → SkillCheckoff records created/updated with score
+    ↓
+Competency score history updated
+    ↓
+Competency Matrix reflects new scores
+```
+
+> **Edge case:** Skill name matching is case-sensitive. "Pump operations" on a shift report will only match a SkillEvaluation named "Pump operations", not "pump operations" or "PUMP OPERATIONS". Ensure skill names are consistent across settings and SkillEvaluation definitions.
+
 ---
 
 ## Troubleshooting

@@ -338,7 +338,7 @@ Shift completion reports are filed by shift officers after each shift. They reco
 - **Performance rating** (1-5 scale, configurable label and scale type)
 - **Areas of strength** and **areas for improvement** (encrypted at rest with AES-256)
 - **Officer narrative** (encrypted free-form assessment)
-- **Skills observed** — structured list of `{skill_name, demonstrated, notes, comment}` entries
+- **Skills observed** — structured list of `{skill_name, demonstrated, score (1-5), notes, comment}` entries. Each skill can be scored on a 1-5 scale: 1=Needs work, 2=Developing, 3=Competent, 4=Proficient, 5=Excellent. Scores flow through to `SkillCheckoff` records and the competency score history
 - **Tasks performed** — structured list of `{task, description, comment}` entries
 
 These reports **automatically update training program progress** for enrolled members. When a report is filed (or a draft is completed), the system credits hours, shift count, and call count toward matching requirements. Call type requirements support **case-insensitive matching** against the report's call_types array — only calls matching the required types count toward progress.
@@ -398,9 +398,15 @@ The shift report system supports a multi-stage review workflow:
 
 **For Reviewers:**
 - Navigate to the **Pending Review** view
-- Review reports and approve or flag them
+- Review reports and approve or flag them — the review modal displays the full report content (hours, calls, rating, strengths, improvements, narrative, skills with scores, tasks) for complete context
+- **Batch review** *(2026-04-07)* — Select multiple reports using checkboxes, toggle select-all, then click "Approve Selected" or "Flag Selected" to review up to 100 reports at once
+- Navigate to the **Flagged** view *(2026-04-07)* — Reports previously flagged appear here for follow-up. Flagged reports can be re-reviewed and approved
 - Optionally **redact fields** — clearing sensitive content from specified fields before the trainee sees the report
 - Add **reviewer notes** (encrypted, never visible to trainees)
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Pending Review view showing report cards with checkboxes, the select-all toggle at the top, and the "Approve Selected" / "Flag Selected" action buttons. Show at least 3 reports with 2 checked._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Flagged tab showing previously flagged reports with a "Re-review" button and the flagged status badge on each card._
 
 **For Trainees:**
 - Navigate to **My Reports** to see approved reports
@@ -528,6 +534,14 @@ For ad-hoc reports (no shift selected), the full member list is shown.
 - **All form sections toggled off:** When all optional sections are disabled, only core fields (trainee, shift date, hours, calls) remain on the form. The form is still submittable.
 - **Apparatus type with no mapped skills:** Falls back to org-wide default skills list. If no defaults exist either, the skills section appears empty (unless toggled off).
 - **Descriptive rating with no custom labels:** Falls back to numeric display (1-5) instead of showing empty labels.
+- **Skill score outside 1-5 range:** Rejected by Pydantic validation with a 422 error. The UI constrains selection to 1-5 buttons, but API callers sending out-of-range values get an immediate validation error.
+- **Batch review with more than 100 reports:** Rejected by `max_length=100` on the `BatchReviewRequest` schema. Select fewer reports and retry.
+- **Batch review with invalid or already-reviewed report IDs:** Valid reports are processed; a `failed` count is returned for reports that could not be reviewed (e.g., already approved, wrong org, or nonexistent ID).
+- **Flagged report re-approved:** Moves from the Flagged view to Approved status. If the report has a linked enrollment, deferred pipeline progress is triggered on approval.
+- **Non-authorized user accessing a report by ID:** Returns 403 Forbidden. Only the trainee, the filing officer, or users with `training.manage` permission can access a specific report. *(Security fix 2026-04-07)*
+- **Trainee accessing their own report:** Data is filtered by visibility settings (e.g., if `show_performance_rating` is off, the rating is stripped). `reviewer_notes` are always stripped for trainees regardless of settings.
+- **Skill linkage status:** When an apparatus-type skill name exactly matches a `SkillEvaluation.name` in the training module, it shows as "linked" (green) in the settings panel. Unlinked skills (amber) are still observed on reports but don't flow into formal competency tracking.
+- **No SkillEvaluation records in org:** All skills show amber "unlinked" tags in the apparatus settings panel.
 
 ---
 

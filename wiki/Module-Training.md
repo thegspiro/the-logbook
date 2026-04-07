@@ -208,12 +208,23 @@ POST   /api/v1/training/external/providers/{id}/imports/bulk  # Bulk import
 
 ```
 POST   /api/v1/training/shift-reports                      # Submit shift report
-GET    /api/v1/training/shift-reports                      # List reports
-GET    /api/v1/training/shift-reports/{id}                 # Get report detail
-PATCH  /api/v1/training/shift-reports/{id}                 # Update report
-POST   /api/v1/training/shift-reports/{id}/review          # Review report
-GET    /api/v1/training/shift-reports/trainee/{user_id}    # Reports for trainee
-GET    /api/v1/training/shift-reports/stats/{user_id}      # Trainee stats
+GET    /api/v1/training/shift-reports/my-reports            # My reports (trainee)
+GET    /api/v1/training/shift-reports/my-stats              # My aggregate stats (trainee)
+GET    /api/v1/training/shift-reports/by-officer            # Reports filed by current officer
+GET    /api/v1/training/shift-reports/all                   # All reports (filterable, training.manage)
+GET    /api/v1/training/shift-reports/officer-analytics     # Org-wide shift report analytics (training.manage)
+GET    /api/v1/training/shift-reports/trainee/{user_id}     # Reports for specific trainee (training.manage)
+GET    /api/v1/training/shift-reports/trainee/{user_id}/stats  # Trainee aggregate stats (training.manage)
+GET    /api/v1/training/shift-reports/pending-review        # Reports awaiting review (training.manage)
+GET    /api/v1/training/shift-reports/flagged               # Flagged reports for follow-up (training.manage)
+GET    /api/v1/training/shift-reports/drafts                # Auto-created draft reports (training.manage)
+POST   /api/v1/training/shift-reports/drafts/submit-all    # Submit all drafts at once (training.manage)
+GET    /api/v1/training/shift-reports/{id}                  # Get report detail (auth: trainee, officer, or training.manage)
+PUT    /api/v1/training/shift-reports/{id}                  # Update draft report (training.manage)
+POST   /api/v1/training/shift-reports/{id}/acknowledge     # Trainee acknowledges report
+POST   /api/v1/training/shift-reports/{id}/review          # Review/approve/flag report (training.manage)
+POST   /api/v1/training/shift-reports/batch-review         # Batch approve/flag up to 100 reports (training.manage)
+GET    /api/v1/training/shift-preview/{shift_id}/{trainee_id}  # Preview auto-populated shift data (training.manage)
 ```
 
 ### Module Configuration
@@ -223,6 +234,7 @@ GET    /api/v1/training/module-config/config               # Get module config
 PUT    /api/v1/training/module-config/config               # Update module config
 GET    /api/v1/training/module-config/visibility           # Get member visibility settings
 GET    /api/v1/training/module-config/my-training          # Get my training summary config
+GET    /api/v1/training/module-config/skill-names          # Get active SkillEvaluation names for skill linkage
 ```
 
 ### Skills Testing
@@ -675,6 +687,80 @@ New organizations are seeded with sample skills, tasks, and apparatus-type mappi
 | Descriptive rating with no labels | Falls back to numeric display (1-5) |
 | Report shift_date vs linked shift date mismatch | Returns validation error |
 | Trainee with shift assignment but no attendance | Allows manual hour entry; auto-populate returns zeros |
+
+## Skill Scoring, Batch Review & Security Hardening (2026-04-07)
+
+### 1-5 Skill Scoring on Shift Completion Reports
+
+Officers can now assign a 1-5 numeric score to each observed skill when filing shift completion reports. Scores are stored in the `SkillObservation.score` field and flow through to `SkillCheckoff` records, feeding the competency score history.
+
+**Score labels:**
+
+| Score | Label |
+|-------|-------|
+| 1 | Needs work |
+| 2 | Developing |
+| 3 | Competent |
+| 4 | Proficient |
+| 5 | Excellent |
+
+Labels appear as tooltips on score buttons and inline text in display views. Buttons use a consistent violet color theme across both `ShiftReportPage` and `ShiftReportsTab`.
+
+### Batch Review
+
+Officers with `training.manage` can select multiple reports in the pending-review or flagged views and batch approve or flag them in a single action via `POST /training/shift-reports/batch-review`. Up to 100 reports per batch. Returns `{reviewed, failed}` counts.
+
+### Flagged Reports View
+
+A new "Flagged" tab in `ShiftReportsTab` surfaces reports flagged by reviewers. Flagged reports can be re-reviewed and approved, allowing recovery. Backed by `GET /training/shift-reports/flagged`.
+
+### Trainee and Officer Names on Reports
+
+`ShiftCompletionReport` model now has `trainee` and `officer` relationships to `User`. Response schema includes `trainee_name` and `officer_name`. Report cards show "Trainee Name — Date" in headers and officer name in footers.
+
+### Report Content in Review Modal
+
+Review modal now renders full report content (hours, calls, rating, strengths, areas for improvement, narrative, skills with scores, tasks) so reviewers have complete context when approving or flagging.
+
+### Skill Linkage Status in Apparatus Settings
+
+`ShiftReportsSettingsPanel` shows color-coded tags for each apparatus-type skill:
+- **Green**: Skill matches a `SkillEvaluation` record → tracks competency, creates checkoffs, progresses pipeline requirements
+- **Amber**: No matching `SkillEvaluation` → skill observed on reports but not formally tracked
+
+Powered by `GET /training/module-config/skill-names`.
+
+### Authorization Fix on `GET /shift-reports/{report_id}`
+
+Previously any authenticated user in the same org could read any report by ID, exposing sensitive performance data. Now enforces that the requester is the trainee, the filing officer, or has `training.manage` permission. Trainees see visibility-filtered data; `reviewer_notes` are always stripped for trainees.
+
+### Audit Logging for Shift Reports
+
+All shift completion report operations now log audit events: `shift_report_created`, `shift_report_updated`, `shift_report_reviewed`, `shift_report_acknowledged`, `shift_reports_bulk_submitted`. Each captures the acting user, report ID, and relevant metadata.
+
+### Bug Fixes (2026-04-07)
+
+| Issue | Fix |
+|-------|-----|
+| Decimal TypeError in weekly/monthly calendar | MySQL `SUM()` returns `Decimal`; wrapped in `float()` before division |
+| `??` → `||` for optional form fields | 35 instances in prospective-members and apparatus modules |
+| `ShiftCompletionReportCreate.shift_date` type mismatch | Changed from optional to required in TypeScript to match backend |
+| Unused `LogOut` import in `MyShiftsTab` | Removed (F401) |
+| `tsconfig.json` TS5101 deprecation error | Added `ignoreDeprecations: "5.0"` for `baseUrl` |
+| `form.shift_date` fallback missing | Added `?? ''` fallback for `noUncheckedIndexedAccess` |
+| Trainee summary table numeric alignment | Center-aligned headers and data columns |
+
+### Edge Cases (2026-04-07)
+
+| Scenario | Behavior |
+|----------|----------|
+| Skill score outside 1-5 range | Rejected by Pydantic `Field(ge=1, le=5)` with 422 |
+| Batch review with >100 report IDs | Rejected by `max_length=100` constraint |
+| Batch review with mix of valid/invalid IDs | Valid reports reviewed; failed count returned |
+| Flagged report re-reviewed to approved | Triggers deferred pipeline progress if applicable |
+| Non-trainee/non-officer accessing report by ID | 403 unless user has `training.manage` |
+| Trainee accessing own report | Sees visibility-filtered data; `reviewer_notes` stripped |
+| No SkillEvaluation records in org | All skills show amber "unlinked" tags |
 
 ---
 

@@ -894,6 +894,96 @@ These edge cases describe system behavior during shift assignment, time-off appr
 
 ---
 
+## Shift Report Enhancements *(2026-04-07)*
+
+### 1-5 Skill Scoring
+
+When filing shift completion reports, officers can now assign a **1-5 numeric score** to each observed skill. This score is separate from the "demonstrated" checkbox and provides a quantitative assessment of the trainee's proficiency.
+
+| Score | Label | Color |
+|-------|-------|-------|
+| 1 | Needs work | Violet (muted) |
+| 2 | Developing | Violet (muted) |
+| 3 | Competent | Violet (standard) |
+| 4 | Proficient | Violet (standard) |
+| 5 | Excellent | Violet (bright) |
+
+Scores appear as interactive buttons on the report form (with tooltip labels) and as inline text in read-only views. Scores flow through to `SkillCheckoff` records and the competency score history in the Training module.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the shift report form's skills section showing 3-4 skills, each with a row of 5 violet score buttons (1-5), the "demonstrated" checkbox, and a comment field. One skill should have score 4 selected (highlighted), another score 2._
+
+### Batch Review
+
+Officers with `training.manage` permission can now review multiple shift reports at once:
+
+1. Navigate to the **Pending Review** or **Flagged** view in the Shift Reports tab
+2. Check individual report cards using the checkbox on each card, or use the **select-all** toggle
+3. Click **"Approve Selected"** or **"Flag Selected"** at the top of the list
+4. In the batch review modal, optionally add **reviewer notes** (applied to all selected reports)
+5. Confirm the action — the system processes up to 100 reports and returns a count of successfully reviewed vs. failed
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Pending Review view with 5 report cards visible, 3 checked with checkboxes, the select-all toggle shown, and "Approve Selected (3)" / "Flag Selected (3)" buttons visible at the top._
+
+> **Hint:** Batch review does not support per-report field redaction. For reports requiring individual redaction, review them one at a time using the standard review modal.
+
+### Flagged Reports View
+
+Reports that reviewers flag for follow-up are now accessible from a dedicated **Flagged** tab in the Shift Reports section:
+
+- View all flagged reports with their reviewer notes and flag date
+- **Re-review** flagged reports — approve them to move to the Approved state, or add additional notes
+- When a flagged report is approved, deferred pipeline progress is triggered if the report has an enrollment linkage
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Flagged tab showing 2-3 flagged report cards with red "Flagged" badges, reviewer notes visible, and a "Re-review" button on each card._
+
+### Trainee & Officer Names on Report Cards
+
+Report cards now display **trainee and officer names** alongside dates:
+
+- Card header: "**Trainee Name** — April 5, 2026"
+- Card footer: "Filed by **Officer Name** on April 6, 2026"
+- Review modal: Shows shift date alongside trainee and officer names in the header
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of a shift report card showing "FF Carter — April 5, 2026" in the header, performance rating stars, hours/calls metadata, and "Filed by Lt. Davis" in the footer._
+
+### Full Report Content in Review Modal
+
+The review modal now displays the **complete report** so reviewers have full context when approving or flagging:
+
+- Hours on shift, calls responded, call types
+- Performance rating (with custom labels if configured)
+- Areas of strength and improvement
+- Officer narrative
+- Skills observed (with scores and notes)
+- Tasks performed (with descriptions)
+- Trainee comments (if acknowledged)
+- Requirements progressed (if enrollment linked)
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the review modal showing the full report content in the top section (hours, rating, narrative, skills with scores) and the review controls (Approve/Flag buttons, reviewer notes textarea) in the bottom section._
+
+### Skill Linkage Status in Settings
+
+The **Shift Reports** settings panel (Scheduling > Settings > Shift Reports) now shows whether each apparatus-type skill matches a formal `SkillEvaluation` record in the Training module:
+
+- **Green tag** with checkmark: Skill name matches a SkillEvaluation — scores will track competency, create checkoffs, and progress pipeline requirements
+- **Amber tag** with warning: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
+- A **legend** at the bottom of the skills section explains the color coding
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Reports settings panel's apparatus skills section (e.g., "Engine" expanded) showing 4 skills with green tags ("Pump operations" ✓, "Hose deployment" ✓) and 2 with amber tags ("Ladder placement" ⚠, "Custom skill" ⚠), plus the explanatory legend below._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Skill score outside 1-5 range via API | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error |
+| Batch review with >100 report IDs | Rejected by `max_length=100` constraint |
+| Batch review with mix of valid/invalid IDs | Valid reports processed; `failed` count returned separately |
+| Flagged report re-approved | Triggers deferred pipeline progress if enrollment linked |
+| Skill name matching for linkage | Case-sensitive exact match against `SkillEvaluation.name` |
+| No SkillEvaluation records in org | All apparatus-type skills show amber "unlinked" tags |
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |

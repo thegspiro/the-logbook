@@ -369,8 +369,21 @@ The following modules now include comprehensive `log_audit_event()` calls for HI
 | **Documents** | Document uploaded (with filename, MIME type, file size), document deleted (severity: "warning") |
 | **Membership Pipeline** | Pipeline created/deleted, prospect created/advanced/transferred (includes name/email in metadata) |
 | **Messages** | Message creation and deletion |
+| **Shift Completion Reports** | Report created (`shift_report_created`), updated (`shift_report_updated`), reviewed/approved/flagged (`shift_report_reviewed`), acknowledged by trainee (`shift_report_acknowledged`), bulk submitted (`shift_reports_bulk_submitted`) *(added 2026-04-07)* |
 
 All audit events are appended to the tamper-proof SHA-256 hash chain in the `audit_logs` table.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "shift_report" events showing recent shift completion report audit entries with timestamps, acting user, event type (e.g., shift_report_reviewed), and metadata (report ID, review status)._
+
+### Shift Report Security Fix *(2026-04-07)*
+
+A critical authorization bypass was identified and fixed on the `GET /shift-reports/{report_id}` endpoint. Previously, any authenticated user in the same organization could access any shift completion report by ID, including sensitive performance ratings, officer narratives, and reviewer notes. This violated the HIPAA minimum-necessary principle.
+
+**After the fix:**
+- Only the **trainee** (subject of the report), the **filing officer**, or users with **`training.manage` permission** can access a specific report
+- Trainees see **visibility-filtered data** matching the `/my-reports` endpoint behavior (e.g., if `show_performance_rating` is disabled, ratings are stripped)
+- `reviewer_notes` are **always stripped** for trainees regardless of visibility settings
+- Unauthorized access returns **403 Forbidden**
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Security > Audit Log page filtered to "medical" events showing recent medical screening audit entries with timestamps, user, and event details._
 

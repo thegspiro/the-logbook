@@ -213,6 +213,8 @@ Requires `training.manage` permission. Tab-based admin interface.
 
 > The **Training Waivers** tab (within Officer Dashboard) shows all training waivers with summary cards, status filtering, and source tracking (Auto LOA vs Manual).
 >
+> The **Shift Reports** tab contains sub-views: My Reports (trainee), Filed by Me (officer), Pending Review, Flagged *(2026-04-07)*, Drafts, and Create. The Flagged sub-view shows reports flagged by reviewers with re-review capability. Batch review (approve/flag up to 100 at once) is available in the Pending Review and Flagged sub-views *(2026-04-07)*.
+>
 > The **Enhancements** tab provides access to recertification pathway management, instructor qualification tracking, training effectiveness evaluations (Kirkpatrick model), multi-agency session coordination, and compliance officer tools.
 
 **Legacy redirects:**

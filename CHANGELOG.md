@@ -7,6 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Skill Scoring, Batch Review & Security Hardening (2026-04-07)
+
+#### Skill Scoring (1-5) on Shift Completion Reports
+
+- **1-5 skill scoring**: Officers can now assign a numeric score (1-5) to each observed skill when filing shift completion reports. Scores flow through to `SkillCheckoff` records and feed the competency score history. The `SkillObservation` schema gains a new `score` field (`int | None`, ge=1, le=5)
+- **Score labels**: Descriptive labels appear as tooltips on score buttons and inline text in display views: 1=Needs work, 2=Developing, 3=Competent, 4=Proficient, 5=Excellent
+- **Unified color theme**: Score buttons use a consistent violet color scheme across both `ShiftReportPage` and `ShiftReportsTab` (previously red in ShiftReportPage)
+- **Shift date in review modal**: Review modal now shows the shift date alongside trainee and officer names for context
+
+#### Batch Review for Shift Reports
+
+- **Batch review endpoint**: New `POST /api/v1/training/shift-reports/batch-review` accepts up to 100 report IDs with a review status (approved/flagged) and optional reviewer notes. Returns `{reviewed: N, failed: N}` counts
+- **Batch review UI**: Checkboxes on report cards in the pending-review and flagged views, select-all toggle, and "Approve Selected" / "Flag Selected" action buttons
+- **Batch review schema**: New `BatchReviewRequest` Pydantic schema with `report_ids` (list[str], min 1, max 100), `review_status` (str), and `reviewer_notes` (optional str)
+
+#### Flagged Reports View
+
+- **Flagged tab**: New "Flagged" view in ShiftReportsTab showing reports that were flagged by reviewers for follow-up
+- **Flagged endpoint**: New `GET /api/v1/training/shift-reports/flagged` returns reports with `review_status=flagged` for the current organization
+- **Re-review capability**: Flagged reports can be re-reviewed and approved from the flagged view, allowing recovery of previously flagged reports
+
+#### Trainee and Officer Names on Reports
+
+- **Model relationships**: Added `trainee` and `officer` relationships on `ShiftCompletionReport` model linking to the `User` model
+- **Response schema**: Added `trainee_name` and `officer_name` fields to `ShiftCompletionReportResponse`, populated from the relationships
+- **Frontend types**: Added `trainee_name` and `officer_name` to the `ShiftCompletionReport` TypeScript interface
+- **Card display**: Report cards now show "Trainee Name — Date" in the header and the officer name in the card footer
+
+#### Report Content in Review Modal
+
+- **Full report display**: Review modal now renders the complete report content (hours, calls, rating, strengths, areas for improvement, narrative, skills with scores, tasks) so reviewers can see exactly what they are approving or flagging
+
+#### Skill Linkage Status in Apparatus Settings
+
+- **Skill linkage indicators**: The `ShiftReportsSettingsPanel` now shows color-coded tags for each apparatus-type skill indicating whether it matches a formal `SkillEvaluation` record in the training module
+  - Green tag: Skill name matches a SkillEvaluation — will track competency, create checkoffs, and progress pipeline requirements
+  - Amber tag: No matching SkillEvaluation — skill is observed on reports but won't flow into formal training tracking
+- **Skill names endpoint**: New `GET /api/v1/training/module-config/skill-names` returns active SkillEvaluation names for the current organization
+- **Legend**: Explanatory legend at the bottom of the skills section explains the color coding
+
+#### Security Fixes
+
+- **Authorization bypass fix on `GET /shift-reports/{report_id}`**: Previously, any authenticated user in the same org could access any shift completion report by ID, exposing sensitive performance data (ratings, narratives, reviewer notes). Now enforces that the requester is the trainee, the filing officer, or has `training.manage` permission. Trainees see visibility-filtered data and `reviewer_notes` are always stripped for trainees. This was a HIPAA minimum-necessary violation
+- **Audit logging for shift reports**: All shift completion report operations now log audit events via `log_audit_event()`:
+  - `shift_report_created`: Officer files a report
+  - `shift_report_updated`: Officer updates a draft report
+  - `shift_report_reviewed`: Reviewer approves/flags/redacts a report
+  - `shift_report_acknowledged`: Trainee acknowledges a report
+  - `shift_reports_bulk_submitted`: Officer submits all drafts at once
+
+#### Bug Fixes (2026-04-07)
+
+- **Decimal TypeError in weekly calendar**: MySQL returns `Decimal` from `SUM()` aggregates. The `_enrich_shifts` helper divided that by a float literal, which Python rejects. Fixed by wrapping in `float()` before division
+- **Decimal TypeError in monthly calendar**: Same `Decimal`-to-float conversion fix applied to the monthly calendar endpoint
+- **`??` to `||` for optional form fields**: Replaced `??` (nullish coalescing) with `||` (logical OR) across 35 instances in prospective-members and apparatus modules to properly coerce empty strings to `undefined`, preventing 422 validation errors from Pydantic
+- **`ShiftCompletionReportCreate.shift_date` type**: Changed from optional to required in TypeScript types to match the backend Pydantic schema contract, preventing potential 422 errors
+- **Unused `LogOut` import**: Removed unused import from `MyShiftsTab` (F401 lint fix)
+- **`tsconfig.json` deprecation**: Added `ignoreDeprecations: "5.0"` to silence TS5101 for `baseUrl` (required for `@/*` path alias, deprecated in TS 7.0)
+- **`ShiftReportsTab` shift_date fallback**: Added fallback for `form.shift_date` to satisfy `noUncheckedIndexedAccess`
+- **Center-aligned numeric columns**: Trainee summary table numeric columns (hours, calls, avg rating) are now center-aligned to match their headers
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/training/shift-reports/batch-review` | Batch approve/flag multiple reports (up to 100) |
+| `GET` | `/api/v1/training/shift-reports/flagged` | Get flagged reports for follow-up review |
+| `GET` | `/api/v1/training/module-config/skill-names` | Get active SkillEvaluation names for skill linkage validation |
+
+**New Schema Fields:**
+
+| Schema | Field | Type | Description |
+|--------|-------|------|-------------|
+| `SkillObservation` | `score` | `int \| None` (1-5) | Numeric skill score for competency tracking |
+| `ShiftCompletionReportResponse` | `trainee_name` | `str \| None` | Resolved trainee display name |
+| `ShiftCompletionReportResponse` | `officer_name` | `str \| None` | Resolved officer display name |
+
+**New Pydantic Schemas:**
+
+| Schema | Fields | Description |
+|--------|--------|-------------|
+| `BatchReviewRequest` | `report_ids`, `review_status`, `reviewer_notes` | Batch review request body |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Skill score outside 1-5 range | Rejected by Pydantic `Field(ge=1, le=5)` with 422 error |
+| Batch review with >100 report IDs | Rejected by `max_length=100` constraint |
+| Batch review with mix of valid/invalid IDs | Valid reports are reviewed; failed count returned separately |
+| Flagged report re-reviewed to approved | Moves from flagged view to approved; triggers deferred pipeline progress if applicable |
+| Non-officer/non-trainee accessing report by ID | Returns 403 Forbidden unless user has `training.manage` permission |
+| Trainee accessing own report | Sees visibility-filtered data; `reviewer_notes` always stripped |
+| Skill name matching for linkage | Case-sensitive exact match against SkillEvaluation.name |
+| No SkillEvaluation records in org | All skills show amber "unlinked" tags |
+
+---
+
 ### Shift Report Settings, Form Customization & Apparatus-Specific Skills (2026-04-04)
 
 - **Shift Reports Settings Panel**: New `ShiftReportsSettingsPanel` component in `modules/scheduling/components/` controls checklist timing windows (start/end of shift), post-shift validation settings (enabled, require_officer_report, validation_window_hours), and surfaces training module defaults (call types, skills, tasks). Accessible from **Scheduling > Settings > Shift Reports** and from the Shift Detail Panel settings link
