@@ -101,6 +101,11 @@ const ReportCard: React.FC<{
           <div className="text-xs text-theme-text-muted">
             Filed by: {memberMap[report.officer_id] || 'Unknown Officer'} on {formatDate(report.created_at, tz)}
           </div>
+          {(report.reviewer_name || report.reviewed_by) && (
+            <div className="text-xs text-theme-text-muted">
+              Reviewed by: {report.reviewer_name || memberMap[report.reviewed_by || ''] || 'Unknown'}
+            </div>
+          )}
         </div>
       )}
     </div>

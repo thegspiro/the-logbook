@@ -865,6 +865,11 @@ export const ShiftReportsTab: React.FC = () => {
                     <UserIcon className="w-3 h-3" /> {report.officer_name}
                   </span>
                 )}
+                {report.reviewer_name && (
+                  <span className="flex items-center gap-1 text-xs text-theme-text-muted">
+                    <Shield className="w-3 h-3" /> Reviewed by {report.reviewer_name}
+                  </span>
+                )}
               </div>
             </div>
           </div>

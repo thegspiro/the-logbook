@@ -1183,6 +1183,7 @@ export interface ShiftCompletionReport {
   requirements_progressed?: { requirement_progress_id: string; value_added: number }[];
   review_status: string;  // draft, pending_review, approved, flagged
   reviewed_by?: string;
+  reviewer_name?: string;
   reviewed_at?: string;
   reviewer_notes?: string;
   trainee_acknowledged: boolean;

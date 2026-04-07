@@ -1376,6 +1376,7 @@ class ShiftCompletionReport(Base):
     # Relationships for name resolution
     trainee = relationship("User", foreign_keys=[trainee_id], lazy="joined")
     officer = relationship("User", foreign_keys=[officer_id], lazy="joined")
+    reviewer = relationship("User", foreign_keys=[reviewed_by], lazy="joined")
 
     __table_args__ = (
         Index("idx_shift_report_trainee", "trainee_id", "shift_date"),
@@ -1405,6 +1406,10 @@ class ShiftCompletionReport(Base):
     @property
     def officer_name(self) -> str | None:
         return self.officer.full_name if self.officer else None
+
+    @property
+    def reviewer_name(self) -> str | None:
+        return self.reviewer.full_name if self.reviewer else None
 
     def __repr__(self):
         return f"<ShiftCompletionReport(trainee={self.trainee_id}, date={self.shift_date}, officer={self.officer_id})>"

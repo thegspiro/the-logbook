@@ -117,6 +117,7 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     # Review workflow
     review_status: str = "approved"
     reviewed_by: Optional[str] = None
+    reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     reviewer_notes: Optional[str] = None
 
