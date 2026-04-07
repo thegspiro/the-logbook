@@ -278,7 +278,7 @@ export const ShiftReportsTab: React.FC = () => {
         .then(setMembers)
         .catch(() => { /* members needed for draft edit */ });
     }
-  }, [viewMode, members.length]);
+  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps -- only load once when entering create mode
 
   // Load recent shifts when entering create mode without a linked shift
   useEffect(() => {

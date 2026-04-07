@@ -636,6 +636,7 @@ async def review_report(
         review_status=review.review_status,
         reviewer_notes=review.reviewer_notes,
         redact_fields=review.redact_fields,
+        reviewer_name=current_user.full_name,
     )
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -675,6 +676,7 @@ async def batch_review_reports(
                 review_status=data.review_status,
                 reviewer_notes=data.reviewer_notes,
                 redact_fields=None,
+                reviewer_name=current_user.full_name,
             )
             if report:
                 reviewed += 1
