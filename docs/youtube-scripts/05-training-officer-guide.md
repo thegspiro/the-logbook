@@ -1,10 +1,10 @@
 # Script 5: Training Officer — Managing Certifications & Programs
 
 **Video Type:** Role-Based Guide (Medium-Form)
-**Estimated Length:** 20–25 minutes
+**Estimated Length:** 25–30 minutes
 **Target Audience:** Training Officers, Safety Officers, Compliance Officers
 **Roles Covered:** training_officer, safety_officer
-**Chapters:** 7 (each designed as a standalone clip)
+**Chapters:** 9 (each designed as a standalone clip)
 
 ---
 
@@ -382,20 +382,70 @@ a member's perspective]**
 > these for your approval, and they count toward their compliance requirements
 > just like internal training."
 
-### TRAINING OFFICER'S WORKFLOW (20:30 – 21:30)
+### SHIFT COMPLETION REPORTS & SKILL SCORING (20:30 – 22:00)
+
+> "After each shift, officers file shift completion reports on their trainees.
+> Let me show you the workflow."
+
+**[SCREEN: Navigate to Training Admin > Shift Reports > Create]**
+
+> "You select the trainee, the shift date, and the shift — hours and calls
+> auto-populate from attendance records. Then you rate their performance 1-5,
+> note strengths and areas for improvement, and write a narrative."
+
+**[SCREEN: Show the skills section with 1-5 score buttons]**
+
+> "New as of this update — you can now score each observed skill on a 1-5
+> scale. **1 is 'Needs work', 3 is 'Competent', 5 is 'Excellent.'** These
+> scores flow directly into the trainee's competency score history."
+
+**[SCREENSHOT NEEDED]:** _Close-up of the skills scoring section showing
+3-4 skills, each with violet 1-5 score buttons, score labels as tooltips,
+the demonstrated checkbox, and comment field._
+
+> "Skills highlighted in **green** are linked to formal SkillEvaluations — those
+> scores feed competency tracking and pipeline progress. **Amber** skills are
+> observed on reports but aren't formally tracked."
+
+**[SCREENSHOT NEEDED]:** _The apparatus skills settings panel showing
+green and amber linkage tags on skills._
+
+### BATCH REVIEW (22:00 – 23:00)
+
+> "When you have a pile of pending reports — say, after a busy weekend — you
+> can batch-review them."
+
+**[SCREEN: Navigate to Pending Review view]**
+
+> "Check the reports you want to approve, or hit Select All. Then click
+> 'Approve Selected' — up to 100 at a time. You can also batch-flag reports
+> that need follow-up."
+
+**[SCREENSHOT NEEDED]:** _Pending Review view with checkboxes on 5 report
+cards, 3 checked, and the "Approve Selected (3)" / "Flag Selected (3)"
+action buttons visible._
+
+> "Flagged reports appear in their own tab, and you can re-review them later."
+
+**[SCREEN: Show the Flagged tab with a few flagged reports]**
+
+### TRAINING OFFICER'S WORKFLOW (23:00 – 24:00)
 
 > "Let me summarize the Training Officer's workflow."
 
 **[CALLOUT: Workflow steps appearing one at a time]**
 
 > "**Weekly:** Check the dashboard for new submissions and approaching
-> expirations. Approve or reject any member-submitted external training."
+> expirations. Approve or reject any member-submitted external training.
+> Review pending shift reports — batch-approve routine ones, flag any that
+> need a closer look."
 
 > "**Before Training Events:** Ensure the event is linked to the correct
 > requirement. Prepare any skills testing templates needed."
 
 > "**After Training Events:** Bulk-record completions for all attendees. Update
-> skills testing records if practical evaluations were conducted."
+> skills testing records if practical evaluations were conducted. File shift
+> completion reports with skill scores for any on-shift training observations."
 
 > "**Monthly:** Review the Compliance Matrix. Identify members falling behind.
 > Plan next month's training calendar to address gaps."
@@ -426,4 +476,6 @@ a member's perspective]**
 | Bulk Recording Training | 9:30–11:00 | "Recording Training for Multiple Members at Once" |
 | Skills Testing Walkthrough | 12:00–16:00 | "Running a Skills Test in The Logbook" |
 | Compliance Reporting | 16:00–19:00 | "Generating Compliance Reports" |
-| Training Officer Workflow | 20:30–21:30 | "The Training Officer's Weekly Routine" |
+| Shift Reports & Skill Scoring | 20:30–22:00 | "Filing Shift Reports with 1-5 Skill Scoring" |
+| Batch Review | 22:00–23:00 | "Batch Reviewing Shift Reports" |
+| Training Officer Workflow | 23:00–24:00 | "The Training Officer's Weekly Routine" |

@@ -1085,9 +1085,59 @@ Frontend shows "Finalized" badge, hides edit controls
 | **My Reports** | Trainees | Received approved reports with acknowledgment |
 | **Filed by Me** | Officers | Reports the officer has filed |
 | **Pending Review** | Training officers | Reports awaiting review approval |
+| **Flagged** | Training officers | Reports flagged for follow-up with re-review capability *(2026-04-07)* |
 | **Drafts** | Officers | Auto-created drafts from finalization |
 | **Create** | Officers | New report form with auto-population |
 
 ---
 
-*Last Updated: March 31, 2026*
+## Skill Scoring, Batch Review & Security Hardening (2026-04-07)
+
+### New Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/training/shift-reports/batch-review` | Batch approve/flag up to 100 reports at once |
+| `GET` | `/api/v1/training/shift-reports/flagged` | Get flagged reports for follow-up review |
+| `GET` | `/api/v1/training/module-config/skill-names` | Get active SkillEvaluation names for skill linkage |
+
+### 1-5 Skill Scoring
+
+Each observed skill in a shift completion report can now be assigned a 1-5 score (1=Needs work → 5=Excellent). Scores flow to `SkillCheckoff` records and competency score history. The `SkillObservation` schema adds a `score` field (`int | None`, ge=1, le=5). Score buttons use a consistent violet color theme.
+
+### Batch Review
+
+Checkboxes on report cards in the pending-review and flagged views, select-all toggle, and "Approve Selected" / "Flag Selected" action buttons. `BatchReviewRequest` schema accepts `report_ids` (list, max 100), `review_status`, and optional `reviewer_notes`.
+
+### Flagged Reports View
+
+New "Flagged" tab in ShiftReportsTab with `GET /flagged` endpoint. Flagged reports can be re-reviewed and approved.
+
+### Trainee & Officer Names
+
+`ShiftCompletionReport` model adds `trainee` and `officer` relationships to `User`. Response schema adds `trainee_name` and `officer_name`. Cards show "Trainee Name — Date" in header.
+
+### Review Modal Content
+
+Review modal now renders full report content (hours, calls, rating, strengths, improvements, narrative, skills with scores, tasks).
+
+### Skill Linkage in Apparatus Settings
+
+`ShiftReportsSettingsPanel` shows green (linked to SkillEvaluation) or amber (unlinked) tags for each apparatus-type skill. Powered by `GET /module-config/skill-names`.
+
+### Security
+
+- **Authorization bypass fixed** on `GET /shift-reports/{report_id}` — now requires trainee, officer, or `training.manage`
+- **Audit logging** added: `shift_report_created`, `shift_report_updated`, `shift_report_reviewed`, `shift_report_acknowledged`, `shift_reports_bulk_submitted`
+
+### Bug Fixes
+
+- MySQL `Decimal` TypeError in weekly/monthly calendar `SUM()` — wrapped in `float()`
+- `??` → `||` for 35 optional form fields in prospective-members and apparatus
+- `shift_date` type made required in TypeScript types
+- Unused `LogOut` import removed from `MyShiftsTab`
+- Center-aligned numeric columns in trainee summary table
+
+---
+
+*Last Updated: April 7, 2026*

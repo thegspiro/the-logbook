@@ -32,6 +32,7 @@ Every significant action in the system is recorded in the audit log with:
 | **Documents** | Document upload (filename, MIME type, file size), document delete *(2026-03-29)* |
 | **Membership Pipeline** | Pipeline created/deleted, prospect created/advanced/transferred *(2026-03-29)* |
 | **Messages** | Message creation and deletion *(2026-03-29)* |
+| **Shift Completion Reports** | Report created, updated, reviewed (approved/flagged/redacted), acknowledged by trainee, bulk submitted *(2026-04-07)* |
 | **Security** | Alert generated, alert acknowledged, integrity check |
 
 ---

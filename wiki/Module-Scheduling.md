@@ -400,4 +400,70 @@ ShiftTemplatesPage decomposed into focused components:
 
 ---
 
+## Skill Scoring, Batch Review & Security Hardening (2026-04-07)
+
+### 1-5 Skill Scoring
+
+Officers can now assign a 1-5 numeric score to each observed skill on shift completion reports. Scores flow through to `SkillCheckoff` records and competency score history. Score labels: 1=Needs work, 2=Developing, 3=Competent, 4=Proficient, 5=Excellent. Violet-themed score buttons across both `ShiftReportPage` and `ShiftReportsTab`.
+
+### Batch Review
+
+New batch review workflow for shift reports:
+
+- Checkboxes appear on report cards in the **Pending Review** and **Flagged** views
+- Select-all toggle to check/uncheck all reports
+- "Approve Selected" and "Flag Selected" action buttons
+- Backend: `POST /api/v1/training/shift-reports/batch-review` (up to 100 reports per batch)
+- Returns `{reviewed, failed}` counts for feedback
+
+### Flagged Reports
+
+- New **Flagged** tab in ShiftReportsTab for reports flagged by reviewers
+- `GET /api/v1/training/shift-reports/flagged` endpoint
+- Re-review capability: flagged reports can be approved from this view
+
+### Trainee & Officer Names
+
+Report cards now show trainee and officer names (resolved from `User` relationships). Cards display "Trainee Name — Date" in headers. Review modal shows shift date alongside names.
+
+### Report Content in Review Modal
+
+Review modal renders complete report content (hours, calls, rating, strengths, improvements, narrative, skills with scores, tasks) for reviewer context.
+
+### Skill Linkage in Apparatus Settings
+
+`ShiftReportsSettingsPanel` shows green/amber tags for each apparatus-type skill:
+- **Green**: Matches a `SkillEvaluation` record (tracks competency)
+- **Amber**: No match (observed but not formally tracked)
+
+Powered by `GET /api/v1/training/module-config/skill-names`.
+
+### Security Fixes
+
+- **Authorization bypass** on `GET /shift-reports/{report_id}` fixed — now requires trainee, officer, or `training.manage` permission
+- **Audit logging** added to all shift report endpoints: `shift_report_created`, `shift_report_updated`, `shift_report_reviewed`, `shift_report_acknowledged`, `shift_reports_bulk_submitted`
+
+### Bug Fixes (2026-04-07)
+
+| Issue | Fix |
+|-------|-----|
+| Decimal TypeError in weekly/monthly calendar | MySQL `SUM()` returns `Decimal`; wrapped in `float()` |
+| `??` → `||` for optional fields | 35 instances in prospective-members and apparatus |
+| `shift_date` type mismatch | Changed from optional to required in TS types |
+| Unused `LogOut` import | Removed from `MyShiftsTab` |
+| Numeric column alignment | Center-aligned trainee summary table columns |
+
+### Edge Cases (2026-04-07)
+
+| Scenario | Behavior |
+|----------|----------|
+| Skill score outside 1-5 | 422 error via Pydantic `Field(ge=1, le=5)` |
+| Batch review >100 IDs | Rejected by `max_length=100` |
+| Batch review with invalid IDs | Valid reports processed; failed count returned |
+| Flagged report re-approved | Moves to approved; deferred pipeline progress triggered |
+| Non-authorized user reads report by ID | 403 Forbidden |
+| Trainee reads own report | Visibility-filtered; `reviewer_notes` stripped |
+
+---
+
 **See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus)

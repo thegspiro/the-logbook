@@ -733,6 +733,8 @@ GET    /api/v1/training/shift-reports/{report_id}                      # Get sin
 PUT    /api/v1/training/shift-reports/{report_id}                      # Update draft
 POST   /api/v1/training/shift-reports/{report_id}/acknowledge          # Trainee acknowledge
 POST   /api/v1/training/shift-reports/{report_id}/review               # Officer review (approve/flag/redact)
+POST   /api/v1/training/shift-reports/batch-review                    # Batch approve/flag up to 100 reports (2026-04-07)
+GET    /api/v1/training/shift-reports/flagged                         # Get flagged reports for follow-up (2026-04-07)
 ```
 
 **ShiftCompletionReport Model:**
@@ -752,7 +754,7 @@ POST   /api/v1/training/shift-reports/{report_id}/review               # Officer
 | `areas_of_strength` | EncryptedText | AES-256 encrypted |
 | `areas_for_improvement` | EncryptedText | AES-256 encrypted |
 | `officer_narrative` | EncryptedText | Free-form assessment |
-| `skills_observed` | JSON | `[{skill_name, demonstrated, notes, comment}]` |
+| `skills_observed` | JSON | `[{skill_name, demonstrated, score (1-5), notes, comment}]` |
 | `tasks_performed` | JSON | `[{task, description, comment}]` |
 | `enrollment_id` | FK → program_enrollments, nullable | Linked enrollment |
 | `requirements_progressed` | JSON | `[{requirement_progress_id, value_added}]` |
@@ -764,6 +766,42 @@ POST   /api/v1/training/shift-reports/{report_id}/review               # Officer
 | `trainee_acknowledged` | Boolean, default=False | Acknowledgment flag |
 | `trainee_acknowledged_at` | DateTime, nullable | Acknowledgment timestamp |
 | `trainee_comments` | Text, nullable | Trainee feedback |
+
+**Relationships** *(2026-04-07):*
+
+| Relationship | Target | Description |
+|-------------|--------|-------------|
+| `trainee` | User | Eager-loaded relationship to the trainee user, provides `trainee_name` on the response schema |
+| `officer` | User | Eager-loaded relationship to the filing officer, provides `officer_name` on the response schema |
+
+**BatchReviewRequest Schema** *(2026-04-07):*
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `report_ids` | `list[str]` | min=1, max=100 | Report IDs to review |
+| `review_status` | `str` | `approved` or `flagged` | Status to apply to all reports |
+| `reviewer_notes` | `str \| None` | Optional | Notes applied to all reports |
+
+**Authorization on `GET /shift-reports/{report_id}`** *(2026-04-07):*
+
+The endpoint now enforces that the requester is one of:
+1. The **trainee** — sees visibility-filtered data; `reviewer_notes` always stripped
+2. The **filing officer** — sees full report data
+3. A user with **`training.manage`** permission — sees full report data
+
+Unauthorized access returns 403 Forbidden. This addresses a HIPAA minimum-necessary violation where any org member could previously read any report by ID.
+
+**Audit Logging** *(2026-04-07):*
+
+All shift report operations now call `log_audit_event()`:
+
+| Event | Trigger | Metadata |
+|-------|---------|----------|
+| `shift_report_created` | Officer files a new report | `report_id`, `trainee_id`, `shift_date` |
+| `shift_report_updated` | Officer updates a draft | `report_id`, updated fields |
+| `shift_report_reviewed` | Reviewer approves/flags/redacts | `report_id`, `review_status`, `reviewer_id` |
+| `shift_report_acknowledged` | Trainee acknowledges | `report_id`, `trainee_id` |
+| `shift_reports_bulk_submitted` | Officer submits all drafts | `count`, `officer_id` |
 
 **Save as Draft:**
 
@@ -791,6 +829,12 @@ When a report is created (non-draft) or transitions from `draft` to `approved`/`
 | Duplicate report for same shift + trainee | Blocked by unique constraint; descriptive error |
 | Draft saved with missing required fields | Accepted; validation deferred to final submission |
 | Equipment check `shift_id` is NULL | Standalone ad-hoc check; not linked to shift finalization |
+| Skill score outside 1-5 range | Rejected by `Field(ge=1, le=5)` with 422 *(2026-04-07)* |
+| Batch review >100 report IDs | Rejected by `max_length=100` on `BatchReviewRequest` *(2026-04-07)* |
+| Batch review with invalid IDs | Valid reports processed; `failed` count returned *(2026-04-07)* |
+| Flagged report re-approved | Triggers deferred pipeline progress *(2026-04-07)* |
+| Non-authorized user reads report by ID | Returns 403 Forbidden *(2026-04-07)* |
+| MySQL SUM() returns Decimal | Wrapped in `float()` before division in calendar endpoints *(2026-04-07)* |
 
 ### Module Configuration
 
@@ -799,6 +843,7 @@ GET    /api/v1/training/module-config/config               # Get module config
 PUT    /api/v1/training/module-config/config               # Update module config
 GET    /api/v1/training/module-config/visibility           # Get member visibility settings
 GET    /api/v1/training/module-config/my-training          # Get my training summary config
+GET    /api/v1/training/module-config/skill-names          # Get active SkillEvaluation names (2026-04-07)
 ```
 
 **TrainingModuleConfig Model (key fields):**
