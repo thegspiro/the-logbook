@@ -35,6 +35,9 @@ import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, UserStatus, AssignmentStatus
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
+import { AssignmentActions } from './AssignmentActions';
+import { PositionEditor } from './PositionEditor';
+import { CrewBoardSlot } from './CrewBoardSlot';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
@@ -138,12 +141,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Signup state
   const [signupPosition, setSignupPosition] = useState('');
 
-  // Inline confirmation for decline/remove
-  const [confirmingDecline, setConfirmingDecline] = useState<string | null>(null);
-  const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
-
   // Inline editing state
-  const [editingPositionId, setEditingPositionId] = useState<string | null>(null);
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null);
   const [editingNotesValue, setEditingNotesValue] = useState('');
 
@@ -303,7 +301,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     setAssignments(prev => prev.map(a =>
       a.id === assignmentId ? { ...a, status: AssignmentStatus.DECLINED } : a
     ));
-    setConfirmingDecline(null);
     try {
       await schedulingService.updateAssignment(assignmentId, { assignment_status: 'declined' });
       toast.success('Assignment declined');
@@ -325,7 +322,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     try {
       await schedulingService.deleteAssignment(assignmentId);
       toast.success('Assignment removed');
-      setConfirmingRemove(null);
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
@@ -336,10 +332,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   };
 
   const handlePositionChange = async (assignmentId: string, newPosition: string, currentPosition: string) => {
-    if (newPosition === currentPosition) {
-      setEditingPositionId(null);
-      return;
-    }
+    if (newPosition === currentPosition) return;
     setPendingFlag('updatingPosition', true);
     try {
       await schedulingService.updateAssignment(assignmentId, { position: newPosition });
@@ -350,7 +343,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       toast.error(getErrorMessage(err, 'Failed to update position'));
     } finally {
       setPendingFlag('updatingPosition', false);
-      setEditingPositionId(null);
     }
   };
 
@@ -504,16 +496,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (editingPositionId) setEditingPositionId(null);
-        else if (editingNotesId) setEditingNotesId(null);
-        else if (confirmingDecline) setConfirmingDecline(null);
-        else if (confirmingRemove) setConfirmingRemove(null);
+        if (editingNotesId) setEditingNotesId(null);
         else onClose();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, editingPositionId, editingNotesId, confirmingDecline, confirmingRemove]);
+  }, [onClose, editingNotesId]);
 
   const shiftDate = new Date(shift.shift_date + 'T12:00:00');
   const isPast = shift.shift_date < getTodayLocalDate(tz);
@@ -583,10 +572,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-violet-500';
 
   const renderAssignmentRow = (assignment: Assignment) => {
-    const effectiveStatus = assignment.status || 'assigned';
-    const statusColor = ASSIGNMENT_STATUS_COLORS[effectiveStatus] || ASSIGNMENT_STATUS_COLORS.assigned;
     const isCurrentUser = assignment.user_id === user?.id;
-    const isAssigned = effectiveStatus === AssignmentStatus.ASSIGNED;
     return (
       <div key={assignment.id} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${isCurrentUser ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30'}`}>
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -597,80 +583,29 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <p className="text-sm font-medium text-theme-text-primary truncate">
               {assignment.user_name || 'Unknown'} {isCurrentUser && <span className="text-xs text-violet-500">(You)</span>}
             </p>
-            {canAssign && !isPast && editingPositionId === assignment.id ? (
-              <select
-                value={assignment.position}
-                onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
-                onBlur={() => { if (!pending.updatingPosition) setEditingPositionId(null); }}
-                disabled={pending.updatingPosition}
-                className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-1 py-0.5 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
-                autoFocus
-              >
-                {positionOptions.map(([val, label]) => (
-                  <option key={val} value={val}>{label}</option>
-                ))}
-              </select>
-            ) : (
-              <button
-                type="button"
-                className={`text-xs capitalize ${canAssign && !isPast ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
-                onClick={canAssign && !isPast ? () => setEditingPositionId(assignment.id) : undefined}
-                disabled={!canAssign || isPast}
-                title={canAssign && !isPast ? 'Click to change position' : undefined}
-              >
-                {POSITION_LABELS[assignment.position] || assignment.position}
-                {canAssign && !isPast && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
-              </button>
-            )}
+            <PositionEditor
+              assignmentId={assignment.id}
+              currentPosition={assignment.position}
+              positionOptions={positionOptions}
+              onSave={(id, newPos, curPos) => { void handlePositionChange(id, newPos, curPos); }}
+              editable={canAssign && !isPast}
+              updatingPosition={pending.updatingPosition}
+            />
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1 sm:gap-2 shrink-0">
-          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${statusColor}`}>
-            {effectiveStatus}
-          </span>
-          {isCurrentUser && isAssigned && confirmingDecline !== assignment.id && (
-            <>
-              <button onClick={() => { void handleConfirm(assignment.id); }} disabled={pending.confirming}
-                className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center disabled:opacity-50" aria-label="Confirm assignment"
-              >
-                {pending.confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              </button>
-              <button onClick={() => setConfirmingDecline(assignment.id)}
-                className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
-              >
-                <XCircle className="w-4 h-4" />
-              </button>
-            </>
-          )}
-          {confirmingDecline === assignment.id && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
-              <button onClick={() => { void handleDecline(assignment.id); }} disabled={pending.declining}
-                className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
-              >{pending.declining ? '...' : 'Yes'}</button>
-              <button onClick={() => setConfirmingDecline(null)}
-                className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
-              >No</button>
-            </div>
-          )}
-          {canAssign && !isCurrentUser && confirmingRemove !== assignment.id && (
-            <button onClick={() => setConfirmingRemove(assignment.id)}
-              className="p-1.5 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
-            >
-              <XCircle className="w-4 h-4" />
-            </button>
-          )}
-          {confirmingRemove === assignment.id && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-red-500 dark:text-red-400">Remove?</span>
-              <button onClick={() => { void handleRemove(assignment.id); }} disabled={pending.removing}
-                className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm removal"
-              >{pending.removing ? '...' : 'Yes'}</button>
-              <button onClick={() => setConfirmingRemove(null)}
-                className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"
-              >No</button>
-            </div>
-          )}
+          <AssignmentActions
+            assignmentId={assignment.id}
+            effectiveStatus={assignment.status || 'assigned'}
+            isCurrentUser={isCurrentUser || false}
+            canAssign={canAssign}
+            onConfirm={(id) => { void handleConfirm(id); }}
+            onDecline={(id) => { void handleDecline(id); }}
+            onRemove={(id) => { void handleRemove(id); }}
+            pendingConfirming={pending.confirming}
+            pendingDeclining={pending.declining}
+            pendingRemoving={pending.removing}
+          />
           {canAssign && !isPast && editingNotesId !== assignment.id && (
             <button
               onClick={() => { setEditingNotesId(assignment.id); setEditingNotesValue(assignment.notes || ''); }}
@@ -1076,159 +1011,32 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               )}
               <div className="space-y-2">
                 {crewBoard?.map(({ position, required, assignment }, i) => (
-                  <div key={i} className={`flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-lg border ${
-                    assignment
-                      ? (assignment.user_id === user?.id ? 'border-violet-500/30 bg-violet-500/5' : 'border-theme-surface-border bg-theme-surface-hover/30')
-                      : 'border-dashed border-theme-surface-border bg-theme-surface-hover/10'
-                  }`}>
-                    <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                      {assignment ? (
-                        <>
-                          <div className="w-8 h-8 rounded-full bg-theme-surface-hover flex items-center justify-center text-sm font-medium text-theme-text-primary shrink-0">
-                            {(assignment.user_name || '?').charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium text-theme-text-primary truncate">
-                              {assignment.user_name || 'Unknown'}
-                              {assignment.user_id === user?.id && <span className="text-xs text-violet-500 ml-1">(You)</span>}
-                            </p>
-                            {canAssign && !isPast && editingPositionId === assignment.id ? (
-                              <select
-                                value={assignment.position}
-                                onChange={e => { void handlePositionChange(assignment.id, e.target.value, assignment.position); }}
-                                onBlur={() => { if (!pending.updatingPosition) setEditingPositionId(null); }}
-                                disabled={pending.updatingPosition}
-                                className="text-xs bg-theme-input-bg border border-theme-input-border rounded-sm px-1 py-0.5 text-theme-text-primary focus:outline-hidden focus:ring-1 focus:ring-violet-500"
-                                autoFocus
-                              >
-                                {positionOptions.map(([val, label]) => (
-                                  <option key={val} value={val}>{label}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <button
-                                type="button"
-                                className={`text-xs capitalize ${canAssign && !isPast ? 'text-theme-text-muted hover:text-violet-500 transition-colors inline-flex items-center gap-0.5' : 'text-theme-text-muted'}`}
-                                onClick={canAssign && !isPast ? () => setEditingPositionId(assignment.id) : undefined}
-                                disabled={!canAssign || isPast}
-                                title={canAssign && !isPast ? 'Click to change position' : undefined}
-                              >
-                                {POSITION_LABELS[position] || position}
-                                {canAssign && !isPast && <Pencil className="w-2.5 h-2.5 ml-0.5 opacity-50" />}
-                              </button>
-                            )}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="w-8 h-8 rounded-full border-2 border-dashed border-theme-surface-border flex items-center justify-center shrink-0">
-                            <UserPlus className="w-3.5 h-3.5 text-theme-text-muted" />
-                          </div>
-                          <div>
-                            <p className="text-sm text-theme-text-muted capitalize">
-                              {POSITION_LABELS[position] || position}
-                              {!required && <span className="text-[10px] text-theme-text-muted ml-1">(optional)</span>}
-                            </p>
-                            <p className="text-xs text-theme-text-muted">{required ? 'Open position' : 'Optional position'}</p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 shrink-0">
-                      {assignment ? (
-                        <>
-                          <span className={`px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded-full capitalize ${ASSIGNMENT_STATUS_COLORS[assignment.status || 'assigned'] || ASSIGNMENT_STATUS_COLORS.assigned}`}>
-                            {assignment.status || 'assigned'}
-                          </span>
-                          {(() => {
-                            const att = attendanceByUser.get(assignment.user_id);
-                            if (!att) return null;
-                            if (att.checked_out_at) {
-                              const hrs = Math.round(((att.duration_minutes ?? 0) / 60) * 10) / 10;
-                              return (
-                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/10 text-green-700 dark:text-green-400" title={`In: ${formatTime(att.checked_in_at, tz)} Out: ${formatTime(att.checked_out_at, tz)}`}>
-                                  {hrs}h
-                                </span>
-                              );
-                            }
-                            if (att.checked_in_at) {
-                              return (
-                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400" title={`Checked in at ${formatTime(att.checked_in_at, tz)}`}>
-                                  <LogIn className="w-3 h-3 inline" />
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
-                          {assignment.user_id === user?.id && assignment.status === AssignmentStatus.ASSIGNED && confirmingDecline !== assignment.id && (
-                            <>
-                              <button onClick={() => { void handleConfirm(assignment.id); }}
-                                className="p-1.5 text-green-600 dark:text-green-400 hover:bg-green-500/10 dark:hover:bg-green-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Confirm assignment"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                              <button onClick={() => setConfirmingDecline(assignment.id)}
-                                className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-500/10 dark:hover:bg-red-500/20 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Decline assignment"
-                              >
-                                <XCircle className="w-4 h-4" />
-                              </button>
-                            </>
-                          )}
-                          {confirmingDecline === assignment.id && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-red-500 dark:text-red-400">Decline?</span>
-                              <button onClick={() => { void handleDecline(assignment.id); }}
-                                className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm decline"
-                              >Yes</button>
-                              <button onClick={() => setConfirmingDecline(null)}
-                                className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel decline"
-                              >No</button>
-                            </div>
-                          )}
-                          {canAssign && assignment.user_id !== user?.id && confirmingRemove !== assignment.id && (
-                            <button onClick={() => setConfirmingRemove(assignment.id)}
-                              className="p-1.5 text-theme-text-muted hover:text-red-500 dark:hover:text-red-400 rounded-sm transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Remove assignment"
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </button>
-                          )}
-                          {confirmingRemove === assignment.id && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-red-500 dark:text-red-400">Remove?</span>
-                              <button onClick={() => { void handleRemove(assignment.id); }}
-                                className="btn-primary px-2 py-1 rounded-md text-xs" aria-label="Confirm removal"
-                              >Yes</button>
-                              <button onClick={() => setConfirmingRemove(null)}
-                                className="px-2 py-1 text-xs text-theme-text-muted hover:text-theme-text-primary" aria-label="Cancel removal"
-                              >No</button>
-                            </div>
-                          )}
-                        </>
-                      ) : !isPast && (
-                        <div className="flex items-center gap-1.5">
-                          {canAssign && (
-                            <button
-                              onClick={() => openAssignFormForPosition(position)}
-                              className="px-2.5 sm:px-3 py-1.5 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 border border-violet-500/30 rounded-lg text-xs font-medium inline-flex items-center gap-1"
-                            >
-                              <UserPlus className="w-3 h-3" />
-                              <span className="hidden sm:inline">Assign</span>
-                            </button>
-                          )}
-                          {!isUserAssigned && (
-                            <button
-                              onClick={() => { void handleSignup(position); }}
-                              disabled={pending.signingUp}
-                              className="px-2.5 sm:px-3 py-1.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1"
-                            >
-                              {pending.signingUp ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
-                              <span className="hidden sm:inline">Sign Up</span><span className="sm:hidden">Join</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <CrewBoardSlot
+                    key={i}
+                    position={position}
+                    required={required}
+                    assignment={assignment}
+                    currentUserId={user?.id}
+                    canAssign={canAssign}
+                    isPast={isPast}
+                    isUserAssigned={isUserAssigned}
+                    positionOptions={positionOptions}
+                    attendanceRecord={assignment ? attendanceByUser.get(assignment.user_id) : undefined}
+                    tz={tz}
+                    pendingStates={{
+                      confirming: pending.confirming,
+                      declining: pending.declining,
+                      removing: pending.removing,
+                      updatingPosition: pending.updatingPosition,
+                      signingUp: pending.signingUp,
+                    }}
+                    onConfirm={(id) => { void handleConfirm(id); }}
+                    onDecline={(id) => { void handleDecline(id); }}
+                    onRemove={(id) => { void handleRemove(id); }}
+                    onPositionChange={(id, newPos, curPos) => { void handlePositionChange(id, newPos, curPos); }}
+                    onAssignToPosition={openAssignFormForPosition}
+                    onSignup={(pos) => { void handleSignup(pos); }}
+                  />
                 ))}
               </div>
 

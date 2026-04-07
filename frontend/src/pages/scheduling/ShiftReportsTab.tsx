@@ -12,7 +12,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   FileText, Plus, Loader2, Star, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
-  Shield, Eye, EyeOff, MessageSquare, ClipboardCheck, Pencil,
+  Shield, Eye, EyeOff, ClipboardCheck, Pencil,
   BarChart3, TrendingUp, Users, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -36,10 +36,10 @@ import { formatDateCustom, getTodayLocalDate } from '../../utils/dateFormatting'
 import {
   DEFAULT_SKILLS,
   DEFAULT_CALL_TYPE_OPTIONS,
-  SKILL_SCORE_LABELS,
   DEFAULT_COMPETENCY_LABELS,
   REVIEW_STATUS_STYLES,
 } from '../../modules/scheduling/components/shiftReportConstants';
+import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -889,93 +889,9 @@ export const ShiftReportsTab: React.FC = () => {
 
         {isExpanded && (
           <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-theme-surface-border space-y-4">
-            {/* Call Types */}
-            {report.call_types && report.call_types.length > 0 && (
-              <div className="pt-3">
-                <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-2">Call Types</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {report.call_types.map(type => (
-                    <span key={type} className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 rounded-full">{type}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Narrative sections */}
-            <div className="form-grid-2 pt-2">
-              {report.areas_of_strength && (
-                <div>
-                  <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Strengths</p>
-                  <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{report.areas_of_strength}</p>
-                </div>
-              )}
-              {report.areas_for_improvement && (
-                <div>
-                  <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Areas for Improvement</p>
-                  <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{report.areas_for_improvement}</p>
-                </div>
-              )}
+            <div className="pt-3">
+              <ReportContentDisplay report={report} />
             </div>
-
-            {report.officer_narrative && (
-              <div>
-                <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Officer Narrative</p>
-                <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{report.officer_narrative}</p>
-              </div>
-            )}
-
-            {/* Skills Observed */}
-            {report.skills_observed && report.skills_observed.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-2">Skills Observed</p>
-                <div className="space-y-1.5">
-                  {report.skills_observed.map((skill, i) => (
-                    <div key={i}>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
-                          : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
-                        }`}>
-                          {skill.demonstrated ? '✓' : '○'} {skill.skill_name}
-                        </span>
-                        {skill.score != null && (
-                          <span className="text-xs font-medium text-violet-600 dark:text-violet-400">
-                            {skill.score}/5 — {SKILL_SCORE_LABELS[skill.score] ?? ''}
-                          </span>
-                        )}
-                      </div>
-                      {skill.comment && (
-                        <p className="mt-0.5 ml-2 text-xs text-theme-text-muted italic flex items-start gap-1">
-                          <MessageSquare className="w-3 h-3 mt-0.5 shrink-0" />
-                          {skill.comment}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tasks Performed */}
-            {report.tasks_performed && report.tasks_performed.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-2">Tasks Performed</p>
-                <ul className="space-y-1.5">
-                  {report.tasks_performed.map((task, i) => (
-                    <li key={i} className="text-sm text-theme-text-primary">
-                      <span className="font-medium">{task.task}</span>
-                      {task.description && <span className="text-theme-text-muted"> — {task.description}</span>}
-                      {task.comment && (
-                        <p className="mt-0.5 ml-2 text-xs text-theme-text-muted italic flex items-start gap-1">
-                          <MessageSquare className="w-3 h-3 mt-0.5 shrink-0" />
-                          {task.comment}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             {/* Reviewer notes (only for officers viewing, never for trainees) */}
             {canManage && report.reviewer_notes && (
@@ -984,14 +900,6 @@ export const ShiftReportsTab: React.FC = () => {
                   <Shield className="w-3 h-3" /> Reviewer Notes (Internal)
                 </p>
                 <p className="text-sm text-theme-text-primary">{report.reviewer_notes}</p>
-              </div>
-            )}
-
-            {/* Trainee comments */}
-            {report.trainee_comments && (
-              <div className="p-3 bg-theme-surface-hover rounded-lg">
-                <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Trainee Comments</p>
-                <p className="text-sm text-theme-text-primary">{report.trainee_comments}</p>
               </div>
             )}
 
@@ -1751,68 +1659,7 @@ export const ShiftReportsTab: React.FC = () => {
                   </span>
                   {reviewReport.performance_rating && renderRating(reviewReport.performance_rating)}
                 </div>
-
-                {reviewReport.call_types && reviewReport.call_types.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Call Types</p>
-                    <div className="flex flex-wrap gap-1">
-                      {reviewReport.call_types.map(type => (
-                        <span key={type} className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 rounded-full">{type}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {reviewReport.areas_of_strength && (
-                  <div>
-                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Strengths</p>
-                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.areas_of_strength}</p>
-                  </div>
-                )}
-
-                {reviewReport.areas_for_improvement && (
-                  <div>
-                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Areas for Improvement</p>
-                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.areas_for_improvement}</p>
-                  </div>
-                )}
-
-                {reviewReport.officer_narrative && (
-                  <div>
-                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Officer Narrative</p>
-                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.officer_narrative}</p>
-                  </div>
-                )}
-
-                {reviewReport.skills_observed && reviewReport.skills_observed.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Skills Observed</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {reviewReport.skills_observed.map((skill, i) => (
-                        <span key={i} className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
-                          : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
-                        }`}>
-                          {skill.demonstrated ? '✓' : '○'} {skill.skill_name}{skill.score != null ? ` (${skill.score}/5 — ${SKILL_SCORE_LABELS[skill.score] ?? ''})` : ''}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {reviewReport.tasks_performed && reviewReport.tasks_performed.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Tasks Performed</p>
-                    <ul className="space-y-0.5">
-                      {reviewReport.tasks_performed.map((task, i) => (
-                        <li key={i} className="text-sm text-theme-text-primary">
-                          <span className="font-medium">{task.task}</span>
-                          {task.description && <span className="text-theme-text-muted"> — {task.description}</span>}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <ReportContentDisplay report={reviewReport} />
               </div>
             )}
 
