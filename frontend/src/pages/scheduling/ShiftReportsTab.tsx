@@ -337,9 +337,11 @@ export const ShiftReportsTab: React.FC = () => {
   };
 
   const handleAddTask = () => {
+    const addedNames = new Set((form.tasks_performed || []).map(t => t.task.toLowerCase()));
+    const nextDefault = taskDefaults.find(t => !addedNames.has(t.toLowerCase()));
     setForm(prev => ({
       ...prev,
-      tasks_performed: [...(prev.tasks_performed || []), { task: '', description: '' }],
+      tasks_performed: [...(prev.tasks_performed || []), { task: nextDefault || '', description: '' }],
     }));
   };
 
@@ -1391,26 +1393,30 @@ export const ShiftReportsTab: React.FC = () => {
               </button>
             </div>
             {/* Quick-add from configured defaults */}
-            {taskDefaults.length > 0 && (form.tasks_performed || []).length === 0 && (
-              <div className="mb-2">
-                <p className="text-xs text-theme-text-muted mb-1.5">Quick add from defaults:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {taskDefaults.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setForm(prev => ({
-                        ...prev,
-                        tasks_performed: [...(prev.tasks_performed || []), { task: t, description: '' }],
-                      }))}
-                      className="px-2 py-1 text-xs rounded-full border border-violet-500/20 bg-violet-500/5 text-violet-700 dark:text-violet-400 hover:bg-violet-500/15 transition-colors"
-                    >
-                      + {t}
-                    </button>
-                  ))}
+            {taskDefaults.length > 0 && (() => {
+              const addedNames = new Set((form.tasks_performed || []).map(t => t.task.toLowerCase()));
+              const remaining = taskDefaults.filter(t => !addedNames.has(t.toLowerCase()));
+              return remaining.length > 0 ? (
+                <div className="mb-2">
+                  <p className="text-xs text-theme-text-muted mb-1.5">Quick add from defaults:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {remaining.map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setForm(prev => ({
+                          ...prev,
+                          tasks_performed: [...(prev.tasks_performed || []), { task: t, description: '' }],
+                        }))}
+                        className="px-2 py-1 text-xs rounded-full border border-violet-500/20 bg-violet-500/5 text-violet-700 dark:text-violet-400 hover:bg-violet-500/15 transition-colors"
+                      >
+                        + {t}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : null;
+            })()}
             <div className="space-y-3">
               {(form.tasks_performed || []).map((task, i) => (
                 <div key={i} className="space-y-1">
