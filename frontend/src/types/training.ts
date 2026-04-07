@@ -1193,6 +1193,45 @@ export interface ShiftCompletionReport {
   updated_at: string;
 }
 
+export interface ShiftCrewMember {
+  user_id: string;
+  user_name: string;
+  position: string;
+  has_active_enrollment: boolean;
+  enrollment_id?: string;
+  program_name?: string;
+  has_existing_report: boolean;
+}
+
+export interface CrewMemberEvaluation {
+  user_id: string;
+  performance_rating?: number;
+  areas_of_strength?: string;
+  areas_for_improvement?: string;
+  remarks?: string;
+  skills_observed?: SkillObservation[];
+  tasks_performed?: TaskPerformed[];
+  enrollment_id?: string;
+}
+
+export interface BatchShiftReportCreate {
+  shift_id: string;
+  shift_date: string;
+  hours_on_shift: number;
+  calls_responded: number;
+  call_types?: string[];
+  officer_narrative?: string;
+  crew_member_ids: string[];
+  trainee_evaluations?: CrewMemberEvaluation[];
+  save_as_draft?: boolean;
+}
+
+export interface BatchShiftReportResponse {
+  created: number;
+  skipped: number;
+  report_ids: string[];
+}
+
 export interface MonthlyShiftData {
   month: string;
   reports: number;

@@ -623,6 +623,16 @@ export const shiftCompletionService = {
     const response = await api.get<{ hours_on_shift: number | null; calls_responded: number; call_types: string[] }>(`/training/shift-reports/shift-preview/${shiftId}/${traineeId}`);
     return response.data;
   },
+
+  async getShiftCrewStatus(shiftId: string): Promise<import('../types/training').ShiftCrewMember[]> {
+    const response = await api.get<import('../types/training').ShiftCrewMember[]>(`/training/shift-reports/shift-crew/${shiftId}`);
+    return response.data;
+  },
+
+  async batchCreateReports(data: import('../types/training').BatchShiftReportCreate): Promise<import('../types/training').BatchShiftReportResponse> {
+    const response = await api.post<import('../types/training').BatchShiftReportResponse>('/training/shift-reports/batch', data);
+    return response.data;
+  },
 };
 
 // ============================================

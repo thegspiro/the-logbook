@@ -285,6 +285,177 @@ class ShiftCompletionService:
 
         return report
 
+    async def get_shift_crew_status(
+        self,
+        organization_id: UUID,
+        shift_id: str,
+    ) -> List[Dict]:
+        """Get crew members for a shift with enrollment and report status.
+
+        Returns a list of dicts with:
+        - user_id, user_name, position
+        - has_active_enrollment (bool)
+        - enrollment_id (str or None)
+        - program_name (str or None)
+        - has_existing_report (bool)
+        """
+        from app.models.training import TrainingProgram
+        from app.models.user import User
+
+        assignments = (
+            await self.db.execute(
+                select(ShiftAssignment).where(
+                    ShiftAssignment.shift_id == shift_id,
+                )
+            )
+        ).scalars().all()
+
+        if not assignments:
+            return []
+
+        user_ids = [a.user_id for a in assignments]
+
+        users = (
+            await self.db.execute(
+                select(User).where(User.id.in_(user_ids))
+            )
+        ).scalars().all()
+        user_map = {str(u.id): u for u in users}
+
+        active_enrollments = (
+            await self.db.execute(
+                select(ProgramEnrollment, TrainingProgram.name).join(
+                    TrainingProgram,
+                    ProgramEnrollment.program_id == TrainingProgram.id,
+                ).where(
+                    ProgramEnrollment.user_id.in_(user_ids),
+                    ProgramEnrollment.organization_id
+                    == str(organization_id),
+                    ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                )
+            )
+        ).all()
+        enrollment_map: Dict[str, Dict] = {}
+        for enrollment, program_name in active_enrollments:
+            enrollment_map[enrollment.user_id] = {
+                "enrollment_id": str(enrollment.id),
+                "program_name": program_name,
+            }
+
+        existing_reports = (
+            await self.db.execute(
+                select(
+                    ShiftCompletionReport.trainee_id
+                ).where(
+                    ShiftCompletionReport.shift_id == shift_id,
+                )
+            )
+        ).scalars().all()
+        reported_ids = set(str(tid) for tid in existing_reports)
+
+        result = []
+        for assignment in assignments:
+            uid = str(assignment.user_id)
+            user = user_map.get(uid)
+            enrollment_info = enrollment_map.get(uid, {})
+            result.append({
+                "user_id": uid,
+                "user_name": (
+                    user.full_name if user else "Unknown"
+                ),
+                "position": assignment.position,
+                "has_active_enrollment": uid in enrollment_map,
+                "enrollment_id": enrollment_info.get(
+                    "enrollment_id"
+                ),
+                "program_name": enrollment_info.get(
+                    "program_name"
+                ),
+                "has_existing_report": uid in reported_ids,
+            })
+
+        return result
+
+    async def batch_create_reports(
+        self,
+        organization_id: UUID,
+        officer_id: UUID,
+        shift_id: str,
+        shift_date: date,
+        hours_on_shift: float,
+        calls_responded: int,
+        call_types: Optional[list],
+        officer_narrative: Optional[str],
+        crew_member_ids: List[str],
+        trainee_evaluations: Optional[List[Dict]],
+        review_status: str = "approved",
+    ) -> Dict:
+        """Create shift reports for all crew members in one transaction.
+
+        Non-trainees get hours/calls credit only.
+        Trainees get full evaluation data.
+        """
+        eval_map: Dict[str, Dict] = {}
+        if trainee_evaluations:
+            for ev in trainee_evaluations:
+                eval_map[ev["user_id"]] = ev
+
+        created_ids: List[str] = []
+        skipped = 0
+
+        for member_id in crew_member_ids:
+            evaluation = eval_map.get(member_id, {})
+            try:
+                report = await self.create_report(
+                    organization_id=organization_id,
+                    officer_id=officer_id,
+                    trainee_id=member_id,
+                    shift_date=shift_date,
+                    hours_on_shift=hours_on_shift,
+                    calls_responded=calls_responded,
+                    call_types=call_types,
+                    shift_id=shift_id,
+                    performance_rating=evaluation.get(
+                        "performance_rating"
+                    ),
+                    areas_of_strength=evaluation.get(
+                        "areas_of_strength"
+                    ),
+                    areas_for_improvement=evaluation.get(
+                        "areas_for_improvement"
+                    ),
+                    officer_narrative=(
+                        evaluation.get("remarks")
+                        or officer_narrative
+                    ),
+                    skills_observed=evaluation.get(
+                        "skills_observed"
+                    ),
+                    tasks_performed=evaluation.get(
+                        "tasks_performed"
+                    ),
+                    enrollment_id=evaluation.get("enrollment_id"),
+                    review_status=review_status,
+                    commit=False,
+                )
+                created_ids.append(str(report.id))
+            except ValueError as e:
+                logger.warning(
+                    "Skipped report for member {}: {}",
+                    member_id,
+                    str(e),
+                )
+                skipped += 1
+
+        if created_ids:
+            await self.db.commit()
+
+        return {
+            "created": len(created_ids),
+            "skipped": skipped,
+            "report_ids": created_ids,
+        }
+
     async def _notify_trainee_report_ready(
         self,
         organization_id: UUID,
