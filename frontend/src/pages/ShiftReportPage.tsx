@@ -39,6 +39,14 @@ import type {
   TrainingModuleConfig,
 } from '../types/training';
 
+const SKILL_SCORE_LABELS: Record<number, string> = {
+  1: 'Needs work',
+  2: 'Developing',
+  3: 'Competent',
+  4: 'Proficient',
+  5: 'Excellent',
+};
+
 // ==================== Star Rating ====================
 
 const StarRating: React.FC<{
@@ -140,7 +148,7 @@ const ReportCard: React.FC<{
               <div className="flex flex-wrap gap-1 mt-1">
                 {report.skills_observed.map((s, i) => (
                   <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
-                    {s.skill_name}{s.score != null ? ` (${s.score}/5)` : ''}
+                    {s.skill_name}{s.score != null ? ` (${s.score}/5 — ${SKILL_SCORE_LABELS[s.score] ?? ''})` : ''}
                   </span>
                 ))}
               </div>
@@ -969,10 +977,17 @@ const ShiftReportPage: React.FC = () => {
                         <div className="mt-1 ml-4 space-y-1.5">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-theme-text-muted">Score:</span>
-                            {[1, 2, 3, 4, 5].map(n => (
+                            {([
+                              { n: 1, tip: 'Needs work' },
+                              { n: 2, tip: 'Developing' },
+                              { n: 3, tip: 'Competent' },
+                              { n: 4, tip: 'Proficient' },
+                              { n: 5, tip: 'Excellent' },
+                            ] as const).map(({ n, tip }) => (
                               <button
                                 key={n}
                                 type="button"
+                                title={tip}
                                 onClick={() => {
                                   setSkills(skills.map(s =>
                                     s.skill_name === skillName
@@ -982,8 +997,8 @@ const ShiftReportPage: React.FC = () => {
                                 }}
                                 className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
                                   selected.score === n
-                                    ? 'bg-red-700 dark:bg-red-600 text-white border-red-800'
-                                    : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-red-400'
+                                    ? 'bg-violet-600 text-white border-violet-700'
+                                    : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
                                 }`}
                               >
                                 {n}
@@ -1000,7 +1015,7 @@ const ShiftReportPage: React.FC = () => {
                                 s.skill_name === skillName ? { ...s, comment } : s
                               ));
                             }}
-                            className="w-full max-w-md py-1.5 px-2 text-xs border border-theme-surface-border rounded bg-theme-surface focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                            className="w-full max-w-md py-1.5 px-2 text-xs border border-theme-surface-border rounded bg-theme-surface focus:ring-1 focus:ring-violet-500 focus:border-violet-500"
                           />
                         </div>
                       )}

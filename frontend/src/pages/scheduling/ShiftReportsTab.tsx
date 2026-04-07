@@ -57,6 +57,14 @@ const DEFAULT_COMPETENCY_LABELS: Record<string, string> = {
   '5': 'Exemplary',
 };
 
+const SKILL_SCORE_LABELS: Record<number, string> = {
+  1: 'Needs work',
+  2: 'Developing',
+  3: 'Competent',
+  4: 'Proficient',
+  5: 'Excellent',
+};
+
 const REVIEW_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   draft: { bg: 'bg-blue-500/10', text: 'text-blue-700 dark:text-blue-400', label: 'Draft' },
   pending_review: { bg: 'bg-amber-500/10', text: 'text-amber-700 dark:text-amber-400', label: 'Pending Review' },
@@ -961,7 +969,7 @@ export const ShiftReportsTab: React.FC = () => {
                         </span>
                         {skill.score != null && (
                           <span className="text-xs font-medium text-violet-600 dark:text-violet-400">
-                            {skill.score}/5
+                            {skill.score}/5 — {SKILL_SCORE_LABELS[skill.score] ?? ''}
                           </span>
                         )}
                       </div>
@@ -1452,10 +1460,17 @@ export const ShiftReportsTab: React.FC = () => {
                       <div className="mt-1 ml-4 space-y-1.5">
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs text-theme-text-muted">Score:</span>
-                          {[1, 2, 3, 4, 5].map(n => (
+                          {([
+                            { n: 1, tip: 'Needs work' },
+                            { n: 2, tip: 'Developing' },
+                            { n: 3, tip: 'Competent' },
+                            { n: 4, tip: 'Proficient' },
+                            { n: 5, tip: 'Excellent' },
+                          ] as const).map(({ n, tip }) => (
                             <button
                               key={n}
                               type="button"
+                              title={tip}
                               onClick={() => handleUpdateSkillScore(skill, selected.score === n ? undefined : n)}
                               className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
                                 selected.score === n
@@ -1745,6 +1760,11 @@ export const ShiftReportsTab: React.FC = () => {
                       <UserIcon className="w-3.5 h-3.5" /> {reviewReport.trainee_name}
                     </span>
                   )}
+                  <span className="text-theme-text-muted">
+                    {formatDateCustom(reviewReport.shift_date + 'T12:00:00', {
+                      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+                    }, tz)}
+                  </span>
                   {reviewReport.officer_name && (
                     <span className="flex items-center gap-1 text-theme-text-muted">
                       Filed by {reviewReport.officer_name}
@@ -1802,7 +1822,7 @@ export const ShiftReportsTab: React.FC = () => {
                           ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
                           : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
                         }`}>
-                          {skill.demonstrated ? '✓' : '○'} {skill.skill_name}{skill.score != null ? ` (${skill.score}/5)` : ''}
+                          {skill.demonstrated ? '✓' : '○'} {skill.skill_name}{skill.score != null ? ` (${skill.score}/5 — ${SKILL_SCORE_LABELS[skill.score] ?? ''})` : ''}
                         </span>
                       ))}
                     </div>
