@@ -89,6 +89,12 @@ class ReportReview(BaseModel):
     redact_fields: Optional[List[str]] = None
 
 
+class BatchReviewRequest(BaseModel):
+    report_ids: List[str] = Field(..., min_length=1, max_length=100)
+    review_status: str  # approved, flagged
+    reviewer_notes: Optional[str] = None
+
+
 class ShiftCompletionReportResponse(UTCResponseBase):
     id: str
     organization_id: str

@@ -609,6 +609,11 @@ export const shiftCompletionService = {
     return response.data;
   },
 
+  async batchReviewReports(data: { report_ids: string[]; review_status: string; reviewer_notes?: string }): Promise<{ reviewed: number; failed: number }> {
+    const response = await api.post<{ reviewed: number; failed: number }>('/training/shift-reports/batch-review', data);
+    return response.data;
+  },
+
   async getOfficerAnalytics(): Promise<import('../types/training').OfficerShiftAnalytics> {
     const response = await api.get<import('../types/training').OfficerShiftAnalytics>('/training/shift-reports/officer-analytics');
     return response.data;

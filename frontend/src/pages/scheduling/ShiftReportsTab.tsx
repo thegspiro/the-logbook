@@ -120,6 +120,10 @@ export const ShiftReportsTab: React.FC = () => {
   const [redactFields, setRedactFields] = useState<string[]>([]);
   const [reviewing, setReviewing] = useState(false);
 
+  // Batch review selection
+  const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
+  const [batchReviewing, setBatchReviewing] = useState(false);
+
   // Draft edit state
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [draftForm, setDraftForm] = useState<Partial<ShiftCompletionReportCreate>>({});
@@ -249,6 +253,7 @@ export const ShiftReportsTab: React.FC = () => {
 
   useEffect(() => {
     if (viewMode !== 'create') void loadReports();
+    setSelectedReportIds(new Set());
   }, [loadReports, viewMode]);
 
   // Load analytics data for dashboard views
@@ -508,6 +513,36 @@ export const ShiftReportsTab: React.FC = () => {
     } finally {
       setReviewing(false);
     }
+  };
+
+  const handleBatchReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
+    if (selectedReportIds.size === 0) return;
+    setBatchReviewing(true);
+    try {
+      const result = await shiftCompletionService.batchReviewReports({
+        report_ids: Array.from(selectedReportIds),
+        review_status: action,
+      });
+      toast.success(`${result.reviewed} report${result.reviewed !== 1 ? 's' : ''} ${action === SubmissionStatus.APPROVED ? 'approved' : 'flagged'}`);
+      setSelectedReportIds(new Set());
+      void loadReports();
+    } catch {
+      toast.error('Failed to batch review reports');
+    } finally {
+      setBatchReviewing(false);
+    }
+  };
+
+  const toggleReportSelection = (reportId: string) => {
+    setSelectedReportIds(prev => {
+      const next = new Set(prev);
+      if (next.has(reportId)) {
+        next.delete(reportId);
+      } else {
+        next.add(reportId);
+      }
+      return next;
+    });
   };
 
   const toggleRedactField = (field: string) => {
@@ -820,6 +855,15 @@ export const ShiftReportsTab: React.FC = () => {
           className="w-full flex items-center justify-between p-4 sm:p-5 text-left hover:bg-theme-surface-hover transition-colors"
         >
           <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+            {(isReviewMode || viewMode === 'flagged') && (
+              <input
+                type="checkbox"
+                checked={selectedReportIds.has(report.id)}
+                onChange={(e) => { e.stopPropagation(); toggleReportSelection(report.id); }}
+                onClick={(e) => e.stopPropagation()}
+                className="form-checkbox shrink-0"
+              />
+            )}
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
               <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
             </div>
@@ -1583,9 +1627,64 @@ export const ShiftReportsTab: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {reports.map(renderReportCard)}
-            </div>
+            <>
+              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
+                <div className="flex items-center justify-between p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3">
+                  <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedReportIds.size === reports.length && reports.length > 0}
+                      onChange={() => {
+                        if (selectedReportIds.size === reports.length) {
+                          setSelectedReportIds(new Set());
+                        } else {
+                          setSelectedReportIds(new Set(reports.map(r => r.id)));
+                        }
+                      }}
+                      className="form-checkbox"
+                    />
+                    Select all ({reports.length})
+                  </label>
+                  {selectedReportIds.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-theme-text-muted">{selectedReportIds.size} selected</span>
+                      {viewMode === 'flagged' && (
+                        <button
+                          onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
+                          disabled={batchReviewing}
+                          className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                        >
+                          {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                          Approve Selected
+                        </button>
+                      )}
+                      {viewMode === 'pending-review' && (
+                        <>
+                          <button
+                            onClick={() => { void handleBatchReview('flagged'); }}
+                            disabled={batchReviewing}
+                            className="btn-primary text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                          >
+                            <AlertCircle className="w-3 h-3" /> Flag Selected
+                          </button>
+                          <button
+                            onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
+                            disabled={batchReviewing}
+                            className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                          >
+                            {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            Approve Selected
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="space-y-3">
+                {reports.map(renderReportCard)}
+              </div>
+            </>
           )}
         </>
       )}
