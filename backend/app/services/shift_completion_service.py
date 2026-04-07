@@ -416,6 +416,11 @@ class ShiftCompletionService:
                 if isinstance(skill, dict)
                 else getattr(skill, "comment", "")
             )
+            score = (
+                skill.get("score")
+                if isinstance(skill, dict)
+                else getattr(skill, "score", None)
+            )
             eval_id = skill_map.get(name.lower())
             if not eval_id:
                 continue
@@ -426,6 +431,7 @@ class ShiftCompletionService:
                 skill_evaluation_id=eval_id,
                 evaluator_id=str(officer_id),
                 status="passed",
+                score=float(score) if score is not None else None,
                 notes=comment or notes or None,
             )
             self.db.add(checkoff)
@@ -436,6 +442,7 @@ class ShiftCompletionService:
                 user_id=trainee_id,
                 skill_evaluation_id=eval_id,
                 evaluator_id=str(officer_id),
+                score=score,
             )
 
         return matched_ids
@@ -446,6 +453,7 @@ class ShiftCompletionService:
         user_id: str,
         skill_evaluation_id: str,
         evaluator_id: str,
+        score: Optional[int] = None,
     ) -> None:
         """Update MemberCompetency when a skill is observed."""
         result = await self.db.execute(
@@ -461,6 +469,13 @@ class ShiftCompletionService:
 
         now = datetime.now(timezone.utc)
 
+        history_entry: dict = {
+            "date": now.isoformat(),
+            "source": "shift_observation",
+        }
+        if score is not None:
+            history_entry["score"] = score
+
         if not comp:
             comp = MemberCompetency(
                 organization_id=str(organization_id),
@@ -471,8 +486,7 @@ class ShiftCompletionService:
                 last_evaluator_id=evaluator_id,
                 evaluation_count=1,
                 score_history=[{
-                    "date": now.isoformat(),
-                    "source": "shift_observation",
+                    **history_entry,
                     "level": CompetencyLevel.NOVICE.value,
                 }],
             )
@@ -496,8 +510,7 @@ class ShiftCompletionService:
 
         history = comp.score_history or []
         history.append({
-            "date": now.isoformat(),
-            "source": "shift_observation",
+            **history_entry,
             "level": comp.current_level.value,
         })
         comp.score_history = history[-10:]

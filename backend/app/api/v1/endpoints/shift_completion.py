@@ -21,6 +21,7 @@ from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.shift_completion import (
+    BatchReviewRequest,
     ReportReview,
     ShiftCompletionReportCreate,
     ShiftCompletionReportResponse,
@@ -294,6 +295,22 @@ async def get_pending_review_reports(
     )
 
 
+@router.get(
+    "/flagged",
+    response_model=list[ShiftCompletionReportResponse],
+)
+async def get_flagged_reports(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Get shift completion reports that have been flagged for follow-up."""
+    service = ShiftCompletionService(db)
+    return await service.get_reports_by_status(
+        organization_id=current_user.organization_id,
+        review_status="flagged",
+    )
+
+
 @router.get("/drafts", response_model=list[ShiftCompletionReportResponse])
 async def get_draft_reports(
     db: AsyncSession = Depends(get_db),
@@ -548,3 +565,46 @@ async def review_report(
         username=current_user.username,
     )
     return report
+
+
+@router.post("/batch-review")
+async def batch_review_reports(
+    data: BatchReviewRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Review multiple shift completion reports at once."""
+    service = ShiftCompletionService(db)
+    reviewed = 0
+    failed = 0
+    for report_id in data.report_ids:
+        try:
+            report = await service.review_report(
+                report_id=report_id,
+                organization_id=current_user.organization_id,
+                reviewer_id=str(current_user.id),
+                review_status=data.review_status,
+                reviewer_notes=data.reviewer_notes,
+                redact_fields=None,
+            )
+            if report:
+                reviewed += 1
+                await log_audit_event(
+                    db=db,
+                    event_type="shift_report_reviewed",
+                    event_category="training",
+                    severity="info",
+                    event_data={
+                        "report_id": report_id,
+                        "review_status": data.review_status,
+                        "batch": True,
+                        "trainee_id": report.trainee_id,
+                    },
+                    user_id=str(current_user.id),
+                    username=current_user.username,
+                )
+            else:
+                failed += 1
+        except Exception:
+            failed += 1
+    return {"reviewed": reviewed, "failed": failed}

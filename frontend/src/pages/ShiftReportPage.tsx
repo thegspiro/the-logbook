@@ -140,7 +140,7 @@ const ReportCard: React.FC<{
               <div className="flex flex-wrap gap-1 mt-1">
                 {report.skills_observed.map((s, i) => (
                   <span key={i} className={`text-xs px-2 py-0.5 rounded-sm ${s.demonstrated ? 'bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-theme-surface-secondary text-theme-text-muted'}`}>
-                    {s.skill_name}
+                    {s.skill_name}{s.score != null ? ` (${s.score}/5)` : ''}
                   </span>
                 ))}
               </div>
@@ -965,6 +965,45 @@ const ShiftReportPage: React.FC = () => {
                       >
                         {selected ? '\u2713 ' : ''}{skillName}
                       </button>
+                      {selected && (
+                        <div className="mt-1 ml-4 space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-theme-text-muted">Score:</span>
+                            {[1, 2, 3, 4, 5].map(n => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => {
+                                  setSkills(skills.map(s =>
+                                    s.skill_name === skillName
+                                      ? { ...s, score: s.score === n ? undefined : n }
+                                      : s
+                                  ));
+                                }}
+                                className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
+                                  selected.score === n
+                                    ? 'bg-red-700 dark:bg-red-600 text-white border-red-800'
+                                    : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-red-400'
+                                }`}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                          <input
+                            type="text"
+                            placeholder="Add comment on this skill..."
+                            value={selected.comment || ''}
+                            onChange={e => {
+                              const comment = e.target.value || undefined;
+                              setSkills(skills.map(s =>
+                                s.skill_name === skillName ? { ...s, comment } : s
+                              ));
+                            }}
+                            className="w-full max-w-md py-1.5 px-2 text-xs border border-theme-surface-border rounded bg-theme-surface focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}

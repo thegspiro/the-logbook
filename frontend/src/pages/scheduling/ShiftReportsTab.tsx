@@ -34,7 +34,7 @@ import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatDateCustom, getTodayLocalDate } from '../../utils/dateFormatting';
 
-type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'drafts';
+type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
 const DEFAULT_CALL_TYPE_OPTIONS = [
   'Structure Fire', 'Vehicle Fire', 'Brush/Wildland',
@@ -119,6 +119,10 @@ export const ShiftReportsTab: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [redactFields, setRedactFields] = useState<string[]>([]);
   const [reviewing, setReviewing] = useState(false);
+
+  // Batch review selection
+  const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
+  const [batchReviewing, setBatchReviewing] = useState(false);
 
   // Draft edit state
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
@@ -233,6 +237,9 @@ export const ShiftReportsTab: React.FC = () => {
       } else if (viewMode === 'pending-review') {
         const data = await shiftCompletionService.getPendingReviewReports();
         setReports(data);
+      } else if (viewMode === 'flagged') {
+        const data = await shiftCompletionService.getFlaggedReports();
+        setReports(data);
       } else if (viewMode === 'drafts') {
         const data = await shiftCompletionService.getDraftReports();
         setReports(data);
@@ -246,6 +253,7 @@ export const ShiftReportsTab: React.FC = () => {
 
   useEffect(() => {
     if (viewMode !== 'create') void loadReports();
+    setSelectedReportIds(new Set());
   }, [loadReports, viewMode]);
 
   // Load analytics data for dashboard views
@@ -335,6 +343,15 @@ export const ShiftReportsTab: React.FC = () => {
     setForm(prev => {
       const skills = (prev.skills_observed || []).map(s =>
         s.skill_name === skillName ? { ...s, comment: comment || undefined } : s
+      );
+      return { ...prev, skills_observed: skills };
+    });
+  };
+
+  const handleUpdateSkillScore = (skillName: string, score: number | undefined) => {
+    setForm(prev => {
+      const skills = (prev.skills_observed || []).map(s =>
+        s.skill_name === skillName ? { ...s, score } : s
       );
       return { ...prev, skills_observed: skills };
     });
@@ -496,6 +513,36 @@ export const ShiftReportsTab: React.FC = () => {
     } finally {
       setReviewing(false);
     }
+  };
+
+  const handleBatchReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
+    if (selectedReportIds.size === 0) return;
+    setBatchReviewing(true);
+    try {
+      const result = await shiftCompletionService.batchReviewReports({
+        report_ids: Array.from(selectedReportIds),
+        review_status: action,
+      });
+      toast.success(`${result.reviewed} report${result.reviewed !== 1 ? 's' : ''} ${action === SubmissionStatus.APPROVED ? 'approved' : 'flagged'}`);
+      setSelectedReportIds(new Set());
+      void loadReports();
+    } catch {
+      toast.error('Failed to batch review reports');
+    } finally {
+      setBatchReviewing(false);
+    }
+  };
+
+  const toggleReportSelection = (reportId: string) => {
+    setSelectedReportIds(prev => {
+      const next = new Set(prev);
+      if (next.has(reportId)) {
+        next.delete(reportId);
+      } else {
+        next.add(reportId);
+      }
+      return next;
+    });
   };
 
   const toggleRedactField = (field: string) => {
@@ -745,22 +792,22 @@ export const ShiftReportsTab: React.FC = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs text-theme-text-muted border-b border-theme-surface-border">
-                    <th className="pb-2 font-medium">Trainee</th>
-                    <th className="pb-2 font-medium text-right">Reports</th>
-                    <th className="pb-2 font-medium text-right">Hours</th>
-                    <th className="pb-2 font-medium text-right">Calls</th>
-                    <th className="pb-2 font-medium text-right">Avg Rating</th>
+                  <tr className="text-xs text-theme-text-muted border-b border-theme-surface-border">
+                    <th className="pb-2 font-medium text-left">Trainee</th>
+                    <th className="pb-2 pl-4 font-medium text-center">Reports</th>
+                    <th className="pb-2 pl-4 font-medium text-center">Hours</th>
+                    <th className="pb-2 pl-4 font-medium text-center">Calls</th>
+                    <th className="pb-2 pl-4 font-medium text-center">Avg Rating</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-theme-surface-border">
                   {officerAnalytics.trainees.map(t => (
                     <tr key={t.trainee_id} className="text-theme-text-primary">
-                      <td className="py-2 font-medium">{t.name}</td>
-                      <td className="py-2 text-right">{t.reports}</td>
-                      <td className="py-2 text-right">{t.hours.toFixed(1)}</td>
-                      <td className="py-2 text-right">{t.calls}</td>
-                      <td className="py-2 text-right">{t.avg_rating ?? '—'}</td>
+                      <td className="py-2 font-medium text-left">{t.name}</td>
+                      <td className="py-2 pl-4 text-center">{t.reports}</td>
+                      <td className="py-2 pl-4 text-center">{t.hours.toFixed(1)}</td>
+                      <td className="py-2 pl-4 text-center">{t.calls}</td>
+                      <td className="py-2 pl-4 text-center">{t.avg_rating ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -808,11 +855,22 @@ export const ShiftReportsTab: React.FC = () => {
           className="w-full flex items-center justify-between p-4 sm:p-5 text-left hover:bg-theme-surface-hover transition-colors"
         >
           <div className="flex items-center gap-3 sm:gap-4 min-w-0 flex-1">
+            {(isReviewMode || viewMode === 'flagged') && (
+              <input
+                type="checkbox"
+                checked={selectedReportIds.has(report.id)}
+                onChange={(e) => { e.stopPropagation(); toggleReportSelection(report.id); }}
+                onClick={(e) => e.stopPropagation()}
+                className="form-checkbox shrink-0"
+              />
+            )}
             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0">
               <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-violet-500" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">{dateStr}</p>
+              <p className="text-sm sm:text-base font-semibold text-theme-text-primary truncate">
+                {report.trainee_name ? `${report.trainee_name} — ` : ''}{dateStr}
+              </p>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1">
                 <span className="flex items-center gap-1 text-xs text-theme-text-muted">
                   <Clock className="w-3 h-3" /> {report.hours_on_shift}h
@@ -821,6 +879,11 @@ export const ShiftReportsTab: React.FC = () => {
                   <Phone className="w-3 h-3" /> {report.calls_responded} calls
                 </span>
                 {report.performance_rating && renderRating(report.performance_rating)}
+                {report.officer_name && (
+                  <span className="flex items-center gap-1 text-xs text-theme-text-muted">
+                    <UserIcon className="w-3 h-3" /> {report.officer_name}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -889,12 +952,19 @@ export const ShiftReportsTab: React.FC = () => {
                 <div className="space-y-1.5">
                   {report.skills_observed.map((skill, i) => (
                     <div key={i}>
-                      <span className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
-                        ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
-                        : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
-                      }`}>
-                        {skill.demonstrated ? '✓' : '○'} {skill.skill_name}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
+                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                          : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
+                        }`}>
+                          {skill.demonstrated ? '✓' : '○'} {skill.skill_name}
+                        </span>
+                        {skill.score != null && (
+                          <span className="text-xs font-medium text-violet-600 dark:text-violet-400">
+                            {skill.score}/5
+                          </span>
+                        )}
+                      </div>
                       {skill.comment && (
                         <p className="mt-0.5 ml-2 text-xs text-theme-text-muted italic flex items-start gap-1">
                           <MessageSquare className="w-3 h-3 mt-0.5 shrink-0" />
@@ -946,14 +1016,24 @@ export const ShiftReportsTab: React.FC = () => {
               </div>
             )}
 
-            {/* Review actions for pending-review mode */}
-            {isReviewMode && report.review_status === SubmissionStatus.PENDING_REVIEW && (
+            {/* Review actions for pending-review and flagged modes */}
+            {(isReviewMode && report.review_status === SubmissionStatus.PENDING_REVIEW) && (
               <div className="pt-2 flex items-center gap-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
                   className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
                 >
                   <ClipboardCheck className="w-4 h-4" /> Review Report
+                </button>
+              </div>
+            )}
+            {viewMode === 'flagged' && report.review_status === 'flagged' && (
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
+                  className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                >
+                  <ClipboardCheck className="w-4 h-4" /> Re-Review Report
                 </button>
               </div>
             )}
@@ -1146,6 +1226,16 @@ export const ShiftReportsTab: React.FC = () => {
               }`}
             >
               <ClipboardCheck className="w-3.5 h-3.5" /> Review Queue
+            </button>
+          )}
+          {canManage && config?.report_review_required && (
+            <button
+              onClick={() => setViewMode('flagged')}
+              className={`flex-1 sm:flex-none px-3 py-1.5 rounded-md text-sm font-medium transition-colors inline-flex items-center justify-center gap-1 ${
+                viewMode === 'flagged' ? 'bg-violet-600 text-white' : 'text-theme-text-secondary hover:text-theme-text-primary'
+              }`}
+            >
+              <AlertCircle className="w-3.5 h-3.5" /> Flagged
             </button>
           )}
           {canManage && (
@@ -1359,7 +1449,24 @@ export const ShiftReportsTab: React.FC = () => {
                       {selected ? '✓ ' : ''}{skill}
                     </button>
                     {selected && (
-                      <div className="mt-1 ml-4">
+                      <div className="mt-1 ml-4 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs text-theme-text-muted">Score:</span>
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => handleUpdateSkillScore(skill, selected.score === n ? undefined : n)}
+                              className={`w-6 h-6 rounded text-xs font-medium border transition-colors ${
+                                selected.score === n
+                                  ? 'bg-violet-500 text-white border-violet-600'
+                                  : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-400'
+                              }`}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
                         <input
                           type="text"
                           placeholder="Add comment on this skill..."
@@ -1502,6 +1609,7 @@ export const ShiftReportsTab: React.FC = () => {
               <h3 className="text-lg font-medium text-theme-text-primary mb-1">
                 {viewMode === 'my-reports' ? 'No reports for you yet' :
                  viewMode === 'pending-review' ? 'No reports pending review' :
+                 viewMode === 'flagged' ? 'No flagged reports' :
                  viewMode === 'drafts' ? 'No draft reports' :
                  'No reports filed yet'}
               </h3>
@@ -1510,6 +1618,8 @@ export const ShiftReportsTab: React.FC = () => {
                   ? 'Shift completion reports from your officers will appear here.'
                   : viewMode === 'pending-review'
                   ? 'All reports have been reviewed.'
+                  : viewMode === 'flagged'
+                  ? 'No reports have been flagged for follow-up.'
                   : viewMode === 'drafts'
                   ? 'Draft reports are auto-created when shifts are finalized. Complete them to track trainee progress.'
                   : 'Submit a shift report to track trainee progress.'
@@ -1517,9 +1627,64 @@ export const ShiftReportsTab: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {reports.map(renderReportCard)}
-            </div>
+            <>
+              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
+                <div className="flex items-center justify-between p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3">
+                  <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedReportIds.size === reports.length && reports.length > 0}
+                      onChange={() => {
+                        if (selectedReportIds.size === reports.length) {
+                          setSelectedReportIds(new Set());
+                        } else {
+                          setSelectedReportIds(new Set(reports.map(r => r.id)));
+                        }
+                      }}
+                      className="form-checkbox"
+                    />
+                    Select all ({reports.length})
+                  </label>
+                  {selectedReportIds.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-theme-text-muted">{selectedReportIds.size} selected</span>
+                      {viewMode === 'flagged' && (
+                        <button
+                          onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
+                          disabled={batchReviewing}
+                          className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                        >
+                          {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                          Approve Selected
+                        </button>
+                      )}
+                      {viewMode === 'pending-review' && (
+                        <>
+                          <button
+                            onClick={() => { void handleBatchReview('flagged'); }}
+                            disabled={batchReviewing}
+                            className="btn-primary text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                          >
+                            <AlertCircle className="w-3 h-3" /> Flag Selected
+                          </button>
+                          <button
+                            onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
+                            disabled={batchReviewing}
+                            className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                          >
+                            {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                            Approve Selected
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="space-y-3">
+                {reports.map(renderReportCard)}
+              </div>
+            </>
           )}
         </>
       )}
@@ -1558,9 +1723,11 @@ export const ShiftReportsTab: React.FC = () => {
       )}
 
       {/* Review Modal */}
-      {reviewReportId && (
+      {reviewReportId && (() => {
+        const reviewReport = reports.find(r => r.id === reviewReportId);
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Review Report">
-          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-lg space-y-4">
+          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 sm:p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto space-y-4">
             <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
               <ClipboardCheck className="w-5 h-5 text-violet-500" /> Review Report
             </h3>
@@ -1568,6 +1735,95 @@ export const ShiftReportsTab: React.FC = () => {
               Review this report before it becomes visible to the trainee.
               You can redact specific fields if they contain improper content.
             </p>
+
+            {/* Report content preview */}
+            {reviewReport && (
+              <div className="border border-theme-surface-border rounded-lg p-4 bg-theme-surface-hover space-y-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  {reviewReport.trainee_name && (
+                    <span className="flex items-center gap-1 font-medium text-theme-text-primary">
+                      <UserIcon className="w-3.5 h-3.5" /> {reviewReport.trainee_name}
+                    </span>
+                  )}
+                  {reviewReport.officer_name && (
+                    <span className="flex items-center gap-1 text-theme-text-muted">
+                      Filed by {reviewReport.officer_name}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  <span className="flex items-center gap-1 text-theme-text-muted">
+                    <Clock className="w-3.5 h-3.5" /> {reviewReport.hours_on_shift}h
+                  </span>
+                  <span className="flex items-center gap-1 text-theme-text-muted">
+                    <Phone className="w-3.5 h-3.5" /> {reviewReport.calls_responded} calls
+                  </span>
+                  {reviewReport.performance_rating && renderRating(reviewReport.performance_rating)}
+                </div>
+
+                {reviewReport.call_types && reviewReport.call_types.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Call Types</p>
+                    <div className="flex flex-wrap gap-1">
+                      {reviewReport.call_types.map(type => (
+                        <span key={type} className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 rounded-full">{type}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {reviewReport.areas_of_strength && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Strengths</p>
+                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.areas_of_strength}</p>
+                  </div>
+                )}
+
+                {reviewReport.areas_for_improvement && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Areas for Improvement</p>
+                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.areas_for_improvement}</p>
+                  </div>
+                )}
+
+                {reviewReport.officer_narrative && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Officer Narrative</p>
+                    <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{reviewReport.officer_narrative}</p>
+                  </div>
+                )}
+
+                {reviewReport.skills_observed && reviewReport.skills_observed.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Skills Observed</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {reviewReport.skills_observed.map((skill, i) => (
+                        <span key={i} className={`inline-block px-2 py-0.5 text-xs rounded-full border ${skill.demonstrated
+                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20'
+                          : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
+                        }`}>
+                          {skill.demonstrated ? '✓' : '○'} {skill.skill_name}{skill.score != null ? ` (${skill.score}/5)` : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {reviewReport.tasks_performed && reviewReport.tasks_performed.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Tasks Performed</p>
+                    <ul className="space-y-0.5">
+                      {reviewReport.tasks_performed.map((task, i) => (
+                        <li key={i} className="text-sm text-theme-text-primary">
+                          <span className="font-medium">{task.task}</span>
+                          {task.description && <span className="text-theme-text-muted"> — {task.description}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Redaction checkboxes */}
             <div>
@@ -1630,7 +1886,8 @@ export const ShiftReportsTab: React.FC = () => {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

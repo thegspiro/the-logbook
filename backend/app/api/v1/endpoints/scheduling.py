@@ -141,8 +141,8 @@ async def _enrich_shifts(
             .group_by(ShiftAttendance.shift_id)
         )
         for row in hours_result.all():
-            total_min = row[1]
-            hours_map[str(row[0])] = round(float(total_min) / 60.0, 1)
+            total_min = float(row[1])
+            hours_map[str(row[0])] = round(total_min / 60.0, 1)
 
     enriched = []
     for s in shifts:
