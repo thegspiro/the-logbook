@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../static/logo.png" alt="The Logbook" width="150" />
+</p>
+
 # The Logbook - Documentation
 
 Welcome to The Logbook documentation! This directory contains comprehensive guides, references, and troubleshooting resources.
