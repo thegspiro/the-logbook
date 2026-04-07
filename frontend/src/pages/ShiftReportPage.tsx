@@ -39,6 +39,15 @@ import type {
   TrainingModuleConfig,
 } from '../types/training';
 
+const DEFAULT_SKILLS = [
+  'SCBA donning/doffing', 'Hose deployment',
+  'Ladder operations', 'Search and rescue',
+  'Ventilation', 'Pump operations',
+  'Patient assessment', 'CPR/AED',
+  'Vitals monitoring', 'Radio communications',
+  'Scene size-up', 'Apparatus check-off',
+];
+
 const SKILL_SCORE_LABELS: Record<number, string> = {
   1: 'Needs work',
   2: 'Developing',
@@ -329,7 +338,7 @@ const ShiftReportPage: React.FC = () => {
         setAutoPopulated(populated);
       })
       .catch(() => setAutoPopulated({}));
-  }, [selectedShiftId, traineeId]);
+  }, [selectedShiftId, traineeId, availableShifts]);
 
   // Load enrollments when trainee is selected
   useEffect(() => {
@@ -500,15 +509,6 @@ const ShiftReportPage: React.FC = () => {
   const callTypeOptions = moduleConfig?.shift_review_call_types?.length
     ? moduleConfig.shift_review_call_types
     : DEFAULT_CALL_TYPES;
-
-  const DEFAULT_SKILLS = [
-    'SCBA donning/doffing', 'Hose deployment',
-    'Ladder operations', 'Search and rescue',
-    'Ventilation', 'Pump operations',
-    'Patient assessment', 'CPR/AED',
-    'Vitals monitoring', 'Radio communications',
-    'Scene size-up', 'Apparatus check-off',
-  ];
 
   const ratingLabel =
     moduleConfig?.rating_label || 'Performance Rating';

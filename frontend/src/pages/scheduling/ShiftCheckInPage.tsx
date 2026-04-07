@@ -206,12 +206,7 @@ const ShiftCheckInPage: React.FC = () => {
                 </p>
                 <p className="text-xs text-green-600/70 dark:text-green-400/70">
                   <Clock className="w-3 h-3 inline mr-1" />
-                  {new Date(
-                    attendance.checked_in_at,
-                  ).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {formatTime(attendance.checked_in_at, tz)}
                 </p>
               </div>
             </div>
@@ -236,19 +231,9 @@ const ShiftCheckInPage: React.FC = () => {
                 {hrs} hours
               </p>
               <p className="text-xs text-theme-text-muted">
-                {new Date(
-                  attendance.checked_in_at ?? '',
-                ).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}{' '}
+                {formatTime(attendance.checked_in_at, tz)}{' '}
                 &rarr;{' '}
-                {new Date(
-                  attendance.checked_out_at ?? '',
-                ).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
+                {formatTime(attendance.checked_out_at, tz)}
               </p>
             </div>
             <p className="text-sm text-theme-text-muted">

@@ -381,8 +381,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
         ];
         merged.sort();
         setApparatusTypes(merged);
-        if (merged.length > 0 && !selectedAppType) {
-          setSelectedAppType(merged[0] ?? "");
+        if (merged.length > 0) {
+          setSelectedAppType((prev) => prev || (merged[0] ?? ""));
         }
       })
       .catch(() => {
@@ -390,8 +390,8 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
           SAMPLE_APPARATUS_SKILLS,
         ).sort();
         setApparatusTypes(fallback);
-        if (fallback.length > 0 && !selectedAppType) {
-          setSelectedAppType(fallback[0] ?? "");
+        if (fallback.length > 0) {
+          setSelectedAppType((prev) => prev || (fallback[0] ?? ""));
         }
       });
   }, []);

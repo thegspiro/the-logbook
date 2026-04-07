@@ -12,7 +12,7 @@
  * via a searchable member dropdown.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
@@ -113,8 +113,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     loadingMembers: false,
     bulkAssigning: false,
   });
-  const setPendingFlag = (key: keyof typeof pending, value: boolean) =>
-    setPending(prev => ({ ...prev, [key]: value }));
+  const setPendingFlag = useCallback((key: keyof typeof pending, value: boolean) =>
+    setPending(prev => ({ ...prev, [key]: value })), []);
 
   // Attendance check-in/check-out state
   const [myAttendance, setMyAttendance] = useState<{
@@ -234,7 +234,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       }
     };
     void loadMembers();
-  }, [showAssignForm, isEditing]);
+  }, [showAssignForm, isEditing, shift.id, setPendingFlag]);
 
   // Load apparatus list when editing
   useEffect(() => {
@@ -568,7 +568,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     return activeAssignments.filter(a => !boardFilledIds.has(a.id));
   }, [hasApparatusPositions, apparatusPositions, activeAssignments]);
 
-  const openPositions = crewBoard?.filter(s => !s.assignment).map(s => s.position) || [];
+  const openPositions = useMemo(() => crewBoard?.filter(s => !s.assignment).map(s => s.position) || [], [crewBoard]);
 
   // Default the assign form to the first open position
   useEffect(() => {
@@ -1146,14 +1146,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                             if (att.checked_out_at) {
                               const hrs = Math.round(((att.duration_minutes ?? 0) / 60) * 10) / 10;
                               return (
-                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/10 text-green-700 dark:text-green-400" title={`In: ${new Date(att.checked_in_at ?? '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} Out: ${new Date(att.checked_out_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}>
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-green-500/10 text-green-700 dark:text-green-400" title={`In: ${formatTime(att.checked_in_at, tz)} Out: ${formatTime(att.checked_out_at, tz)}`}>
                                   {hrs}h
                                 </span>
                               );
                             }
                             if (att.checked_in_at) {
                               return (
-                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400" title={`Checked in at ${new Date(att.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}>
+                                <span className="px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400" title={`Checked in at ${formatTime(att.checked_in_at, tz)}`}>
                                   <LogIn className="w-3 h-3 inline" />
                                 </span>
                               );
@@ -1433,17 +1433,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 <div className="flex items-center gap-2 pt-1">
                   {!myAttendance?.checked_in_at ? (
                     <button
-                      onClick={async () => {
-                        setCheckingIn(true);
-                        try {
-                          const result = await schedulingService.checkIn(shift.id);
-                          setMyAttendance(result);
-                          toast.success('Checked in');
-                        } catch {
-                          toast.error('Failed to check in');
-                        } finally {
-                          setCheckingIn(false);
-                        }
+                      onClick={() => {
+                        void (async () => {
+                          setCheckingIn(true);
+                          try {
+                            const result = await schedulingService.checkIn(shift.id);
+                            setMyAttendance(result);
+                            toast.success('Checked in');
+                          } catch {
+                            toast.error('Failed to check in');
+                          } finally {
+                            setCheckingIn(false);
+                          }
+                        })();
                       }}
                       disabled={checkingIn}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
@@ -1454,20 +1456,22 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   ) : !myAttendance?.checked_out_at ? (
                     <>
                       <span className="text-xs text-green-700 dark:text-green-400">
-                        Checked in at {new Date(myAttendance.checked_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        Checked in at {formatTime(myAttendance.checked_in_at, tz)}
                       </span>
                       <button
-                        onClick={async () => {
-                          setCheckingOut(true);
-                          try {
-                            const result = await schedulingService.checkOut(shift.id);
-                            setMyAttendance(result);
-                            toast.success(`Checked out (${Math.round((result.duration_minutes ?? 0) / 60 * 10) / 10} hrs)`);
-                          } catch {
-                            toast.error('Failed to check out');
-                          } finally {
-                            setCheckingOut(false);
-                          }
+                        onClick={() => {
+                          void (async () => {
+                            setCheckingOut(true);
+                            try {
+                              const result = await schedulingService.checkOut(shift.id);
+                              setMyAttendance(result);
+                              toast.success(`Checked out (${Math.round((result.duration_minutes ?? 0) / 60 * 10) / 10} hrs)`);
+                            } catch {
+                              toast.error('Failed to check out');
+                            } finally {
+                              setCheckingOut(false);
+                            }
+                          })();
                         }}
                         disabled={checkingOut}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
