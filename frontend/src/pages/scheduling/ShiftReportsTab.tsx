@@ -921,14 +921,24 @@ export const ShiftReportsTab: React.FC = () => {
                 </button>
               </div>
             )}
-            {viewMode === 'flagged' && report.review_status === 'flagged' && (
-              <div className="pt-2 flex items-center gap-2">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
-                  className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
-                >
-                  <ClipboardCheck className="w-4 h-4" /> Re-Review Report
-                </button>
+            {canManage && report.review_status === 'flagged' && !isReviewMode && (
+              <div className="pt-2 space-y-3">
+                <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-lg">
+                  <p className="text-xs font-semibold text-red-700 dark:text-red-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Flagged for Review
+                  </p>
+                  <p className="text-sm text-theme-text-secondary">
+                    This report has been flagged and requires attention. You can re-review it to approve or add notes.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setReviewReportId(report.id); }}
+                    className="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1.5"
+                  >
+                    <ClipboardCheck className="w-4 h-4" /> Re-Review Report
+                  </button>
+                </div>
               </div>
             )}
 
