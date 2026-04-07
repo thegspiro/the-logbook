@@ -1361,6 +1361,9 @@ class ShiftCompletionReport(Base):
     reviewer_notes = Column(
         EncryptedText, nullable=True
     )  # Internal notes from reviewer, never shown to trainee
+    review_history = Column(
+        JSON, nullable=True
+    )  # Array of { status, reviewer_id, reviewer_name, notes, timestamp }
 
     # Trainee acknowledgment
     trainee_acknowledged = Column(Boolean, default=False)

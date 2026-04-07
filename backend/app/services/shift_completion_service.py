@@ -481,6 +481,36 @@ class ShiftCompletionService:
         except Exception as e:
             logger.error(f"Failed to send trainee report notification: {e}")
 
+    async def _notify_officer_report_flagged(
+        self,
+        organization_id: UUID,
+        officer_id: str,
+        shift_date: date,
+        reviewer_notes: Optional[str] = None,
+    ) -> None:
+        """Notify the filing officer that their report was flagged."""
+        try:
+            message = (
+                f"Your shift report for {shift_date} has been "
+                f"flagged for revision."
+            )
+            if reviewer_notes:
+                message += f" Reviewer comment: {reviewer_notes}"
+            notification = NotificationLog(
+                organization_id=str(organization_id),
+                recipient_id=officer_id,
+                channel=NotificationChannel.IN_APP,
+                category=NotificationCategory.TRAINING,
+                subject="Shift report flagged for revision",
+                message=message,
+            )
+            self.db.add(notification)
+            await self.db.commit()
+        except Exception as e:
+            logger.error(
+                f"Failed to send officer flagged notification: {e}"
+            )
+
     async def _resolve_skill_evaluations(
         self,
         organization_id: UUID,
@@ -1046,11 +1076,35 @@ class ShiftCompletionService:
                 if field in REDACTABLE_FIELDS and hasattr(report, field):
                     setattr(report, field, None)
 
+        now = datetime.now(timezone.utc)
         report.review_status = review_status
         report.reviewed_by = reviewer_id
-        report.reviewed_at = datetime.now(timezone.utc)
+        report.reviewed_at = now
         if reviewer_notes:
             report.reviewer_notes = reviewer_notes
+
+        # Append to review history
+        from app.models.user import User
+
+        reviewer_user = (
+            await self.db.execute(
+                select(User).where(User.id == reviewer_id)
+            )
+        ).scalar_one_or_none()
+        history_entry = {
+            "status": review_status,
+            "reviewer_id": reviewer_id,
+            "reviewer_name": (
+                reviewer_user.full_name if reviewer_user else None
+            ),
+            "notes": reviewer_notes,
+            "timestamp": now.isoformat(),
+        }
+        existing_history = copy.deepcopy(
+            report.review_history or []
+        )
+        existing_history.append(history_entry)
+        report.review_history = existing_history
 
         # Trigger deferred training progress when draft is activated
         if was_draft and review_status in (
@@ -1070,6 +1124,14 @@ class ShiftCompletionService:
                 organization_id=organization_id,
                 trainee_id=report.trainee_id,
                 shift_date=report.shift_date,
+            )
+
+        if review_status == "flagged":
+            await self._notify_officer_report_flagged(
+                organization_id=organization_id,
+                officer_id=str(report.officer_id),
+                shift_date=report.shift_date,
+                reviewer_notes=reviewer_notes,
             )
 
         return report

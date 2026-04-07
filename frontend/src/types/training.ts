@@ -1186,11 +1186,20 @@ export interface ShiftCompletionReport {
   reviewer_name?: string;
   reviewed_at?: string;
   reviewer_notes?: string;
+  review_history?: ReviewHistoryEntry[];
   trainee_acknowledged: boolean;
   trainee_acknowledged_at?: string;
   trainee_comments?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ReviewHistoryEntry {
+  status: string;
+  reviewer_id: string;
+  reviewer_name?: string;
+  notes?: string;
+  timestamp: string;
 }
 
 export interface ShiftCrewMember {

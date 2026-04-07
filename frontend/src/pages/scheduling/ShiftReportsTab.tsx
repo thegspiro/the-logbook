@@ -113,6 +113,7 @@ export const ShiftReportsTab: React.FC = () => {
   // Batch review selection
   const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
   const [batchReviewing, setBatchReviewing] = useState(false);
+  const [batchReviewNotes, setBatchReviewNotes] = useState('');
 
   // Draft edit state
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
@@ -499,14 +500,20 @@ export const ShiftReportsTab: React.FC = () => {
 
   const handleBatchReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
     if (selectedReportIds.size === 0) return;
+    if (action === 'flagged' && !batchReviewNotes.trim()) {
+      toast.error('Please add a comment explaining why these reports are being flagged');
+      return;
+    }
     setBatchReviewing(true);
     try {
       const result = await shiftCompletionService.batchReviewReports({
         report_ids: Array.from(selectedReportIds),
         review_status: action,
+        reviewer_notes: batchReviewNotes.trim() || undefined,
       });
       toast.success(`${result.reviewed} report${result.reviewed !== 1 ? 's' : ''} ${action === SubmissionStatus.APPROVED ? 'approved' : 'flagged'}`);
       setSelectedReportIds(new Set());
+      setBatchReviewNotes('');
       void loadReports();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to batch review reports'));
@@ -816,6 +823,20 @@ export const ShiftReportsTab: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            {/* Aging indicator for pending/flagged */}
+            {(report.review_status === 'pending_review' || report.review_status === 'flagged') && (() => {
+              const days = Math.floor((Date.now() - new Date(report.created_at).getTime()) / 86400000);
+              if (days < 1) return null;
+              return (
+                <span className={`text-xs font-medium ${
+                  days >= 7 ? 'text-red-600 dark:text-red-400'
+                    : days >= 3 ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-theme-text-muted'
+                }`}>
+                  {days}d
+                </span>
+              );
+            })()}
             {/* Review status badge */}
             {report.review_status !== SubmissionStatus.APPROVED && (
               <span className={`px-2 py-0.5 text-xs font-medium ${statusStyle.bg} ${statusStyle.text} border border-current/20 rounded-full`}>
@@ -861,6 +882,39 @@ export const ShiftReportsTab: React.FC = () => {
                   )}
                 </p>
                 <p className="text-sm text-theme-text-primary">{report.reviewer_notes}</p>
+              </div>
+            )}
+
+            {/* Review history timeline */}
+            {canManage && report.review_history && report.review_history.length > 1 && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Review History
+                </p>
+                <div className="space-y-1 pl-2 border-l-2 border-theme-surface-border">
+                  {report.review_history.map((entry, i) => (
+                    <div key={i} className="pl-3 py-1">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className={`font-medium capitalize ${
+                          entry.status === 'approved' ? 'text-green-700 dark:text-green-400'
+                            : entry.status === 'flagged' ? 'text-red-700 dark:text-red-400'
+                            : 'text-theme-text-secondary'
+                        }`}>
+                          {entry.status === 'pending_review' ? 'Submitted' : entry.status}
+                        </span>
+                        {entry.reviewer_name && (
+                          <span className="text-theme-text-muted">by {entry.reviewer_name}</span>
+                        )}
+                        <span className="text-theme-text-muted">
+                          {formatDateCustom(entry.timestamp, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }, tz)}
+                        </span>
+                      </div>
+                      {entry.notes && (
+                        <p className="text-xs text-theme-text-muted mt-0.5 italic">&quot;{entry.notes}&quot;</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1641,45 +1695,68 @@ export const ShiftReportsTab: React.FC = () => {
             </div>
           ) : (
             <>
-              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
-                <div className="flex items-center justify-between p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3">
-                  <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedReportIds.size === reports.length && reports.length > 0}
-                      onChange={() => {
-                        if (selectedReportIds.size === reports.length) {
-                          setSelectedReportIds(new Set());
-                        } else {
-                          setSelectedReportIds(new Set(reports.map(r => r.id)));
-                        }
-                      }}
-                      className="form-checkbox"
-                    />
-                    Select all ({reports.length})
-                  </label>
-                  {selectedReportIds.size > 0 && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-theme-text-muted">{selectedReportIds.size} selected</span>
-                      {viewMode === 'flagged' && (
-                        <button
-                          onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
-                          disabled={batchReviewing}
-                          className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
-                        >
-                          {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                          Approve Selected
-                        </button>
+              {/* Review summary dashboard */}
+              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 0 && (() => {
+                const byOfficer = new Map<string, number>();
+                let oldestDays = 0;
+                const now = Date.now();
+                for (const r of reports) {
+                  const name = r.officer_name || 'Unknown';
+                  byOfficer.set(name, (byOfficer.get(name) ?? 0) + 1);
+                  const age = Math.floor((now - new Date(r.created_at).getTime()) / 86400000);
+                  if (age > oldestDays) oldestDays = age;
+                }
+                return (
+                  <div className="p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-semibold text-theme-text-primary flex items-center gap-1.5">
+                        <BarChart3 className="w-4 h-4 text-violet-500" />
+                        {viewMode === 'pending-review' ? 'Pending Review' : 'Flagged Reports'} — {reports.length} report{reports.length !== 1 ? 's' : ''}
+                      </h4>
+                      {oldestDays > 0 && (
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          oldestDays >= 7 ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                            : oldestDays >= 3 ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                            : 'bg-theme-surface-hover text-theme-text-muted'
+                        }`}>
+                          Oldest: {oldestDays}d ago
+                        </span>
                       )}
-                      {viewMode === 'pending-review' && (
-                        <>
-                          <button
-                            onClick={() => { void handleBatchReview('flagged'); }}
-                            disabled={batchReviewing}
-                            className="btn-primary text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
-                          >
-                            <AlertCircle className="w-3 h-3" /> Flag Selected
-                          </button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(byOfficer.entries()).map(([name, count]) => (
+                        <span key={name} className="text-xs bg-theme-surface-hover px-2 py-1 rounded-full text-theme-text-secondary">
+                          {name}: {count}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Batch review toolbar */}
+              {(viewMode === 'pending-review' || viewMode === 'flagged') && reports.length > 1 && (
+                <div className="p-3 bg-theme-surface border border-theme-surface-border rounded-lg mb-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2 text-sm text-theme-text-secondary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedReportIds.size === reports.length && reports.length > 0}
+                        onChange={() => {
+                          if (selectedReportIds.size === reports.length) {
+                            setSelectedReportIds(new Set());
+                          } else {
+                            setSelectedReportIds(new Set(reports.map(r => r.id)));
+                          }
+                        }}
+                        className="form-checkbox"
+                      />
+                      Select all ({reports.length})
+                    </label>
+                    {selectedReportIds.size > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-theme-text-muted">{selectedReportIds.size} selected</span>
+                        {viewMode === 'flagged' && (
                           <button
                             onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
                             disabled={batchReviewing}
@@ -1688,9 +1765,37 @@ export const ShiftReportsTab: React.FC = () => {
                             {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                             Approve Selected
                           </button>
-                        </>
-                      )}
-                    </div>
+                        )}
+                        {viewMode === 'pending-review' && (
+                          <>
+                            <button
+                              onClick={() => { void handleBatchReview('flagged'); }}
+                              disabled={batchReviewing}
+                              className="btn-primary text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                            >
+                              <AlertCircle className="w-3 h-3" /> Flag Selected
+                            </button>
+                            <button
+                              onClick={() => { void handleBatchReview(SubmissionStatus.APPROVED); }}
+                              disabled={batchReviewing}
+                              className="btn-success text-xs font-medium px-3 py-1.5 inline-flex items-center gap-1"
+                            >
+                              {batchReviewing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                              Approve Selected
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {selectedReportIds.size > 0 && (
+                    <input
+                      type="text"
+                      placeholder={viewMode === 'pending-review' ? 'Add a comment for all selected reports (required for flagging)...' : 'Add a comment (optional)...'}
+                      value={batchReviewNotes}
+                      onChange={e => setBatchReviewNotes(e.target.value)}
+                      className="form-input focus:ring-violet-500 text-xs py-1.5"
+                    />
                   )}
                 </div>
               )}

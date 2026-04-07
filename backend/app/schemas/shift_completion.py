@@ -164,6 +164,7 @@ class ShiftCompletionReportResponse(UTCResponseBase):
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     reviewer_notes: Optional[str] = None
+    review_history: Optional[List[Dict]] = None
 
     trainee_acknowledged: bool = False
     trainee_acknowledged_at: Optional[datetime] = None
