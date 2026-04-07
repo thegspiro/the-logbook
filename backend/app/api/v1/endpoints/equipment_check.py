@@ -685,9 +685,39 @@ async def get_my_checklists(
 ):
     """Get pending and recent checklists for the current user."""
     service = EquipmentCheckService(db)
-    return await service.get_my_checklists(
+    raw = await service.get_my_checklists(
         str(current_user.id), current_user.organization_id
     )
+
+    results = []
+    for cl in raw:
+        tmpl = cl["template"]
+        check = cl.get("check")
+
+        status = "not_started"
+        if check:
+            if check.overall_status == "incomplete":
+                status = "in_progress"
+            else:
+                status = check.overall_status or "not_started"
+
+        results.append({
+            "shiftId": cl["shift_id"],
+            "shiftDate": str(cl.get("shift_date") or ""),
+            "apparatusName": cl.get("apparatus_name", ""),
+            "templateId": tmpl.id,
+            "templateName": tmpl.name,
+            "checkTiming": tmpl.check_timing,
+            "status": status,
+            "totalItems": (
+                check.total_items if check
+                else sum(len(c.items) for c in tmpl.compartments)
+            ),
+            "completedItems": check.completed_items if check else 0,
+            "checkId": check.id if check and check.overall_status == "incomplete" else None,
+        })
+
+    return results
 
 
 @router.get(
