@@ -193,7 +193,7 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, onRendered })
       // Invalid barcode value — SVG stays empty
     }
     onRendered?.();
-  }, [barcodeValue, preset.barcodeWidth, preset.barcodeHeight, onRendered]);
+  }, [barcodeValue, preset.barcodeWidth, preset.barcodeHeight, preset.barcodeFontSize, onRendered]);
 
   if (!barcodeValue) {
     return (

@@ -126,9 +126,7 @@ async def get_template(
 ):
     """Get a specific template with all compartments and items."""
     service = EquipmentCheckService(db)
-    template = await service.get_template(
-        template_id, current_user.organization_id
-    )
+    template = await service.get_template(template_id, current_user.organization_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     return template
@@ -177,15 +175,11 @@ async def delete_template(
 ):
     """Delete a template and all its compartments/items."""
     service = EquipmentCheckService(db)
-    template = await service.get_template(
-        template_id, current_user.organization_id
-    )
+    template = await service.get_template(template_id, current_user.organization_id)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
     tmpl_name = template.name
-    deleted = await service.delete_template(
-        template_id, current_user.organization_id
-    )
+    deleted = await service.delete_template(template_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Template not found")
     await service.log_template_change(
@@ -457,9 +451,7 @@ async def delete_item(
     )
 
     service = EquipmentCheckService(db)
-    item_result = await db.execute(
-        select(CTI).where(CTI.id == item_id)
-    )
+    item_result = await db.execute(select(CTI).where(CTI.id == item_id))
     item_obj = item_result.scalar_one_or_none()
     item_name = item_obj.name if item_obj else "Unknown"
     item_comp_id = str(item_obj.compartment_id) if item_obj else ""
@@ -486,9 +478,7 @@ async def delete_item(
         await db.commit()
 
 
-@router.put(
-    "/compartments/{compartment_id}/items/reorder", status_code=200
-)
+@router.put("/compartments/{compartment_id}/items/reorder", status_code=200)
 async def reorder_items(
     compartment_id: str,
     data: ReorderRequest,
@@ -575,9 +565,7 @@ async def submit_standalone_check(
         )
         return check
     except ValueError as e:
-        raise HTTPException(
-            status_code=400, detail=safe_error_detail(e)
-        )
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
 
 @router.put(
@@ -701,21 +689,26 @@ async def get_my_checklists(
             else:
                 status = check.overall_status or "not_started"
 
-        results.append({
-            "shiftId": cl["shift_id"],
-            "shiftDate": str(cl.get("shift_date") or ""),
-            "apparatusName": cl.get("apparatus_name", ""),
-            "templateId": tmpl.id,
-            "templateName": tmpl.name,
-            "checkTiming": tmpl.check_timing,
-            "status": status,
-            "totalItems": (
-                check.total_items if check
-                else sum(len(c.items) for c in tmpl.compartments)
-            ),
-            "completedItems": check.completed_items if check else 0,
-            "checkId": check.id if check and check.overall_status == "incomplete" else None,
-        })
+        results.append(
+            {
+                "shiftId": cl["shift_id"],
+                "shiftDate": str(cl.get("shift_date") or ""),
+                "apparatusName": cl.get("apparatus_name", ""),
+                "templateId": tmpl.id,
+                "templateName": tmpl.name,
+                "checkTiming": tmpl.check_timing,
+                "status": status,
+                "totalItems": (
+                    check.total_items
+                    if check
+                    else sum(len(c.items) for c in tmpl.compartments)
+                ),
+                "completedItems": check.completed_items if check else 0,
+                "checkId": (
+                    check.id if check and check.overall_status == "incomplete" else None
+                ),
+            }
+        )
 
     return results
 
@@ -787,8 +780,7 @@ async def upload_check_item_photos(
         .where(
             ShiftEquipmentCheckItem.id == item_id,
             ShiftEquipmentCheckItem.check_id == check_id,
-            ShiftEquipmentCheck.organization_id
-            == current_user.organization_id,
+            ShiftEquipmentCheck.organization_id == current_user.organization_id,
         )
     )
     check_item = result.scalars().first()
@@ -1126,10 +1118,7 @@ async def export_pdf(
         check_dict = {
             "overall_status": check.overall_status,
             "checked_by_name": None,
-            "checked_at": (
-                check.checked_at.isoformat()
-                if check.checked_at else ""
-            ),
+            "checked_at": (check.checked_at.isoformat() if check.checked_at else ""),
             "check_timing": check.check_timing,
             "total_items": check.total_items,
             "completed_items": check.completed_items,
@@ -1158,9 +1147,7 @@ async def export_pdf(
                 first = u.first_name or ""
                 last = u.last_name or ""
                 name = f"{first} {last}".strip()
-                check_dict["checked_by_name"] = (
-                    name or "Unknown"
-                )
+                check_dict["checked_by_name"] = name or "Unknown"
         pdf_bytes = generate_check_detail_pdf(check_dict)
         filename = f"equipment_check_{check_id[:8]}.pdf"
 
@@ -1223,8 +1210,7 @@ async def download_csv_sample(
         media_type="text/csv",
         headers={
             "Content-Disposition": (
-                "attachment; "
-                "filename=checklist_import_sample.csv"
+                "attachment; " "filename=checklist_import_sample.csv"
             )
         },
     )

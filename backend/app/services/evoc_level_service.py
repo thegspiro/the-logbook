@@ -74,9 +74,7 @@ class EvocLevelService:
             conditions.append(EvocLevel.is_active.is_(True))
 
         result = await self.db.execute(
-            select(EvocLevel)
-            .where(and_(*conditions))
-            .order_by(EvocLevel.level_number)
+            select(EvocLevel).where(and_(*conditions)).order_by(EvocLevel.level_number)
         )
         return list(result.scalars().all())
 
@@ -111,9 +109,7 @@ class EvocLevelService:
         await self.db.refresh(level)
         return level
 
-    async def delete_level(
-        self, level_id: str, organization_id: str
-    ) -> bool:
+    async def delete_level(self, level_id: str, organization_id: str) -> bool:
         """Delete an EVOC level (only if not in use)."""
         level = await self.get_level(level_id, organization_id)
         if not level:
@@ -123,10 +119,12 @@ class EvocLevelService:
             raise ValueError("Cannot delete system EVOC levels")
 
         apparatus_using = await self.db.execute(
-            select(Apparatus.id).where(
+            select(Apparatus.id)
+            .where(
                 Apparatus.required_evoc_level_id == level_id,
                 Apparatus.organization_id == organization_id,
-            ).limit(1)
+            )
+            .limit(1)
         )
         if apparatus_using.scalar_one_or_none():
             raise ValueError(
@@ -166,8 +164,12 @@ class EvocLevelService:
         )
         apparatus = apparatus_result.scalar_one_or_none()
         if not apparatus or not apparatus.required_evoc_level_id:
-            return {"eligible": True, "warning": None,
-                    "required_level": None, "user_level": None}
+            return {
+                "eligible": True,
+                "warning": None,
+                "required_level": None,
+                "user_level": None,
+            }
 
         required_level = apparatus.required_evoc_level
 
@@ -186,7 +188,10 @@ class EvocLevelService:
         user_max_level = None
         for op in operators:
             if op.evoc_level:
-                if user_max_level is None or op.evoc_level.level_number > user_max_level.level_number:
+                if (
+                    user_max_level is None
+                    or op.evoc_level.level_number > user_max_level.level_number
+                ):
                     user_max_level = op.evoc_level
 
         if not user_max_level:
@@ -209,8 +214,7 @@ class EvocLevelService:
 
         if not meets_requirement:
             specific_match = await self.db.execute(
-                select(ApparatusOperator)
-                .where(
+                select(ApparatusOperator).where(
                     ApparatusOperator.user_id == user_id,
                     ApparatusOperator.organization_id == organization_id,
                     ApparatusOperator.is_active.is_(True),

@@ -50,7 +50,7 @@ async def list_requirements(
         is_active=is_active,
         screening_type=screening_type,
     )
-    return requirements[pagination.skip:pagination.skip + pagination.limit]
+    return requirements[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.get(
@@ -193,7 +193,7 @@ async def list_records(
         screening_type=screening_type,
         status=record_status,
     )
-    return records[pagination.skip:pagination.skip + pagination.limit]
+    return records[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.get(

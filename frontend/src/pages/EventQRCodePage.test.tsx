@@ -96,8 +96,8 @@ describe('EventQRCodePage', () => {
       await waitFor(() => {
         const backLink = screen.getByRole('link', { name: /back to event/i });
         expect(backLink).toBeInTheDocument();
-        expect(backLink).toHaveAttribute('href', '/events/1');
-      });
+      })
+      expect(backLink).toHaveAttribute('href', '/events/1');;
     });
 
     it('should have correct href on back link for navigation', async () => {
@@ -185,7 +185,7 @@ describe('EventQRCodePage', () => {
         await user.click(printButton);
       });
 
-      expect(window.print).toHaveBeenCalled();
+      expect(window.print).toHaveBeenCalledWith();
     });
   });
 
@@ -343,8 +343,8 @@ describe('EventQRCodePage', () => {
       await waitFor(() => {
         const backLink = screen.getByRole('link', { name: /back to event/i });
         expect(backLink).toBeInTheDocument();
-        expect(backLink).toHaveAttribute('href', '/events/1');
-      });
+      })
+      expect(backLink).toHaveAttribute('href', '/events/1');;
     });
   });
 

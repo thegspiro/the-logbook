@@ -613,7 +613,9 @@ class MeetingMinutes(Base):
     rejection_reason = Column(Text, nullable=True)
 
     # Link to event (optional — minutes can be linked to a business_meeting event)
-    event_id = Column(String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True)
+    event_id = Column(
+        String(36), ForeignKey("events.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Link to meeting record (optional — pre-fills date, attendees, agenda from Meeting)
     meeting_id = Column(

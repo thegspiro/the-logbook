@@ -79,7 +79,7 @@ async def list_fiscal_years(
 ):
     service = FinanceService(db)
     results = await service.list_fiscal_years(str(current_user.organization_id))
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post("/fiscal-years", response_model=FiscalYearResponse, status_code=201)
@@ -199,7 +199,7 @@ async def list_budget_categories(
 ):
     service = FinanceService(db)
     results = await service.list_budget_categories(str(current_user.organization_id))
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -276,7 +276,7 @@ async def list_budgets(
     results = await service.list_budgets(
         str(current_user.organization_id), fiscal_year_id, category_id
     )
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post("/budgets", response_model=BudgetResponse, status_code=201)
@@ -361,7 +361,7 @@ async def list_approval_chains(
 ):
     service = FinanceService(db)
     results = await service.list_approval_chains(str(current_user.organization_id))
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -642,7 +642,7 @@ async def list_purchase_requests(
     results = await service.list_purchase_requests(
         str(current_user.organization_id), status, fiscal_year_id
     )
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -837,7 +837,7 @@ async def list_expense_reports(
     results = await service.list_expense_reports(
         str(current_user.organization_id), status
     )
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -983,7 +983,7 @@ async def list_check_requests(
     results = await service.list_check_requests(
         str(current_user.organization_id), status
     )
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -1114,7 +1114,7 @@ async def list_dues_schedules(
 ):
     service = FinanceService(db)
     results = await service.list_dues_schedules(str(current_user.organization_id))
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -1194,7 +1194,7 @@ async def list_member_dues(
     results = await service.list_member_dues(
         str(current_user.organization_id), schedule_id, user_id, status
     )
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.put("/dues/{dues_id}", response_model=MemberDuesResponse)
@@ -1263,7 +1263,7 @@ async def list_export_mappings(
 ):
     service = FinanceService(db)
     results = await service.list_export_mappings(str(current_user.organization_id))
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -1342,7 +1342,7 @@ async def list_export_logs(
 ):
     service = FinanceService(db)
     results = await service.list_export_logs(str(current_user.organization_id))
-    return results[pagination.skip:pagination.skip + pagination.limit]
+    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 # ============================================

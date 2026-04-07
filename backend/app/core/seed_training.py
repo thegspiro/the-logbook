@@ -2144,7 +2144,11 @@ VIRGINIA_RECERT_STANDARDS = [
         "renewal_window_days": 180,
         "grace_period_days": 90,
         "category_hours": [
-            {"code": "NCCR-AIRWAY", "hours": 1.5, "label": "Airway, Respiration & Ventilation"},
+            {
+                "code": "NCCR-AIRWAY",
+                "hours": 1.5,
+                "label": "Airway, Respiration & Ventilation",
+            },
             {"code": "NCCR-CARDIO", "hours": 2.0, "label": "Cardiovascular"},
             {"code": "EMS-TRAUMA", "hours": 1.0, "label": "Trauma"},
             {"code": "NCCR-MEDICAL", "hours": 2.5, "label": "Medical"},
@@ -2166,7 +2170,11 @@ VIRGINIA_RECERT_STANDARDS = [
         "renewal_window_days": 180,
         "grace_period_days": 90,
         "category_hours": [
-            {"code": "NCCR-AIRWAY", "hours": 4.0, "label": "Airway, Respiration & Ventilation"},
+            {
+                "code": "NCCR-AIRWAY",
+                "hours": 4.0,
+                "label": "Airway, Respiration & Ventilation",
+            },
             {"code": "NCCR-CARDIO", "hours": 5.0, "label": "Cardiovascular"},
             {"code": "EMS-TRAUMA", "hours": 3.0, "label": "Trauma"},
             {"code": "NCCR-MEDICAL", "hours": 6.0, "label": "Medical"},
@@ -2188,7 +2196,11 @@ VIRGINIA_RECERT_STANDARDS = [
         "renewal_window_days": 180,
         "grace_period_days": 90,
         "category_hours": [
-            {"code": "NCCR-AIRWAY", "hours": 5.0, "label": "Airway, Respiration & Ventilation"},
+            {
+                "code": "NCCR-AIRWAY",
+                "hours": 5.0,
+                "label": "Airway, Respiration & Ventilation",
+            },
             {"code": "NCCR-CARDIO", "hours": 6.0, "label": "Cardiovascular"},
             {"code": "EMS-TRAUMA", "hours": 4.0, "label": "Trauma"},
             {"code": "NCCR-MEDICAL", "hours": 7.0, "label": "Medical"},
@@ -2210,7 +2222,11 @@ VIRGINIA_RECERT_STANDARDS = [
         "renewal_window_days": 180,
         "grace_period_days": 90,
         "category_hours": [
-            {"code": "NCCR-AIRWAY", "hours": 5.5, "label": "Airway, Respiration & Ventilation"},
+            {
+                "code": "NCCR-AIRWAY",
+                "hours": 5.5,
+                "label": "Airway, Respiration & Ventilation",
+            },
             {"code": "NCCR-CARDIO", "hours": 6.5, "label": "Cardiovascular"},
             {"code": "EMS-TRAUMA", "hours": 4.5, "label": "Trauma"},
             {"code": "NCCR-MEDICAL", "hours": 7.5, "label": "Medical"},
@@ -2232,7 +2248,11 @@ VIRGINIA_RECERT_STANDARDS = [
         "renewal_window_days": 180,
         "grace_period_days": 90,
         "category_hours": [
-            {"code": "NCCR-AIRWAY", "hours": 6.0, "label": "Airway, Respiration & Ventilation"},
+            {
+                "code": "NCCR-AIRWAY",
+                "hours": 6.0,
+                "label": "Airway, Respiration & Ventilation",
+            },
             {"code": "NCCR-CARDIO", "hours": 7.0, "label": "Cardiovascular"},
             {"code": "EMS-TRAUMA", "hours": 5.0, "label": "Trauma"},
             {"code": "NCCR-MEDICAL", "hours": 8.0, "label": "Medical"},
@@ -2281,9 +2301,7 @@ async def seed_virginia_recertification(
         existing = result.scalar_one_or_none()
 
         if existing:
-            logger.info(
-                f"Recertification pathway already exists: {standard['name']}"
-            )
+            logger.info(f"Recertification pathway already exists: {standard['name']}")
             pathway_ids.append(existing.id)
             continue
 
@@ -2292,11 +2310,13 @@ async def seed_virginia_recertification(
         for cat_hours in standard["category_hours"]:
             cat_id = category_map.get(cat_hours["code"])
             if cat_id:
-                category_hour_reqs.append({
-                    "category_id": cat_id,
-                    "hours": cat_hours["hours"],
-                    "label": cat_hours["label"],
-                })
+                category_hour_reqs.append(
+                    {
+                        "category_id": cat_id,
+                        "hours": cat_hours["hours"],
+                        "label": cat_hours["label"],
+                    }
+                )
             else:
                 logger.warning(
                     f"Category code {cat_hours['code']} not found in category map"

@@ -53,12 +53,8 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     rating_scale_labels: Optional[dict] = None
 
     # Per-apparatus-type skills and tasks
-    apparatus_type_skills: Optional[
-        Dict[str, List[str]]
-    ] = None
-    apparatus_type_tasks: Optional[
-        Dict[str, List[str]]
-    ] = None
+    apparatus_type_skills: Optional[Dict[str, List[str]]] = None
+    apparatus_type_tasks: Optional[Dict[str, List[str]]] = None
 
     # Report form sections
     form_show_performance_rating: bool = True
@@ -126,12 +122,8 @@ class TrainingModuleConfigUpdate(BaseModel):
     form_show_call_types: Optional[bool] = None
 
     # Per-apparatus-type skills and tasks
-    apparatus_type_skills: Optional[
-        Dict[str, List[str]]
-    ] = None
-    apparatus_type_tasks: Optional[
-        Dict[str, List[str]]
-    ] = None
+    apparatus_type_skills: Optional[Dict[str, List[str]]] = None
+    apparatus_type_tasks: Optional[Dict[str, List[str]]] = None
 
     # Shift review defaults
     shift_review_call_types: Optional[List[str]] = None

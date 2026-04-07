@@ -2201,7 +2201,8 @@ class ElectionService:
         """
         ballot_items = election.ballot_items or []
         pkg_items = [
-            item for item in ballot_items
+            item
+            for item in ballot_items
             if item.get("type") == "membership_approval"
             and item.get("prospect_package_id")
         ]
@@ -2233,9 +2234,7 @@ class ElectionService:
                     Candidate.id.in_(list(candidate_ids))
                 )
             )
-            candidate_names = {
-                str(row.id): row.name for row in cand_result.all()
-            }
+            candidate_names = {str(row.id): row.name for row in cand_result.all()}
 
         for item in pkg_items:
             pkg = pkgs_by_id.get(item["prospect_package_id"])
@@ -4516,7 +4515,8 @@ Best regards,
             hash_to_user: Dict[str, str] = {}
             for user in users:
                 voter_hash = self._generate_voter_hash(
-                    user.id, election_id,
+                    user.id,
+                    election_id,
                     election.voter_anonymity_salt or "",
                 )
                 hash_to_user[voter_hash] = str(user.id)
@@ -4547,10 +4547,7 @@ Best regards,
             voted_user_ids = {str(r[0]) for r in vote_result.all() if r[0]}
 
         ballot_items = election.ballot_items or []
-        override_user_ids = {
-            o.get("user_id")
-            for o in (election.voter_overrides or [])
-        }
+        override_user_ids = {o.get("user_id") for o in (election.voter_overrides or [])}
 
         roster = []
         for user in users:
@@ -4562,34 +4559,28 @@ Best regards,
             # Restricted voter list check
             in_eligible_list = True
             if election.eligible_voters:
-                in_eligible_list = user_id in [
-                    str(v) for v in election.eligible_voters
-                ]
+                in_eligible_list = user_id in [str(v) for v in election.eligible_voters]
 
             # Per-item eligibility
             item_eligibility = []
             eligible_count = 0
             for item in ballot_items:
                 if has_override or not election.eligible_voters or in_eligible_list:
-                    eligible_items = (
-                        await self._get_eligible_ballot_items_for_user(
-                            user, election, str(organization_id), organization,
-                        )
+                    eligible_items = await self._get_eligible_ballot_items_for_user(
+                        user,
+                        election,
+                        str(organization_id),
+                        organization,
                     )
                     item_ids = {i.get("id") for i in eligible_items}
                     for bi in ballot_items:
                         is_eligible = bi.get("id") in item_ids
                         reason = None
                         if not is_eligible and not has_override:
-                            eligible_types = bi.get(
-                                "eligible_voter_types", ["all"]
-                            )
-                            if not await self._user_has_role_type(
-                                user, eligible_types
-                            ):
+                            eligible_types = bi.get("eligible_voter_types", ["all"])
+                            if not await self._user_has_role_type(user, eligible_types):
                                 member_type = (
-                                    getattr(user, "membership_type", None)
-                                    or "active"
+                                    getattr(user, "membership_type", None) or "active"
                                 )
                                 reason = (
                                     f"Membership type '{member_type}' not in "
@@ -4597,23 +4588,27 @@ Best regards,
                                 )
                             elif bi.get("require_attendance") and not is_attending:
                                 reason = "Not checked in for meeting"
-                        item_eligibility.append({
-                            "ballot_item_id": bi.get("id", ""),
-                            "ballot_item_title": bi.get("title", ""),
-                            "eligible": is_eligible,
-                            "reason": reason,
-                        })
+                        item_eligibility.append(
+                            {
+                                "ballot_item_id": bi.get("id", ""),
+                                "ballot_item_title": bi.get("title", ""),
+                                "eligible": is_eligible,
+                                "reason": reason,
+                            }
+                        )
                         if is_eligible:
                             eligible_count += 1
                     break  # computed all items in one pass
                 else:
                     for bi in ballot_items:
-                        item_eligibility.append({
-                            "ballot_item_id": bi.get("id", ""),
-                            "ballot_item_title": bi.get("title", ""),
-                            "eligible": False,
-                            "reason": "Not in eligible voters list",
-                        })
+                        item_eligibility.append(
+                            {
+                                "ballot_item_id": bi.get("id", ""),
+                                "ballot_item_title": bi.get("title", ""),
+                                "eligible": False,
+                                "reason": "Not in eligible voters list",
+                            }
+                        )
                     break
 
             # Overall ineligibility reason
@@ -4623,7 +4618,10 @@ Best regards,
                 eligible_count = 0
             elif eligible_count == 0 and not has_override:
                 overall_reason = await self._get_ineligibility_reason_for_user(
-                    user, election, str(organization_id), organization,
+                    user,
+                    election,
+                    str(organization_id),
+                    organization,
                 )
 
             will_receive_ballot = (
@@ -4631,20 +4629,22 @@ Best regards,
             ) and in_eligible_list
 
             member_type = getattr(user, "membership_type", None) or "active"
-            roster.append({
-                "user_id": user_id,
-                "full_name": user.full_name or user.username,
-                "email": user.email,
-                "membership_type": member_type,
-                "has_override": has_override,
-                "has_voted": has_voted,
-                "is_attending": is_attending,
-                "will_receive_ballot": will_receive_ballot,
-                "eligible_item_count": eligible_count if will_receive_ballot else 0,
-                "total_item_count": len(ballot_items),
-                "ineligibility_reason": overall_reason,
-                "item_eligibility": item_eligibility,
-            })
+            roster.append(
+                {
+                    "user_id": user_id,
+                    "full_name": user.full_name or user.username,
+                    "email": user.email,
+                    "membership_type": member_type,
+                    "has_override": has_override,
+                    "has_voted": has_voted,
+                    "is_attending": is_attending,
+                    "will_receive_ballot": will_receive_ballot,
+                    "eligible_item_count": eligible_count if will_receive_ballot else 0,
+                    "total_item_count": len(ballot_items),
+                    "ineligibility_reason": overall_reason,
+                    "item_eligibility": item_eligibility,
+                }
+            )
 
         total_eligible = sum(1 for r in roster if r["will_receive_ballot"])
         total_voted = sum(1 for r in roster if r["has_voted"])
@@ -4653,7 +4653,11 @@ Best regards,
         return {
             "election_id": str(election_id),
             "election_title": election.title,
-            "election_status": election.status.value if hasattr(election.status, "value") else str(election.status),
+            "election_status": (
+                election.status.value
+                if hasattr(election.status, "value")
+                else str(election.status)
+            ),
             "total_members": len(roster),
             "total_eligible": total_eligible,
             "total_ineligible": len(roster) - total_eligible,

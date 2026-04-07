@@ -62,7 +62,7 @@ async def list_ranks(
         organization_id=current_user.organization_id,
         is_active=is_active,
     )
-    paginated = ranks[pagination.skip:pagination.skip + pagination.limit]
+    paginated = ranks[pagination.skip : pagination.skip + pagination.limit]
     return [_rank_to_response(r) for r in paginated]
 
 

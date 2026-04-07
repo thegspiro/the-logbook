@@ -1208,7 +1208,9 @@ class EvocLevel(Base):
     )
 
     # Relationships
-    training_program = relationship("TrainingProgram", foreign_keys=[training_program_id])
+    training_program = relationship(
+        "TrainingProgram", foreign_keys=[training_program_id]
+    )
 
     __table_args__ = (
         Index(

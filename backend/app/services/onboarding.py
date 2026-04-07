@@ -1147,29 +1147,21 @@ class OnboardingService:
         are available immediately after setup.
         """
         try:
-            org_result = await self.db.execute(
-                select(Organization).limit(1)
-            )
+            org_result = await self.db.execute(select(Organization).limit(1))
             org = org_result.scalar_one_or_none()
 
-            user_result = await self.db.execute(
-                select(User).limit(1)
-            )
+            user_result = await self.db.execute(select(User).limit(1))
             user = user_result.scalar_one_or_none()
 
             if org and user:
-                result = await seed_admin_hours_data(
-                    self.db, org.id, user.id
-                )
+                result = await seed_admin_hours_data(self.db, org.id, user.id)
                 logger.info(
                     "Seeded {} admin hours categories and {} event mappings",
                     result["categories_count"],
                     result["mappings_created"],
                 )
         except Exception as e:
-            logger.warning(
-                "Non-critical: failed to seed admin hours defaults: {}", e
-            )
+            logger.warning("Non-critical: failed to seed admin hours defaults: {}", e)
 
     async def _create_post_onboarding_checklist(self):
         """Create post-onboarding checklist items"""

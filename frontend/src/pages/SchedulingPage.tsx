@@ -259,7 +259,7 @@ const SchedulingPage: React.FC = () => {
     if (validTabs.includes(tabParam) && tabParam !== activeTab) {
       setActiveTab(tabParam);
     }
-  }, [searchParams]);
+  }, [searchParams, activeTab]);
 
   // Calendar state
   const [viewMode, setViewMode] = useState<ViewMode>("week");

@@ -416,10 +416,7 @@ class EquipmentCheckService:
         checklists = []
         for tmpl in templates:
             check = existing_checks.get(tmpl.id)
-            is_completed = (
-                check is not None
-                and check.overall_status != "incomplete"
-            )
+            is_completed = check is not None and check.overall_status != "incomplete"
             checklists.append(
                 {
                     "template": tmpl,
@@ -506,24 +503,12 @@ class EquipmentCheckService:
                 item["status"] = "fail"
             req_qty = item.get("required_quantity")
             found_qty = item.get("quantity_found")
-            if (
-                req_qty is not None
-                and found_qty is not None
-                and found_qty < req_qty
-            ):
+            if req_qty is not None and found_qty is not None and found_qty < req_qty:
                 item["status"] = "fail"
 
         total = len(items_data)
-        completed = sum(
-            1
-            for i in items_data
-            if i.get("status") != "not_checked"
-        )
-        failed = sum(
-            1
-            for i in items_data
-            if i.get("status") == "fail"
-        )
+        completed = sum(1 for i in items_data if i.get("status") != "not_checked")
+        failed = sum(1 for i in items_data if i.get("status") == "fail")
 
         if completed < total:
             overall_status = "incomplete"
@@ -574,9 +559,7 @@ class EquipmentCheckService:
                 status=item_data.get("status", "not_checked"),
                 quantity_found=item_data.get("quantity_found"),
                 required_quantity=item_data.get("required_quantity"),
-                critical_minimum_quantity=item_data.get(
-                    "critical_minimum_quantity"
-                ),
+                critical_minimum_quantity=item_data.get("critical_minimum_quantity"),
                 level_reading=item_data.get("level_reading"),
                 level_unit=item_data.get("level_unit"),
                 serial_number=item_data.get("serial_number"),
@@ -621,9 +604,7 @@ class EquipmentCheckService:
     ) -> Dict[str, CheckTemplateItem]:
         """Load CheckTemplateItem records referenced by the submitted items."""
         template_item_ids = [
-            i.get("template_item_id")
-            for i in items_data
-            if i.get("template_item_id")
+            i.get("template_item_id") for i in items_data if i.get("template_item_id")
         ]
         template_items_map: Dict[str, CheckTemplateItem] = {}
         if template_item_ids:
@@ -662,18 +643,14 @@ class EquipmentCheckService:
         template_id = data.get("template_id")
 
         if not items_data:
-            raise ValueError(
-                "At least one checklist item is required"
-            )
+            raise ValueError("At least one checklist item is required")
 
         # Prevent duplicate submission for same shift+template
         if template_id:
             existing_result = await self.db.execute(
                 select(ShiftEquipmentCheck).where(
-                    ShiftEquipmentCheck.shift_id
-                    == shift_id,
-                    ShiftEquipmentCheck.template_id
-                    == template_id,
+                    ShiftEquipmentCheck.shift_id == shift_id,
+                    ShiftEquipmentCheck.template_id == template_id,
                 )
             )
             existing_check = existing_result.scalars().first()
@@ -694,8 +671,8 @@ class EquipmentCheckService:
                     "been submitted for this shift"
                 )
 
-        total, completed, failed, overall_status = (
-            self._compute_check_status(items_data)
+        total, completed, failed, overall_status = self._compute_check_status(
+            items_data
         )
 
         check = ShiftEquipmentCheck(
@@ -706,9 +683,7 @@ class EquipmentCheckService:
             apparatus_id=shift.apparatus_id,
             checked_by=checked_by,
             checked_at=datetime.now(timezone.utc),
-            check_timing=data.get(
-                "check_timing", "start_of_shift"
-            ),
+            check_timing=data.get("check_timing", "start_of_shift"),
             overall_status=overall_status,
             total_items=total,
             completed_items=completed,
@@ -720,39 +695,25 @@ class EquipmentCheckService:
 
         # Validate submitted items belong to the template
         submitted_ids = {
-            i.get("template_item_id")
-            for i in items_data
-            if i.get("template_item_id")
+            i.get("template_item_id") for i in items_data if i.get("template_item_id")
         }
         if template_id and submitted_ids:
             valid_result = await self.db.execute(
                 select(CheckTemplateItem.id)
                 .join(CheckTemplateCompartment)
-                .where(
-                    CheckTemplateCompartment.template_id
-                    == template_id
-                )
+                .where(CheckTemplateCompartment.template_id == template_id)
             )
-            valid_ids = {
-                str(r) for r in valid_result.scalars().all()
-            }
+            valid_ids = {str(r) for r in valid_result.scalars().all()}
             invalid = submitted_ids - valid_ids
             if invalid:
                 raise ValueError(
-                    f"Items do not belong to template: "
-                    f"{', '.join(invalid)}"
+                    f"Items do not belong to template: " f"{', '.join(invalid)}"
                 )
 
-        template_items_map = await self._load_template_items_map(
-            items_data
-        )
-        await self._create_check_items(
-            check.id, items_data, template_items_map
-        )
+        template_items_map = await self._load_template_items_map(items_data)
+        await self._create_check_items(check.id, items_data, template_items_map)
 
-        await self._update_apparatus_deficiency(
-            shift.apparatus_id, overall_status
-        )
+        await self._update_apparatus_deficiency(shift.apparatus_id, overall_status)
 
         # Collect failed item details for notifications
         critical_items: List[Dict[str, Any]] = []
@@ -795,9 +756,7 @@ class EquipmentCheckService:
         except Exception:
             await self.db.rollback()
             raise
-        return await self.get_check(
-            check.id, organization_id
-        )
+        return await self.get_check(check.id, organization_id)
 
     async def submit_standalone_check(
         self,
@@ -813,8 +772,7 @@ class EquipmentCheckService:
         result = await self.db.execute(
             select(EquipmentCheckTemplate).where(
                 EquipmentCheckTemplate.id == template_id,
-                EquipmentCheckTemplate.organization_id
-                == organization_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
             )
         )
         template = result.scalars().first()
@@ -826,12 +784,10 @@ class EquipmentCheckService:
         items_data = data.pop("items", [])
 
         if not items_data:
-            raise ValueError(
-                "At least one checklist item is required"
-            )
+            raise ValueError("At least one checklist item is required")
 
-        total, completed, failed, overall_status = (
-            self._compute_check_status(items_data)
+        total, completed, failed, overall_status = self._compute_check_status(
+            items_data
         )
 
         check = ShiftEquipmentCheck(
@@ -842,9 +798,7 @@ class EquipmentCheckService:
             apparatus_id=apparatus_id,
             checked_by=checked_by,
             checked_at=datetime.now(timezone.utc),
-            check_timing=data.get(
-                "check_timing", "start_of_shift"
-            ),
+            check_timing=data.get("check_timing", "start_of_shift"),
             check_context="standalone",
             overall_status=overall_status,
             total_items=total,
@@ -856,25 +810,17 @@ class EquipmentCheckService:
         self.db.add(check)
         await self.db.flush()
 
-        template_items_map = await self._load_template_items_map(
-            items_data
-        )
-        await self._create_check_items(
-            check.id, items_data, template_items_map
-        )
+        template_items_map = await self._load_template_items_map(items_data)
+        await self._create_check_items(check.id, items_data, template_items_map)
 
-        await self._update_apparatus_deficiency(
-            apparatus_id, overall_status
-        )
+        await self._update_apparatus_deficiency(apparatus_id, overall_status)
 
         try:
             await self.db.commit()
         except Exception:
             await self.db.rollback()
             raise
-        return await self.get_check(
-            check.id, organization_id
-        )
+        return await self.get_check(check.id, organization_id)
 
     async def complete_incomplete_check(
         self,
@@ -888,31 +834,22 @@ class EquipmentCheckService:
             select(ShiftEquipmentCheck)
             .where(
                 ShiftEquipmentCheck.id == check_id,
-                ShiftEquipmentCheck.organization_id
-                == organization_id,
+                ShiftEquipmentCheck.organization_id == organization_id,
             )
-            .options(
-                selectinload(ShiftEquipmentCheck.items)
-            )
+            .options(selectinload(ShiftEquipmentCheck.items))
         )
         check = result.scalars().first()
         if not check:
             raise ValueError("Check not found")
         if check.overall_status != "incomplete":
-            raise ValueError(
-                "Only incomplete checks can be updated"
-            )
+            raise ValueError("Only incomplete checks can be updated")
 
         items_data = data.get("items", [])
         if not items_data:
-            raise ValueError(
-                "At least one item is required"
-            )
+            raise ValueError("At least one item is required")
 
         existing_map: Dict[str, ShiftEquipmentCheckItem] = {
-            item.template_item_id: item
-            for item in check.items
-            if item.template_item_id
+            item.template_item_id: item for item in check.items if item.template_item_id
         }
 
         for item_data in items_data:
@@ -920,10 +857,7 @@ class EquipmentCheckService:
             existing = existing_map.get(tmpl_id) if tmpl_id else None
             if existing:
                 new_status = item_data.get("status", "not_checked")
-                if (
-                    existing.status == "not_checked"
-                    or new_status != "not_checked"
-                ):
+                if existing.status == "not_checked" or new_status != "not_checked":
                     existing.status = new_status
                 existing.quantity_found = item_data.get(
                     "quantity_found", existing.quantity_found
@@ -931,28 +865,17 @@ class EquipmentCheckService:
                 existing.level_reading = item_data.get(
                     "level_reading", existing.level_reading
                 )
-                existing.notes = item_data.get(
-                    "notes", existing.notes
-                )
+                existing.notes = item_data.get("notes", existing.notes)
                 existing.serial_found = item_data.get(
                     "serial_found", existing.serial_found
                 )
-                existing.lot_found = item_data.get(
-                    "lot_found", existing.lot_found
-                )
-                existing.is_expired = item_data.get(
-                    "is_expired", existing.is_expired
-                )
+                existing.lot_found = item_data.get("lot_found", existing.lot_found)
+                existing.is_expired = item_data.get("is_expired", existing.is_expired)
 
         all_items = check.items
         total = len(all_items)
-        completed = sum(
-            1 for i in all_items
-            if i.status != "not_checked"
-        )
-        failed = sum(
-            1 for i in all_items if i.status == "fail"
-        )
+        completed = sum(1 for i in all_items if i.status != "not_checked")
+        failed = sum(1 for i in all_items if i.status == "fail")
 
         if completed < total:
             check.overall_status = "incomplete"
@@ -970,9 +893,7 @@ class EquipmentCheckService:
             check.signature_data = data["signature_data"]
 
         await self.db.commit()
-        return await self.get_check(
-            check.id, organization_id
-        )
+        return await self.get_check(check.id, organization_id)
 
     async def get_checks_for_shift(
         self,
@@ -1035,11 +956,7 @@ class EquipmentCheckService:
         rows = list(result.all())
 
         # Collect apparatus IDs for name lookup
-        apparatus_ids = {
-            row[1].apparatus_id
-            for row in rows
-            if row[1].apparatus_id
-        }
+        apparatus_ids = {row[1].apparatus_id for row in rows if row[1].apparatus_id}
         apparatus_map: Dict[str, str] = {}
         if apparatus_ids:
             app_result = await self.db.execute(
@@ -1055,9 +972,7 @@ class EquipmentCheckService:
             shift_checklists = await self.get_checklists_for_shift(
                 assignment.shift_id, user_id, organization_id
             )
-            apparatus_name = apparatus_map.get(
-                shift.apparatus_id or "", ""
-            )
+            apparatus_name = apparatus_map.get(shift.apparatus_id or "", "")
             for cl in shift_checklists:
                 cl["shift_id"] = assignment.shift_id
                 cl["shift_date"] = shift.shift_date
@@ -1562,14 +1477,14 @@ class EquipmentCheckService:
 
             # Build per-item detail lines for the message
             item_lines: list[str] = []
-            for ci in (critical_items or []):
+            for ci in critical_items or []:
                 line = f"[CRITICAL] {ci['name']}"
                 if "expected" in ci and "found" in ci:
                     line += f" — expected {ci['expected']}, found {ci['found']}"
                 if "critical_minimum" in ci:
                     line += f" (critical min: {ci['critical_minimum']})"
                 item_lines.append(line)
-            for wi in (warning_items or []):
+            for wi in warning_items or []:
                 line = wi["name"]
                 if "expected" in wi and "found" in wi:
                     line += f" — expected {wi['expected']}, found {wi['found']}"
@@ -1624,7 +1539,7 @@ class EquipmentCheckService:
 
                         # Build HTML item table for email
                         item_rows_html = ""
-                        for ci in (critical_items or []):
+                        for ci in critical_items or []:
                             qty_info = ""
                             if "expected" in ci and "found" in ci:
                                 qty_info = (
@@ -1633,8 +1548,7 @@ class EquipmentCheckService:
                                 )
                                 if "critical_minimum" in ci:
                                     qty_info += (
-                                        f" (Critical min: "
-                                        f"{ci['critical_minimum']})"
+                                        f" (Critical min: " f"{ci['critical_minimum']})"
                                     )
                             item_rows_html += (
                                 "<tr style='background:#fef2f2'>"
@@ -1646,7 +1560,7 @@ class EquipmentCheckService:
                                 f"<td style='padding:4px 8px'>"
                                 f"{qty_info}</td></tr>"
                             )
-                        for wi in (warning_items or []):
+                        for wi in warning_items or []:
                             qty_info = ""
                             if "expected" in wi and "found" in wi:
                                 qty_info = (
@@ -2184,8 +2098,7 @@ class EquipmentCheckService:
         lines = [
             "Compartment,Item Name,Check Type,Expected Quantity,"
             "Critical Minimum,Level Unit",
-            "Cab & Exterior,Lights & emergency warning system,"
-            "functional,,",
+            "Cab & Exterior,Lights & emergency warning system," "functional,,",
             "Cab & Exterior,Tire condition & pressure,pass_fail,,",
             "Engine Compartment,Oil level,level,,,quarts",
             "Medical Supplies,Tourniquets,quantity,4,2,",

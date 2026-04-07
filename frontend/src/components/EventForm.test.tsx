@@ -409,7 +409,7 @@ describe('EventForm', () => {
       const cancelButton = screen.getByRole('button', { name: /cancel/i });
       await user.click(cancelButton);
 
-      expect(mockOnCancel).toHaveBeenCalled();
+      expect(mockOnCancel).toHaveBeenCalledWith();
     });
   });
 

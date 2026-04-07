@@ -42,7 +42,13 @@ from zoneinfo import ZoneInfo
 
 from app.core.utils import generate_uuid
 from app.models.notification import NotificationLog
-from app.models.user import MemberLeaveOfAbsence, Organization, Position, User, user_positions
+from app.models.user import (
+    MemberLeaveOfAbsence,
+    Organization,
+    Position,
+    User,
+    user_positions,
+)
 from app.services.member_leave_service import MemberLeaveService
 
 
@@ -211,9 +217,7 @@ class SchedulingService:
                         email_err,
                     )
         except Exception as e:
-            logger.warning(
-                "Notification failed (category=%s): %s", category, e
-            )
+            logger.warning("Notification failed (category=%s): %s", category, e)
 
     # ============================================
     # Position Helpers
@@ -492,15 +496,11 @@ class SchedulingService:
         for a in attendance_records:
             d = self._orm_to_dict(a, name_map)
             if member_call_counts is not None:
-                d["call_count"] = member_call_counts.get(
-                    str(a.user_id), 0
-                )
+                d["call_count"] = member_call_counts.get(str(a.user_id), 0)
             result.append(d)
         return result
 
-    async def compute_member_call_counts(
-        self, shift_id: UUID
-    ) -> Dict[str, int]:
+    async def compute_member_call_counts(self, shift_id: UUID) -> Dict[str, int]:
         """Count calls per member from ShiftCall.responding_members JSON."""
         call_result = await self.db.execute(
             select(ShiftCall.responding_members).where(
@@ -606,9 +606,7 @@ class SchedulingService:
                 select(Shift)
                 .where(
                     Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(
-                        organization_id
-                    ),
+                    Shift.organization_id == str(organization_id),
                     Shift.shift_date == today,
                     Shift.is_finalized == False,  # noqa: E712
                 )
@@ -625,9 +623,7 @@ class SchedulingService:
                 select(Shift)
                 .where(
                     Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(
-                        organization_id
-                    ),
+                    Shift.organization_id == str(organization_id),
                     Shift.is_finalized == False,  # noqa: E712
                     Shift.end_time >= now - timedelta(hours=2),
                 )
@@ -644,9 +640,7 @@ class SchedulingService:
                 select(Shift)
                 .where(
                     Shift.apparatus_id == apparatus_id,
-                    Shift.organization_id == str(
-                        organization_id
-                    ),
+                    Shift.organization_id == str(organization_id),
                     Shift.shift_date > today,
                     Shift.is_finalized == False,  # noqa: E712
                 )
@@ -771,10 +765,8 @@ class SchedulingService:
 
             report_count = (
                 await self.db.execute(
-                    select(func.count(ShiftCompletionReport.id))
-                    .where(
-                        ShiftCompletionReport.shift_id
-                        == str(shift_id)
+                    select(func.count(ShiftCompletionReport.id)).where(
+                        ShiftCompletionReport.shift_id == str(shift_id)
                     )
                 )
             ).scalar() or 0
@@ -873,9 +865,7 @@ class SchedulingService:
         organization_id: UUID,
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
         """Member self-service check-in for a shift."""
-        shift = await self.get_shift_by_id(
-            shift_id, organization_id
-        )
+        shift = await self.get_shift_by_id(shift_id, organization_id)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:
@@ -884,9 +874,7 @@ class SchedulingService:
         existing = (
             await self.db.execute(
                 select(ShiftAttendance).where(
-                    ShiftAttendance.shift_id == str(
-                        shift_id
-                    ),
+                    ShiftAttendance.shift_id == str(shift_id),
                     ShiftAttendance.user_id == user_id,
                 )
             )
@@ -918,9 +906,7 @@ class SchedulingService:
         organization_id: UUID,
     ) -> Tuple[Optional[ShiftAttendance], Optional[str]]:
         """Member self-service check-out for a shift."""
-        shift = await self.get_shift_by_id(
-            shift_id, organization_id
-        )
+        shift = await self.get_shift_by_id(shift_id, organization_id)
         if not shift:
             return None, "Shift not found"
         if shift.is_finalized:
@@ -929,9 +915,7 @@ class SchedulingService:
         existing = (
             await self.db.execute(
                 select(ShiftAttendance).where(
-                    ShiftAttendance.shift_id == str(
-                        shift_id
-                    ),
+                    ShiftAttendance.shift_id == str(shift_id),
                     ShiftAttendance.user_id == user_id,
                 )
             )
@@ -947,9 +931,7 @@ class SchedulingService:
         now = datetime.now(timezone.utc)
         existing.checked_out_at = now
         delta = now - existing.checked_in_at
-        existing.duration_minutes = int(
-            delta.total_seconds() / 60
-        )
+        existing.duration_minutes = int(delta.total_seconds() / 60)
         await self.db.commit()
         await self.db.refresh(existing)
         return existing, None
@@ -961,9 +943,7 @@ class SchedulingService:
         organization_id: UUID,
     ) -> Optional[ShiftAttendance]:
         """Get a member's attendance record for a shift."""
-        shift = await self.get_shift_by_id(
-            shift_id, organization_id
-        )
+        shift = await self.get_shift_by_id(shift_id, organization_id)
         if not shift:
             return None
         result = await self.db.execute(
@@ -1937,8 +1917,7 @@ class SchedulingService:
 
             wants_email = sched_cfg.get("send_email", False)
             email_subj = (
-                f"Shift Coverage Needed \u2014 "
-                f"{position} on {shift_date_str}"
+                f"Shift Coverage Needed \u2014 " f"{position} on {shift_date_str}"
             )
             email_html = (
                 f"<p>{message}</p>"
@@ -2004,9 +1983,7 @@ class SchedulingService:
 
             from app.services.scheduled_tasks import resolve_check_templates
 
-            org_tz = ZoneInfo(
-                org.timezone if org.timezone else "America/New_York"
-            )
+            org_tz = ZoneInfo(org.timezone if org.timezone else "America/New_York")
 
             message = (
                 f"You have been assigned to the {position_label} position "
@@ -2032,21 +2009,15 @@ class SchedulingService:
 
             if checklist_names:
                 checklist_list = ", ".join(checklist_names)
-                message += (
-                    f" Equipment checklists to complete: "
-                    f"{checklist_list}."
-                )
+                message += f" Equipment checklists to complete: " f"{checklist_list}."
 
             notif_metadata: dict = {"shift_id": str(shift_id)}
             if shift.start_time:
-                notif_metadata["shift_start_time"] = (
-                    shift.start_time.isoformat()
-                )
+                notif_metadata["shift_start_time"] = shift.start_time.isoformat()
 
             wants_email = assign_cfg.get("send_email", False)
             email_subj = (
-                f"Shift Assignment \u2014 "
-                f"{position_label} on {shift_date_str}"
+                f"Shift Assignment \u2014 " f"{position_label} on {shift_date_str}"
             )
             email_html = (
                 f"<p>{message}</p>"
@@ -2081,9 +2052,7 @@ class SchedulingService:
         """Notify the target user (or shift officer) about a new swap request."""
         try:
             req_result = await self.db.execute(
-                select(User).where(
-                    User.id == str(swap_request.requesting_user_id)
-                )
+                select(User).where(User.id == str(swap_request.requesting_user_id))
             )
             req_user = req_result.scalar_one_or_none()
             req_name = "A member"
@@ -2093,9 +2062,7 @@ class SchedulingService:
                 req_name = f"{first} {last}".strip() or "A member"
 
             shift_result = await self.db.execute(
-                select(Shift).where(
-                    Shift.id == str(swap_request.offering_shift_id)
-                )
+                select(Shift).where(Shift.id == str(swap_request.offering_shift_id))
             )
             offering_shift = shift_result.scalar_one_or_none()
             shift_date_str = (
@@ -2142,14 +2109,11 @@ class SchedulingService:
         """Notify the requesting user about swap approval/denial."""
         try:
             status_label = (
-                "approved" if status == SwapRequestStatus.APPROVED
-                else "denied"
+                "approved" if status == SwapRequestStatus.APPROVED else "denied"
             )
 
             shift_result = await self.db.execute(
-                select(Shift).where(
-                    Shift.id == str(swap_request.offering_shift_id)
-                )
+                select(Shift).where(Shift.id == str(swap_request.offering_shift_id))
             )
             offering_shift = shift_result.scalar_one_or_none()
             shift_date_str = (
@@ -2183,9 +2147,7 @@ class SchedulingService:
         """Notify the shift officer when a member confirms their assignment."""
         try:
             shift_result = await self.db.execute(
-                select(Shift).where(
-                    Shift.id == str(assignment.shift_id)
-                )
+                select(Shift).where(Shift.id == str(assignment.shift_id))
             )
             shift = shift_result.scalar_one_or_none()
             if not shift or not shift.shift_officer_id:
@@ -2205,9 +2167,7 @@ class SchedulingService:
                 user_name = f"{first} {last}".strip() or "A member"
 
             shift_date_str = (
-                shift.shift_date.isoformat()
-                if shift.shift_date
-                else "unknown date"
+                shift.shift_date.isoformat() if shift.shift_date else "unknown date"
             )
             position_label = str(assignment.position or "")
 
@@ -2240,21 +2200,12 @@ class SchedulingService:
             if not time_off.user_id:
                 return
 
-            status_label = (
-                "approved" if status == TimeOffStatus.APPROVED
-                else "denied"
-            )
+            status_label = "approved" if status == TimeOffStatus.APPROVED else "denied"
 
             start_str = (
-                time_off.start_date.isoformat()
-                if time_off.start_date
-                else "unknown"
+                time_off.start_date.isoformat() if time_off.start_date else "unknown"
             )
-            end_str = (
-                time_off.end_date.isoformat()
-                if time_off.end_date
-                else "unknown"
-            )
+            end_str = time_off.end_date.isoformat() if time_off.end_date else "unknown"
 
             message = (
                 f"Your time-off request for "
@@ -2663,8 +2614,7 @@ class SchedulingService:
         """
         total_days = (end_date - start_date).days + 1
         all_dates = {
-            (start_date + timedelta(days=i)).isoformat()
-            for i in range(total_days)
+            (start_date + timedelta(days=i)).isoformat() for i in range(total_days)
         }
 
         # Active org members
@@ -2693,10 +2643,12 @@ class SchedulingService:
                 Shift.shift_date >= start_date,
                 Shift.shift_date <= end_date,
                 ShiftAssignment.user_id.in_(user_ids),
-                ShiftAssignment.assignment_status.in_([
-                    AssignmentStatus.ASSIGNED,
-                    AssignmentStatus.CONFIRMED,
-                ]),
+                ShiftAssignment.assignment_status.in_(
+                    [
+                        AssignmentStatus.ASSIGNED,
+                        AssignmentStatus.CONFIRMED,
+                    ]
+                ),
             )
             .group_by(ShiftAssignment.user_id)
         )
@@ -2757,15 +2709,17 @@ class SchedulingService:
             name = f"{u.first_name or ''} {u.last_name or ''}".strip()
             unavail = user_unavailable.get(uid, set())
             avail = all_dates - unavail
-            summaries.append({
-                "user_id": uid,
-                "user_name": name or u.email or uid,
-                "email": u.email,
-                "total_shifts_assigned": assignment_counts.get(uid, 0),
-                "time_off_days": len(unavail),
-                "available_dates": sorted(avail),
-                "unavailable_dates": sorted(unavail),
-            })
+            summaries.append(
+                {
+                    "user_id": uid,
+                    "user_name": name or u.email or uid,
+                    "email": u.email,
+                    "total_shifts_assigned": assignment_counts.get(uid, 0),
+                    "time_off_days": len(unavail),
+                    "available_dates": sorted(avail),
+                    "unavailable_dates": sorted(unavail),
+                }
+            )
 
         summaries.sort(key=lambda x: x["user_name"])
         return summaries
@@ -2793,10 +2747,12 @@ class SchedulingService:
             select(ShiftAssignment.user_id).where(
                 ShiftAssignment.shift_id == str(shift_id),
                 ShiftAssignment.user_id.isnot(None),
-                ShiftAssignment.assignment_status.in_([
-                    AssignmentStatus.ASSIGNED,
-                    AssignmentStatus.CONFIRMED,
-                ]),
+                ShiftAssignment.assignment_status.in_(
+                    [
+                        AssignmentStatus.ASSIGNED,
+                        AssignmentStatus.CONFIRMED,
+                    ]
+                ),
             )
         )
         for row in result.scalars().all():
@@ -2854,9 +2810,7 @@ class SchedulingService:
                 User.first_name,
                 User.last_name,
                 func.count(ShiftAssignment.id).label("shift_count"),
-                func.coalesce(func.sum(duration_minutes), 0).label(
-                    "total_minutes"
-                ),
+                func.coalesce(func.sum(duration_minutes), 0).label("total_minutes"),
             )
             .join(Shift, ShiftAssignment.shift_id == Shift.id)
             .join(User, ShiftAssignment.user_id == User.id)
@@ -3183,9 +3137,7 @@ class SchedulingService:
                 "start_time": (
                     shift.start_time.isoformat() if shift.start_time else None
                 ),
-                "end_time": (
-                    shift.end_time.isoformat() if shift.end_time else None
-                ),
+                "end_time": (shift.end_time.isoformat() if shift.end_time else None),
                 "notes": shift.notes,
                 "apparatus_id": shift.apparatus_id,
                 "shift_officer_id": shift.shift_officer_id,
@@ -3201,9 +3153,7 @@ class SchedulingService:
                     {
                         "id": assignment.id,
                         "position": (
-                            assignment.position.value
-                            if assignment.position
-                            else None
+                            assignment.position.value if assignment.position else None
                         ),
                         "status": (
                             assignment.assignment_status.value
@@ -3637,31 +3587,19 @@ class SchedulingService:
             # Snapshot total hours from attendance duration
             hours_result = await self.db.execute(
                 select(
-                    func.coalesce(
-                        func.sum(ShiftAttendance.duration_minutes), 0
-                    )
-                ).where(
-                    ShiftAttendance.shift_id == str(shift_id)
-                )
+                    func.coalesce(func.sum(ShiftAttendance.duration_minutes), 0)
+                ).where(ShiftAttendance.shift_id == str(shift_id))
             )
             total_min = hours_result.scalar() or 0
-            shift.total_hours = (
-                round(total_min / 60.0, 1) if total_min > 0 else 0.0
-            )
+            shift.total_hours = round(total_min / 60.0, 1) if total_min > 0 else 0.0
 
             # Snapshot per-member call counts onto attendance records
-            member_call_counts = await self.compute_member_call_counts(
-                shift_id
-            )
+            member_call_counts = await self.compute_member_call_counts(shift_id)
             att_result = await self.db.execute(
-                select(ShiftAttendance).where(
-                    ShiftAttendance.shift_id == str(shift_id)
-                )
+                select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift_id))
             )
             for att in att_result.scalars().all():
-                att.call_count = member_call_counts.get(
-                    str(att.user_id), 0
-                )
+                att.call_count = member_call_counts.get(str(att.user_id), 0)
 
             shift.is_finalized = True
             shift.finalized_at = now
@@ -3710,9 +3648,7 @@ class SchedulingService:
         )
 
         att_result = await self.db.execute(
-            select(ShiftAttendance).where(
-                ShiftAttendance.shift_id == str(shift.id)
-            )
+            select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift.id))
         )
         attendees = att_result.scalars().all()
         if not attendees:
@@ -3725,9 +3661,7 @@ class SchedulingService:
                 ProgramEnrollment.user_id,
                 ProgramEnrollment.id,
             ).where(
-                ProgramEnrollment.organization_id == str(
-                    organization_id
-                ),
+                ProgramEnrollment.organization_id == str(organization_id),
                 ProgramEnrollment.user_id.in_(attendee_ids),
                 ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
             )
@@ -3742,27 +3676,16 @@ class SchedulingService:
         for user_id, enrollment_id in trainee_enrollments:
             try:
                 att = next(
-                    (
-                        a for a in attendees
-                        if str(a.user_id) == str(user_id)
-                    ),
+                    (a for a in attendees if str(a.user_id) == str(user_id)),
                     None,
                 )
                 hours = 0.0
                 if att and att.duration_minutes:
-                    hours = round(
-                        att.duration_minutes / 60.0, 2
-                    )
+                    hours = round(att.duration_minutes / 60.0, 2)
 
-                if (
-                    hours <= 0
-                    and shift.start_time
-                    and shift.end_time
-                ):
+                if hours <= 0 and shift.start_time and shift.end_time:
                     delta = shift.end_time - shift.start_time
-                    hours = round(
-                        delta.total_seconds() / 3600.0, 2
-                    )
+                    hours = round(delta.total_seconds() / 3600.0, 2)
 
                 if hours <= 0:
                     hours = 1.0
@@ -3781,8 +3704,7 @@ class SchedulingService:
                 created_count += 1
             except Exception as e:
                 logger.error(
-                    "Failed to create draft report for "
-                    "trainee %s on shift %s: %s",
+                    "Failed to create draft report for " "trainee %s on shift %s: %s",
                     user_id,
                     shift.id,
                     e,
@@ -3817,9 +3739,7 @@ class SchedulingService:
                 return
 
             org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == str(organization_id)
-                )
+                select(Organization).where(Organization.id == str(organization_id))
             )
             org = org_result.scalar_one_or_none()
             if not org:
@@ -3831,10 +3751,7 @@ class SchedulingService:
                 else "Unknown"
             )
             plural = "s" if draft_count != 1 else ""
-            subject = (
-                f"Shift Finalized: {draft_count} draft "
-                f"report{plural} created"
-            )
+            subject = f"Shift Finalized: {draft_count} draft " f"report{plural} created"
             message = (
                 f"Your shift on {shift_date_str} has been "
                 f"finalized. {draft_count} draft completion "
@@ -3870,9 +3787,7 @@ class SchedulingService:
                         f"{settings.FRONTEND_URL}"
                         f"/scheduling?tab=shift-reports&view=drafts"
                     )
-                    e_first = _html.escape(
-                        officer.first_name or ""
-                    )
+                    e_first = _html.escape(officer.first_name or "")
                     e_date = _html.escape(shift_date_str)
                     _logo = build_email_logo_html(org)
                     email_service = EmailService(organization=org)
@@ -3915,15 +3830,15 @@ class SchedulingService:
                     )
                 except Exception as e:
                     logger.error(
-                        "Failed to send finalization email "
-                        "to officer %s: %s",
-                        officer_id, e,
+                        "Failed to send finalization email " "to officer %s: %s",
+                        officer_id,
+                        e,
                     )
 
             await self.db.commit()
         except Exception as e:
             logger.error(
-                "Failed to send finalization notification "
-                "for shift %s: %s",
-                shift.id, e,
+                "Failed to send finalization notification " "for shift %s: %s",
+                shift.id,
+                e,
             )

@@ -48,7 +48,7 @@ describe('EquipmentRequestsPage', () => {
     expect(screen.getByText('Equipment Requests')).toBeInTheDocument();
     expect(screen.getByText('Review member requests for equipment')).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockGetEquipmentRequests).toHaveBeenCalled();
+      expect(mockGetEquipmentRequests).toHaveBeenCalledWith();
     });
   });
 
@@ -153,7 +153,7 @@ describe('EquipmentRequestsPage', () => {
     await user.click(screen.getByText('Review'));
     await user.click(await screen.findByText('Approve'));
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith();
     });
   });
 
