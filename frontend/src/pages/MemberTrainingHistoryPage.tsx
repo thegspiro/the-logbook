@@ -207,6 +207,12 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 {user.full_name || user.username}
               </p>
             </div>
+            <button
+              onClick={() => window.open(`/training/print/member?id=${userId}&name=${encodeURIComponent(user.full_name || user.username)}`, '_blank')}
+              className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors print:hidden"
+            >
+              Print Record
+            </button>
           </div>
         </div>
 
