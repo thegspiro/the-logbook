@@ -234,6 +234,15 @@ def wrap_email_body(
     )
     if not footer_text:
         footer_text = f"This is an automated message from {org_name}."
+    org_phone = _html.escape(getattr(organization, "phone", None) or "") if organization else ""
+    org_email_addr = _html.escape(getattr(organization, "email", None) or "") if organization else ""
+    org_website = _html.escape(getattr(organization, "website", None) or "") if organization else ""
+    contact_parts = [p for p in (org_phone, org_email_addr, org_website) if p]
+    contact_line = (
+        f'<p style="font-size: 11px; color: #9ca3af;">{" | ".join(contact_parts)}</p>'
+        if contact_parts
+        else ""
+    )
     style_attr = f' style="background-color: {header_color};"' if header_color else ""
     return (
         f"<!DOCTYPE html><html><head>"
@@ -246,6 +255,7 @@ def wrap_email_body(
         f'<div class="footer">'
         f"<p>{footer_text}</p>"
         f"<p>Please do not reply to this email.</p>"
+        f"{contact_line}"
         f"</div></div></body></html>"
     )
 

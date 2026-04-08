@@ -723,6 +723,7 @@ DEFAULT_WELCOME_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -741,7 +742,8 @@ Log in at: {{login_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_WELCOME_SUBJECT = "Welcome to {{organization_name}} — Your Account is Ready"
 
@@ -769,6 +771,7 @@ DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -786,7 +789,8 @@ If you did not request a password reset, you can safely ignore this email. Your 
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
 
@@ -827,6 +831,7 @@ DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
     <div class="footer">
         <p>This is an official department notice from {{organization_name}}.</p>
         <p>A copy has been placed in your member file.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -855,7 +860,8 @@ Respectfully,
 
 ---
 This is an official department notice from {{organization_name}}.
-A copy has been placed in your member file."""
+A copy has been placed in your member file.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 # Default inventory change notification email
 DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
@@ -890,6 +896,7 @@ DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated inventory notice from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -917,7 +924,8 @@ Thank you,
 
 ---
 This is an automated inventory notice from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
 
@@ -947,6 +955,7 @@ DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -966,7 +975,8 @@ View your certifications: {{renewal_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_CERT_EXPIRATION_SUBJECT = (
     "Certification Expiring: {{cert_name}} — {{organization_name}}"
@@ -998,6 +1008,7 @@ DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1017,7 +1028,8 @@ Validate attendance: {{validation_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_POST_EVENT_VALIDATION_SUBJECT = "Attendance Validation Needed: {{event_title}}"
 
@@ -1047,6 +1059,7 @@ DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1066,7 +1079,8 @@ Validate shift: {{validation_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_POST_SHIFT_VALIDATION_SUBJECT = (
     "Shift Validation Needed: {{shift_name}} — {{shift_date}}"
@@ -1097,6 +1111,7 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
     <div class="footer">
         <p>This is an official department notice from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1117,7 +1132,8 @@ Please contact the department administration to arrange return of these items.
 
 ---
 This is an official department notice from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT = (
     "Property Return Reminder — {{organization_name}}"
@@ -1150,6 +1166,7 @@ DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1170,7 +1187,8 @@ View prospect: {{prospect_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_INACTIVITY_WARNING_SUBJECT = (
     "Inactivity Alert: {{prospect_name}} — {{organization_name}}"
@@ -1198,6 +1216,7 @@ DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1215,7 +1234,8 @@ Please review the election details and coordinate with your team as needed.
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_title}}"
 
@@ -1241,6 +1261,7 @@ DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1258,7 +1279,8 @@ All associated ballots and results have been removed.
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_ELECTION_DELETED_SUBJECT = "CRITICAL: Election Deleted — {{election_title}}"
 
@@ -1278,6 +1300,7 @@ DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1289,7 +1312,8 @@ The member's profile remains accessible for legal requests or future reactivatio
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_MEMBER_ARCHIVED_SUBJECT = (
     "Member Archived: {{member_name}} — {{organization_name}}"
@@ -1317,6 +1341,7 @@ DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1334,7 +1359,8 @@ Thank you for your request.
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = "Event Request Update — {{status_label}}"
 
@@ -1359,6 +1385,7 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated IT security notice from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1375,7 +1402,8 @@ This is an informational notice. No action is required unless the request appear
 
 ---
 This is an automated IT security notice from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
     "[IT Notice] Password Reset Requested — {{organization_name}}"
@@ -1402,6 +1430,7 @@ DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>{{organization_phone}} | {{organization_email}}</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1420,7 +1449,8 @@ status of your application, please contact us directly.
 
 ---
 This is an automated message from {{organization_name}}.
-{{organization_phone}} | {{organization_email}}"""
+{{organization_phone}} | {{organization_email}}
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
     "Application Already on File — {{organization_name}}"
@@ -1460,6 +1490,7 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1487,7 +1518,8 @@ If you have any questions, please contact your election administrator:
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
 
@@ -1531,6 +1563,7 @@ DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated election report from {{organization_name}}.</p>
         <p>Please retain this email for your records.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1562,7 +1595,8 @@ MEMBERS WHO DID NOT RECEIVE BALLOTS
 
 ---
 This is an automated election report from {{organization_name}}.
-Please retain this email for your records."""
+Please retain this email for your records.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_ELECTION_REPORT_SUBJECT = (
     "Election Report: {{election_title}} — {{organization_name}}"
@@ -1602,6 +1636,7 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated eligibility summary from {{organization_name}}.</p>
         <p>Please retain this email for your records.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1628,7 +1663,8 @@ WHAT YOU CAN DO
 
 ---
 This is an automated eligibility summary from {{organization_name}}.
-Please retain this email for your records."""
+Please retain this email for your records.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT = (
     "Ballot Eligibility Summary: {{election_title}} — {{organization_name}}"
@@ -1656,6 +1692,7 @@ DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1673,7 +1710,8 @@ Please update your calendar accordingly.
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_EVENT_CANCELLATION_SUBJECT = (
     "Event Cancelled: {{event_title}} — {{organization_name}}"
@@ -1706,6 +1744,7 @@ DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated reminder from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1726,7 +1765,8 @@ View event: {{event_url}}
 
 ---
 This is an automated reminder from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
 
@@ -1757,6 +1797,7 @@ DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated reminder from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1777,7 +1818,8 @@ View event: {{event_url}}
 
 ---
 This is an automated reminder from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_SERIES_END_REMINDER_SUBJECT = (
     "Recurring Series Ending Soon: {{event_title}} — Ends {{series_end_date}}"
@@ -1810,6 +1852,7 @@ DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1828,7 +1871,8 @@ Review and approve: {{approval_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_TRAINING_APPROVAL_SUBJECT = (
     "Training Approval Needed: {{course_name}} — {{event_date}}"
