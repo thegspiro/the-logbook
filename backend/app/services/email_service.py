@@ -201,6 +201,55 @@ def build_email_logo_html(organization: Optional[Organization]) -> str:
     return f'<div style="text-align:center;padding:16px 0;">' f"{img}</div>"
 
 
+def wrap_email_body(
+    organization: Optional[Organization],
+    title: str,
+    body_html: str,
+    footer_text: str = "",
+    header_color: str = "",
+) -> str:
+    """Wrap raw HTML content in the standard email template chrome.
+
+    Produces the same visual structure as the ``EmailTemplateService``
+    default templates:  container > logo > header(h1) > content > footer.
+
+    Use this for one-off emails in scheduled tasks that build HTML
+    inline rather than going through the template system.
+
+    Args:
+        organization: Org for logo. ``None`` skips the logo.
+        title: Text for the ``<h1>`` header banner.
+        body_html: Pre-escaped HTML for the content area.
+        footer_text: Optional custom first-line footer text.
+            Defaults to "This is an automated message from <org>."
+        header_color: Optional inline ``background-color`` for the header.
+            E.g. ``"#dc2626"`` for red alerts.
+    """
+    logo_img = build_email_logo_img(organization)
+    logo_div = f'<div class="logo">{logo_img}</div>' if logo_img else ""
+    org_name = (
+        _html.escape(getattr(organization, "name", ""))
+        if organization
+        else ""
+    )
+    if not footer_text:
+        footer_text = f"This is an automated message from {org_name}."
+    style_attr = f' style="background-color: {header_color};"' if header_color else ""
+    return (
+        f"<!DOCTYPE html><html><head>"
+        f"<style>{DEFAULT_CSS}</style></head><body>"
+        f'<div class="container">'
+        f"{logo_div}"
+        f'<div class="header"{style_attr}>'
+        f"<h1>{_html.escape(title)}</h1></div>"
+        f'<div class="content">{body_html}</div>'
+        f'<div class="footer">'
+        f"<p>{footer_text}</p>"
+        f"<p>Please do not reply to this email.</p>"
+        f"</div></div></body></html>"
+    )
+
+
 class EmailService:
     """Service for sending emails"""
 

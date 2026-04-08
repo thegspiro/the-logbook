@@ -191,7 +191,10 @@ class SchedulingService:
 
             if send_email and org:
                 try:
-                    from app.services.email_service import EmailService
+                    from app.services.email_service import (
+                        EmailService,
+                        wrap_email_body,
+                    )
 
                     recipient_result = await self.db.execute(
                         select(User.email).where(
@@ -201,11 +204,17 @@ class SchedulingService:
                     )
                     to_emails = [r[0] for r in recipient_result.all() if r[0]]
                     if to_emails:
+                        content = email_html_body or f"<p>{message}</p>"
+                        html = wrap_email_body(
+                            org,
+                            email_subject or subject,
+                            content,
+                        )
                         email_svc = EmailService(organization=org)
                         await email_svc.send_email(
                             to_emails=to_emails,
                             subject=email_subject or subject,
-                            html_body=email_html_body or f"<p>{message}</p>",
+                            html_body=html,
                             cc_emails=email_cc or None,
                             db=self.db,
                             template_type=email_template_type or category,
@@ -3725,10 +3734,7 @@ class SchedulingService:
 
         from app.core.config import settings
         from app.models.notification import NotificationChannel
-        from app.services.email_service import (
-            EmailService,
-            build_email_logo_html,
-        )
+        from app.services.email_service import EmailService
 
         try:
             officer_result = await self.db.execute(
@@ -3783,20 +3789,20 @@ class SchedulingService:
             wants_email = prefs.get("email_notifications", True)
             if wants_email and officer.email:
                 try:
+                    from app.services.email_service import wrap_email_body
+
                     full_url = (
                         f"{settings.FRONTEND_URL}"
                         f"/scheduling?tab=shift-reports&view=drafts"
                     )
                     e_first = _html.escape(officer.first_name or "")
                     e_date = _html.escape(shift_date_str)
-                    _logo = build_email_logo_html(org)
                     email_service = EmailService(organization=org)
 
-                    e_url = _html.escape(full_url)
-                    html_body = (
-                        f"{_logo}"
-                        f"<h2>Shift Finalized</h2>"
-                        f"<p>Hi {e_first},</p>"
+                    html_body = wrap_email_body(
+                        org,
+                        "Shift Finalized",
+                        f"<p>Hello {e_first},</p>"
                         f"<p>Your shift on <strong>{e_date}"
                         f"</strong> has been finalized. "
                         f"<strong>{draft_count}</strong> draft "
@@ -3805,12 +3811,10 @@ class SchedulingService:
                         f"<p>Please review and complete each "
                         f"draft with ratings, skills, and "
                         f"narratives.</p>"
-                        f'<p><a href="{e_url}" style="'
-                        f"display:inline-block;padding:10px 20px;"
-                        f"background-color:#7c3aed;"
-                        f"color:#ffffff;text-decoration:none;"
-                        f"border-radius:6px;font-weight:600;"
-                        f'">Review Draft Reports</a></p>'
+                        f'<p style="text-align: center;">'
+                        f'<a href="{_html.escape(full_url)}" '
+                        f'class="button" role="link">'
+                        f"Review Draft Reports</a></p>",
                     )
                     text_body = (
                         f"Hi {officer.first_name or ''},\n\n"
