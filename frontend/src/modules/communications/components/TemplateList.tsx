@@ -28,6 +28,12 @@ import {
   Archive,
   CalendarCheck,
   Lock,
+  BarChart3,
+  ListChecks,
+  Copy,
+  CalendarRange,
+  UserX,
+  Bell,
 } from 'lucide-react';
 import type { EmailTemplate } from '../types';
 
@@ -54,6 +60,13 @@ const TEMPLATE_TYPE_DISPLAY: Record<
   member_archived: { icon: Archive, label: 'Member Archived', color: 'text-theme-text-muted' },
   event_request_status: { icon: CalendarCheck, label: 'Event Request Status', color: 'text-cyan-500' },
   it_password_notification: { icon: Lock, label: 'IT Password Reset', color: 'text-blue-600' },
+  election_report: { icon: BarChart3, label: 'Election Report', color: 'text-emerald-600' },
+  ballot_eligibility_summary: { icon: ListChecks, label: 'Ballot Eligibility Summary', color: 'text-amber-600' },
+  duplicate_application: { icon: Copy, label: 'Duplicate Application', color: 'text-slate-500' },
+  series_end_reminder: { icon: CalendarRange, label: 'Series End Reminder', color: 'text-purple-400' },
+  shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-600' },
+  shift_decline: { icon: UserX, label: 'Shift Decline', color: 'text-red-400' },
+  shift_reminder: { icon: Bell, label: 'Shift Reminder', color: 'text-sky-500' },
   custom: { icon: FileText, label: 'Custom', color: 'text-theme-text-muted' },
 };
 

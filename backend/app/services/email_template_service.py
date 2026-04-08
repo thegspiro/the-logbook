@@ -2367,6 +2367,17 @@ class EmailTemplateService:
             ),
         },
         {
+            "type": EmailTemplateType.BALLOT_ELIGIBILITY_SUMMARY,
+            "name": "Ballot Eligibility Summary",
+            "subject": DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT,
+            "html": DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML,
+            "text": DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT,
+            "description": (
+                "Sent to the secretary after ballot emails are dispatched. "
+                "Lists who received ballots and who was skipped with reasons."
+            ),
+        },
+        {
             "type": EmailTemplateType.MEMBER_DROPPED,
             "name": "Member Dropped \u2014 Property Return Notice",
             "subject": "Notice of Department Property Return \u2014 {{organization_name}}",
