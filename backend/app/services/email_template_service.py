@@ -14,6 +14,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings as app_settings
 from app.models.email_template import EmailTemplate, EmailTemplateType
 
 # Default CSS styles shared across all email templates.
@@ -51,6 +52,11 @@ GLOBAL_VARIABLES: List[Dict[str, str]] = [
     },
     {"name": "organization_phone", "description": "Organization phone number"},
     {"name": "organization_email", "description": "Organization email address"},
+    {"name": "organization_website", "description": "Organization website URL"},
+    {
+        "name": "login_url",
+        "description": "URL to the application login page",
+    },
 ]
 
 
@@ -75,8 +81,6 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "full_name", "description": "Recipient's full name"},
         {"name": "username", "description": "Login username"},
         {"name": "temp_password", "description": "Temporary password"},
-
-        {"name": "login_url", "description": "URL to the login page"},
     ],
     "password_reset": [
         {"name": "first_name", "description": "Recipient's first name"},
@@ -349,6 +353,8 @@ _SAMPLE_ORG_CONTEXT: Dict[str, str] = {
     "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
     "organization_phone": "(555) 555-1234",
     "organization_email": "info@samplefd.org",
+    "organization_website": "https://www.samplefd.org",
+    "login_url": "https://example.com/login",
 }
 
 
@@ -367,7 +373,6 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "full_name": "John Doe",
         "username": "jdoe",
         "temp_password": "TempPass123!",
-        "login_url": "https://example.com/login",
     }),
     "password_reset": _sample({
         "first_name": "John",
@@ -2126,6 +2131,9 @@ class EmailTemplateService:
             ctx.setdefault(
                 "organization_email", getattr(organization, "email", None) or ""
             )
+            ctx.setdefault(
+                "organization_website", getattr(organization, "website", None) or ""
+            )
             # Build formatted mailing address
             ctx.setdefault(
                 "organization_mailing_address",
@@ -2154,6 +2162,10 @@ class EmailTemplateService:
                         getattr(organization, "physical_zip", None),
                     ),
                 )
+        # login_url: always available regardless of organization
+        frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+        ctx.setdefault("login_url", f"{frontend_url}/login" if frontend_url else "")
+
         # Build a ready-to-use <img> tag so templates can just insert it.
         # Skip base64 data URIs — they embed the full image payload in the
         # HTML and easily exceed Gmail's 102 KB message-clipping threshold.
