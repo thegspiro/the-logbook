@@ -390,9 +390,12 @@ export const ShiftReportsTab: React.FC = () => {
       return;
     }
 
-    const traineeIds = crewMembers
-      .filter(m => m.has_active_enrollment && selectedCrewIds.has(m.user_id))
-      .map(m => m.user_id);
+    const includeTraining = config?.shift_reports_include_training ?? true;
+    const traineeIds = includeTraining
+      ? crewMembers
+          .filter(m => m.has_active_enrollment && selectedCrewIds.has(m.user_id))
+          .map(m => m.user_id)
+      : [];
 
     const evaluations: CrewMemberEvaluation[] = traineeIds
       .map(id => {
@@ -1361,7 +1364,7 @@ export const ShiftReportsTab: React.FC = () => {
                 ) : (
                   <div className="space-y-2">
                     {crewMembers.map(member => {
-                      const isTrainee = member.has_active_enrollment;
+                      const isTrainee = member.has_active_enrollment && (config?.shift_reports_include_training ?? true);
                       const isReported = member.has_existing_report;
                       const isSelected = selectedCrewIds.has(member.user_id);
                       const isExpanded = expandedTraineeId === member.user_id;

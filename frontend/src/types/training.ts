@@ -1311,6 +1311,8 @@ export interface TrainingModuleConfig {
   form_show_skills_observed: boolean;
   form_show_tasks_performed: boolean;
   form_show_call_types: boolean;
+  shift_reports_enabled: boolean;
+  shift_reports_include_training: boolean;
   shift_review_call_types?: string[];
   shift_review_default_skills?: string[];
   shift_review_default_tasks?: string[];

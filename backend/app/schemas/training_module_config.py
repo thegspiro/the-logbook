@@ -65,6 +65,10 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     form_show_tasks_performed: bool = True
     form_show_call_types: bool = True
 
+    # Feature toggles
+    shift_reports_enabled: bool = True
+    shift_reports_include_training: bool = True
+
     # Shift review defaults
     shift_review_call_types: Optional[List[str]] = None
     shift_review_default_skills: Optional[List[str]] = None
@@ -120,6 +124,10 @@ class TrainingModuleConfigUpdate(BaseModel):
     form_show_skills_observed: Optional[bool] = None
     form_show_tasks_performed: Optional[bool] = None
     form_show_call_types: Optional[bool] = None
+
+    # Feature toggles
+    shift_reports_enabled: Optional[bool] = None
+    shift_reports_include_training: Optional[bool] = None
 
     # Per-apparatus-type skills and tasks
     apparatus_type_skills: Optional[Dict[str, List[str]]] = None

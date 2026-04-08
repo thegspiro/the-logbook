@@ -1506,6 +1506,10 @@ class TrainingModuleConfig(Base):
     form_show_tasks_performed = Column(Boolean, default=True)
     form_show_call_types = Column(Boolean, default=True)
 
+    # Feature toggles
+    shift_reports_enabled = Column(Boolean, default=True)
+    shift_reports_include_training = Column(Boolean, default=True)
+
     # Shift review defaults (configurable by training officers)
     shift_review_call_types = Column(
         JSON, nullable=True
