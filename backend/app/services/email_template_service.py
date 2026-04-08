@@ -2122,6 +2122,56 @@ class EmailTemplateService:
         )
         return template
 
+    async def reset_to_default(
+        self,
+        template_id: str,
+        organization_id: str,
+        updated_by: Optional[str] = None,
+    ) -> Optional[EmailTemplate]:
+        """Reset a template to its built-in default content.
+
+        Looks up the template's type in ``_DEFAULT_TEMPLATE_DEFS`` and
+        restores the subject, HTML body, text body, and CSS to the
+        system defaults.  Returns ``None`` if the template is not found
+        or its type has no registered default.
+        """
+        result = await self.db.execute(
+            select(EmailTemplate)
+            .where(
+                EmailTemplate.id == template_id,
+                EmailTemplate.organization_id == organization_id,
+            )
+            .options(selectinload(EmailTemplate.attachments))
+        )
+        template = result.scalar_one_or_none()
+        if not template:
+            return None
+
+        ttype = template.template_type
+        defn = next(
+            (d for d in self._DEFAULT_TEMPLATE_DEFS if d["type"] == ttype),
+            None,
+        )
+        if not defn:
+            return None
+
+        template.subject = defn["subject"]
+        template.html_body = defn["html"]
+        template.text_body = defn["text"]
+        template.css_styles = DEFAULT_CSS
+        template.updated_by = updated_by
+        await self.db.flush()
+        await self.db.refresh(template, attribute_names=["updated_at"])
+
+        logger.info(
+            "Template reset to default id=%s type=%s org=%s by=%s",
+            template_id,
+            ttype,
+            organization_id,
+            updated_by,
+        )
+        return template
+
     async def delete_template(self, template_id: str, organization_id: str) -> bool:
         """Delete an email template"""
         result = await self.db.execute(
