@@ -277,10 +277,15 @@ class ShiftCompletionService:
             await self.db.refresh(report)
 
         if review_status == "approved":
-            await self._notify_trainee_report_ready(
+            await self._send_notification(
                 organization_id=organization_id,
-                trainee_id=trainee_id,
-                shift_date=shift_date,
+                recipient_id=trainee_id,
+                subject="Shift report ready for review",
+                message=(
+                    f"A shift completion report for "
+                    f"{shift_date} is ready for your "
+                    f"review and acknowledgment."
+                ),
             )
 
         return report
@@ -337,7 +342,7 @@ class ShiftCompletionService:
         ).all()
         enrollment_map: Dict[str, Dict] = {}
         for enrollment, program_name in active_enrollments:
-            enrollment_map[enrollment.user_id] = {
+            enrollment_map[str(enrollment.user_id)] = {
                 "enrollment_id": str(enrollment.id),
                 "program_name": program_name,
             }
@@ -456,59 +461,28 @@ class ShiftCompletionService:
             "report_ids": created_ids,
         }
 
-    async def _notify_trainee_report_ready(
+    async def _send_notification(
         self,
         organization_id: UUID,
-        trainee_id: str,
-        shift_date: date,
+        recipient_id: str,
+        subject: str,
+        message: str,
     ) -> None:
-        """Send in-app notification to trainee."""
+        """Send an in-app training notification."""
         try:
             notification = NotificationLog(
                 organization_id=str(organization_id),
-                recipient_id=trainee_id,
+                recipient_id=recipient_id,
                 channel=NotificationChannel.IN_APP,
                 category=NotificationCategory.TRAINING,
-                subject="Shift report ready for review",
-                message=(
-                    f"A shift completion report for "
-                    f"{shift_date} is ready for your "
-                    f"review and acknowledgment."
-                ),
-            )
-            self.db.add(notification)
-            await self.db.commit()
-        except Exception as e:
-            logger.error(f"Failed to send trainee report notification: {e}")
-
-    async def _notify_officer_report_flagged(
-        self,
-        organization_id: UUID,
-        officer_id: str,
-        shift_date: date,
-        reviewer_notes: Optional[str] = None,
-    ) -> None:
-        """Notify the filing officer that their report was flagged."""
-        try:
-            message = (
-                f"Your shift report for {shift_date} has been "
-                f"flagged for revision."
-            )
-            if reviewer_notes:
-                message += f" Reviewer comment: {reviewer_notes}"
-            notification = NotificationLog(
-                organization_id=str(organization_id),
-                recipient_id=officer_id,
-                channel=NotificationChannel.IN_APP,
-                category=NotificationCategory.TRAINING,
-                subject="Shift report flagged for revision",
+                subject=subject,
                 message=message,
             )
             self.db.add(notification)
             await self.db.commit()
         except Exception as e:
             logger.error(
-                f"Failed to send officer flagged notification: {e}"
+                f"Failed to send notification: {e}"
             )
 
     async def _resolve_skill_evaluations(
@@ -1050,6 +1024,7 @@ class ShiftCompletionService:
         review_status: str,
         reviewer_notes: Optional[str] = None,
         redact_fields: Optional[List[str]] = None,
+        reviewer_name: Optional[str] = None,
     ) -> Optional[ShiftCompletionReport]:
         """Review a shift completion report: approve, flag, or redact fields.
 
@@ -1083,20 +1058,10 @@ class ShiftCompletionService:
         if reviewer_notes:
             report.reviewer_notes = reviewer_notes
 
-        # Append to review history
-        from app.models.user import User
-
-        reviewer_user = (
-            await self.db.execute(
-                select(User).where(User.id == reviewer_id)
-            )
-        ).scalar_one_or_none()
         history_entry = {
             "status": review_status,
             "reviewer_id": reviewer_id,
-            "reviewer_name": (
-                reviewer_user.full_name if reviewer_user else None
-            ),
+            "reviewer_name": reviewer_name,
             "notes": reviewer_notes,
             "timestamp": now.isoformat(),
         }
@@ -1120,18 +1085,31 @@ class ShiftCompletionService:
         await self.db.refresh(report)
 
         if review_status == "approved":
-            await self._notify_trainee_report_ready(
+            await self._send_notification(
                 organization_id=organization_id,
-                trainee_id=report.trainee_id,
-                shift_date=report.shift_date,
+                recipient_id=report.trainee_id,
+                subject="Shift report ready for review",
+                message=(
+                    f"A shift completion report for "
+                    f"{report.shift_date} is ready for "
+                    f"your review and acknowledgment."
+                ),
             )
 
         if review_status == "flagged":
-            await self._notify_officer_report_flagged(
+            flag_msg = (
+                f"Your shift report for {report.shift_date}"
+                f" has been flagged for revision."
+            )
+            if reviewer_notes:
+                flag_msg += (
+                    f" Reviewer comment: {reviewer_notes}"
+                )
+            await self._send_notification(
                 organization_id=organization_id,
-                officer_id=str(report.officer_id),
-                shift_date=report.shift_date,
-                reviewer_notes=reviewer_notes,
+                recipient_id=str(report.officer_id),
+                subject="Shift report flagged for revision",
+                message=flag_msg,
             )
 
         return report

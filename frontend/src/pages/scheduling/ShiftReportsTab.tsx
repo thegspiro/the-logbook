@@ -278,7 +278,7 @@ export const ShiftReportsTab: React.FC = () => {
         .then(setMembers)
         .catch(() => { /* members needed for draft edit */ });
     }
-  }, [viewMode, members.length]);
+  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps -- only load once when entering create mode
 
   // Load recent shifts when entering create mode without a linked shift
   useEffect(() => {
@@ -397,16 +397,18 @@ export const ShiftReportsTab: React.FC = () => {
     const evaluations: CrewMemberEvaluation[] = traineeIds
       .map(id => {
         const ev = traineeEvals[id];
-        return {
-          user_id: id,
-          performance_rating: ev?.performance_rating,
-          areas_of_strength: ev?.areas_of_strength || undefined,
-          areas_for_improvement: ev?.areas_for_improvement || undefined,
-          remarks: crewRemarks[id] || ev?.remarks || undefined,
-          skills_observed: ev?.skills_observed?.length ? ev.skills_observed : undefined,
-          tasks_performed: ev?.tasks_performed?.filter(t => t.task.trim()) || undefined,
-          enrollment_id: crewMembers.find(m => m.user_id === id)?.enrollment_id,
-        };
+        const entry: CrewMemberEvaluation = { user_id: id };
+        if (ev?.performance_rating) entry.performance_rating = ev.performance_rating;
+        if (ev?.areas_of_strength) entry.areas_of_strength = ev.areas_of_strength;
+        if (ev?.areas_for_improvement) entry.areas_for_improvement = ev.areas_for_improvement;
+        const remark = crewRemarks[id] || ev?.remarks;
+        if (remark) entry.remarks = remark;
+        if (ev?.skills_observed?.length) entry.skills_observed = ev.skills_observed;
+        const filteredTasks = ev?.tasks_performed?.filter(t => t.task.trim());
+        if (filteredTasks?.length) entry.tasks_performed = filteredTasks;
+        const enrollId = crewMembers.find(m => m.user_id === id)?.enrollment_id;
+        if (enrollId) entry.enrollment_id = enrollId;
+        return entry;
       })
       .filter(ev =>
         ev.performance_rating || ev.areas_of_strength || ev.areas_for_improvement ||
@@ -506,11 +508,12 @@ export const ShiftReportsTab: React.FC = () => {
     }
     setBatchReviewing(true);
     try {
-      const result = await shiftCompletionService.batchReviewReports({
+      const batchPayload: { report_ids: string[]; review_status: string; reviewer_notes?: string } = {
         report_ids: Array.from(selectedReportIds),
         review_status: action,
-        reviewer_notes: batchReviewNotes.trim() || undefined,
-      });
+      };
+      if (batchReviewNotes.trim()) batchPayload.reviewer_notes = batchReviewNotes.trim();
+      const result = await shiftCompletionService.batchReviewReports(batchPayload);
       toast.success(`${result.reviewed} report${result.reviewed !== 1 ? 's' : ''} ${action === SubmissionStatus.APPROVED ? 'approved' : 'flagged'}`);
       setSelectedReportIds(new Set());
       setBatchReviewNotes('');
