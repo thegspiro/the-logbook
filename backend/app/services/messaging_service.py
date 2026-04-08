@@ -312,17 +312,60 @@ class MessagingService:
                 m["author_name"] = author_map.get(m["posted_by"], "Unknown")
 
         # Paginate
-        len(enriched)
         enriched = enriched[skip : skip + limit]
 
         return enriched
 
     async def get_unread_count(self, organization_id: str, user_id: str) -> int:
-        """Get count of unread messages for a user"""
-        inbox = await self.get_inbox(
-            organization_id, user_id, include_read=False, limit=1000
+        """Get count of unread messages for a user.
+
+        Uses a lightweight query that only loads IDs and targeting fields
+        instead of fetching full message bodies through get_inbox.
+        """
+        now = datetime.now(timezone.utc)
+
+        user_result = await self.db.execute(
+            select(User).options(selectinload(User.roles)).where(User.id == user_id)
         )
-        return len(inbox)
+        user = user_result.scalar_one_or_none()
+        if not user:
+            return 0
+
+        user_role_names = [r.name for r in user.roles]
+        user_status = (
+            user.status.value if hasattr(user.status, "value") else str(user.status)
+        )
+
+        # Load only active, non-expired message IDs + targeting fields
+        query = select(DepartmentMessage).where(
+            DepartmentMessage.organization_id == organization_id,
+            DepartmentMessage.is_active == True,  # noqa: E712
+        ).where(
+            or_(
+                DepartmentMessage.expires_at.is_(None),
+                DepartmentMessage.expires_at > now,
+            )
+        )
+        result = await self.db.execute(query)
+        all_messages = result.scalars().all()
+
+        visible_ids = [
+            m.id for m in all_messages
+            if self._is_targeted(m, user_id, user_role_names, user_status)
+        ]
+        if not visible_ids:
+            return 0
+
+        # Count how many of those the user has already read
+        read_result = await self.db.execute(
+            select(func.count(DepartmentMessageRead.id)).where(
+                DepartmentMessageRead.user_id == user_id,
+                DepartmentMessageRead.message_id.in_(visible_ids),
+            )
+        )
+        read_count = read_result.scalar() or 0
+
+        return len(visible_ids) - read_count
 
     def _is_targeted(
         self,

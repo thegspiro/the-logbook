@@ -3477,7 +3477,7 @@ Best regards,
             rid = params.pop("recipient_id")
             cc_emails = params.pop("cc_emails", None)
             try:
-                subj, html_body, text_body = email_service.render_ballot_notification(
+                subj, html_body, text_body = await email_service.render_ballot_notification(
                     recipient_name=params["recipient_name"],
                     election_title=params["election_title"],
                     ballot_url=params["ballot_url"],
