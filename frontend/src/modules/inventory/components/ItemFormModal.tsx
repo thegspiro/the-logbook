@@ -50,8 +50,13 @@ export interface ItemFormModalProps {
   editItem?: InventoryItem | null;
 }
 
-/** Categories that support size/style variant generation */
-const VARIANT_ITEM_TYPES = new Set(['uniform', 'ppe']);
+/** All item types support size/style variant generation (uniforms, PPE,
+ *  batteries, lights, etc. — any category where items come in different
+ *  sizes, colors, or styles). */
+const VARIANT_ITEM_TYPES = new Set([
+  'uniform', 'ppe', 'tool', 'equipment', 'vehicle',
+  'electronics', 'consumable', 'other',
+]);
 
 export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   isOpen, onClose, onSaved, categories, locations, storageAreas, editItem,

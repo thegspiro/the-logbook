@@ -25,6 +25,7 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
+import { VariantCapsules } from '../components/VariantCapsules';
 import toast from 'react-hot-toast';
 
 /* ---------- Collapsible section ---------- */
@@ -439,7 +440,7 @@ const MyEquipmentPage: React.FC = () => {
                 <Link to={`/inventory/items/${iss.item_id}`} className="font-medium text-theme-text-primary hover:underline">{iss.item_name}</Link>
                 <div className="flex flex-wrap gap-2 text-xs text-theme-text-muted">
                   <span>Qty: {iss.quantity_issued}</span>
-                  {iss.size && <span>Size: {iss.size}</span>}
+                  <VariantCapsules item={{ size: iss.size } as InventoryItem} />
                   <span>Issued {formatDate(iss.issued_at, tz)}</span>
                 </div>
               </div>

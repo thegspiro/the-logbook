@@ -25,6 +25,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
+import { VariantCapsules, getDisplayName } from '../components/VariantCapsules';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatCurrency as fmtCurrencyUtil } from '../../../utils/dateFormatting';
 import toast from 'react-hot-toast';
@@ -270,7 +271,8 @@ const ItemDetailPage: React.FC = () => {
         <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-theme-text-muted shrink-0">{typeIcon(itemType)}</span>
-            <h1 className="text-2xl font-bold text-theme-text-primary truncate">{item.name}</h1>
+            <h1 className="text-2xl font-bold text-theme-text-primary truncate">{getDisplayName(item)}</h1>
+            <VariantCapsules item={item} showLabels />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${getStatusStyle(item.status)}`}>

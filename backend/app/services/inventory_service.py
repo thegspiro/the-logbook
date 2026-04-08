@@ -420,6 +420,9 @@ class InventoryService:
         location_id: Optional[UUID] = None,
         storage_area_id: Optional[UUID] = None,
         search: Optional[str] = None,
+        size: Optional[str] = None,
+        color: Optional[str] = None,
+        style: Optional[str] = None,
         active_only: bool = True,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
@@ -465,6 +468,20 @@ class InventoryService:
 
         if storage_area_id:
             query = query.where(InventoryItem.storage_area_id == str(storage_area_id))
+
+        if size:
+            query = query.where(
+                or_(
+                    InventoryItem.standard_size == size,
+                    InventoryItem.size == size,
+                )
+            )
+
+        if color:
+            query = query.where(InventoryItem.color == color)
+
+        if style:
+            query = query.where(InventoryItem.style == style)
 
         if search:
             safe_search = (
