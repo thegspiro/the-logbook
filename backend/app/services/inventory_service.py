@@ -74,6 +74,46 @@ def _sanitize_barcode_value(raw: str) -> str:
     return "".join(ch for ch in raw if ord(ch) < 128)
 
 
+# Supported extra-line field keys that can be requested on labels.
+_EXTRA_LINE_FIELDS = {"location", "category", "condition", "custom"}
+
+
+def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
+    """Build a single extra info string from requested fields.
+
+    *extra_lines* is a list of field keys the user wants printed below
+    the identifier line (e.g. ``["location", "category"]``).
+    Only fields that have a non-empty value on the item are included.
+    """
+    if not extra_lines:
+        return ""
+    parts: list[str] = []
+    for key in extra_lines:
+        if key == "location":
+            val = getattr(item, "location_name", None) or getattr(
+                item, "location_id", None
+            )
+            if val:
+                parts.append(str(val))
+        elif key == "category":
+            cat = getattr(item, "category", None)
+            if cat and getattr(cat, "name", None):
+                parts.append(cat.name)
+            elif getattr(item, "category_id", None):
+                parts.append(str(item.category_id)[:8])
+        elif key == "condition":
+            cond = getattr(item, "condition", None)
+            if cond:
+                val = cond.value if hasattr(cond, "value") else str(cond)
+                parts.append(val.replace("_", " ").title())
+        elif key == "custom":
+            # Custom text is handled by the caller pre-populating item.notes
+            # or by adding it to the extra_lines list as "custom:text"
+            if ":" in key:
+                parts.append(key.split(":", 1)[1])
+    return " | ".join(parts)
+
+
 class InventoryService:
     """Service for inventory management"""
 
@@ -2430,6 +2470,7 @@ class InventoryService:
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
         auto_rotate: Optional[bool] = None,
+        extra_lines: Optional[List[str]] = None,
     ) -> Tuple[BytesIO, int]:
         """
         Generate a PDF containing barcode labels for the given items.
@@ -2440,6 +2481,9 @@ class InventoryService:
         `auto_rotate` controls whether landscape labels are rotated to match
         roll-fed printer feed direction (narrow edge first).  When None, the
         format's default is used (True for Rollo/generic, False for Dymo).
+
+        `extra_lines` is an optional list of field keys to print below the
+        identifier line (e.g. ``["location", "category"]``).
 
         Returns a tuple of (pdf_buffer, auto_populated_count).
         """
@@ -2484,7 +2528,7 @@ class InventoryService:
                 )
             rotate = auto_rotate if auto_rotate is not None else True
             pdf_buf = self._generate_thermal_labels(
-                items, custom_width, custom_height, rotate
+                items, custom_width, custom_height, rotate, extra_lines
             )
             return pdf_buf, auto_populated
 
@@ -2495,7 +2539,7 @@ class InventoryService:
             )
 
         if fmt["type"] == "sheet":
-            pdf_buf = self._generate_sheet_labels(items)
+            pdf_buf = self._generate_sheet_labels(items, extra_lines)
         else:
             rotate = (
                 auto_rotate
@@ -2503,12 +2547,15 @@ class InventoryService:
                 else fmt.get("auto_rotate", False)
             )
             pdf_buf = self._generate_thermal_labels(
-                items, fmt["width"], fmt["height"], rotate
+                items, fmt["width"], fmt["height"], rotate, extra_lines
             )
         return pdf_buf, auto_populated
 
     @staticmethod
-    def _generate_sheet_labels(items: list) -> BytesIO:
+    def _generate_sheet_labels(
+        items: list,
+        extra_lines: Optional[List[str]] = None,
+    ) -> BytesIO:
         """Generate labels on standard letter-size sheets in an Avery 5160 layout (3x10 grid, 30/page)."""
         from reportlab.graphics.barcode import code128
         from reportlab.lib.pagesizes import letter
@@ -2524,10 +2571,10 @@ class InventoryService:
         rows = 10
         label_w = 2.625 * inch
         label_h = 1.0 * inch
-        # Avery 5160 margins: 0.1875" left/right, 0.5" top/bottom
         margin_x = (page_w - cols * label_w) / 2
         margin_y = 0.5 * inch
         labels_per_page = cols * rows
+        padding = 0.06 * inch  # consistent inset on each side
 
         for idx, item in enumerate(items):
             if idx > 0 and idx % labels_per_page == 0:
@@ -2544,13 +2591,19 @@ class InventoryService:
                 item.barcode or item.asset_tag or item.serial_number or item.id[:12]
             )
 
+            usable_w = label_w - 2 * padding
+            y_cursor = y + label_h - padding
+
+            # Item name
             c.setFont("Helvetica-Bold", 7)
-            max_name_chars = int(label_w / (7 * 0.5))
+            max_name_chars = int(usable_w / (7 * 0.5))
             name = item.name[:max_name_chars] + (
                 "..." if len(item.name) > max_name_chars else ""
             )
-            c.drawString(x + 6, y + label_h - 12, name)
+            y_cursor -= 7
+            c.drawString(x + padding, y_cursor, name)
 
+            # Secondary identifiers
             info_parts = []
             if item.asset_tag and item.asset_tag != barcode_value:
                 info_parts.append(f"Asset: {item.asset_tag}")
@@ -2558,16 +2611,26 @@ class InventoryService:
                 info_parts.append(f"S/N: {item.serial_number}")
             if info_parts:
                 c.setFont("Helvetica", 5.5)
-                c.drawString(x + 6, y + label_h - 20, "  |  ".join(info_parts))
+                y_cursor -= 5.5 + 2
+                c.drawString(x + padding, y_cursor, "  |  ".join(info_parts))
 
-            # ISO/IEC 15417 quiet zone: leave space on each side of the barcode
+            # Optional extra info lines (location, category, custom text)
+            extra = _build_extra_lines(item, extra_lines)
+            if extra:
+                c.setFont("Helvetica", 5)
+                y_cursor -= 5 + 1
+                max_extra = int(usable_w / (5 * 0.5))
+                line = extra[:max_extra]
+                c.drawString(x + padding, y_cursor, line)
+
+            # ISO/IEC 15417 quiet zone
             quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
             bar_height = 0.35 * inch
             bar_width_unit = 0.008 * inch
             barcode_obj = code128.Code128(
                 barcode_value, barWidth=bar_width_unit, barHeight=bar_height
             )
-            max_barcode_width = label_w - 12 - 2 * quiet_zone
+            max_barcode_width = usable_w - 2 * quiet_zone
             while (
                 barcode_obj.width > max_barcode_width
                 and bar_width_unit > _MIN_BAR_WIDTH_INCH * inch
@@ -2577,10 +2640,10 @@ class InventoryService:
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
             barcode_x = x + (label_w - barcode_obj.width) / 2
-            barcode_obj.drawOn(c, barcode_x, y + 10)
+            barcode_obj.drawOn(c, barcode_x, y + padding + 8)
 
             c.setFont("Courier", 5.5)
-            c.drawCentredString(x + label_w / 2, y + 3, barcode_value)
+            c.drawCentredString(x + label_w / 2, y + padding + 1, barcode_value)
 
         c.save()
         buf.seek(0)
@@ -2592,6 +2655,7 @@ class InventoryService:
         width_in: float,
         height_in: float,
         auto_rotate: bool = False,
+        extra_lines: Optional[List[str]] = None,
     ) -> BytesIO:
         """
         Generate labels sized for thermal printers (Dymo, Rollo, etc).
@@ -2648,103 +2712,82 @@ class InventoryService:
             quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
             min_bar = _MIN_BAR_WIDTH_INCH * inch
 
-            if is_landscape:
-                self_w = content_w - 2 * padding
-                self_h = content_h - 2 * padding
+            self_w = content_w - 2 * padding
+            self_h = content_h - 2 * padding
 
+            if is_landscape:
                 name_font_size = min(8, max(5, self_h / (0.2 * inch)))
                 info_font_size = max(4, name_font_size - 2)
                 barcode_text_size = max(4, info_font_size)
-
-                max_barcode_width = self_w * 0.85 - 2 * quiet_zone
                 bar_height = min(0.4 * inch, self_h * 0.4)
                 bar_width_unit = 0.01 * inch
-
-                barcode_obj = code128.Code128(
-                    barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-                )
-                while (
-                    barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
-                ):
-                    bar_width_unit -= 0.001 * inch
-                    barcode_obj = code128.Code128(
-                        barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-                    )
-
-                y_cursor = content_h - padding
-
-                c.setFont("Helvetica-Bold", name_font_size)
-                name_max_chars = int(self_w / (name_font_size * 0.5))
-                name = item.name[:name_max_chars] + (
-                    "..." if len(item.name) > name_max_chars else ""
-                )
-                y_cursor -= name_font_size
-                c.drawString(padding, y_cursor, name)
-
-                info_parts = []
-                if item.asset_tag and item.asset_tag != barcode_value:
-                    info_parts.append(f"Asset: {item.asset_tag}")
-                if item.serial_number and item.serial_number != barcode_value:
-                    info_parts.append(f"S/N: {item.serial_number}")
-                if info_parts:
-                    y_cursor -= info_font_size + 2
-                    c.setFont("Helvetica", info_font_size)
-                    c.drawString(padding, y_cursor, " | ".join(info_parts))
-
-                barcode_x = padding + (self_w - barcode_obj.width) / 2
-                barcode_y = padding + barcode_text_size + 4
-                barcode_obj.drawOn(c, barcode_x, barcode_y)
-
-                c.setFont("Courier", barcode_text_size)
-                c.drawCentredString(content_w / 2, padding + 1, barcode_value)
-
             else:
-                self_w = content_w - 2 * padding
-                self_h = content_h - 2 * padding
-
                 name_font_size = min(10, max(6, self_w / (0.4 * inch)))
                 info_font_size = max(5, name_font_size - 2)
                 barcode_text_size = max(5, info_font_size)
-
-                max_barcode_width = self_w * 0.9 - 2 * quiet_zone
                 bar_height = min(0.8 * inch, self_h * 0.3)
                 bar_width_unit = 0.012 * inch
 
+            # Use 90% of usable width for barcode area (consistent for both orientations)
+            max_barcode_width = self_w * 0.9 - 2 * quiet_zone
+
+            barcode_obj = code128.Code128(
+                barcode_value, barWidth=bar_width_unit, barHeight=bar_height
+            )
+            while (
+                barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
+            ):
+                bar_width_unit -= 0.001 * inch
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
-                while (
-                    barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
-                ):
-                    bar_width_unit -= 0.001 * inch
-                    barcode_obj = code128.Code128(
-                        barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-                    )
 
-                c.setFont("Helvetica-Bold", name_font_size)
-                name_max_chars = int(self_w / (name_font_size * 0.52))
-                name = item.name[:name_max_chars] + (
-                    "..." if len(item.name) > name_max_chars else ""
-                )
-                y_cursor = content_h - padding - name_font_size
+            # -- Top section: name, identifiers, optional extra lines --
+            y_cursor = content_h - padding
+
+            c.setFont("Helvetica-Bold", name_font_size)
+            name_max_chars = int(self_w / (name_font_size * 0.5))
+            name = item.name[:name_max_chars] + (
+                "..." if len(item.name) > name_max_chars else ""
+            )
+            y_cursor -= name_font_size
+            if is_landscape:
+                c.drawString(padding, y_cursor, name)
+            else:
                 c.drawCentredString(content_w / 2, y_cursor, name)
 
-                info_parts = []
-                if item.asset_tag and item.asset_tag != barcode_value:
-                    info_parts.append(f"Asset: {item.asset_tag}")
-                if item.serial_number and item.serial_number != barcode_value:
-                    info_parts.append(f"S/N: {item.serial_number}")
-                if info_parts:
-                    y_cursor -= info_font_size + 4
-                    c.setFont("Helvetica", info_font_size)
+            info_parts = []
+            if item.asset_tag and item.asset_tag != barcode_value:
+                info_parts.append(f"Asset: {item.asset_tag}")
+            if item.serial_number and item.serial_number != barcode_value:
+                info_parts.append(f"S/N: {item.serial_number}")
+            if info_parts:
+                y_cursor -= info_font_size + 2
+                c.setFont("Helvetica", info_font_size)
+                if is_landscape:
+                    c.drawString(padding, y_cursor, " | ".join(info_parts))
+                else:
                     c.drawCentredString(content_w / 2, y_cursor, " | ".join(info_parts))
 
-                barcode_x = padding + (self_w - barcode_obj.width) / 2
-                barcode_y = padding + barcode_text_size + 8
-                barcode_obj.drawOn(c, barcode_x, barcode_y)
+            # Optional extra info line (location, category, custom text)
+            extra = _build_extra_lines(item, extra_lines)
+            if extra:
+                extra_size = max(4, info_font_size - 1)
+                y_cursor -= extra_size + 1
+                max_extra = int(self_w / (extra_size * 0.5))
+                c.setFont("Helvetica", extra_size)
+                if is_landscape:
+                    c.drawString(padding, y_cursor, extra[:max_extra])
+                else:
+                    c.drawCentredString(content_w / 2, y_cursor, extra[:max_extra])
 
-                c.setFont("Courier", barcode_text_size)
-                c.drawCentredString(content_w / 2, padding + 2, barcode_value)
+            # -- Bottom section: barcode + barcode text value --
+            barcode_x = padding + (self_w - barcode_obj.width) / 2
+            barcode_y = padding + barcode_text_size + 4
+            barcode_obj.drawOn(c, barcode_x, barcode_y)
+
+            c.setFont("Courier", barcode_text_size)
+            c.drawCentredString(content_w / 2, padding + 1, barcode_value)
 
             if needs_rotation:
                 c.restoreState()

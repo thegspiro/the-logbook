@@ -160,10 +160,23 @@ function getBarcodeValue(item: InventoryItem): string | null {
 interface BarcodeLabelProps {
   item: InventoryItem;
   preset: LabelPreset;
+  extraLines?: string[];
   onRendered?: () => void;
 }
 
-const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, onRendered }) => {
+/** Build the extra info string matching the backend _build_extra_lines logic */
+function buildExtraText(item: InventoryItem, extraLines?: string[]): string | null {
+  if (!extraLines || extraLines.length === 0) return null;
+  const parts: string[] = [];
+  for (const key of extraLines) {
+    if (key === 'location' && item.location_id) parts.push(item.location_id.slice(0, 12));
+    if (key === 'category' && item.category_name) parts.push(item.category_name);
+    if (key === 'condition' && item.condition) parts.push(item.condition.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+  }
+  return parts.length > 0 ? parts.join(' | ') : null;
+}
+
+const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, extraLines, onRendered }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const barcodeValue = getBarcodeValue(item);
 
@@ -256,6 +269,16 @@ const BarcodeLabel: React.FC<BarcodeLabelProps> = ({ item, preset, onRendered })
           {subtitle}
         </div>
       )}
+      {(() => {
+        const extra = buildExtraText(item, extraLines);
+        if (!extra) return null;
+        const smallerSize = `calc(${preset.subtitleFontSize} - 1pt)`;
+        return (
+          <div style={{ fontSize: smallerSize, color: '#666', textAlign: 'center', lineHeight: 1.1, marginTop: '1px', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {extra}
+          </div>
+        );
+      })()}
     </div>
   );
 };
@@ -274,6 +297,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const [barcodesReady, setBarcodesReady] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [autoRotateOverride, setAutoRotateOverride] = useState<boolean | null>(null);
+  const [extraLines, setExtraLines] = useState<string[]>([]);
   const renderedCountRef = useRef(0);
   const totalLabelsRef = useRef(0);
 
@@ -460,6 +484,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
         undefined,
         undefined,
         effectiveAutoRotate,
+        extraLines,
       );
       if (autoPopulated > 0) {
         toast.success(`${autoPopulated} item${autoPopulated !== 1 ? 's' : ''} had barcode values auto-generated`);
@@ -490,6 +515,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
         undefined,
         undefined,
         effectiveAutoRotate,
+        extraLines,
       );
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -754,6 +780,46 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 />
               </div>
 
+              {/* Additional label content */}
+              <div>
+                <label className="block text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-2">
+                  Additional Info on Label
+                </label>
+                <p className="text-xs text-theme-text-muted mb-2">
+                  Show extra details below the barcode identifier, space permitting.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'location', label: 'Location' },
+                    { key: 'category', label: 'Category' },
+                    { key: 'condition', label: 'Condition' },
+                  ].map(({ key, label }) => {
+                    const active = extraLines.includes(key);
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setExtraLines(prev =>
+                          active ? prev.filter(k => k !== key) : [...prev, key]
+                        )}
+                        className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                          active
+                            ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+                            : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-secondary'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {extraLines.length > 0 && (
+                  <p className="text-xs text-theme-text-muted mt-1.5">
+                    On small labels, extra text may be truncated or omitted if it doesn&apos;t fit.
+                  </p>
+                )}
+              </div>
+
               {/* Rotation control — only relevant for thermal presets with landscape labels */}
               {isThermal && (
                 <div>
@@ -875,6 +941,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
                 key={`${item.id}-${index}`}
                 item={item}
                 preset={preset}
+                extraLines={extraLines}
                 onRendered={handleLabelRendered}
               />
             ))}

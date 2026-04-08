@@ -2229,6 +2229,7 @@ async def generate_barcode_labels(
             custom_width=request.custom_width,
             custom_height=request.custom_height,
             auto_rotate=request.auto_rotate,
+            extra_lines=request.extra_lines,
         )
     except ValueError as e:
         raise HTTPException(

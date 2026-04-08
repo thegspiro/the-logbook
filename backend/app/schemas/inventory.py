@@ -982,6 +982,11 @@ class LabelGenerateRequest(BaseModel):
         description="Rotate landscape labels to match roll-fed printer feed direction. "
         "None uses the format's default (True for Rollo/generic, False for Dymo).",
     )
+    extra_lines: Optional[List[str]] = Field(
+        None,
+        description="Optional extra fields to print on labels: "
+        "'location', 'category', 'condition'. Space permitting.",
+    )
 
 
 # ============================================

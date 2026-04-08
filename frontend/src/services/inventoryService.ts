@@ -291,6 +291,7 @@ export const inventoryService = {
     customWidth?: number,
     customHeight?: number,
     autoRotate?: boolean,
+    extraLines?: string[],
   ): Promise<{ blob: Blob; autoPopulated: number }> {
     const response = await api.post<Blob>('/inventory/labels/generate', {
       item_ids: itemIds,
@@ -298,6 +299,7 @@ export const inventoryService = {
       custom_width: customWidth,
       custom_height: customHeight,
       auto_rotate: autoRotate,
+      extra_lines: extraLines && extraLines.length > 0 ? extraLines : undefined,
     }, {
       responseType: 'blob',
     });
