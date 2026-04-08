@@ -47,7 +47,7 @@ import type {
 } from '../types';
 import { DEFAULT_EMAIL_SECTION_ORDER } from '../types';
 import { formsService } from '@/services/formsServices';
-import type { FormDef } from '@/services/inventoryService';
+import type { FormDef } from '@/services/formTypes';
 import { pipelineService } from '../services/api';
 import type { FormPipelineValidation } from '../types';
 import { eventService } from '@/services/eventServices';

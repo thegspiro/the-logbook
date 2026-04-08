@@ -27,9 +27,6 @@ import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 
-/* ---------- Status badge colors ---------- */
-const STATUS_BADGE = REQUEST_STATUS_BADGES;
-
 /* ---------- Collapsible section ---------- */
 const Section: React.FC<{
   title: string; count: number; icon: React.ReactNode;
@@ -333,7 +330,7 @@ const MyEquipmentPage: React.FC = () => {
                         <span className="font-medium text-theme-text-primary truncate block sm:inline">{r.item_name}</span>
                         <span className="text-theme-text-muted ml-0 sm:ml-2 text-xs block sm:inline">{r.request_type} &middot; {formatDate(r.created_at, tz)}</span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 self-start sm:self-auto ${STATUS_BADGE[r.status] ?? 'text-theme-text-muted'}`}>{r.status}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 self-start sm:self-auto ${REQUEST_STATUS_BADGES[r.status] ?? 'text-theme-text-muted'}`}>{r.status}</span>
                     </div>
                   ))}
                 </div>
@@ -349,7 +346,7 @@ const MyEquipmentPage: React.FC = () => {
                         <span className="font-medium text-theme-text-primary truncate block sm:inline">{r.item_name}</span>
                         <span className="text-theme-text-muted ml-0 sm:ml-2 text-xs block sm:inline">{r.return_type} &middot; {formatDate(r.created_at, tz)}</span>
                       </div>
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 self-start sm:self-auto ${STATUS_BADGE[r.status] ?? 'text-theme-text-muted'}`}>{r.status}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium shrink-0 self-start sm:self-auto ${REQUEST_STATUS_BADGES[r.status] ?? 'text-theme-text-muted'}`}>{r.status}</span>
                     </div>
                   ))}
                 </div>

@@ -293,8 +293,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   <button
                     key={s.value}
                     type="button"
-                    className={`${chipBase} ${selectedSizes.includes(s.label) ? chipOn : chipOff}`}
-                    onClick={() => toggleSize(s.label)}
+                    className={`${chipBase} ${selectedSizes.includes(s.value) ? chipOn : chipOff}`}
+                    onClick={() => toggleSize(s.value)}
                   >
                     {s.label}
                   </button>
@@ -349,7 +349,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 <p className="text-xs text-theme-text-muted mt-0.5">
                   {selectedSizes.length} size{selectedSizes.length !== 1 ? 's' : ''}
                   {selectedStyles.length > 0 && ` × ${selectedStyles.length} style${selectedStyles.length !== 1 ? 's' : ''}`}
-                  {variantColors.split(',').filter((c) => c.trim()).length > 0 && ` × ${variantColors.split(',').filter((c) => c.trim()).length} color${variantColors.split(',').filter((c) => c.trim()).length !== 1 ? 's' : ''}`}
+                  {(() => { const n = variantColors.split(',').filter((c) => c.trim()).length; return n > 0 ? ` × ${n} color${n !== 1 ? 's' : ''}` : ''; })()}
                 </p>
               </div>
             )}

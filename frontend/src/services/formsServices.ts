@@ -9,7 +9,7 @@ import type {
   FormFieldCreate, FormField, FormSubmission, SubmissionsListResponse,
   FormIntegrationCreate, FormIntegration, MemberLookupResponse,
   PublicFormDef, PublicFormSubmissionResponse,
-} from './inventoryService';
+} from './formTypes';
 
 export const formsService = {
   async getSummary(): Promise<FormsSummary> {

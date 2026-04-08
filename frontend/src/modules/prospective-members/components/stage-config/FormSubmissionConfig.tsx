@@ -1,7 +1,7 @@
 import React from 'react';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import type { FormStageConfig, StageConfig, FormPipelineValidation } from '../../types';
-import type { FormDef } from '@/services/inventoryService';
+import type { FormDef } from '@/services/formTypes';
 import { pipelineService } from '../../services/api';
 
 interface FormSubmissionConfigProps {
