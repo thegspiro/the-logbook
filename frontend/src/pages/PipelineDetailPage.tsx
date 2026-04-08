@@ -14,6 +14,7 @@ import {
   Clock,
   AlertTriangle,
   UserPlus,
+  Printer,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
@@ -345,6 +346,13 @@ const PipelineDetailPage: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2">
+            <button
+              onClick={() => window.open(`/training/print/program?id=${programId}`, '_blank')}
+              className="flex items-center space-x-1 px-3 py-2 bg-theme-surface text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover text-sm print:hidden"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Print</span>
+            </button>
             <button
               onClick={() => setShowEnrollModal(true)}
               className="btn-success flex items-center px-3 space-x-1 text-sm"

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, X, Pencil } from "lucide-react";
+import { Plus, X, Pencil, ChevronUp, ChevronDown } from "lucide-react";
 
 interface EditingState {
   index: number;
@@ -15,6 +15,7 @@ interface EditableTagListProps {
   tagColorClass?: string;
   getTagClassName?: (item: string) => string;
   getTagTitle?: (item: string) => string;
+  reorderable?: boolean;
 }
 
 const EditableTagList: React.FC<EditableTagListProps> = ({
@@ -26,6 +27,7 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
   tagColorClass = "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20",
   getTagClassName,
   getTagTitle,
+  reorderable = false,
 }) => {
   const [newValue, setNewValue] = useState("");
   const [editing, setEditing] = useState<EditingState | null>(null);
@@ -39,6 +41,16 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
 
   const removeItem = (index: number) => {
     onItemsChange(items.filter((_, i) => i !== index));
+  };
+
+  const moveItem = (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+    const updated = [...items];
+    const temp = updated[index] ?? '';
+    updated[index] = updated[target] ?? '';
+    updated[target] = temp;
+    onItemsChange(updated);
   };
 
   const commitEdit = () => {
@@ -92,6 +104,18 @@ const EditableTagList: React.FC<EditableTagListProps> = ({
               title={title}
             >
               {item}
+              {reorderable && (
+                <>
+                  <button type="button" onClick={() => moveItem(i, -1)} disabled={i === 0}
+                    className="hover:text-violet-500 disabled:opacity-30" title="Move up">
+                    <ChevronUp className="w-3 h-3" />
+                  </button>
+                  <button type="button" onClick={() => moveItem(i, 1)} disabled={i === items.length - 1}
+                    className="hover:text-violet-500 disabled:opacity-30" title="Move down">
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={() => setEditing({ index: i, value: item })}

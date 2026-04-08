@@ -40,6 +40,7 @@ import type {
   ShiftTemplateRecord,
 } from "../modules/scheduling";
 import { resolveTemplatePositions, normalizePositions } from "../modules/scheduling/services/api";
+import { trainingModuleConfigService } from "../services/api";
 import { lazyWithRetry } from "../utils/lazyWithRetry";
 import TimeQuarterHour from "../components/ux/TimeQuarterHour";
 
@@ -228,6 +229,7 @@ const SchedulingPage: React.FC = () => {
   const tz = useTimezone();
   const { resolvedTheme } = useTheme();
   const canManage = checkPermission("scheduling.manage");
+  const [shiftReportsEnabled, setShiftReportsEnabled] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Shared store — members, templates, apparatus loaded once and cached
@@ -260,6 +262,13 @@ const SchedulingPage: React.FC = () => {
       setActiveTab(tabParam);
     }
   }, [searchParams, activeTab]);
+
+  // Load shift reports feature flag
+  useEffect(() => {
+    trainingModuleConfigService.getConfig()
+      .then(cfg => setShiftReportsEnabled(cfg.shift_reports_enabled ?? true))
+      .catch(() => { /* default to enabled */ });
+  }, []);
 
   // Calendar state
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -535,7 +544,9 @@ const SchedulingPage: React.FC = () => {
 
   const hasShifts = shifts.length > 0;
 
-  const visibleTabs = TAB_CONFIG;
+  const visibleTabs = shiftReportsEnabled
+    ? TAB_CONFIG
+    : TAB_CONFIG.filter(t => t.id !== 'shift-reports');
 
   return (
     <div className="min-h-screen">

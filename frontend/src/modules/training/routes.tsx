@@ -57,6 +57,17 @@ const ActiveSkillTestPage = lazyWithRetry(
   () => import('../../pages/ActiveSkillTestPage'),
 );
 
+// Training Module - Print Pages
+const MemberTrainingPrintPage = lazyWithRetry(
+  () => import('../../pages/training/MemberTrainingPrintPage'),
+);
+const ProgramPrintPage = lazyWithRetry(
+  () => import('../../pages/training/ProgramPrintPage'),
+);
+const CompliancePrintPage = lazyWithRetry(
+  () => import('../../pages/training/CompliancePrintPage'),
+);
+
 export const getTrainingRoutes = () => {
   return (
     <React.Fragment>
@@ -196,6 +207,33 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/skills-testing/test/:testId/active"
         element={<ActiveSkillTestPage />}
+      />
+      {/* Training Module - Print Pages */}
+      <Route
+        path="/training/print/member"
+        element={
+          <React.Suspense fallback={null}>
+            <MemberTrainingPrintPage />
+          </React.Suspense>
+        }
+      />
+      <Route
+        path="/training/print/program"
+        element={
+          <React.Suspense fallback={null}>
+            <ProgramPrintPage />
+          </React.Suspense>
+        }
+      />
+      <Route
+        path="/training/print/compliance"
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <React.Suspense fallback={null}>
+              <CompliancePrintPage />
+            </React.Suspense>
+          </ProtectedRoute>
+        }
       />
     </React.Fragment>
   );

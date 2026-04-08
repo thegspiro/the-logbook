@@ -47,6 +47,9 @@ const ShiftCheckInPage = lazyWithRetry(
 const ShiftCheckInPrintPage = lazyWithRetry(
   () => import('../../pages/scheduling/ShiftCheckInPrintPage'),
 );
+const ShiftReportPrintPage = lazyWithRetry(
+  () => import('../../pages/scheduling/ShiftReportPrintPage'),
+);
 
 export const getSchedulingRoutes = () => {
   return (
@@ -142,6 +145,14 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             <ShiftCheckInPrintPage />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/shift-reports/print"
+        element={
+          <Suspense fallback={null}>
+            <ShiftReportPrintPage />
           </Suspense>
         }
       />

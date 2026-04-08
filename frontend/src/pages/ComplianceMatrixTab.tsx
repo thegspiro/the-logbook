@@ -80,7 +80,15 @@ const ComplianceMatrixTab: React.FC = () => {
             {members.length} members × {requirements.length} requirements
           </p>
         </div>
-        <p className="text-xs text-theme-text-muted">Generated {formatShortDateTime(matrix.generated_at, tz)}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-theme-text-muted">Generated {formatShortDateTime(matrix.generated_at, tz)}</p>
+          <button
+            onClick={() => window.open('/training/print/compliance', '_blank')}
+            className="text-xs text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1 px-2 py-1 border border-theme-surface-border rounded hover:bg-theme-surface-hover transition-colors print:hidden"
+          >
+            Print Report
+          </button>
+        </div>
       </div>
 
       <div className="card-secondary overflow-x-auto">

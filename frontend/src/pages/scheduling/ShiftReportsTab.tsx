@@ -12,7 +12,7 @@ import { useSearchParams } from 'react-router-dom';
 import {
   FileText, Plus, Loader2, Star, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
-  Shield, Eye, EyeOff, ClipboardCheck, Pencil,
+  Shield, Eye, EyeOff, ClipboardCheck, Pencil, Printer,
   BarChart3, TrendingUp, Users, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -44,6 +44,9 @@ import {
 } from '../../modules/scheduling/components/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
 import { getErrorMessage } from '../../utils/errorHandling';
+import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';
+import { enqueueShiftReport, listPendingReports, dequeueShiftReport, pendingReportCount } from '../../utils/shiftReportOfflineQueue';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 type ViewMode = 'my-reports' | 'filed-by-me' | 'create' | 'pending-review' | 'flagged' | 'drafts';
 
@@ -51,6 +54,8 @@ export const ShiftReportsTab: React.FC = () => {
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('training.manage');
+  const isOnline = useOnlineStatus();
+  const [pendingOfflineCount, setPendingOfflineCount] = useState(0);
   const [searchParams] = useSearchParams();
 
   const linkedShiftId = searchParams.get('shift') || undefined;
@@ -297,6 +302,74 @@ export const ShiftReportsTab: React.FC = () => {
       .finally(() => setLoadingShifts(false));
   }, [viewMode, linkedShiftId]);
 
+  // Auto-save draft to localStorage when form changes
+  useEffect(() => {
+    if (viewMode !== 'create' || !form.shift_id) return;
+    const timer = setTimeout(() => {
+      saveDraft({
+        shiftId: form.shift_id ?? '',
+        shiftLabel: linkedShiftLabel || '',
+        formData: form as Record<string, unknown>,
+        crewSelections: Array.from(selectedCrewIds),
+        traineeEvals: traineeEvals as Record<string, unknown>,
+        crewRemarks,
+        savedAt: Date.now(),
+      });
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [viewMode, form, selectedCrewIds, traineeEvals, crewRemarks, linkedShiftLabel]);
+
+  // Restore draft when a shift is loaded and a draft exists
+  useEffect(() => {
+    if (!form.shift_id || crewMembers.length === 0) return;
+    const draft = loadDraft(form.shift_id);
+    if (!draft) return;
+    const age = Date.now() - draft.savedAt;
+    if (age > 24 * 60 * 60 * 1000) {
+      deleteDraft(form.shift_id);
+      return;
+    }
+    if (draft.crewSelections.length > 0) {
+      setSelectedCrewIds(new Set(draft.crewSelections));
+    }
+    if (draft.crewRemarks && Object.keys(draft.crewRemarks).length > 0) {
+      setCrewRemarks(draft.crewRemarks);
+    }
+    if (draft.formData.officer_narrative) {
+      setForm(prev => ({ ...prev, officer_narrative: draft.formData.officer_narrative as string }));
+    }
+  }, [form.shift_id, crewMembers.length]); // eslint-disable-line react-hooks/exhaustive-deps -- restore once when crew loads
+
+  // Sync offline queue when connectivity returns
+  useEffect(() => {
+    if (!isOnline) return;
+    const syncQueue = async () => {
+      const pending = await listPendingReports();
+      if (pending.length === 0) return;
+      let synced = 0;
+      for (const entry of pending) {
+        try {
+          await shiftCompletionService.batchCreateReports(entry.payload);
+          await dequeueShiftReport(entry.id);
+          synced++;
+        } catch {
+          // Will retry next time connectivity is restored
+        }
+      }
+      if (synced > 0) {
+        toast.success(`Synced ${synced} offline report${synced !== 1 ? 's' : ''}`);
+        void loadReports();
+      }
+      setPendingOfflineCount(await pendingReportCount());
+    };
+    void syncQueue();
+  }, [isOnline, loadReports]);
+
+  // Track pending offline count
+  useEffect(() => {
+    void pendingReportCount().then(setPendingOfflineCount);
+  }, []);
+
   const toggleCallType = (
     setter: React.Dispatch<React.SetStateAction<Partial<ShiftCompletionReportCreate>>>,
     type: string,
@@ -390,9 +463,12 @@ export const ShiftReportsTab: React.FC = () => {
       return;
     }
 
-    const traineeIds = crewMembers
-      .filter(m => m.has_active_enrollment && selectedCrewIds.has(m.user_id))
-      .map(m => m.user_id);
+    const includeTraining = config?.shift_reports_include_training ?? true;
+    const traineeIds = includeTraining
+      ? crewMembers
+          .filter(m => m.has_active_enrollment && selectedCrewIds.has(m.user_id))
+          .map(m => m.user_id)
+      : [];
 
     const evaluations: CrewMemberEvaluation[] = traineeIds
       .map(id => {
@@ -443,11 +519,19 @@ export const ShiftReportsTab: React.FC = () => {
     else setSubmitting(true);
 
     try {
-      const result = await shiftCompletionService.batchCreateReports(payload);
-      const msg = asDraft
-        ? `Saved ${result.created} draft${result.created !== 1 ? 's' : ''}`
-        : `Submitted ${result.created} report${result.created !== 1 ? 's' : ''}`;
-      toast.success(result.skipped > 0 ? `${msg} (${result.skipped} skipped — already reported)` : msg);
+      if (!isOnline && !asDraft) {
+        await enqueueShiftReport(payload);
+        setPendingOfflineCount(await pendingReportCount());
+        toast.success('You\'re offline — report queued and will submit automatically when connectivity returns');
+        if (form.shift_id) deleteDraft(form.shift_id);
+      } else {
+        const result = await shiftCompletionService.batchCreateReports(payload);
+        const msg = asDraft
+          ? `Saved ${result.created} draft${result.created !== 1 ? 's' : ''}`
+          : `Submitted ${result.created} report${result.created !== 1 ? 's' : ''}`;
+        toast.success(result.skipped > 0 ? `${msg} (${result.skipped} skipped — already reported)` : msg);
+        if (form.shift_id) deleteDraft(form.shift_id);
+      }
       resetNewForm();
       setCrewMembers([]);
       setSelectedCrewIds(new Set());
@@ -866,6 +950,19 @@ export const ShiftReportsTab: React.FC = () => {
               <ReportContentDisplay report={report} />
             </div>
 
+            {/* Print button */}
+            <div className="flex justify-end print:hidden">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(`/scheduling/shift-reports/print?id=${report.id}`, '_blank');
+                }}
+                className="text-xs text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1 transition-colors"
+              >
+                <Printer className="w-3.5 h-3.5" /> Print Report
+              </button>
+            </div>
+
             {/* Reviewer comment (visible to officers, not trainees) */}
             {canManage && report.reviewer_notes && (
               <div className={`p-3 rounded-lg ${
@@ -1193,6 +1290,23 @@ export const ShiftReportsTab: React.FC = () => {
         </div>
       )}
 
+      {/* Offline indicator */}
+      {!isOnline && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-amber-500/5 border border-amber-500/20 rounded-lg text-xs text-amber-700 dark:text-amber-400">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          You&apos;re offline. Reports will be saved locally and submitted automatically when connectivity returns.
+          {pendingOfflineCount > 0 && (
+            <span className="font-medium ml-1">({pendingOfflineCount} pending)</span>
+          )}
+        </div>
+      )}
+      {isOnline && pendingOfflineCount > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-500/5 border border-blue-500/20 rounded-lg text-xs text-blue-700 dark:text-blue-400">
+          <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+          Syncing {pendingOfflineCount} queued report{pendingOfflineCount !== 1 ? 's' : ''}...
+        </div>
+      )}
+
       {/* Create Form — Shift-first batch workflow */}
       {viewMode === 'create' && (
         <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-6 space-y-5">
@@ -1361,7 +1475,7 @@ export const ShiftReportsTab: React.FC = () => {
                 ) : (
                   <div className="space-y-2">
                     {crewMembers.map(member => {
-                      const isTrainee = member.has_active_enrollment;
+                      const isTrainee = member.has_active_enrollment && (config?.shift_reports_include_training ?? true);
                       const isReported = member.has_existing_report;
                       const isSelected = selectedCrewIds.has(member.user_id);
                       const isExpanded = expandedTraineeId === member.user_id;

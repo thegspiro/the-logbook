@@ -12,6 +12,8 @@
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
+  ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   FileText,
   Loader2,
@@ -40,6 +42,7 @@ import type { ShiftReportSettings } from "../types/shiftSettings";
 import type { TrainingModuleConfig } from "../../../types/training";
 
 type SectionKey =
+  | "feature-toggles"
   | "checklist-timing"
   | "post-shift"
   | "training-defaults"
@@ -54,6 +57,12 @@ const SECTIONS: {
   icon: React.ElementType;
   description: string;
 }[] = [
+  {
+    key: "feature-toggles",
+    label: "Feature Toggles",
+    icon: SlidersHorizontal,
+    description: "Enable/disable shift reports and training",
+  },
   {
     key: "checklist-timing",
     label: "Checklist Timing",
@@ -139,7 +148,7 @@ const checkboxClass =
 // ─── Component ─────────────────────────────────────────────────────────────
 
 export const ShiftReportsSettingsPanel: React.FC = () => {
-  const [activeSection, setActiveSection] = useState<SectionKey>("checklist-timing");
+  const [activeSection, setActiveSection] = useState<SectionKey>("feature-toggles");
   const [settings, setSettings] = useState<ShiftReportSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
 
@@ -380,6 +389,19 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
     [],
   );
 
+  const moveItem = useCallback(
+    (list: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, index: number, direction: -1 | 1) => {
+      const target = index + direction;
+      if (target < 0 || target >= list.length) return;
+      const updated = [...list];
+      const temp = updated[index] ?? '';
+      updated[index] = updated[target] ?? '';
+      updated[target] = temp;
+      setList(updated);
+    },
+    [],
+  );
+
   const trainingDirty =
     trainingConfig &&
     (JSON.stringify(callTypes) !== JSON.stringify(trainingConfig.shift_review_call_types ?? []) ||
@@ -399,6 +421,71 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
 
   const renderSection = () => {
     switch (activeSection) {
+      case "feature-toggles":
+        return (
+          <div>
+            <p className="text-sm text-theme-text-muted mb-4">
+              Control whether shift reports are available for your department and
+              which features are included.
+            </p>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={trainingConfig.shift_reports_enabled ?? true}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    void runSaveTraining(
+                      async () => {
+                        const result = await trainingModuleConfigService.updateConfig({ shift_reports_enabled: checked });
+                        setTrainingConfig(result);
+                      },
+                      `Shift reports ${checked ? "enabled" : "disabled"}`,
+                      "Failed to update",
+                    );
+                  }}
+                  disabled={savingTraining}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-sm font-medium text-theme-text-primary">Enable Shift Reports</span>
+                  <p className="text-xs text-theme-text-muted">
+                    When enabled, officers can file end-of-shift reports for crew members.
+                    All crew members receive hours and call credit. Disabling hides the
+                    Shift Reports tab from the scheduling section.
+                  </p>
+                </div>
+              </label>
+              <label className={`flex items-center gap-3 cursor-pointer ${!(trainingConfig.shift_reports_enabled ?? true) ? 'opacity-50 pointer-events-none' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={trainingConfig.shift_reports_include_training ?? true}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    void runSaveTraining(
+                      async () => {
+                        const result = await trainingModuleConfigService.updateConfig({ shift_reports_include_training: checked });
+                        setTrainingConfig(result);
+                      },
+                      `Training evaluations ${checked ? "included" : "excluded"} from shift reports`,
+                      "Failed to update",
+                    );
+                  }}
+                  disabled={savingTraining || !(trainingConfig.shift_reports_enabled ?? true)}
+                  className={checkboxClass}
+                />
+                <div>
+                  <span className="text-sm font-medium text-theme-text-primary">Include Training Evaluations</span>
+                  <p className="text-xs text-theme-text-muted">
+                    When enabled, trainees enrolled in a training program will have an
+                    expanded evaluation section (performance rating, skills, tasks,
+                    strengths/improvements). Requires the Training module to be active.
+                  </p>
+                </div>
+              </label>
+            </div>
+          </div>
+        );
       case "checklist-timing":
         return (
           <div>
@@ -540,6 +627,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               description="Incident types officers can select when recording calls responded."
               items={callTypes}
               onRemove={(i) => removeItem(callTypes, setCallTypes, i)}
+              onMove={(i, d) => moveItem(callTypes, setCallTypes, i, d)}
               inputValue={newCallType}
               onInputChange={setNewCallType}
               onAdd={() => addItem(callTypes, setCallTypes, newCallType, setNewCallType)}
@@ -552,6 +640,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               description="Skills officers can mark as demonstrated during the shift."
               items={skills}
               onRemove={(i) => removeItem(skills, setSkills, i)}
+              onMove={(i, d) => moveItem(skills, setSkills, i, d)}
               inputValue={newSkill}
               onInputChange={setNewSkill}
               onAdd={() => addItem(skills, setSkills, newSkill, setNewSkill)}
@@ -564,6 +653,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               description="Tasks to track on the shift completion report."
               items={tasks}
               onRemove={(i) => removeItem(tasks, setTasks, i)}
+              onMove={(i, d) => moveItem(tasks, setTasks, i, d)}
               inputValue={newTask}
               onInputChange={setNewTask}
               onAdd={() => addItem(tasks, setTasks, newTask, setNewTask)}
@@ -938,7 +1028,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                           delete updated[key];
                           const renumbered: Record<string, string> =
                             {};
-                          Object.values(updated)
+                          (Object.values(updated) as string[])
                             .sort()
                             .forEach((v, i) => {
                               renumbered[String(i + 1)] = v;
@@ -1080,6 +1170,7 @@ interface TagListEditorProps {
   description: string;
   items: string[];
   onRemove: (index: number) => void;
+  onMove?: (index: number, direction: -1 | 1) => void;
   inputValue: string;
   onInputChange: (value: string) => void;
   onAdd: () => void;
@@ -1091,6 +1182,7 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
   description,
   items,
   onRemove,
+  onMove,
   inputValue,
   onInputChange,
   onAdd,
@@ -1108,6 +1200,18 @@ const TagListEditor: React.FC<TagListEditorProps> = ({
             className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-500/20 px-2.5 py-0.5 text-xs font-medium"
           >
             {item}
+            {onMove && (
+              <>
+                <button type="button" onClick={() => onMove(i, -1)} disabled={i === 0}
+                  className="rounded-full p-0.5 hover:bg-violet-500/20 disabled:opacity-30 transition-colors" aria-label="Move up">
+                  <ChevronUp className="h-3 w-3" />
+                </button>
+                <button type="button" onClick={() => onMove(i, 1)} disabled={i === items.length - 1}
+                  className="rounded-full p-0.5 hover:bg-violet-500/20 disabled:opacity-30 transition-colors" aria-label="Move down">
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={() => onRemove(i)}
