@@ -789,10 +789,9 @@ DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
 DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
-        <h1>{{organization_name}}</h1>
+        <h1>Department Property Return Notice</h1>
     </div>
     <div class="content">
-        <p><strong>Re: {{drop_type_display}} — Notice of Department Property Return</strong></p>
         <p>Dear {{member_name}},</p>
         <p>
             This message serves as formal notice that your membership status with
@@ -821,11 +820,12 @@ DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
         </p>
     </div>
     <div class="footer">
-        <p>This is an official department notice. A copy has been placed in your member file.</p>
+        <p>This is an official department notice from {{organization_name}}.</p>
+        <p>A copy has been placed in your member file.</p>
     </div>
 </div>"""
 
-DEFAULT_MEMBER_DROPPED_TEXT = """Notice of Department Property Return
+DEFAULT_MEMBER_DROPPED_TEXT = """Department Property Return Notice
 
 Dear {{member_name}},
 
@@ -849,13 +849,14 @@ Respectfully,
 {{organization_name}}
 
 ---
-This is an official department notice. A copy has been placed in your member file."""
+This is an official department notice from {{organization_name}}.
+A copy has been placed in your member file."""
 
 # Default inventory change notification email
 DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
-        <h1>{{organization_name}}</h1>
+        <h1>Inventory Change Confirmation</h1>
     </div>
     <div class="content">
         <p>Hello {{first_name}},</p>
@@ -1070,10 +1071,9 @@ DEFAULT_POST_SHIFT_VALIDATION_SUBJECT = (
 DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
-        <h1>{{organization_name}}</h1>
+        <h1>Property Return Reminder</h1>
     </div>
     <div class="content">
-        <p><strong>Re: Department Property Return Reminder</strong></p>
         <p>Dear {{member_name}},</p>
 
         <p>This is a reminder that you still have outstanding department property that needs to be returned.</p>
@@ -1091,10 +1091,11 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an official department notice from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
     </div>
 </div>"""
 
-DEFAULT_PROPERTY_RETURN_REMINDER_TEXT = """Department Property Return Reminder
+DEFAULT_PROPERTY_RETURN_REMINDER_TEXT = """Property Return Reminder
 
 Dear {{member_name}},
 
@@ -1110,7 +1111,8 @@ Return Deadline: {{return_deadline}}
 Please contact the department administration to arrange return of these items.
 
 ---
-This is an official department notice from {{organization_name}}."""
+This is an official department notice from {{organization_name}}.
+Please do not reply to this email."""
 
 DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT = (
     "Property Return Reminder — {{organization_name}}"
@@ -1190,6 +1192,7 @@ DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
     </div>
 </div>"""
 
@@ -1206,7 +1209,8 @@ Reason: {{reason}}
 Please review the election details and coordinate with your team as needed.
 
 ---
-This is an automated message from {{organization_name}}."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
 
 DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_title}}"
 
@@ -1231,6 +1235,7 @@ DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
     </div>
 </div>"""
 
@@ -1247,7 +1252,8 @@ Reason: {{reason}}
 All associated ballots and results have been removed.
 
 ---
-This is an automated message from {{organization_name}}."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
 
 DEFAULT_ELECTION_DELETED_SUBJECT = "CRITICAL: Election Deleted — {{election_title}}"
 
@@ -1266,6 +1272,7 @@ DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
     </div>
 </div>"""
 
@@ -1276,7 +1283,8 @@ All department property has been returned. Previous status: {{previous_status}}.
 The member's profile remains accessible for legal requests or future reactivation.
 
 ---
-This is an automated message from {{organization_name}}."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
 
 DEFAULT_MEMBER_ARCHIVED_SUBJECT = (
     "Member Archived: {{member_name}} — {{organization_name}}"
@@ -1303,6 +1311,7 @@ DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
     </div>
 </div>"""
 
@@ -1319,7 +1328,8 @@ Message: {{message}}
 Thank you for your request.
 
 ---
-This is an automated message from {{organization_name}}."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email."""
 
 DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = "Event Request Update — {{status_label}}"
 
@@ -1343,6 +1353,7 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated IT security notice from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
     </div>
 </div>"""
 
@@ -1358,7 +1369,8 @@ IP Address: {{ip_address}}
 This is an informational notice. No action is required unless the request appears suspicious.
 
 ---
-This is an automated IT security notice from {{organization_name}}."""
+This is an automated IT security notice from {{organization_name}}.
+Please do not reply to this email."""
 
 DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
     "[IT Notice] Password Reset Requested — {{organization_name}}"
@@ -1383,9 +1395,8 @@ DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
         status of your application, please contact us directly.</p>
     </div>
     <div class="footer">
-        <p>{{organization_name}}</p>
-        <p>{{organization_phone}}</p>
-        <p>{{organization_email}}</p>
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>{{organization_phone}} | {{organization_email}}</p>
     </div>
 </div>"""
 
@@ -1403,9 +1414,8 @@ If you believe this is an error, or if you have questions about the
 status of your application, please contact us directly.
 
 ---
-{{organization_name}}
-{{organization_phone}}
-{{organization_email}}"""
+This is an automated message from {{organization_name}}.
+{{organization_phone}} | {{organization_email}}"""
 
 DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
     "Application Already on File — {{organization_name}}"
@@ -1689,7 +1699,7 @@ DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
         </p>
     </div>
     <div class="footer">
-        <p>This is an automated reminder.</p>
+        <p>This is an automated reminder from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
     </div>
 </div>"""
@@ -1710,7 +1720,7 @@ Location: {{location_name}}
 View event: {{event_url}}
 
 ---
-This is an automated reminder.
+This is an automated reminder from {{organization_name}}.
 Please do not reply to this email."""
 
 DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
@@ -1793,7 +1803,7 @@ DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
         </p>
     </div>
     <div class="footer">
-        <p>This is an automated message.</p>
+        <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
     </div>
 </div>"""
@@ -1812,7 +1822,7 @@ Approval Deadline: {{approval_deadline}}
 Review and approve: {{approval_url}}
 
 ---
-This is an automated message.
+This is an automated message from {{organization_name}}.
 Please do not reply to this email."""
 
 DEFAULT_TRAINING_APPROVAL_SUBJECT = (
