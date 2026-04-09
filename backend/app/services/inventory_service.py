@@ -3842,16 +3842,16 @@ class InventoryService:
         days_ahead: int = 180,
     ) -> List[Dict[str, Any]]:
         """Get PPE items approaching NFPA 10-year retirement date."""
-        from app.models.inventory import NFPACompliance
+        from app.models.inventory import NFPAItemCompliance
 
         cutoff = date.today() + timedelta(days=days_ahead)
 
         result = await self.db.execute(
-            select(NFPACompliance)
-            .where(NFPACompliance.organization_id == str(organization_id))
-            .where(NFPACompliance.retirement_date.isnot(None))
-            .where(NFPACompliance.retirement_date <= cutoff)
-            .where(NFPACompliance.is_retired == False)  # noqa: E712
+            select(NFPAItemCompliance)
+            .where(NFPAItemCompliance.organization_id == str(organization_id))
+            .where(NFPAItemCompliance.expected_retirement_date.isnot(None))
+            .where(NFPAItemCompliance.expected_retirement_date <= cutoff)
+            .where(NFPAItemCompliance.is_retired_by_age == False)  # noqa: E712
         )
         records = list(result.scalars().all())
 
@@ -3862,14 +3862,14 @@ class InventoryService:
             )
             item = item_result.scalar_one_or_none()
             if item and item.active:
-                days_until = (rec.retirement_date - date.today()).days
+                days_until = (rec.expected_retirement_date - date.today()).days
                 items_due.append(
                     {
                         "item_id": item.id,
                         "item_name": item.name,
                         "serial_number": item.serial_number,
                         "asset_tag": item.asset_tag,
-                        "retirement_date": rec.retirement_date.isoformat(),
+                        "retirement_date": rec.expected_retirement_date.isoformat(),
                         "days_until_retirement": days_until,
                         "assigned_to": item.assigned_to_user_id,
                     }
