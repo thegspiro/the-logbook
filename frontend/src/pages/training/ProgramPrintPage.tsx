@@ -15,6 +15,7 @@ import { formatDateCustom } from '../../utils/dateFormatting';
 import type {
   ProgramWithDetails,
   ProgramEnrollment,
+  ProgramRequirement,
 } from '../../types/training';
 
 const ProgramPrintPage: React.FC = () => {
@@ -23,6 +24,7 @@ const ProgramPrintPage: React.FC = () => {
   const tz = useTimezone();
 
   const [program, setProgram] = useState<(ProgramWithDetails & { enrollments?: ProgramEnrollment[] }) | null>(null);
+  const [programRequirements, setProgramRequirements] = useState<ProgramRequirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -32,8 +34,14 @@ const ProgramPrintPage: React.FC = () => {
       setLoading(false);
       return;
     }
-    trainingProgramService.getProgram(programId)
-      .then(p => setProgram(p as ProgramWithDetails & { enrollments?: ProgramEnrollment[] }))
+    Promise.all([
+      trainingProgramService.getProgram(programId),
+      trainingProgramService.getProgramRequirements(programId).catch(() => []),
+    ])
+      .then(([p, reqs]) => {
+        setProgram(p as ProgramWithDetails & { enrollments?: ProgramEnrollment[] });
+        setProgramRequirements(reqs);
+      })
       .catch(() => setError('Failed to load program'))
       .finally(() => setLoading(false));
   }, [programId]);
@@ -54,7 +62,7 @@ const ProgramPrintPage: React.FC = () => {
   const fmtDate = (d?: string) => d ? formatDateCustom(d, { month: 'short', day: 'numeric', year: 'numeric' }, tz) : '—';
 
   const phases = program.phases || [];
-  const requirements = program.requirements || [];
+  const requirements = programRequirements;
   const enrollments = program.enrollments || [];
 
   const sectionHeading: React.CSSProperties = {

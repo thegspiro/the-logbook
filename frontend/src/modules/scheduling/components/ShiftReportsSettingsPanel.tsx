@@ -428,6 +428,16 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
               Control whether shift reports are available for your department and
               which features are included.
             </p>
+            {loadingTraining ? (
+              <div className="flex items-center justify-center py-6" role="status" aria-live="polite">
+                <Loader2 className="h-5 w-5 animate-spin text-theme-text-muted" />
+                <span className="ml-2 text-sm text-theme-text-muted">Loading config...</span>
+              </div>
+            ) : !trainingConfig ? (
+              <p className="text-sm text-theme-text-muted italic">
+                Configuration is not available.
+              </p>
+            ) : (
             <div className="space-y-4">
               <label className="flex items-center gap-3 cursor-pointer">
                 <input
@@ -484,6 +494,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                 </div>
               </label>
             </div>
+            )}
           </div>
         );
       case "checklist-timing":
