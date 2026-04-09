@@ -3615,6 +3615,23 @@ class SchedulingService:
                     self.db.add(att)
                 await self.db.flush()
 
+            # Auto-close open attendance (checked in, never checked out)
+            open_att_result = await self.db.execute(
+                select(ShiftAttendance).where(
+                    ShiftAttendance.shift_id == str(shift_id),
+                    ShiftAttendance.checked_in_at.isnot(None),
+                    ShiftAttendance.checked_out_at.is_(None),
+                )
+            )
+            for open_att in open_att_result.scalars().all():
+                open_att.checked_out_at = shift.end_time or now
+                if open_att.checked_in_at:
+                    delta = open_att.checked_out_at - open_att.checked_in_at
+                    open_att.duration_minutes = max(
+                        int(delta.total_seconds() / 60), 0
+                    )
+            await self.db.flush()
+
             # Snapshot call count
             call_result = await self.db.execute(
                 select(func.count(ShiftCall.id)).where(

@@ -773,7 +773,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                         )}
                         {checkedIn.length > checkedOut.length && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                            {checkedIn.length - checkedOut.length} member(s) still on shift
+                            {checkedIn.length - checkedOut.length} member(s) still on shift &mdash; will be auto-checked-out at shift end time
                           </p>
                         )}
                       </div>
