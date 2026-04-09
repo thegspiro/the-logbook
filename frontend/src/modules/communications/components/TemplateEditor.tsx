@@ -5,7 +5,7 @@
  * plain-text body, and CSS styles. Includes a variable insertion helper.
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Save,
   Variable,
@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Info,
+  Undo2,
 } from 'lucide-react';
 import type { EmailTemplate, EmailTemplateUpdate, TemplateVariable } from '../types';
 import { validateEmailList, parseEmailList } from '../../../hooks/useEmailListInput';
@@ -80,6 +81,15 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const bccError = validateEmailList(defaultBcc);
   const hasValidationErrors = ccError !== null || bccError !== null;
 
+  const handleDiscard = useCallback(() => {
+    setSubject(template.subject);
+    setHtmlBody(template.html_body);
+    setTextBody(template.text_body ?? '');
+    setCssStyles(template.css_styles ?? '');
+    setDefaultCc((template.default_cc ?? []).join(', '));
+    setDefaultBcc((template.default_bcc ?? []).join(', '));
+  }, [template]);
+
   const handleSave = () => {
     if (hasValidationErrors) return;
     const data: EmailTemplateUpdate = {};
@@ -91,6 +101,20 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     if (defaultBcc !== origBcc) data.default_bcc = parsedBcc.length > 0 ? parsedBcc : null;
     onSave(data);
   };
+
+  // Ctrl+S / Cmd+S keyboard shortcut to save
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (isDirty && !isSaving && !hasValidationErrors) {
+          handleSave();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  });
 
   const insertVariable = (variable: TemplateVariable) => {
     const tag = `{{${variable.name}}}`;
@@ -123,18 +147,31 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         <h3 className="text-theme-text-primary text-lg font-semibold">
           Edit Template
         </h3>
-        <button
-          onClick={handleSave}
-          disabled={!isDirty || isSaving || hasValidationErrors}
-          className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSaving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
+        <div className="flex items-center gap-2">
+          {isDirty && (
+            <button
+              onClick={handleDiscard}
+              disabled={isSaving}
+              className="flex items-center space-x-1.5 px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+            >
+              <Undo2 className="w-4 h-4" />
+              <span>Discard</span>
+            </button>
           )}
-          <span>Save Changes</span>
-        </button>
+          <button
+            onClick={handleSave}
+            disabled={!isDirty || isSaving || hasValidationErrors}
+            className="flex items-center space-x-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Save changes (Ctrl+S)"
+          >
+            {isSaving ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            <span>Save</span>
+          </button>
+        </div>
       </div>
 
       {/* Subject */}

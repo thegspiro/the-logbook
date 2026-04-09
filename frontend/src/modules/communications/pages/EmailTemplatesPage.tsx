@@ -21,6 +21,8 @@ import {
   Pencil,
   Eye,
   History,
+  RotateCcw,
+  Send,
 } from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, SkeletonPage } from '../../../components/ux';
 import { useEmailTemplatesStore } from '../store/emailTemplatesStore';
@@ -75,6 +77,9 @@ const EmailTemplatesPage: React.FC = () => {
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [previewMemberId, setPreviewMemberId] = useState<string | undefined>(undefined);
   const [attachmentToDelete, setAttachmentToDelete] = useState<EmailAttachment | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
 
   useEffect(() => {
     void fetchTemplates();
@@ -189,6 +194,44 @@ const EmailTemplatesPage: React.FC = () => {
       toast.error('Failed to delete attachment');
     } finally {
       setAttachmentToDelete(null);
+    }
+  };
+
+  const handleResetToDefault = async () => {
+    if (!selectedTemplate) return;
+    setIsResetting(true);
+    try {
+      const updated = await emailTemplatesService.resetTemplate(selectedTemplate.id);
+      // Refresh the template list and re-select
+      await fetchTemplates();
+      const refreshed = useEmailTemplatesStore.getState().templates.find(
+        (t) => t.id === updated.id,
+      );
+      if (refreshed) selectTemplate(refreshed);
+      clearPreview();
+      toast.success('Template restored to default');
+    } catch {
+      toast.error('Failed to reset template');
+    } finally {
+      setIsResetting(false);
+      setShowResetConfirm(false);
+    }
+  };
+
+  const handleSendTest = async () => {
+    if (!selectedTemplate) return;
+    setIsSendingTest(true);
+    try {
+      const { messageHistoryService } = await import('../../../services/api');
+      await messageHistoryService.sendTestEmail({
+        to_email: '',
+        template_id: selectedTemplate.id,
+      });
+      toast.success('Test email sent to your inbox');
+    } catch {
+      toast.error('Failed to send test email');
+    } finally {
+      setIsSendingTest(false);
     }
   };
 
@@ -336,6 +379,19 @@ const EmailTemplatesPage: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex items-center space-x-3">
+                    <button
+                      onClick={() => setShowResetConfirm(true)}
+                      disabled={isResetting}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+                      title="Restore default content"
+                    >
+                      {isResetting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      )}
+                      <span>Reset</span>
+                    </button>
                     <span className="text-theme-text-muted text-xs">
                       {selectedTemplate.is_active ? 'Active' : 'Inactive'}
                     </span>
@@ -463,6 +519,25 @@ const EmailTemplatesPage: React.FC = () => {
                       members={members}
                       isLoadingMembers={isLoadingMembers}
                     />
+                    {preview && (
+                      <div className="mt-4 pt-4 border-t border-theme-surface-border">
+                        <button
+                          onClick={() => { void handleSendTest(); }}
+                          disabled={isSendingTest || !preview}
+                          className="flex items-center gap-2 px-4 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+                        >
+                          {isSendingTest ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4" />
+                          )}
+                          <span>Send Test Email to Me</span>
+                        </button>
+                        <p className="text-theme-text-muted text-xs mt-1.5">
+                          Sends this preview to your email address so you can verify how it looks in a real inbox.
+                        </p>
+                      </div>
+                    )}
                   )}
                 </div>
               </div>
@@ -488,6 +563,15 @@ const EmailTemplatesPage: React.FC = () => {
           title="Delete Attachment"
           message={`Remove "${attachmentToDelete?.filename ?? ''}" from this template? This attachment will no longer be included in emails.`}
           confirmLabel="Delete"
+          variant="danger"
+        />
+        <ConfirmDialog
+          isOpen={showResetConfirm}
+          onClose={() => setShowResetConfirm(false)}
+          onConfirm={() => { void handleResetToDefault(); }}
+          title="Reset to Default"
+          message="This will restore the template's subject, HTML body, text body, and CSS to the system defaults. Your CC/BCC settings will be preserved. This action cannot be undone."
+          confirmLabel="Reset"
           variant="danger"
         />
       </main>

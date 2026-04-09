@@ -163,6 +163,43 @@ async def update_email_template(
     return template
 
 
+@router.post("/{template_id}/reset", response_model=EmailTemplateResponse)
+async def reset_email_template(
+    template_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+):
+    """
+    Reset an email template to its built-in default content.
+
+    Restores the subject, HTML body, text body, and CSS styles to the
+    system defaults. Custom CC/BCC settings are preserved.
+    """
+    service = EmailTemplateService(db)
+    template = await service.reset_to_default(
+        template_id=template_id,
+        organization_id=current_user.organization_id,
+        updated_by=current_user.id,
+    )
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email template not found or has no built-in default",
+        )
+    await db.commit()
+
+    logger.info(
+        "Email template reset to default id=%s type=%s org=%s by=%s",
+        template_id,
+        template.template_type,
+        current_user.organization_id,
+        current_user.id,
+    )
+    return template
+
+
 @router.post("/{template_id}/preview", response_model=EmailTemplatePreviewResponse)
 async def preview_email_template(
     template_id: str,

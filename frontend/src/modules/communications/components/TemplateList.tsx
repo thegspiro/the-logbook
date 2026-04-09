@@ -4,9 +4,10 @@
  * Displays all email templates grouped by type with selection.
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Mail,
+  Search,
   UserPlus,
   KeyRound,
   CalendarX,
@@ -28,6 +29,12 @@ import {
   Archive,
   CalendarCheck,
   Lock,
+  BarChart3,
+  ListChecks,
+  Copy,
+  CalendarRange,
+  UserX,
+  Bell,
 } from 'lucide-react';
 import type { EmailTemplate } from '../types';
 
@@ -54,6 +61,13 @@ const TEMPLATE_TYPE_DISPLAY: Record<
   member_archived: { icon: Archive, label: 'Member Archived', color: 'text-theme-text-muted' },
   event_request_status: { icon: CalendarCheck, label: 'Event Request Status', color: 'text-cyan-500' },
   it_password_notification: { icon: Lock, label: 'IT Password Reset', color: 'text-blue-600' },
+  election_report: { icon: BarChart3, label: 'Election Report', color: 'text-emerald-600' },
+  ballot_eligibility_summary: { icon: ListChecks, label: 'Ballot Eligibility Summary', color: 'text-amber-600' },
+  duplicate_application: { icon: Copy, label: 'Duplicate Application', color: 'text-slate-500' },
+  series_end_reminder: { icon: CalendarRange, label: 'Series End Reminder', color: 'text-purple-400' },
+  shift_assignment: { icon: CalendarCheck, label: 'Shift Assignment', color: 'text-green-600' },
+  shift_decline: { icon: UserX, label: 'Shift Decline', color: 'text-red-400' },
+  shift_reminder: { icon: Bell, label: 'Shift Reminder', color: 'text-sky-500' },
   custom: { icon: FileText, label: 'Custom', color: 'text-theme-text-muted' },
 };
 
@@ -78,12 +92,39 @@ export const TemplateList: React.FC<TemplateListProps> = ({
   selectedId,
   onSelect,
 }) => {
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return templates;
+    const q = search.toLowerCase();
+    return templates.filter((t) => {
+      const display = getTemplateDisplay(t.template_type);
+      return (
+        display.label.toLowerCase().includes(q) ||
+        t.template_type.toLowerCase().includes(q) ||
+        (t.name ?? '').toLowerCase().includes(q)
+      );
+    });
+  }, [templates, search]);
+
   return (
     <div className="space-y-1">
       <h3 className="text-theme-text-muted text-xs font-semibold uppercase tracking-wider px-3 mb-2">
         Email Templates
       </h3>
-      {templates.map((template) => {
+      {templates.length > 8 && (
+        <div className="relative px-3 mb-2">
+          <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-theme-text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter templates..."
+            className="w-full pl-7 pr-2 py-1.5 text-xs rounded-md border border-theme-surface-border bg-theme-surface text-theme-text-primary focus:border-theme-focus-ring focus:outline-hidden"
+          />
+        </div>
+      )}
+      {filtered.map((template) => {
         const display = getTemplateDisplay(template.template_type);
         const Icon = display.icon;
         const isSelected = template.id === selectedId;
@@ -120,9 +161,9 @@ export const TemplateList: React.FC<TemplateListProps> = ({
           </button>
         );
       })}
-      {templates.length === 0 && (
+      {filtered.length === 0 && (
         <p className="text-theme-text-muted text-sm text-center py-8">
-          No templates found
+          {search ? 'No matching templates' : 'No templates found'}
         </p>
       )}
     </div>

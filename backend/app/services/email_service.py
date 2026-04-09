@@ -22,8 +22,10 @@ from zoneinfo import ZoneInfo
 from loguru import logger
 
 from app.core.config import settings
+from app.models.email_template import EmailTemplateType
 from app.models.user import Organization
 from app.schemas.organization import decrypt_settings_secrets
+from app.services.email_template_service import DEFAULT_CSS, EmailTemplateService
 
 # Header injection control characters that must never appear in
 # RFC 5322 unstructured fields (Subject, From display-name, etc.).
@@ -199,6 +201,65 @@ def build_email_logo_html(organization: Optional[Organization]) -> str:
     return f'<div style="text-align:center;padding:16px 0;">' f"{img}</div>"
 
 
+def wrap_email_body(
+    organization: Optional[Organization],
+    title: str,
+    body_html: str,
+    footer_text: str = "",
+    header_color: str = "",
+) -> str:
+    """Wrap raw HTML content in the standard email template chrome.
+
+    Produces the same visual structure as the ``EmailTemplateService``
+    default templates:  container > logo > header(h1) > content > footer.
+
+    Use this for one-off emails in scheduled tasks that build HTML
+    inline rather than going through the template system.
+
+    Args:
+        organization: Org for logo. ``None`` skips the logo.
+        title: Text for the ``<h1>`` header banner.
+        body_html: Pre-escaped HTML for the content area.
+        footer_text: Optional custom first-line footer text.
+            Defaults to "This is an automated message from <org>."
+        header_color: Optional inline ``background-color`` for the header.
+            E.g. ``"#dc2626"`` for red alerts.
+    """
+    logo_img = build_email_logo_img(organization)
+    logo_div = f'<div class="logo">{logo_img}</div>' if logo_img else ""
+    org_name = (
+        _html.escape(getattr(organization, "name", ""))
+        if organization
+        else ""
+    )
+    if not footer_text:
+        footer_text = f"This is an automated message from {org_name}."
+    org_phone = _html.escape(getattr(organization, "phone", None) or "") if organization else ""
+    org_email_addr = _html.escape(getattr(organization, "email", None) or "") if organization else ""
+    org_website = _html.escape(getattr(organization, "website", None) or "") if organization else ""
+    contact_parts = [p for p in (org_phone, org_email_addr, org_website) if p]
+    contact_line = (
+        f'<p style="font-size: 11px; color: #9ca3af;">{" | ".join(contact_parts)}</p>'
+        if contact_parts
+        else ""
+    )
+    style_attr = f' style="background-color: {header_color};"' if header_color else ""
+    return (
+        f"<!DOCTYPE html><html><head>"
+        f"<style>{DEFAULT_CSS}</style></head><body>"
+        f'<div class="container">'
+        f"{logo_div}"
+        f'<div class="header"{style_attr}>'
+        f"<h1>{_html.escape(title)}</h1></div>"
+        f'<div class="content">{body_html}</div>'
+        f'<div class="footer">'
+        f"<p>{footer_text}</p>"
+        f"<p>Please do not reply to this email.</p>"
+        f"{contact_line}"
+        f"</div></div></body></html>"
+    )
+
+
 class EmailService:
     """Service for sending emails"""
 
@@ -245,6 +306,65 @@ class EmailService:
         else:
             local_dt = dt
         return local_dt.strftime(fmt)
+
+    async def _render_with_fallback(
+        self,
+        template_type: EmailTemplateType,
+        context: Dict[str, Any],
+        db: Any = None,
+        organization_id: Optional[str] = None,
+        template: Any = None,
+        default_subject: str = "",
+        default_html: str = "",
+        default_text: str = "",
+    ) -> Tuple[str, str, Optional[str]]:
+        """Load an admin template or fall back to built-in defaults.
+
+        Centralises the pattern repeated across every ``send_*`` method:
+        1. If a pre-loaded *template* is provided, render it.
+        2. Else if *db* and *organization_id* are given, try loading from DB.
+        3. Fall back to *default_subject* / *default_html* / *default_text*
+           with proper HTML escaping via ``EmailTemplateService``.
+
+        Returns ``(subject, html_body, text_body)``.
+        """
+        loaded = template
+
+        if not loaded and db and organization_id:
+            try:
+                svc = EmailTemplateService(db)
+                loaded = await svc.get_template(organization_id, template_type)
+            except Exception as e:
+                logger.warning(
+                    "Failed to load %s template, using default: %s",
+                    template_type.value,
+                    e,
+                )
+
+        if loaded:
+            return EmailTemplateService.render_static(
+                loaded, context, organization=self.organization
+            )
+
+        context["organization_logo_img"] = self._build_logo_img()
+
+        def _replace(text: str) -> str:
+            def replacer(match: re.Match) -> str:
+                var = match.group(1).strip()
+                value = str(context.get(var, match.group(0)))
+                if var in EmailTemplateService._RAW_HTML_VARIABLES:
+                    return value
+                return _html.escape(value)
+
+            return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
+
+        subject = _replace(default_subject)
+        html_body = (
+            f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style>"
+            f"</head><body>{_replace(default_html)}</body></html>"
+        )
+        text_body = _replace(default_text)
+        return subject, html_body, text_body
 
     def _get_smtp_config(self) -> Dict[str, Any]:
         """
@@ -553,37 +673,35 @@ class EmailService:
         safe_from_name = _sanitize_header(self._smtp_config["from_name"])
         safe_subject = _sanitize_header(subject)
 
-        success_count = 0
-        failure_count = 0
+        # Pre-read attachment payloads once (avoids re-reading per recipient)
+        attachment_parts: List[MIMEBase] = []
+        for filepath in attachment_paths or []:
+            resolved = os.path.realpath(filepath)
+            if not os.path.isfile(resolved):
+                logger.warning("Attachment not found, skipping")
+                continue
+            with open(resolved, "rb") as f:
+                part = MIMEBase("application", "octet-stream")
+                part.set_payload(f.read())
+            encoders.encode_base64(part)
+            filename = _sanitize_header(os.path.basename(resolved))
+            part.add_header(
+                "Content-Disposition", "attachment", filename=filename
+            )
+            attachment_parts.append(part)
 
+        # Build one MIME message per recipient
+        batch: List[Tuple[List[str], str]] = []
         for to_email in to_emails:
             try:
-                # Use mixed type when we have attachments, alternative otherwise
-                if attachment_paths:
+                if attachment_parts:
                     msg = MIMEMultipart("mixed")
-                    # Create alternative sub-part for text/html
                     alt_part = MIMEMultipart("alternative")
                     if text_body:
                         alt_part.attach(MIMEText(text_body, "plain", "utf-8"))
                     alt_part.attach(MIMEText(html_body, "html", "utf-8"))
                     msg.attach(alt_part)
-
-                    # Attach files
-                    for filepath in attachment_paths:
-                        resolved = os.path.realpath(filepath)
-                        if not os.path.isfile(resolved):
-                            logger.warning("Attachment not found, skipping")
-                            continue
-                        with open(resolved, "rb") as f:
-                            part = MIMEBase("application", "octet-stream")
-                            part.set_payload(f.read())
-                        encoders.encode_base64(part)
-                        filename = _sanitize_header(os.path.basename(resolved))
-                        part.add_header(
-                            "Content-Disposition",
-                            "attachment",
-                            filename=filename,
-                        )
+                    for part in attachment_parts:
                         msg.attach(part)
                 else:
                     msg = MIMEMultipart("alternative")
@@ -606,27 +724,36 @@ class EmailService:
                     msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
                     msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
-                # Add CC and BCC recipients
                 all_recipients = [to_email]
                 if cc_emails:
                     msg["Cc"] = ", ".join(cc_emails)
                     all_recipients.extend(cc_emails)
                 if bcc_emails:
-                    # BCC recipients are NOT added to headers (invisible to other recipients)
                     all_recipients.extend(bcc_emails)
 
-                # Send email in a thread to avoid blocking the event loop
-                await asyncio.to_thread(
-                    self._smtp_send,
-                    all_recipients,
-                    msg.as_string(),
-                )
-
-                success_count += 1
-
+                batch.append((all_recipients, msg.as_string()))
             except Exception as e:
-                logger.error(f"Failed to send email to {_redact_email(to_email)}: {e}")
-                failure_count += 1
+                logger.error(f"Failed to build email for {_redact_email(to_email)}: {e}")
+
+        # Send through a single SMTP connection when possible
+        if len(batch) == 1:
+            try:
+                await asyncio.to_thread(self._smtp_send, batch[0][0], batch[0][1])
+                results = [True]
+            except Exception as e:
+                logger.error(
+                    "Failed to send email to %s: %s",
+                    _redact_email(to_emails[0] if to_emails else "?"),
+                    e,
+                )
+                results = [False]
+        elif batch:
+            results = await asyncio.to_thread(self._smtp_send_batch, batch)
+        else:
+            results = []
+
+        success_count = sum(1 for r in results if r)
+        failure_count = len(to_emails) - success_count
 
         logger.info(
             f"Email send complete: {success_count} succeeded, "
@@ -697,7 +824,7 @@ class EmailService:
         db.add(history)
         await db.flush()
 
-    def render_ballot_notification(
+    async def render_ballot_notification(
         self,
         recipient_name: str,
         election_title: str,
@@ -720,12 +847,18 @@ class EmailService:
 
         Returns ``(subject, html_body, text_body)``.
         """
-        org_name = ""
-        if self.organization:
-            org_name = getattr(self.organization, "name", "")
-        org_logo = ""
-        if self.organization:
-            org_logo = getattr(self.organization, "logo", None) or ""
+        from app.services.email_template_service import (
+            DEFAULT_BALLOT_NOTIFICATION_HTML,
+            DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
+            DEFAULT_BALLOT_NOTIFICATION_TEXT,
+        )
+
+        org_name = getattr(self.organization, "name", "") if self.organization else ""
+        org_logo = (
+            (getattr(self.organization, "logo", None) or "")
+            if self.organization
+            else ""
+        )
 
         custom_message_html = ""
         if custom_message:
@@ -749,55 +882,14 @@ class EmailService:
             "organization_logo": org_logo,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
-
-        # Use pre-loaded admin template if provided
-        if template:
-            from app.services.email_template_service import EmailTemplateService
-
-            subject, html_body, text_body = EmailTemplateService.render_static(
-                template, context, organization=self.organization
-            )
-
-        # Fall back to inline default if no template loaded
-        if not subject:
-            from app.services.email_template_service import (
-                DEFAULT_BALLOT_NOTIFICATION_HTML,
-                DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
-                DEFAULT_BALLOT_NOTIFICATION_TEXT,
-                DEFAULT_CSS,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            _raw_html_vars = {
-                "organization_logo_img",
-                "ballot_items_html",
-                "custom_message_html",
-            }
-
-            def _replace(text: str) -> str:
-                def replacer(match: re.Match) -> str:
-                    var = match.group(1).strip()
-                    value = str(context.get(var, match.group(0)))
-                    if var in _raw_html_vars:
-                        return value
-                    return _html.escape(value)
-
-                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
-
-            subject = _replace(DEFAULT_BALLOT_NOTIFICATION_SUBJECT)
-            html_body = (
-                f"<!DOCTYPE html><html><head>"
-                f"<style>{DEFAULT_CSS}</style>"
-                f"</head><body>"
-                f"{_replace(DEFAULT_BALLOT_NOTIFICATION_HTML)}"
-                f"</body></html>"
-            )
-            text_body = _replace(DEFAULT_BALLOT_NOTIFICATION_TEXT)
-
-        return subject, html_body, text_body  # type: ignore[return-value]
+        return await self._render_with_fallback(
+            template_type=EmailTemplateType.BALLOT_NOTIFICATION,
+            context=context,
+            template=template,
+            default_subject=DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
+            default_html=DEFAULT_BALLOT_NOTIFICATION_HTML,
+            default_text=DEFAULT_BALLOT_NOTIFICATION_TEXT,
+        )
 
     async def send_ballot_notification(
         self,
@@ -829,40 +921,53 @@ class EmailService:
         Returns:
             True if sent successfully
         """
-        loaded_template = template
-
-        # Load from DB only if no template was pre-loaded
-        if not loaded_template and db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                loaded_template = await template_service.get_template(
-                    organization_id, EmailTemplateType.BALLOT_NOTIFICATION
-                )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load ballot notification template, using default: %s", e
-                )
-
-        subject, html_body, text_body = self.render_ballot_notification(
-            recipient_name=recipient_name,
-            election_title=election_title,
-            ballot_url=ballot_url,
-            meeting_date=meeting_date,
-            custom_message=custom_message,
-            start_date=start_date,
-            end_date=end_date,
-            positions=positions,
-            ballot_items_html=ballot_items_html,
-            ballot_items_text=ballot_items_text,
-            admin_contact_name=admin_contact_name,
-            admin_contact_email=admin_contact_email,
-            template=loaded_template,
+        from app.services.email_template_service import (
+            DEFAULT_BALLOT_NOTIFICATION_HTML,
+            DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
+            DEFAULT_BALLOT_NOTIFICATION_TEXT,
         )
 
-        success_count, failure_count = await self.send_email(
+        org_name = getattr(self.organization, "name", "") if self.organization else ""
+        org_logo = (
+            (getattr(self.organization, "logo", None) or "")
+            if self.organization
+            else ""
+        )
+
+        custom_message_html = ""
+        if custom_message:
+            custom_message_html = f"<p>{_html.escape(custom_message)}</p>"
+
+        context = {
+            "recipient_name": recipient_name,
+            "election_title": election_title,
+            "ballot_url": ballot_url or "",
+            "meeting_date": self._format_local_dt(meeting_date) if meeting_date else "",
+            "custom_message": custom_message or "",
+            "custom_message_html": custom_message_html,
+            "voting_opens": self._format_local_dt(start_date) if start_date else "",
+            "voting_closes": self._format_local_dt(end_date) if end_date else "",
+            "positions": ", ".join(positions) if positions else "",
+            "ballot_items_html": ballot_items_html,
+            "ballot_items_text": ballot_items_text,
+            "admin_contact_name": admin_contact_name,
+            "admin_contact_email": admin_contact_email,
+            "organization_name": org_name,
+            "organization_logo": org_logo,
+        }
+
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.BALLOT_NOTIFICATION,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            template=template,
+            default_subject=DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
+            default_html=DEFAULT_BALLOT_NOTIFICATION_HTML,
+            default_text=DEFAULT_BALLOT_NOTIFICATION_TEXT,
+        )
+
+        success_count, _ = await self.send_email(
             to_emails=[to_email],
             subject=subject,
             html_body=html_body,
@@ -903,9 +1008,13 @@ class EmailService:
         Returns:
             Tuple of (success_count, failure_count)
         """
-        org_name = ""
-        if self.organization:
-            org_name = getattr(self.organization, "name", "")
+        from app.services.email_template_service import (
+            DEFAULT_ELECTION_REPORT_HTML,
+            DEFAULT_ELECTION_REPORT_SUBJECT,
+            DEFAULT_ELECTION_REPORT_TEXT,
+        )
+
+        org_name = getattr(self.organization, "name", "") if self.organization else ""
 
         context = {
             "recipient_name": recipient_name,
@@ -927,66 +1036,17 @@ class EmailService:
             "organization_name": org_name,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.ELECTION_REPORT,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_ELECTION_REPORT_SUBJECT,
+            default_html=DEFAULT_ELECTION_REPORT_HTML,
+            default_text=DEFAULT_ELECTION_REPORT_TEXT,
+        )
 
-        # Try loading the admin-configured template from the database
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.ELECTION_REPORT
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load election report template, using default: %s", e
-                )
-
-        # Fall back to inline default if no template loaded
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_ELECTION_REPORT_HTML,
-                DEFAULT_ELECTION_REPORT_SUBJECT,
-                DEFAULT_ELECTION_REPORT_TEXT,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            _raw_html_vars = {
-                "organization_logo_img",
-                "results_html",
-                "ballot_recipients_html",
-                "skipped_voters_html",
-            }
-
-            def _replace(text: str) -> str:
-                def replacer(match):
-                    var = match.group(1).strip()
-                    value = str(context.get(var, match.group(0)))
-                    if var in _raw_html_vars:
-                        return value
-                    return _html.escape(value)
-
-                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
-
-            subject = _replace(DEFAULT_ELECTION_REPORT_SUBJECT)
-            html_body = (
-                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head>"
-                f"<body>{_replace(DEFAULT_ELECTION_REPORT_HTML)}</body></html>"
-            )
-            text_body = _replace(DEFAULT_ELECTION_REPORT_TEXT)
-
-        success_count, failure_count = await self.send_email(
+        return await self.send_email(
             to_emails=to_emails,
             subject=subject,
             html_body=html_body,
@@ -995,8 +1055,6 @@ class EmailService:
             db=db,
             template_type="election_report",
         )
-
-        return success_count, failure_count
 
     async def send_eligibility_summary(
         self,
@@ -1023,9 +1081,13 @@ class EmailService:
         Returns:
             Tuple of (success_count, failure_count)
         """
-        org_name = ""
-        if self.organization:
-            org_name = getattr(self.organization, "name", "")
+        from app.services.email_template_service import (
+            DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML,
+            DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT,
+            DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT,
+        )
+
+        org_name = getattr(self.organization, "name", "") if self.organization else ""
 
         context = {
             "recipient_name": recipient_name,
@@ -1040,70 +1102,17 @@ class EmailService:
             "organization_name": org_name,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.BALLOT_ELIGIBILITY_SUMMARY,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT,
+            default_html=DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML,
+            default_text=DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT,
+        )
 
-        # Try loading the admin-configured template from the database
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import (
-                    EmailTemplateService,
-                )
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id,
-                    EmailTemplateType.BALLOT_ELIGIBILITY_SUMMARY,
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load eligibility summary template, using default: %s", e
-                )
-
-        # Fall back to inline default if no template loaded
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML,
-                DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT,
-                DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT,
-                DEFAULT_CSS,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            _raw_html_vars = {
-                "organization_logo_img",
-                "recipients_html",
-                "skipped_voters_html",
-            }
-
-            def _replace(text: str) -> str:
-                def replacer(match):
-                    var = match.group(1).strip()
-                    value = str(context.get(var, match.group(0)))
-                    if var in _raw_html_vars:
-                        return value
-                    return _html.escape(value)
-
-                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
-
-            subject = _replace(DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT)
-            html_body = (
-                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style>"
-                f"</head><body>"
-                f"{_replace(DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML)}"
-                f"</body></html>"
-            )
-            text_body = _replace(DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT)
-
-        success_count, failure_count = await self.send_email(
+        return await self.send_email(
             to_emails=to_emails,
             subject=subject,
             html_body=html_body,
@@ -1112,8 +1121,6 @@ class EmailService:
             db=db,
             template_type="ballot_eligibility_summary",
         )
-
-        return success_count, failure_count
 
     async def send_training_approval_request(
         self,
@@ -1129,23 +1136,17 @@ class EmailService:
         organization_id: Optional[str] = None,
     ) -> tuple[int, int]:
         """
-        Send training approval request notification to training officers
-
-        Args:
-            to_emails: List of training officer email addresses
-            event_title: Title of the training event
-            course_name: Name of the training course
-            event_date: Date/time of the training event
-            approval_url: URL to the approval page
-            attendee_count: Number of attendees to approve
-            approval_deadline: Deadline for approval
-            submitter_name: Name of the person who submitted for approval
-            db: Optional database session for loading templates
-            organization_id: Optional org ID for loading templates
+        Send training approval request notification to training officers.
 
         Returns:
             Tuple of (success_count, failure_count)
         """
+        from app.services.email_template_service import (
+            DEFAULT_TRAINING_APPROVAL_HTML,
+            DEFAULT_TRAINING_APPROVAL_SUBJECT,
+            DEFAULT_TRAINING_APPROVAL_TEXT,
+        )
+
         context = {
             "course_name": course_name,
             "event_title": event_title,
@@ -1156,51 +1157,15 @@ class EmailService:
             "approval_url": approval_url,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
-
-        # Try loading the admin-configured template from the database
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.TRAINING_APPROVAL
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load training approval template, using default: %s", e
-                )
-
-        # Fall back to inline default if no template loaded
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_TRAINING_APPROVAL_HTML,
-                DEFAULT_TRAINING_APPROVAL_SUBJECT,
-                DEFAULT_TRAINING_APPROVAL_TEXT,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            subject = DEFAULT_TRAINING_APPROVAL_SUBJECT
-            rendered_html = DEFAULT_TRAINING_APPROVAL_HTML
-            rendered_text = DEFAULT_TRAINING_APPROVAL_TEXT
-            for key, val in context.items():
-                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                subject = re.sub(pattern, str(val), subject)
-                rendered_html = re.sub(pattern, str(val), rendered_html)
-                rendered_text = re.sub(pattern, str(val), rendered_text)
-            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
-            text_body = rendered_text
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.TRAINING_APPROVAL,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_TRAINING_APPROVAL_SUBJECT,
+            default_html=DEFAULT_TRAINING_APPROVAL_HTML,
+            default_text=DEFAULT_TRAINING_APPROVAL_TEXT,
+        )
 
         return await self.send_email(
             to_emails=to_emails,
@@ -1227,28 +1192,20 @@ class EmailService:
         """
         Send a welcome email to a newly created user.
 
-        If a database session and organization_id are provided, loads the
-        admin-configured template from the database. Otherwise falls back
-        to a default template.
-
-        Args:
-            to_email: New user's email address
-            first_name: New user's first name
-            last_name: New user's last name
-            username: Login username
-            temp_password: Temporary password
-            organization_name: Organization display name
-            login_url: URL to the login page
-            db: Optional async database session (for loading templates)
-            organization_id: Optional org ID (for loading templates)
-            attachment_paths: Optional list of local file paths to attach
-
         Returns:
             True if sent successfully
         """
-        org_logo = ""
-        if self.organization:
-            org_logo = getattr(self.organization, "logo", None) or ""
+        from app.services.email_template_service import (
+            DEFAULT_WELCOME_HTML,
+            DEFAULT_WELCOME_SUBJECT,
+            DEFAULT_WELCOME_TEXT,
+        )
+
+        org_logo = (
+            (getattr(self.organization, "logo", None) or "")
+            if self.organization
+            else ""
+        )
 
         context = {
             "first_name": first_name,
@@ -1261,63 +1218,30 @@ class EmailService:
             "login_url": login_url,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
-
-        # Try loading the admin-configured template from the database
+        # Welcome template supports attachments stored on the template itself
+        loaded_template = None
         if db and organization_id:
             try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
+                svc = EmailTemplateService(db)
+                loaded_template = await svc.get_template(
                     organization_id, EmailTemplateType.WELCOME
                 )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-                    # Gather stored attachment paths if template has attachments
-                    if template.allow_attachments and template.attachments:
-                        stored_paths = [a.storage_path for a in template.attachments]
-                        if attachment_paths:
-                            attachment_paths = attachment_paths + stored_paths
-                        else:
-                            attachment_paths = stored_paths
+                if loaded_template and loaded_template.allow_attachments and loaded_template.attachments:
+                    stored_paths = [a.storage_path for a in loaded_template.attachments]
+                    attachment_paths = (attachment_paths or []) + stored_paths
             except Exception as e:
                 logger.warning(
                     "Failed to load welcome email template, using default: %s", e
                 )
 
-        # Fall back to inline default if no template loaded
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_WELCOME_HTML,
-                DEFAULT_WELCOME_SUBJECT,
-                DEFAULT_WELCOME_TEXT,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            _raw_html_vars = {"organization_logo_img"}
-
-            def _replace(text: str) -> str:
-                def replacer(match):
-                    var = match.group(1).strip()
-                    value = str(context.get(var, match.group(0)))
-                    if var in _raw_html_vars:
-                        return value
-                    return _html.escape(value)
-
-                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
-
-            subject = _replace(DEFAULT_WELCOME_SUBJECT)
-            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_WELCOME_HTML)}</body></html>"
-            text_body = _replace(DEFAULT_WELCOME_TEXT)
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.WELCOME,
+            context=context,
+            template=loaded_template,
+            default_subject=DEFAULT_WELCOME_SUBJECT,
+            default_html=DEFAULT_WELCOME_HTML,
+            default_text=DEFAULT_WELCOME_TEXT,
+        )
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -1344,23 +1268,20 @@ class EmailService:
         """
         Send a password reset email.
 
-        Only used when local authentication is enabled.
-
-        Args:
-            to_email: User's email address
-            first_name: User's first name
-            reset_url: Full URL to the password reset page with token
-            organization_name: Organization display name
-            expiry_minutes: Minutes until the reset link expires
-            db: Optional async database session (for loading templates)
-            organization_id: Optional org ID (for loading templates)
-
         Returns:
             True if sent successfully
         """
-        org_logo = ""
-        if self.organization:
-            org_logo = getattr(self.organization, "logo", None) or ""
+        from app.services.email_template_service import (
+            DEFAULT_PASSWORD_RESET_HTML,
+            DEFAULT_PASSWORD_RESET_SUBJECT,
+            DEFAULT_PASSWORD_RESET_TEXT,
+        )
+
+        org_logo = (
+            (getattr(self.organization, "logo", None) or "")
+            if self.organization
+            else ""
+        )
 
         context = {
             "first_name": first_name,
@@ -1372,56 +1293,15 @@ class EmailService:
             "expiry_hours": str(max(1, expiry_minutes // 60)),
         }
 
-        subject = None
-        html_body = None
-        text_body = None
-
-        # Try loading the admin-configured template from the database
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.PASSWORD_RESET
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load password reset template, using default: %s", e
-                )
-
-        # Fall back to inline default
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_PASSWORD_RESET_HTML,
-                DEFAULT_PASSWORD_RESET_SUBJECT,
-                DEFAULT_PASSWORD_RESET_TEXT,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            _raw_html_vars = {"organization_logo_img"}
-
-            def _replace(text: str) -> str:
-                def replacer(match):
-                    var = match.group(1).strip()
-                    value = str(context.get(var, match.group(0)))
-                    if var in _raw_html_vars:
-                        return value
-                    return _html.escape(value)
-
-                return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
-
-            subject = _replace(DEFAULT_PASSWORD_RESET_SUBJECT)
-            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{_replace(DEFAULT_PASSWORD_RESET_HTML)}</body></html>"
-            text_body = _replace(DEFAULT_PASSWORD_RESET_TEXT)
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.PASSWORD_RESET,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_PASSWORD_RESET_SUBJECT,
+            default_html=DEFAULT_PASSWORD_RESET_HTML,
+            default_text=DEFAULT_PASSWORD_RESET_TEXT,
+        )
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -1447,75 +1327,32 @@ class EmailService:
         """
         Notify IT team members that a password reset was requested.
 
-        Args:
-            to_emails: IT team member email addresses
-            user_email: Email of the user who requested the reset
-            user_name: Display name of the user
-            organization_name: Organization name
-            ip_address: IP address the request originated from
-            db: Optional database session for loading templates
-            organization_id: Optional org ID for loading templates
-
         Returns:
             Tuple of (success_count, failure_count)
         """
-        timestamp = self._format_local_dt(datetime.now(timezone.utc))
-        ip_display = ip_address or "Unknown"
+        from app.services.email_template_service import (
+            DEFAULT_IT_PASSWORD_NOTIFICATION_HTML,
+            DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT,
+            DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
+        )
 
         context = {
             "user_name": user_name,
             "user_email": user_email,
-            "request_time": timestamp,
-            "ip_address": ip_display,
+            "request_time": self._format_local_dt(datetime.now(timezone.utc)),
+            "ip_address": ip_address or "Unknown",
             "organization_name": organization_name,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
-
-        # Try loading the admin-configured template from the database
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.IT_PASSWORD_NOTIFICATION
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load IT password notification template, using default: %s",
-                    e,
-                )
-
-        # Fall back to inline default if no template loaded
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_IT_PASSWORD_NOTIFICATION_HTML,
-                DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT,
-                DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            subject = DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT
-            rendered_html = DEFAULT_IT_PASSWORD_NOTIFICATION_HTML
-            rendered_text = DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT
-            for key, val in context.items():
-                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                subject = re.sub(pattern, str(val), subject)
-                rendered_html = re.sub(pattern, str(val), rendered_html)
-                rendered_text = re.sub(pattern, str(val), rendered_text)
-            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
-            text_body = rendered_text
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.IT_PASSWORD_NOTIFICATION,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT,
+            default_html=DEFAULT_IT_PASSWORD_NOTIFICATION_HTML,
+            default_text=DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
+        )
 
         return await self.send_email(
             to_emails=to_emails,
@@ -1543,81 +1380,35 @@ class EmailService:
         """
         Send an event reminder email.
 
-        Args:
-            to_email: Recipient email address
-            recipient_name: Recipient's display name
-            event_title: Title of the event
-            event_start: Event start datetime (UTC)
-            event_end: Event end datetime (UTC)
-            event_type: Event type label (e.g. "Business Meeting")
-            location_name: Optional location display name
-            location_details: Optional additional location info
-            event_url: Optional link to view the event
-            db: Optional database session for loading templates
-            organization_id: Optional org ID for loading templates
-
         Returns:
             True if sent successfully
         """
-        start_str = self._format_local_dt(event_start)
-        end_str = self._format_local_dt(event_end, "%I:%M %p")
+        from app.services.email_template_service import (
+            DEFAULT_EVENT_REMINDER_HTML,
+            DEFAULT_EVENT_REMINDER_SUBJECT,
+            DEFAULT_EVENT_REMINDER_TEXT,
+        )
 
         context = {
             "recipient_name": recipient_name,
             "event_title": event_title,
             "event_type": event_type,
-            "event_start": start_str,
-            "event_end": end_str,
+            "event_start": self._format_local_dt(event_start),
+            "event_end": self._format_local_dt(event_end, "%I:%M %p"),
             "location_name": location_name or "",
             "location_details": location_details or "",
             "event_url": event_url or "",
         }
 
-        subject = None
-        html_body = None
-        text_body = None
-
-        # Try loading the admin-configured template from the database
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.EVENT_REMINDER
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load event reminder template, using default: %s", e
-                )
-
-        # Fall back to inline default if no template loaded
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_EVENT_REMINDER_HTML,
-                DEFAULT_EVENT_REMINDER_SUBJECT,
-                DEFAULT_EVENT_REMINDER_TEXT,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            subject = DEFAULT_EVENT_REMINDER_SUBJECT
-            rendered_html = DEFAULT_EVENT_REMINDER_HTML
-            rendered_text = DEFAULT_EVENT_REMINDER_TEXT
-            for key, val in context.items():
-                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                subject = re.sub(pattern, str(val), subject)
-                rendered_html = re.sub(pattern, str(val), rendered_html)
-                rendered_text = re.sub(pattern, str(val), rendered_text)
-            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
-            text_body = rendered_text
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.EVENT_REMINDER,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_EVENT_REMINDER_SUBJECT,
+            default_html=DEFAULT_EVENT_REMINDER_HTML,
+            default_text=DEFAULT_EVENT_REMINDER_TEXT,
+        )
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],
@@ -1643,21 +1434,13 @@ class EmailService:
         db: Optional[Any] = None,
         organization_id: Optional[str] = None,
     ) -> bool:
-        """
-        Send an inactivity warning email to coordinator(s) about a stalled prospect.
+        """Send an inactivity warning email to coordinator(s) about a stalled prospect."""
+        from app.services.email_template_service import (
+            DEFAULT_INACTIVITY_WARNING_HTML,
+            DEFAULT_INACTIVITY_WARNING_SUBJECT,
+            DEFAULT_INACTIVITY_WARNING_TEXT,
+        )
 
-        Args:
-            to_emails: Coordinator email address(es)
-            prospect_name: Full name of the prospect
-            current_stage: Name of the stage they are stalled on
-            days_inactive: Number of days since last activity
-            timeout_days: Configured inactivity timeout
-            organization_name: Organization display name
-            coordinator_name: Name of the pipeline coordinator
-            prospect_url: Link to the prospect's profile
-            db: Optional database session for loading templates
-            organization_id: Optional org ID for loading templates
-        """
         context = {
             "coordinator_name": coordinator_name or "Coordinator",
             "prospect_name": prospect_name,
@@ -1668,51 +1451,15 @@ class EmailService:
             "prospect_url": prospect_url,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
-
-        # Try loading the admin-configured template from the database
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.INACTIVITY_WARNING
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load inactivity warning template, using default: %s", e
-                )
-
-        # Fall back to inline default if no template loaded
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_INACTIVITY_WARNING_HTML,
-                DEFAULT_INACTIVITY_WARNING_SUBJECT,
-                DEFAULT_INACTIVITY_WARNING_TEXT,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            subject = DEFAULT_INACTIVITY_WARNING_SUBJECT
-            rendered_html = DEFAULT_INACTIVITY_WARNING_HTML
-            rendered_text = DEFAULT_INACTIVITY_WARNING_TEXT
-            for key, val in context.items():
-                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                subject = re.sub(pattern, str(val), subject)
-                rendered_html = re.sub(pattern, str(val), rendered_html)
-                rendered_text = re.sub(pattern, str(val), rendered_text)
-            html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
-            text_body = rendered_text
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.INACTIVITY_WARNING,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_INACTIVITY_WARNING_SUBJECT,
+            default_html=DEFAULT_INACTIVITY_WARNING_HTML,
+            default_text=DEFAULT_INACTIVITY_WARNING_TEXT,
+        )
 
         success_count, _ = await self.send_email(
             to_emails=to_emails,
@@ -1735,73 +1482,28 @@ class EmailService:
         db: Optional[Any] = None,
         organization_id: Optional[str] = None,
     ) -> bool:
-        """
-        Notify an applicant that a duplicate application was detected.
+        """Notify an applicant that a duplicate application was detected."""
+        from app.services.email_template_service import (
+            DEFAULT_DUPLICATE_APPLICATION_HTML,
+            DEFAULT_DUPLICATE_APPLICATION_SUBJECT,
+            DEFAULT_DUPLICATE_APPLICATION_TEXT,
+        )
 
-        The department's email is included as BCC so leadership is aware.
-
-        Args:
-            to_email: Applicant's email address
-            applicant_name: Applicant's full name
-            organization_name: Organization display name
-            original_date: Formatted date of the original application
-            bcc_emails: Department/org email(s) to BCC
-            db: Optional database session for loading templates
-            organization_id: Optional org ID for loading templates
-        """
         context = {
             "applicant_name": applicant_name,
             "organization_name": organization_name,
             "original_date": original_date,
         }
 
-        subject = None
-        html_body = None
-        text_body = None
-
-        if db and organization_id:
-            try:
-                from app.models.email_template import EmailTemplateType
-                from app.services.email_template_service import EmailTemplateService
-
-                template_service = EmailTemplateService(db)
-                template = await template_service.get_template(
-                    organization_id, EmailTemplateType.DUPLICATE_APPLICATION
-                )
-                if template:
-                    subject, html_body, text_body = template_service.render(
-                        template, context, organization=self.organization
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Failed to load duplicate application template, using default: %s",
-                    e,
-                )
-
-        if not subject:
-            import re
-
-            from app.services.email_template_service import (
-                DEFAULT_CSS,
-                DEFAULT_DUPLICATE_APPLICATION_HTML,
-                DEFAULT_DUPLICATE_APPLICATION_SUBJECT,
-                DEFAULT_DUPLICATE_APPLICATION_TEXT,
-            )
-
-            context["organization_logo_img"] = self._build_logo_img()
-            subject = DEFAULT_DUPLICATE_APPLICATION_SUBJECT
-            rendered_html = DEFAULT_DUPLICATE_APPLICATION_HTML
-            rendered_text = DEFAULT_DUPLICATE_APPLICATION_TEXT
-            for key, val in context.items():
-                pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                subject = re.sub(pattern, str(val), subject)
-                rendered_html = re.sub(pattern, str(val), rendered_html)
-                rendered_text = re.sub(pattern, str(val), rendered_text)
-            html_body = (
-                f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style>"
-                f"</head><body>{rendered_html}</body></html>"
-            )
-            text_body = rendered_text
+        subject, html_body, text_body = await self._render_with_fallback(
+            template_type=EmailTemplateType.DUPLICATE_APPLICATION,
+            context=context,
+            db=db,
+            organization_id=organization_id,
+            default_subject=DEFAULT_DUPLICATE_APPLICATION_SUBJECT,
+            default_html=DEFAULT_DUPLICATE_APPLICATION_HTML,
+            default_text=DEFAULT_DUPLICATE_APPLICATION_TEXT,
+        )
 
         success_count, _ = await self.send_email(
             to_emails=[to_email],

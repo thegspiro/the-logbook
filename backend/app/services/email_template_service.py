@@ -14,6 +14,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings as app_settings
 from app.models.email_template import EmailTemplate, EmailTemplateType
 
 # Default CSS styles shared across all email templates.
@@ -51,6 +52,11 @@ GLOBAL_VARIABLES: List[Dict[str, str]] = [
     },
     {"name": "organization_phone", "description": "Organization phone number"},
     {"name": "organization_email", "description": "Organization email address"},
+    {"name": "organization_website", "description": "Organization website URL"},
+    {
+        "name": "login_url",
+        "description": "URL to the application login page",
+    },
 ]
 
 
@@ -75,18 +81,16 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "full_name", "description": "Recipient's full name"},
         {"name": "username", "description": "Login username"},
         {"name": "temp_password", "description": "Temporary password"},
-        {"name": "organization_name", "description": "Organization name"},
-        {"name": "login_url", "description": "URL to the login page"},
     ],
     "password_reset": [
         {"name": "first_name", "description": "Recipient's first name"},
         {"name": "reset_url", "description": "Password reset link"},
-        {"name": "organization_name", "description": "Organization name"},
+
         {"name": "expiry_minutes", "description": "Minutes until link expires"},
     ],
     "inventory_change": [
         {"name": "first_name", "description": "Member's first name"},
-        {"name": "organization_name", "description": "Organization/department name"},
+
         {"name": "change_date", "description": "Date the changes occurred"},
         {
             "name": "items_issued_html",
@@ -104,7 +108,7 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     ],
     "member_dropped": [
         {"name": "member_name", "description": "Full name of the dropped member"},
-        {"name": "organization_name", "description": "Organization/department name"},
+
         {
             "name": "drop_type_display",
             "description": "Type of separation (Voluntary/Involuntary)",
@@ -159,7 +163,7 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "event_title", "description": "Title of the cancelled event"},
         {"name": "event_date", "description": "Original event date"},
-        {"name": "organization_name", "description": "Organization name"},
+
         {"name": "reason", "description": "Reason for cancellation"},
     ],
     "training_approval": [
@@ -205,7 +209,7 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "cert_name", "description": "Name of the certification"},
         {"name": "expiration_date", "description": "Expiration date of the cert"},
         {"name": "days_remaining", "description": "Days until expiration"},
-        {"name": "organization_name", "description": "Organization name"},
+
         {"name": "renewal_url", "description": "Link to training/certification page"},
     ],
     "post_event_validation": [
@@ -214,7 +218,7 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "event_date", "description": "Date of the event"},
         {"name": "attendee_count", "description": "Number of attendees recorded"},
         {"name": "validation_url", "description": "Link to validate attendance"},
-        {"name": "organization_name", "description": "Organization name"},
+
     ],
     "post_shift_validation": [
         {"name": "recipient_name", "description": "Shift officer's name"},
@@ -222,11 +226,11 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "shift_name", "description": "Name/label of the shift"},
         {"name": "attendee_count", "description": "Number of members on shift"},
         {"name": "validation_url", "description": "Link to validate attendance"},
-        {"name": "organization_name", "description": "Organization name"},
+
     ],
     "property_return_reminder": [
         {"name": "member_name", "description": "Member's full name"},
-        {"name": "organization_name", "description": "Organization name"},
+
         {"name": "item_count", "description": "Number of outstanding items"},
         {"name": "total_value", "description": "Total value of outstanding items"},
         {
@@ -249,7 +253,7 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Configured inactivity timeout threshold in days",
         },
         {"name": "pipeline_stage", "description": "Current pipeline stage"},
-        {"name": "organization_name", "description": "Organization name"},
+
         {"name": "prospect_url", "description": "Link to prospect profile"},
     ],
     "election_rollback": [
@@ -257,14 +261,14 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "election_title", "description": "Title of the election"},
         {"name": "performer_name", "description": "Name of the person who rolled back"},
         {"name": "reason", "description": "Reason for the rollback"},
-        {"name": "organization_name", "description": "Organization name"},
+
     ],
     "election_deleted": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "election_title", "description": "Title of the deleted election"},
         {"name": "performer_name", "description": "Name of the person who deleted it"},
         {"name": "reason", "description": "Reason for deletion"},
-        {"name": "organization_name", "description": "Organization name"},
+
     ],
     "election_report": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -304,12 +308,12 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "name": "skipped_voters_text",
             "description": "Plain-text list of members who did not receive ballots with reasons",
         },
-        {"name": "organization_name", "description": "Organization name"},
+
     ],
     "member_archived": [
         {"name": "member_name", "description": "Archived member's full name"},
         {"name": "previous_status", "description": "Member's status before archival"},
-        {"name": "organization_name", "description": "Organization name"},
+
     ],
     "event_request_status": [
         {"name": "contact_name", "description": "Requester's name"},
@@ -317,7 +321,7 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "event_date", "description": "Scheduled event date (if set)"},
         {"name": "decline_reason", "description": "Reason for decline (if applicable)"},
         {"name": "message", "description": "Additional message from coordinator"},
-        {"name": "organization_name", "description": "Organization name"},
+
     ],
     "it_password_notification": [
         {
@@ -327,11 +331,11 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "user_email", "description": "Email of the user"},
         {"name": "request_time", "description": "Time the request was made"},
         {"name": "ip_address", "description": "IP address of the request"},
-        {"name": "organization_name", "description": "Organization name"},
+
     ],
     "duplicate_application": [
         {"name": "applicant_name", "description": "Applicant's full name"},
-        {"name": "organization_name", "description": "Organization name"},
+
         {
             "name": "original_date",
             "description": "Date the original application was received",
@@ -341,33 +345,41 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
 
 # Sample context data for previewing each template type.
 # Used by the preview endpoint to substitute realistic placeholder values.
+# Shared organization fields are merged from _SAMPLE_ORG_CONTEXT.
+_SAMPLE_ORG_CONTEXT: Dict[str, str] = {
+    "organization_name": "Sample Fire Department",
+    "organization_logo": "https://example.com/logo.png",
+    "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
+    "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
+    "organization_phone": "(555) 555-1234",
+    "organization_email": "info@samplefd.org",
+    "organization_website": "https://www.samplefd.org",
+    "login_url": "https://example.com/login",
+}
+
+
+def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
+    """Merge sample org context with type-specific fields."""
+    merged = dict(_SAMPLE_ORG_CONTEXT)
+    for d in dicts:
+        merged.update(d)
+    return merged
+
+
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
-    "welcome": {
+    "welcome": _sample({
         "first_name": "John",
         "last_name": "Doe",
         "full_name": "John Doe",
         "username": "jdoe",
         "temp_password": "TempPass123!",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-        "login_url": "https://example.com/login",
-    },
-    "password_reset": {
+    }),
+    "password_reset": _sample({
         "first_name": "John",
         "reset_url": "https://example.com/reset-password?token=sample-token",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
         "expiry_minutes": "30",
-    },
-    "event_reminder": {
+    }),
+    "event_reminder": _sample({
         "recipient_name": "John Doe",
         "event_title": "Monthly Business Meeting",
         "event_type": "Business Meeting",
@@ -376,40 +388,22 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "location_name": "Main Station \u2014 Meeting Room A",
         "location_details": "123 Main St, Anytown, USA",
         "event_url": "https://example.com/events/123",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "series_end_reminder": {
+    }),
+    "series_end_reminder": _sample({
         "recipient_name": "John Doe",
         "event_title": "Weekly Officers Meeting",
         "recurrence_pattern": "Weekly",
         "series_end_date": "September 15, 2026",
         "remaining_occurrences": "26",
         "event_url": "https://example.com/events/456",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "event_cancellation": {
+    }),
+    "event_cancellation": _sample({
         "recipient_name": "John Doe",
         "event_title": "Monthly Business Meeting",
         "event_date": "March 15, 2026",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
         "reason": "Inclement weather",
-    },
-    "training_approval": {
+    }),
+    "training_approval": _sample({
         "course_name": "Hazardous Materials Awareness",
         "event_title": "HazMat Refresher Training",
         "event_date": "March 20, 2026 at 09:00 AM",
@@ -417,14 +411,8 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         "approval_deadline": "March 18, 2026",
         "submitter_name": "Jane Smith",
         "approval_url": "https://example.com/training/approve/123",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "ballot_notification": {
+    }),
+    "ballot_notification": _sample({
         "recipient_name": "John Doe",
         "election_title": "Captain Election 2026",
         "meeting_date": "April 1, 2026 at 07:00 PM",
@@ -445,21 +433,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         ),
         "admin_contact_name": "FCVFD Secretary",
         "admin_contact_email": "secretary@samplefd.org",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "member_dropped": {
+    }),
+    "member_dropped": _sample({
         "member_name": "John Doe",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
         "drop_type_display": "Voluntary Separation",
         "reason": "Relocation",
         "effective_date": "March 31, 2026",
@@ -524,15 +500,9 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         ),
         "performed_by_name": "Chief Robert Johnson",
         "performed_by_title": "Fire Chief",
-    },
-    "inventory_change": {
+    }),
+    "inventory_change": _sample({
         "first_name": "John",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
         "change_date": "March 1, 2026",
         "items_issued_html": (
             "<h3>Items Issued</h3>"
@@ -552,54 +522,30 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "Items Returned:\n"
             "- Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123"
         ),
-    },
-    "cert_expiration": {
+    }),
+    "cert_expiration": _sample({
         "recipient_name": "John Doe",
         "cert_name": "EMT-Basic Certification",
         "expiration_date": "April 15, 2026",
         "days_remaining": "45",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
         "renewal_url": "https://example.com/training/certifications",
-    },
-    "post_event_validation": {
+    }),
+    "post_event_validation": _sample({
         "recipient_name": "Jane Smith",
         "event_title": "Monthly Business Meeting",
         "event_date": "March 15, 2026",
         "attendee_count": "24",
         "validation_url": "https://example.com/events/123/validate",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "post_shift_validation": {
+    }),
+    "post_shift_validation": _sample({
         "recipient_name": "Capt. Mike Davis",
         "shift_date": "March 14, 2026",
         "shift_name": "Engine 1 \u2014 Night Shift",
         "attendee_count": "6",
         "validation_url": "https://example.com/scheduling/shifts/456/validate",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "property_return_reminder": {
+    }),
+    "property_return_reminder": _sample({
         "member_name": "John Doe",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
         "item_count": "3",
         "total_value": "1,200.00",
         "items_list_html": (
@@ -642,46 +588,28 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
         ),
         "days_since_drop": "30",
         "return_deadline": "April 30, 2026",
-    },
-    "inactivity_warning": {
+    }),
+    "inactivity_warning": _sample({
         "coordinator_name": "Jane Smith",
         "prospect_name": "Alex Johnson",
         "days_inactive": "21",
         "timeout_days": "30",
         "pipeline_stage": "Application Review",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
         "prospect_url": "https://example.com/prospective-members/789",
-    },
-    "election_rollback": {
+    }),
+    "election_rollback": _sample({
         "recipient_name": "Lt. Jane Smith",
         "election_title": "Captain Election 2026",
         "performer_name": "Secretary Robert Johnson",
         "reason": "Ballots were distributed to ineligible members",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "election_deleted": {
+    }),
+    "election_deleted": _sample({
         "recipient_name": "Lt. Jane Smith",
         "election_title": "Captain Election 2026",
         "performer_name": "Secretary Robert Johnson",
         "reason": "Election created in error — new election will be scheduled",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "election_report": {
+    }),
+    "election_report": _sample({
         "recipient_name": "Secretary Robert Johnson",
         "election_title": "Captain Election 2026",
         "election_type": "Officer Election",
@@ -744,58 +672,28 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "  - Tom Brown: Membership tier 'Social' is not eligible to vote\n"
             "  - Sarah Lee: Not checked in as present at the meeting"
         ),
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "member_archived": {
+    }),
+    "member_archived": _sample({
         "member_name": "John Doe",
         "previous_status": "Dropped",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "event_request_status": {
+    }),
+    "event_request_status": _sample({
         "contact_name": "John Doe",
         "status_label": "Scheduled",
         "event_date": "April 15, 2026 at 06:00 PM",
         "decline_reason": "",
         "message": "Your event has been approved and added to the calendar.",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "it_password_notification": {
+    }),
+    "it_password_notification": _sample({
         "user_name": "John Doe",
         "user_email": "jdoe@example.com",
         "request_time": "March 1, 2026 at 02:30 PM",
         "ip_address": "192.168.1.100",
-        "organization_name": "Sample Fire Department",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
-    "duplicate_application": {
+    }),
+    "duplicate_application": _sample({
         "applicant_name": "Alex Johnson",
-        "organization_name": "Sample Fire Department",
         "original_date": "February 15, 2026",
-        "organization_logo": "https://example.com/logo.png",
-        "organization_mailing_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_physical_address": "100 Main Street\nAnytown, CA 90210",
-        "organization_phone": "(555) 555-1234",
-        "organization_email": "info@samplefd.org",
-    },
+    }),
 }
 
 # Default welcome email HTML body
@@ -825,6 +723,7 @@ DEFAULT_WELCOME_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -843,7 +742,8 @@ Log in at: {{login_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_WELCOME_SUBJECT = "Welcome to {{organization_name}} — Your Account is Ready"
 
@@ -871,6 +771,7 @@ DEFAULT_PASSWORD_RESET_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -888,7 +789,8 @@ If you did not request a password reset, you can safely ignore this email. Your 
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
 
@@ -896,10 +798,9 @@ DEFAULT_PASSWORD_RESET_SUBJECT = "Password Reset — {{organization_name}}"
 DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
-        <h1>{{organization_name}}</h1>
+        <h1>Department Property Return Notice</h1>
     </div>
     <div class="content">
-        <p><strong>Re: {{drop_type_display}} — Notice of Department Property Return</strong></p>
         <p>Dear {{member_name}},</p>
         <p>
             This message serves as formal notice that your membership status with
@@ -928,11 +829,13 @@ DEFAULT_MEMBER_DROPPED_HTML = """<div class="container">
         </p>
     </div>
     <div class="footer">
-        <p>This is an official department notice. A copy has been placed in your member file.</p>
+        <p>This is an official department notice from {{organization_name}}.</p>
+        <p>A copy has been placed in your member file.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
-DEFAULT_MEMBER_DROPPED_TEXT = """Notice of Department Property Return
+DEFAULT_MEMBER_DROPPED_TEXT = """Department Property Return Notice
 
 Dear {{member_name}},
 
@@ -956,14 +859,15 @@ Respectfully,
 {{organization_name}}
 
 ---
-This is an official department notice. A copy has been placed in your member file."""
-
+This is an official department notice from {{organization_name}}.
+A copy has been placed in your member file.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 # Default inventory change notification email
 DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
-        <h1>{{organization_name}}</h1>
+        <h1>Inventory Change Confirmation</h1>
     </div>
     <div class="content">
         <p>Hello {{first_name}},</p>
@@ -992,6 +896,7 @@ DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated inventory notice from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1019,10 +924,10 @@ Thank you,
 
 ---
 This is an automated inventory notice from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_INVENTORY_CHANGE_SUBJECT = "Inventory Update — {{organization_name}}"
-
 
 # Default certification expiration alert email
 DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
@@ -1050,6 +955,7 @@ DEFAULT_CERT_EXPIRATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1069,12 +975,12 @@ View your certifications: {{renewal_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_CERT_EXPIRATION_SUBJECT = (
     "Certification Expiring: {{cert_name}} — {{organization_name}}"
 )
-
 
 # Default post-event validation email
 DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
@@ -1102,6 +1008,7 @@ DEFAULT_POST_EVENT_VALIDATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1121,10 +1028,10 @@ Validate attendance: {{validation_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_POST_EVENT_VALIDATION_SUBJECT = "Attendance Validation Needed: {{event_title}}"
-
 
 # Default post-shift validation email
 DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
@@ -1152,6 +1059,7 @@ DEFAULT_POST_SHIFT_VALIDATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1171,21 +1079,20 @@ Validate shift: {{validation_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_POST_SHIFT_VALIDATION_SUBJECT = (
     "Shift Validation Needed: {{shift_name}} — {{shift_date}}"
 )
 
-
 # Default property return reminder email
 DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
     <div class="logo">{{organization_logo_img}}</div>
     <div class="header">
-        <h1>{{organization_name}}</h1>
+        <h1>Property Return Reminder</h1>
     </div>
     <div class="content">
-        <p><strong>Re: Department Property Return Reminder</strong></p>
         <p>Dear {{member_name}},</p>
 
         <p>This is a reminder that you still have outstanding department property that needs to be returned.</p>
@@ -1203,10 +1110,12 @@ DEFAULT_PROPERTY_RETURN_REMINDER_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an official department notice from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
-DEFAULT_PROPERTY_RETURN_REMINDER_TEXT = """Department Property Return Reminder
+DEFAULT_PROPERTY_RETURN_REMINDER_TEXT = """Property Return Reminder
 
 Dear {{member_name}},
 
@@ -1222,12 +1131,13 @@ Return Deadline: {{return_deadline}}
 Please contact the department administration to arrange return of these items.
 
 ---
-This is an official department notice from {{organization_name}}."""
+This is an official department notice from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT = (
     "Property Return Reminder — {{organization_name}}"
 )
-
 
 # Default inactivity warning email
 DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
@@ -1256,6 +1166,7 @@ DEFAULT_INACTIVITY_WARNING_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1276,12 +1187,12 @@ View prospect: {{prospect_url}}
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_INACTIVITY_WARNING_SUBJECT = (
     "Inactivity Alert: {{prospect_name}} — {{organization_name}}"
 )
-
 
 # Default election rollback alert email
 DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
@@ -1304,6 +1215,8 @@ DEFAULT_ELECTION_ROLLBACK_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1320,10 +1233,11 @@ Reason: {{reason}}
 Please review the election details and coordinate with your team as needed.
 
 ---
-This is an automated message from {{organization_name}}."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_ELECTION_ROLLBACK_SUBJECT = "ALERT: Election Rolled Back — {{election_title}}"
-
 
 # Default election deleted alert email
 DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
@@ -1346,6 +1260,8 @@ DEFAULT_ELECTION_DELETED_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1362,10 +1278,11 @@ Reason: {{reason}}
 All associated ballots and results have been removed.
 
 ---
-This is an automated message from {{organization_name}}."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_ELECTION_DELETED_SUBJECT = "CRITICAL: Election Deleted — {{election_title}}"
-
 
 # Default member archived notification email
 DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
@@ -1382,6 +1299,8 @@ DEFAULT_MEMBER_ARCHIVED_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1392,12 +1311,13 @@ All department property has been returned. Previous status: {{previous_status}}.
 The member's profile remains accessible for legal requests or future reactivation.
 
 ---
-This is an automated message from {{organization_name}}."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_MEMBER_ARCHIVED_SUBJECT = (
     "Member Archived: {{member_name}} — {{organization_name}}"
 )
-
 
 # Default event request status update email
 DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
@@ -1420,6 +1340,8 @@ DEFAULT_EVENT_REQUEST_STATUS_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1436,10 +1358,11 @@ Message: {{message}}
 Thank you for your request.
 
 ---
-This is an automated message from {{organization_name}}."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_EVENT_REQUEST_STATUS_SUBJECT = "Event Request Update — {{status_label}}"
-
 
 # Default IT password reset notification email
 DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
@@ -1461,6 +1384,8 @@ DEFAULT_IT_PASSWORD_NOTIFICATION_HTML = """<div class="container">
     </div>
     <div class="footer">
         <p>This is an automated IT security notice from {{organization_name}}.</p>
+        <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1476,12 +1401,13 @@ IP Address: {{ip_address}}
 This is an informational notice. No action is required unless the request appears suspicious.
 
 ---
-This is an automated IT security notice from {{organization_name}}."""
+This is an automated IT security notice from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT = (
     "[IT Notice] Password Reset Requested — {{organization_name}}"
 )
-
 
 # Default duplicate application notification email
 DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
@@ -1502,9 +1428,9 @@ DEFAULT_DUPLICATE_APPLICATION_HTML = """<div class="container">
         status of your application, please contact us directly.</p>
     </div>
     <div class="footer">
-        <p>{{organization_name}}</p>
-        <p>{{organization_phone}}</p>
-        <p>{{organization_email}}</p>
+        <p>This is an automated message from {{organization_name}}.</p>
+        <p>{{organization_phone}} | {{organization_email}}</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1522,14 +1448,13 @@ If you believe this is an error, or if you have questions about the
 status of your application, please contact us directly.
 
 ---
-{{organization_name}}
-{{organization_phone}}
-{{organization_email}}"""
+This is an automated message from {{organization_name}}.
+{{organization_phone}} | {{organization_email}}
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_DUPLICATE_APPLICATION_SUBJECT = (
     "Application Already on File — {{organization_name}}"
 )
-
 
 # Default ballot notification email
 DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
@@ -1565,6 +1490,7 @@ DEFAULT_BALLOT_NOTIFICATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1592,10 +1518,10 @@ If you have any questions, please contact your election administrator:
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_BALLOT_NOTIFICATION_SUBJECT = "Ballot Available: {{election_title}}"
-
 
 # Default election report email
 DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
@@ -1637,6 +1563,7 @@ DEFAULT_ELECTION_REPORT_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated election report from {{organization_name}}.</p>
         <p>Please retain this email for your records.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1668,12 +1595,12 @@ MEMBERS WHO DID NOT RECEIVE BALLOTS
 
 ---
 This is an automated election report from {{organization_name}}.
-Please retain this email for your records."""
+Please retain this email for your records.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_ELECTION_REPORT_SUBJECT = (
     "Election Report: {{election_title}} — {{organization_name}}"
 )
-
 
 # Default ballot eligibility summary email (sent to secretary after ballot dispatch)
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
@@ -1709,6 +1636,7 @@ DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated eligibility summary from {{organization_name}}.</p>
         <p>Please retain this email for your records.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1735,12 +1663,12 @@ WHAT YOU CAN DO
 
 ---
 This is an automated eligibility summary from {{organization_name}}.
-Please retain this email for your records."""
+Please retain this email for your records.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT = (
     "Ballot Eligibility Summary: {{election_title}} — {{organization_name}}"
 )
-
 
 # Default event cancellation email
 DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
@@ -1764,6 +1692,7 @@ DEFAULT_EVENT_CANCELLATION_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1781,12 +1710,12 @@ Please update your calendar accordingly.
 
 ---
 This is an automated message from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_EVENT_CANCELLATION_SUBJECT = (
     "Event Cancelled: {{event_title}} — {{organization_name}}"
 )
-
 
 # Default event reminder email
 DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
@@ -1813,8 +1742,9 @@ DEFAULT_EVENT_REMINDER_HTML = """<div class="container">
         </p>
     </div>
     <div class="footer">
-        <p>This is an automated reminder.</p>
+        <p>This is an automated reminder from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1834,11 +1764,11 @@ Location: {{location_name}}
 View event: {{event_url}}
 
 ---
-This is an automated reminder.
-Please do not reply to this email."""
+This is an automated reminder from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_EVENT_REMINDER_SUBJECT = "Reminder: {{event_title}} — {{event_start}}"
-
 
 # Default series end reminder email
 DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
@@ -1867,6 +1797,7 @@ DEFAULT_SERIES_END_REMINDER_HTML = """<div class="container">
     <div class="footer">
         <p>This is an automated reminder from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1887,12 +1818,12 @@ View event: {{event_url}}
 
 ---
 This is an automated reminder from {{organization_name}}.
-Please do not reply to this email."""
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_SERIES_END_REMINDER_SUBJECT = (
     "Recurring Series Ending Soon: {{event_title}} — Ends {{series_end_date}}"
 )
-
 
 # Default training approval email
 DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
@@ -1919,8 +1850,9 @@ DEFAULT_TRAINING_APPROVAL_HTML = """<div class="container">
         </p>
     </div>
     <div class="footer">
-        <p>This is an automated message.</p>
+        <p>This is an automated message from {{organization_name}}.</p>
         <p>Please do not reply to this email.</p>
+        <p style="font-size: 11px; color: #9ca3af;">{{organization_phone}} | {{organization_email}} | {{organization_website}}</p>
     </div>
 </div>"""
 
@@ -1938,8 +1870,9 @@ Approval Deadline: {{approval_deadline}}
 Review and approve: {{approval_url}}
 
 ---
-This is an automated message.
-Please do not reply to this email."""
+This is an automated message from {{organization_name}}.
+Please do not reply to this email.
+{{organization_phone}} | {{organization_email}} | {{organization_website}}"""
 
 DEFAULT_TRAINING_APPROVAL_SUBJECT = (
     "Training Approval Needed: {{course_name}} — {{event_date}}"
@@ -2189,6 +2122,56 @@ class EmailTemplateService:
         )
         return template
 
+    async def reset_to_default(
+        self,
+        template_id: str,
+        organization_id: str,
+        updated_by: Optional[str] = None,
+    ) -> Optional[EmailTemplate]:
+        """Reset a template to its built-in default content.
+
+        Looks up the template's type in ``_DEFAULT_TEMPLATE_DEFS`` and
+        restores the subject, HTML body, text body, and CSS to the
+        system defaults.  Returns ``None`` if the template is not found
+        or its type has no registered default.
+        """
+        result = await self.db.execute(
+            select(EmailTemplate)
+            .where(
+                EmailTemplate.id == template_id,
+                EmailTemplate.organization_id == organization_id,
+            )
+            .options(selectinload(EmailTemplate.attachments))
+        )
+        template = result.scalar_one_or_none()
+        if not template:
+            return None
+
+        ttype = template.template_type
+        defn = next(
+            (d for d in self._DEFAULT_TEMPLATE_DEFS if d["type"] == ttype),
+            None,
+        )
+        if not defn:
+            return None
+
+        template.subject = defn["subject"]
+        template.html_body = defn["html"]
+        template.text_body = defn["text"]
+        template.css_styles = DEFAULT_CSS
+        template.updated_by = updated_by
+        await self.db.flush()
+        await self.db.refresh(template, attribute_names=["updated_at"])
+
+        logger.info(
+            "Template reset to default id=%s type=%s org=%s by=%s",
+            template_id,
+            ttype,
+            organization_id,
+            updated_by,
+        )
+        return template
+
     async def delete_template(self, template_id: str, organization_id: str) -> bool:
         """Delete an email template"""
         result = await self.db.execute(
@@ -2242,6 +2225,9 @@ class EmailTemplateService:
             ctx.setdefault(
                 "organization_email", getattr(organization, "email", None) or ""
             )
+            ctx.setdefault(
+                "organization_website", getattr(organization, "website", None) or ""
+            )
             # Build formatted mailing address
             ctx.setdefault(
                 "organization_mailing_address",
@@ -2270,6 +2256,10 @@ class EmailTemplateService:
                         getattr(organization, "physical_zip", None),
                     ),
                 )
+        # login_url: always available regardless of organization
+        frontend_url = getattr(app_settings, "FRONTEND_URL", "") or ""
+        ctx.setdefault("login_url", f"{frontend_url}/login" if frontend_url else "")
+
         # Build a ready-to-use <img> tag so templates can just insert it.
         # Skip base64 data URIs — they embed the full image payload in the
         # HTML and easily exceed Gmail's 102 KB message-clipping threshold.
@@ -2403,6 +2393,257 @@ class EmailTemplateService:
 
         return re.sub(r"\{\{(\s*\w+\s*)\}\}", replacer, text)
 
+    # Registry of default template definitions, keyed by EmailTemplateType.
+    # Used by ensure_default_templates() to create missing templates in a
+    # single data-driven loop instead of 20+ copy-pasted blocks.
+    _DEFAULT_TEMPLATE_DEFS: List[Dict[str, Any]] = [
+        {
+            "type": EmailTemplateType.WELCOME,
+            "name": "Welcome Email",
+            "subject": DEFAULT_WELCOME_SUBJECT,
+            "html": DEFAULT_WELCOME_HTML,
+            "text": DEFAULT_WELCOME_TEXT,
+            "description": "Sent to new members when their account is created. Includes login credentials.",
+            "attachments": True,
+        },
+        {
+            "type": EmailTemplateType.PASSWORD_RESET,
+            "name": "Password Reset",
+            "subject": DEFAULT_PASSWORD_RESET_SUBJECT,
+            "html": DEFAULT_PASSWORD_RESET_HTML,
+            "text": DEFAULT_PASSWORD_RESET_TEXT,
+            "description": "Sent when a member requests a password reset. Only used with local authentication.",
+        },
+        {
+            "type": EmailTemplateType.EVENT_CANCELLATION,
+            "name": "Event Cancellation",
+            "subject": DEFAULT_EVENT_CANCELLATION_SUBJECT,
+            "html": DEFAULT_EVENT_CANCELLATION_HTML,
+            "text": DEFAULT_EVENT_CANCELLATION_TEXT,
+            "description": (
+                "Sent to attendees when an event is cancelled. "
+                "Includes the event name, original date, and cancellation reason."
+            ),
+        },
+        {
+            "type": EmailTemplateType.EVENT_REMINDER,
+            "name": "Event Reminder",
+            "subject": DEFAULT_EVENT_REMINDER_SUBJECT,
+            "html": DEFAULT_EVENT_REMINDER_HTML,
+            "text": DEFAULT_EVENT_REMINDER_TEXT,
+            "description": (
+                "Sent to attendees as a reminder before an upcoming event. "
+                "Includes event details, time, and location."
+            ),
+        },
+        {
+            "type": EmailTemplateType.SERIES_END_REMINDER,
+            "name": "Series End Reminder",
+            "subject": DEFAULT_SERIES_END_REMINDER_SUBJECT,
+            "html": DEFAULT_SERIES_END_REMINDER_HTML,
+            "text": DEFAULT_SERIES_END_REMINDER_TEXT,
+            "description": (
+                "Sent to event managers 6 months before a recurring event "
+                "series is scheduled to end. Includes series details and "
+                "remaining occurrences."
+            ),
+        },
+        {
+            "type": EmailTemplateType.TRAINING_APPROVAL,
+            "name": "Training Approval Request",
+            "subject": DEFAULT_TRAINING_APPROVAL_SUBJECT,
+            "html": DEFAULT_TRAINING_APPROVAL_HTML,
+            "text": DEFAULT_TRAINING_APPROVAL_TEXT,
+            "description": (
+                "Sent to approvers when a training event is submitted for approval. "
+                "Includes course details, attendee count, and approval deadline."
+            ),
+        },
+        {
+            "type": EmailTemplateType.BALLOT_NOTIFICATION,
+            "name": "Ballot Notification",
+            "subject": DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
+            "html": DEFAULT_BALLOT_NOTIFICATION_HTML,
+            "text": DEFAULT_BALLOT_NOTIFICATION_TEXT,
+            "description": (
+                "Sent to eligible voters when a ballot is available. "
+                "Includes the election title, meeting date, and a link to vote."
+            ),
+        },
+        {
+            "type": EmailTemplateType.ELECTION_REPORT,
+            "name": "Election Report",
+            "subject": DEFAULT_ELECTION_REPORT_SUBJECT,
+            "html": DEFAULT_ELECTION_REPORT_HTML,
+            "text": DEFAULT_ELECTION_REPORT_TEXT,
+            "description": (
+                "Sent to the secretary when an election is closed. "
+                "Includes election results, ballot recipients, and "
+                "reasons why members did not receive ballots."
+            ),
+        },
+        {
+            "type": EmailTemplateType.BALLOT_ELIGIBILITY_SUMMARY,
+            "name": "Ballot Eligibility Summary",
+            "subject": DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_SUBJECT,
+            "html": DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_HTML,
+            "text": DEFAULT_BALLOT_ELIGIBILITY_SUMMARY_TEXT,
+            "description": (
+                "Sent to the secretary after ballot emails are dispatched. "
+                "Lists who received ballots and who was skipped with reasons."
+            ),
+        },
+        {
+            "type": EmailTemplateType.MEMBER_DROPPED,
+            "name": "Member Dropped \u2014 Property Return Notice",
+            "subject": "Notice of Department Property Return \u2014 {{organization_name}}",
+            "html": DEFAULT_MEMBER_DROPPED_HTML,
+            "text": DEFAULT_MEMBER_DROPPED_TEXT,
+            "description": (
+                "Sent to a member when their status changes to dropped. "
+                "Includes the reason for separation and a notice to return all department property. "
+                "CC recipients are controlled in Organization Settings > Drop Notifications."
+            ),
+            "attachments": True,
+        },
+        {
+            "type": EmailTemplateType.INVENTORY_CHANGE,
+            "name": "Inventory Change Confirmation",
+            "subject": DEFAULT_INVENTORY_CHANGE_SUBJECT,
+            "html": DEFAULT_INVENTORY_CHANGE_HTML,
+            "text": DEFAULT_INVENTORY_CHANGE_TEXT,
+            "description": (
+                "Sent to a member approximately one hour after inventory changes "
+                "(items issued, assigned, returned, etc.). Multiple changes within "
+                "the window are consolidated into a single email. Offsetting actions "
+                "(e.g. issue + return of the same item) are netted out."
+            ),
+        },
+        {
+            "type": EmailTemplateType.CERT_EXPIRATION,
+            "name": "Certification Expiration Alert",
+            "subject": DEFAULT_CERT_EXPIRATION_SUBJECT,
+            "html": DEFAULT_CERT_EXPIRATION_HTML,
+            "text": DEFAULT_CERT_EXPIRATION_TEXT,
+            "description": (
+                "Sent to members when a certification is approaching its expiration date. "
+                "Tiered alerts are sent at 90, 60, 30, and 7 days before expiry."
+            ),
+        },
+        {
+            "type": EmailTemplateType.POST_EVENT_VALIDATION,
+            "name": "Post-Event Attendance Validation",
+            "subject": DEFAULT_POST_EVENT_VALIDATION_SUBJECT,
+            "html": DEFAULT_POST_EVENT_VALIDATION_HTML,
+            "text": DEFAULT_POST_EVENT_VALIDATION_TEXT,
+            "description": (
+                "Sent to the event creator after an event ends, asking them to "
+                "review and validate the attendance records."
+            ),
+        },
+        {
+            "type": EmailTemplateType.POST_SHIFT_VALIDATION,
+            "name": "Post-Shift Attendance Validation",
+            "subject": DEFAULT_POST_SHIFT_VALIDATION_SUBJECT,
+            "html": DEFAULT_POST_SHIFT_VALIDATION_HTML,
+            "text": DEFAULT_POST_SHIFT_VALIDATION_TEXT,
+            "description": (
+                "Sent to the shift officer after a shift ends, asking them to "
+                "review and confirm the shift attendance."
+            ),
+        },
+        {
+            "type": EmailTemplateType.PROPERTY_RETURN_REMINDER,
+            "name": "Property Return Reminder",
+            "subject": DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT,
+            "html": DEFAULT_PROPERTY_RETURN_REMINDER_HTML,
+            "text": DEFAULT_PROPERTY_RETURN_REMINDER_TEXT,
+            "description": (
+                "Sent to dropped members as a follow-up reminder to return "
+                "department property. Sent at 30 and 90 days after separation."
+            ),
+        },
+        {
+            "type": EmailTemplateType.INACTIVITY_WARNING,
+            "name": "Prospect Inactivity Warning",
+            "subject": DEFAULT_INACTIVITY_WARNING_SUBJECT,
+            "html": DEFAULT_INACTIVITY_WARNING_HTML,
+            "text": DEFAULT_INACTIVITY_WARNING_TEXT,
+            "description": (
+                "Sent to pipeline coordinators when a prospective member has "
+                "been inactive for an extended period."
+            ),
+        },
+        {
+            "type": EmailTemplateType.ELECTION_ROLLBACK,
+            "name": "Election Rollback Alert",
+            "subject": DEFAULT_ELECTION_ROLLBACK_SUBJECT,
+            "html": DEFAULT_ELECTION_ROLLBACK_HTML,
+            "text": DEFAULT_ELECTION_ROLLBACK_TEXT,
+            "description": (
+                "Sent to department leadership when an election is rolled "
+                "back to a previous stage. Includes the reason and who performed it."
+            ),
+        },
+        {
+            "type": EmailTemplateType.ELECTION_DELETED,
+            "name": "Election Deleted Alert",
+            "subject": DEFAULT_ELECTION_DELETED_SUBJECT,
+            "html": DEFAULT_ELECTION_DELETED_HTML,
+            "text": DEFAULT_ELECTION_DELETED_TEXT,
+            "description": (
+                "Sent to department leadership when an election is permanently "
+                "deleted. All ballots and results are removed."
+            ),
+        },
+        {
+            "type": EmailTemplateType.MEMBER_ARCHIVED,
+            "name": "Member Archived Notification",
+            "subject": DEFAULT_MEMBER_ARCHIVED_SUBJECT,
+            "html": DEFAULT_MEMBER_ARCHIVED_HTML,
+            "text": DEFAULT_MEMBER_ARCHIVED_TEXT,
+            "description": (
+                "Sent to admins when a dropped member is automatically archived "
+                "after all department property has been returned."
+            ),
+        },
+        {
+            "type": EmailTemplateType.EVENT_REQUEST_STATUS,
+            "name": "Event Request Status Update",
+            "subject": DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
+            "html": DEFAULT_EVENT_REQUEST_STATUS_HTML,
+            "text": DEFAULT_EVENT_REQUEST_STATUS_TEXT,
+            "description": (
+                "Sent to the event requester and/or assigned coordinator when "
+                "an event request status changes (e.g. submitted, scheduled, declined)."
+            ),
+        },
+        {
+            "type": EmailTemplateType.IT_PASSWORD_NOTIFICATION,
+            "name": "IT Password Reset Notice",
+            "subject": DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT,
+            "html": DEFAULT_IT_PASSWORD_NOTIFICATION_HTML,
+            "text": DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
+            "description": (
+                "Sent to the IT team contacts when a user requests a password "
+                "reset. Informational only \u2014 includes the user's name, email, "
+                "and request IP address."
+            ),
+        },
+        {
+            "type": EmailTemplateType.DUPLICATE_APPLICATION,
+            "name": "Duplicate Application Notice",
+            "subject": DEFAULT_DUPLICATE_APPLICATION_SUBJECT,
+            "html": DEFAULT_DUPLICATE_APPLICATION_HTML,
+            "text": DEFAULT_DUPLICATE_APPLICATION_TEXT,
+            "description": (
+                "Sent to the applicant when a duplicate membership application "
+                "is detected for the same email address. The department is "
+                "BCC'd automatically."
+            ),
+        },
+    ]
+
     async def ensure_default_templates(
         self,
         organization_id: str,
@@ -2412,480 +2653,24 @@ class EmailTemplateService:
         Ensure default templates exist for an organization.
         Creates any missing default templates. Idempotent.
         """
-        created = []
+        created: List[EmailTemplate] = []
 
-        # Check for welcome template
-        existing = await self.get_template(
-            organization_id, EmailTemplateType.WELCOME, active_only=False
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.WELCOME,
-                name="Welcome Email",
-                subject=DEFAULT_WELCOME_SUBJECT,
-                html_body=DEFAULT_WELCOME_HTML,
-                text_body=DEFAULT_WELCOME_TEXT,
-                description="Sent to new members when their account is created. Includes login credentials.",
-                allow_attachments=True,
-                created_by=created_by,
+        for defn in self._DEFAULT_TEMPLATE_DEFS:
+            existing = await self.get_template(
+                organization_id, defn["type"], active_only=False
             )
-            created.append(template)
-
-        # Check for password reset template
-        existing = await self.get_template(
-            organization_id, EmailTemplateType.PASSWORD_RESET, active_only=False
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.PASSWORD_RESET,
-                name="Password Reset",
-                subject=DEFAULT_PASSWORD_RESET_SUBJECT,
-                html_body=DEFAULT_PASSWORD_RESET_HTML,
-                text_body=DEFAULT_PASSWORD_RESET_TEXT,
-                description="Sent when a member requests a password reset. Only used with local authentication.",
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for event cancellation template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.EVENT_CANCELLATION,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.EVENT_CANCELLATION,
-                name="Event Cancellation",
-                subject=DEFAULT_EVENT_CANCELLATION_SUBJECT,
-                html_body=DEFAULT_EVENT_CANCELLATION_HTML,
-                text_body=DEFAULT_EVENT_CANCELLATION_TEXT,
-                description=(
-                    "Sent to attendees when an event is cancelled. "
-                    "Includes the event name, original date, and cancellation reason."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for event reminder template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.EVENT_REMINDER,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.EVENT_REMINDER,
-                name="Event Reminder",
-                subject=DEFAULT_EVENT_REMINDER_SUBJECT,
-                html_body=DEFAULT_EVENT_REMINDER_HTML,
-                text_body=DEFAULT_EVENT_REMINDER_TEXT,
-                description=(
-                    "Sent to attendees as a reminder before an upcoming event. "
-                    "Includes event details, time, and location."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for series end reminder template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.SERIES_END_REMINDER,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.SERIES_END_REMINDER,
-                name="Series End Reminder",
-                subject=DEFAULT_SERIES_END_REMINDER_SUBJECT,
-                html_body=DEFAULT_SERIES_END_REMINDER_HTML,
-                text_body=DEFAULT_SERIES_END_REMINDER_TEXT,
-                description=(
-                    "Sent to event managers 6 months before a recurring event "
-                    "series is scheduled to end. Includes series details and "
-                    "remaining occurrences."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for training approval template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.TRAINING_APPROVAL,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.TRAINING_APPROVAL,
-                name="Training Approval Request",
-                subject=DEFAULT_TRAINING_APPROVAL_SUBJECT,
-                html_body=DEFAULT_TRAINING_APPROVAL_HTML,
-                text_body=DEFAULT_TRAINING_APPROVAL_TEXT,
-                description=(
-                    "Sent to approvers when a training event is submitted for approval. "
-                    "Includes course details, attendee count, and approval deadline."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for ballot notification template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.BALLOT_NOTIFICATION,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.BALLOT_NOTIFICATION,
-                name="Ballot Notification",
-                subject=DEFAULT_BALLOT_NOTIFICATION_SUBJECT,
-                html_body=DEFAULT_BALLOT_NOTIFICATION_HTML,
-                text_body=DEFAULT_BALLOT_NOTIFICATION_TEXT,
-                description=(
-                    "Sent to eligible voters when a ballot is available. "
-                    "Includes the election title, meeting date, and a link to vote."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for election report template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.ELECTION_REPORT,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.ELECTION_REPORT,
-                name="Election Report",
-                subject=DEFAULT_ELECTION_REPORT_SUBJECT,
-                html_body=DEFAULT_ELECTION_REPORT_HTML,
-                text_body=DEFAULT_ELECTION_REPORT_TEXT,
-                description=(
-                    "Sent to the secretary when an election is closed. "
-                    "Includes election results, ballot recipients, and "
-                    "reasons why members did not receive ballots."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for member dropped template
-        existing = await self.get_template(
-            organization_id, EmailTemplateType.MEMBER_DROPPED, active_only=False
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.MEMBER_DROPPED,
-                name="Member Dropped — Property Return Notice",
-                subject="Notice of Department Property Return — {{organization_name}}",
-                html_body=DEFAULT_MEMBER_DROPPED_HTML,
-                text_body=DEFAULT_MEMBER_DROPPED_TEXT,
-                description=(
-                    "Sent to a member when their status changes to dropped. "
-                    "Includes the reason for separation and a notice to return all department property. "
-                    "CC recipients are controlled in Organization Settings > Drop Notifications."
-                ),
-                allow_attachments=True,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for inventory change template
-        existing = await self.get_template(
-            organization_id, EmailTemplateType.INVENTORY_CHANGE, active_only=False
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.INVENTORY_CHANGE,
-                name="Inventory Change Confirmation",
-                subject=DEFAULT_INVENTORY_CHANGE_SUBJECT,
-                html_body=DEFAULT_INVENTORY_CHANGE_HTML,
-                text_body=DEFAULT_INVENTORY_CHANGE_TEXT,
-                description=(
-                    "Sent to a member approximately one hour after inventory changes "
-                    "(items issued, assigned, returned, etc.). Multiple changes within "
-                    "the window are consolidated into a single email. Offsetting actions "
-                    "(e.g. issue + return of the same item) are netted out."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for cert expiration template
-        existing = await self.get_template(
-            organization_id, EmailTemplateType.CERT_EXPIRATION, active_only=False
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.CERT_EXPIRATION,
-                name="Certification Expiration Alert",
-                subject=DEFAULT_CERT_EXPIRATION_SUBJECT,
-                html_body=DEFAULT_CERT_EXPIRATION_HTML,
-                text_body=DEFAULT_CERT_EXPIRATION_TEXT,
-                description=(
-                    "Sent to members when a certification is approaching its expiration date. "
-                    "Tiered alerts are sent at 90, 60, 30, and 7 days before expiry."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for post-event validation template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.POST_EVENT_VALIDATION,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.POST_EVENT_VALIDATION,
-                name="Post-Event Attendance Validation",
-                subject=DEFAULT_POST_EVENT_VALIDATION_SUBJECT,
-                html_body=DEFAULT_POST_EVENT_VALIDATION_HTML,
-                text_body=DEFAULT_POST_EVENT_VALIDATION_TEXT,
-                description=(
-                    "Sent to the event creator after an event ends, asking them to "
-                    "review and validate the attendance records."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for post-shift validation template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.POST_SHIFT_VALIDATION,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.POST_SHIFT_VALIDATION,
-                name="Post-Shift Attendance Validation",
-                subject=DEFAULT_POST_SHIFT_VALIDATION_SUBJECT,
-                html_body=DEFAULT_POST_SHIFT_VALIDATION_HTML,
-                text_body=DEFAULT_POST_SHIFT_VALIDATION_TEXT,
-                description=(
-                    "Sent to the shift officer after a shift ends, asking them to "
-                    "review and confirm the shift attendance."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for property return reminder template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.PROPERTY_RETURN_REMINDER,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.PROPERTY_RETURN_REMINDER,
-                name="Property Return Reminder",
-                subject=DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT,
-                html_body=DEFAULT_PROPERTY_RETURN_REMINDER_HTML,
-                text_body=DEFAULT_PROPERTY_RETURN_REMINDER_TEXT,
-                description=(
-                    "Sent to dropped members as a follow-up reminder to return "
-                    "department property. Sent at 30 and 90 days after separation."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for inactivity warning template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.INACTIVITY_WARNING,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.INACTIVITY_WARNING,
-                name="Prospect Inactivity Warning",
-                subject=DEFAULT_INACTIVITY_WARNING_SUBJECT,
-                html_body=DEFAULT_INACTIVITY_WARNING_HTML,
-                text_body=DEFAULT_INACTIVITY_WARNING_TEXT,
-                description=(
-                    "Sent to pipeline coordinators when a prospective member has "
-                    "been inactive for an extended period."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for election rollback template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.ELECTION_ROLLBACK,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.ELECTION_ROLLBACK,
-                name="Election Rollback Alert",
-                subject=DEFAULT_ELECTION_ROLLBACK_SUBJECT,
-                html_body=DEFAULT_ELECTION_ROLLBACK_HTML,
-                text_body=DEFAULT_ELECTION_ROLLBACK_TEXT,
-                description=(
-                    "Sent to department leadership when an election is rolled "
-                    "back to a previous stage. Includes the reason and who performed it."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for election deleted template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.ELECTION_DELETED,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.ELECTION_DELETED,
-                name="Election Deleted Alert",
-                subject=DEFAULT_ELECTION_DELETED_SUBJECT,
-                html_body=DEFAULT_ELECTION_DELETED_HTML,
-                text_body=DEFAULT_ELECTION_DELETED_TEXT,
-                description=(
-                    "Sent to department leadership when an election is permanently "
-                    "deleted. All ballots and results are removed."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for member archived template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.MEMBER_ARCHIVED,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.MEMBER_ARCHIVED,
-                name="Member Archived Notification",
-                subject=DEFAULT_MEMBER_ARCHIVED_SUBJECT,
-                html_body=DEFAULT_MEMBER_ARCHIVED_HTML,
-                text_body=DEFAULT_MEMBER_ARCHIVED_TEXT,
-                description=(
-                    "Sent to admins when a dropped member is automatically archived "
-                    "after all department property has been returned."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for event request status template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.EVENT_REQUEST_STATUS,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.EVENT_REQUEST_STATUS,
-                name="Event Request Status Update",
-                subject=DEFAULT_EVENT_REQUEST_STATUS_SUBJECT,
-                html_body=DEFAULT_EVENT_REQUEST_STATUS_HTML,
-                text_body=DEFAULT_EVENT_REQUEST_STATUS_TEXT,
-                description=(
-                    "Sent to the event requester and/or assigned coordinator when "
-                    "an event request status changes (e.g. submitted, scheduled, declined)."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for IT password notification template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.IT_PASSWORD_NOTIFICATION,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.IT_PASSWORD_NOTIFICATION,
-                name="IT Password Reset Notice",
-                subject=DEFAULT_IT_PASSWORD_NOTIFICATION_SUBJECT,
-                html_body=DEFAULT_IT_PASSWORD_NOTIFICATION_HTML,
-                text_body=DEFAULT_IT_PASSWORD_NOTIFICATION_TEXT,
-                description=(
-                    "Sent to the IT team contacts when a user requests a password "
-                    "reset. Informational only — includes the user's name, email, "
-                    "and request IP address."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
-
-        # Check for duplicate application notification template
-        existing = await self.get_template(
-            organization_id,
-            EmailTemplateType.DUPLICATE_APPLICATION,
-            active_only=False,
-        )
-        if not existing:
-            template = await self.create_template(
-                organization_id=organization_id,
-                template_type=EmailTemplateType.DUPLICATE_APPLICATION,
-                name="Duplicate Application Notice",
-                subject=DEFAULT_DUPLICATE_APPLICATION_SUBJECT,
-                html_body=DEFAULT_DUPLICATE_APPLICATION_HTML,
-                text_body=DEFAULT_DUPLICATE_APPLICATION_TEXT,
-                description=(
-                    "Sent to the applicant when a duplicate membership application "
-                    "is detected for the same email address. The department is "
-                    "BCC'd automatically."
-                ),
-                allow_attachments=False,
-                created_by=created_by,
-            )
-            created.append(template)
+            if not existing:
+                template = await self.create_template(
+                    organization_id=organization_id,
+                    template_type=defn["type"],
+                    name=defn["name"],
+                    subject=defn["subject"],
+                    html_body=defn["html"],
+                    text_body=defn["text"],
+                    description=defn.get("description"),
+                    allow_attachments=defn.get("attachments", False),
+                    created_by=created_by,
+                )
+                created.append(template)
 
         return created

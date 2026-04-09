@@ -173,6 +173,11 @@ export const emailTemplatesService = {
     return response.data;
   },
 
+  async resetTemplate(templateId: string): Promise<EmailTemplate> {
+    const response = await api.post<EmailTemplate>(`/email-templates/${templateId}/reset`);
+    return response.data;
+  },
+
   async previewTemplate(templateId: string, context?: Record<string, unknown>, overrides?: { subject?: string; html_body?: string; css_styles?: string }, memberId?: string): Promise<EmailTemplatePreview> {
     const response = await api.post<EmailTemplatePreview>(`/email-templates/${templateId}/preview`, {
       context: context || {},
