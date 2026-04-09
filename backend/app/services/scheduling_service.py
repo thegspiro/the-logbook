@@ -1066,7 +1066,7 @@ class SchedulingService:
             .where(Shift.shift_date < next_month_first)
         )
         total_minutes = hours_result.scalar() or 0
-        total_hours = round(total_minutes / 60.0, 1)
+        total_hours = round(float(total_minutes) / 60.0, 1)
 
         return {
             "total_shifts": total_shifts,
@@ -2844,7 +2844,7 @@ class SchedulingService:
                 "last_name": row.last_name or "",
                 "shift_count": row.shift_count,
                 "total_minutes": row.total_minutes,
-                "total_hours": round(row.total_minutes / 60.0, 1),
+                "total_hours": round(float(row.total_minutes) / 60.0, 1),
             }
             for row in rows
         ]
@@ -3454,7 +3454,7 @@ class SchedulingService:
                 attendance_map[row.user_id] = {
                     "shift_count": row.shift_count,
                     "total_minutes": row.total_minutes,
-                    "total_hours": round(row.total_minutes / 60.0, 1),
+                    "total_hours": round(float(row.total_minutes) / 60.0, 1),
                 }
 
             # Pre-load leave months for rolling requirements so we can
@@ -3600,7 +3600,7 @@ class SchedulingService:
                 ).where(ShiftAttendance.shift_id == str(shift_id))
             )
             total_min = hours_result.scalar() or 0
-            shift.total_hours = round(total_min / 60.0, 1) if total_min > 0 else 0.0
+            shift.total_hours = round(float(total_min) / 60.0, 1) if total_min > 0 else 0.0
 
             # Snapshot per-member call counts onto attendance records
             member_call_counts = await self.compute_member_call_counts(shift_id)
@@ -3690,7 +3690,7 @@ class SchedulingService:
                 )
                 hours = 0.0
                 if att and att.duration_minutes:
-                    hours = round(att.duration_minutes / 60.0, 2)
+                    hours = round(float(att.duration_minutes) / 60.0, 2)
 
                 if hours <= 0 and shift.start_time and shift.end_time:
                     delta = shift.end_time - shift.start_time

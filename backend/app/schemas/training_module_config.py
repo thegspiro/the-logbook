@@ -3,12 +3,25 @@ Schemas for Training Module Configuration (Member Visibility Settings)
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.base import UTCResponseBase
+
+_BOOL_FIELD_DEFAULTS: Dict[str, bool] = {
+    "form_show_performance_rating": True,
+    "form_show_areas_of_strength": True,
+    "form_show_areas_for_improvement": True,
+    "form_show_officer_narrative": True,
+    "form_show_skills_observed": True,
+    "form_show_tasks_performed": True,
+    "form_show_call_types": True,
+    "shift_reports_enabled": True,
+    "shift_reports_include_training": True,
+    "report_review_required": False,
+}
 
 
 class TrainingModuleConfigResponse(UTCResponseBase):
@@ -68,6 +81,23 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     # Feature toggles
     shift_reports_enabled: bool = True
     shift_reports_include_training: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def coerce_null_booleans(cls, data: Any) -> Any:
+        """DB columns added after initial rows exist may be NULL; coerce to defaults."""
+        if isinstance(data, dict):
+            for field, default in _BOOL_FIELD_DEFAULTS.items():
+                if data.get(field) is None:
+                    data[field] = default
+        else:
+            for field, default in _BOOL_FIELD_DEFAULTS.items():
+                if getattr(data, field, None) is None:
+                    try:
+                        setattr(data, field, default)
+                    except AttributeError:
+                        pass
+        return data
 
     # Shift review defaults
     shift_review_call_types: Optional[List[str]] = None
