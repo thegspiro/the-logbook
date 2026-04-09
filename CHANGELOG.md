@@ -7,6 +7,176 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Shift Report Redesign, Email Templates, Inventory Variants & Print Support (2026-04-07 — 2026-04-09)
+
+#### Shift Report Creation Redesign — Shift-First Batch Workflow
+
+- **Shift-first batch creation**: Officers now start by selecting a shift, then the system loads all crew members for that shift. Officers fill in shared data (hours, calls, call types) once, then add per-trainee evaluations (rating, skills, tasks, narrative) for members who need them. Non-trainees receive hours/calls credit only. Submits all reports in a single batch via `POST /api/v1/shift-completion-reports/batch`
+- **Batch create endpoint**: New `POST /api/v1/shift-completion-reports/batch` accepts a `BatchShiftReportCreate` payload with shared shift data and per-member evaluation arrays. Returns `{created, skipped}` counts
+- **By-shift lookup**: Officers can query all existing reports for a shift before creating new ones, preventing duplicate work
+- **Task defaults pre-population**: After selecting an apparatus type, Add Task dialog pre-populates from the apparatus-type task mapping. Previously selected task defaults remain visible after selection
+- **Score labels inline**: 1-5 skill score buttons now show descriptive label text next to them (Needs work, Developing, Competent, Proficient, Excellent) in addition to tooltips, improving readability in both ShiftReportPage and ShiftReportsTab
+- **Reviewer name on cards**: Shift completion report cards now display the reviewer's name (resolved via `reviewed_by` → `User` relationship) alongside the review status badge
+- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-review" action button in all view modes (not just the Flagged tab)
+- **Server error messages in toasts**: Toast notifications now show actual server error messages from the API response instead of generic "Failed to submit" text, improving troubleshooting for officers
+- **Review comment UX**: Flagging a report now requires entering a reason (modal blocks submission without text). Reviewer name is displayed on the review badge
+
+#### Shift Report Offline Support
+
+- **Offline draft auto-save**: In-progress shift report forms are auto-saved to `localStorage` to prevent data loss from connectivity drops or accidental navigation. Stores shift ID, form data, crew selections, trainee evaluations, and crew remarks. Maximum 20 drafts retained with LRU eviction
+- **Offline submission queue**: When connectivity is lost during report submission, reports are queued in IndexedDB and automatically synced when connectivity returns. Uses the same architecture as the equipment check offline queue
+- **Draft management functions**: `saveDraft()`, `loadDraft()`, `deleteDraft()`, `listDrafts()`, `hasDraft()` for form state persistence
+- **Queue management functions**: `enqueueShiftReport()`, `listPendingReports()`, `dequeueShiftReport()`, `markReportRetry()`, `pendingReportCount()` for offline queue operations
+
+#### Shift Report Print Page
+
+- **Paper-formatted print page**: New route at `/scheduling/shift-reports/print` renders a letter-size (8.5" × 11") shift completion report formatted for printing with department branding, signature lines, and structured sections
+- **Auto-print trigger**: Page automatically opens the browser print dialog after loading
+- **Print from reports tab**: "Print" button on report cards in ShiftReportsTab navigates to the print page with the report ID as a query parameter
+
+#### Department-Level Shift Report Settings
+
+- **Granular toggles**: New department-level settings for controlling shift report behavior beyond the existing form section toggles. Stored in `training_module_configs` and `org.settings["shift_reports"]`
+- **Editable tag lists**: Skills and tasks per apparatus type are now managed via an `EditableTagList` component with inline add/remove UI, replacing the previous plain text display
+
+#### Training Record Print Pages
+
+- **Member training history print**: New route at `/training/print/member` renders a paper-formatted member training record for printing. Includes all training records, hours summary, certification status, and compliance indicators
+- **Program detail print**: New route at `/training/print/program` renders a training program with phases, requirements, milestones, and enrollment data formatted for paper
+- **Compliance matrix print**: New route at `/training/print/compliance` renders the department-wide compliance matrix (all members × all requirements) as a printable grid. Designed for annual reviews, audits, and regulatory filing. Requires `training.manage` permission
+- **Print buttons on source pages**: ComplianceMatrixTab, MemberTrainingHistoryPage, and PipelineDetailPage each have a new "Print" button that navigates to the corresponding print page
+
+#### Email Template System Improvements
+
+- **Template editor keyboard shortcut**: Ctrl+S / Cmd+S saves the current template without clicking the Save button
+- **Discard changes**: "Discard" button reverts unsaved editor changes to the last saved state
+- **Reset to default**: `POST /api/v1/email-templates/{id}/reset` restores a template's subject, HTML body, text body, and CSS to built-in defaults while preserving custom CC/BCC settings
+- **Test email**: `POST /api/v1/message-history/test-email` sends a test email using the current template content. Accepts optional `template_id` to test a specific template. Result is logged to message history
+- **Template search**: Searchable template list with filter-as-you-type in the TemplateList component
+- **Standardized email footers**: All email templates now include department contact information (phone, email, address) in the footer. Pulled from organization settings
+- **Global template variables**: `organization_website` and `login_url` available as Jinja2 variables in all email templates for consistent branding links
+- **`wrap_email_body()` helper**: New utility function that wraps inline HTML email content in the standard template structure (header, body, footer). Converts legacy inline HTML emails in scheduled tasks and scheduling service to use the template system
+- **Missing template types**: Added all missing email template types to both the frontend display map (TemplateList) and backend defaults (email_template_service), ensuring every template is visible and configurable
+
+#### Inventory Module — Variant Capsules, Stock Matrix & Filters
+
+- **Variant capsules component**: New `VariantCapsules` component displays size (blue), color (purple), and style (amber) as compact colored pill badges on inventory items. Used across InventoryItemsPage, ItemDetailPage, MyEquipmentPage, PoolItemsPage, and VariantGroupsPage
+- **Stock matrix on variant groups**: VariantGroupsPage redesigned with a stock matrix view showing all size × color × style combinations with per-variant quantity, total stock, and low-stock indicators
+- **Size/color/style filters on items page**: `GET /api/v1/inventory/items` now accepts `size`, `color`, and `style` query parameters for filtering inventory by variant attributes
+- **`getDisplayName()` helper**: Strips variant suffixes (` — size [— color] [— style]`) from item names for cleaner display in lists and cards
+
+#### Barcode Label Improvements
+
+- **Layout bug fixes**: Fixed label content overflowing on Dymo 30334 and Rollo 4×6 formats. Corrected quiet zone spacing on Code128 barcodes
+- **Content customization**: Label generation now supports customizable content fields — choose which fields (name, serial, asset tag, barcode, category, location) appear on labels. New `BarcodeLabelOptions` schema field on the generate request
+- **Print preview**: InventoryBarcodePrintPage now shows a live preview of label content before generating the PDF
+
+#### Equipment Check Improvements
+
+- **Incomplete checklist warning**: When a member submits an equipment check with unanswered items, a confirmation dialog warns about the incomplete state before allowing submission
+- **Reopen in-progress checks**: `PUT /api/v1/equipment-checks/checks/{id}/complete` allows completing remaining items on an incomplete check, enabling members to resume interrupted inspections
+- **MyChecklistsPage enhancements**: In-progress checks now show a "Resume" button alongside the completion percentage
+
+#### Branding & PWA
+
+- **App logo as default fallback**: SideNavigation, TopNavigation, and LoginPage now display the app logo (`/logo.png`) as default branding when no custom organization logo is configured
+- **PWA icons**: Added `apple-touch-icon.png`, `pwa-192x192.png`, and `pwa-512x512.png` to `frontend/public/` for proper PWA installation appearance on mobile devices
+- **Open Graph meta tags**: `frontend/index.html` now includes OG tags (`og:title`, `og:description`, `og:image`) for rich link previews when sharing the application URL
+- **Logo in documentation**: README.md and docs/README.md now display the project logo
+
+#### Code Quality & Refactoring
+
+- **Lint fix sweep**: Fixed pre-existing lint violations across 64 files (backend: F401 unused imports, F811 redefined names, E303 blank lines, W291 trailing whitespace; frontend: test assertion patterns, unused imports, type safety)
+- **Shared frontend components extracted**: `EditableTagList`, `ReportContentDisplay`, `StarRating`, `AssignmentActions`, `CrewBoardSlot`, `PositionEditor` extracted from large page components to reduce duplication. New `useLoadData` hook for common data-loading pattern
+- **Shared shift report constants**: `shiftReportConstants.ts` centralizes call types, default skills, default tasks, score labels, and status display mappings used across ShiftReportPage, ShiftReportsTab, and ShiftReportsSettingsPanel
+- **Backend service deduplication**: Extracted shared patterns in `scheduling_service.py`, `scheduled_tasks.py`, `equipment_check_service.py`, and `shift_completion_service.py` to reduce code duplication
+- **Email service simplification**: Extracted shared email patterns, fixed security issues (template injection vectors), and performance issues (redundant DB queries) in `email_service.py` and `email_template_service.py`
+- **Form types extraction**: Moved shared form type definitions from `inventoryService.ts` to dedicated `formTypes.ts`, removing dead code from the inventory service
+
+#### Bug Fixes (2026-04-07 — 2026-04-09)
+
+| Issue | Fix |
+|-------|-----|
+| `category_name` missing from `InventoryItem` interface | Added to `eventServices.ts` type definition |
+| JSX syntax error in `EmailTemplatesPage` | Fixed malformed JSX causing Docker build failure |
+| Null check failures in `ShiftReportsSettingsPanel` | Added null guards for optional config values |
+| Null check in `ProgramPrintPage` | Added fallback for nullable program fields |
+| `exactOptionalPropertyTypes` violations in `ShiftReportsTab` | Fixed optional property assignments to use `undefined` explicitly |
+| `notification_metadata` bug and JSON column mutations | Fixed silent data loss from shallow-copy JSON mutations using `copy.deepcopy()` |
+| Banned date patterns in `TrainingEnhancementsTab` | Replaced with timezone-aware `dateFormatting.ts` utilities |
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/shift-completion-reports/batch` | Batch-create shift reports for all crew on a shift |
+| `PUT` | `/api/v1/equipment-checks/checks/{id}/complete` | Complete remaining items on an incomplete check |
+| `POST` | `/api/v1/email-templates/{id}/reset` | Reset email template to built-in defaults |
+| `POST` | `/api/v1/email-templates/{id}/preview` | Preview rendered template with sample/live data |
+| `POST` | `/api/v1/message-history/test-email` | Send test email for SMTP verification or template preview |
+| `POST` | `/api/v1/inventory/items/create-variants` | Create multiple size/color/style variant items at once |
+
+**New Frontend Routes:**
+
+| Route | Page | Description |
+|-------|------|-------------|
+| `/scheduling/shift-reports/print` | `ShiftReportPrintPage` | Paper-formatted shift completion report (letter-size, auto-print) |
+| `/training/print/member` | `MemberTrainingPrintPage` | Paper-formatted member training records |
+| `/training/print/program` | `ProgramPrintPage` | Paper-formatted training program detail |
+| `/training/print/compliance` | `CompliancePrintPage` | Paper-formatted compliance matrix for audits |
+
+**New Frontend Components:**
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| `VariantCapsules` | `modules/inventory/components/VariantCapsules.tsx` | Colored pill badges for size/color/style variant attributes |
+| `EditableTagList` | `modules/scheduling/components/EditableTagList.tsx` | Inline add/remove tag list for skills and tasks |
+| `ReportContentDisplay` | `modules/scheduling/components/ReportContentDisplay.tsx` | Renders shift report content sections (reusable across views) |
+| `StarRating` | `modules/scheduling/components/StarRating.tsx` | Reusable star rating display component |
+| `AssignmentActions` | `pages/scheduling/AssignmentActions.tsx` | Crew assignment action buttons (extracted from ShiftDetailPanel) |
+| `CrewBoardSlot` | `pages/scheduling/CrewBoardSlot.tsx` | Individual crew board position slot (extracted from ShiftDetailPanel) |
+| `PositionEditor` | `pages/scheduling/PositionEditor.tsx` | Inline position editing component (extracted from ShiftDetailPanel) |
+| `ShiftReportPrintPage` | `pages/scheduling/ShiftReportPrintPage.tsx` | Print-formatted shift report page |
+| `MemberTrainingPrintPage` | `pages/training/MemberTrainingPrintPage.tsx` | Print-formatted member training records |
+| `ProgramPrintPage` | `pages/training/ProgramPrintPage.tsx` | Print-formatted training program detail |
+| `CompliancePrintPage` | `pages/training/CompliancePrintPage.tsx` | Print-formatted compliance matrix |
+
+**New Utility Modules:**
+
+| Module | Location | Description |
+|--------|----------|-------------|
+| `shiftReportDrafts` | `utils/shiftReportDrafts.ts` | localStorage-based auto-save for in-progress shift report forms |
+| `shiftReportOfflineQueue` | `utils/shiftReportOfflineQueue.ts` | IndexedDB-backed offline queue for report submissions |
+| `shiftReportConstants` | `modules/scheduling/constants/shiftReportConstants.ts` | Centralized constants for shift report UI (call types, score labels, status mappings) |
+| `formTypes` | `services/formTypes.ts` | Shared form type definitions extracted from inventoryService |
+
+**New Schema Fields:**
+
+| Schema | Field | Type | Description |
+|--------|-------|------|-------------|
+| `ShiftCompletionReportResponse` | `reviewer_name` | `str \| None` | Resolved reviewer display name from `reviewed_by` relationship |
+| `BarcodeLabelOptions` | (multiple) | various | Content customization fields for label generation |
+| `EquipmentCheckCompleteItems` | (payload) | object | Data for completing remaining items on incomplete checks |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Batch create with mixed trainee/non-trainee crew | Non-trainees get hours/calls credit only; trainees get full evaluation data |
+| Batch create when reports already exist for some crew | Existing reports are skipped; `skipped` count returned |
+| Offline report queued but connectivity returns before sync | Queue drains automatically on reconnection; no duplicate submissions |
+| Draft auto-save exceeds 20 limit | Oldest draft evicted (LRU) to stay within limit |
+| Print page for report with redacted fields | Redacted fields show "[Redacted]" on printed output |
+| Template reset when custom CC/BCC configured | CC/BCC preserved; only subject/body/CSS reset to defaults |
+| Test email with invalid SMTP | Error message returned with SMTP diagnostic details |
+| Variant capsules on item with no variant attributes | Component returns null (no empty badges rendered) |
+| Stock matrix with zero stock across all variants | Group shows "Out of Stock" banner; individual zeros are dimmed |
+| Size/color/style filter with no matches | Empty results returned; filter state preserved |
+| Equipment check resume after items were modified | Loads current template state; new items appear as unanswered |
+| Compliance print page with 100+ members | Paginated across multiple printed pages with repeat headers |
+
+---
+
 ### Skill Scoring, Batch Review & Security Hardening (2026-04-07)
 
 #### Skill Scoring (1-5) on Shift Completion Reports

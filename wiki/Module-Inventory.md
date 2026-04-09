@@ -433,4 +433,61 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 
 ---
 
+## Variant Capsules, Stock Matrix & Size/Color/Style Filters (2026-04-08)
+
+### Variant Capsules Component
+
+A new `VariantCapsules` component renders variant attributes as compact colored pill badges on inventory items:
+
+- **Blue capsule** — Size (e.g., "S", "M", "L", "XL")
+- **Purple capsule** — Color (e.g., "Navy", "White")
+- **Amber capsule** — Style (e.g., "Regular", "Long")
+
+Used across InventoryItemsPage, ItemDetailPage, MyEquipmentPage, PoolItemsPage, and VariantGroupsPage. The `getDisplayName()` helper strips variant suffixes (` — size [— color] [— style]`) for cleaner display in lists and cards. The component returns null for items without variant attributes (no empty badges rendered).
+
+### Stock Matrix on Variant Groups Page
+
+The VariantGroupsPage has been redesigned with a **stock matrix view** showing all size × color × style combinations for each variant group:
+
+- Per-variant quantity displayed in a grid layout
+- Total stock aggregated across all variants
+- Low-stock indicators on individual variants below threshold
+- Variants with zero stock are dimmed but remain visible so administrators can see which combinations need reordering
+
+### Size/Color/Style Filters
+
+`GET /api/v1/inventory/items` now accepts three new query parameters for variant-based filtering:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `size` | string | Filter items by size variant (e.g., "L", "XL") |
+| `color` | string | Filter items by color variant (e.g., "Navy") |
+| `style` | string | Filter items by style variant (e.g., "Regular") |
+
+Filters are applied in the InventoryItemsPage as dropdown selectors alongside existing category, status, and location filters.
+
+### Barcode Label Improvements
+
+- **Layout bug fixes**: Fixed content overflowing on Dymo 30334 and Rollo 4×6 formats. Corrected quiet zone spacing on Code128 barcodes for ISO/IEC 15417 compliance
+- **Content customization**: New `BarcodeLabelOptions` schema allows choosing which fields appear on labels (name, serial, asset tag, barcode, category, location). Configured in the InventoryBarcodePrintPage before generating the PDF
+- **Print preview**: Live preview of label content displayed before generating the final PDF
+
+### Code Cleanup
+
+- Inventory service refactored: removed dead code, reduced duplication across `inventory_service.py`, `inventory_notification_service.py`, and `inventory.py` endpoints
+- `inventoryService.ts` form types extracted to shared `formTypes.ts`
+- `InventoryItem` TypeScript interface updated with `category_name` field to fix build error
+
+### Edge Cases (2026-04-08)
+
+| Scenario | Behavior |
+|----------|----------|
+| Variant capsules on item with no variant attributes | Component returns null; no empty badges |
+| Stock matrix with zero stock across all variants | Group shows "Out of Stock" banner; individual zeros dimmed |
+| Size/color/style filter with no matches | Empty results; filter state preserved |
+| Label content with all optional fields unchecked | Minimum: barcode image + item name always included |
+| `category_name` null on older items | Falls back to empty string display |
+
+---
+
 **See also:** [Apparatus Module](Module-Apparatus) | [Training Module](Module-Training)

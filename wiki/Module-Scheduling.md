@@ -466,4 +466,148 @@ Powered by `GET /api/v1/training/module-config/skill-names`.
 
 ---
 
+## Shift Report Creation Redesign — Shift-First Batch Workflow (2026-04-07)
+
+### Overview
+
+The shift report creation flow has been redesigned from a one-report-at-a-time approach to a **shift-first batch workflow**. Officers now select a shift, see all crew members for that shift, and file reports for the entire crew in a single operation.
+
+### How Batch Creation Works
+
+1. Navigate to **Shift Reports > Create Report** (or click "New Report" from the reports tab)
+2. Select a **shift** from the dropdown — the system loads all crew members assigned to that shift
+3. Fill in **shared data** that applies to all crew members: hours on shift, calls responded, and call types
+4. For each **trainee** on the crew, expand their evaluation section to add individual assessment data: performance rating, skills observed (with 1-5 scores), tasks performed, strengths, areas for improvement, and officer narrative
+5. Non-trainees appear in the crew list but only receive hours/calls credit — no evaluation section is shown
+6. Click **Submit All** — the system creates reports for all crew members in a single batch via `POST /api/v1/shift-completion-reports/batch`
+7. The response shows `{created: N, skipped: N}` — reports are skipped if one already exists for that trainee on that shift
+
+### Task Defaults Pre-Population
+
+When a shift is linked to an apparatus type, the **Add Task** dialog pre-populates from the apparatus-type task mapping configured in **Scheduling > Settings > Shift Reports**. After selecting a task, the defaults remain visible for reference. This reduces data entry and ensures consistency across officers.
+
+### Score Label Improvements
+
+The 1-5 skill score buttons now show descriptive label text inline next to the button (not just as tooltips):
+- 1 = Needs work
+- 2 = Developing
+- 3 = Competent
+- 4 = Proficient
+- 5 = Excellent
+
+This applies to both `ShiftReportPage` and `ShiftReportsTab` and uses a consistent violet color scheme.
+
+### Review Workflow Improvements
+
+- **Require reason when flagging**: Flagging a report now requires entering a reason. The modal blocks submission until text is provided
+- **Reviewer name on cards**: Report cards display the reviewer's name alongside the review status badge
+- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-review" action in all view modes (not just the Flagged tab)
+- **Server error messages**: Toast notifications show actual server error messages instead of generic "Failed to submit" text
+
+### New API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/shift-completion-reports/batch` | Batch-create shift reports for all crew on a shift |
+
+### Edge Cases (2026-04-07)
+
+| Scenario | Behavior |
+|----------|----------|
+| Batch create with mixed trainee/non-trainee crew | Non-trainees get hours/calls credit only; no evaluation data |
+| Reports already exist for some crew members | Existing reports skipped; `skipped` count returned |
+| Shift with no crew assignments | Empty crew list shown; submit button disabled |
+| Task defaults after apparatus type change | Defaults update to match new apparatus type |
+| Review comment required for flagging | Modal blocks submission without text |
+
+---
+
+## Shift Report Offline Support (2026-04-08)
+
+### Draft Auto-Save
+
+In-progress shift report forms are automatically saved to `localStorage` to prevent data loss from connectivity drops, browser crashes, or accidental navigation. The system stores:
+
+- Shift ID and shift label
+- All form field values
+- Crew selections and evaluation data
+- Crew remarks
+- Timestamp of last save
+
+Up to **20 drafts** are retained. When the limit is reached, the oldest draft is evicted (LRU policy).
+
+### Offline Submission Queue
+
+When connectivity is lost during report submission, reports are queued in **IndexedDB** and automatically synced when connectivity returns:
+
+- Uses the same architecture as the equipment check offline queue
+- Queue items include the full `BatchShiftReportCreate` payload, queued timestamp, and retry count
+- On reconnection, queued reports are submitted in order
+- Failed submissions are retried with incrementing retry counter
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Browser closed with unsaved form | Auto-saved draft restored on next visit |
+| 21st draft saved | Oldest draft evicted to stay within 20 limit |
+| Connectivity restored with queued reports | Queue drains automatically; no duplicate submissions |
+| Queue item fails on retry | Retry counter incremented; kept in queue for next attempt |
+
+---
+
+## Shift Report Print Page (2026-04-08)
+
+New route at `/scheduling/shift-reports/print` renders a shift completion report formatted for printing:
+
+- **Letter-size layout** (8.5" × 11") with proper margins and page breaks
+- **Department branding**: Organization name and logo in the header
+- **Structured sections**: Shift info, trainee/officer names, hours, calls, performance rating, strengths, areas for improvement, narrative, skills with scores, tasks, and reviewer notes (if applicable)
+- **Signature lines**: Spaces for officer and trainee signatures at the bottom
+- **Auto-print**: Browser print dialog opens automatically after the page loads
+- **Access**: "Print" button on report cards in ShiftReportsTab navigates to this page with `?id=<reportId>`
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Redacted fields on printed report | Shows "[Redacted]" placeholder text |
+| Print page for report with all sections toggled off | Only core fields (trainee, date, hours, calls) appear |
+| Browser blocks auto-print dialog | Page remains visible for manual Ctrl+P |
+
+---
+
+## Equipment Check Improvements (2026-04-07)
+
+### Incomplete Checklist Warning
+
+When a member submits an equipment check with unanswered items, a confirmation dialog warns about the incomplete state. The dialog shows the count of unanswered items and asks the member to confirm they want to submit with gaps.
+
+### Reopening In-Progress Checks
+
+Previously, incomplete checks could not be resumed. Now:
+
+- `PUT /api/v1/equipment-checks/checks/{id}/complete` allows completing remaining items on an incomplete check
+- **MyChecklistsPage** shows a "Resume" button alongside the completion percentage for in-progress checks
+- The check form loads with previously answered items pre-filled and unanswered items highlighted
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Resume check after template items were added | New items appear as unanswered alongside previously answered items |
+| Resume check after template items were removed | Orphaned answers preserved but marked as "template item removed" |
+| Submit with 0 items answered | Confirmation dialog warns; submission still allowed for edge cases |
+
+---
+
+## Department-Level Shift Report Settings (2026-04-08)
+
+New granular toggles in the **Shift Reports Settings Panel** extend the existing form section toggles with department-level behavioral controls:
+
+- **Editable tag lists**: Skills and tasks per apparatus type are now managed via inline `EditableTagList` components with add/remove buttons, replacing the previous accordion-only display
+- **Settings connection**: Settings panel reads from and writes to both `training_module_configs` (form section toggles, apparatus mappings) and `org.settings["shift_reports"]` (checklist timing, post-shift validation)
+
+---
+
 **See also:** [Events Module](Module-Events) | [Apparatus Module](Module-Apparatus)

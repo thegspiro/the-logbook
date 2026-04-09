@@ -1089,4 +1089,82 @@ A new shared utility (`utils/colorContrast.ts`) provides WCAG-compliant color fu
 
 ---
 
+## Email Template Editor Improvements (2026-04-08)
+
+The email template editor has been significantly improved with new productivity features, testing capabilities, and standardized branding.
+
+### Keyboard Shortcuts
+
+- **Ctrl+S / Cmd+S** — Saves the current template without clicking the Save button. Works in both the HTML editor and the subject line field
+
+### Discard Changes
+
+A **Discard** button appears when you have unsaved changes. Clicking it reverts the editor to the last saved state, discarding all modifications since the last save.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the template editor showing the "Discard" button highlighted in the toolbar, next to the Save button. Show the editor with some modified HTML content._
+
+### Reset to Default
+
+Each template can be reset to its built-in default content:
+
+1. Open the template in the editor
+2. Click **Reset to Default** in the toolbar
+3. Confirm the action in the dialog
+4. The template's subject, HTML body, text body, and CSS styles are restored to the application's defaults
+5. Custom CC/BCC recipients are **preserved** — only content is reset
+
+This is useful when a template has been heavily customized and you want to start fresh from the standard design.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the "Reset to Default" confirmation dialog showing which fields will be reset (Subject, HTML Body, Text Body, CSS) and which will be preserved (CC, BCC)._
+
+### Send Test Email
+
+You can now send a test email to verify your template changes before they go live:
+
+1. Open the template in the editor
+2. Click **Send Test Email** in the toolbar
+3. The system sends the email using the current editor content (including unsaved changes) to the configured test recipient
+4. Check your email inbox to verify the rendering, links, and footer content
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the "Send Test Email" button in the toolbar and the success toast notification showing "Test email sent to admin@example.com"._
+
+### Template Search
+
+The template list now includes a **search field** that filters templates as you type. Search matches against template name and template type, making it faster to find specific templates in departments with many customized templates.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the template list sidebar showing the search field with "welcome" typed, and the filtered list showing only templates whose names contain "welcome" (e.g., "Welcome New Member", "Welcome Back")._
+
+### Standardized Email Footers
+
+All email templates now include **department contact information** in the footer:
+
+- Department phone number
+- Department email address
+- Department physical address
+
+This information is pulled from the organization's settings. If any contact field is not configured, it is omitted from the footer rather than showing placeholder text.
+
+### Global Template Variables
+
+Two new Jinja2 variables are available in all email templates:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `organization_website` | The organization's website URL from settings | `https://oakvillefire.org` |
+| `login_url` | Direct link to the application login page | `https://app.thelogbook.io/login` |
+
+Use these in templates to provide consistent branding links. For example: `<a href="{{ login_url }}">Log in to The Logbook</a>`.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Reset template with no built-in default | Reset button disabled (only available for system templates) |
+| Test email with invalid SMTP config | Error toast with SMTP diagnostic details |
+| Search with no matches | Empty list with "No templates match" message |
+| Footer with no contact info configured | Footer section omitted entirely |
+| Ctrl+S with no changes | No-op; no unnecessary save triggered |
+
+---
+
 **Previous:** [Documents & Forms](./07-documents-forms.md) | **Next:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)
