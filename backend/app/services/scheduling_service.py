@@ -3566,12 +3566,17 @@ class SchedulingService:
         shift_id: UUID,
         organization_id: UUID,
         finalized_by_user_id: str,
+        manual_hours: Optional[List[Dict[str, Any]]] = None,
     ) -> Tuple[Optional[Shift], Optional[str]]:
         """Mark a shift as finalized after officer review.
 
         Validates that the shift has ended before allowing finalization.
         Snapshots call_count and total_hours onto the shift record so
         the values are preserved even if attendance records change later.
+
+        ``manual_hours`` is an optional list of
+        ``{"user_id": str, "hours": float}`` dicts that create attendance
+        records for members who did not check in/out.
         """
         try:
             shift = await self.get_shift_by_id(shift_id, organization_id)
@@ -3584,6 +3589,31 @@ class SchedulingService:
             now = datetime.now(timezone.utc)
             if shift.end_time and shift.end_time > now:
                 return None, "Cannot finalize a shift that has not ended"
+
+            # Create attendance records for manually-entered hours
+            if manual_hours:
+                existing = await self.db.execute(
+                    select(ShiftAttendance.user_id).where(
+                        ShiftAttendance.shift_id == str(shift_id)
+                    )
+                )
+                existing_user_ids = {
+                    row[0] for row in existing.all()
+                }
+                for entry in manual_hours:
+                    uid = str(entry["user_id"])
+                    if uid in existing_user_ids:
+                        continue
+                    att = ShiftAttendance(
+                        id=generate_uuid(),
+                        shift_id=str(shift_id),
+                        user_id=uid,
+                        duration_minutes=round(entry["hours"] * 60),
+                        checked_in_at=shift.start_time,
+                        checked_out_at=shift.end_time,
+                    )
+                    self.db.add(att)
+                await self.db.flush()
 
             # Snapshot call count
             call_result = await self.db.execute(

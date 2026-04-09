@@ -306,8 +306,15 @@ export const schedulingService = {
     await api.delete(`/scheduling/shifts/${shiftId}`);
   },
 
-  async finalizeShift(shiftId: string): Promise<ShiftRecord> {
-    const response = await api.post<ShiftRecord>(`/scheduling/shifts/${shiftId}/finalize`);
+  async finalizeShift(
+    shiftId: string,
+    manualHours?: { user_id: string; hours: number }[],
+  ): Promise<ShiftRecord> {
+    const body = manualHours?.length ? { manual_hours: manualHours } : {};
+    const response = await api.post<ShiftRecord>(
+      `/scheduling/shifts/${shiftId}/finalize`,
+      body,
+    );
     return response.data;
   },
 
