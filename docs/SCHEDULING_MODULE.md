@@ -1140,4 +1140,128 @@ Review modal now renders full report content (hours, calls, rating, strengths, i
 
 ---
 
-*Last Updated: April 7, 2026*
+## Shift Report Creation Redesign, Offline Support & Print (2026-04-07 — 2026-04-09)
+
+### Shift-First Batch Workflow
+
+The report creation flow has been redesigned from a one-report-at-a-time model to a **shift-first batch workflow**:
+
+1. Officer selects a shift → system loads all crew members for that shift
+2. Officer fills in **shared data** once (hours, calls, call types)
+3. For each **trainee**, officer expands an evaluation panel (rating, skills with 1-5 scores, tasks, narrative)
+4. Non-trainees receive hours/calls credit only — no evaluation UI shown
+5. **Submit All** sends `POST /api/v1/shift-completion-reports/batch` and returns `{created, skipped}` counts
+
+**New endpoint:** `POST /api/v1/shift-completion-reports/batch`
+
+Accepts a `BatchShiftReportCreate` payload with:
+- Shared fields: `shift_id`, `shift_date`, `hours_on_shift`, `calls_responded`, `call_types`
+- Per-member evaluations: `trainee_id`, `performance_rating`, `skills_observed`, `tasks_performed`, `areas_of_strength`, `areas_for_improvement`, `officer_narrative`
+- `save_as_draft: bool` — optionally save as drafts instead of submitting for review
+
+### Review Workflow Improvements (2026-04-07)
+
+- **Require reason when flagging**: Flagging a report now requires entering a reason (modal blocks submission without text)
+- **Reviewer name on cards**: `ShiftCompletionReportResponse` gains a `reviewer_name` field resolved from the `reviewed_by` → `User` relationship. Displayed alongside the review status badge
+- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-review" action in all view modes
+- **Server error messages in toasts**: Toast notifications show actual API error messages instead of generic "Failed to submit"
+- **Score labels inline**: 1-5 skill score buttons show descriptive text (Needs work, Developing, Competent, Proficient, Excellent) alongside the buttons, not just as tooltips
+- **Task defaults visible after selection**: Apparatus-type task defaults remain visible after selecting a task, and the Add Task dialog pre-populates from the mapping
+
+### Offline Support
+
+#### Draft Auto-Save (`utils/shiftReportDrafts.ts`)
+
+In-progress shift report forms are auto-saved to `localStorage`:
+- Stores shift ID, form data, crew selections, trainee evaluations, crew remarks, and timestamp
+- Maximum 20 drafts retained (LRU eviction)
+- Functions: `saveDraft()`, `loadDraft()`, `deleteDraft()`, `listDrafts()`, `hasDraft()`
+
+#### Offline Submission Queue (`utils/shiftReportOfflineQueue.ts`)
+
+Reports submitted while offline are queued in IndexedDB and synced on reconnection:
+- Same architecture as equipment check offline queue
+- Stores full `BatchShiftReportCreate` payload, queued timestamp, and retry count
+- Functions: `enqueueShiftReport()`, `listPendingReports()`, `dequeueShiftReport()`, `markReportRetry()`, `pendingReportCount()`
+
+### Shift Report Print Page
+
+**Route:** `/scheduling/shift-reports/print`  
+**Component:** `ShiftReportPrintPage`
+
+Paper-formatted shift completion report (8.5" × 11" letter size):
+- Department branding (org name/logo) in header
+- Structured sections: shift info, trainee/officer names, hours, calls, rating, strengths, improvements, narrative, skills with scores, tasks, reviewer notes
+- Signature lines for officer and trainee
+- Auto-triggers browser print dialog after loading
+- Accessed via "Print" button on report cards in ShiftReportsTab
+
+### Department-Level Shift Report Settings (2026-04-08)
+
+Extended the `ShiftReportsSettingsPanel` with:
+- **Editable tag lists**: Skills and tasks per apparatus type managed via `EditableTagList` component with inline add/remove UI
+- **Granular department toggles**: Additional behavioral toggles beyond form section visibility
+
+### Equipment Check Improvements (2026-04-07)
+
+- **Incomplete checklist warning**: Confirmation dialog when submitting with unanswered items
+- **Resume in-progress checks**: `PUT /api/v1/equipment-checks/checks/{id}/complete` for completing remaining items
+- **MyChecklistsPage**: "Resume" button with completion percentage for in-progress checks
+
+### Frontend Architecture Changes
+
+New shared components extracted to reduce code duplication:
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| `EditableTagList` | `modules/scheduling/components/EditableTagList.tsx` | Inline add/remove tag list |
+| `ReportContentDisplay` | `modules/scheduling/components/ReportContentDisplay.tsx` | Renders report content sections |
+| `StarRating` | `modules/scheduling/components/StarRating.tsx` | Reusable star rating display |
+| `AssignmentActions` | `pages/scheduling/AssignmentActions.tsx` | Crew assignment action buttons |
+| `CrewBoardSlot` | `pages/scheduling/CrewBoardSlot.tsx` | Individual crew board position slot |
+| `PositionEditor` | `pages/scheduling/PositionEditor.tsx` | Inline position editing |
+| `ShiftReportPrintPage` | `pages/scheduling/ShiftReportPrintPage.tsx` | Print-formatted shift report |
+
+New shared constants:
+
+| File | Contents |
+|------|----------|
+| `modules/scheduling/constants/shiftReportConstants.ts` | Call types, default skills/tasks, score labels, status display mappings |
+
+New utility modules:
+
+| File | Purpose |
+|------|---------|
+| `utils/shiftReportDrafts.ts` | localStorage-based auto-save for report forms |
+| `utils/shiftReportOfflineQueue.ts` | IndexedDB-backed offline submission queue |
+
+### New Routes
+
+| Route | Component | Description |
+|-------|-----------|-------------|
+| `/scheduling/shift-reports/print` | `ShiftReportPrintPage` | Print-formatted shift report |
+
+### New API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/shift-completion-reports/batch` | Batch-create reports for all crew on a shift |
+| `PUT` | `/api/v1/equipment-checks/checks/{id}/complete` | Complete remaining items on incomplete check |
+
+### Edge Cases (2026-04-07 — 2026-04-09)
+
+| Scenario | Behavior |
+|----------|----------|
+| Batch create with mixed trainee/non-trainee crew | Non-trainees get hours/calls credit; no evaluation data |
+| Reports already exist for some crew | Existing reports skipped; `skipped` count returned |
+| Offline queue drain on reconnection | Reports submitted in order; no duplicates |
+| Draft auto-save limit exceeded | Oldest draft evicted (LRU) |
+| Print page for redacted report | "[Redacted]" placeholder for redacted fields |
+| Resume incomplete check after template changes | New items appear unanswered; orphaned answers preserved |
+| Submit check with 0 items answered | Confirmation dialog warns; still allowed |
+| Flagging without reason text | Modal blocks submission |
+| Batch create as drafts | All reports saved as drafts; no pipeline progress triggered |
+
+---
+
+*Last Updated: April 9, 2026*

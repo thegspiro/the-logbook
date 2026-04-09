@@ -1043,4 +1043,74 @@ The bulk training record entry form now includes all available fields, matching 
 
 ---
 
+## Printing Training Records, Programs & Compliance (2026-04-08)
+
+Three new print-formatted pages allow you to generate paper copies of training data for audits, regulatory filings, annual reviews, and member records.
+
+### Printing a Member's Training History
+
+1. Navigate to **Training > Members** and select a member, or open a member's training history page
+2. Click the **Print** button in the page header
+3. A new tab opens with a paper-formatted view of the member's training records
+
+The printed record includes:
+
+- Member name, rank, station, and membership dates
+- Training hours summary (current period and all-time)
+- Certification status and expiration dates
+- Compliance indicators (green/yellow/red) for all active requirements
+- Complete list of training records with course name, date, hours, category, and status
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the printed Member Training History page showing the letter-size layout with member info header, summary statistics, certification table, compliance badges, and training records table._
+
+### Printing a Training Program
+
+1. Navigate to **Training > Programs** and select a program
+2. Click the **Print** button in the page header
+3. A new tab opens with a paper-formatted view of the program
+
+The printed program includes:
+
+- Program name, description, type (Flexible/Sequential/Phase-based), and status
+- Phase breakdown with all requirements listed under each phase
+- Milestone checkpoints with completion criteria
+- Enrollment roster with per-member progress percentages
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the printed Training Program page showing the program header, phases with requirements listed under each, progress bars per requirement, milestone checkpoints, and enrollment table with member progress._
+
+### Printing the Compliance Matrix
+
+**Required Permission:** `training.manage`
+
+1. Navigate to **Training Admin > Compliance Matrix**
+2. Click the **Print** button in the toolbar above the matrix
+3. A new tab opens with the full compliance matrix formatted for paper
+
+The printed matrix includes:
+
+- All members listed as rows and all active requirements as columns
+- Color-coded cells (green for compliant, yellow for in-progress, red for non-compliant) with percentage values
+- Designed for **landscape printing** on letter-size paper
+- Repeat column headers across page breaks when the matrix spans multiple pages
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the printed Compliance Matrix page showing the landscape grid with member names on the left, requirement names across the top, and colored cells with percentages. Show page break indicators._
+
+This is particularly useful for:
+- **Annual training audits** — print the matrix at year-end for records
+- **Regulatory filings** — provide printed compliance evidence to regulatory agencies
+- **Officer reviews** — give training officers a paper overview during planning meetings
+- **Insurance requirements** — document department-wide training compliance
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Member with no training records | Print page shows empty table with "No records found" |
+| Program with no enrollments | Enrollment section shows "No members enrolled" |
+| Compliance matrix with 100+ members | Paginated across multiple pages with repeated headers |
+| Browser blocks auto-print dialog | Page remains visible for manual Ctrl+P |
+| Member on leave of absence | Print page shows adjusted requirements with leave notation |
+
+---
+
 **Previous:** [Membership Management](./01-membership.md) | **Next:** [Shifts & Scheduling](./03-scheduling.md)

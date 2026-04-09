@@ -1322,4 +1322,173 @@ When assigning a member to a Driver/Operator position, the system checks the app
 
 ---
 
+## Shift Report Creation Redesign — Shift-First Batch Workflow (2026-04-07)
+
+The shift report creation flow has been completely redesigned. Instead of creating one report at a time per trainee, officers now use a **shift-first batch workflow** that processes the entire crew at once.
+
+### How It Works
+
+1. Navigate to **Shift Reports** and click **New Report**
+2. **Select a shift** from the dropdown — the system loads all crew members assigned to that shift
+3. Fill in **shared data** once: hours on shift, calls responded, and call types. These values apply to all crew members
+4. For each **trainee** on the crew, expand their evaluation panel to add:
+   - Performance rating (1-5)
+   - Skills observed with individual 1-5 scores
+   - Tasks performed
+   - Areas of strength and areas for improvement
+   - Officer narrative
+5. **Non-trainees** (members without active training program enrollments) appear in the crew list but only receive hours/calls credit — no evaluation section is shown for them
+6. Click **Submit All** to create reports for all crew members in a single batch
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the batch report creation form showing: (1) the shift selector dropdown at top with a selected shift, (2) the shared data section with hours, calls, and call type fields, (3) the crew list below with two trainees expanded showing evaluation fields and one non-trainee showing only hours/calls credit._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the submission confirmation showing "Created 5 reports, skipped 1" result after a batch submission._
+
+### Task Defaults Pre-Population
+
+When the selected shift is linked to an apparatus type (e.g., Engine, Ladder, Ambulance), the **Add Task** dialog pre-populates from the apparatus-type task mapping configured in **Scheduling > Settings > Shift Reports**. After selecting a task, the defaults remain visible for reference.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Add Task dialog showing pre-populated tasks from the engine apparatus type mapping (e.g., "Pump test", "Hose load inventory") with an "Add Custom" option at the bottom._
+
+### Score Labels
+
+The 1-5 skill score buttons now display descriptive label text inline next to each button:
+
+| Score | Label |
+|-------|-------|
+| 1 | Needs work |
+| 2 | Developing |
+| 3 | Competent |
+| 4 | Proficient |
+| 5 | Excellent |
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the skills section in the evaluation panel showing three skills with 1-5 score buttons, each button labeled with its descriptive text (e.g., "3 — Competent" highlighted for "Pump Operations")._
+
+### Review Workflow Improvements
+
+- **Require reason when flagging**: When flagging a report, the modal now requires entering a reason before submission. The "Flag" button is disabled until text is entered. This ensures trainees always receive feedback when a report is flagged
+- **Reviewer name displayed**: Report cards show the reviewer's full name next to the review status badge (e.g., "Approved by Lt. Davis")
+- **Flagged report explanation**: Flagged reports show the reviewer's reason and a "Re-review" action in all view modes — not just in the dedicated Flagged tab
+- **Actual server error messages**: Toast notifications now display the server's error message instead of generic text like "Failed to submit", improving troubleshooting
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of a flagged report card showing the orange "Flagged" badge, the reviewer name, the reason text, and the "Re-review" button._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Batch create with mix of trainees and non-trainees | Non-trainees get hours/calls only; no evaluation data |
+| Reports already exist for some crew | Existing reports skipped; `skipped` count returned |
+| All sections toggled off in settings | Only core fields (trainee, shift, hours, calls) on form |
+| Task defaults after apparatus type change | Defaults update to match the new apparatus type |
+| Flagging without entering a reason | Modal blocks submission until text is provided |
+
+---
+
+## Shift Report Offline Support (2026-04-08)
+
+### Draft Auto-Save
+
+When filling out a shift report, your form data is **automatically saved to local storage** as you work. This prevents data loss from:
+
+- Connectivity drops during field operations
+- Accidental browser tab closure or page navigation
+- Browser crashes or device restarts
+
+The auto-save stores your shift selection, all form fields, crew selections, individual trainee evaluations, and crew remarks. Up to 20 drafts are retained — when the limit is reached, the oldest draft is evicted.
+
+When you return to the shift reports form, any existing draft for the selected shift is automatically loaded, so you can pick up where you left off.
+
+### Offline Submission Queue
+
+If your device loses connectivity while submitting a batch of shift reports, the reports are **queued locally** and automatically submitted when connectivity returns:
+
+1. You click "Submit All" while offline
+2. A toast notification confirms the reports have been queued
+3. When connectivity returns, queued reports are submitted automatically in order
+4. A notification confirms successful submission
+
+This uses the same IndexedDB-backed architecture as the equipment check offline queue, ensuring reliable offline-to-online synchronization.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot showing the offline indicator banner at the top of the shift reports page, a "Queued for sync" badge on a pending report, and the count of pending reports._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Browser closed with unsaved form | Auto-saved draft restored on next visit |
+| 21st draft saved | Oldest draft evicted (LRU policy) |
+| Connectivity restored with queued reports | Queue drains automatically; no duplicates |
+| Same shift submitted online and offline | Duplicate detection on the server; skipped reports counted |
+
+---
+
+## Shift Report Print Page (2026-04-08)
+
+A new **print-formatted page** renders shift completion reports for paper output at `/scheduling/shift-reports/print`.
+
+### What's Included on the Printed Report
+
+- **Header**: Department name and logo
+- **Shift information**: Date, start/end time, apparatus, station
+- **Personnel**: Trainee name and rank, filing officer name and rank
+- **Performance data**: Hours on shift, calls responded, call types, performance rating with label
+- **Assessment**: Areas of strength, areas for improvement, officer narrative
+- **Skills observed**: Each skill with its 1-5 score and descriptive label
+- **Tasks performed**: Each task with description
+- **Reviewer information** (if reviewed): Reviewer name, review date, review status
+- **Signature lines**: Spaces for officer and trainee signatures at the bottom
+
+The page is formatted for **letter-size (8.5" × 11")** printing and automatically opens the browser's print dialog after loading.
+
+### How to Print a Report
+
+1. Navigate to **Shift Reports** and find the report you want to print
+2. Click the **Print** button on the report card
+3. The print page opens in a new tab with the formatted report
+4. Your browser's print dialog opens automatically — select your printer and print
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the print-formatted shift report showing the letter-size layout with department branding header, structured sections, and signature lines at the bottom._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Report with redacted fields | Printed as "[Redacted]" |
+| Report with all optional sections off | Only core fields printed |
+| Browser blocks auto-print dialog | Page remains visible for manual Ctrl+P |
+
+---
+
+## Equipment Check Improvements (2026-04-07)
+
+### Incomplete Checklist Warning
+
+When submitting an equipment check with unanswered items, a **confirmation dialog** now warns about the incomplete state before allowing submission. The dialog shows the count of unanswered items and asks the member to confirm.
+
+This prevents accidental submission of partially completed checks while still allowing intentional partial submissions (e.g., when an item is not accessible).
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the confirmation dialog showing "3 items not answered" warning with "Go Back" and "Submit Anyway" buttons._
+
+### Resuming In-Progress Checks
+
+Previously, if you started an equipment check but couldn't finish it, the check was stuck in an incomplete state. Now:
+
+1. Navigate to **Scheduling > My Checklists**
+2. In-progress checks show a **"Resume"** button alongside the completion percentage (e.g., "Resume — 65% complete")
+3. Click Resume to open the check form with previously answered items pre-filled
+4. Complete the remaining unanswered items and submit
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the My Checklists page showing two checklists: one completed (green checkmark) and one in-progress with "Resume — 65% complete" button and a progress bar._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Resume check after template items added | New items appear as unanswered alongside pre-filled items |
+| Resume check after template items removed | Orphaned answers preserved but flagged |
+| Submit with 0 items answered | Confirmation dialog warns; still allowed |
+
+---
+
 **Previous:** [Training & Certification](./02-training.md) | **Next:** [Events & Meetings](./04-events-meetings.md)

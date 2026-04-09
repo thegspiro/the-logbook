@@ -1311,4 +1311,64 @@ Items created before the barcode auto-generation feature was added receive barco
 
 ---
 
+## Variant Capsules & Visual Improvements (2026-04-08)
+
+### Variant Capsules
+
+Inventory items that belong to a variant group now display compact **colored pill badges** showing their variant attributes:
+
+- **Blue capsule** — Size (e.g., "S", "M", "L", "XL")
+- **Purple capsule** — Color (e.g., "Navy", "White")
+- **Amber capsule** — Style (e.g., "Regular", "Long")
+
+These capsules appear on inventory item cards across all pages: Items List, Item Detail, My Equipment, Pool Items, and Variant Groups. They provide an at-a-glance understanding of which variant an item represents without opening the detail view.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Inventory Items List showing several item cards, with variant items displaying colored capsule badges (e.g., a "Turnout Coat" card showing blue "L" capsule, purple "Navy" capsule, and amber "Regular" capsule)._
+
+### Stock Matrix on Variant Groups Page
+
+The Variant Groups page now displays a **stock matrix** showing all size × color × style combinations for each group:
+
+- Grid layout with sizes as columns and colors/styles as rows
+- Per-variant quantity displayed in each cell
+- Total stock aggregated across all variants shown in the group header
+- Low-stock indicators on individual variants below threshold (dimmed with warning icon)
+- Variants with zero stock are dimmed but remain visible for reorder visibility
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Variant Groups page showing a variant group expanded into the stock matrix view. Show a grid with sizes across the top (S, M, L, XL, 2XL), colors/styles down the left (Navy/Regular, Navy/Long, Black/Regular), and stock quantities in each cell. Highlight one cell with a low-stock warning indicator._
+
+### Size, Color & Style Filters
+
+The Items List page now includes three new filter dropdowns for variant-based filtering:
+
+| Filter | Description |
+|--------|-------------|
+| **Size** | Filter items by size (e.g., "L", "XL", "2XL") |
+| **Color** | Filter items by color (e.g., "Navy", "Black") |
+| **Style** | Filter items by style (e.g., "Regular", "Long") |
+
+These filters work alongside existing category, status, condition, and location filters. Selecting a size filter, for example, shows only items with that size variant attribute — useful for quickly finding all "XL" items across all categories.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Items List filter bar showing the three new dropdown filters (Size, Color, Style) alongside the existing Category and Status filters. Show the Size dropdown open with options like "S", "M", "L", "XL"._
+
+### Barcode Label Improvements
+
+- **Layout fixes**: Corrected content overflow on Dymo 30334 and Rollo 4×6 label formats. Fixed quiet zone spacing on Code128 barcodes
+- **Content customization**: Before generating labels, you can now choose which fields appear on each label: item name, serial number, asset tag, barcode, category, and location. This lets you create compact labels with only essential info for small thermal printers
+- **Print preview**: A live preview shows the label layout before generating the final PDF, so you can verify the content fits your chosen label size
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the InventoryBarcodePrintPage showing the content customization checkboxes (Name, Serial, Asset Tag, Category, Location), the label format dropdown, and a live preview of a barcode label._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Variant capsules on non-variant item | No capsules displayed (component returns null) |
+| Stock matrix with all zeros | Group shows "Out of Stock" banner; cells dimmed |
+| Size/color/style filter with no matches | Empty results; filters remain applied |
+| Label preview with all fields unchecked | Minimum content: barcode image + item name always included |
+| Custom label size smaller than content | Content scaled to fit; warning shown if text will be truncated |
+
+---
+
 **Previous:** [Events & Meetings](./04-events-meetings.md) | **Next:** [Apparatus & Facilities](./06-apparatus-facilities.md)

@@ -801,4 +801,71 @@ All shift completion report operations now log audit events: `shift_report_creat
 
 ---
 
+## Print Support for Training Records, Programs & Compliance (2026-04-08)
+
+Three new print-formatted pages allow officers and administrators to generate paper copies of training data for audits, regulatory filings, reviews, and member records.
+
+### Member Training History Print Page
+
+**Route:** `/training/print/member`
+
+Renders a paper-formatted member training record including:
+
+- Member name, rank, station, and membership dates
+- Training hours summary (current period and all-time)
+- Certification status and expiration dates
+- Compliance indicators (green/yellow/red) for all active requirements
+- Complete chronological list of training records with course, date, hours, and category
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Member Training Print Page showing the letter-size layout with member info header, hours summary cards, certification table, compliance status badges, and the training records table._
+
+### Training Program Print Page
+
+**Route:** `/training/print/program`
+
+Renders a training program detail for paper:
+
+- Program name, description, type (Flexible/Sequential/Phase-based), and status
+- Phase breakdown with requirements listed under each phase
+- Milestones with completion criteria
+- Enrollment roster with per-member progress percentages
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Program Print Page showing the program header, phase accordion expanded with requirements and progress bars, milestone checkpoints, and enrollment table._
+
+### Compliance Matrix Print Page
+
+**Route:** `/training/print/compliance`  
+**Permission:** `training.manage`
+
+Renders the department-wide compliance matrix (all members × all requirements) as a printable grid:
+
+- Members listed as rows, requirements as columns
+- Color-coded cells (green/yellow/red) with percentage values
+- Optimized for letter-size landscape printing with repeat headers across pages
+- Designed for annual reviews, regulatory audits, and compliance filing
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Compliance Print Page showing the grid with member names on the left, requirement names across the top, and colored cells with percentages. Show the landscape orientation and page break indicators._
+
+### Print Buttons on Source Pages
+
+Each source page now includes a **Print** button that navigates to the corresponding print page:
+
+| Source Page | Print Button Location | Target Print Page |
+|-------------|----------------------|-------------------|
+| `ComplianceMatrixTab` | Toolbar above the matrix | `/training/print/compliance` |
+| `MemberTrainingHistoryPage` | Page header actions | `/training/print/member` |
+| `PipelineDetailPage` | Page header actions | `/training/print/program` |
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Member with no training records | Print page shows empty table with "No records found" message |
+| Program with no enrollments | Enrollment section shows "No members enrolled" |
+| Compliance matrix with 100+ members | Paginated across multiple printed pages with repeated column headers |
+| Browser blocks auto-print dialog | Page remains visible for manual Ctrl+P |
+| Print page for member on leave | Leave period shown with pro-rated requirement adjustments |
+
+---
+
 **See also:** [Compliance Module](Module-Compliance) | [Scheduling Module](Module-Scheduling)
