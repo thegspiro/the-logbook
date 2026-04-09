@@ -555,6 +555,7 @@ export interface InventoryItem {
   id: string;
   organization_id: string;
   category_id?: string;
+  category_name?: string;
   name: string;
   description?: string;
   manufacturer?: string;
