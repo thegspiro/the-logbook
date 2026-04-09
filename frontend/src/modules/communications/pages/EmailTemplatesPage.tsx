@@ -512,32 +512,34 @@ const EmailTemplatesPage: React.FC = () => {
                       )}
                     </>
                   ) : (
-                    <TemplatePreview
-                      preview={preview}
-                      isPreviewing={isPreviewing}
-                      onRefresh={handlePreview}
-                      members={members}
-                      isLoadingMembers={isLoadingMembers}
-                    />
-                    {preview && (
-                      <div className="mt-4 pt-4 border-t border-theme-surface-border">
-                        <button
-                          onClick={() => { void handleSendTest(); }}
-                          disabled={isSendingTest || !preview}
-                          className="flex items-center gap-2 px-4 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
-                        >
-                          {isSendingTest ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Send className="w-4 h-4" />
-                          )}
-                          <span>Send Test Email to Me</span>
-                        </button>
-                        <p className="text-theme-text-muted text-xs mt-1.5">
-                          Sends this preview to your email address so you can verify how it looks in a real inbox.
-                        </p>
-                      </div>
-                    )}
+                    <>
+                      <TemplatePreview
+                        preview={preview}
+                        isPreviewing={isPreviewing}
+                        onRefresh={handlePreview}
+                        members={members}
+                        isLoadingMembers={isLoadingMembers}
+                      />
+                      {preview && (
+                        <div className="mt-4 pt-4 border-t border-theme-surface-border">
+                          <button
+                            onClick={() => { void handleSendTest(); }}
+                            disabled={isSendingTest || !preview}
+                            className="flex items-center gap-2 px-4 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+                          >
+                            {isSendingTest ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Send className="w-4 h-4" />
+                            )}
+                            <span>Send Test Email to Me</span>
+                          </button>
+                          <p className="text-theme-text-muted text-xs mt-1.5">
+                            Sends this preview to your email address so you can verify how it looks in a real inbox.
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
