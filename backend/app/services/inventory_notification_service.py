@@ -298,19 +298,25 @@ class InventoryNotificationService:
     # Email rendering helpers
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _format_item_parts(item: Dict[str, Any]) -> tuple:
+        """Extract common display parts for a notification line item."""
+        identifier = (
+            item.get("item_serial_number") or item.get("item_asset_tag") or ""
+        )
+        qty_str = f" (x{item['quantity']})" if item["quantity"] > 1 else ""
+        label = _ACTION_LABELS.get(item["action_type"], str(item["action_type"]))
+        id_display = f" — {identifier}" if identifier else ""
+        return item["item_name"], id_display, qty_str, label
+
     def _build_item_list_html(self, items: List[Dict[str, Any]], heading: str) -> str:
         if not items:
             return ""
 
         rows = ""
         for item in items:
-            identifier = (
-                item.get("item_serial_number") or item.get("item_asset_tag") or ""
-            )
-            qty_str = f" (x{item['quantity']})" if item["quantity"] > 1 else ""
-            label = _ACTION_LABELS.get(item["action_type"], str(item["action_type"]))
-            id_display = f" — {identifier}" if identifier else ""
-            rows += f"<li><strong>{item['item_name']}</strong>{id_display}{qty_str} <em>({label})</em></li>\n"
+            name, id_display, qty_str, label = self._format_item_parts(item)
+            rows += f"<li><strong>{name}</strong>{id_display}{qty_str} <em>({label})</em></li>\n"
 
         return f"""<h3 style="margin-top: 20px;">{heading}</h3>
 <ul style="margin: 8px 0; padding-left: 20px;">
@@ -322,13 +328,8 @@ class InventoryNotificationService:
 
         lines = [f"{heading}:", ""]
         for item in items:
-            identifier = (
-                item.get("item_serial_number") or item.get("item_asset_tag") or ""
-            )
-            qty_str = f" (x{item['quantity']})" if item["quantity"] > 1 else ""
-            label = _ACTION_LABELS.get(item["action_type"], str(item["action_type"]))
-            id_display = f" — {identifier}" if identifier else ""
-            lines.append(f"  - {item['item_name']}{id_display}{qty_str} ({label})")
+            name, id_display, qty_str, label = self._format_item_parts(item)
+            lines.append(f"  - {name}{id_display}{qty_str} ({label})")
 
         return "\n".join(lines)
 

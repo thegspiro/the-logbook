@@ -18,6 +18,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { Pagination } from '../../../components/ux/Pagination';
+import { VariantCapsules, getDisplayName } from '../components/VariantCapsules';
 import toast from 'react-hot-toast';
 
 interface SummaryCardProps {
@@ -80,7 +81,7 @@ const PoolCard: React.FC<PoolCardProps> = ({
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h3 className="font-semibold text-theme-text-primary truncate">{item.name}</h3>
+          <h3 className="font-semibold text-theme-text-primary truncate">{getDisplayName(item)}</h3>
           <p className="text-xs text-theme-text-muted">{categoryName}</p>
         </div>
         {onHand <= 0 && (
@@ -110,12 +111,9 @@ const PoolCard: React.FC<PoolCardProps> = ({
       </div>
 
       {/* Meta row */}
-      <div className="flex flex-wrap gap-2 text-xs text-theme-text-muted">
+      <div className="flex flex-wrap gap-2 text-xs text-theme-text-muted items-center">
         {item.unit_of_measure && <span className="bg-theme-surface px-2 py-0.5 rounded">{item.unit_of_measure}</span>}
-        {item.standard_size && <span className="bg-theme-surface px-2 py-0.5 rounded">Size: {item.standard_size.toUpperCase()}</span>}
-        {!item.standard_size && item.size && <span className="bg-theme-surface px-2 py-0.5 rounded">Size: {item.size}</span>}
-        {item.style && <span className="bg-theme-surface px-2 py-0.5 rounded">Style: {item.style.replace(/_/g, ' ')}</span>}
-        {item.color && <span className="bg-theme-surface px-2 py-0.5 rounded">Color: {item.color}</span>}
+        <VariantCapsules item={item} />
       </div>
 
       {/* Actions */}

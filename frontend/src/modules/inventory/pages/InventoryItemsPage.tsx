@@ -24,12 +24,13 @@ import { MobileItemCard } from '../../../components/ux/MobileItemCard';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
+import { VariantCapsules, getDisplayName } from '../components/VariantCapsules';
 import type {
   InventoryItem, InventoryCategory, InventorySummary, LocationInventorySummary,
   StorageAreaResponse, Location,
 } from '../types';
 import {
-  STATUS_OPTIONS, ITEM_TYPES,
+  STATUS_OPTIONS, ITEM_TYPES, STANDARD_SIZES, GARMENT_STYLES,
   getStatusStyle, getConditionColor,
 } from '../types';
 
@@ -108,7 +109,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                 </th>
               )}
               <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Category</th>
-              <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Size</th>
+              <th scope="col" className="px-3 py-3 text-left text-theme-text-secondary font-medium">Variant</th>
               <th scope="col" className="px-3 py-3 text-center text-theme-text-secondary font-medium">Qty</th>
               <th scope="col" className="px-3 py-3 text-left">
                 <button onClick={() => toggleSort('condition')} className="inline-flex items-center gap-1 text-theme-text-secondary hover:text-theme-text-primary font-medium">
@@ -130,8 +131,9 @@ const ItemTable: React.FC<ItemTableProps> = ({
                   </td>
                   <td className="px-3 py-3">
                     <Link to={`/inventory/items/${item.id}`} className="font-medium text-theme-text-primary hover:text-blue-600 dark:hover:text-blue-400">
-                      {item.name}
+                      {getDisplayName(item)}
                     </Link>
+                    <div className="mt-0.5 sm:hidden"><VariantCapsules item={item} /></div>
                   </td>
                   {showStatus && (
                     <td className="px-3 py-3">
@@ -141,7 +143,7 @@ const ItemTable: React.FC<ItemTableProps> = ({
                     </td>
                   )}
                   <td className="px-3 py-3 text-theme-text-muted">{cat?.name ?? ''}</td>
-                  <td className="px-3 py-3 text-theme-text-muted">{item.size ?? '-'}</td>
+                  <td className="px-3 py-3"><VariantCapsules item={item} /></td>
                   <td className="px-3 py-3 text-center text-theme-text-muted tabular-nums">{qtyLabel(item)}</td>
                   <td className={`px-3 py-3 capitalize ${getConditionColor(item.condition)}`}>{item.condition.replace(/_/g, ' ')}</td>
                   <td className="px-3 py-3 text-theme-text-muted truncate max-w-[160px]">{loc || '-'}</td>
@@ -184,6 +186,9 @@ const InventoryItemsPage: React.FC = () => {
   const [fCond, setFCond] = useState('');
   const [fType, setFType] = useState('');
   const [fLoc, setFLoc] = useState('');
+  const [fSize, setFSize] = useState('');
+  const [fColor, setFColor] = useState('');
+  const [fStyle, setFStyle] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('name');
   const [sortOrd, setSortOrd] = useState<'asc' | 'desc'>('asc');
   const [skip, setSkip] = useState(0);
@@ -207,9 +212,12 @@ const InventoryItemsPage: React.FC = () => {
     condition: fCond || undefined,
     item_type: fType || undefined,
     location_id: fLoc || undefined,
+    size: fSize || undefined,
+    color: fColor || undefined,
+    style: fStyle || undefined,
     sort_by: sortBy,
     sort_order: sortOrd,
-  }), [search, fCat, fStatus, fCond, fType, fLoc, sortBy, sortOrd]);
+  }), [search, fCat, fStatus, fCond, fType, fLoc, fSize, fColor, fStyle, sortBy, sortOrd]);
 
   const loadItems = useCallback(async (reset = false) => {
     const s = reset ? 0 : skip;
@@ -440,6 +448,22 @@ const InventoryItemsPage: React.FC = () => {
           <select className="form-input" value={fLoc} onChange={(e) => setFLoc(e.target.value)}>
             <option value="">All Locations</option>
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+          <select className="form-input" value={fSize} onChange={(e) => setFSize(e.target.value)}>
+            <option value="">All Sizes</option>
+            {STANDARD_SIZES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          <select className="form-input" value={fColor} onChange={(e) => setFColor(e.target.value)}>
+            <option value="">All Colors</option>
+            {Array.from(new Set(items.map((i) => i.color).filter(Boolean))).sort().map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          <select className="form-input" value={fStyle} onChange={(e) => setFStyle(e.target.value)}>
+            <option value="">All Styles</option>
+            {GARMENT_STYLES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
         </div>
       </div>

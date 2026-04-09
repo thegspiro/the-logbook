@@ -33,15 +33,17 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail, sanitize_error_message
+from app.core.utils import generate_uuid, safe_error_detail, sanitize_error_message
 from app.core.websocket_manager import ws_manager
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
     EquipmentRequest,
+    InventoryCategory,
     InventoryItem,
     IssuanceAllowance,
     ItemCondition,
+    ItemIssuance,
     ItemStatus,
     ItemType,
     NFPAExposureRecord,
@@ -309,6 +311,9 @@ async def list_items(
     location_id: UUID | None = None,
     storage_area_id: UUID | None = None,
     search: str | None = None,
+    size: str | None = None,
+    color: str | None = None,
+    style: str | None = None,
     active_only: bool = True,
     sort_by: str | None = None,
     sort_order: str | None = Query(None, pattern="^(asc|desc)$"),
@@ -368,6 +373,9 @@ async def list_items(
         location_id=location_id,
         storage_area_id=storage_area_id,
         search=search,
+        size=size,
+        color=color,
+        style=style,
         active_only=active_only,
         sort_by=sort_by,
         sort_order=sort_order,
@@ -449,8 +457,6 @@ async def export_items_csv(
     service = InventoryService(db)
     status_enum = None
     if status:
-        from app.models.inventory import ItemStatus
-
         try:
             status_enum = ItemStatus(status)
         except ValueError:
@@ -1206,9 +1212,6 @@ async def unassign_item(
     """
     service = InventoryService(db)
 
-    # Convert condition string to enum if provided
-    from app.models.inventory import ItemCondition
-
     return_condition = None
     if unassign_data.return_condition:
         try:
@@ -1356,8 +1359,6 @@ async def return_to_pool(
     **Authentication required**
     **Requires permission: inventory.manage**
     """
-    from app.models.inventory import ItemCondition
-
     return_condition = None
     if return_data.return_condition:
         try:
@@ -1525,9 +1526,6 @@ async def checkin_item(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
-
-    # Convert condition string to enum
-    from app.models.inventory import ItemCondition
 
     try:
         return_condition = ItemCondition(checkin_data.return_condition)
@@ -2237,6 +2235,7 @@ async def generate_barcode_labels(
             custom_width=request.custom_width,
             custom_height=request.custom_height,
             auto_rotate=request.auto_rotate,
+            extra_lines=request.extra_lines,
         )
     except ValueError as e:
         raise HTTPException(
@@ -2551,8 +2550,6 @@ async def create_equipment_request(
     Any authenticated member can submit a request for checkout, issuance, or purchase.
     Items with a rank restriction will be validated against the requester's rank.
     """
-    from app.core.utils import generate_uuid as gen_id
-
     # --- Rank & position access check ---
     if request_data.item_id:
         item_result = await db.execute(
@@ -2611,7 +2608,7 @@ async def create_equipment_request(
                     )
 
     req = EquipmentRequest(
-        id=gen_id(),
+        id=generate_uuid(),
         organization_id=str(current_user.organization_id),
         requester_id=str(current_user.id),
         item_name=request_data.item_name,
@@ -2833,9 +2830,6 @@ async def list_storage_areas(
     result = await db.execute(query)
     areas = result.scalars().all()
 
-    # Count items per storage area
-    from app.models.inventory import InventoryItem
-
     count_result = await db.execute(
         select(
             InventoryItem.storage_area_id, sqlfunc.count(InventoryItem.id).label("cnt")
@@ -2923,8 +2917,6 @@ async def create_storage_area(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Create a new storage area"""
-    from app.core.utils import generate_uuid
-
     area = StorageArea(
         id=generate_uuid(),
         organization_id=str(current_user.organization_id),
@@ -3263,9 +3255,6 @@ async def create_nfpa_compliance(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Create NFPA compliance record for an item. Requires NFPA tracking on the item's category."""
-    from app.core.utils import generate_uuid
-    from app.models.inventory import InventoryCategory
-
     # Verify item exists and belongs to this org
     item_result = await db.execute(
         select(InventoryItem).where(
@@ -3438,8 +3427,6 @@ async def create_exposure_record(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Log a hazardous exposure event for an NFPA-tracked item."""
-    from app.core.utils import generate_uuid
-
     # Verify item exists and belongs to this org
     item_result = await db.execute(
         select(InventoryItem).where(
@@ -4034,9 +4021,6 @@ async def update_issuance_charge(
         user_id=str(current_user.id),
         username=current_user.username,
     )
-
-    # Return updated record
-    from app.models.inventory import ItemIssuance
 
     result = await db.execute(
         select(ItemIssuance).where(ItemIssuance.id == str(issuance_id))

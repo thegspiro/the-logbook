@@ -59,14 +59,14 @@ export { electionService } from './electionService';
 
 // Inventory
 export { inventoryService } from './inventoryService';
-// Form types co-located with inventoryService due to extraction overlap
+// Form types (extracted to dedicated file)
 export type {
   FormFieldOption, FormField, FormFieldCreate, FormIntegration,
   FormIntegrationCreate, MemberLookupResult, MemberLookupResponse,
   FormDef, FormDetailDef, FormCreate, FormUpdate, FormsListResponse,
   FormSubmission, SubmissionsListResponse, FormsSummary,
   PublicFormField, PublicFormDef, PublicFormSubmissionResponse,
-} from './inventoryService';
+} from './formTypes';
 
 // Forms
 export { formsService, publicFormsService } from './formsServices';

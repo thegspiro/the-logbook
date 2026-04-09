@@ -43,6 +43,8 @@ from app.models.inventory import (
     WriteOffStatus,
 )
 from app.models.user import User
+from app.core.audit import log_audit_event
+from app.core.utils import generate_uuid as _gen
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +74,46 @@ def _sanitize_barcode_value(raw: str) -> str:
     return "".join(ch for ch in raw if ord(ch) < 128)
 
 
+# Supported extra-line field keys that can be requested on labels.
+_EXTRA_LINE_FIELDS = {"location", "category", "condition", "custom"}
+
+
+def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
+    """Build a single extra info string from requested fields.
+
+    *extra_lines* is a list of field keys the user wants printed below
+    the identifier line (e.g. ``["location", "category"]``).
+    Only fields that have a non-empty value on the item are included.
+    """
+    if not extra_lines:
+        return ""
+    parts: list[str] = []
+    for key in extra_lines:
+        if key == "location":
+            val = getattr(item, "location_name", None) or getattr(
+                item, "location_id", None
+            )
+            if val:
+                parts.append(str(val))
+        elif key == "category":
+            cat = getattr(item, "category", None)
+            if cat and getattr(cat, "name", None):
+                parts.append(cat.name)
+            elif getattr(item, "category_id", None):
+                parts.append(str(item.category_id)[:8])
+        elif key == "condition":
+            cond = getattr(item, "condition", None)
+            if cond:
+                val = cond.value if hasattr(cond, "value") else str(cond)
+                parts.append(val.replace("_", " ").title())
+        elif key == "custom":
+            # Custom text is handled by the caller pre-populating item.notes
+            # or by adding it to the extra_lines list as "custom:text"
+            if ":" in key:
+                parts.append(key.split(":", 1)[1])
+    return " | ".join(parts)
+
+
 class InventoryService:
     """Service for inventory management"""
 
@@ -82,8 +124,6 @@ class InventoryService:
         """Lazily backfill a barcode for items created before auto-generation."""
         if item.barcode:
             return
-        from app.core.utils import generate_uuid as _gen
-
         item.barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
         await self.db.commit()
         await self.db.refresh(item)
@@ -121,6 +161,43 @@ class InventoryService:
             from loguru import logger
 
             logger.warning(f"Failed to queue inventory notification: {e}")
+
+    # ------------------------------------------------------------------
+    # Shared helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _status_from_condition(
+        return_condition: Optional[ItemCondition],
+    ) -> ItemStatus:
+        """Determine item status after return based on condition.
+
+        Items returned in poor/damaged/out-of-service condition are
+        auto-quarantined to IN_MAINTENANCE; all others go to AVAILABLE.
+        """
+        if return_condition and return_condition in (
+            ItemCondition.POOR,
+            ItemCondition.DAMAGED,
+            ItemCondition.OUT_OF_SERVICE,
+        ):
+            return ItemStatus.IN_MAINTENANCE
+        return ItemStatus.AVAILABLE
+
+    @staticmethod
+    def _format_user_name(user) -> str:
+        """Build 'First Last' display name, falling back to username."""
+        if not user:
+            return ""
+        return (
+            f"{user.first_name or ''} {user.last_name or ''}".strip()
+            or user.username
+            or ""
+        )
+
+    @staticmethod
+    def _enum_value(obj) -> Any:
+        """Return .value for enum instances, or the raw value otherwise."""
+        return obj.value if obj and hasattr(obj, "value") else obj
 
     # ------------------------------------------------------------------
     # State validation helpers
@@ -307,8 +384,6 @@ class InventoryService:
             # Auto-generate a barcode if none was provided.  Format: INV-XXXXXXXX
             # (8 uppercase alphanumeric chars derived from the item's UUID).
             if not item_data.get("barcode"):
-                from app.core.utils import generate_uuid as _gen
-
                 raw_id = _gen().replace("-", "").upper()[:8]
                 item_data["barcode"] = f"INV-{raw_id}"
 
@@ -345,6 +420,9 @@ class InventoryService:
         location_id: Optional[UUID] = None,
         storage_area_id: Optional[UUID] = None,
         search: Optional[str] = None,
+        size: Optional[str] = None,
+        color: Optional[str] = None,
+        style: Optional[str] = None,
         active_only: bool = True,
         sort_by: Optional[str] = None,
         sort_order: Optional[str] = None,
@@ -391,6 +469,20 @@ class InventoryService:
         if storage_area_id:
             query = query.where(InventoryItem.storage_area_id == str(storage_area_id))
 
+        if size:
+            query = query.where(
+                or_(
+                    InventoryItem.standard_size == size,
+                    InventoryItem.size == size,
+                )
+            )
+
+        if color:
+            query = query.where(InventoryItem.color == color)
+
+        if style:
+            query = query.where(InventoryItem.style == style)
+
         if search:
             safe_search = (
                 search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -431,8 +523,6 @@ class InventoryService:
 
         missing = [i for i in items if not i.barcode]
         if missing:
-            from app.core.utils import generate_uuid as _gen
-
             for item in missing:
                 item.barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
             await self.db.commit()
@@ -615,9 +705,6 @@ class InventoryService:
             if notes:
                 item.status_notes = notes
 
-            # Log audit event for retirement within the service transaction
-            from app.core.audit import log_audit_event
-
             await log_audit_event(
                 db=self.db,
                 event_type="inventory_item_retired",
@@ -760,16 +847,7 @@ class InventoryService:
             if return_condition:
                 item.condition = return_condition
 
-            # Auto-quarantine: items returned in poor/damaged condition
-            # go to in_maintenance instead of available
-            if return_condition and return_condition in (
-                ItemCondition.POOR,
-                ItemCondition.DAMAGED,
-                ItemCondition.OUT_OF_SERVICE,
-            ):
-                item.status = ItemStatus.IN_MAINTENANCE
-            else:
-                item.status = ItemStatus.AVAILABLE
+            item.status = self._status_from_condition(return_condition)
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -1156,15 +1234,7 @@ class InventoryService:
                 return False, "Associated item not found"
             item.condition = return_condition
 
-            # Auto-quarantine: items returned in poor/damaged condition
-            if return_condition in (
-                ItemCondition.POOR,
-                ItemCondition.DAMAGED,
-                ItemCondition.OUT_OF_SERVICE,
-            ):
-                item.status = ItemStatus.IN_MAINTENANCE
-            else:
-                item.status = ItemStatus.AVAILABLE
+            item.status = self._status_from_condition(return_condition)
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -2133,16 +2203,7 @@ class InventoryService:
             if not lookup:
                 lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
-                results.append(
-                    {
-                        "code": code,
-                        "item_name": "Unknown",
-                        "item_id": "",
-                        "action": "none",
-                        "success": False,
-                        "error": f"No item found for code '{code}'",
-                    }
-                )
+                results.append(self._batch_result(code, None, "none", False, f"No item found for code '{code}'"))
                 failed += 1
                 continue
 
@@ -2159,30 +2220,8 @@ class InventoryService:
                         quantity=quantity,
                         reason=reason,
                     )
-                    if err:
-                        results.append(
-                            {
-                                "code": code,
-                                "item_name": item.name,
-                                "item_id": item.id,
-                                "action": "issued",
-                                "success": False,
-                                "error": err,
-                            }
-                        )
-                        failed += 1
-                    else:
-                        results.append(
-                            {
-                                "code": code,
-                                "item_name": item.name,
-                                "item_id": item.id,
-                                "action": "issued",
-                                "success": True,
-                                "error": None,
-                            }
-                        )
-                        successful += 1
+                    results.append(self._batch_result(code, item, "issued", not err, err))
+                    successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
 
                 elif item.status in (ItemStatus.AVAILABLE, ItemStatus.ASSIGNED):
                     # Individual available/assigned item → (re)assign
@@ -2194,55 +2233,15 @@ class InventoryService:
                         assignment_type=AssignmentType.PERMANENT,
                         reason=reason,
                     )
-                    if err:
-                        results.append(
-                            {
-                                "code": code,
-                                "item_name": item.name,
-                                "item_id": item.id,
-                                "action": "assigned",
-                                "success": False,
-                                "error": err,
-                            }
-                        )
-                        failed += 1
-                    else:
-                        results.append(
-                            {
-                                "code": code,
-                                "item_name": item.name,
-                                "item_id": item.id,
-                                "action": "assigned",
-                                "success": True,
-                                "error": None,
-                            }
-                        )
-                        successful += 1
+                    results.append(self._batch_result(code, item, "assigned", not err, err))
+                    successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
 
                 else:
-                    results.append(
-                        {
-                            "code": code,
-                            "item_name": item.name,
-                            "item_id": item.id,
-                            "action": "none",
-                            "success": False,
-                            "error": f"Item is not available (status: {item.status.value})",
-                        }
-                    )
+                    results.append(self._batch_result(code, item, "none", False, f"Item is not available (status: {item.status.value})"))
                     failed += 1
 
             except Exception as e:
-                results.append(
-                    {
-                        "code": code,
-                        "item_name": item.name if item else "Unknown",
-                        "item_id": item.id if item else "",
-                        "action": "none",
-                        "success": False,
-                        "error": str(e),
-                    }
-                )
+                results.append(self._batch_result(code, item, "none", False, str(e)))
                 failed += 1
 
         return {
@@ -2257,6 +2256,24 @@ class InventoryService:
     # Batch Return (scan-to-return)
     # ============================================
 
+    @staticmethod
+    def _batch_result(
+        code: str,
+        item,
+        action: str,
+        success: bool,
+        error: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build a single result entry for batch checkout/return operations."""
+        return {
+            "code": code,
+            "item_name": item.name if item else "Unknown",
+            "item_id": item.id if item else "",
+            "action": action,
+            "success": success,
+            "error": error,
+        }
+
     async def batch_return(
         self,
         user_id: UUID,
@@ -2270,8 +2287,6 @@ class InventoryService:
         Determines the correct return operation (unassign, check-in,
         or pool return) based on how the item is currently held.
         """
-        from app.models.inventory import ItemCondition as IC
-
         results = []
         successful = 0
         failed = 0
@@ -2291,34 +2306,16 @@ class InventoryService:
             if not lookup:
                 lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
-                results.append(
-                    {
-                        "code": code,
-                        "item_name": "Unknown",
-                        "item_id": "",
-                        "action": "none",
-                        "success": False,
-                        "error": f"No item found for code '{code}'",
-                    }
-                )
+                results.append(self._batch_result(code, None, "none", False, f"No item found for code '{code}'"))
                 failed += 1
                 continue
 
             item, _, _ = lookup
 
             try:
-                condition = IC(condition_str)
+                condition = ItemCondition(condition_str)
             except ValueError:
-                results.append(
-                    {
-                        "code": code,
-                        "item_name": item.name if item else "Unknown",
-                        "item_id": item.id if item else "",
-                        "action": "none",
-                        "success": False,
-                        "error": f"Invalid return condition: '{condition_str}'",
-                    }
-                )
+                results.append(self._batch_result(code, item, "none", False, f"Invalid return condition: '{condition_str}'"))
                 failed += 1
                 continue
 
@@ -2336,30 +2333,8 @@ class InventoryService:
                         return_notes=damage_notes or notes,
                         expected_user_id=user_id,
                     )
-                    if err:
-                        results.append(
-                            {
-                                "code": code,
-                                "item_name": item.name,
-                                "item_id": item.id,
-                                "action": "unassigned",
-                                "success": False,
-                                "error": err,
-                            }
-                        )
-                        failed += 1
-                    else:
-                        results.append(
-                            {
-                                "code": code,
-                                "item_name": item.name,
-                                "item_id": item.id,
-                                "action": "unassigned",
-                                "success": True,
-                                "error": None,
-                            }
-                        )
-                        successful += 1
+                    results.append(self._batch_result(code, item, "unassigned", not err, err))
+                    successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
                     continue
 
                 # Check if checked out to this user
@@ -2384,30 +2359,8 @@ class InventoryService:
                         return_condition=condition,
                         damage_notes=damage_notes,
                     )
-                    if err:
-                        results.append(
-                            {
-                                "code": code,
-                                "item_name": item.name,
-                                "item_id": item.id,
-                                "action": "checked_in",
-                                "success": False,
-                                "error": err,
-                            }
-                        )
-                        failed += 1
-                    else:
-                        results.append(
-                            {
-                                "code": code,
-                                "item_name": item.name,
-                                "item_id": item.id,
-                                "action": "checked_in",
-                                "success": True,
-                                "error": None,
-                            }
-                        )
-                        successful += 1
+                    results.append(self._batch_result(code, item, "checked_in", not err, err))
+                    successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
                     continue
 
                 # Check for pool issuance to this user
@@ -2434,56 +2387,19 @@ class InventoryService:
                             return_notes=damage_notes or notes,
                             quantity_returned=quantity,
                         )
-                        if err:
-                            results.append(
-                                {
-                                    "code": code,
-                                    "item_name": item.name,
-                                    "item_id": item.id,
-                                    "action": "returned_to_pool",
-                                    "success": False,
-                                    "error": err,
-                                }
-                            )
-                            failed += 1
-                        else:
-                            results.append(
-                                {
-                                    "code": code,
-                                    "item_name": item.name,
-                                    "item_id": item.id,
-                                    "action": "returned_to_pool",
-                                    "success": True,
-                                    "error": None,
-                                }
-                            )
-                            successful += 1
+                        results.append(self._batch_result(code, item, "returned_to_pool", not err, err))
+                        successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
                         continue
 
                 # Item not held by this user
-                results.append(
-                    {
-                        "code": code,
-                        "item_name": item.name,
-                        "item_id": item.id,
-                        "action": "none",
-                        "success": False,
-                        "error": "Item is not assigned to, checked out by, or issued to this member",
-                    }
-                )
+                results.append(self._batch_result(
+                    code, item, "none", False,
+                    "Item is not assigned to, checked out by, or issued to this member",
+                ))
                 failed += 1
 
             except Exception as e:
-                results.append(
-                    {
-                        "code": code,
-                        "item_name": item.name if item else "Unknown",
-                        "item_id": item.id if item else "",
-                        "action": "none",
-                        "success": False,
-                        "error": str(e),
-                    }
-                )
+                results.append(self._batch_result(code, item, "none", False, str(e)))
                 failed += 1
 
         return {
@@ -2571,6 +2487,7 @@ class InventoryService:
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
         auto_rotate: Optional[bool] = None,
+        extra_lines: Optional[List[str]] = None,
     ) -> Tuple[BytesIO, int]:
         """
         Generate a PDF containing barcode labels for the given items.
@@ -2581,6 +2498,9 @@ class InventoryService:
         `auto_rotate` controls whether landscape labels are rotated to match
         roll-fed printer feed direction (narrow edge first).  When None, the
         format's default is used (True for Rollo/generic, False for Dymo).
+
+        `extra_lines` is an optional list of field keys to print below the
+        identifier line (e.g. ``["location", "category"]``).
 
         Returns a tuple of (pdf_buffer, auto_populated_count).
         """
@@ -2625,7 +2545,7 @@ class InventoryService:
                 )
             rotate = auto_rotate if auto_rotate is not None else True
             pdf_buf = self._generate_thermal_labels(
-                items, custom_width, custom_height, rotate
+                items, custom_width, custom_height, rotate, extra_lines
             )
             return pdf_buf, auto_populated
 
@@ -2636,7 +2556,7 @@ class InventoryService:
             )
 
         if fmt["type"] == "sheet":
-            pdf_buf = self._generate_sheet_labels(items)
+            pdf_buf = self._generate_sheet_labels(items, extra_lines)
         else:
             rotate = (
                 auto_rotate
@@ -2644,12 +2564,15 @@ class InventoryService:
                 else fmt.get("auto_rotate", False)
             )
             pdf_buf = self._generate_thermal_labels(
-                items, fmt["width"], fmt["height"], rotate
+                items, fmt["width"], fmt["height"], rotate, extra_lines
             )
         return pdf_buf, auto_populated
 
     @staticmethod
-    def _generate_sheet_labels(items: list) -> BytesIO:
+    def _generate_sheet_labels(
+        items: list,
+        extra_lines: Optional[List[str]] = None,
+    ) -> BytesIO:
         """Generate labels on standard letter-size sheets in an Avery 5160 layout (3x10 grid, 30/page)."""
         from reportlab.graphics.barcode import code128
         from reportlab.lib.pagesizes import letter
@@ -2665,10 +2588,10 @@ class InventoryService:
         rows = 10
         label_w = 2.625 * inch
         label_h = 1.0 * inch
-        # Avery 5160 margins: 0.1875" left/right, 0.5" top/bottom
         margin_x = (page_w - cols * label_w) / 2
         margin_y = 0.5 * inch
         labels_per_page = cols * rows
+        padding = 0.06 * inch  # consistent inset on each side
 
         for idx, item in enumerate(items):
             if idx > 0 and idx % labels_per_page == 0:
@@ -2685,13 +2608,19 @@ class InventoryService:
                 item.barcode or item.asset_tag or item.serial_number or item.id[:12]
             )
 
+            usable_w = label_w - 2 * padding
+            y_cursor = y + label_h - padding
+
+            # Item name
             c.setFont("Helvetica-Bold", 7)
-            max_name_chars = int(label_w / (7 * 0.5))
+            max_name_chars = int(usable_w / (7 * 0.5))
             name = item.name[:max_name_chars] + (
                 "..." if len(item.name) > max_name_chars else ""
             )
-            c.drawString(x + 6, y + label_h - 12, name)
+            y_cursor -= 7
+            c.drawString(x + padding, y_cursor, name)
 
+            # Secondary identifiers
             info_parts = []
             if item.asset_tag and item.asset_tag != barcode_value:
                 info_parts.append(f"Asset: {item.asset_tag}")
@@ -2699,16 +2628,26 @@ class InventoryService:
                 info_parts.append(f"S/N: {item.serial_number}")
             if info_parts:
                 c.setFont("Helvetica", 5.5)
-                c.drawString(x + 6, y + label_h - 20, "  |  ".join(info_parts))
+                y_cursor -= 5.5 + 2
+                c.drawString(x + padding, y_cursor, "  |  ".join(info_parts))
 
-            # ISO/IEC 15417 quiet zone: leave space on each side of the barcode
+            # Optional extra info lines (location, category, custom text)
+            extra = _build_extra_lines(item, extra_lines)
+            if extra:
+                c.setFont("Helvetica", 5)
+                y_cursor -= 5 + 1
+                max_extra = int(usable_w / (5 * 0.5))
+                line = extra[:max_extra]
+                c.drawString(x + padding, y_cursor, line)
+
+            # ISO/IEC 15417 quiet zone
             quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
             bar_height = 0.35 * inch
             bar_width_unit = 0.008 * inch
             barcode_obj = code128.Code128(
                 barcode_value, barWidth=bar_width_unit, barHeight=bar_height
             )
-            max_barcode_width = label_w - 12 - 2 * quiet_zone
+            max_barcode_width = usable_w - 2 * quiet_zone
             while (
                 barcode_obj.width > max_barcode_width
                 and bar_width_unit > _MIN_BAR_WIDTH_INCH * inch
@@ -2718,10 +2657,10 @@ class InventoryService:
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
             barcode_x = x + (label_w - barcode_obj.width) / 2
-            barcode_obj.drawOn(c, barcode_x, y + 10)
+            barcode_obj.drawOn(c, barcode_x, y + padding + 8)
 
             c.setFont("Courier", 5.5)
-            c.drawCentredString(x + label_w / 2, y + 3, barcode_value)
+            c.drawCentredString(x + label_w / 2, y + padding + 1, barcode_value)
 
         c.save()
         buf.seek(0)
@@ -2733,6 +2672,7 @@ class InventoryService:
         width_in: float,
         height_in: float,
         auto_rotate: bool = False,
+        extra_lines: Optional[List[str]] = None,
     ) -> BytesIO:
         """
         Generate labels sized for thermal printers (Dymo, Rollo, etc).
@@ -2789,103 +2729,82 @@ class InventoryService:
             quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
             min_bar = _MIN_BAR_WIDTH_INCH * inch
 
-            if is_landscape:
-                self_w = content_w - 2 * padding
-                self_h = content_h - 2 * padding
+            self_w = content_w - 2 * padding
+            self_h = content_h - 2 * padding
 
+            if is_landscape:
                 name_font_size = min(8, max(5, self_h / (0.2 * inch)))
                 info_font_size = max(4, name_font_size - 2)
                 barcode_text_size = max(4, info_font_size)
-
-                max_barcode_width = self_w * 0.85 - 2 * quiet_zone
                 bar_height = min(0.4 * inch, self_h * 0.4)
                 bar_width_unit = 0.01 * inch
-
-                barcode_obj = code128.Code128(
-                    barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-                )
-                while (
-                    barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
-                ):
-                    bar_width_unit -= 0.001 * inch
-                    barcode_obj = code128.Code128(
-                        barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-                    )
-
-                y_cursor = content_h - padding
-
-                c.setFont("Helvetica-Bold", name_font_size)
-                name_max_chars = int(self_w / (name_font_size * 0.5))
-                name = item.name[:name_max_chars] + (
-                    "..." if len(item.name) > name_max_chars else ""
-                )
-                y_cursor -= name_font_size
-                c.drawString(padding, y_cursor, name)
-
-                info_parts = []
-                if item.asset_tag and item.asset_tag != barcode_value:
-                    info_parts.append(f"Asset: {item.asset_tag}")
-                if item.serial_number and item.serial_number != barcode_value:
-                    info_parts.append(f"S/N: {item.serial_number}")
-                if info_parts:
-                    y_cursor -= info_font_size + 2
-                    c.setFont("Helvetica", info_font_size)
-                    c.drawString(padding, y_cursor, " | ".join(info_parts))
-
-                barcode_x = padding + (self_w - barcode_obj.width) / 2
-                barcode_y = padding + barcode_text_size + 4
-                barcode_obj.drawOn(c, barcode_x, barcode_y)
-
-                c.setFont("Courier", barcode_text_size)
-                c.drawCentredString(content_w / 2, padding + 1, barcode_value)
-
             else:
-                self_w = content_w - 2 * padding
-                self_h = content_h - 2 * padding
-
                 name_font_size = min(10, max(6, self_w / (0.4 * inch)))
                 info_font_size = max(5, name_font_size - 2)
                 barcode_text_size = max(5, info_font_size)
-
-                max_barcode_width = self_w * 0.9 - 2 * quiet_zone
                 bar_height = min(0.8 * inch, self_h * 0.3)
                 bar_width_unit = 0.012 * inch
 
+            # Use 90% of usable width for barcode area (consistent for both orientations)
+            max_barcode_width = self_w * 0.9 - 2 * quiet_zone
+
+            barcode_obj = code128.Code128(
+                barcode_value, barWidth=bar_width_unit, barHeight=bar_height
+            )
+            while (
+                barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
+            ):
+                bar_width_unit -= 0.001 * inch
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height
                 )
-                while (
-                    barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
-                ):
-                    bar_width_unit -= 0.001 * inch
-                    barcode_obj = code128.Code128(
-                        barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-                    )
 
-                c.setFont("Helvetica-Bold", name_font_size)
-                name_max_chars = int(self_w / (name_font_size * 0.52))
-                name = item.name[:name_max_chars] + (
-                    "..." if len(item.name) > name_max_chars else ""
-                )
-                y_cursor = content_h - padding - name_font_size
+            # -- Top section: name, identifiers, optional extra lines --
+            y_cursor = content_h - padding
+
+            c.setFont("Helvetica-Bold", name_font_size)
+            name_max_chars = int(self_w / (name_font_size * 0.5))
+            name = item.name[:name_max_chars] + (
+                "..." if len(item.name) > name_max_chars else ""
+            )
+            y_cursor -= name_font_size
+            if is_landscape:
+                c.drawString(padding, y_cursor, name)
+            else:
                 c.drawCentredString(content_w / 2, y_cursor, name)
 
-                info_parts = []
-                if item.asset_tag and item.asset_tag != barcode_value:
-                    info_parts.append(f"Asset: {item.asset_tag}")
-                if item.serial_number and item.serial_number != barcode_value:
-                    info_parts.append(f"S/N: {item.serial_number}")
-                if info_parts:
-                    y_cursor -= info_font_size + 4
-                    c.setFont("Helvetica", info_font_size)
+            info_parts = []
+            if item.asset_tag and item.asset_tag != barcode_value:
+                info_parts.append(f"Asset: {item.asset_tag}")
+            if item.serial_number and item.serial_number != barcode_value:
+                info_parts.append(f"S/N: {item.serial_number}")
+            if info_parts:
+                y_cursor -= info_font_size + 2
+                c.setFont("Helvetica", info_font_size)
+                if is_landscape:
+                    c.drawString(padding, y_cursor, " | ".join(info_parts))
+                else:
                     c.drawCentredString(content_w / 2, y_cursor, " | ".join(info_parts))
 
-                barcode_x = padding + (self_w - barcode_obj.width) / 2
-                barcode_y = padding + barcode_text_size + 8
-                barcode_obj.drawOn(c, barcode_x, barcode_y)
+            # Optional extra info line (location, category, custom text)
+            extra = _build_extra_lines(item, extra_lines)
+            if extra:
+                extra_size = max(4, info_font_size - 1)
+                y_cursor -= extra_size + 1
+                max_extra = int(self_w / (extra_size * 0.5))
+                c.setFont("Helvetica", extra_size)
+                if is_landscape:
+                    c.drawString(padding, y_cursor, extra[:max_extra])
+                else:
+                    c.drawCentredString(content_w / 2, y_cursor, extra[:max_extra])
 
-                c.setFont("Courier", barcode_text_size)
-                c.drawCentredString(content_w / 2, padding + 2, barcode_value)
+            # -- Bottom section: barcode + barcode text value --
+            barcode_x = padding + (self_w - barcode_obj.width) / 2
+            barcode_y = padding + barcode_text_size + 4
+            barcode_obj.drawOn(c, barcode_x, barcode_y)
+
+            c.setFont("Courier", barcode_text_size)
+            c.drawCentredString(content_w / 2, padding + 1, barcode_value)
 
             if needs_rotation:
                 c.restoreState()
@@ -2999,22 +2918,12 @@ class InventoryService:
                 u = await self.db.execute(
                     select(User).where(User.id == wo.requested_by)
                 )
-                user = u.scalar_one_or_none()
-                if user:
-                    requester_name = (
-                        f"{user.first_name or ''} {user.last_name or ''}".strip()
-                        or user.username
-                    )
+                requester_name = self._format_user_name(u.scalar_one_or_none()) or None
 
             reviewer_name = None
             if wo.reviewed_by:
                 u = await self.db.execute(select(User).where(User.id == wo.reviewed_by))
-                user = u.scalar_one_or_none()
-                if user:
-                    reviewer_name = (
-                        f"{user.first_name or ''} {user.last_name or ''}".strip()
-                        or user.username
-                    )
+                reviewer_name = self._format_user_name(u.scalar_one_or_none()) or None
 
             requests.append(
                 {
@@ -3137,13 +3046,7 @@ class InventoryService:
             .order_by(ItemAssignment.assigned_date.desc())
         )
         for a in asgn_result.scalars().all():
-            user_name = ""
-            if a.user:
-                user_name = (
-                    f"{a.user.first_name or ''} {a.user.last_name or ''}".strip()
-                    or a.user.username
-                    or ""
-                )
+            user_name = self._format_user_name(a.user)
             events.append(
                 {
                     "type": "assignment",
@@ -3160,22 +3063,13 @@ class InventoryService:
                     ),
                     "details": {
                         "user_name": user_name,
-                        "assignment_type": (
-                            a.assignment_type.value
-                            if hasattr(a.assignment_type, "value")
-                            else a.assignment_type
-                        ),
+                        "assignment_type": self._enum_value(a.assignment_type),
                         "reason": a.assignment_reason,
                         "is_active": a.is_active,
                         "returned_at": (
                             a.returned_date.isoformat() if a.returned_date else None
                         ),
-                        "return_condition": (
-                            a.return_condition.value
-                            if a.return_condition
-                            and hasattr(a.return_condition, "value")
-                            else a.return_condition
-                        ),
+                        "return_condition": self._enum_value(a.return_condition),
                         "return_notes": a.return_notes,
                     },
                 }
@@ -3190,12 +3084,7 @@ class InventoryService:
                         "summary": f"Returned by {user_name}",
                         "details": {
                             "user_name": user_name,
-                            "return_condition": (
-                                a.return_condition.value
-                                if a.return_condition
-                                and hasattr(a.return_condition, "value")
-                                else a.return_condition
-                            ),
+                            "return_condition": self._enum_value(a.return_condition),
                             "return_notes": a.return_notes,
                         },
                     }
@@ -3212,13 +3101,7 @@ class InventoryService:
             .order_by(CheckOutRecord.checked_out_at.desc())
         )
         for c in co_result.scalars().all():
-            user_name = ""
-            if c.user:
-                user_name = (
-                    f"{c.user.first_name or ''} {c.user.last_name or ''}".strip()
-                    or c.user.username
-                    or ""
-                )
+            user_name = self._format_user_name(c.user)
             events.append(
                 {
                     "type": "checkout",
@@ -3251,12 +3134,7 @@ class InventoryService:
                         "summary": f"Checked in by {user_name}",
                         "details": {
                             "user_name": user_name,
-                            "return_condition": (
-                                c.return_condition.value
-                                if c.return_condition
-                                and hasattr(c.return_condition, "value")
-                                else c.return_condition
-                            ),
+                            "return_condition": self._enum_value(c.return_condition),
                             "damage_notes": c.damage_notes,
                         },
                     }
@@ -3273,13 +3151,7 @@ class InventoryService:
             .order_by(ItemIssuance.issued_at.desc())
         )
         for i in iss_result.scalars().all():
-            user_name = ""
-            if i.user:
-                user_name = (
-                    f"{i.user.first_name or ''} {i.user.last_name or ''}".strip()
-                    or i.user.username
-                    or ""
-                )
+            user_name = self._format_user_name(i.user)
             events.append(
                 {
                     "type": "issuance",
@@ -3308,12 +3180,7 @@ class InventoryService:
                         "details": {
                             "user_name": user_name,
                             "quantity": i.quantity,
-                            "return_condition": (
-                                i.return_condition.value
-                                if i.return_condition
-                                and hasattr(i.return_condition, "value")
-                                else i.return_condition
-                            ),
+                            "return_condition": self._enum_value(i.return_condition),
                             "return_notes": i.return_notes,
                         },
                     }
@@ -3329,11 +3196,7 @@ class InventoryService:
             .order_by(MaintenanceRecord.created_at.desc())
         )
         for m in maint_result.scalars().all():
-            mtype = (
-                m.maintenance_type.value
-                if hasattr(m.maintenance_type, "value")
-                else m.maintenance_type
-            )
+            mtype = self._enum_value(m.maintenance_type)
             events.append(
                 {
                     "type": "maintenance",
@@ -3354,11 +3217,7 @@ class InventoryService:
                         "description": m.description,
                         "is_completed": m.is_completed,
                         "passed": m.passed,
-                        "condition_after": (
-                            m.condition_after.value
-                            if m.condition_after and hasattr(m.condition_after, "value")
-                            else m.condition_after
-                        ),
+                        "condition_after": self._enum_value(m.condition_after),
                         "notes": m.notes,
                     },
                 }
@@ -3580,8 +3439,6 @@ class InventoryService:
                         garment_style = member
                         break
 
-            from app.core.utils import generate_uuid as _gen
-
             barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
 
             item = InventoryItem(
@@ -3685,11 +3542,7 @@ class InventoryService:
         total_waived = 0
 
         for iss in issuances:
-            user_name = ""
-            if iss.user:
-                user_name = (
-                    f"{iss.user.first_name or ''} {iss.user.last_name or ''}".strip()
-                )
+            user_name = self._format_user_name(iss.user)
             item_name = iss.item.name if iss.item else "Unknown"
 
             cost = iss.charge_amount or (

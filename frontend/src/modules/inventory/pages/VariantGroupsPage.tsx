@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Ruler, Plus, Pencil, RefreshCw, Eye, EyeOff, Package, DollarSign, Tag,
+  AlertTriangle,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
-import type { ItemVariantGroup, ItemVariantGroupCreate, InventoryCategory } from '../types';
+import type { ItemVariantGroup, ItemVariantGroupCreate, InventoryCategory, InventoryItem } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { VariantCapsules, getDisplayName } from '../components/VariantCapsules';
 import toast from 'react-hot-toast';
 
 interface GroupFormData {
@@ -27,6 +29,115 @@ const EMPTY_FORM: GroupFormData = {
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
 const labelClass = 'form-label';
+
+/** Stock matrix — shows on-hand quantities by size × color (or style) */
+const StockMatrix: React.FC<{ items: InventoryItem[] }> = ({ items }) => {
+  const matrix = useMemo(() => {
+    const sizes = new Set<string>();
+    const columns = new Set<string>();
+
+    for (const it of items) {
+      const sz = it.standard_size || it.size || '';
+      if (sz) sizes.add(sz);
+      const col = it.color || it.style?.replace(/_/g, ' ') || '';
+      if (col) columns.add(col);
+    }
+
+    if (sizes.size === 0) return null;
+
+    const sizeList = Array.from(sizes);
+    const colList = Array.from(columns);
+    if (colList.length === 0) colList.push('');
+
+    const grid: Record<string, Record<string, { onHand: number; total: number }>> = {};
+    for (const sz of sizeList) {
+      grid[sz] = {};
+      for (const cl of colList) {
+        grid[sz][cl] = { onHand: 0, total: 0 };
+      }
+    }
+
+    for (const it of items) {
+      const sz = it.standard_size || it.size || '';
+      if (!sz) continue;
+      const cl = it.color || it.style?.replace(/_/g, ' ') || '';
+      const key = colList.includes(cl) ? cl : colList[0] ?? '';
+      const cell = grid[sz]?.[key];
+      if (cell) {
+        const issued = it.quantity_issued ?? 0;
+        const qty = it.quantity ?? 0;
+        cell.onHand += qty;
+        cell.total += qty + issued;
+      }
+    }
+
+    return { sizeList, colList, grid };
+  }, [items]);
+
+  if (!matrix) {
+    return (
+      <div className="space-y-2">
+        {items.map((item) => (
+          <div key={item.id} className="flex items-center justify-between p-2.5 rounded-lg bg-theme-surface-secondary/50 border border-theme-surface-border">
+            <div className="flex items-center gap-2 min-w-0">
+              <Package className="w-4 h-4 text-theme-text-muted shrink-0" />
+              <span className="text-sm text-theme-text-primary truncate">{getDisplayName(item)}</span>
+              <VariantCapsules item={item} />
+            </div>
+            <span className="text-xs font-medium text-theme-text-muted tabular-nums shrink-0 ml-2">
+              {item.quantity ?? 0} on hand
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const { sizeList, colList, grid } = matrix;
+  const hasColumns = colList.length > 1 || colList[0] !== '';
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr>
+            <th className="text-left p-2 text-xs font-medium text-theme-text-muted border-b border-theme-surface-border">Size</th>
+            {hasColumns ? colList.map((col) => (
+              <th key={col || '_none'} className="text-center p-2 text-xs font-medium text-theme-text-muted border-b border-theme-surface-border">
+                {col || 'Default'}
+              </th>
+            )) : (
+              <th className="text-center p-2 text-xs font-medium text-theme-text-muted border-b border-theme-surface-border">On Hand</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {sizeList.map((sz) => (
+            <tr key={sz} className="border-b border-theme-surface-border last:border-b-0">
+              <td className="p-2 font-medium text-theme-text-primary uppercase text-xs">{sz}</td>
+              {colList.map((col) => {
+                const cell = grid[sz]?.[col];
+                const onHand = cell?.onHand ?? 0;
+                const isLow = onHand === 0;
+                return (
+                  <td key={col || '_none'} className="text-center p-2 tabular-nums">
+                    <span className={`inline-flex items-center justify-center min-w-[2rem] px-1.5 py-0.5 rounded text-xs font-semibold ${
+                      isLow
+                        ? 'bg-red-500/10 text-red-700 dark:text-red-400'
+                        : 'bg-green-500/10 text-green-700 dark:text-green-400'
+                    }`}>
+                      {onHand}
+                    </span>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 const VariantGroupsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
@@ -289,6 +400,15 @@ const VariantGroupsPage: React.FC = () => {
                     {group.items.length} variant{group.items.length !== 1 ? 's' : ''}
                   </span>
                 )}
+                {group.items && (() => {
+                  const outOfStock = (group.items as InventoryItem[]).filter(i => (i.quantity ?? 0) === 0).length;
+                  return outOfStock > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      {outOfStock} out of stock
+                    </span>
+                  ) : null;
+                })()}
               </div>
             </div>
           ))}
@@ -395,26 +515,10 @@ const VariantGroupsPage: React.FC = () => {
 
             <div>
               <h4 className="text-sm font-medium text-theme-text-primary mb-2">
-                Variants ({detailGroup.items?.length ?? 0})
+                Stock Matrix ({detailGroup.items?.length ?? 0} variant{(detailGroup.items?.length ?? 0) !== 1 ? 's' : ''})
               </h4>
               {detailGroup.items && detailGroup.items.length > 0 ? (
-                <div className="space-y-2">
-                  {detailGroup.items.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-2.5 rounded-lg bg-theme-surface-secondary/50 border border-theme-surface-border">
-                      <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-theme-text-muted" />
-                        <span className="text-sm text-theme-text-primary">{item.name}</span>
-                      </div>
-                      <span className={`inline-flex text-xs font-medium px-2 py-0.5 rounded-full border ${
-                        item.status === 'available'
-                          ? 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30'
-                          : 'bg-theme-surface-secondary text-theme-text-muted border-theme-surface-border'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <StockMatrix items={detailGroup.items as InventoryItem[]} />
               ) : (
                 <p className="text-sm text-theme-text-muted">No variants in this group yet. Add inventory items and assign them to this group.</p>
               )}

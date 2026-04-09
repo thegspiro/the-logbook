@@ -19,6 +19,8 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
+import { VariantCapsules } from '../components/VariantCapsules';
+import type { InventoryItem } from '../types';
 import { ReturnItemsModal } from '../../../components/ReturnItemsModal';
 import { MemberIdScannerModal } from '../../../components/MemberIdScannerModal';
 
@@ -370,7 +372,7 @@ const InventoryMembersPage: React.FC = () => {
                                   <Link to={`/inventory/items/${it.item_id}`} className="text-sm font-medium text-theme-text-primary hover:underline">{it.item_name}</Link>
                                   <div className="flex items-center gap-3 mt-1 text-xs text-theme-text-muted flex-wrap">
                                     <span>Qty: {it.quantity_issued}</span>
-                                    {it.size && <span>Size: {it.size}</span>}
+                                    <VariantCapsules item={{ size: it.size } as InventoryItem} />
                                     <span>{formatDate(it.issued_at, tz)}</span>
                                   </div>
                                 </div>

@@ -60,6 +60,8 @@ export type {
   MemberSizePreferencesCreate,
 } from '../../../services/eventServices';
 
+import type { InventoryCategory } from '../../../services/eventServices';
+
 export type { Location } from '../../../services/communicationsServices';
 export type { Role } from '../../../types/role';
 
@@ -175,5 +177,3 @@ export function getConditionColor(condition: string): string {
 export function getItemTypeFromCategory(category: InventoryCategory | null | undefined): string {
   return category?.item_type ?? 'equipment';
 }
-
-import type { InventoryCategory } from '../../../services/eventServices';

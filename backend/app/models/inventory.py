@@ -30,6 +30,11 @@ from app.core.database import Base
 from app.core.utils import generate_uuid
 
 
+def _enum_values(enum_cls):
+    """Extract string values from a (str, Enum) for SQLAlchemy's values_callable."""
+    return [e.value for e in enum_cls]
+
+
 class ItemType(str, enum.Enum):
     """Type of inventory item"""
 
@@ -249,7 +254,7 @@ class InventoryCategory(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text)
     item_type = Column(
-        Enum(ItemType, values_callable=lambda x: [e.value for e in x]), nullable=False
+        Enum(ItemType, values_callable=_enum_values), nullable=False
     )
 
     # Organization
@@ -349,12 +354,12 @@ class InventoryItem(Base):
     # Physical Details
     size = Column(String(50))  # Small, Medium, Large, or specific measurements
     standard_size = Column(
-        Enum(StandardSize, values_callable=lambda x: [e.value for e in x]),
+        Enum(StandardSize, values_callable=_enum_values),
         nullable=True,
     )  # Controlled vocabulary for sizes when applicable
     color = Column(String(50))
     style = Column(
-        Enum(GarmentStyle, values_callable=lambda x: [e.value for e in x]),
+        Enum(GarmentStyle, values_callable=_enum_values),
         nullable=True,
     )  # Garment style (long_sleeve, short_sleeve, etc.)
     weight = Column(Float)  # Weight in pounds or kg
@@ -379,13 +384,13 @@ class InventoryItem(Base):
 
     # Condition & Status
     condition = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]),
+        Enum(ItemCondition, values_callable=_enum_values),
         default=ItemCondition.GOOD,
         nullable=False,
         index=True,
     )
     status = Column(
-        Enum(ItemStatus, values_callable=lambda x: [e.value for e in x]),
+        Enum(ItemStatus, values_callable=_enum_values),
         default=ItemStatus.AVAILABLE,
         nullable=False,
         index=True,
@@ -394,7 +399,7 @@ class InventoryItem(Base):
 
     # Tracking mode: "individual" (serial-numbered, 1:1 assignment) or "pool" (quantity-tracked, issue/return)
     tracking_type = Column(
-        Enum(TrackingType, values_callable=lambda x: [e.value for e in x]),
+        Enum(TrackingType, values_callable=_enum_values),
         default=TrackingType.INDIVIDUAL,
         nullable=False,
         server_default="individual",
@@ -522,7 +527,7 @@ class ItemAssignment(Base):
         index=True,
     )
     assignment_type = Column(
-        Enum(AssignmentType, values_callable=lambda x: [e.value for e in x]),
+        Enum(AssignmentType, values_callable=_enum_values),
         default=AssignmentType.PERMANENT,
         nullable=False,
     )
@@ -539,7 +544,7 @@ class ItemAssignment(Base):
     returned_by = Column(String(36), ForeignKey("users.id"))
     assignment_reason = Column(Text)
     return_condition = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x])
+        Enum(ItemCondition, values_callable=_enum_values)
     )
     return_notes = Column(Text)
 
@@ -615,7 +620,7 @@ class ItemIssuance(Base):
     # Context
     issue_reason = Column(Text)
     return_condition = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x])
+        Enum(ItemCondition, values_callable=_enum_values)
     )
     return_notes = Column(Text)
 
@@ -627,7 +632,7 @@ class ItemIssuance(Base):
 
     # Cost recovery for lost/damaged items
     charge_status = Column(
-        Enum(ChargeStatus, values_callable=lambda x: [e.value for e in x]),
+        Enum(ChargeStatus, values_callable=_enum_values),
         default=ChargeStatus.NONE,
         server_default="none",
     )
@@ -755,10 +760,10 @@ class CheckOutRecord(Base):
 
     # Return Condition
     checkout_condition = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x])
+        Enum(ItemCondition, values_callable=_enum_values)
     )
     return_condition = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x])
+        Enum(ItemCondition, values_callable=_enum_values)
     )
     damage_notes = Column(Text)
 
@@ -811,7 +816,7 @@ class MaintenanceRecord(Base):
         index=True,
     )
     maintenance_type = Column(
-        Enum(MaintenanceType, values_callable=lambda x: [e.value for e in x]),
+        Enum(MaintenanceType, values_callable=_enum_values),
         nullable=False,
     )
 
@@ -827,10 +832,10 @@ class MaintenanceRecord(Base):
 
     # Condition Assessment
     condition_before = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x])
+        Enum(ItemCondition, values_callable=_enum_values)
     )
     condition_after = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x])
+        Enum(ItemCondition, values_callable=_enum_values)
     )
 
     # Work Performed
@@ -916,7 +921,7 @@ class DepartureClearance(Base):
 
     # Clearance status
     status = Column(
-        Enum(ClearanceStatus, values_callable=lambda x: [e.value for e in x]),
+        Enum(ClearanceStatus, values_callable=_enum_values),
         default=ClearanceStatus.INITIATED,
         nullable=False,
     )
@@ -939,7 +944,7 @@ class DepartureClearance(Base):
 
     # Notes / context
     departure_type = Column(
-        Enum(DepartureType, values_callable=lambda x: [e.value for e in x]),
+        Enum(DepartureType, values_callable=_enum_values),
         nullable=True,
     )
     notes = Column(Text)
@@ -1007,12 +1012,12 @@ class DepartureClearanceItem(Base):
 
     # Resolution
     disposition = Column(
-        Enum(ClearanceLineDisposition, values_callable=lambda x: [e.value for e in x]),
+        Enum(ClearanceLineDisposition, values_callable=_enum_values),
         default=ClearanceLineDisposition.PENDING,
         nullable=False,
     )
     return_condition = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x])
+        Enum(ItemCondition, values_callable=_enum_values)
     )
     resolved_at = Column(DateTime(timezone=True))
     resolved_by = Column(String(36), ForeignKey("users.id"))
@@ -1071,7 +1076,7 @@ class InventoryNotificationQueue(Base):
 
     # What happened
     action_type = Column(
-        Enum(InventoryActionType, values_callable=lambda x: [e.value for e in x]),
+        Enum(InventoryActionType, values_callable=_enum_values),
         nullable=False,
     )
 
@@ -1205,12 +1210,12 @@ class EquipmentRequest(Base):
     )  # Category (optional)
     quantity = Column(Integer, nullable=False, default=1)
     request_type = Column(
-        Enum(RequestType, values_callable=lambda x: [e.value for e in x]),
+        Enum(RequestType, values_callable=_enum_values),
         nullable=False,
         default=RequestType.CHECKOUT,
     )
     priority = Column(
-        Enum(RequestPriority, values_callable=lambda x: [e.value for e in x]),
+        Enum(RequestPriority, values_callable=_enum_values),
         nullable=False,
         default=RequestPriority.NORMAL,
     )
@@ -1218,7 +1223,7 @@ class EquipmentRequest(Base):
 
     # Review
     status = Column(
-        Enum(RequestStatus, values_callable=lambda x: [e.value for e in x]),
+        Enum(RequestStatus, values_callable=_enum_values),
         nullable=False,
         default=RequestStatus.PENDING,
         index=True,
@@ -1289,7 +1294,7 @@ class StorageArea(Base):
 
     # Type of storage location
     storage_type = Column(
-        Enum(StorageLocationType, values_callable=lambda x: [e.value for e in x]),
+        Enum(StorageLocationType, values_callable=_enum_values),
         nullable=False,
     )
 
@@ -1384,7 +1389,7 @@ class WriteOffRequest(Base):
 
     # Reason / justification
     reason = Column(
-        Enum(WriteOffReason, values_callable=lambda x: [e.value for e in x]),
+        Enum(WriteOffReason, values_callable=_enum_values),
         nullable=False,
         default=WriteOffReason.LOST,
     )
@@ -1392,7 +1397,7 @@ class WriteOffRequest(Base):
 
     # Approval status
     status = Column(
-        Enum(WriteOffStatus, values_callable=lambda x: [e.value for e in x]),
+        Enum(WriteOffStatus, values_callable=_enum_values),
         nullable=False,
         default=WriteOffStatus.PENDING,
         index=True,
@@ -1488,7 +1493,7 @@ class NFPAItemCompliance(Base):
 
     # Last known contamination level
     contamination_level = Column(
-        Enum(ContaminationLevel, values_callable=lambda x: [e.value for e in x]),
+        Enum(ContaminationLevel, values_callable=_enum_values),
         default=ContaminationLevel.NONE,
     )
 
@@ -1541,7 +1546,7 @@ class NFPAInspectionDetail(Base):
 
     # NFPA 1851 inspection level
     inspection_level = Column(
-        Enum(NFPAInspectionLevel, values_callable=lambda x: [e.value for e in x]),
+        Enum(NFPAInspectionLevel, values_callable=_enum_values),
         nullable=False,
     )
 
@@ -1555,7 +1560,7 @@ class NFPAInspectionDetail(Base):
 
     # Contamination assessment
     contamination_level = Column(
-        Enum(ContaminationLevel, values_callable=lambda x: [e.value for e in x]),
+        Enum(ContaminationLevel, values_callable=_enum_values),
         nullable=True,
     )
 
@@ -1567,7 +1572,7 @@ class NFPAInspectionDetail(Base):
 
     # Overall recommendation
     recommendation = Column(
-        Enum(NFPARecommendation, values_callable=lambda x: [e.value for e in x]),
+        Enum(NFPARecommendation, values_callable=_enum_values),
         nullable=True,
     )
 
@@ -1614,7 +1619,7 @@ class NFPAExposureRecord(Base):
 
     # Exposure details
     exposure_type = Column(
-        Enum(ExposureType, values_callable=lambda x: [e.value for e in x]),
+        Enum(ExposureType, values_callable=_enum_values),
         nullable=False,
     )
     exposure_date = Column(Date, nullable=False)
@@ -1696,7 +1701,7 @@ class ReturnRequest(Base):
 
     # What they want to return
     return_type = Column(
-        Enum(ReturnRequestType, values_callable=lambda x: [e.value for e in x]),
+        Enum(ReturnRequestType, values_callable=_enum_values),
         nullable=False,
     )
     item_id = Column(
@@ -1724,7 +1729,7 @@ class ReturnRequest(Base):
     # Member-reported details
     quantity_returning = Column(Integer, nullable=False, default=1)
     reported_condition = Column(
-        Enum(ItemCondition, values_callable=lambda x: [e.value for e in x]),
+        Enum(ItemCondition, values_callable=_enum_values),
         nullable=False,
         default=ItemCondition.GOOD,
     )
@@ -1732,7 +1737,7 @@ class ReturnRequest(Base):
 
     # Review
     status = Column(
-        Enum(ReturnRequestStatus, values_callable=lambda x: [e.value for e in x]),
+        Enum(ReturnRequestStatus, values_callable=_enum_values),
         nullable=False,
         default=ReturnRequestStatus.PENDING,
         index=True,
@@ -1821,13 +1826,13 @@ class ReorderRequest(Base):
 
     # Status workflow
     status = Column(
-        Enum(ReorderStatus, values_callable=lambda x: [e.value for e in x]),
+        Enum(ReorderStatus, values_callable=_enum_values),
         nullable=False,
         default=ReorderStatus.PENDING,
         index=True,
     )
     urgency = Column(
-        Enum(ReorderUrgency, values_callable=lambda x: [e.value for e in x]),
+        Enum(ReorderUrgency, values_callable=_enum_values),
         nullable=False,
         default=ReorderUrgency.NORMAL,
     )

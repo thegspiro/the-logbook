@@ -50,8 +50,13 @@ export interface ItemFormModalProps {
   editItem?: InventoryItem | null;
 }
 
-/** Categories that support size/style variant generation */
-const VARIANT_ITEM_TYPES = new Set(['uniform', 'ppe']);
+/** All item types support size/style variant generation (uniforms, PPE,
+ *  batteries, lights, etc. — any category where items come in different
+ *  sizes, colors, or styles). */
+const VARIANT_ITEM_TYPES = new Set([
+  'uniform', 'ppe', 'tool', 'equipment', 'vehicle',
+  'electronics', 'consumable', 'other',
+]);
 
 export const ItemFormModal: React.FC<ItemFormModalProps> = ({
   isOpen, onClose, onSaved, categories, locations, storageAreas, editItem,
@@ -293,8 +298,8 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                   <button
                     key={s.value}
                     type="button"
-                    className={`${chipBase} ${selectedSizes.includes(s.label) ? chipOn : chipOff}`}
-                    onClick={() => toggleSize(s.label)}
+                    className={`${chipBase} ${selectedSizes.includes(s.value) ? chipOn : chipOff}`}
+                    onClick={() => toggleSize(s.value)}
                   >
                     {s.label}
                   </button>
@@ -349,7 +354,7 @@ export const ItemFormModal: React.FC<ItemFormModalProps> = ({
                 <p className="text-xs text-theme-text-muted mt-0.5">
                   {selectedSizes.length} size{selectedSizes.length !== 1 ? 's' : ''}
                   {selectedStyles.length > 0 && ` × ${selectedStyles.length} style${selectedStyles.length !== 1 ? 's' : ''}`}
-                  {variantColors.split(',').filter((c) => c.trim()).length > 0 && ` × ${variantColors.split(',').filter((c) => c.trim()).length} color${variantColors.split(',').filter((c) => c.trim()).length !== 1 ? 's' : ''}`}
+                  {(() => { const n = variantColors.split(',').filter((c) => c.trim()).length; return n > 0 ? ` × ${n} color${n !== 1 ? 's' : ''}` : ''; })()}
                 </p>
               </div>
             )}
