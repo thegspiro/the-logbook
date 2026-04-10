@@ -219,7 +219,7 @@ describe('trainingService', () => {
 
       const result = await trainingService.getUserStats('u1');
 
-      expect(mockGet).toHaveBeenCalledWith('/training/users/u1/stats');
+      expect(mockGet).toHaveBeenCalledWith('/training/stats/user/u1');
       expect(result).toEqual(stats);
     });
   });
@@ -231,7 +231,7 @@ describe('trainingService', () => {
 
       const result = await trainingService.getComplianceSummary('u1');
 
-      expect(mockGet).toHaveBeenCalledWith('/training/users/u1/compliance');
+      expect(mockGet).toHaveBeenCalledWith('/training/compliance-summary/u1');
       expect(result).toEqual(summary);
     });
   });
@@ -243,7 +243,7 @@ describe('trainingService', () => {
 
       const result = await trainingService.getRequirementProgress('u1');
 
-      expect(mockGet).toHaveBeenCalledWith('/training/users/u1/requirement-progress', {
+      expect(mockGet).toHaveBeenCalledWith('/training/requirements/progress/u1', {
         params: { year: undefined },
       });
       expect(result).toEqual(progress);
@@ -254,7 +254,7 @@ describe('trainingService', () => {
 
       await trainingService.getRequirementProgress('u1', 2026);
 
-      expect(mockGet).toHaveBeenCalledWith('/training/users/u1/requirement-progress', {
+      expect(mockGet).toHaveBeenCalledWith('/training/requirements/progress/u1', {
         params: { year: 2026 },
       });
     });
@@ -268,7 +268,7 @@ describe('trainingService', () => {
       const result = await trainingService.getExpiringCertifications();
 
       expect(mockGet).toHaveBeenCalledWith('/training/certifications/expiring', {
-        params: { days_ahead: undefined },
+        params: { days_ahead: 90 },
       });
       expect(result).toEqual(certs);
     });
