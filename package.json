@@ -77,6 +77,9 @@
       "eslint --fix",
       "prettier --write"
     ],
+    "frontend/src/**/*.{ts,tsx}": [
+      "bash -c 'cd frontend && npx vitest related --run \"$@\"' --"
+    ],
     "*.{json,md}": [
       "prettier --write"
     ],

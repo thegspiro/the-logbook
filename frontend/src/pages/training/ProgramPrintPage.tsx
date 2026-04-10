@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { trainingProgramService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom } from '../../utils/dateFormatting';
+import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import type {
   ProgramWithDetails,
   ProgramEnrollment,
@@ -94,7 +94,7 @@ const ProgramPrintPage: React.FC = () => {
                 )}
               </div>
               <div style={{ textAlign: 'right', fontSize: '9pt', color: '#666' }}>
-                <p style={{ margin: 0 }}>Generated: {new Date().toLocaleDateString()}</p>
+                <p style={{ margin: 0 }}>Generated: {formatDate(new Date(), tz)}</p>
                 {program.code && <p style={{ margin: 0 }}>Code: {program.code}</p>}
                 {program.version && <p style={{ margin: 0 }}>Version: {program.version}</p>}
               </div>
@@ -215,7 +215,7 @@ const ProgramPrintPage: React.FC = () => {
           {/* Footer */}
           <div style={{ marginTop: '24pt', borderTop: '1px solid #ddd', paddingTop: '6pt', display: 'flex', justifyContent: 'space-between', fontSize: '8pt', color: '#aaa' }}>
             <span>The Logbook — Training Program Record</span>
-            <span>Generated {new Date().toLocaleDateString()}</span>
+            <span>Generated {formatDate(new Date(), tz)}</span>
           </div>
         </div>
       </div>

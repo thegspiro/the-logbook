@@ -12,7 +12,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { trainingService, trainingProgramService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom } from '../../utils/dateFormatting';
+import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import type {
   TrainingRecord,
   ComplianceSummary,
@@ -55,10 +55,10 @@ const MemberTrainingPrintPage: React.FC = () => {
       trainingProgramService.getUserEnrollments(userId).catch(() => []),
     ])
       .then(([recs, st, comp, enr]) => {
-        setRecords(recs as TrainingRecord[]);
-        setStats(st as UserTrainingStats | null);
-        setCompliance(comp as ComplianceSummary | null);
-        setEnrollments(enr as ProgramEnrollment[]);
+        setRecords(recs);
+        setStats(st);
+        setCompliance(comp);
+        setEnrollments(enr);
       })
       .catch(() => setError('Failed to load training data'))
       .finally(() => setLoading(false));
@@ -107,7 +107,7 @@ const MemberTrainingPrintPage: React.FC = () => {
                 <p style={{ fontSize: '14pt', margin: 0 }}>{memberName}</p>
               </div>
               <div style={{ textAlign: 'right', fontSize: '9pt', color: '#666' }}>
-                <p style={{ margin: 0 }}>Generated: {new Date().toLocaleDateString()}</p>
+                <p style={{ margin: 0 }}>Generated: {formatDate(new Date(), tz)}</p>
                 {compliance && (
                   <p style={{ margin: 0, fontWeight: 600, color: compliance.compliance_status === 'green' ? '#166534' : compliance.compliance_status === 'red' ? '#991b1b' : '#92400e' }}>
                     Compliance: {compliance.compliance_label || compliance.compliance_status.toUpperCase()}

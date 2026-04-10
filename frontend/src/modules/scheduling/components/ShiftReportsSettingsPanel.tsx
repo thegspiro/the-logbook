@@ -1039,7 +1039,7 @@ export const ShiftReportsSettingsPanel: React.FC = () => {
                           delete updated[key];
                           const renumbered: Record<string, string> =
                             {};
-                          (Object.values(updated) as string[])
+                          Object.values(updated)
                             .sort()
                             .forEach((v, i) => {
                               renumbered[String(i + 1)] = v;

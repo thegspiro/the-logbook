@@ -280,7 +280,7 @@ describe('onboardingStore', () => {
       expect(errors[0]?.action).toBe('saveName');
       expect(errors[0]?.errorMessage).toBe('Name too long');
       expect(errors[0]?.recovered).toBe(false);
-      expect(errors[0]?.timestamp).toBeTruthy();
+      expect(errors[0]?.timestamp).toBeTypeOf('string');
     });
 
     it('logError sets lastError to the new error', () => {
@@ -381,7 +381,7 @@ describe('onboardingStore', () => {
     it('triggerAutoSave updates lastSaved when autoSaveEnabled is true', () => {
       expect(getState().lastSaved).toBeNull();
       getState().triggerAutoSave();
-      expect(getState().lastSaved).toBeTruthy();
+      expect(getState().lastSaved).toBeTypeOf('string');
     });
 
     it('triggerAutoSave does not update lastSaved when autoSaveEnabled is false', () => {
@@ -392,7 +392,7 @@ describe('onboardingStore', () => {
 
     it('actions trigger auto-save (lastSaved is updated)', () => {
       getState().setDepartmentName('Test FD');
-      expect(getState().lastSaved).toBeTruthy();
+      expect(getState().lastSaved).toBeTypeOf('string');
     });
   });
 
