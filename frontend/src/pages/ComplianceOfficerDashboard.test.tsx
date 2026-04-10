@@ -134,7 +134,7 @@ describe('ComplianceOfficerDashboard', () => {
       expect(screen.getByText(/Annual Compliance Report/)).toBeInTheDocument();
     });
 
-    expect(mockGetAnnualReport).toHaveBeenCalledWith();
+    expect(mockGetAnnualReport).toHaveBeenCalledWith(new Date().getFullYear());
   });
 
   it('can switch to ISO Readiness section', async () => {

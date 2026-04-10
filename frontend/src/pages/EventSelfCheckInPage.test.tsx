@@ -85,11 +85,12 @@ describe('EventSelfCheckInPage', () => {
 
       renderWithRouter(<EventSelfCheckInPage />);
 
+      let link!: HTMLElement;
       await waitFor(() => {
-        const link = screen.getByRole('link', { name: /view all events/i });
+        link = screen.getByRole('link', { name: /view all events/i });
         expect(link).toBeInTheDocument();
-      })
-      expect(link).toHaveAttribute('href', '/events');;
+      });
+      expect(link).toHaveAttribute('href', '/events');
     });
   });
 
@@ -155,11 +156,12 @@ describe('EventSelfCheckInPage', () => {
         await user.click(checkInButton);
       });
 
+      let loadingButton!: HTMLElement;
       await waitFor(() => {
-        const loadingButton = screen.getByRole('button', { name: /checking in\.\.\./i });
+        loadingButton = screen.getByRole('button', { name: /checking in\.\.\./i });
         expect(loadingButton).toBeInTheDocument();
-      })
-      expect(loadingButton).toBeDisabled();;
+      });
+      expect(loadingButton).toBeDisabled();
     });
 
     it('should display success message after successful check-in', async () => {

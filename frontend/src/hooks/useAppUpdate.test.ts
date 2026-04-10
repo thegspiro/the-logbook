@@ -58,7 +58,7 @@ describe('useAppUpdate', () => {
 
     // Wait for the fetch to complete
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith();
+      expect(fetchSpy).toHaveBeenCalledWith('/version.json', { cache: 'no-store' });
     });
 
     expect(result.current.updateAvailable).toBe(false);
@@ -83,7 +83,7 @@ describe('useAppUpdate', () => {
     const { result } = renderHook(() => useAppUpdate(), { wrapper });
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith();
+      expect(fetchSpy).toHaveBeenCalledWith('/version.json', { cache: 'no-store' });
     });
 
     expect(result.current.updateAvailable).toBe(false);
@@ -95,7 +95,7 @@ describe('useAppUpdate', () => {
     const { result } = renderHook(() => useAppUpdate(), { wrapper });
 
     await waitFor(() => {
-      expect(fetchSpy).toHaveBeenCalledWith();
+      expect(fetchSpy).toHaveBeenCalledWith('/version.json', { cache: 'no-store' });
     });
 
     expect(result.current.updateAvailable).toBe(false);

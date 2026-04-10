@@ -180,11 +180,12 @@ describe("MemberIdCardPage", () => {
 
       renderWithRouter(<MemberIdCardPage />);
 
+      let backLink!: HTMLElement;
       await waitFor(() => {
-        const backLink = screen.getByRole("link", { name: /back to profile/i });
+        backLink = screen.getByRole("link", { name: /back to profile/i });
         expect(backLink).toBeInTheDocument();
-      })
-      expect(backLink).toHaveAttribute("href", "/members/user-123");;
+      });
+      expect(backLink).toHaveAttribute("href", "/members/user-123");
     });
   });
 
@@ -338,11 +339,12 @@ describe("MemberIdCardPage", () => {
 
       renderWithRouter(<MemberIdCardPage />);
 
+      let img!: HTMLElement;
       await waitFor(() => {
-        const img = screen.getByAltText("John Doe");
+        img = screen.getByAltText("John Doe");
         expect(img).toBeInTheDocument();
-      })
-      expect(img).toHaveAttribute("src", "/photos/jdoe.jpg");;
+      });
+      expect(img).toHaveAttribute("src", "/photos/jdoe.jpg");
     });
   });
 
@@ -392,11 +394,12 @@ describe("MemberIdCardPage", () => {
 
       renderWithRouter(<MemberIdCardPage />);
 
+      let backLink!: HTMLElement;
       await waitFor(() => {
-        const backLink = screen.getByRole("link", { name: /back to profile/i });
+        backLink = screen.getByRole("link", { name: /back to profile/i });
         expect(backLink).toBeInTheDocument();
-      })
-      expect(backLink).toHaveAttribute("href", "/members/user-123");;
+      });
+      expect(backLink).toHaveAttribute("href", "/members/user-123");
     });
   });
 
@@ -474,11 +477,12 @@ describe("MemberIdCardPage", () => {
 
       renderWithRouter(<MemberIdCardPage />);
 
+      let logo!: HTMLElement;
       await waitFor(() => {
-        const logo = screen.getByAltText("Springfield Fire Department");
+        logo = screen.getByAltText("Springfield Fire Department");
         expect(logo).toBeInTheDocument();
-      })
-      expect(logo).toHaveAttribute("src", "/logos/sfd.png");;
+      });
+      expect(logo).toHaveAttribute("src", "/logos/sfd.png");
     });
   });
 });
