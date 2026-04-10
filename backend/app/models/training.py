@@ -1532,26 +1532,34 @@ class TrainingModuleConfig(Base):
         return f"<TrainingModuleConfig(org_id={self.organization_id})>"
 
     def to_visibility_dict(self):
-        """Return a dictionary of all visibility settings for frontend consumption."""
+        """Return a dictionary of all visibility settings for frontend consumption.
+
+        Boolean columns added after initial rows may be NULL in the DB;
+        coerce them to their intended defaults so callers always see
+        ``True``/``False``, never ``None``.
+        """
+        def _b(val, default=True):
+            return val if val is not None else default
+
         return {
-            "show_training_history": self.show_training_history,
-            "show_training_hours": self.show_training_hours,
-            "show_certification_status": self.show_certification_status,
-            "show_pipeline_progress": self.show_pipeline_progress,
-            "show_requirement_details": self.show_requirement_details,
-            "show_shift_reports": self.show_shift_reports,
-            "show_shift_stats": self.show_shift_stats,
-            "show_officer_narrative": self.show_officer_narrative,
-            "show_performance_rating": self.show_performance_rating,
-            "show_areas_of_strength": self.show_areas_of_strength,
-            "show_areas_for_improvement": self.show_areas_for_improvement,
-            "show_skills_observed": self.show_skills_observed,
-            "show_submission_history": self.show_submission_history,
-            "allow_member_report_export": self.allow_member_report_export,
-            "report_review_required": self.report_review_required,
-            "report_review_role": self.report_review_role,
-            "rating_label": self.rating_label,
-            "rating_scale_type": self.rating_scale_type,
+            "show_training_history": _b(self.show_training_history),
+            "show_training_hours": _b(self.show_training_hours),
+            "show_certification_status": _b(self.show_certification_status),
+            "show_pipeline_progress": _b(self.show_pipeline_progress),
+            "show_requirement_details": _b(self.show_requirement_details),
+            "show_shift_reports": _b(self.show_shift_reports),
+            "show_shift_stats": _b(self.show_shift_stats),
+            "show_officer_narrative": _b(self.show_officer_narrative, False),
+            "show_performance_rating": _b(self.show_performance_rating),
+            "show_areas_of_strength": _b(self.show_areas_of_strength),
+            "show_areas_for_improvement": _b(self.show_areas_for_improvement),
+            "show_skills_observed": _b(self.show_skills_observed),
+            "show_submission_history": _b(self.show_submission_history),
+            "allow_member_report_export": _b(self.allow_member_report_export),
+            "report_review_required": _b(self.report_review_required, False),
+            "report_review_role": self.report_review_role or "training_officer",
+            "rating_label": self.rating_label or "Performance Rating",
+            "rating_scale_type": self.rating_scale_type or "stars",
             "rating_scale_labels": self.rating_scale_labels,
         }
 

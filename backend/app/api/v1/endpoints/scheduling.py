@@ -39,6 +39,7 @@ from app.schemas.scheduling import (
     ShiftAttendanceCreate,
     ShiftAttendanceResponse,
     ShiftAttendanceUpdate,
+    ShiftFinalizeRequest,
     ShiftCallCreate,
     ShiftCallResponse,
     ShiftCallUpdate,
@@ -361,21 +362,32 @@ async def delete_shift(
 @router.post("/shifts/{shift_id}/finalize", response_model=ShiftResponse)
 async def finalize_shift(
     shift_id: UUID,
+    body: ShiftFinalizeRequest = ShiftFinalizeRequest(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """
     Finalize a shift after the officer has reviewed attendance and checklists.
 
+    Optionally include ``manual_hours`` to credit members who did not
+    check in/out with a specific number of hours.
+
     Once finalized the shift is considered closed and attendance is locked.
 
     **Permissions required:** scheduling.manage
     """
+    manual = None
+    if body.manual_hours:
+        manual = [
+            {"user_id": str(entry.user_id), "hours": entry.hours}
+            for entry in body.manual_hours
+        ]
     service = SchedulingService(db)
     shift, error = await service.finalize_shift(
         shift_id,
         current_user.organization_id,
         finalized_by_user_id=str(current_user.id),
+        manual_hours=manual,
     )
     if not shift:
         raise HTTPException(

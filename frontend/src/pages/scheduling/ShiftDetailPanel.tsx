@@ -132,6 +132,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [checkingOut, setCheckingOut] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
+  // Manual hours for members without attendance (used during finalization)
+  const [manualHours, setManualHours] = useState<Record<string, string>>({});
+
   // UI visibility toggles
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFinalizeChecklist, setShowFinalizeChecklist] = useState(false);
@@ -468,8 +471,15 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const handleFinalize = async () => {
     setPendingFlag('finalizing', true);
     try {
-      const updated = await schedulingService.finalizeShift(shift.id);
+      const entries = Object.entries(manualHours)
+        .map(([uid, val]) => ({ user_id: uid, hours: parseFloat(val) }))
+        .filter(e => e.hours > 0 && !isNaN(e.hours));
+      const updated = await schedulingService.finalizeShift(
+        shift.id,
+        entries.length > 0 ? entries : undefined,
+      );
       setShift(updated);
+      setManualHours({});
       toast.success('Shift finalized');
       setShowFinalizeChecklist(false);
       onRefresh?.();
@@ -763,9 +773,46 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                         )}
                         {checkedIn.length > checkedOut.length && (
                           <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                            {checkedIn.length - checkedOut.length} member(s) still on shift
+                            {checkedIn.length - checkedOut.length} member(s) still on shift &mdash; will be auto-checked-out at shift end time
                           </p>
                         )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Manual hours for unattended members */}
+                {(() => {
+                  const attendedIds = new Set(allAttendance.map(a => a.user_id));
+                  const unattended = activeAssignments.filter(a => !attendedIds.has(a.user_id));
+                  if (unattended.length === 0) return null;
+                  return (
+                    <div className="p-2 rounded-md border border-amber-500/20 bg-amber-500/5 space-y-2">
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        Add hours for members who didn&apos;t check in
+                      </p>
+                      <div className="space-y-1.5">
+                        {unattended.map(a => (
+                          <div key={a.user_id} className="flex items-center gap-2">
+                            <span className="text-sm text-theme-text-secondary flex-1 truncate">
+                              {a.user_name || 'Unknown'}
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="48"
+                              step="0.5"
+                              placeholder="hrs"
+                              value={manualHours[a.user_id] ?? ''}
+                              onChange={e => setManualHours(prev => ({
+                                ...prev,
+                                [a.user_id]: e.target.value,
+                              }))}
+                              className="w-20 px-2 py-1 text-sm rounded-md border border-theme-surface-border bg-theme-surface text-theme-text-primary text-right"
+                            />
+                          </div>
+                        ))}
                       </div>
                     </div>
                   );

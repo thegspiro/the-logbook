@@ -140,6 +140,19 @@ class ShiftAttendanceUpdate(BaseModel):
     duration_minutes: Optional[int] = None
 
 
+class ManualHoursEntry(BaseModel):
+    """A single member's manually-entered hours for shift finalization."""
+
+    user_id: UUID
+    hours: float = Field(..., gt=0, le=48)
+
+
+class ShiftFinalizeRequest(BaseModel):
+    """Optional request body for finalizing a shift."""
+
+    manual_hours: Optional[List[ManualHoursEntry]] = None
+
+
 class ShiftAttendanceResponse(UTCResponseBase):
     """Schema for shift attendance response"""
 
