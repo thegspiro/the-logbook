@@ -54,7 +54,7 @@ describe('medicalScreeningStore', () => {
 
       await useMedicalScreeningStore.getState().fetchRequirements();
 
-      expect(mockListRequirements).toHaveBeenCalledWith();
+      expect(mockListRequirements).toHaveBeenCalledWith(undefined);
       expect(useMedicalScreeningStore.getState().requirements).toEqual(mockData);
       expect(useMedicalScreeningStore.getState().isLoading).toBe(false);
       expect(useMedicalScreeningStore.getState().error).toBeNull();

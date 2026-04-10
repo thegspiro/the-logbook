@@ -309,7 +309,7 @@ describe('adminHoursStore', () => {
 
       expect(mockClockOut).toHaveBeenCalledWith('entry1');
       expect(getState().activeSession).toBeNull();
-      expect(mockListMy).toHaveBeenCalledWith();
+      expect(mockListMy).toHaveBeenCalledWith(undefined);
     });
 
     it('should set error and re-throw on failure', async () => {
@@ -331,7 +331,7 @@ describe('adminHoursStore', () => {
 
       expect(mockClockOutByCategory).toHaveBeenCalledWith('cat1');
       expect(getState().activeSession).toBeNull();
-      expect(mockListMy).toHaveBeenCalledWith();
+      expect(mockListMy).toHaveBeenCalledWith(undefined);
     });
 
     it('should set error and re-throw on failure', async () => {
