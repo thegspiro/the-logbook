@@ -12,7 +12,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { shiftCompletionService } from '../../services/api';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom } from '../../utils/dateFormatting';
+import { formatDate, formatDateCustom } from '../../utils/dateFormatting';
 import type { ShiftCompletionReport } from '../../types/training';
 
 const ShiftReportPrintPage: React.FC = () => {
@@ -285,7 +285,7 @@ const ShiftReportPrintPage: React.FC = () => {
           {/* Footer */}
           <div style={{ marginTop: '24pt', borderTop: '1px solid #ddd', paddingTop: '6pt', display: 'flex', justifyContent: 'space-between', fontSize: '8pt', color: '#aaa' }}>
             <span>The Logbook — Shift Completion Report</span>
-            <span>Generated {new Date().toLocaleDateString()}</span>
+            <span>Generated {formatDate(new Date(), tz)}</span>
           </div>
 
         </div>

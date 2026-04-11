@@ -36,7 +36,7 @@ function openDB(): Promise<IDBDatabase> {
     };
 
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(request.error ?? new Error('Failed to open database'));
   });
 }
 
@@ -56,7 +56,7 @@ export async function enqueueShiftReport(
     const tx = db.transaction(STORE_REPORTS, 'readwrite');
     tx.objectStore(STORE_REPORTS).add(entry);
     tx.oncomplete = () => resolve(id);
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to enqueue shift report'));
   });
 }
 
@@ -66,7 +66,7 @@ export async function listPendingReports(): Promise<QueuedShiftReport[]> {
     const tx = db.transaction(STORE_REPORTS, 'readonly');
     const request = tx.objectStore(STORE_REPORTS).getAll();
     request.onsuccess = () => resolve(request.result as QueuedShiftReport[]);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(request.error ?? new Error('Failed to list pending reports'));
   });
 }
 
@@ -76,7 +76,7 @@ export async function dequeueShiftReport(id: string): Promise<void> {
     const tx = db.transaction(STORE_REPORTS, 'readwrite');
     tx.objectStore(STORE_REPORTS).delete(id);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to dequeue shift report'));
   });
 }
 
@@ -94,7 +94,7 @@ export async function markReportRetry(id: string): Promise<void> {
       }
     };
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to mark report retry'));
   });
 }
 
@@ -104,6 +104,6 @@ export async function pendingReportCount(): Promise<number> {
     const tx = db.transaction(STORE_REPORTS, 'readonly');
     const request = tx.objectStore(STORE_REPORTS).count();
     request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onerror = () => reject(request.error ?? new Error('Failed to count pending reports'));
   });
 }

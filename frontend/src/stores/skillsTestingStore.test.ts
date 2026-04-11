@@ -132,7 +132,7 @@ describe('skillsTestingStore', () => {
 
       await useSkillsTestingStore.getState().loadTemplates();
 
-      expect(skillsTestingService.getTemplates).toHaveBeenCalledWith();
+      expect(skillsTestingService.getTemplates).toHaveBeenCalledWith(undefined);
       expect(useSkillsTestingStore.getState().templates).toHaveLength(1);
       expect(useSkillsTestingStore.getState().templates[0]?.name).toBe('SCBA Evaluation');
       expect(useSkillsTestingStore.getState().templatesLoading).toBe(false);

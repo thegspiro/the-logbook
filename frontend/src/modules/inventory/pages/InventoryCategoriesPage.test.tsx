@@ -61,7 +61,7 @@ describe('InventoryCategoriesPage', () => {
     expect(screen.getByText('Categories')).toBeInTheDocument();
     expect(screen.getByText(/Organize inventory items by type/)).toBeInTheDocument();
     await waitFor(() => {
-      expect(mockGetCategories).toHaveBeenCalledWith();
+      expect(mockGetCategories).toHaveBeenCalledWith(undefined, true);
     });
   });
 
@@ -198,7 +198,7 @@ describe('InventoryCategoriesPage', () => {
     await user.type(nameInput, 'Test');
     await user.click(screen.getByText('Create Category'));
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalledWith();
+      expect(mockToastError).toHaveBeenCalled();
     });
   });
 

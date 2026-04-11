@@ -11,8 +11,11 @@
 import React, { useState, useEffect } from 'react';
 import { trainingService } from '../../services/api';
 import type { ComplianceMatrix, ComplianceMatrixMember } from '../../services/communicationsServices';
+import { formatDate } from '@/utils/dateFormatting';
+import { useTimezone } from '@/hooks/useTimezone';
 
 const CompliancePrintPage: React.FC = () => {
+  const tz = useTimezone();
   const [matrix, setMatrix] = useState<ComplianceMatrix | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,7 +67,7 @@ const CompliancePrintPage: React.FC = () => {
                 <p style={{ fontSize: '10pt', color: '#555', margin: 0 }}>Department-Wide Compliance Matrix</p>
               </div>
               <div style={{ textAlign: 'right', fontSize: '9pt', color: '#666' }}>
-                <p style={{ margin: 0 }}>Generated: {new Date().toLocaleDateString()}</p>
+                <p style={{ margin: 0 }}>Generated: {formatDate(new Date(), tz)}</p>
                 <p style={{ margin: 0 }}>Total Members: {members.length}</p>
               </div>
             </div>
@@ -155,7 +158,7 @@ const CompliancePrintPage: React.FC = () => {
           {/* Footer */}
           <div style={{ marginTop: '12pt', borderTop: '1px solid #ddd', paddingTop: '4pt', display: 'flex', justifyContent: 'space-between', fontSize: '7pt', color: '#aaa' }}>
             <span>The Logbook — Training Compliance Report</span>
-            <span>Generated {new Date().toLocaleDateString()}</span>
+            <span>Generated {formatDate(new Date(), tz)}</span>
           </div>
         </div>
       </div>

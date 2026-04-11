@@ -258,7 +258,13 @@ describe('authStore', () => {
         });
       });
 
-      expect(mockRegister).toHaveBeenCalledWith();
+      expect(mockRegister).toHaveBeenCalledWith({
+        username: 'newuser',
+        email: 'new@example.com',
+        password: 'securePass1',
+        first_name: 'New',
+        last_name: 'User',
+      });
       expect(localStorage.getItem('has_session')).toBe('1');
       expect(getState().isAuthenticated).toBe(true);
     });

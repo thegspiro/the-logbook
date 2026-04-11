@@ -545,6 +545,26 @@ The `Organization.settings` column uses `MutableDict.as_mutable(JSON)` which aut
 
 **Rule:** Never use `dict(obj.json_column)` (shallow copy) when you intend to modify nested values and reassign. Use `copy.deepcopy()` to create a fully independent copy, or use `flag_modified()` after in-place mutation.
 
+### 13. Test Assertions: Never Use Bare `toHaveBeenCalledWith()`
+
+`expect(mock).toHaveBeenCalledWith()` asserts the mock was called with **zero arguments**. This is almost never the intent — most service calls receive parameters (filter objects, IDs, `undefined` for optional args). This was the #1 source of test failures in this project (34 of 46 broken tests).
+
+```typescript
+// WRONG — asserts zero arguments; fails when store passes { active_only: false }
+expect(mockGetRequirements).toHaveBeenCalledWith();
+
+// CORRECT — assert the actual arguments
+expect(mockGetRequirements).toHaveBeenCalledWith({ active_only: false });
+
+// CORRECT — when you don't care about arguments, just that it was called
+expect(mockGetRequirements).toHaveBeenCalled();
+
+// CORRECT — for optional params that pass undefined
+expect(mockGetTemplates).toHaveBeenCalledWith(undefined);
+```
+
+**Rule:** Never use bare `toHaveBeenCalledWith()`. Use `toHaveBeenCalled()` if you don't care about arguments, or specify the expected arguments explicitly. The ESLint rule `vitest/prefer-called-with` enforces this at `error` level.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

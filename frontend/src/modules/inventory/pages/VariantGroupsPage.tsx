@@ -401,7 +401,7 @@ const VariantGroupsPage: React.FC = () => {
                   </span>
                 )}
                 {group.items && (() => {
-                  const outOfStock = (group.items as InventoryItem[]).filter(i => (i.quantity ?? 0) === 0).length;
+                  const outOfStock = group.items.filter(i => (i.quantity ?? 0) === 0).length;
                   return outOfStock > 0 ? (
                     <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
                       <AlertTriangle className="w-3.5 h-3.5" />
@@ -518,7 +518,7 @@ const VariantGroupsPage: React.FC = () => {
                 Stock Matrix ({detailGroup.items?.length ?? 0} variant{(detailGroup.items?.length ?? 0) !== 1 ? 's' : ''})
               </h4>
               {detailGroup.items && detailGroup.items.length > 0 ? (
-                <StockMatrix items={detailGroup.items as InventoryItem[]} />
+                <StockMatrix items={detailGroup.items} />
               ) : (
                 <p className="text-sm text-theme-text-muted">No variants in this group yet. Add inventory items and assign them to this group.</p>
               )}

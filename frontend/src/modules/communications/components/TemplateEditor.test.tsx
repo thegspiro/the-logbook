@@ -43,7 +43,7 @@ describe('TemplateEditor', () => {
     const template = makeTemplate();
     render(<TemplateEditor template={template} isSaving={false} onSave={vi.fn()} />);
 
-    const saveButton = screen.getByRole('button', { name: /save changes/i });
+    const saveButton = screen.getByRole('button', { name: /save/i });
     expect(saveButton).toBeDisabled();
   });
 
@@ -56,7 +56,7 @@ describe('TemplateEditor', () => {
     await user.clear(subjectInput);
     await user.type(subjectInput, 'New Subject');
 
-    const saveButton = screen.getByRole('button', { name: /save changes/i });
+    const saveButton = screen.getByRole('button', { name: /save/i });
     expect(saveButton).not.toBeDisabled();
   });
 
@@ -70,7 +70,7 @@ describe('TemplateEditor', () => {
     await user.clear(subjectInput);
     await user.type(subjectInput, 'New Subject');
 
-    await user.click(screen.getByRole('button', { name: /save changes/i }));
+    await user.click(screen.getByRole('button', { name: /save/i }));
 
     expect(onSave).toHaveBeenCalledWith({ subject: 'New Subject' });
   });
@@ -91,7 +91,7 @@ describe('TemplateEditor', () => {
     const template = makeTemplate();
     render(<TemplateEditor template={template} isSaving={true} onSave={vi.fn()} />);
 
-    const saveButton = screen.getByRole('button', { name: /save changes/i });
+    const saveButton = screen.getByRole('button', { name: /save/i });
     expect(saveButton).toBeDisabled();
   });
 

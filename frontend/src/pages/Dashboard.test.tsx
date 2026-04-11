@@ -245,8 +245,8 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: /confirm/i }));
 
       await waitFor(() => {
-        expect(mockGetMyShifts).toHaveBeenCalledWith();
-        expect(mockGetOpenShifts).toHaveBeenCalledWith();
+        expect(mockGetMyShifts).toHaveBeenCalled();
+        expect(mockGetOpenShifts).toHaveBeenCalled();
       });
     });
 
