@@ -67,6 +67,28 @@ class AuditLogger:
         # Calculate SHA-256 hash
         return hashlib.sha256(data_string.encode()).hexdigest()
 
+    def _build_hash_data(self, log: AuditLog) -> dict[str, Any]:
+        """Build the dict used as input to calculate_hash from a DB row.
+
+        Centralised so that create, verify, and rehash all hash the same
+        fields in the same order — preventing the class of drift bug where
+        one callsite includes a field and another does not.
+        """
+        return {
+            "timestamp": self._normalize_timestamp(log.timestamp),
+            "timestamp_nanos": log.timestamp_nanos,
+            "event_type": log.event_type,
+            "event_category": log.event_category,
+            "severity": (
+                log.severity.value
+                if hasattr(log.severity, "value")
+                else log.severity
+            ),
+            "user_id": log.user_id,
+            "ip_address": log.ip_address,
+            "event_data": log.event_data,
+        }
+
     async def create_log_entry(
         self,
         db: AsyncSession,
@@ -110,7 +132,11 @@ class AuditLogger:
                     "timestamp_nanos": timestamp_nanos,
                     "event_type": event_type,
                     "event_category": event_category,
-                    "severity": severity,
+                    "severity": (
+                        severity.value
+                        if hasattr(severity, "value")
+                        else severity
+                    ),
                     "user_id": user_id,
                     "ip_address": ip_address,
                     "event_data": event_data,
@@ -195,16 +221,7 @@ class AuditLogger:
 
         # Verify each log entry
         for i, log in enumerate(logs):
-            # Recalculate hash
-            log_data = {
-                "timestamp": self._normalize_timestamp(log.timestamp),
-                "timestamp_nanos": log.timestamp_nanos,
-                "event_type": log.event_type,
-                "user_id": log.user_id,
-                "ip_address": log.ip_address,
-                "event_data": log.event_data,
-            }
-
+            log_data = self._build_hash_data(log)
             calculated_hash = self.calculate_hash(log_data, log.previous_hash)
 
             # Check if hash matches
@@ -254,14 +271,7 @@ class AuditLogger:
         previous_hash = "0" * 64
         count = 0
         for log in logs:
-            log_data = {
-                "timestamp": self._normalize_timestamp(log.timestamp),
-                "timestamp_nanos": log.timestamp_nanos,
-                "event_type": log.event_type,
-                "user_id": log.user_id,
-                "ip_address": log.ip_address,
-                "event_data": log.event_data,
-            }
+            log_data = self._build_hash_data(log)
             correct_hash = self.calculate_hash(log_data, previous_hash)
             if log.previous_hash != previous_hash or log.current_hash != correct_hash:
                 log.previous_hash = previous_hash
