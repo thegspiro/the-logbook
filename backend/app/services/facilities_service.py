@@ -837,6 +837,7 @@ class FacilitiesService:
             )
             for photo in result.scalars().all():
                 photo.is_primary = False
+            await self.db.flush()
 
         photo = FacilityPhoto(
             organization_id=organization_id,
@@ -879,6 +880,7 @@ class FacilitiesService:
             )
             for other_photo in existing.scalars().all():
                 other_photo.is_primary = False
+            await self.db.flush()
 
         for field, value in update_data.items():
             setattr(photo, field, value)

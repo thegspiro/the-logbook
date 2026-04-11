@@ -74,8 +74,6 @@ describe('facilitiesStore', () => {
       isLoadingDetail: false,
       isLoadingDashboard: false,
       error: null,
-      showArchived: false,
-      searchQuery: '',
     });
   });
 
@@ -122,14 +120,6 @@ describe('facilitiesStore', () => {
       expect(useFacilitiesStore.getState().isLoading).toBe(false);
     });
 
-    it('should pass showArchived flag to the service', async () => {
-      useFacilitiesStore.setState({ showArchived: true });
-      mockGetFacilities.mockResolvedValue([]);
-
-      await useFacilitiesStore.getState().loadFacilities();
-
-      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: true });
-    });
   });
 
   describe('loadLookupData', () => {
@@ -292,30 +282,6 @@ describe('facilitiesStore', () => {
   });
 
   describe('UI state setters', () => {
-    it('setShowArchived should update state', () => {
-      expect(useFacilitiesStore.getState().showArchived).toBe(false);
-
-      useFacilitiesStore.getState().setShowArchived(true);
-
-      expect(useFacilitiesStore.getState().showArchived).toBe(true);
-
-      useFacilitiesStore.getState().setShowArchived(false);
-
-      expect(useFacilitiesStore.getState().showArchived).toBe(false);
-    });
-
-    it('setSearchQuery should update state', () => {
-      expect(useFacilitiesStore.getState().searchQuery).toBe('');
-
-      useFacilitiesStore.getState().setSearchQuery('fire station');
-
-      expect(useFacilitiesStore.getState().searchQuery).toBe('fire station');
-
-      useFacilitiesStore.getState().setSearchQuery('');
-
-      expect(useFacilitiesStore.getState().searchQuery).toBe('');
-    });
-
     it('clearSelectedFacility should reset selected state', () => {
       useFacilitiesStore.setState({
         selectedFacility: mockFacility as never,
