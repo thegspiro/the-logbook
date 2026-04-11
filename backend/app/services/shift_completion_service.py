@@ -906,6 +906,7 @@ class ShiftCompletionService:
             "officer_narrative",
             "skills_observed",
             "tasks_performed",
+            "enrollment_id",
             "review_status",
         }
 
@@ -922,6 +923,16 @@ class ShiftCompletionService:
             )
 
         was_draft = report.review_status == "draft"
+
+        # Prevent regression to draft once pipeline has run
+        new_status = updates.get("review_status")
+        if (
+            new_status == "draft"
+            and not was_draft
+        ):
+            raise ValueError(
+                "Cannot revert to draft after submission"
+            )
 
         for field, value in updates.items():
             if field in UPDATABLE_FIELDS:
