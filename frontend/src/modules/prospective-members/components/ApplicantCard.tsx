@@ -35,9 +35,13 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${applicant.first_name} ${applicant.last_name}, ${applicant.status}`}
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart?.(e, applicant)}
       onClick={() => onClick(applicant)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(applicant); } }}
       className={`bg-theme-surface-hover border rounded-lg p-3.5 cursor-pointer hover:border-theme-surface-border hover:bg-theme-surface-hover transition-all ${
         isDragging ? 'opacity-50 ring-2 ring-red-500' : ''
       } ${alertStyle ? alertStyle.border : 'border-theme-surface-border'}`}

@@ -180,5 +180,3 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
     set({ error: null });
   },
 }));
-
-export default useMembershipStore;

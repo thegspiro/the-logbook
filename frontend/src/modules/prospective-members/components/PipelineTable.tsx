@@ -192,6 +192,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
           <div className="flex items-center gap-2 ml-auto flex-wrap">
             <button
               onClick={() => { void handleBulkAction('advance'); }}
+              aria-label={`Advance ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
             >
               <Forward className="w-3.5 h-3.5" />
@@ -199,6 +200,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             </button>
             <button
               onClick={() => { void handleBulkAction('hold'); }}
+              aria-label={`Hold ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
             >
               <Pause className="w-3.5 h-3.5" />
@@ -206,6 +208,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             </button>
             <button
               onClick={() => setShowBulkRejectConfirm(true)}
+              aria-label={`Reject ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
               className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-sm"
             >
               <XCircle className="w-3.5 h-3.5" />

@@ -11,9 +11,8 @@ import toast from 'react-hot-toast';
 import type {
   PipelineStage,
   ApplicantListItem,
-  StageType,
 } from '../types';
-import { STAGE_TYPE_ICONS } from '../constants';
+import { STAGE_TYPE_ICONS, STAGE_HEADER_COLORS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { ApplicantCard } from './ApplicantCard';
 import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums';
@@ -25,22 +24,6 @@ interface PipelineKanbanProps {
   selectedApplicants?: Set<string> | undefined;
   onToggleSelect?: ((id: string) => void) | undefined;
 }
-
-
-const STAGE_HEADER_COLORS: Record<StageType, string> = {
-  form_submission: 'border-blue-500',
-  document_upload: 'border-amber-500',
-  election_vote: 'border-purple-500',
-  manual_approval: 'border-emerald-500',
-  meeting: 'border-teal-500',
-  status_page_toggle: 'border-sky-500',
-  automated_email: 'border-rose-500',
-  reference_check: 'border-orange-500',
-  checklist: 'border-cyan-500',
-  interview_requirement: 'border-indigo-500',
-  multi_approval: 'border-lime-500',
-  medical_screening: 'border-pink-500',
-};
 
 export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
   stages,
@@ -188,6 +171,7 @@ export const PipelineKanban: React.FC<PipelineKanbanProps> = ({
                             e.stopPropagation();
                             onToggleSelect(applicant.id);
                           }}
+                          aria-label={`Select ${applicant.first_name} ${applicant.last_name}`}
                           className="rounded-sm border-theme-surface-border bg-theme-surface-hover text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
                         />
                       </div>
