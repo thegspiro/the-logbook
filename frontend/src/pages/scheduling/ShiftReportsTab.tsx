@@ -310,7 +310,7 @@ export const ShiftReportsTab: React.FC = () => {
     if (viewMode !== 'create' || !form.shift_id) return;
     const timer = setTimeout(() => {
       saveDraft({
-        shiftId: form.shift_id ?? '',
+        shiftId: form.shift_id || '',
         shiftLabel: linkedShiftLabel || '',
         formData: form as Record<string, unknown>,
         crewSelections: Array.from(selectedCrewIds),
@@ -507,12 +507,12 @@ export const ShiftReportsTab: React.FC = () => {
     } as CrewMemberEvaluation))];
 
     const payload: BatchShiftReportCreate = {
-      shift_id: form.shift_id ?? '',
-      shift_date: form.shift_date ?? '',
-      hours_on_shift: form.hours_on_shift ?? 0,
-      calls_responded: form.calls_responded ?? 0,
+      shift_id: form.shift_id || '',
+      shift_date: form.shift_date || '',
+      hours_on_shift: form.hours_on_shift || 0,
+      calls_responded: form.calls_responded || 0,
       ...(form.call_types?.length ? { call_types: form.call_types } : {}),
-      ...(form.officer_narrative ? { officer_narrative: form.officer_narrative } : {}),
+      ...(form.officer_narrative?.trim() ? { officer_narrative: form.officer_narrative.trim() } : {}),
       crew_member_ids: Array.from(selectedCrewIds),
       ...(allEvaluations.length > 0 ? { trainee_evaluations: allEvaluations } : {}),
       save_as_draft: asDraft,
@@ -569,6 +569,10 @@ export const ShiftReportsTab: React.FC = () => {
 
   const handleReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
     if (!reviewReportId) return;
+    if (action === 'flagged' && !reviewNotes.trim()) {
+      toast.error('Please add notes when flagging a report');
+      return;
+    }
     setReviewing(true);
     try {
       await shiftCompletionService.reviewReport(reviewReportId, {
@@ -634,6 +638,8 @@ export const ShiftReportsTab: React.FC = () => {
   const handleEditDraft = (report: ShiftCompletionReport) => {
     setEditingDraftId(report.id);
     setDraftForm({
+      shift_id: report.shift_id,
+      shift_date: report.shift_date,
       hours_on_shift: report.hours_on_shift,
       calls_responded: report.calls_responded,
       call_types: report.call_types || [],
@@ -765,8 +771,8 @@ export const ShiftReportsTab: React.FC = () => {
   const renderOfficerDashboard = () => {
     if (!officerAnalytics || officerAnalytics.total_reports === 0) return null;
     const maxHours = Math.max(...officerAnalytics.monthly.map(m => m.hours), 1);
-    const draftCount = officerAnalytics.status_counts['draft'] ?? 0;
-    const pendingCount = officerAnalytics.status_counts['pending_review'] ?? 0;
+    const draftCount = officerAnalytics?.status_counts?.['draft'] ?? 0;
+    const pendingCount = officerAnalytics?.status_counts?.['pending_review'] ?? 0;
     return (
       <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 space-y-4">
         <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">

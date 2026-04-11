@@ -48,6 +48,22 @@ class ShiftCompletionService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def validate_shift_ownership(
+        self,
+        shift_id: str,
+        organization_id: UUID,
+    ) -> bool:
+        """Check that a shift exists and belongs to the organization."""
+        result = (
+            await self.db.execute(
+                select(Shift.id).where(
+                    Shift.id == shift_id,
+                    Shift.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        return result is not None
+
     async def _get_trainee_call_data_from_shift(
         self,
         shift_id: str,
@@ -58,6 +74,8 @@ class ShiftCompletionService:
 
         Searches responding_members JSON arrays for the trainee's user
         ID and collects the incident_type from each matching call.
+
+        Callers must validate shift ownership before invoking.
         """
         result = await self.db.execute(
             select(
@@ -84,7 +102,10 @@ class ShiftCompletionService:
         shift_id: str,
         trainee_id: str,
     ) -> Optional[float]:
-        """Get a trainee's hours from their ShiftAttendance record."""
+        """Get a trainee's hours from their ShiftAttendance record.
+
+        Callers must validate shift ownership before invoking.
+        """
         result = await self.db.execute(
             select(ShiftAttendance.duration_minutes).where(
                 ShiftAttendance.shift_id == shift_id,
@@ -202,12 +223,15 @@ class ShiftCompletionService:
                     select(ProgramEnrollment).where(
                         ProgramEnrollment.id == enrollment_id,
                         ProgramEnrollment.user_id == trainee_id,
+                        ProgramEnrollment.organization_id
+                        == str(organization_id),
                     )
                 )
             ).scalar_one_or_none()
             if not enrollment:
                 raise ValueError(
-                    "Enrollment not found or does not " "belong to this trainee"
+                    "Enrollment not found or does not "
+                    "belong to this trainee"
                 )
 
         report = ShiftCompletionReport(
@@ -377,6 +401,8 @@ class ShiftCompletionService:
                     ShiftCompletionReport.trainee_id
                 ).where(
                     ShiftCompletionReport.shift_id == shift_id,
+                    ShiftCompletionReport.organization_id
+                    == org_id_str,
                 )
             )
         ).scalars().all()
@@ -870,24 +896,35 @@ class ShiftCompletionService:
         When review_status transitions away from 'draft', training
         pipeline progress is triggered with the final report data.
         """
+        UPDATABLE_FIELDS = {
+            "hours_on_shift",
+            "calls_responded",
+            "call_types",
+            "performance_rating",
+            "areas_of_strength",
+            "areas_for_improvement",
+            "officer_narrative",
+            "skills_observed",
+            "tasks_performed",
+            "review_status",
+        }
+
         report = await self.get_report(report_id)
         if not report:
             return None
         if report.organization_id != str(organization_id):
-            return None
+            raise ValueError(
+                "Report not found in this organization"
+            )
         if report.officer_id != officer_id:
-            raise ValueError("Only the filing officer can update this report")
+            raise ValueError(
+                "Only the filing officer can update this report"
+            )
 
         was_draft = report.review_status == "draft"
 
         for field, value in updates.items():
-            if hasattr(report, field) and field not in (
-                "id",
-                "organization_id",
-                "officer_id",
-                "trainee_id",
-                "created_at",
-            ):
+            if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
 
         # Trigger training progress when a draft is completed
@@ -1009,11 +1046,16 @@ class ShiftCompletionService:
         self,
         report_id: str,
         trainee_id: str,
+        organization_id: UUID,
         trainee_comments: Optional[str] = None,
     ) -> Optional[ShiftCompletionReport]:
         """Trainee acknowledges a shift completion report."""
         report = await self.get_report(report_id)
-        if not report or report.trainee_id != trainee_id:
+        if (
+            not report
+            or report.trainee_id != trainee_id
+            or report.organization_id != str(organization_id)
+        ):
             return None
 
         report.trainee_acknowledged = True

@@ -66,7 +66,15 @@ async def preview_shift_data(
     Returns hours, call count, and call types from actual records.
     """
     service = ShiftCompletionService(db)
-    hours = await service._get_trainee_hours_from_shift(shift_id, trainee_id)
+    if not await service.validate_shift_ownership(
+        shift_id, current_user.organization_id
+    ):
+        raise HTTPException(
+            status_code=404, detail="Shift not found"
+        )
+    hours = await service._get_trainee_hours_from_shift(
+        shift_id, trainee_id
+    )
     calls, call_types = await service._get_trainee_call_data_from_shift(
         shift_id, trainee_id
     )
@@ -601,6 +609,7 @@ async def acknowledge_report(
     report = await service.acknowledge_report(
         report_id=report_id,
         trainee_id=str(current_user.id),
+        organization_id=current_user.organization_id,
         trainee_comments=ack.trainee_comments,
     )
     if not report:
