@@ -6,7 +6,8 @@
 
 import React from 'react';
 import { Clock, Mail, Phone, ArrowRight, AlertTriangle } from 'lucide-react';
-import type { ApplicantListItem, ApplicantStatus, InactivityAlertLevel } from '../types';
+import type { ApplicantListItem, InactivityAlertLevel } from '../types';
+import { APPLICANT_STATUS_COLORS } from '../constants';
 import { getInitials } from '../utils';
 
 interface ApplicantCardProps {
@@ -15,15 +16,6 @@ interface ApplicantCardProps {
   onDragStart?: (e: React.DragEvent, applicant: ApplicantListItem) => void;
   isDragging?: boolean;
 }
-
-const STATUS_COLORS: Record<ApplicantStatus, string> = {
-  active: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400',
-  on_hold: 'bg-amber-500/20 text-amber-700 dark:text-amber-400',
-  withdrawn: 'bg-theme-surface-hover text-theme-text-muted',
-  converted: 'bg-blue-500/20 text-blue-700 dark:text-blue-400',
-  rejected: 'bg-red-500/20 text-red-700 dark:text-red-400',
-  inactive: 'bg-theme-surface-hover text-theme-text-muted',
-};
 
 const ALERT_LEVEL_STYLES: Record<InactivityAlertLevel, { border: string; icon: string } | null> = {
   normal: null,
@@ -43,9 +35,13 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={`${applicant.first_name} ${applicant.last_name}, ${applicant.status}`}
       draggable={!!onDragStart}
       onDragStart={(e) => onDragStart?.(e, applicant)}
       onClick={() => onClick(applicant)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(applicant); } }}
       className={`bg-theme-surface-hover border rounded-lg p-3.5 cursor-pointer hover:border-theme-surface-border hover:bg-theme-surface-hover transition-all ${
         isDragging ? 'opacity-50 ring-2 ring-red-500' : ''
       } ${alertStyle ? alertStyle.border : 'border-theme-surface-border'}`}
@@ -75,7 +71,7 @@ export const ApplicantCard: React.FC<ApplicantCardProps> = ({
             <p className="text-sm font-medium text-theme-text-primary truncate">
               {applicant.first_name} {applicant.last_name}
             </p>
-            <span className={`inline-block text-xs px-1.5 py-0.5 rounded-sm ${STATUS_COLORS[applicant.status]}`}>
+            <span className={`inline-block text-xs px-1.5 py-0.5 rounded-sm ${APPLICANT_STATUS_COLORS[applicant.status]}`}>
               {applicant.status.replace('_', ' ')}
             </span>
           </div>

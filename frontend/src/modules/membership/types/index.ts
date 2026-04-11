@@ -20,22 +20,6 @@ export type {
 import type { User, ContactInfoSettings, NotificationPreferences, ContactInfoUpdate } from '../../../types/user';
 export type { User, ContactInfoSettings, NotificationPreferences, ContactInfoUpdate };
 
-// =============================================================================
-// Pagination & Filtering
-// =============================================================================
-
-export interface PaginatedMemberList {
-  items: User[];
-  total: number;
-  page: number;
-  page_size: number;
-  total_pages: number;
-}
-
-export interface MemberListFilters {
-  status?: string;
-  membership_type?: string;
-  search?: string;
-  rank?: string;
-  station?: string;
-}
+export type UserWithRoles = User & {
+  roles?: { id: string; name: string }[] | undefined;
+};

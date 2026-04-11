@@ -11,5 +11,8 @@
 // Export routes
 export { getMembershipRoutes } from './routes';
 
+// Export store
+export { useMembershipStore } from './store/membershipStore';
+
 // Export types
 export * from './types';

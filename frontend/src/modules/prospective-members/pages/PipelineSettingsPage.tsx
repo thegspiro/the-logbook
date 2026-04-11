@@ -29,21 +29,12 @@ import {
   CheckCircle2,
   XCircle,
   ArrowRight,
-  FileText,
-  Upload,
-  Vote,
-  CheckCircle,
-  CalendarCheck,
   Globe,
-  Mail,
   BarChart3,
-  UserCheck,
-  ClipboardList,
-  MessageSquare,
-  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import { STAGE_TYPE_ICONS, STAGE_TYPE_COLORS } from '../constants';
 import { pipelineService } from '../services/api';
 import { PipelineBuilder } from '../components/PipelineBuilder';
 import { ReportStageGroupsEditor } from '../components/ReportStageGroupsEditor';
@@ -54,7 +45,6 @@ import type {
   PipelineListItem,
   InactivityConfig,
   InactivityTimeoutPreset,
-  StageType,
 } from '../types';
 import {
   DEFAULT_INACTIVITY_CONFIG,
@@ -62,35 +52,6 @@ import {
 } from '../types';
 import { getEffectiveTimeoutDays } from '../utils';
 
-const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
-  form_submission: FileText,
-  document_upload: Upload,
-  election_vote: Vote,
-  manual_approval: CheckCircle,
-  meeting: CalendarCheck,
-  status_page_toggle: Globe,
-  automated_email: Mail,
-  reference_check: UserCheck,
-  checklist: ClipboardList,
-  interview_requirement: MessageSquare,
-  multi_approval: Users,
-  medical_screening: Stethoscope,
-};
-
-const STAGE_TYPE_COLORS: Record<StageType, string> = {
-  form_submission: 'text-blue-600 dark:text-blue-400 bg-blue-500/10',
-  document_upload: 'text-amber-600 dark:text-amber-400 bg-amber-500/10',
-  election_vote: 'text-purple-600 dark:text-purple-400 bg-purple-500/10',
-  manual_approval: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
-  meeting: 'text-teal-600 dark:text-teal-400 bg-teal-500/10',
-  status_page_toggle: 'text-sky-600 dark:text-sky-400 bg-sky-500/10',
-  automated_email: 'text-rose-600 dark:text-rose-400 bg-rose-500/10',
-  reference_check: 'text-orange-600 dark:text-orange-400 bg-orange-500/10',
-  checklist: 'text-cyan-600 dark:text-cyan-400 bg-cyan-500/10',
-  interview_requirement: 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/10',
-  multi_approval: 'text-lime-600 dark:text-lime-400 bg-lime-500/10',
-  medical_screening: 'text-pink-600 dark:text-pink-400 bg-pink-500/10',
-};
 
 export const PipelineSettingsPage: React.FC = () => {
   const navigate = useNavigate();

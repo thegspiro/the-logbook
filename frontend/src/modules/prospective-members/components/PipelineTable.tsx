@@ -19,7 +19,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { ApplicantListItem, ApplicantStatus } from '../types';
+import type { ApplicantListItem } from '../types';
+import { APPLICANT_STATUS_COLORS, APPLICANT_STATUS_LABELS } from '../constants';
 import { getInitials } from '../utils';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -39,14 +40,6 @@ interface PipelineTableProps {
   onToggleAll?: (() => void) | undefined;
 }
 
-const STATUS_BADGES: Record<ApplicantStatus, { label: string; className: string }> = {
-  active: { label: 'Active', className: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' },
-  on_hold: { label: 'On Hold', className: 'bg-amber-500/20 text-amber-700 dark:text-amber-400' },
-  withdrawn: { label: 'Withdrawn', className: 'bg-theme-surface-hover text-theme-text-muted' },
-  converted: { label: 'Converted', className: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' },
-  rejected: { label: 'Rejected', className: 'bg-red-500/20 text-red-700 dark:text-red-400' },
-  inactive: { label: 'Inactive', className: 'bg-theme-surface-hover text-theme-text-muted' },
-};
 
 type SortField = 'name' | 'email' | 'current_stage_name' | 'status' | 'days_in_stage' | 'target_membership_type' | 'created_at';
 
@@ -199,6 +192,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
           <div className="flex items-center gap-2 ml-auto flex-wrap">
             <button
               onClick={() => { void handleBulkAction('advance'); }}
+              aria-label={`Advance ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
             >
               <Forward className="w-3.5 h-3.5" />
@@ -206,6 +200,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             </button>
             <button
               onClick={() => { void handleBulkAction('hold'); }}
+              aria-label={`Hold ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors"
             >
               <Pause className="w-3.5 h-3.5" />
@@ -213,6 +208,7 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
             </button>
             <button
               onClick={() => setShowBulkRejectConfirm(true)}
+              aria-label={`Reject ${selected.size} selected applicant${selected.size === 1 ? '' : 's'}`}
               className="btn-primary flex gap-1.5 items-center px-3 py-1.5 text-sm"
             >
               <XCircle className="w-3.5 h-3.5" />
@@ -284,7 +280,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 </tr>
               ) : (
                 sortedApplicants.map((applicant) => {
-                  const statusBadge = STATUS_BADGES[applicant.status];
+                  const statusColor = APPLICANT_STATUS_COLORS[applicant.status];
+                  const statusLabel = APPLICANT_STATUS_LABELS[applicant.status];
                   const isSelected = selected.has(applicant.id);
 
                   return (
@@ -335,8 +332,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         className="p-3"
                         onClick={() => onApplicantClick(applicant)}
                       >
-                        <span className={`inline-block text-xs px-2 py-0.5 rounded-sm ${statusBadge.className}`}>
-                          {statusBadge.label}
+                        <span className={`inline-block text-xs px-2 py-0.5 rounded-sm ${statusColor}`}>
+                          {statusLabel}
                         </span>
                       </td>
                       <td

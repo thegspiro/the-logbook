@@ -1,12 +1,13 @@
 /**
  * Membership Store
  *
- * Zustand store for managing member state with server-side pagination.
+ * Zustand store for managing member state with client-side pagination.
  */
 
 import { create } from 'zustand';
 import { userService } from '../../../services/api';
-import type { User, ContactInfoSettings } from '../types';
+import type { ContactInfoSettings, UserWithRoles } from '../types';
+import type { User } from '../../../types/user';
 import type { MemberStats } from '../../../types/member';
 import { UserStatus } from '../../../constants/enums';
 import { handleStoreError } from '../../../utils/storeHelpers';
@@ -14,7 +15,7 @@ import { handleStoreError } from '../../../utils/storeHelpers';
 interface MembershipState {
   // Data
   members: User[];
-  currentMember: (User & { roles?: { id: string; name: string }[] | undefined }) | null;
+  currentMember: UserWithRoles | null;
   stats: MemberStats;
   contactInfoSettings: ContactInfoSettings | null;
 
@@ -39,7 +40,7 @@ interface MembershipState {
   fetchContactInfoSettings: () => Promise<void>;
   setSearchQuery: (query: string) => void;
   setStatusFilter: (status: string) => void;
-  setCurrentMember: (member: (User & { roles?: { id: string; name: string }[] | undefined }) | null) => void;
+  setCurrentMember: (member: UserWithRoles | null) => void;
   clearError: () => void;
 }
 
@@ -103,15 +104,18 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
         );
       }
 
-      // Calculate stats from all members (before pagination)
-      const stats: MemberStats = {
-        total: allMembers.length,
-        active: allMembers.filter((m) => m.status === UserStatus.ACTIVE).length,
-        inactive: allMembers.filter((m) => m.status === UserStatus.INACTIVE).length,
-        onLeave: allMembers.filter((m) => m.status === UserStatus.LEAVE).length,
-        retired: allMembers.filter((m) => m.status === UserStatus.RETIRED).length,
-        expiringCertifications: 0,
-      };
+      // Calculate stats from all members in a single pass
+      const stats: MemberStats = allMembers.reduce<MemberStats>(
+        (acc, m) => {
+          acc.total++;
+          if (m.status === UserStatus.ACTIVE) acc.active++;
+          else if (m.status === UserStatus.INACTIVE) acc.inactive++;
+          else if (m.status === UserStatus.LEAVE) acc.onLeave++;
+          else if (m.status === UserStatus.RETIRED) acc.retired++;
+          return acc;
+        },
+        { total: 0, active: 0, inactive: 0, onLeave: 0, retired: 0, expiringCertifications: 0 },
+      );
 
       // Client-side pagination
       const total = filtered.length;
@@ -176,5 +180,3 @@ export const useMembershipStore = create<MembershipState>((set, get) => ({
     set({ error: null });
   },
 }));
-
-export default useMembershipStore;

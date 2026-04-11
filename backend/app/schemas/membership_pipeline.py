@@ -252,6 +252,8 @@ class ProspectBase(BaseModel):
 class ProspectCreate(ProspectBase):
     """Schema for creating a prospective member"""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     pipeline_id: Optional[UUID] = Field(
         None, description="Pipeline to assign, uses org default if not specified"
     )

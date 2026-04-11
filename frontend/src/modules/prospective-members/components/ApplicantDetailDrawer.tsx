@@ -6,7 +6,6 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   X,
   Mail,
@@ -15,55 +14,34 @@ import {
   MapPin,
   CheckCircle2,
   Circle,
-  ArrowLeft,
-  ArrowRight,
-  Pause,
-  XCircle,
-  Play,
   FileText,
-  Upload,
-  Vote,
   CheckCircle,
   Clock,
   User,
   Loader2,
-  MessageSquare,
-  RotateCcw,
   AlertTriangle,
   EyeOff,
   Eye,
-  Archive,
   Activity,
   Pencil,
   Save,
-  CalendarCheck,
-  Globe,
-  ClipboardList,
-  Link2,
-  Trash2,
-  CalendarPlus,
-  Search,
-  UserCheck,
-  Users,
-  Stethoscope,
+  Archive,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
   Applicant,
-  ProspectEventLink,
-  StageType,
   StageHistoryEntry,
 } from '../types';
 import { isSafeUrl, getInitials } from '../utils';
+import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
-import { applicantService, eventLinkService } from '../services/api';
+import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
-import { ApplicantStatus, StageType as StageTypeEnum, ElectionStatus } from '../../../constants/enums';
-import { eventService } from '../../../services/eventServices';
-import { electionService } from '../../../services/electionService';
-import type { ElectionListItem } from '../../../types/election';
-import type { EventListItem } from '../../../types/event';
+import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
+import ElectionPackageSection from './ElectionPackageSection';
+import LinkedEventsSection from './LinkedEventsSection';
+import { ApplicantActionPanels } from './ApplicantActionPanels';
 
 /** Maps snake_case backend field keys to human-readable labels. */
 const FORM_FIELD_LABELS: Record<string, string> = {
@@ -119,21 +97,6 @@ interface ApplicantDetailDrawerProps {
   isFirstStage: boolean;
 }
 
-const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
-  form_submission: FileText,
-  document_upload: Upload,
-  election_vote: Vote,
-  manual_approval: CheckCircle,
-  meeting: CalendarCheck,
-  status_page_toggle: Globe,
-  automated_email: Mail,
-  reference_check: UserCheck,
-  checklist: ClipboardList,
-  interview_requirement: MessageSquare,
-  multi_approval: Users,
-  medical_screening: Stethoscope,
-};
-
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   applicant,
   isOpen,
@@ -143,60 +106,15 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   isFirstStage,
 }) => {
   const tz = useTimezone();
-  const navigate = useNavigate();
 
   const {
-    advanceApplicant,
-    regressApplicant,
-    rejectApplicant,
-    holdApplicant,
-    resumeApplicant,
-    withdrawApplicant,
-    reactivateApplicant,
-    fetchElectionPackage,
-    updateElectionPackage,
-    submitElectionPackage,
-    assignPackageToElection,
-    currentElectionPackage,
-    isLoadingElectionPackage,
-    isAdvancing,
-    isRegressing,
-    isRejecting,
-    isHolding,
-    isResuming,
-    isWithdrawing,
-    isReactivating,
     isLoadingApplicant,
   } = useProspectiveMembersStore();
 
-  const [actionNotes, setActionNotes] = useState('');
-  const [showNotesInput, setShowNotesInput] = useState(false);
-  const [showRejectConfirm, setShowRejectConfirm] = useState(false);
-  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
-  const [showSkipConfirm, setShowSkipConfirm] = useState(false);
-  const [isSkipping, setIsSkipping] = useState(false);
   const [showPii, setShowPii] = useState(true);
-  const [pkgNotes, setPkgNotes] = useState('');
-  const [pkgStatement, setPkgStatement] = useState('');
-  const [isSubmittingPackage, setIsSubmittingPackage] = useState(false);
   const [activityLog, setActivityLog] = useState<Array<{ id: string; action: string; details: Record<string, unknown>; performer_name: string; created_at: string }>>([]);
   const [isLoadingActivity, setIsLoadingActivity] = useState(false);
   const [showActivityLog, setShowActivityLog] = useState(false);
-
-  // Linked events state
-  const [linkedEvents, setLinkedEvents] = useState<ProspectEventLink[]>([]);
-  const [isLoadingLinkedEvents, setIsLoadingLinkedEvents] = useState(false);
-  const [showEventPicker, setShowEventPicker] = useState(false);
-  const [upcomingEvents, setUpcomingEvents] = useState<EventListItem[]>([]);
-  const [isLoadingUpcoming, setIsLoadingUpcoming] = useState(false);
-  const [eventSearchQuery, setEventSearchQuery] = useState('');
-
-  // Election assignment state
-  const [showElectionPicker, setShowElectionPicker] = useState(false);
-  const [draftElections, setDraftElections] = useState<ElectionListItem[]>([]);
-  const [isLoadingDraftElections, setIsLoadingDraftElections] = useState(false);
-  const [selectedElectionId, setSelectedElectionId] = useState('');
-  const [isAssigningToElection, setIsAssigningToElection] = useState(false);
 
   // Editable contact info state
   const [isEditingContact, setIsEditingContact] = useState(false);
@@ -215,12 +133,8 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
   const isOnElectionStage = applicant?.current_stage_type === StageTypeEnum.ELECTION_VOTE && applicant?.status === ApplicantStatus.ACTIVE;
 
-  // Reset action notes and confirm state when applicant changes
+  // Reset editing state when applicant changes
   useEffect(() => {
-    setActionNotes('');
-    setShowNotesInput(false);
-    setShowRejectConfirm(false);
-    setShowWithdrawConfirm(false);
     setIsEditingContact(false);
   }, [applicant?.id]);
 
@@ -230,12 +144,12 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       first_name: applicant.first_name,
       last_name: applicant.last_name,
       email: applicant.email,
-      phone: applicant.phone ?? '',
-      date_of_birth: applicant.date_of_birth ?? '',
-      address_street: applicant.address?.street ?? '',
-      address_city: applicant.address?.city ?? '',
-      address_state: applicant.address?.state ?? '',
-      address_zip: applicant.address?.zip_code ?? '',
+      phone: applicant.phone || '',
+      date_of_birth: applicant.date_of_birth || '',
+      address_street: applicant.address?.street || '',
+      address_city: applicant.address?.city || '',
+      address_state: applicant.address?.state || '',
+      address_zip: applicant.address?.zip_code || '',
     });
     setIsEditingContact(true);
   };
@@ -271,24 +185,6 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     }
   };
 
-  // Load election package when applicant is on an election stage
-  useEffect(() => {
-    if (isOnElectionStage && applicant) {
-      void fetchElectionPackage(applicant.id);
-    }
-  }, [applicant, isOnElectionStage, fetchElectionPackage]);
-
-  // Sync package fields to local state when package loads
-  useEffect(() => {
-    if (currentElectionPackage) {
-      setPkgNotes(currentElectionPackage.coordinator_notes ?? '');
-      setPkgStatement(currentElectionPackage.supporting_statement ?? '');
-    } else {
-      setPkgNotes('');
-      setPkgStatement('');
-    }
-  }, [currentElectionPackage]);
-
   const fetchActivityLog = useCallback(async () => {
     if (!applicant) return;
     setIsLoadingActivity(true);
@@ -316,62 +212,6 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
     setShowActivityLog(false);
   }, [applicant?.id]);
 
-  // Load linked events when applicant changes
-  useEffect(() => {
-    if (!applicant?.id) {
-      setLinkedEvents([]);
-      return;
-    }
-    setIsLoadingLinkedEvents(true);
-    eventLinkService
-      .getLinkedEvents(applicant.id)
-      .then(setLinkedEvents)
-      .catch(() => setLinkedEvents([]))
-      .finally(() => setIsLoadingLinkedEvents(false));
-  }, [applicant?.id]);
-
-  const handleOpenEventPicker = async () => {
-    setShowEventPicker(true);
-    setEventSearchQuery('');
-    setIsLoadingUpcoming(true);
-    try {
-      const now = new Date().toISOString();
-      const events = await eventService.getEvents({
-        end_after: now,
-        include_cancelled: false,
-        limit: 50,
-      });
-      setUpcomingEvents(events);
-    } catch {
-      setUpcomingEvents([]);
-    } finally {
-      setIsLoadingUpcoming(false);
-    }
-  };
-
-  const handleLinkEvent = async (eventId: string) => {
-    if (!applicant) return;
-    try {
-      const link = await eventLinkService.linkEvent(applicant.id, eventId);
-      setLinkedEvents((prev) => [link, ...prev]);
-      setShowEventPicker(false);
-      toast.success('Event linked');
-    } catch {
-      toast.error('Failed to link event');
-    }
-  };
-
-  const handleUnlinkEvent = async (linkId: string) => {
-    if (!applicant) return;
-    try {
-      await eventLinkService.unlinkEvent(applicant.id, linkId);
-      setLinkedEvents((prev) => prev.filter((l) => l.id !== linkId));
-      toast.success('Event unlinked');
-    } catch {
-      toast.error('Failed to unlink event');
-    }
-  };
-
   // Refresh applicant data when the drawer becomes visible (catches
   // pipeline changes made by other coordinators or from settings page).
   useEffect(() => {
@@ -386,185 +226,6 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   }, [isOpen]);
 
   if (!isOpen) return null;
-
-  const isActionInProgress = isAdvancing || isRegressing || isRejecting || isHolding || isResuming || isWithdrawing || isSkipping;
-
-  const handleAdvance = async () => {
-    if (!applicant) return;
-
-    if (isLastStage) {
-      onConvert(applicant);
-      return;
-    }
-
-    try {
-      await advanceApplicant(applicant.id, actionNotes || undefined);
-      toast.success('Applicant advanced to next stage');
-      setActionNotes('');
-      setShowNotesInput(false);
-    } catch {
-      toast.error('Failed to advance applicant');
-    }
-  };
-
-  const handleRegress = async () => {
-    if (!applicant) return;
-    try {
-      await regressApplicant(applicant.id, actionNotes || undefined);
-      toast.success('Applicant moved back to previous stage');
-      setActionNotes('');
-      setShowNotesInput(false);
-    } catch {
-      toast.error('Failed to move applicant back');
-    }
-  };
-
-  const handleSkipStage = async () => {
-    if (!applicant) return;
-    setIsSkipping(true);
-    try {
-      // Complete current step then advance
-      if (applicant.current_stage_id) {
-        await applicantService.completeStep(
-          applicant.id,
-          applicant.current_stage_id,
-          `Stage skipped by coordinator${actionNotes ? `: ${actionNotes}` : ''}`
-        );
-      }
-      await advanceApplicant(applicant.id, 'Stage skipped');
-      toast.success('Stage skipped');
-      setShowSkipConfirm(false);
-      setActionNotes('');
-    } catch {
-      toast.error('Failed to skip stage');
-    } finally {
-      setIsSkipping(false);
-    }
-  };
-
-  const handleReject = async () => {
-    if (!applicant) return;
-    try {
-      await rejectApplicant(applicant.id, actionNotes || undefined);
-      toast.success('Applicant rejected');
-      setActionNotes('');
-      setShowNotesInput(false);
-      setShowRejectConfirm(false);
-    } catch {
-      toast.error('Failed to reject applicant');
-    }
-  };
-
-  const handleHold = async () => {
-    if (!applicant) return;
-    try {
-      await holdApplicant(applicant.id, actionNotes || undefined);
-      toast.success('Applicant put on hold');
-      setActionNotes('');
-      setShowNotesInput(false);
-    } catch {
-      toast.error('Failed to put applicant on hold');
-    }
-  };
-
-  const handleResume = async () => {
-    if (!applicant) return;
-    try {
-      await resumeApplicant(applicant.id);
-      toast.success('Applicant resumed');
-    } catch {
-      toast.error('Failed to resume applicant');
-    }
-  };
-
-  const handleReactivate = async () => {
-    if (!applicant) return;
-    try {
-      await reactivateApplicant(applicant.id, actionNotes || undefined);
-      toast.success('Application reactivated');
-      setActionNotes('');
-      setShowNotesInput(false);
-    } catch {
-      toast.error('Failed to reactivate application');
-    }
-  };
-
-  const handleWithdraw = async () => {
-    if (!applicant) return;
-    try {
-      await withdrawApplicant(applicant.id, actionNotes || undefined);
-      toast.success(`${applicant.first_name}'s application withdrawn`);
-      setActionNotes('');
-      setShowNotesInput(false);
-      setShowWithdrawConfirm(false);
-    } catch {
-      toast.error('Failed to withdraw application');
-    }
-  };
-
-  const handleSavePackage = async () => {
-    if (!applicant || !currentElectionPackage) return;
-    try {
-      await updateElectionPackage(applicant.id, {
-        coordinator_notes: pkgNotes || undefined,
-        supporting_statement: pkgStatement || undefined,
-      });
-      toast.success('Election package saved');
-    } catch {
-      toast.error('Failed to save election package');
-    }
-  };
-
-  const handleSubmitPackage = async () => {
-    if (!applicant) return;
-    setIsSubmittingPackage(true);
-    try {
-      // Save any pending edits first
-      if (currentElectionPackage) {
-        await updateElectionPackage(applicant.id, {
-          coordinator_notes: pkgNotes || undefined,
-          supporting_statement: pkgStatement || undefined,
-        });
-      }
-      await submitElectionPackage(applicant.id);
-      toast.success('Election package marked as ready for ballot');
-    } catch {
-      toast.error('Failed to submit election package');
-    } finally {
-      setIsSubmittingPackage(false);
-    }
-  };
-
-  const handleOpenElectionPicker = async () => {
-    setShowElectionPicker(true);
-    setIsLoadingDraftElections(true);
-    try {
-      const elections = await electionService.getElections('draft');
-      setDraftElections(elections);
-    } catch {
-      toast.error('Failed to load draft elections');
-    } finally {
-      setIsLoadingDraftElections(false);
-    }
-  };
-
-  const handleAssignToElection = async () => {
-    if (!applicant || !selectedElectionId) return;
-    setIsAssigningToElection(true);
-    try {
-      await assignPackageToElection(applicant.id, selectedElectionId);
-      const electionTitle = draftElections.find(
-        (e) => e.id === selectedElectionId
-      )?.title ?? 'election';
-      toast.success(`Application added to "${electionTitle}" ballot`);
-      setShowElectionPicker(false);
-      setSelectedElectionId('');
-    } catch {
-      toast.error('Failed to assign package to election');
-    } finally {
-      setIsAssigningToElection(false);
-    }
-  };
 
   const maskValue = (value: string) => showPii ? value : '••••••••';
 
@@ -913,374 +574,11 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
 
               {/* Election Package Section */}
               {isOnElectionStage && (
-                <div className="p-4 border-b border-theme-surface-border">
-                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider mb-3">
-                    Election Package
-                  </h3>
-                  {isLoadingElectionPackage ? (
-                    <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
-                      <Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" />
-                    </div>
-                  ) : currentElectionPackage ? (
-                    <div className="space-y-3">
-                      {/* Package status badge */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-theme-text-muted">Status</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                          currentElectionPackage.status === ElectionStatus.DRAFT
-                            ? 'bg-theme-surface-secondary text-theme-text-muted'
-                            : currentElectionPackage.status === 'ready'
-                              ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
-                              : currentElectionPackage.status === 'added_to_ballot'
-                                ? 'bg-purple-500/20 text-purple-600 dark:text-purple-300'
-                                : currentElectionPackage.status === 'elected'
-                                  ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-300'
-                                  : 'bg-red-500/20 text-red-600 dark:text-red-300'
-                        }`}>
-                          {currentElectionPackage.status.replace(/_/g, ' ')}
-                        </span>
-                      </div>
-
-                      {/* Applicant snapshot info */}
-                      <div className="bg-theme-surface rounded-lg p-3 text-xs space-y-1">
-                        <div className="flex justify-between">
-                          <span className="text-theme-text-muted">Name</span>
-                          <span className="text-theme-text-secondary">{currentElectionPackage.applicant_name}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-theme-text-muted">Membership Type</span>
-                          <span className="text-theme-text-secondary capitalize">{currentElectionPackage.target_membership_type}</span>
-                        </div>
-                        {currentElectionPackage.target_role_name && (
-                          <div className="flex justify-between">
-                            <span className="text-theme-text-muted">Target Role</span>
-                            <span className="text-theme-text-secondary">{currentElectionPackage.target_role_name}</span>
-                          </div>
-                        )}
-                        {currentElectionPackage.documents && currentElectionPackage.documents.length > 0 && (
-                          <div className="pt-1">
-                            <span className="text-theme-text-muted">Documents:</span>
-                            <div className="mt-1 space-y-0.5">
-                              {currentElectionPackage.documents.map((doc, i) => (
-                                <div key={i} className="flex items-center gap-1 text-blue-700 dark:text-blue-400">
-                                  <FileText className="w-3 h-3" />
-                                  {isSafeUrl(doc.url) ? (
-                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                                      {doc.name}
-                                    </a>
-                                  ) : (
-                                    <span>{doc.name}</span>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Editable fields — only for draft packages */}
-                      {currentElectionPackage.status === ElectionStatus.DRAFT && (
-                        <>
-                          <div>
-                            <label className="block text-xs text-theme-text-muted mb-1">
-                              Coordinator Notes
-                            </label>
-                            <textarea
-                              value={pkgNotes}
-                              onChange={(e) => setPkgNotes(e.target.value)}
-                              placeholder="Internal notes about this applicant..."
-                              rows={2}
-                              className="w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-theme-text-muted mb-1">
-                              Supporting Statement
-                            </label>
-                            <textarea
-                              value={pkgStatement}
-                              onChange={(e) => setPkgStatement(e.target.value)}
-                              placeholder="Statement shown to voters on the ballot..."
-                              rows={2}
-                              className="w-full bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2 justify-end">
-                            <button
-                              onClick={() => { void handleSavePackage(); }}
-                              className="px-3 py-1.5 text-xs text-theme-text-secondary border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
-                            >
-                              Save Draft
-                            </button>
-                            <button
-                              onClick={() => { void handleSubmitPackage(); }}
-                              disabled={isSubmittingPackage}
-                              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                            >
-                              {isSubmittingPackage && <Loader2 className="w-3 h-3 animate-spin" />}
-                              <Vote className="w-3 h-3" />
-                              Mark Ready for Ballot
-                            </button>
-                          </div>
-                        </>
-                      )}
-
-                      {/* Ready state — assign to election */}
-                      {currentElectionPackage.status === 'ready' && (
-                        <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3 space-y-2">
-                          <p className="text-xs text-emerald-600 dark:text-emerald-300">
-                            This package is ready for the secretary to add to a ballot.
-                            {currentElectionPackage.submitted_at && (
-                              <> Submitted {formatDateTime(currentElectionPackage.submitted_at, tz)}.</>
-                            )}
-                          </p>
-                          {currentElectionPackage.coordinator_notes && (
-                            <p className="text-xs text-theme-text-muted">
-                              Notes: {currentElectionPackage.coordinator_notes}
-                            </p>
-                          )}
-                          {!showElectionPicker ? (
-                            <button
-                              onClick={() => { void handleOpenElectionPicker(); }}
-                              className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-                            >
-                              <Vote className="w-3 h-3" />
-                              Assign to Election
-                            </button>
-                          ) : (
-                            <div className="space-y-2">
-                              {isLoadingDraftElections ? (
-                                <div className="flex items-center gap-2 text-xs text-theme-text-muted" role="status" aria-live="polite">
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                  Loading draft elections...
-                                </div>
-                              ) : draftElections.length === 0 ? (
-                                <p className="text-xs text-theme-text-muted">
-                                  No draft elections available. Create one in the Elections module first.
-                                </p>
-                              ) : (
-                                <>
-                                  <select
-                                    value={selectedElectionId}
-                                    onChange={(e) => setSelectedElectionId(e.target.value)}
-                                    className="w-full px-2 py-1.5 text-xs rounded-lg border border-theme-surface-border bg-theme-surface text-theme-text-primary"
-                                  >
-                                    <option value="">Select a draft election...</option>
-                                    {draftElections.map((el) => (
-                                      <option key={el.id} value={el.id}>{el.title}</option>
-                                    ))}
-                                  </select>
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      onClick={() => { void handleAssignToElection(); }}
-                                      disabled={!selectedElectionId || isAssigningToElection}
-                                      className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                                    >
-                                      {isAssigningToElection && <Loader2 className="w-3 h-3 animate-spin" />}
-                                      Add to Ballot
-                                    </button>
-                                    <button
-                                      onClick={() => { setShowElectionPicker(false); setSelectedElectionId(''); }}
-                                      className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Added to ballot / election outcome info */}
-                      {(currentElectionPackage.status === 'added_to_ballot' ||
-                        currentElectionPackage.status === 'elected' ||
-                        currentElectionPackage.status === 'not_elected') && (
-                        <div className={`border rounded-lg p-3 ${
-                          currentElectionPackage.status === 'elected'
-                            ? 'bg-emerald-500/5 border-emerald-500/20'
-                            : currentElectionPackage.status === 'not_elected'
-                              ? 'bg-red-500/5 border-red-500/20'
-                              : 'bg-purple-500/5 border-purple-500/20'
-                        }`}>
-                          <p className={`text-xs ${
-                            currentElectionPackage.status === 'elected'
-                              ? 'text-emerald-600 dark:text-emerald-300'
-                              : currentElectionPackage.status === 'not_elected'
-                                ? 'text-red-600 dark:text-red-300'
-                                : 'text-purple-600 dark:text-purple-300'
-                          }`}>
-                            {currentElectionPackage.status === 'added_to_ballot' &&
-                              'This applicant has been added to a ballot and is awaiting election results.'}
-                            {currentElectionPackage.status === 'elected' &&
-                              'This applicant was elected. They can now be converted to a member.'}
-                            {currentElectionPackage.status === 'not_elected' &&
-                              'This applicant was not elected by the membership vote.'}
-                          </p>
-                          {currentElectionPackage.election_id && currentElectionPackage.election_title && (
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/elections/${currentElectionPackage.election_id}`)}
-                              className="mt-1.5 text-xs text-theme-primary hover:underline"
-                            >
-                              {currentElectionPackage.election_title}
-                              {currentElectionPackage.election_status === 'open' && ' — Voting in progress'}
-                              {currentElectionPackage.election_status === 'closed' && ' — Closed'}
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-theme-text-muted">
-                      No election package has been created yet. It will be auto-generated when the applicant reaches this stage.
-                    </p>
-                  )}
-                </div>
+                <ElectionPackageSection applicant={applicant} tz={tz} />
               )}
 
               {/* Linked Events */}
-              <div className="p-4 border-b border-theme-surface-border">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-xs font-medium text-theme-text-muted uppercase tracking-wider flex items-center gap-1.5">
-                    <Link2 className="w-3.5 h-3.5" />
-                    Linked Events
-                  </h3>
-                  {applicant.status === ApplicantStatus.ACTIVE && (
-                    <button
-                      onClick={() => { void handleOpenEventPicker(); }}
-                      className="flex items-center gap-1 text-xs text-red-500 hover:text-red-800 dark:hover:text-red-400 transition-colors"
-                    >
-                      <CalendarPlus className="w-3 h-3" />
-                      Link Event
-                    </button>
-                  )}
-                </div>
-
-                {/* Event picker dropdown */}
-                {showEventPicker && (
-                  <div className="mb-3 bg-theme-surface border border-theme-surface-border rounded-lg shadow-lg overflow-hidden">
-                    <div className="p-2 border-b border-theme-surface-border">
-                      <div className="flex items-center gap-2 px-2 py-1.5 bg-theme-input-bg border border-theme-surface-border rounded-sm">
-                        <Search className="w-3.5 h-3.5 text-theme-text-muted" />
-                        <input
-                          type="text"
-                          value={eventSearchQuery}
-                          onChange={(e) => setEventSearchQuery(e.target.value)}
-                          aria-label="Search upcoming events..." placeholder="Search upcoming events..."
-                          className="flex-1 bg-transparent text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => setShowEventPicker(false)}
-                          className="text-theme-text-muted hover:text-theme-text-primary"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="max-h-48 overflow-y-auto">
-                      {isLoadingUpcoming ? (
-                        <div className="flex items-center justify-center py-4" role="status" aria-live="polite">
-                          <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
-                        </div>
-                      ) : (() => {
-                        const alreadyLinkedIds = new Set(linkedEvents.map((l) => l.event_id));
-                        const query = eventSearchQuery.toLowerCase();
-                        const filtered = upcomingEvents.filter(
-                          (ev) =>
-                            !alreadyLinkedIds.has(ev.id) &&
-                            (ev.title.toLowerCase().includes(query) ||
-                              ev.event_type.toLowerCase().includes(query) ||
-                              (ev.custom_category ?? '').toLowerCase().includes(query))
-                        );
-                        if (filtered.length === 0) {
-                          return (
-                            <p className="text-xs text-theme-text-muted text-center py-4">
-                              No matching upcoming events
-                            </p>
-                          );
-                        }
-                        return filtered.map((ev) => (
-                          <button
-                            key={ev.id}
-                            onClick={() => { void handleLinkEvent(ev.id); }}
-                            className="w-full flex items-center gap-3 px-3 py-2 hover:bg-theme-surface-hover text-left transition-colors"
-                          >
-                            <Calendar className="w-4 h-4 text-theme-text-muted shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm text-theme-text-primary truncate">{ev.title}</p>
-                              <p className="text-xs text-theme-text-muted">
-                                {formatDateTime(ev.start_datetime, tz)}
-                                {ev.custom_category && (
-                                  <span className="ml-1.5 px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px]">
-                                    {ev.custom_category}
-                                  </span>
-                                )}
-                                {!ev.custom_category && (
-                                  <span className="ml-1.5 px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px] capitalize">
-                                    {ev.event_type.replace(/_/g, ' ')}
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          </button>
-                        ));
-                      })()}
-                    </div>
-                  </div>
-                )}
-
-                {/* Linked events list */}
-                {isLoadingLinkedEvents ? (
-                  <div className="flex items-center justify-center py-3" role="status" aria-live="polite">
-                    <Loader2 className="w-4 h-4 animate-spin text-theme-text-muted" />
-                  </div>
-                ) : linkedEvents.length === 0 ? (
-                  <p className="text-xs text-theme-text-muted">No events linked yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {linkedEvents.map((link) => (
-                      <div
-                        key={link.id}
-                        className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
-                          link.is_cancelled
-                            ? 'border-red-500/20 bg-red-500/5 opacity-60'
-                            : 'border-theme-surface-border bg-theme-surface'
-                        }`}
-                      >
-                        <Calendar className="w-4 h-4 text-theme-text-muted shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm text-theme-text-primary truncate">
-                            {link.event_title ?? 'Deleted event'}
-                            {link.is_cancelled && (
-                              <span className="ml-1.5 text-[10px] text-red-500 font-medium">CANCELLED</span>
-                            )}
-                          </p>
-                          <p className="text-xs text-theme-text-muted">
-                            {link.event_start ? formatDateTime(link.event_start, tz) : 'No date'}
-                            {(link.custom_category || link.event_type) && (
-                              <span className="ml-1.5 px-1.5 py-0.5 bg-theme-surface-secondary rounded text-[10px] capitalize">
-                                {link.custom_category ?? (link.event_type ?? '').replace(/_/g, ' ')}
-                              </span>
-                            )}
-                          </p>
-                        </div>
-                        {applicant.status === ApplicantStatus.ACTIVE && (
-                          <button
-                            onClick={() => { void handleUnlinkEvent(link.id); }}
-                            className="text-theme-text-muted hover:text-red-500 transition-colors shrink-0"
-                            title="Unlink event"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <LinkedEventsSection applicant={applicant} tz={tz} />
 
               {/* Checklist Stage Section */}
               {applicant.current_stage_type === StageTypeEnum.CHECKLIST && applicant.status === ApplicantStatus.ACTIVE && (() => {
@@ -1699,390 +997,13 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
             </div>
 
             {/* Footer Actions */}
-            {applicant.status === ApplicantStatus.ACTIVE && (
-              <div className="border-t border-theme-surface-border p-4 space-y-3">
-                {/* Notes input */}
-                {showNotesInput && (
-                  <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
-                    <textarea
-                      value={actionNotes}
-                      onChange={(e) => setActionNotes(e.target.value)}
-                      placeholder="Add notes for this action..."
-                      rows={2}
-                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
-                    />
-                  </div>
-                )}
-
-                {/* Withdraw confirmation */}
-                {showWithdrawConfirm && (
-                  <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-3">
-                    <p className="text-sm text-theme-text-secondary mb-2">
-                      Withdraw this application? The applicant will be archived and removed from the active pipeline.
-                    </p>
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setShowWithdrawConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => { void handleWithdraw(); }}
-                        disabled={isWithdrawing}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
-                        Confirm Withdraw
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Skip stage confirmation */}
-                {showSkipConfirm && (
-                  <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
-                    <p className="text-sm text-purple-600 dark:text-purple-300 mb-2">
-                      Skip the current stage? This will mark it as completed and advance the applicant.
-                    </p>
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setShowSkipConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => { void handleSkipStage(); }}
-                        disabled={isSkipping}
-                        className="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors disabled:opacity-50 flex gap-1 items-center"
-                      >
-                        {isSkipping && <Loader2 className="w-3 h-3 animate-spin" />}
-                        Confirm Skip
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Reject confirmation */}
-                {showRejectConfirm && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-600 dark:text-red-300 mb-2">
-                      Are you sure you want to reject this applicant? This action cannot be easily undone.
-                    </p>
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => { void handleReject(); }}
-                        disabled={isRejecting}
-                        className="btn-primary flex gap-1 items-center px-3 py-1.5 text-xs"
-                      >
-                        {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
-                        Confirm Reject
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="action-bar">
-                  <button
-                    onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                    title="Add notes"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      onClose();
-                      navigate(`/prospective-members/${applicant.id}/interview`);
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-blue-500 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors"
-                    title="Open interview view"
-                  >
-                    <ClipboardList className="w-3.5 h-3.5" />
-                    <span className="action-label">Interview</span>
-                  </button>
-
-                  {!isFirstStage && (
-                    <button
-                      onClick={() => { void handleRegress(); }}
-                      disabled={isActionInProgress}
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
-                      title="Move back to previous stage"
-                    >
-                      {isRegressing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowLeft className="w-3.5 h-3.5" />}
-                      <span className="action-label">Back</span>
-                    </button>
-                  )}
-
-                  <div className="flex-1" />
-
-                  <button
-                    onClick={() => setShowWithdrawConfirm(true)}
-                    disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
-                    title="Withdraw application"
-                  >
-                    <Archive className="w-3.5 h-3.5" />
-                    <span className="action-label">Withdraw</span>
-                  </button>
-                  <button
-                    onClick={() => { void handleHold(); }}
-                    disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-amber-700 dark:text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 transition-colors disabled:opacity-50"
-                  >
-                    {isHolding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Pause className="w-3.5 h-3.5" />}
-                    <span className="action-label">Hold</span>
-                  </button>
-                  <button
-                    onClick={() => setShowSkipConfirm(true)}
-                    disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-purple-700 dark:text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/10 transition-colors disabled:opacity-50"
-                    title="Skip this stage and advance"
-                  >
-                    {isSkipping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowRight className="w-3.5 h-3.5" />}
-                    <span className="action-label">Skip</span>
-                  </button>
-                  <button
-                    onClick={() => setShowRejectConfirm(true)}
-                    disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span className="action-label">Reject</span>
-                  </button>
-                  <button
-                    onClick={() => { void handleAdvance(); }}
-                    disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {isAdvancing ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    )}
-                    {isLastStage ? 'Convert' : 'Advance'}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* On Hold Actions */}
-            {applicant.status === ApplicantStatus.ON_HOLD && (
-              <div className="border-t border-theme-surface-border p-4 space-y-3">
-                {showNotesInput && (
-                  <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
-                    <textarea
-                      value={actionNotes}
-                      onChange={(e) => setActionNotes(e.target.value)}
-                      placeholder="Add notes for this action..."
-                      rows={2}
-                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
-                    />
-                  </div>
-                )}
-                {showWithdrawConfirm && (
-                  <div className="bg-theme-surface-secondary border border-theme-surface-border rounded-lg p-3">
-                    <p className="text-sm text-theme-text-secondary mb-2">
-                      Withdraw this application? The applicant will be archived and removed from the active pipeline.
-                    </p>
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setShowWithdrawConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => { void handleWithdraw(); }}
-                        disabled={isWithdrawing}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs bg-theme-surface-hover hover:bg-theme-surface text-theme-text-primary border border-theme-surface-border rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {isWithdrawing && <Loader2 className="w-3 h-3 animate-spin" />}
-                        Confirm Withdraw
-                      </button>
-                    </div>
-                  </div>
-                )}
-                {showRejectConfirm && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-600 dark:text-red-300 mb-2">
-                      Are you sure you want to reject this applicant? This action cannot be easily undone.
-                    </p>
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => { void handleReject(); }}
-                        disabled={isRejecting}
-                        className="btn-primary flex gap-1 items-center px-3 py-1.5 text-xs"
-                      >
-                        {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
-                        Confirm Reject
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <div className="action-bar">
-                  <button
-                    onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                    title="Add notes"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => setShowWithdrawConfirm(true)}
-                    disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-theme-text-muted border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
-                    title="Withdraw application"
-                  >
-                    <Archive className="w-3.5 h-3.5" />
-                    <span className="action-label">Withdraw</span>
-                  </button>
-                  <button
-                    onClick={() => setShowRejectConfirm(true)}
-                    disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span className="action-label">Reject</span>
-                  </button>
-                  <button
-                    onClick={() => { void handleResume(); }}
-                    disabled={isActionInProgress}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {isResuming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-                    Resume
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Withdrawn Actions */}
-            {applicant.status === ApplicantStatus.WITHDRAWN && (
-              <div className="border-t border-theme-surface-border p-4 space-y-3">
-                {showNotesInput && (
-                  <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
-                    <textarea
-                      value={actionNotes}
-                      onChange={(e) => setActionNotes(e.target.value)}
-                      placeholder="Add notes for reactivation..."
-                      rows={2}
-                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
-                    />
-                  </div>
-                )}
-                <div className="action-bar">
-                  <button
-                    onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                    title="Add notes"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => { void handleReactivate(); }}
-                    disabled={isReactivating}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {isReactivating ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    )}
-                    Reactivate
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Inactive Actions */}
-            {applicant.status === ApplicantStatus.INACTIVE && (
-              <div className="border-t border-theme-surface-border p-4 space-y-3">
-                {showNotesInput && (
-                  <div className="flex items-start gap-2">
-                    <MessageSquare className="w-4 h-4 text-theme-text-muted mt-2.5" />
-                    <textarea
-                      value={actionNotes}
-                      onChange={(e) => setActionNotes(e.target.value)}
-                      placeholder="Add notes for reactivation..."
-                      rows={2}
-                      className="flex-1 bg-theme-surface border border-theme-surface-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring resize-none"
-                    />
-                  </div>
-                )}
-                {showRejectConfirm && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3">
-                    <p className="text-sm text-red-600 dark:text-red-300 mb-2">
-                      Are you sure you want to reject this applicant?
-                    </p>
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => setShowRejectConfirm(false)}
-                        className="px-3 py-1.5 text-xs text-theme-text-secondary hover:text-theme-text-primary transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={() => { void handleReject(); }}
-                        disabled={isRejecting}
-                        className="btn-primary flex gap-1 items-center px-3 py-1.5 text-xs"
-                      >
-                        {isRejecting && <Loader2 className="w-3 h-3 animate-spin" />}
-                        Confirm Reject
-                      </button>
-                    </div>
-                  </div>
-                )}
-                <div className="action-bar">
-                  <button
-                    onClick={() => setShowNotesInput(!showNotesInput)}
-                    className="p-2 text-theme-text-muted hover:text-theme-text-primary transition-colors"
-                    title="Add notes"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                  </button>
-                  <div className="flex-1" />
-                  <button
-                    onClick={() => setShowRejectConfirm(true)}
-                    disabled={isRejecting || isReactivating}
-                    className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-700 dark:text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors disabled:opacity-50"
-                  >
-                    <XCircle className="w-3.5 h-3.5" />
-                    <span className="action-label">Reject</span>
-                  </button>
-                  <button
-                    onClick={() => { void handleReactivate(); }}
-                    disabled={isReactivating}
-                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {isReactivating ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <RotateCcw className="w-3.5 h-3.5" />
-                    )}
-                    Reactivate
-                  </button>
-                </div>
-              </div>
-            )}
+            <ApplicantActionPanels
+              applicant={applicant}
+              isLastStage={isLastStage}
+              isFirstStage={isFirstStage}
+              onClose={onClose}
+              onConvert={onConvert}
+            />
           </>
         )}
       </div>
