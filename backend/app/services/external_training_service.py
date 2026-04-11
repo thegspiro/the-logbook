@@ -688,6 +688,9 @@ class ExternalTrainingSyncService:
             "description": record.get(
                 "description", record.get("courseDescription", "")
             ),
+            "training_type": record.get(
+                "trainingType", record.get("type", record.get("courseType", ""))
+            ),
             "duration_minutes": record.get(
                 "durationMinutes",
                 record.get("duration", record.get("creditMinutes", 0)),
@@ -698,6 +701,18 @@ class ExternalTrainingSyncService:
             "completion_date": record.get(
                 "completionDate",
                 record.get("completedDate", record.get("dateCompleted")),
+            ),
+            "expiration_date": record.get(
+                "expirationDate",
+                record.get("expireDate", record.get("certExpirationDate")),
+            ),
+            "certification_number": record.get(
+                "certificationNumber",
+                record.get("certNumber", record.get("licenseNumber", "")),
+            ),
+            "issuing_agency": record.get(
+                "issuingAgency",
+                record.get("issuer", record.get("certifyingBody", "")),
             ),
             "score": record.get(
                 "score", record.get("percentScore", record.get("finalScore"))
@@ -1024,6 +1039,50 @@ class ExternalTrainingSyncService:
         self.db.add(import_record)
         return "imported"
 
+    @staticmethod
+    def _map_training_type(raw_data: Optional[Dict[str, Any]]) -> TrainingType:
+        """Infer the Logbook TrainingType from external provider data.
+
+        Looks at trainingType, courseType, and category keywords to map
+        to the closest Logbook enum value.  Falls back to
+        CONTINUING_EDUCATION when no match is found.
+        """
+        if not raw_data:
+            return TrainingType.CONTINUING_EDUCATION
+
+        type_str = str(
+            raw_data.get(
+                "trainingType",
+                raw_data.get(
+                    "type", raw_data.get("courseType", "")
+                ),
+            )
+        ).lower().strip()
+
+        # Direct keyword matching
+        cert_keywords = ("certification", "license", "credential", "cert")
+        refresher_keywords = ("refresher", "recertification", "renewal")
+        skills_keywords = ("skills", "practical", "hands-on", "drill")
+        orientation_keywords = ("orientation", "onboarding", "induction")
+        specialty_keywords = ("specialty", "advanced", "technician", "hazmat")
+
+        if any(k in type_str for k in cert_keywords):
+            return TrainingType.CERTIFICATION
+        if any(k in type_str for k in refresher_keywords):
+            return TrainingType.REFRESHER
+        if any(k in type_str for k in skills_keywords):
+            return TrainingType.SKILLS_PRACTICE
+        if any(k in type_str for k in orientation_keywords):
+            return TrainingType.ORIENTATION
+        if any(k in type_str for k in specialty_keywords):
+            return TrainingType.SPECIALTY
+
+        # Check if the record has expiration data — likely a certification
+        if raw_data.get("expirationDate") or raw_data.get("expireDate"):
+            return TrainingType.CERTIFICATION
+
+        return TrainingType.CONTINUING_EDUCATION
+
     def _parse_date(self, date_value: Any) -> Optional[datetime]:
         """Parse various date formats to datetime"""
         if not date_value:
@@ -1220,13 +1279,28 @@ class ExternalTrainingSyncService:
                 (import_record.duration_minutes or 0) / 60.0, 2
             )
 
+        # Determine training type from external data when available
+        training_type = self._map_training_type(import_record.raw_data)
+
+        # Parse expiration date if present in raw data
+        raw = import_record.raw_data or {}
+        expiration_str = raw.get(
+            "expirationDate",
+            raw.get("expireDate", raw.get("certExpirationDate")),
+        )
+        expiration_date = None
+        if expiration_str:
+            parsed = self._parse_date(expiration_str)
+            if parsed:
+                expiration_date = parsed.date()
+
         # Create training record
         training_record = TrainingRecord(
             user_id=target_user_id,
             organization_id=import_record.organization_id,
             course_name=import_record.course_title,
             course_code=import_record.course_code,
-            training_type=TrainingType.CONTINUING_EDUCATION,
+            training_type=training_type,
             hours_completed=computed_hours,
             credit_hours=import_record.credit_hours,
             completion_date=(
@@ -1234,6 +1308,16 @@ class ExternalTrainingSyncService:
                 if import_record.completion_date
                 else None
             ),
+            expiration_date=expiration_date,
+            certification_number=raw.get(
+                "certificationNumber",
+                raw.get("certNumber", raw.get("licenseNumber")),
+            ),
+            issuing_agency=raw.get(
+                "issuingAgency",
+                raw.get("issuer", raw.get("certifyingBody")),
+            ),
+            score=import_record.score,
             passed=import_record.passed,
             status=TrainingStatus.COMPLETED,
             category_id=target_category_id,

@@ -63,6 +63,9 @@ Recommended crontab (add to host or container cron):
 
 # Daily at 2:30 AM — extend rolling recurring event series (12-month horizon)
 30 2 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=rolling_recurrence_extend
+
+# Every 30 minutes — auto-sync external training providers (Vector Solutions, etc.)
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=external_training_auto_sync
 -----------------------------------------------------
 """
 
@@ -71,7 +74,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import Organization, User
@@ -204,6 +207,12 @@ SCHEDULE = {
         "frequency": "every 15 minutes",
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
+    },
+    "external_training_auto_sync": {
+        "description": "Sync training records from external providers (Vector Solutions, etc.) that have auto-sync enabled and are due",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
     },
 }
 
@@ -3096,6 +3105,60 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_external_training_auto_sync(db: AsyncSession) -> dict:
+    """Sync training records from external providers that are due.
+
+    Checks all providers with auto_sync_enabled=True and a next_sync_at
+    that has passed (or is null), then triggers an incremental sync for
+    each one.  Called every 30 minutes by the scheduler.
+    """
+    from datetime import timezone as dt_timezone
+
+    from app.models.training import ExternalTrainingProvider
+    from app.services.external_training_service import ExternalTrainingSyncService
+
+    now = datetime.now(dt_timezone.utc)
+    result = await db.execute(
+        select(ExternalTrainingProvider).where(
+            ExternalTrainingProvider.auto_sync_enabled.is_(True),
+            ExternalTrainingProvider.active.is_(True),
+            ExternalTrainingProvider.connection_verified.is_(True),
+            or_(
+                ExternalTrainingProvider.next_sync_at.is_(None),
+                ExternalTrainingProvider.next_sync_at <= now,
+            ),
+        )
+    )
+    providers = result.scalars().all()
+
+    synced = 0
+    failed = 0
+    for provider in providers:
+        sync_service = ExternalTrainingSyncService(db)
+        try:
+            await sync_service.sync_training_records(
+                provider, sync_type="incremental"
+            )
+            synced += 1
+        except Exception:
+            logger.warning(
+                "Auto-sync failed for provider %s (%s)",
+                provider.name,
+                provider.id,
+                exc_info=True,
+            )
+            failed += 1
+        finally:
+            await sync_service.close()
+
+    return {
+        "task": "external_training_auto_sync",
+        "providers_checked": len(providers),
+        "synced": synced,
+        "failed": failed,
+    }
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -3119,4 +3182,5 @@ TASK_RUNNERS = {
     "series_end_reminders": run_series_end_reminders,
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
+    "external_training_auto_sync": run_external_training_auto_sync,
 }
