@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { organizationService } from '../services/userServices';
 import {
   ArrowLeft,
   ClipboardList,
@@ -116,9 +117,13 @@ const ShiftReportPage: React.FC = () => {
   const [myStats, setMyStats] = useState<TraineeShiftStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [memberMap, setMemberMap] = useState<Record<string, string>>({});
+  const [schedulingEnabled, setSchedulingEnabled] = useState(true);
 
   useEffect(() => {
     void loadData();
+    organizationService.isModuleEnabled('scheduling')
+      .then(enabled => setSchedulingEnabled(enabled))
+      .catch(() => {});
   }, []);
 
   const loadData = async () => {
@@ -228,21 +233,38 @@ const ShiftReportPage: React.FC = () => {
           </button>
         </div>
 
-        {/* New Report — redirect to Shift Scheduling */}
+        {/* New Report — route to scheduling or manual entry */}
         {activeTab === 'new' && (
           <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-8 text-center space-y-4">
             <ClipboardList className="w-12 h-12 text-red-500 mx-auto" />
             <h2 className="text-lg font-semibold text-theme-text-primary">File Shift Completion Report</h2>
-            <p className="text-sm text-theme-text-secondary max-w-md mx-auto">
-              Shift reports are now filed from the Shift Scheduling section. Select a shift, validate hours and calls for the entire crew, and evaluate trainees — all in one streamlined form.
-            </p>
-            <button
-              onClick={() => navigate('/scheduling?tab=shift-reports&view=create')}
-              className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium"
-            >
-              <Send className="w-4 h-4" />
-              Go to Shift Reports
-            </button>
+            {schedulingEnabled ? (
+              <>
+                <p className="text-sm text-theme-text-secondary max-w-md mx-auto">
+                  Shift reports are now filed from the Shift Scheduling section. Select a shift, validate hours and calls for the entire crew, and evaluate trainees — all in one streamlined form.
+                </p>
+                <button
+                  onClick={() => navigate('/scheduling?tab=shift-reports&view=create')}
+                  className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium"
+                >
+                  <Send className="w-4 h-4" />
+                  Go to Shift Reports
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-theme-text-secondary max-w-md mx-auto">
+                  Log shift hours, calls, and evaluations for your crew members. Hours and calls will be credited to each selected member.
+                </p>
+                <button
+                  onClick={() => navigate('/training/log-shift')}
+                  className="btn-primary inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium"
+                >
+                  <Send className="w-4 h-4" />
+                  Log Shift Report
+                </button>
+              </>
+            )}
           </div>
         )}
 

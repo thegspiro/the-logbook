@@ -57,6 +57,11 @@ const ActiveSkillTestPage = lazyWithRetry(
   () => import('../../pages/ActiveSkillTestPage'),
 );
 
+// Training Module - Manual Shift Report (scheduling module disabled)
+const ManualShiftReportPage = lazyWithRetry(
+  () => import('../../pages/training/ManualShiftReportPage'),
+);
+
 // Training Module - Print Pages
 const MemberTrainingPrintPage = lazyWithRetry(
   () => import('../../pages/training/MemberTrainingPrintPage'),
@@ -164,6 +169,16 @@ export const getTrainingRoutes = () => {
             to="/training/admin?page=setup&tab=integrations"
             replace
           />
+        }
+      />
+
+      {/* Manual Shift Report — fallback for orgs without scheduling */}
+      <Route
+        path="/training/log-shift"
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <ManualShiftReportPage />
+          </ProtectedRoute>
         }
       />
 

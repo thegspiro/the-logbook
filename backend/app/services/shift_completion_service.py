@@ -21,6 +21,7 @@ from app.models.notification import (
     NotificationLog,
 )
 from app.models.training import (
+    AssignmentStatus,
     CompetencyLevel,
     EnrollmentStatus,
     MemberCompetency,
@@ -47,6 +48,22 @@ class ShiftCompletionService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def validate_shift_ownership(
+        self,
+        shift_id: str,
+        organization_id: UUID,
+    ) -> bool:
+        """Check that a shift exists and belongs to the organization."""
+        result = (
+            await self.db.execute(
+                select(Shift.id).where(
+                    Shift.id == shift_id,
+                    Shift.organization_id == str(organization_id),
+                )
+            )
+        ).scalar_one_or_none()
+        return result is not None
+
     async def _get_trainee_call_data_from_shift(
         self,
         shift_id: str,
@@ -57,6 +74,8 @@ class ShiftCompletionService:
 
         Searches responding_members JSON arrays for the trainee's user
         ID and collects the incident_type from each matching call.
+
+        Callers must validate shift ownership before invoking.
         """
         result = await self.db.execute(
             select(
@@ -83,7 +102,10 @@ class ShiftCompletionService:
         shift_id: str,
         trainee_id: str,
     ) -> Optional[float]:
-        """Get a trainee's hours from their ShiftAttendance record."""
+        """Get a trainee's hours from their ShiftAttendance record.
+
+        Callers must validate shift ownership before invoking.
+        """
         result = await self.db.execute(
             select(ShiftAttendance.duration_minutes).where(
                 ShiftAttendance.shift_id == shift_id,
@@ -201,12 +223,15 @@ class ShiftCompletionService:
                     select(ProgramEnrollment).where(
                         ProgramEnrollment.id == enrollment_id,
                         ProgramEnrollment.user_id == trainee_id,
+                        ProgramEnrollment.organization_id
+                        == str(organization_id),
                     )
                 )
             ).scalar_one_or_none()
             if not enrollment:
                 raise ValueError(
-                    "Enrollment not found or does not " "belong to this trainee"
+                    "Enrollment not found or does not "
+                    "belong to this trainee"
                 )
 
         report = ShiftCompletionReport(
@@ -307,11 +332,35 @@ class ShiftCompletionService:
         from app.models.training import TrainingProgram
         from app.models.user import User
 
+        org_id_str = str(organization_id)
+
+        shift = (
+            await self.db.execute(
+                select(Shift).where(
+                    Shift.id == shift_id,
+                    Shift.organization_id == org_id_str,
+                )
+            )
+        ).scalar_one_or_none()
+        if not shift:
+            return []
+
+        active_statuses = [
+            AssignmentStatus.ASSIGNED,
+            AssignmentStatus.CONFIRMED,
+            AssignmentStatus.PENDING,
+        ]
         assignments = (
             await self.db.execute(
-                select(ShiftAssignment).where(
-                    ShiftAssignment.shift_id == shift_id,
+                select(ShiftAssignment)
+                .where(
+                    ShiftAssignment.shift_id == str(shift_id),
+                    ShiftAssignment.organization_id == org_id_str,
+                    ShiftAssignment.assignment_status.in_(
+                        active_statuses
+                    ),
                 )
+                .order_by(ShiftAssignment.created_at.asc())
             )
         ).scalars().all()
 
@@ -334,8 +383,7 @@ class ShiftCompletionService:
                     ProgramEnrollment.program_id == TrainingProgram.id,
                 ).where(
                     ProgramEnrollment.user_id.in_(user_ids),
-                    ProgramEnrollment.organization_id
-                    == str(organization_id),
+                    ProgramEnrollment.organization_id == org_id_str,
                     ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
                 )
             )
@@ -353,6 +401,8 @@ class ShiftCompletionService:
                     ShiftCompletionReport.trainee_id
                 ).where(
                     ShiftCompletionReport.shift_id == shift_id,
+                    ShiftCompletionReport.organization_id
+                    == org_id_str,
                 )
             )
         ).scalars().all()
@@ -363,12 +413,13 @@ class ShiftCompletionService:
             uid = str(assignment.user_id)
             user = user_map.get(uid)
             enrollment_info = enrollment_map.get(uid, {})
+            pos = assignment.position
             result.append({
                 "user_id": uid,
                 "user_name": (
                     user.full_name if user else "Unknown"
                 ),
-                "position": assignment.position,
+                "position": pos.value if hasattr(pos, "value") else pos,
                 "has_active_enrollment": uid in enrollment_map,
                 "enrollment_id": enrollment_info.get(
                     "enrollment_id"
@@ -385,7 +436,7 @@ class ShiftCompletionService:
         self,
         organization_id: UUID,
         officer_id: UUID,
-        shift_id: str,
+        shift_id: Optional[str],
         shift_date: date,
         hours_on_shift: float,
         calls_responded: int,
@@ -845,24 +896,46 @@ class ShiftCompletionService:
         When review_status transitions away from 'draft', training
         pipeline progress is triggered with the final report data.
         """
+        UPDATABLE_FIELDS = {
+            "hours_on_shift",
+            "calls_responded",
+            "call_types",
+            "performance_rating",
+            "areas_of_strength",
+            "areas_for_improvement",
+            "officer_narrative",
+            "skills_observed",
+            "tasks_performed",
+            "enrollment_id",
+            "review_status",
+        }
+
         report = await self.get_report(report_id)
         if not report:
             return None
         if report.organization_id != str(organization_id):
-            return None
+            raise ValueError(
+                "Report not found in this organization"
+            )
         if report.officer_id != officer_id:
-            raise ValueError("Only the filing officer can update this report")
+            raise ValueError(
+                "Only the filing officer can update this report"
+            )
 
         was_draft = report.review_status == "draft"
 
+        # Prevent regression to draft once pipeline has run
+        new_status = updates.get("review_status")
+        if (
+            new_status == "draft"
+            and not was_draft
+        ):
+            raise ValueError(
+                "Cannot revert to draft after submission"
+            )
+
         for field, value in updates.items():
-            if hasattr(report, field) and field not in (
-                "id",
-                "organization_id",
-                "officer_id",
-                "trainee_id",
-                "created_at",
-            ):
+            if field in UPDATABLE_FIELDS:
                 setattr(report, field, value)
 
         # Trigger training progress when a draft is completed
@@ -984,11 +1057,16 @@ class ShiftCompletionService:
         self,
         report_id: str,
         trainee_id: str,
+        organization_id: UUID,
         trainee_comments: Optional[str] = None,
     ) -> Optional[ShiftCompletionReport]:
         """Trainee acknowledges a shift completion report."""
         report = await self.get_report(report_id)
-        if not report or report.trainee_id != trainee_id:
+        if (
+            not report
+            or report.trainee_id != trainee_id
+            or report.organization_id != str(organization_id)
+        ):
             return None
 
         report.trainee_acknowledged = True

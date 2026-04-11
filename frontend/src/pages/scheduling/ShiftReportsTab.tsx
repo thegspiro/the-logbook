@@ -100,6 +100,7 @@ export const ShiftReportsTab: React.FC = () => {
   const [expandedTraineeId, setExpandedTraineeId] = useState<string | null>(null);
   const [crewRemarks, setCrewRemarks] = useState<Record<string, string>>({});
   const [loadingCrew, setLoadingCrew] = useState(false);
+  const [crewLoadError, setCrewLoadError] = useState(false);
   const [shiftList, setShiftList] = useState<ShiftRecord[]>([]);
   const [loadingShifts, setLoadingShifts] = useState(false);
   const [shiftSearchQuery, setShiftSearchQuery] = useState('');
@@ -176,6 +177,7 @@ export const ShiftReportsTab: React.FC = () => {
   // Load crew status when a shift is selected
   const loadCrewForShift = useCallback(async (shiftId: string) => {
     setLoadingCrew(true);
+    setCrewLoadError(false);
     try {
       const crew = await shiftCompletionService.getShiftCrewStatus(shiftId);
       setCrewMembers(crew);
@@ -185,7 +187,8 @@ export const ShiftReportsTab: React.FC = () => {
       setCrewRemarks({});
       setExpandedTraineeId(null);
     } catch {
-      toast.error('Failed to load crew');
+      setCrewLoadError(true);
+      toast.error('Failed to load crew members');
     } finally {
       setLoadingCrew(false);
     }
@@ -307,7 +310,7 @@ export const ShiftReportsTab: React.FC = () => {
     if (viewMode !== 'create' || !form.shift_id) return;
     const timer = setTimeout(() => {
       saveDraft({
-        shiftId: form.shift_id ?? '',
+        shiftId: form.shift_id || '',
         shiftLabel: linkedShiftLabel || '',
         formData: form as Record<string, unknown>,
         crewSelections: Array.from(selectedCrewIds),
@@ -338,7 +341,7 @@ export const ShiftReportsTab: React.FC = () => {
     if (draft.formData.officer_narrative) {
       setForm(prev => ({ ...prev, officer_narrative: draft.formData.officer_narrative as string }));
     }
-  }, [form.shift_id, crewMembers.length]); // eslint-disable-line react-hooks/exhaustive-deps -- restore once when crew loads
+  }, [form.shift_id, crewMembers.length]);
 
   // Sync offline queue when connectivity returns
   useEffect(() => {
@@ -504,12 +507,12 @@ export const ShiftReportsTab: React.FC = () => {
     } as CrewMemberEvaluation))];
 
     const payload: BatchShiftReportCreate = {
-      shift_id: form.shift_id ?? '',
-      shift_date: form.shift_date ?? '',
-      hours_on_shift: form.hours_on_shift ?? 0,
-      calls_responded: form.calls_responded ?? 0,
+      shift_id: form.shift_id || '',
+      shift_date: form.shift_date || '',
+      hours_on_shift: form.hours_on_shift || 0,
+      calls_responded: form.calls_responded || 0,
       ...(form.call_types?.length ? { call_types: form.call_types } : {}),
-      ...(form.officer_narrative ? { officer_narrative: form.officer_narrative } : {}),
+      ...(form.officer_narrative?.trim() ? { officer_narrative: form.officer_narrative.trim() } : {}),
       crew_member_ids: Array.from(selectedCrewIds),
       ...(allEvaluations.length > 0 ? { trainee_evaluations: allEvaluations } : {}),
       save_as_draft: asDraft,
@@ -537,6 +540,7 @@ export const ShiftReportsTab: React.FC = () => {
       setSelectedCrewIds(new Set());
       setTraineeEvals({});
       setCrewRemarks({});
+      setCrewLoadError(false);
       setExpandedTraineeId(null);
       setViewMode(asDraft ? 'drafts' : 'filed-by-me');
     } catch (err: unknown) {
@@ -565,6 +569,10 @@ export const ShiftReportsTab: React.FC = () => {
 
   const handleReview = async (action: typeof SubmissionStatus.APPROVED | 'flagged') => {
     if (!reviewReportId) return;
+    if (action === 'flagged' && !reviewNotes.trim()) {
+      toast.error('Please add notes when flagging a report');
+      return;
+    }
     setReviewing(true);
     try {
       await shiftCompletionService.reviewReport(reviewReportId, {
@@ -630,6 +638,8 @@ export const ShiftReportsTab: React.FC = () => {
   const handleEditDraft = (report: ShiftCompletionReport) => {
     setEditingDraftId(report.id);
     setDraftForm({
+      shift_id: report.shift_id,
+      shift_date: report.shift_date,
       hours_on_shift: report.hours_on_shift,
       calls_responded: report.calls_responded,
       call_types: report.call_types || [],
@@ -761,8 +771,8 @@ export const ShiftReportsTab: React.FC = () => {
   const renderOfficerDashboard = () => {
     if (!officerAnalytics || officerAnalytics.total_reports === 0) return null;
     const maxHours = Math.max(...officerAnalytics.monthly.map(m => m.hours), 1);
-    const draftCount = officerAnalytics.status_counts['draft'] ?? 0;
-    const pendingCount = officerAnalytics.status_counts['pending_review'] ?? 0;
+    const draftCount = officerAnalytics?.status_counts?.['draft'] ?? 0;
+    const pendingCount = officerAnalytics?.status_counts?.['pending_review'] ?? 0;
     return (
       <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-4 sm:p-5 space-y-4">
         <h3 className="text-sm font-semibold text-theme-text-primary flex items-center gap-2">
@@ -955,7 +965,7 @@ export const ShiftReportsTab: React.FC = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  window.open(`/scheduling/shift-reports/print?id=${report.id}`, '_blank');
+                  window.print();
                 }}
                 className="text-xs text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1 transition-colors"
               >
@@ -1394,6 +1404,7 @@ export const ShiftReportsTab: React.FC = () => {
                       setLinkedShiftLabel(null);
                       setCrewMembers([]);
                       setSelectedCrewIds(new Set());
+                      setCrewLoadError(false);
                     }}
                     className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
@@ -1470,8 +1481,29 @@ export const ShiftReportsTab: React.FC = () => {
                   <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4" role="status">
                     <Loader2 className="w-4 h-4 animate-spin" /> Loading crew...
                   </div>
+                ) : crewLoadError ? (
+                  <div className="flex items-center gap-3 text-sm py-4">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span className="text-theme-text-muted">Failed to load crew members.</span>
+                    <button
+                      type="button"
+                      onClick={() => { if (form.shift_id) void loadCrewForShift(form.shift_id); }}
+                      className="text-violet-600 dark:text-violet-400 hover:underline text-sm font-medium"
+                    >
+                      Retry
+                    </button>
+                  </div>
                 ) : crewMembers.length === 0 ? (
-                  <p className="text-sm text-theme-text-muted py-4">No crew members assigned to this shift.</p>
+                  <div className="flex items-center gap-3 text-sm py-4">
+                    <span className="text-theme-text-muted">No active crew members found for this shift.</span>
+                    <button
+                      type="button"
+                      onClick={() => { if (form.shift_id) void loadCrewForShift(form.shift_id); }}
+                      className="text-violet-600 dark:text-violet-400 hover:underline text-sm font-medium"
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     {crewMembers.map(member => {

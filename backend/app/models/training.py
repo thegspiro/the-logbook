@@ -1521,6 +1521,19 @@ class TrainingModuleConfig(Base):
         JSON, nullable=True
     )  # Default tasks to track, e.g. ["Apparatus check-off", ...]
 
+    # Manual shift entry (fallback for orgs without scheduling module)
+    manual_entry_enabled = Column(Boolean, default=False)
+    manual_entry_require_apparatus = Column(Boolean, default=True)
+    manual_entry_apparatus_ids = Column(
+        JSON, nullable=True
+    )  # BasicApparatus IDs available for selection; null = all active
+    manual_entry_default_start_time = Column(
+        String(5), nullable=True
+    )  # HH:MM format, e.g. "08:00"
+    manual_entry_default_duration_hours = Column(
+        Float, nullable=True
+    )  # Default shift duration for pre-fill
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

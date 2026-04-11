@@ -45,6 +45,9 @@ const CreateTrainingSessionPage = lazyWithRetry(
   () => import("./CreateTrainingSessionPage"),
 );
 const ShiftReportPage = lazyWithRetry(() => import("./ShiftReportPage"));
+const ManualEntrySettingsPanel = lazyWithRetry(
+  () => import("./training/ManualEntrySettingsPanel"),
+);
 
 const TrainingRequirementsPage = lazyWithRetry(
   () => import("./TrainingRequirementsPage"),
@@ -127,6 +130,7 @@ const pages: PageDef[] = [
     tabs: [
       { id: "requirements", label: "Requirements" },
       { id: "pipelines", label: "Pipelines" },
+      { id: "manual-entry", label: "Manual Entry" },
       { id: "integrations", label: "Integrations" },
       { id: "import", label: "Import History" },
     ],
@@ -246,6 +250,7 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
   if (page === "setup") {
     if (tab === "requirements") return <TrainingRequirementsPage />;
     if (tab === "pipelines") return <CreatePipelinePage />;
+    if (tab === "manual-entry") return <ManualEntrySettingsPanel />;
     if (tab === "integrations") return <ExternalTrainingPage />;
     if (tab === "import") return <HistoricalImportPage />;
   }
