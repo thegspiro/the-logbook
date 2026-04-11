@@ -27,6 +27,9 @@ import {
   Activity,
   Send,
   Users,
+  RefreshCw,
+  Upload,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -214,6 +217,8 @@ const IntegrationsPage: React.FC = () => {
   const [showConnectModal, setShowConnectModal] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [showSyncPanel, setShowSyncPanel] = useState(false);
 
   // Config form state
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -356,6 +361,29 @@ const IntegrationsPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Connection test failed'));
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleSalesforceSync = async (syncType: 'members' | 'training' | 'events' | 'pull-contacts') => {
+    setSyncing(syncType);
+    try {
+      if (syncType === 'members') {
+        const result = await integrationsService.salesforcePushMembers();
+        toast.success(result.message);
+      } else if (syncType === 'training') {
+        const result = await integrationsService.salesforcePushTraining();
+        toast.success(result.message);
+      } else if (syncType === 'events') {
+        const result = await integrationsService.salesforcePushEvents();
+        toast.success(result.message);
+      } else if (syncType === 'pull-contacts') {
+        const result = await integrationsService.salesforcePullContacts();
+        toast.success(`Pulled ${result.count} contacts from Salesforce`);
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Sync failed'));
+    } finally {
+      setSyncing(null);
     }
   };
 
@@ -698,6 +726,15 @@ const IntegrationsPage: React.FC = () => {
                 <div className="flex justify-end gap-2">
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
+                      {integration.integration_type === 'salesforce' && (
+                        <button
+                          onClick={() => setShowSyncPanel(!showSyncPanel)}
+                          className="px-3 py-1.5 text-sm bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors flex items-center space-x-1"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Sync</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => { void handleTestConnection(integration.id); }}
                         disabled={testing}
@@ -729,6 +766,87 @@ const IntegrationsPage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Salesforce Sync Panel */}
+        {showSyncPanel && integrations.some(i => i.integration_type === 'salesforce' && i.status === ConnectionStatus.CONNECTED) && (
+          <div className="card mt-6 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">Salesforce Sync</h3>
+                  <p className="text-theme-text-muted text-xs">Push data to or pull data from Salesforce</p>
+                </div>
+              </div>
+              <button onClick={() => setShowSyncPanel(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Push section */}
+              <div className="space-y-3">
+                <h4 className="text-theme-text-primary text-sm font-medium flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Push to Salesforce
+                </h4>
+                <button
+                  onClick={() => { void handleSalesforceSync('members'); }}
+                  disabled={syncing !== null}
+                  className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
+                >
+                  <span>Members &rarr; Contacts</span>
+                  {syncing === 'members' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => { void handleSalesforceSync('training'); }}
+                  disabled={syncing !== null}
+                  className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
+                >
+                  <span>Training Records &rarr; Tasks</span>
+                  {syncing === 'training' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clipboard className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => { void handleSalesforceSync('events'); }}
+                  disabled={syncing !== null}
+                  className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
+                >
+                  <span>Events &rarr; Salesforce Events</span>
+                  {syncing === 'events' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Pull section */}
+              <div className="space-y-3">
+                <h4 className="text-theme-text-primary text-sm font-medium flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Pull from Salesforce
+                </h4>
+                <button
+                  onClick={() => { void handleSalesforceSync('pull-contacts'); }}
+                  disabled={syncing !== null}
+                  className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
+                >
+                  <span>Contacts &rarr; Review</span>
+                  {syncing === 'pull-contacts' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                </button>
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mt-2">
+                  <p className="text-blue-700 dark:text-blue-400 text-xs">
+                    Pulled contacts are returned for review. Real-time inbound sync is available via the Salesforce webhook endpoint.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-theme-surface-border">
+              <p className="text-theme-text-muted text-xs">
+                Events and training are also pushed automatically when sync direction is set to &quot;Push&quot; or &quot;Both&quot;.
+              </p>
+            </div>
+          </div>
+        )}
 
         {filteredIntegrations.length === 0 && (
           <div className="text-center py-12">
