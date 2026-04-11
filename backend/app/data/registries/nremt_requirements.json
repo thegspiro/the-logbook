@@ -6,7 +6,7 @@
   "source": "national",
   "nccr_topic_areas": [
     {"code": "NCCR-AIRWAY", "name": "Airway, Respiration & Ventilation", "nremt_area_bls": "11", "nremt_area_als": "16"},
-    {"code": "NCCR-CARDIO", "name": "Cardiovascular", "nremt_area_bls": "12", "nremt_area_als": "17"},
+    {"code": "NCCR-CARDIO", "name": "Cardiology", "nremt_area_bls": "12", "nremt_area_als": "17"},
     {"code": "NCCR-TRAUMA", "name": "Trauma", "nremt_area_bls": "13", "nremt_area_als": "18"},
     {"code": "NCCR-MEDICAL", "name": "Medical", "nremt_area_bls": "14", "nremt_area_als": "19"},
     {"code": "NCCR-OPS", "name": "Operations", "nremt_area_bls": "15", "nremt_area_als": "20"}
