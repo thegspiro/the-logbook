@@ -26,6 +26,10 @@ import {
   Award,
   Activity,
   Send,
+  Users,
+  RefreshCw,
+  Upload,
+  Download,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -107,6 +111,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     bgColor: 'bg-rose-500/10',
     features: ['NEMSIS 3.5', 'Response module', 'State EMS reporting'],
   },
+  'salesforce': {
+    icon: <Users className="w-6 h-6" />,
+    color: 'text-blue-700 dark:text-blue-400',
+    bgColor: 'bg-blue-500/10',
+    features: ['Contact sync', 'Donor management', 'Event push', 'Bidirectional sync'],
+  },
   'active911': {
     icon: <Radio className="w-6 h-6" />,
     color: 'text-red-700 dark:text-red-400',
@@ -181,16 +191,17 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   'Dispatch': <Radio className="w-3.5 h-3.5" />,
   'Automation': <Zap className="w-3.5 h-3.5" />,
   'Mapping': <MapPin className="w-3.5 h-3.5" />,
+  'CRM': <Users className="w-3.5 h-3.5" />,
 };
 
-type CategoryFilter = 'all' | 'Calendar' | 'Messaging' | 'Data' | 'Safety' | 'Reporting' | 'EMS' | 'Dispatch' | 'Automation' | 'Mapping';
+type CategoryFilter = 'all' | 'Calendar' | 'Messaging' | 'Data' | 'CRM' | 'Safety' | 'Reporting' | 'EMS' | 'Dispatch' | 'Automation' | 'Mapping';
 
-const ALL_CATEGORIES: CategoryFilter[] = ['all', 'Calendar', 'Messaging', 'Data', 'Safety', 'Reporting', 'EMS', 'Dispatch', 'Automation', 'Mapping'];
+const ALL_CATEGORIES: CategoryFilter[] = ['all', 'Calendar', 'Messaging', 'Data', 'CRM', 'Safety', 'Reporting', 'EMS', 'Dispatch', 'Automation', 'Mapping'];
 
 // Integration types that need webhook URL config
 const WEBHOOK_TYPES = new Set(['slack', 'discord', 'microsoft-teams']);
 // Integration types that need specific config forms
-const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import']);
+const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import', 'salesforce']);
 
 const inputClass = 'form-input';
 const labelClass = 'form-label';
@@ -206,6 +217,8 @@ const IntegrationsPage: React.FC = () => {
   const [showConnectModal, setShowConnectModal] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [showSyncPanel, setShowSyncPanel] = useState(false);
 
   // Config form state
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -216,6 +229,12 @@ const IntegrationsPage: React.FC = () => {
   const [genericWebhookUrl, setGenericWebhookUrl] = useState('');
   const [genericWebhookSecret, setGenericWebhookSecret] = useState('');
   const [importFormat, setImportFormat] = useState('csv');
+  const [sfInstanceUrl, setSfInstanceUrl] = useState('');
+  const [sfClientId, setSfClientId] = useState('');
+  const [sfClientSecret, setSfClientSecret] = useState('');
+  const [sfRefreshToken, setSfRefreshToken] = useState('');
+  const [sfEnvironment, setSfEnvironment] = useState('production');
+  const [sfSyncDirection, setSfSyncDirection] = useState('push');
 
   useEffect(() => {
     const loadIntegrations = async () => {
@@ -261,6 +280,12 @@ const IntegrationsPage: React.FC = () => {
     setGenericWebhookUrl('');
     setGenericWebhookSecret('');
     setImportFormat('csv');
+    setSfInstanceUrl('');
+    setSfClientId('');
+    setSfClientSecret('');
+    setSfRefreshToken('');
+    setSfEnvironment('production');
+    setSfSyncDirection('push');
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -278,6 +303,15 @@ const IntegrationsPage: React.FC = () => {
         return { url: genericWebhookUrl, secret: genericWebhookSecret };
       case 'epcr-import':
         return { import_format: importFormat };
+      case 'salesforce':
+        return {
+          instance_url: sfInstanceUrl,
+          client_id: sfClientId,
+          client_secret: sfClientSecret || undefined,
+          refresh_token: sfRefreshToken || undefined,
+          environment: sfEnvironment,
+          sync_direction: sfSyncDirection,
+        };
       default:
         return {};
     }
@@ -327,6 +361,29 @@ const IntegrationsPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Connection test failed'));
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleSalesforceSync = async (syncType: 'members' | 'training' | 'events' | 'pull-contacts') => {
+    setSyncing(syncType);
+    try {
+      if (syncType === 'members') {
+        const result = await integrationsService.salesforcePushMembers();
+        toast.success(result.message);
+      } else if (syncType === 'training') {
+        const result = await integrationsService.salesforcePushTraining();
+        toast.success(result.message);
+      } else if (syncType === 'events') {
+        const result = await integrationsService.salesforcePushEvents();
+        toast.success(result.message);
+      } else if (syncType === 'pull-contacts') {
+        const result = await integrationsService.salesforcePullContacts();
+        toast.success(`Pulled ${result.count} contacts from Salesforce`);
+      }
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Sync failed'));
+    } finally {
+      setSyncing(null);
     }
   };
 
@@ -449,6 +506,95 @@ const IntegrationsPage: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'salesforce':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="sf-instance-url" className={labelClass}>Salesforce Instance URL</label>
+              <input
+                id="sf-instance-url"
+                type="url"
+                value={sfInstanceUrl}
+                onChange={(e) => setSfInstanceUrl(e.target.value.trim())}
+                placeholder="https://yourorg.my.salesforce.com"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Your Salesforce org URL (e.g., https://yourorg.my.salesforce.com).
+              </p>
+            </div>
+            <div>
+              <label htmlFor="sf-client-id" className={labelClass}>Connected App Client ID</label>
+              <input
+                id="sf-client-id"
+                type="text"
+                value={sfClientId}
+                onChange={(e) => setSfClientId(e.target.value)}
+                placeholder="3MVG9..."
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="sf-client-secret" className={labelClass}>Client Secret</label>
+              <input
+                id="sf-client-secret"
+                type="password"
+                value={sfClientSecret}
+                onChange={(e) => setSfClientSecret(e.target.value)}
+                placeholder="Connected App client secret"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="sf-refresh-token" className={labelClass}>Refresh Token</label>
+              <input
+                id="sf-refresh-token"
+                type="password"
+                value={sfRefreshToken}
+                onChange={(e) => setSfRefreshToken(e.target.value)}
+                placeholder="OAuth refresh token"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Obtain a refresh token by completing the OAuth flow in your Salesforce Connected App.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="sf-environment" className={labelClass}>Environment</label>
+              <select
+                id="sf-environment"
+                value={sfEnvironment}
+                onChange={(e) => setSfEnvironment(e.target.value)}
+                className={inputClass}
+              >
+                <option value="production">Production</option>
+                <option value="sandbox">Sandbox</option>
+              </select>
+              <p className="text-xs text-theme-text-muted mt-1">
+                Select Sandbox if connecting to a Salesforce sandbox org for testing.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="sf-sync-direction" className={labelClass}>Sync Direction</label>
+              <select
+                id="sf-sync-direction"
+                value={sfSyncDirection}
+                onChange={(e) => setSfSyncDirection(e.target.value)}
+                className={inputClass}
+              >
+                <option value="push">Push (Logbook &rarr; Salesforce)</option>
+                <option value="pull">Pull (Salesforce &rarr; Logbook)</option>
+                <option value="both">Bidirectional</option>
+              </select>
+            </div>
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+              <p className="text-blue-700 dark:text-blue-400 text-xs">
+                Create a Connected App in Salesforce Setup &rarr; App Manager with the &quot;Full access (full)&quot; OAuth scope. Enable the refresh token grant flow.
+              </p>
+            </div>
           </div>
         );
 
@@ -580,6 +726,15 @@ const IntegrationsPage: React.FC = () => {
                 <div className="flex justify-end gap-2">
                   {integration.status === ConnectionStatus.CONNECTED && canManage && (
                     <>
+                      {integration.integration_type === 'salesforce' && (
+                        <button
+                          onClick={() => setShowSyncPanel(!showSyncPanel)}
+                          className="px-3 py-1.5 text-sm bg-blue-500/10 text-blue-700 dark:text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors flex items-center space-x-1"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          <span>Sync</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => { void handleTestConnection(integration.id); }}
                         disabled={testing}
@@ -611,6 +766,87 @@ const IntegrationsPage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Salesforce Sync Panel */}
+        {showSyncPanel && integrations.some(i => i.integration_type === 'salesforce' && i.status === ConnectionStatus.CONNECTED) && (
+          <div className="card mt-6 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">Salesforce Sync</h3>
+                  <p className="text-theme-text-muted text-xs">Push data to or pull data from Salesforce</p>
+                </div>
+              </div>
+              <button onClick={() => setShowSyncPanel(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Push section */}
+              <div className="space-y-3">
+                <h4 className="text-theme-text-primary text-sm font-medium flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Push to Salesforce
+                </h4>
+                <button
+                  onClick={() => { void handleSalesforceSync('members'); }}
+                  disabled={syncing !== null}
+                  className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
+                >
+                  <span>Members &rarr; Contacts</span>
+                  {syncing === 'members' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => { void handleSalesforceSync('training'); }}
+                  disabled={syncing !== null}
+                  className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
+                >
+                  <span>Training Records &rarr; Tasks</span>
+                  {syncing === 'training' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Clipboard className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => { void handleSalesforceSync('events'); }}
+                  disabled={syncing !== null}
+                  className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
+                >
+                  <span>Events &rarr; Salesforce Events</span>
+                  {syncing === 'events' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                </button>
+              </div>
+
+              {/* Pull section */}
+              <div className="space-y-3">
+                <h4 className="text-theme-text-primary text-sm font-medium flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Pull from Salesforce
+                </h4>
+                <button
+                  onClick={() => { void handleSalesforceSync('pull-contacts'); }}
+                  disabled={syncing !== null}
+                  className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
+                >
+                  <span>Contacts &rarr; Review</span>
+                  {syncing === 'pull-contacts' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
+                </button>
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mt-2">
+                  <p className="text-blue-700 dark:text-blue-400 text-xs">
+                    Pulled contacts are returned for review. Real-time inbound sync is available via the Salesforce webhook endpoint.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-theme-surface-border">
+              <p className="text-theme-text-muted text-xs">
+                Events and training are also pushed automatically when sync direction is set to &quot;Push&quot; or &quot;Both&quot;.
+              </p>
+            </div>
+          </div>
+        )}
 
         {filteredIntegrations.length === 0 && (
           <div className="text-center py-12">

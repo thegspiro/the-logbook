@@ -139,6 +139,27 @@ class CSVImportConfig(BaseModel):
     pass
 
 
+class SalesforceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Accepts production (*.my.salesforce.com), sandbox
+    # (*.sandbox.my.salesforce.com), and gov-cloud URLs.
+    instance_url: str = Field(
+        pattern=r"^https://[a-zA-Z0-9\-\.]+\.salesforce\.com$"
+    )
+    client_id: str = ""
+    client_secret: str = ""
+    refresh_token: str = ""
+    api_version: str = "v62.0"
+    environment: str = Field(
+        default="production", pattern=r"^(production|sandbox)$"
+    )
+    sync_direction: str = Field(
+        default="push", pattern=r"^(push|pull|both)$"
+    )
+    sync_types: List[str] = Field(default_factory=list)
+
+
 # Map integration_type → config schema for strict validation
 INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "slack": SlackConfig,
@@ -153,6 +174,7 @@ INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "outlook": OutlookCalendarConfig,
     "ical": ICalConfig,
     "csv-import": CSVImportConfig,
+    "salesforce": SalesforceConfig,
 }
 
 # Fields in config that contain secrets and should be stored encrypted
@@ -164,8 +186,10 @@ SECRET_CONFIG_KEYS = frozenset(
         "feed_token",
         "api_key",
         "client_secret",
+        "client_id",
         "token",
         "password",
+        "access_token",
     }
 )
 

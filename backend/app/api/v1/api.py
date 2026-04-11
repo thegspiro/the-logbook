@@ -32,6 +32,7 @@ from app.api.v1.endpoints import (
     grants,
     integrations,
     inventory,
+    salesforce_sync,
     locations,
     meetings,
     medical_screening,
@@ -148,6 +149,11 @@ api_router.include_router(
 api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
 api_router.include_router(
     integrations.router, prefix="/integrations", tags=["integrations"]
+)
+api_router.include_router(
+    salesforce_sync.router,
+    prefix="/integrations/salesforce",
+    tags=["salesforce-sync"],
 )
 api_router.include_router(
     scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"]

@@ -88,6 +88,15 @@ async def test_integration_connection(integration: Integration) -> str:
         service = OutlookCalendarService(creds)
         return await service.test_connection()
 
+    if itype == "salesforce":
+        from app.services.integration_services.salesforce_service import (
+            SalesforceService,
+        )
+
+        creds = _get_salesforce_credentials(integration)
+        service = SalesforceService(creds)
+        return await service.test_connection()
+
     if itype == "ical":
         return "iCal feeds are read-only — no connection test needed"
 
@@ -101,6 +110,21 @@ def _get_calendar_credentials(integration: Integration) -> dict[str, Any]:
     """Extract calendar credentials from encrypted storage."""
     creds: dict[str, Any] = {}
     for key in ("refresh_token", "client_id", "client_secret", "tenant_id", "token"):
+        val = integration.get_secret(key)
+        if val:
+            creds[key] = val
+    return creds
+
+
+def _get_salesforce_credentials(integration: Integration) -> dict[str, Any]:
+    """Extract Salesforce OAuth credentials from encrypted storage."""
+    config = integration.config or {}
+    creds: dict[str, Any] = {
+        "instance_url": config.get("instance_url", ""),
+        "api_version": config.get("api_version", "v62.0"),
+        "environment": config.get("environment", "production"),
+    }
+    for key in ("client_id", "client_secret", "refresh_token", "access_token"):
         val = integration.get_secret(key)
         if val:
             creds[key] = val

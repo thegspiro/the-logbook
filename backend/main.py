@@ -25,6 +25,7 @@ from slowapi.util import get_remote_address
 from app.api.public.display import router as public_display_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.portal import router as public_portal_router
+from app.api.public.salesforce_webhook import router as sf_webhook_router
 from app.api.v1.api import api_router
 from app.core.cache import cache_manager
 from app.core.config import settings
@@ -2028,6 +2029,8 @@ app.include_router(public_forms_router, prefix="/api")
 
 # Include public display API (no auth required - uses /api/public/v1/display)
 app.include_router(public_display_router, prefix="/api")
+
+app.include_router(sf_webhook_router, prefix="/api")
 
 
 # Health check endpoint

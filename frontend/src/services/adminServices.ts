@@ -644,6 +644,29 @@ export interface TestConnectionResult {
   message: string;
 }
 
+export interface SalesforceSyncStatus {
+  connected: boolean;
+  last_sync_at: string | null;
+  sync_direction: string;
+  sync_types: string[];
+  environment: string;
+  field_mappings: Record<string, Record<string, string>>;
+}
+
+export interface SalesforceSyncResult {
+  success: boolean;
+  message: string;
+  created: number;
+  updated: number;
+  failed: number;
+}
+
+export interface SalesforcePullResult {
+  success: boolean;
+  contacts: Record<string, unknown>[];
+  count: number;
+}
+
 export const integrationsService = {
   async getIntegrations(): Promise<IntegrationConfig[]> {
     const response = await api.get<IntegrationConfig[]>('/integrations');
@@ -671,6 +694,31 @@ export const integrationsService = {
 
   async testConnection(integrationId: string): Promise<TestConnectionResult> {
     const response = await api.post<TestConnectionResult>(`/integrations/${integrationId}/test-connection`);
+    return response.data;
+  },
+
+  async salesforceSyncStatus(): Promise<SalesforceSyncStatus> {
+    const response = await api.get<SalesforceSyncStatus>('/integrations/salesforce/status');
+    return response.data;
+  },
+
+  async salesforcePushMembers(): Promise<SalesforceSyncResult> {
+    const response = await api.post<SalesforceSyncResult>('/integrations/salesforce/push/members');
+    return response.data;
+  },
+
+  async salesforcePushTraining(): Promise<SalesforceSyncResult> {
+    const response = await api.post<SalesforceSyncResult>('/integrations/salesforce/push/training');
+    return response.data;
+  },
+
+  async salesforcePushEvents(): Promise<SalesforceSyncResult> {
+    const response = await api.post<SalesforceSyncResult>('/integrations/salesforce/push/events');
+    return response.data;
+  },
+
+  async salesforcePullContacts(): Promise<SalesforcePullResult> {
+    const response = await api.post<SalesforcePullResult>('/integrations/salesforce/pull/contacts');
     return response.data;
   },
 };
