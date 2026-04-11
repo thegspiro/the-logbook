@@ -19,7 +19,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import type { ApplicantListItem, ApplicantStatus } from '../types';
+import type { ApplicantListItem } from '../types';
+import { APPLICANT_STATUS_COLORS, APPLICANT_STATUS_LABELS } from '../constants';
 import { getInitials } from '../utils';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -39,14 +40,6 @@ interface PipelineTableProps {
   onToggleAll?: (() => void) | undefined;
 }
 
-const STATUS_BADGES: Record<ApplicantStatus, { label: string; className: string }> = {
-  active: { label: 'Active', className: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' },
-  on_hold: { label: 'On Hold', className: 'bg-amber-500/20 text-amber-700 dark:text-amber-400' },
-  withdrawn: { label: 'Withdrawn', className: 'bg-theme-surface-hover text-theme-text-muted' },
-  converted: { label: 'Converted', className: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' },
-  rejected: { label: 'Rejected', className: 'bg-red-500/20 text-red-700 dark:text-red-400' },
-  inactive: { label: 'Inactive', className: 'bg-theme-surface-hover text-theme-text-muted' },
-};
 
 type SortField = 'name' | 'email' | 'current_stage_name' | 'status' | 'days_in_stage' | 'target_membership_type' | 'created_at';
 
@@ -284,7 +277,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                 </tr>
               ) : (
                 sortedApplicants.map((applicant) => {
-                  const statusBadge = STATUS_BADGES[applicant.status];
+                  const statusColor = APPLICANT_STATUS_COLORS[applicant.status];
+                  const statusLabel = APPLICANT_STATUS_LABELS[applicant.status];
                   const isSelected = selected.has(applicant.id);
 
                   return (
@@ -335,8 +329,8 @@ export const PipelineTable: React.FC<PipelineTableProps> = ({
                         className="p-3"
                         onClick={() => onApplicantClick(applicant)}
                       >
-                        <span className={`inline-block text-xs px-2 py-0.5 rounded-sm ${statusBadge.className}`}>
-                          {statusBadge.label}
+                        <span className={`inline-block text-xs px-2 py-0.5 rounded-sm ${statusColor}`}>
+                          {statusLabel}
                         </span>
                       </td>
                       <td

@@ -550,6 +550,69 @@ class MembershipPipelineService:
 
         return prospects, total
 
+    @staticmethod
+    def enrich_prospect_list_item(
+        prospect: ProspectiveMember, now: datetime
+    ) -> Dict[str, Any]:
+        """Compute derived fields for a prospect list response.
+
+        Returns a dict with stage_entered_at, days_in_stage,
+        days_in_pipeline, days_since_activity, inactivity_alert_level,
+        and inactivity_timeout_days.  Called by the list_prospects
+        endpoint to keep business logic out of the endpoint layer.
+        """
+        def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+            if dt is not None and dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+
+        stage_entered_at = None
+        if prospect.current_step_id and prospect.step_progress:
+            for sp in prospect.step_progress:
+                if sp.step_id == prospect.current_step_id:
+                    stage_entered_at = sp.created_at
+                    break
+        if stage_entered_at is None:
+            stage_entered_at = prospect.created_at
+
+        stage_entered_at = _ensure_utc(stage_entered_at)
+        p_created_at = _ensure_utc(prospect.created_at)
+        p_updated_at = _ensure_utc(prospect.updated_at)
+
+        days_in_stage = (
+            (now - stage_entered_at).days if stage_entered_at else 0
+        )
+        days_in_pipeline = (
+            (now - p_created_at).days if p_created_at else 0
+        )
+        last_activity = p_updated_at or p_created_at
+        days_since_activity = (
+            (now - last_activity).days if last_activity else 0
+        )
+
+        timeout_days = (
+            prospect.current_step.inactivity_timeout_days
+            if prospect.current_step
+            and prospect.current_step.inactivity_timeout_days
+            else None
+        )
+        inactivity_alert_level = "normal"
+        if timeout_days and days_in_stage > 0:
+            if days_in_stage >= timeout_days:
+                inactivity_alert_level = "critical"
+            elif days_in_stage >= timeout_days * 0.75:
+                inactivity_alert_level = "warning"
+
+        return {
+            "stage_entered_at": stage_entered_at,
+            "days_in_stage": days_in_stage,
+            "days_in_pipeline": days_in_pipeline,
+            "days_since_activity": days_since_activity,
+            "last_activity": last_activity,
+            "inactivity_alert_level": inactivity_alert_level,
+            "inactivity_timeout_days": timeout_days,
+        }
+
     async def get_prospect(
         self, prospect_id: str, organization_id: str
     ) -> Optional[ProspectiveMember]:
@@ -2490,6 +2553,49 @@ class MembershipPipelineService:
     _FIELD_TYPE_MAP: Dict[str, str] = _SHARED_FIELD_TYPE_MAP
     _REQUIRED_PROSPECT_FIELDS: set[str] = _SHARED_REQUIRED_FIELDS
 
+    @classmethod
+    def _map_form_fields(
+        cls, fields: List[Any]
+    ) -> tuple[Dict[str, Dict[str, str]], set[str]]:
+        """Map form fields to prospect fields using label then field_type.
+
+        Returns (mapped, used_targets) where mapped is
+        {target: {field_id, label, method}} and used_targets is the set
+        of prospect field names that were successfully matched.
+        Shared by validate_form_for_pipeline and the legacy
+        FormIntegration repair path.
+        """
+        mapped: Dict[str, Dict[str, str]] = {}
+        used_targets: set[str] = set()
+
+        for field in fields:
+            normalised = field.label.strip().lower()
+            target = cls._LABEL_MAP.get(normalised)
+            if target and target not in used_targets:
+                mapped[target] = {
+                    "field_id": str(field.id),
+                    "label": field.label,
+                    "method": "label",
+                }
+                used_targets.add(target)
+
+        for field in fields:
+            if str(field.id) in {m["field_id"] for m in mapped.values()}:
+                continue
+            ft = field.field_type
+            if hasattr(ft, "value"):
+                ft = ft.value
+            target = cls._FIELD_TYPE_MAP.get(ft)
+            if target and target not in used_targets:
+                mapped[target] = {
+                    "field_id": str(field.id),
+                    "label": field.label,
+                    "method": "field_type",
+                }
+                used_targets.add(target)
+
+        return mapped, used_targets
+
     async def validate_form_for_pipeline(self, form_id: str) -> Dict[str, Any]:
         """Check whether a form's fields can be mapped to prospect data.
 
@@ -2516,38 +2622,7 @@ class MembershipPipelineService:
                 ],
             }
 
-        # Build mapping using the same logic as _ensure_membership_form_integration.
-        mapped: Dict[str, Dict[str, str]] = {}  # target -> {field_id, label, method}
-        used_targets: set[str] = set()
-
-        # Pass 1 — match by label.
-        for field in fields:
-            normalised = field.label.strip().lower()
-            target = self._LABEL_MAP.get(normalised)
-            if target and target not in used_targets:
-                mapped[target] = {
-                    "field_id": str(field.id),
-                    "label": field.label,
-                    "method": "label",
-                }
-                used_targets.add(target)
-
-        # Pass 2 — match by field_type.
-        for field in fields:
-            if str(field.id) in {m["field_id"] for m in mapped.values()}:
-                continue
-            ft = field.field_type
-            if hasattr(ft, "value"):
-                ft = ft.value
-            target = self._FIELD_TYPE_MAP.get(ft)
-            if target and target not in used_targets:
-                mapped[target] = {
-                    "field_id": str(field.id),
-                    "label": field.label,
-                    "method": "field_type",
-                }
-                used_targets.add(target)
-
+        mapped, used_targets = self._map_form_fields(fields)
         missing = sorted(self._REQUIRED_PROSPECT_FIELDS - used_targets)
         suggestions: list[str] = []
         if missing:
@@ -2636,26 +2711,10 @@ class MembershipPipelineService:
             )
             return
 
-        field_mappings: Dict[str, str] = {}
-        used_targets: set[str] = set()
-
-        for field in fields:
-            normalised = field.label.strip().lower()
-            target = self._LABEL_MAP.get(normalised)
-            if target and target not in used_targets:
-                field_mappings[str(field.id)] = target
-                used_targets.add(target)
-
-        for field in fields:
-            if str(field.id) in field_mappings:
-                continue
-            ft = field.field_type
-            if hasattr(ft, "value"):
-                ft = ft.value
-            target = self._FIELD_TYPE_MAP.get(ft)
-            if target and target not in used_targets:
-                field_mappings[str(field.id)] = target
-                used_targets.add(target)
+        mapped, used_targets = self._map_form_fields(fields)
+        field_mappings: Dict[str, str] = {
+            m["field_id"]: target for target, m in mapped.items()
+        }
 
         if not field_mappings:
             logger.warning(

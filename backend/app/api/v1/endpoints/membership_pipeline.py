@@ -682,44 +682,9 @@ async def list_prospects(
     now = datetime.now(timezone.utc)
     items = []
     for p in prospects:
-        # Find when the prospect entered their current step
-        stage_entered_at = None
-        if p.current_step_id and p.step_progress:
-            for sp in p.step_progress:
-                if sp.step_id == p.current_step_id:
-                    stage_entered_at = sp.created_at
-                    break
-        if stage_entered_at is None:
-            stage_entered_at = p.created_at
-
-        # Compute days metrics — ensure datetimes are tz-aware (DB may store naive UTC)
-        def _ensure_utc(dt: datetime | None) -> datetime | None:
-            if dt is not None and dt.tzinfo is None:
-                return dt.replace(tzinfo=timezone.utc)
-            return dt
-
-        stage_entered_at = _ensure_utc(stage_entered_at)
-        p_created_at = _ensure_utc(p.created_at)
-        p_updated_at = _ensure_utc(p.updated_at)
-
-        days_in_stage = (now - stage_entered_at).days if stage_entered_at else 0
-        days_in_pipeline = (now - p_created_at).days if p_created_at else 0
-        last_activity = p_updated_at or p_created_at
-        days_since_activity = (now - last_activity).days if last_activity else 0
-
-        # Determine inactivity alert level based on step timeout
-        timeout_days = (
-            p.current_step.inactivity_timeout_days
-            if p.current_step and p.current_step.inactivity_timeout_days
-            else None
+        enriched = MembershipPipelineService.enrich_prospect_list_item(
+            p, now
         )
-        inactivity_alert_level = "normal"
-        if timeout_days and days_in_stage > 0:
-            if days_in_stage >= timeout_days:
-                inactivity_alert_level = "critical"
-            elif days_in_stage >= timeout_days * 0.75:
-                inactivity_alert_level = "warning"
-
         items.append(
             ProspectListResponse(
                 id=p.id,
@@ -727,19 +692,33 @@ async def list_prospects(
                 last_name=p.last_name,
                 email=p.email,
                 phone=p.phone,
-                status=p.status.value if hasattr(p.status, "value") else p.status,
+                status=(
+                    p.status.value
+                    if hasattr(p.status, "value")
+                    else p.status
+                ),
                 pipeline_id=p.pipeline_id,
-                pipeline_name=p.pipeline.name if p.pipeline else None,
+                pipeline_name=(
+                    p.pipeline.name if p.pipeline else None
+                ),
                 current_step_id=p.current_step_id,
-                current_step_name=p.current_step.name if p.current_step else None,
+                current_step_name=(
+                    p.current_step.name
+                    if p.current_step
+                    else None
+                ),
                 created_at=p.created_at,
-                updated_at=last_activity,
-                stage_entered_at=stage_entered_at,
-                days_in_stage=days_in_stage,
-                days_in_pipeline=days_in_pipeline,
-                days_since_activity=days_since_activity,
-                inactivity_alert_level=inactivity_alert_level,
-                inactivity_timeout_days=timeout_days,
+                updated_at=enriched["last_activity"],
+                stage_entered_at=enriched["stage_entered_at"],
+                days_in_stage=enriched["days_in_stage"],
+                days_in_pipeline=enriched["days_in_pipeline"],
+                days_since_activity=enriched["days_since_activity"],
+                inactivity_alert_level=enriched[
+                    "inactivity_alert_level"
+                ],
+                inactivity_timeout_days=enriched[
+                    "inactivity_timeout_days"
+                ],
             )
         )
     return PaginatedProspectListResponse(
