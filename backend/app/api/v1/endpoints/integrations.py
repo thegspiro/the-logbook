@@ -125,6 +125,13 @@ INTEGRATION_CATALOG = [
         "contains_phi": True,
     },
     {
+        "integration_type": "salesforce",
+        "name": "Salesforce",
+        "description": "Sync department contacts, donors, and community engagement data with Salesforce CRM. Supports push, pull, or bidirectional sync of members, events, training records, and incidents.",
+        "category": "CRM",
+        "status": "available",
+    },
+    {
         "integration_type": "active911",
         "name": "Active911",
         "description": "Receive dispatch alerts and mapping from Active911 paging platform.",
@@ -269,7 +276,7 @@ def _extract_secrets(
 
 def _validate_urls_in_config(config: dict[str, Any]) -> None:
     """Validate any URL fields in config for SSRF protection."""
-    url_keys = {"url", "webhook_url", "api_url", "api_base_url"}
+    url_keys = {"url", "webhook_url", "api_url", "api_base_url", "instance_url"}
     for key in url_keys:
         if key in config and config[key]:
             try:

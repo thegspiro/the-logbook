@@ -26,6 +26,7 @@ import {
   Award,
   Activity,
   Send,
+  Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -107,6 +108,12 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     bgColor: 'bg-rose-500/10',
     features: ['NEMSIS 3.5', 'Response module', 'State EMS reporting'],
   },
+  'salesforce': {
+    icon: <Users className="w-6 h-6" />,
+    color: 'text-blue-700 dark:text-blue-400',
+    bgColor: 'bg-blue-500/10',
+    features: ['Contact sync', 'Donor management', 'Event push', 'Bidirectional sync'],
+  },
   'active911': {
     icon: <Radio className="w-6 h-6" />,
     color: 'text-red-700 dark:text-red-400',
@@ -181,16 +188,17 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   'Dispatch': <Radio className="w-3.5 h-3.5" />,
   'Automation': <Zap className="w-3.5 h-3.5" />,
   'Mapping': <MapPin className="w-3.5 h-3.5" />,
+  'CRM': <Users className="w-3.5 h-3.5" />,
 };
 
-type CategoryFilter = 'all' | 'Calendar' | 'Messaging' | 'Data' | 'Safety' | 'Reporting' | 'EMS' | 'Dispatch' | 'Automation' | 'Mapping';
+type CategoryFilter = 'all' | 'Calendar' | 'Messaging' | 'Data' | 'CRM' | 'Safety' | 'Reporting' | 'EMS' | 'Dispatch' | 'Automation' | 'Mapping';
 
-const ALL_CATEGORIES: CategoryFilter[] = ['all', 'Calendar', 'Messaging', 'Data', 'Safety', 'Reporting', 'EMS', 'Dispatch', 'Automation', 'Mapping'];
+const ALL_CATEGORIES: CategoryFilter[] = ['all', 'Calendar', 'Messaging', 'Data', 'CRM', 'Safety', 'Reporting', 'EMS', 'Dispatch', 'Automation', 'Mapping'];
 
 // Integration types that need webhook URL config
 const WEBHOOK_TYPES = new Set(['slack', 'discord', 'microsoft-teams']);
 // Integration types that need specific config forms
-const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import']);
+const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import', 'salesforce']);
 
 const inputClass = 'form-input';
 const labelClass = 'form-label';
@@ -216,6 +224,11 @@ const IntegrationsPage: React.FC = () => {
   const [genericWebhookUrl, setGenericWebhookUrl] = useState('');
   const [genericWebhookSecret, setGenericWebhookSecret] = useState('');
   const [importFormat, setImportFormat] = useState('csv');
+  const [sfInstanceUrl, setSfInstanceUrl] = useState('');
+  const [sfClientId, setSfClientId] = useState('');
+  const [sfClientSecret, setSfClientSecret] = useState('');
+  const [sfRefreshToken, setSfRefreshToken] = useState('');
+  const [sfSyncDirection, setSfSyncDirection] = useState('push');
 
   useEffect(() => {
     const loadIntegrations = async () => {
@@ -261,6 +274,11 @@ const IntegrationsPage: React.FC = () => {
     setGenericWebhookUrl('');
     setGenericWebhookSecret('');
     setImportFormat('csv');
+    setSfInstanceUrl('');
+    setSfClientId('');
+    setSfClientSecret('');
+    setSfRefreshToken('');
+    setSfSyncDirection('push');
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -278,6 +296,14 @@ const IntegrationsPage: React.FC = () => {
         return { url: genericWebhookUrl, secret: genericWebhookSecret };
       case 'epcr-import':
         return { import_format: importFormat };
+      case 'salesforce':
+        return {
+          instance_url: sfInstanceUrl,
+          client_id: sfClientId,
+          client_secret: sfClientSecret || undefined,
+          refresh_token: sfRefreshToken || undefined,
+          sync_direction: sfSyncDirection,
+        };
       default:
         return {};
     }
@@ -449,6 +475,80 @@ const IntegrationsPage: React.FC = () => {
                 </div>
               </div>
             )}
+          </div>
+        );
+
+      case 'salesforce':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="sf-instance-url" className={labelClass}>Salesforce Instance URL</label>
+              <input
+                id="sf-instance-url"
+                type="url"
+                value={sfInstanceUrl}
+                onChange={(e) => setSfInstanceUrl(e.target.value.trim())}
+                placeholder="https://yourorg.my.salesforce.com"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Your Salesforce org URL (e.g., https://yourorg.my.salesforce.com).
+              </p>
+            </div>
+            <div>
+              <label htmlFor="sf-client-id" className={labelClass}>Connected App Client ID</label>
+              <input
+                id="sf-client-id"
+                type="text"
+                value={sfClientId}
+                onChange={(e) => setSfClientId(e.target.value)}
+                placeholder="3MVG9..."
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="sf-client-secret" className={labelClass}>Client Secret</label>
+              <input
+                id="sf-client-secret"
+                type="password"
+                value={sfClientSecret}
+                onChange={(e) => setSfClientSecret(e.target.value)}
+                placeholder="Connected App client secret"
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label htmlFor="sf-refresh-token" className={labelClass}>Refresh Token</label>
+              <input
+                id="sf-refresh-token"
+                type="password"
+                value={sfRefreshToken}
+                onChange={(e) => setSfRefreshToken(e.target.value)}
+                placeholder="OAuth refresh token"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Obtain a refresh token by completing the OAuth flow in your Salesforce Connected App.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="sf-sync-direction" className={labelClass}>Sync Direction</label>
+              <select
+                id="sf-sync-direction"
+                value={sfSyncDirection}
+                onChange={(e) => setSfSyncDirection(e.target.value)}
+                className={inputClass}
+              >
+                <option value="push">Push (Logbook &rarr; Salesforce)</option>
+                <option value="pull">Pull (Salesforce &rarr; Logbook)</option>
+                <option value="both">Bidirectional</option>
+              </select>
+            </div>
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+              <p className="text-blue-700 dark:text-blue-400 text-xs">
+                Create a Connected App in Salesforce Setup &rarr; App Manager with the &quot;Full access (full)&quot; OAuth scope. Enable the refresh token grant flow.
+              </p>
+            </div>
           </div>
         );
 
