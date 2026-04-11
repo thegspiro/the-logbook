@@ -72,7 +72,7 @@ export const ConversionModal: React.FC<ConversionModalProps> = ({
   useEffect(() => {
     if (applicant && isOpen) {
       setStep(1);
-      setMembershipType(applicant.target_membership_type ?? 'regular');
+      setMembershipType(applicant.target_membership_type || 'regular');
       setRank('');
       setStation('');
       setMiddleName('');

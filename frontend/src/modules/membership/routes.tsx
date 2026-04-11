@@ -29,46 +29,14 @@ import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
 // Lazy-loaded pages
 const Members = lazyWithRetry(() => import("../../pages/Members"));
-const MemberProfilePage = lazyWithRetry(() =>
-  import("../../pages/MemberProfilePage").then((m) => ({
-    default: m.MemberProfilePage,
-  })),
-);
-const MemberTrainingHistoryPage = lazyWithRetry(() =>
-  import("../../pages/MemberTrainingHistoryPage").then((m) => ({
-    default: m.MemberTrainingHistoryPage,
-  })),
-);
-const MembersAdminHub = lazyWithRetry(() =>
-  import("../../pages/MembersAdminHub").then((m) => ({
-    default: m.MembersAdminHub,
-  })),
-);
-const MemberAdminEditPage = lazyWithRetry(() =>
-  import("../../pages/MemberAdminEditPage").then((m) => ({
-    default: m.MemberAdminEditPage,
-  })),
-);
-const MemberAuditHistoryPage = lazyWithRetry(() =>
-  import("../../pages/MemberAuditHistoryPage").then((m) => ({
-    default: m.MemberAuditHistoryPage,
-  })),
-);
-const MemberIdCardPage = lazyWithRetry(() =>
-  import("../../pages/MemberIdCardPage").then((m) => ({
-    default: m.MemberIdCardPage,
-  })),
-);
-const MemberScanPage = lazyWithRetry(() =>
-  import("../../pages/MemberScanPage").then((m) => ({
-    default: m.MemberScanPage,
-  })),
-);
-const WaiverManagementPage = lazyWithRetry(() =>
-  import("../../pages/WaiverManagementPage").then((m) => ({
-    default: m.WaiverManagementPage,
-  })),
-);
+const MemberProfilePage = lazyWithRetry(() => import("../../pages/MemberProfilePage"));
+const MemberTrainingHistoryPage = lazyWithRetry(() => import("../../pages/MemberTrainingHistoryPage"));
+const MembersAdminHub = lazyWithRetry(() => import("../../pages/MembersAdminHub"));
+const MemberAdminEditPage = lazyWithRetry(() => import("../../pages/MemberAdminEditPage"));
+const MemberAuditHistoryPage = lazyWithRetry(() => import("../../pages/MemberAuditHistoryPage"));
+const MemberIdCardPage = lazyWithRetry(() => import("../../pages/MemberIdCardPage"));
+const MemberScanPage = lazyWithRetry(() => import("../../pages/MemberScanPage"));
+const WaiverManagementPage = lazyWithRetry(() => import("../../pages/WaiverManagementPage"));
 
 export const getMembershipRoutes = () => {
   return (

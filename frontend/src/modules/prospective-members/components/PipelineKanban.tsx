@@ -6,26 +6,14 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import {
-  FileText,
-  Upload,
-  Vote,
-  CheckCircle,
-  Users,
-  CalendarCheck,
-  Globe,
-  Mail,
-  UserCheck,
-  ClipboardList,
-  MessageSquare,
-  Stethoscope,
-} from 'lucide-react';
+import { Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
   PipelineStage,
   ApplicantListItem,
   StageType,
 } from '../types';
+import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { ApplicantCard } from './ApplicantCard';
 import { ApplicantStatus as ApplicantStatusEnum } from '../../../constants/enums';
@@ -38,20 +26,6 @@ interface PipelineKanbanProps {
   onToggleSelect?: ((id: string) => void) | undefined;
 }
 
-const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
-  form_submission: FileText,
-  document_upload: Upload,
-  election_vote: Vote,
-  manual_approval: CheckCircle,
-  meeting: CalendarCheck,
-  status_page_toggle: Globe,
-  automated_email: Mail,
-  reference_check: UserCheck,
-  checklist: ClipboardList,
-  interview_requirement: MessageSquare,
-  multi_approval: Users,
-  medical_screening: Stethoscope,
-};
 
 const STAGE_HEADER_COLORS: Record<StageType, string> = {
   form_submission: 'border-blue-500',

@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -1517,9 +1518,17 @@ class MembershipPipelineService:
                 "program_name": program.name,
             }
 
-        except Exception as e:
-            logger.error(f"Auto-enrollment failed for user {user_id}: {e}")
+        except ValueError as e:
+            logger.warning(
+                f"Auto-enrollment skipped for user {user_id}: {e}"
+            )
             return None
+        except Exception as e:
+            logger.error(
+                f"Auto-enrollment failed for user {user_id}: {e}",
+                exc_info=True,
+            )
+            raise
 
     @staticmethod
     def _is_email_step(step: MembershipPipelineStep) -> bool:
@@ -1968,8 +1977,9 @@ class MembershipPipelineService:
         base = f"{first[0]}{last}"
         candidate = base
 
+        max_attempts = 1000
         suffix = 0
-        while True:
+        for _ in range(max_attempts):
             result = await self.db.execute(
                 select(func.count())
                 .select_from(User)
@@ -1983,6 +1993,11 @@ class MembershipPipelineService:
                 return candidate
             suffix += 1
             candidate = f"{base}{suffix}"
+
+        raise ValueError(
+            f"Cannot generate unique username after {max_attempts} attempts "
+            f"(base='{base}')"
+        )
 
     async def _generate_department_email(
         self,
@@ -2692,7 +2707,7 @@ class MembershipPipelineService:
         self.db.add(integration)
         try:
             await self.db.commit()
-        except Exception:
+        except IntegrityError:
             # A concurrent call may have created the integration between our
             # existence check and this INSERT (the unique constraint on
             # (form_id, target_module) prevents duplicates).  Roll back and
@@ -2900,10 +2915,13 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
-        # Validate file_path: must be under the expected uploads directory
-        # and must not contain path traversal sequences.
-        normalized = os.path.normpath(file_path)
-        if ".." in normalized or not normalized.startswith("/uploads/"):
+        # Validate file_path: must resolve to a location under /uploads/
+        # to prevent path traversal via symlinks or unicode tricks.
+        from pathlib import Path
+
+        base_dir = Path("/uploads/").resolve()
+        resolved = Path(file_path).resolve()
+        if not str(resolved).startswith(str(base_dir) + os.sep) and resolved != base_dir:
             raise ValueError(
                 "Invalid file_path: must be under /uploads/ and may not contain path traversal"
             )
@@ -2917,7 +2935,7 @@ class MembershipPipelineService:
             step_id=step_id,
             document_type=document_type,
             file_name=safe_file_name,
-            file_path=normalized,
+            file_path=str(resolved),
             file_size=file_size,
             mime_type=mime_type,
             uploaded_by=uploaded_by,
@@ -3687,7 +3705,12 @@ class MembershipPipelineService:
             )
 
         # Re-fetch to get relationships loaded
-        return await self.get_interview(interview.id, organization_id)  # type: ignore[return-value]
+        interview_loaded = await self.get_interview(interview.id, organization_id)
+        if interview_loaded is None:
+            raise ValueError(
+                f"Failed to re-fetch interview {interview.id} immediately after creation"
+            )
+        return interview_loaded
 
     async def update_interview(
         self,

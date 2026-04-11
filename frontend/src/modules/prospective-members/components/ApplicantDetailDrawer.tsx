@@ -21,7 +21,6 @@ import {
   XCircle,
   Play,
   FileText,
-  Upload,
   Vote,
   CheckCircle,
   Clock,
@@ -36,25 +35,20 @@ import {
   Activity,
   Pencil,
   Save,
-  CalendarCheck,
-  Globe,
   ClipboardList,
   Link2,
   Trash2,
   CalendarPlus,
   Search,
-  UserCheck,
-  Users,
-  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type {
   Applicant,
   ProspectEventLink,
-  StageType,
   StageHistoryEntry,
 } from '../types';
 import { isSafeUrl, getInitials } from '../utils';
+import { STAGE_TYPE_ICONS } from '../constants';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService, eventLinkService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -118,21 +112,6 @@ interface ApplicantDetailDrawerProps {
   isLastStage: boolean;
   isFirstStage: boolean;
 }
-
-const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
-  form_submission: FileText,
-  document_upload: Upload,
-  election_vote: Vote,
-  manual_approval: CheckCircle,
-  meeting: CalendarCheck,
-  status_page_toggle: Globe,
-  automated_email: Mail,
-  reference_check: UserCheck,
-  checklist: ClipboardList,
-  interview_requirement: MessageSquare,
-  multi_approval: Users,
-  medical_screening: Stethoscope,
-};
 
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   applicant,
@@ -230,12 +209,12 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
       first_name: applicant.first_name,
       last_name: applicant.last_name,
       email: applicant.email,
-      phone: applicant.phone ?? '',
-      date_of_birth: applicant.date_of_birth ?? '',
-      address_street: applicant.address?.street ?? '',
-      address_city: applicant.address?.city ?? '',
-      address_state: applicant.address?.state ?? '',
-      address_zip: applicant.address?.zip_code ?? '',
+      phone: applicant.phone || '',
+      date_of_birth: applicant.date_of_birth || '',
+      address_street: applicant.address?.street || '',
+      address_city: applicant.address?.city || '',
+      address_state: applicant.address?.state || '',
+      address_zip: applicant.address?.zip_code || '',
     });
     setIsEditingContact(true);
   };

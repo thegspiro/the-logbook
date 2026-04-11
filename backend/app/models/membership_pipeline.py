@@ -121,7 +121,7 @@ class MembershipPipeline(Base):
     public_status_enabled = Column(Boolean, default=False)
     report_stage_groups = Column(JSON, default=list)
 
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(String(36), ForeignKey("users.id"), index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -186,6 +186,7 @@ class MembershipPipelineStep(Base):
         String(36),
         ForeignKey("email_templates.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     required = Column(Boolean, default=True)
     config = Column(JSON, default=dict)
@@ -456,7 +457,8 @@ class ProspectDocument(Base):
     mime_type = Column(String(100))
 
     uploaded_by = Column(
-        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+        index=True,
     )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

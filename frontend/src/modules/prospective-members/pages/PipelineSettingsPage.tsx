@@ -29,21 +29,12 @@ import {
   CheckCircle2,
   XCircle,
   ArrowRight,
-  FileText,
-  Upload,
-  Vote,
-  CheckCircle,
-  CalendarCheck,
   Globe,
-  Mail,
   BarChart3,
-  UserCheck,
-  ClipboardList,
-  MessageSquare,
-  Stethoscope,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
+import { STAGE_TYPE_ICONS } from '../constants';
 import { pipelineService } from '../services/api';
 import { PipelineBuilder } from '../components/PipelineBuilder';
 import { ReportStageGroupsEditor } from '../components/ReportStageGroupsEditor';
@@ -61,21 +52,6 @@ import {
   TIMEOUT_PRESET_LABELS,
 } from '../types';
 import { getEffectiveTimeoutDays } from '../utils';
-
-const STAGE_TYPE_ICONS: Record<StageType, React.ElementType> = {
-  form_submission: FileText,
-  document_upload: Upload,
-  election_vote: Vote,
-  manual_approval: CheckCircle,
-  meeting: CalendarCheck,
-  status_page_toggle: Globe,
-  automated_email: Mail,
-  reference_check: UserCheck,
-  checklist: ClipboardList,
-  interview_requirement: MessageSquare,
-  multi_approval: Users,
-  medical_screening: Stethoscope,
-};
 
 const STAGE_TYPE_COLORS: Record<StageType, string> = {
   form_submission: 'text-blue-600 dark:text-blue-400 bg-blue-500/10',

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
@@ -358,6 +359,19 @@ async def validate_form_for_pipeline(
 
     **Requires permission: prospective_members.manage**
     """
+    from app.models.forms import Form
+
+    form_result = await db.execute(
+        select(Form).where(
+            Form.id == str(form_id),
+            Form.organization_id == current_user.organization_id,
+        )
+    )
+    if not form_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Form not found"
+        )
+
     service = MembershipPipelineService(db)
     return await service.validate_form_for_pipeline(str(form_id))
 
