@@ -406,6 +406,78 @@ async def perform_sync_task(
             logger.exception(f"Background sync failed for provider {provider_id}: {e}")
 
 
+@router.post("/providers/{provider_id}/sync-categories")
+async def sync_categories(
+    provider_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Fetch the full training category catalog from Vector Solutions and
+    create mapping records for each one.  Categories that already exist
+    as mappings are left untouched; new categories are auto-mapped by
+    name when a matching Logbook training category exists.
+
+    Run this before the first training-record sync so that category
+    mappings are ready and records land in the right buckets.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    result = await db.execute(
+        select(ExternalTrainingProvider)
+        .where(ExternalTrainingProvider.id == str(provider_id))
+        .where(
+            ExternalTrainingProvider.organization_id
+            == str(current_user.organization_id)
+        )
+    )
+    provider = result.scalar_one_or_none()
+    if not provider:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider not found",
+        )
+
+    from app.services.external_training_service import ExternalTrainingSyncService
+
+    sync_service = ExternalTrainingSyncService(db)
+    try:
+        counts = await sync_service.sync_vector_solutions_categories(provider)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to fetch categories: {e}",
+        )
+    finally:
+        await sync_service.close()
+
+    await db.commit()
+
+    await log_audit_event(
+        db,
+        "external_training.categories_synced",
+        "training",
+        "info",
+        {
+            "user_id": current_user.id,
+            "organization_id": str(current_user.organization_id),
+            "provider_id": str(provider_id),
+            "created": counts["created"],
+            "existing": counts["existing"],
+        },
+    )
+
+    return {
+        "success": True,
+        "message": (
+            f"Fetched categories: {counts['created']} new, "
+            f"{counts['existing']} already mapped"
+        ),
+        **counts,
+    }
+
+
 @router.post("/providers/{provider_id}/sync", response_model=SyncResponse)
 async def trigger_sync(
     provider_id: UUID,

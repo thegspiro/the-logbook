@@ -355,6 +355,16 @@ export const externalTrainingService = {
     return response.data;
   },
 
+  /**
+   * Fetch training categories from the external provider and create mappings
+   */
+  async syncCategories(providerId: string): Promise<{ success: boolean; message: string; created: number; existing: number }> {
+    const response = await api.post<{ success: boolean; message: string; created: number; existing: number }>(
+      `/training/external/providers/${providerId}/sync-categories`
+    );
+    return response.data;
+  },
+
   // ==================== Category Mappings ====================
 
   /**

@@ -368,22 +368,26 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
 interface ProviderCardProps {
   provider: ExternalTrainingProvider;
   onTestConnection: (id: string) => void;
+  onSyncCategories: (id: string) => void;
   onSync: (id: string) => void;
   onEdit: (provider: ExternalTrainingProvider) => void;
   onDelete: (id: string) => void;
   onViewMappings: (id: string) => void;
   isTestingConnection: boolean;
+  isSyncingCategories: boolean;
   isSyncing: boolean;
 }
 
 const ProviderCard: React.FC<ProviderCardProps> = ({
   provider,
   onTestConnection,
+  onSyncCategories,
   onSync,
   onEdit,
   onDelete,
   onViewMappings,
   isTestingConnection,
+  isSyncingCategories,
   isSyncing,
 }) => {
   const tz = useTimezone();
@@ -470,6 +474,18 @@ const ProviderCard: React.FC<ProviderCardProps> = ({
             <CheckCircle className="w-4 h-4" aria-hidden="true" />
           )}
           Test
+        </button>
+        <button
+          onClick={() => onSyncCategories(provider.id)}
+          disabled={isSyncingCategories}
+          className="flex items-center gap-2 px-3 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary text-sm rounded-lg"
+        >
+          {isSyncingCategories ? (
+            <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <FolderTree className="w-4 h-4" aria-hidden="true" />
+          )}
+          Fetch Categories
         </button>
         <button
           onClick={() => onSync(provider.id)}
@@ -992,6 +1008,20 @@ const ExternalTrainingPage: React.FC = () => {
     }
   };
 
+  const [syncingCategoriesProvider, setSyncingCategoriesProvider] = useState<string | null>(null);
+
+  const handleSyncCategories = async (providerId: string) => {
+    setSyncingCategoriesProvider(providerId);
+    try {
+      const result = await externalTrainingService.syncCategories(providerId);
+      toast.success(result.message || 'Categories fetched successfully');
+    } catch (err: unknown) {
+      toast.error(`Category sync failed: ${getErrorMessage(err)}`);
+    } finally {
+      setSyncingCategoriesProvider(null);
+    }
+  };
+
   const handleSync = async (providerId: string) => {
     setSyncingProvider(providerId);
     try {
@@ -1124,11 +1154,13 @@ const ExternalTrainingPage: React.FC = () => {
                   key={provider.id}
                   provider={provider}
                   onTestConnection={(id) => { void handleTestConnection(id); }}
+                  onSyncCategories={(id) => { void handleSyncCategories(id); }}
                   onSync={(id) => { void handleSync(id); }}
                   onEdit={handleEdit}
                   onDelete={(id) => { void handleDelete(id); }}
                   onViewMappings={handleViewMappings}
                   isTestingConnection={testingProvider === provider.id}
+                  isSyncingCategories={syncingCategoriesProvider === provider.id}
                   isSyncing={syncingProvider === provider.id}
                 />
               ))

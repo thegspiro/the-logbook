@@ -448,6 +448,119 @@ class ExternalTrainingSyncService:
             await asyncio.sleep(wait)
         return response  # type: ignore[possibly-undefined]
 
+    async def fetch_vector_solutions_categories(
+        self,
+        provider: ExternalTrainingProvider,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch the full training category catalog from Vector Solutions.
+
+        Calls GET /sites/{siteId}/categories to retrieve all categories
+        so they can be mapped to Logbook training categories before
+        syncing records.
+
+        Returns:
+            List of dicts with external_category_id and external_category_name.
+        """
+        headers = self._get_auth_headers(provider)
+        site_id = self._get_vector_site_id(provider)
+        url = f"{provider.api_base_url.rstrip('/')}/sites/{site_id}/categories"
+
+        response = await self._vs_request(
+            provider, "GET", url, headers=headers
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        raw_categories = (
+            data
+            if isinstance(data, list)
+            else data.get(
+                "categories", data.get("data", data.get("records", []))
+            )
+        )
+
+        categories: List[Dict[str, Any]] = []
+        for cat in raw_categories:
+            cat_id = str(
+                cat.get("id", cat.get("categoryId", cat.get("catId", "")))
+            )
+            cat_name = cat.get(
+                "name", cat.get("categoryName", cat.get("title", ""))
+            )
+            if not cat_id:
+                continue
+            categories.append({
+                "external_category_id": cat_id,
+                "external_category_name": cat_name,
+                "description": cat.get("description", ""),
+                "parent_id": str(
+                    cat.get("parentCategoryId", cat.get("parentId", ""))
+                ) or None,
+            })
+
+        return categories
+
+    async def sync_vector_solutions_categories(
+        self,
+        provider: ExternalTrainingProvider,
+    ) -> Dict[str, int]:
+        """
+        Fetch categories from Vector Solutions and create/update mappings.
+
+        Returns counts of new and existing mappings.
+        """
+        categories = await self.fetch_vector_solutions_categories(provider)
+
+        created = 0
+        existing = 0
+        for cat in categories:
+            ext_id = cat["external_category_id"]
+            result = await self.db.execute(
+                select(ExternalCategoryMapping)
+                .where(ExternalCategoryMapping.provider_id == provider.id)
+                .where(
+                    ExternalCategoryMapping.external_category_id == ext_id
+                )
+            )
+            mapping = result.scalar_one_or_none()
+            if mapping:
+                # Update name if it changed
+                if mapping.external_category_name != cat["external_category_name"]:
+                    mapping.external_category_name = cat["external_category_name"]
+                existing += 1
+            else:
+                new_mapping = ExternalCategoryMapping(
+                    provider_id=provider.id,
+                    organization_id=provider.organization_id,
+                    external_category_id=ext_id,
+                    external_category_name=cat["external_category_name"],
+                    is_mapped=False,
+                )
+                self.db.add(new_mapping)
+
+                # Try auto-mapping by name match
+                cat_result = await self.db.execute(
+                    select(TrainingCategory)
+                    .where(
+                        TrainingCategory.organization_id
+                        == provider.organization_id
+                    )
+                    .where(
+                        TrainingCategory.name == cat["external_category_name"]
+                    )
+                )
+                internal_cat = cat_result.scalar_one_or_none()
+                if internal_cat:
+                    new_mapping.internal_category_id = internal_cat.id
+                    new_mapping.is_mapped = True
+                    new_mapping.auto_mapped = True
+
+                created += 1
+
+        await self.db.flush()
+        return {"created": created, "existing": existing}
+
     async def _fetch_vector_solutions_records(
         self,
         provider: ExternalTrainingProvider,
@@ -460,7 +573,7 @@ class ExternalTrainingSyncService:
         API details:
         - Auth: AccessToken header
         - Endpoints are site-scoped: /sites/{siteId}/...
-        - Pagination: startrow & limit params (max 1000 per page)
+        - Pagination: startrow & count params (max 1000 per page)
         - Date filtering via query params
         - Response is JSON
         """
