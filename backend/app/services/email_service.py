@@ -547,7 +547,7 @@ class EmailService:
             except Exception:
                 pass
         succeeded = sum(1 for r in results if r)
-        logger.info("Batch send complete: %d/%d succeeded", succeeded, len(results))
+        logger.info("Batch send complete: {}/{} succeeded", succeeded, len(results))
         return results
 
     def build_message(
@@ -616,7 +616,7 @@ class EmailService:
             .get("email_service", {})
             .get("enabled")
         ):
-            logger.info("Email disabled. Would batch-send %d messages.", len(messages))
+            logger.info("Email disabled. Would batch-send {} messages.", len(messages))
             return [False] * len(messages)
         return await asyncio.to_thread(self._smtp_send_batch, messages)
 
