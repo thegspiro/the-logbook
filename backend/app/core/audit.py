@@ -6,6 +6,7 @@ with cryptographic integrity verification.
 """
 
 import hashlib
+import json
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -28,10 +29,12 @@ class AuditLogger:
         if isinstance(ts, str):
             return ts
         if isinstance(ts, datetime):
-            # Always produce UTC with +00:00 suffix for consistency
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=UTC)
-            return ts.astimezone(UTC).isoformat()
+            # timespec='microseconds' always emits 6 decimal places so the
+            # output is identical whether or not MySQL preserved fractional
+            # seconds (TIMESTAMP without fsp truncates to whole seconds).
+            return ts.astimezone(UTC).isoformat(timespec="microseconds")
         return str(ts)
 
     @staticmethod
@@ -42,7 +45,13 @@ class AuditLogger:
         Creates a deterministic hash from log entry data and previous hash,
         forming a blockchain-inspired chain.
         """
-        # Create deterministic string from log data
+        # json.dumps with sort_keys produces identical output regardless of
+        # Python dict insertion order or MySQL JSON key reordering.
+        event_data = log_data.get("event_data", {})
+        event_data_str = json.dumps(
+            event_data, sort_keys=True, default=str
+        )
+
         data_string = "|".join(
             [
                 str(log_data.get("timestamp", "")),
@@ -50,7 +59,7 @@ class AuditLogger:
                 str(log_data.get("event_type", "")),
                 str(log_data.get("user_id", "")),
                 str(log_data.get("ip_address", "")),
-                str(log_data.get("event_data", {})),
+                event_data_str,
                 previous_hash,
             ]
         )

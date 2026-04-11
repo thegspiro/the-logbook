@@ -514,11 +514,11 @@ class EmailService:
                         server.sendmail(from_email, recipients, msg_str)
                         results.append(True)
                     except Exception as e2:
-                        logger.error("Batch email retry failed: %s", e2)
+                        logger.error("Batch email retry failed: {}", e2)
                         results.append(False)
                 except smtplib.SMTPResponseException as e:
                     logger.error(
-                        "Batch email rejected (code=%s): %s", e.smtp_code, e.smtp_error
+                        "Batch email rejected (code={}): {}", e.smtp_code, e.smtp_error
                     )
                     results.append(False)
                     # 421/451/452 = rate limit / too many connections
@@ -531,7 +531,7 @@ class EmailService:
                             pass
                         server = self._smtp_connect()
                 except Exception as e:
-                    logger.error("Batch email send failed: %s", e)
+                    logger.error("Batch email send failed: {}", e)
                     results.append(False)
 
                 # Brief pause between messages to avoid rate limiting
@@ -742,7 +742,7 @@ class EmailService:
                 results = [True]
             except Exception as e:
                 logger.error(
-                    "Failed to send email to %s: %s",
+                    "Failed to send email to {}: {}",
                     _redact_email(to_emails[0] if to_emails else "?"),
                     e,
                 )
@@ -776,7 +776,7 @@ class EmailService:
                     failure_count=failure_count,
                 )
             except Exception as e:
-                logger.warning("Failed to log message history: %s", e)
+                logger.warning("Failed to log message history: {}", e)
 
         return success_count, failure_count
 
