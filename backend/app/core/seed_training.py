@@ -100,30 +100,43 @@ DEFAULT_CATEGORIES = [
                 "description": "Pediatric emergency care",
                 "sort_order": 4,
             },
-            # Virginia NCCR areas (National Continued Competency Requirements)
+            # NREMT NCCR topic areas (National Continued Competency Requirements)
+            # registry_code links these categories to national standards so
+            # compliance checks can verify per-topic hour minimums.
             {
                 "name": "Airway, Respiration & Ventilation",
                 "code": "NCCR-AIRWAY",
+                "registry_code": "NCCR-AIRWAY",
                 "description": "NCCR Area 11/16: Airway management, respiration assessment, and ventilation techniques",
                 "sort_order": 5,
             },
             {
                 "name": "Cardiovascular",
                 "code": "NCCR-CARDIO",
+                "registry_code": "NCCR-CARDIO",
                 "description": "NCCR Area 12/17: Cardiovascular assessment, ECG interpretation, and cardiac emergencies",
                 "sort_order": 6,
             },
             {
+                "name": "Trauma",
+                "code": "NCCR-TRAUMA",
+                "registry_code": "NCCR-TRAUMA",
+                "description": "NCCR Area 13/18: Trauma assessment, hemorrhage control, and musculoskeletal injuries",
+                "sort_order": 7,
+            },
+            {
                 "name": "Medical",
                 "code": "NCCR-MEDICAL",
+                "registry_code": "NCCR-MEDICAL",
                 "description": "NCCR Area 14/19: Medical emergencies including toxicology, endocrine, and neurological",
-                "sort_order": 7,
+                "sort_order": 8,
             },
             {
                 "name": "Operations",
                 "code": "NCCR-OPS",
+                "registry_code": "NCCR-OPS",
                 "description": "NCCR Area 15/20: EMS operations, incident management, triage, and mass casualty",
-                "sort_order": 8,
+                "sort_order": 9,
             },
         ],
     },
@@ -558,6 +571,7 @@ async def seed_training_categories(
                     organization_id=organization_id,
                     name=sub_data["name"],
                     code=sub_data["code"],
+                    registry_code=sub_data.get("registry_code"),
                     description=sub_data["description"],
                     color=cat_data["color"],
                     icon=cat_data["icon"],
