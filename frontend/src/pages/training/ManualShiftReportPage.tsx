@@ -2,8 +2,8 @@
  * Manual Shift Report Page
  *
  * Standalone page for departments that don't use the scheduling module.
- * Allows officers to log shift hours, calls, and evaluations for crew
- * members without requiring a linked shift record.
+ * Officers select an apparatus, enter start/end datetimes, and the page
+ * auto-calculates shift hours (including shifts that span midnight).
  *
  * Only accessible when the scheduling module is disabled.
  */
@@ -11,12 +11,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  FileText, Loader2, Search,
-  User as UserIcon, X, Save, ChevronDown, ChevronUp,
+  FileText, Loader2, Search, User as UserIcon,
+  X, Save, ChevronDown, ChevronUp, AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
+import { schedulingService } from '../../modules/scheduling/services/api';
+import type { ApparatusOption } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
@@ -32,25 +34,24 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 
+/** Calculate hours between two datetime strings, handling midnight crossover. */
+function calculateHours(startDate: string, startTime: string, endDate: string, endTime: string): number {
+  if (!startDate || !startTime || !endDate || !endTime) return 0;
+  const start = new Date(`${startDate}T${startTime}`);
+  const end = new Date(`${endDate}T${endTime}`);
+  const diffMs = end.getTime() - start.getTime();
+  if (diffMs <= 0) return 0;
+  return Math.round((diffMs / 3_600_000) * 100) / 100;
+}
+
 const toggleCallType = (
-  setForm: React.Dispatch<React.SetStateAction<FormData>>,
+  setter: React.Dispatch<React.SetStateAction<string[]>>,
   type: string,
 ) => {
-  setForm(prev => ({
-    ...prev,
-    call_types: prev.call_types.includes(type)
-      ? prev.call_types.filter(t => t !== type)
-      : [...prev.call_types, type],
-  }));
+  setter(prev =>
+    prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type],
+  );
 };
-
-interface FormData {
-  shift_date: string;
-  hours_on_shift: number;
-  calls_responded: number;
-  call_types: string[];
-  officer_narrative: string;
-}
 
 interface CrewEntry {
   user_id: string;
@@ -62,31 +63,78 @@ export const ManualShiftReportPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
 
-  const [form, setForm] = useState<FormData>({
-    shift_date: getTodayLocalDate(tz),
-    hours_on_shift: 0,
-    calls_responded: 0,
-    call_types: [],
-    officer_narrative: '',
-  });
+  // Form state
+  const [apparatusId, setApparatusId] = useState('');
+  const [shiftDate, setShiftDate] = useState(getTodayLocalDate(tz));
+  const [startTime, setStartTime] = useState('');
+  const [endDate, setEndDate] = useState(getTodayLocalDate(tz));
+  const [endTime, setEndTime] = useState('');
+  const [callsResponded, setCallsResponded] = useState(0);
+  const [callTypes, setCallTypes] = useState<string[]>([]);
+  const [narrative, setNarrative] = useState('');
 
+  // Crew
   const [members, setMembers] = useState<User[]>([]);
   const [crew, setCrew] = useState<CrewEntry[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [memberSearch, setMemberSearch] = useState('');
-  const [config, setConfig] = useState<TrainingModuleConfig | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [savingDraft, setSavingDraft] = useState(false);
 
+  // Config & apparatus
+  const [config, setConfig] = useState<TrainingModuleConfig | null>(null);
+  const [apparatusOptions, setApparatusOptions] = useState<ApparatusOption[]>([]);
+  const [loadingApparatus, setLoadingApparatus] = useState(true);
+
+  // Evaluations
   const [traineeEvals, setTraineeEvals] = useState<Record<string, CrewMemberEvaluation>>({});
   const [expandedMemberId, setExpandedMemberId] = useState<string | null>(null);
 
+  // Submission
+  const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+
+  // Auto-calculated hours
+  const calculatedHours = useMemo(
+    () => calculateHours(shiftDate, startTime, endDate, endTime),
+    [shiftDate, startTime, endDate, endTime],
+  );
+
+  // Load config, members, apparatus
   useEffect(() => {
     userService.getUsers().then(setMembers).catch(() => {});
     trainingModuleConfigService.getConfig()
-      .then(setConfig)
+      .then(cfg => {
+        setConfig(cfg);
+        if (cfg.manual_entry_default_start_time) {
+          setStartTime(cfg.manual_entry_default_start_time);
+        }
+        if (cfg.manual_entry_default_duration_hours && cfg.manual_entry_default_start_time) {
+          const [h, m] = cfg.manual_entry_default_start_time.split(':').map(Number);
+          const startMinutes = (h ?? 0) * 60 + (m ?? 0);
+          const endMinutes = startMinutes + Math.round(cfg.manual_entry_default_duration_hours * 60);
+          const endH = Math.floor(endMinutes / 60) % 24;
+          const endM = endMinutes % 60;
+          setEndTime(`${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`);
+          if (endMinutes >= 24 * 60) {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            setEndDate(tomorrow.toISOString().split('T')[0] ?? getTodayLocalDate(tz));
+          }
+        }
+      })
       .catch(() => {});
-  }, []);
+    setLoadingApparatus(true);
+    schedulingService.getApparatusOptions()
+      .then(res => setApparatusOptions(res.options.filter(o => o.source !== 'default')))
+      .catch(() => {})
+      .finally(() => setLoadingApparatus(false));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filter apparatus by config's allowed IDs
+  const availableApparatus = useMemo(() => {
+    const allowedIds = config?.manual_entry_apparatus_ids;
+    if (!allowedIds || allowedIds.length === 0) return apparatusOptions;
+    return apparatusOptions.filter(a => a.id && allowedIds.includes(a.id));
+  }, [apparatusOptions, config?.manual_entry_apparatus_ids]);
 
   const filteredMembers = useMemo(() => {
     if (memberSearch.trim().length < 2) return [];
@@ -112,20 +160,11 @@ export const ManualShiftReportPage: React.FC = () => {
 
   const removeMember = (userId: string) => {
     setCrew(prev => prev.filter(c => c.user_id !== userId));
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.delete(userId);
-      return next;
-    });
+    setSelectedIds(prev => { const n = new Set(prev); n.delete(userId); return n; });
   };
 
   const toggleMember = (userId: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
-      return next;
-    });
+    setSelectedIds(prev => { const n = new Set(prev); if (n.has(userId)) n.delete(userId); else n.add(userId); return n; });
   };
 
   const updateEval = (userId: string, field: keyof CrewMemberEvaluation, value: unknown) => {
@@ -136,16 +175,24 @@ export const ManualShiftReportPage: React.FC = () => {
   };
 
   const handleSubmit = async (asDraft: boolean) => {
-    if (!form.shift_date) {
+    if (config?.manual_entry_require_apparatus && !apparatusId) {
+      toast.error('Please select an apparatus');
+      return;
+    }
+    if (!shiftDate) {
       toast.error('Please enter a shift date');
+      return;
+    }
+    if (!startTime || !endTime) {
+      toast.error('Please enter start and end times');
+      return;
+    }
+    if (calculatedHours <= 0) {
+      toast.error('End time must be after start time');
       return;
     }
     if (selectedIds.size === 0) {
       toast.error('Please select at least one crew member');
-      return;
-    }
-    if (!form.hours_on_shift || form.hours_on_shift <= 0) {
-      toast.error('Please enter hours on shift');
       return;
     }
 
@@ -155,12 +202,23 @@ export const ManualShiftReportPage: React.FC = () => {
         !!ev && !!(ev.performance_rating || ev.areas_of_strength || ev.areas_for_improvement || ev.remarks),
       );
 
+    const selectedApparatus = availableApparatus.find(a => a.id === apparatusId);
+    const apparatusLabel = selectedApparatus
+      ? `${selectedApparatus.name}${selectedApparatus.unit_number ? ` (${selectedApparatus.unit_number})` : ''}`
+      : '';
+
+    const fullNarrative = [
+      apparatusLabel ? `Apparatus: ${apparatusLabel}` : '',
+      `Shift: ${shiftDate} ${startTime} — ${endDate} ${endTime}`,
+      narrative,
+    ].filter(Boolean).join('\n');
+
     const payload: BatchShiftReportCreate = {
-      shift_date: form.shift_date,
-      hours_on_shift: form.hours_on_shift,
-      calls_responded: form.calls_responded || 0,
-      ...(form.call_types.length ? { call_types: form.call_types } : {}),
-      ...(form.officer_narrative.trim() ? { officer_narrative: form.officer_narrative.trim() } : {}),
+      shift_date: shiftDate,
+      hours_on_shift: calculatedHours,
+      calls_responded: callsResponded || 0,
+      ...(callTypes.length ? { call_types: callTypes } : {}),
+      ...(fullNarrative.trim() ? { officer_narrative: fullNarrative.trim() } : {}),
       crew_member_ids: Array.from(selectedIds),
       ...(evaluations.length > 0 ? { trainee_evaluations: evaluations } : {}),
       save_as_draft: asDraft,
@@ -205,36 +263,96 @@ export const ManualShiftReportPage: React.FC = () => {
       </div>
 
       <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 space-y-5">
-        {/* Shift-Level Data */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+
+        {/* Apparatus Selection */}
+        <div>
+          <label className="block text-sm font-medium text-theme-text-secondary mb-1">
+            Apparatus{config?.manual_entry_require_apparatus ? ' *' : ''}
+          </label>
+          {loadingApparatus ? (
+            <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading apparatus...
+            </div>
+          ) : availableApparatus.length === 0 ? (
+            <div className="flex items-center gap-2 text-sm text-theme-text-muted py-2">
+              <AlertCircle className="w-4 h-4" />
+              No apparatus configured. Contact an administrator.
+            </div>
+          ) : (
+            <select
+              value={apparatusId}
+              onChange={e => setApparatusId(e.target.value)}
+              className="form-input focus:ring-violet-500 text-sm"
+            >
+              <option value="">Select apparatus...</option>
+              {availableApparatus.map(a => (
+                <option key={a.id || a.name} value={a.id || a.name}>
+                  {a.name}{a.unit_number ? ` (${a.unit_number})` : ''} — {a.apparatus_type}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Date & Time */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Shift Date *</label>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Date *</label>
             <input
               type="date"
-              value={form.shift_date}
-              onChange={e => setForm(prev => ({ ...prev, shift_date: e.target.value }))}
+              value={shiftDate}
+              onChange={e => { setShiftDate(e.target.value); if (!endDate || endDate < e.target.value) setEndDate(e.target.value); }}
               className="form-input focus:ring-violet-500 text-sm"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Hours on Shift *</label>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Start Time *</label>
             <input
-              type="number"
-              min="0.5"
-              max="48"
-              step="0.5"
-              value={form.hours_on_shift || ''}
-              onChange={e => setForm(prev => ({ ...prev, hours_on_shift: parseFloat(e.target.value) || 0 }))}
+              type="time"
+              value={startTime}
+              onChange={e => setStartTime(e.target.value)}
               className="form-input focus:ring-violet-500 text-sm"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Date *</label>
+            <input
+              type="date"
+              value={endDate}
+              min={shiftDate}
+              onChange={e => setEndDate(e.target.value)}
+              className="form-input focus:ring-violet-500 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-theme-text-secondary mb-1">End Time *</label>
+            <input
+              type="time"
+              value={endTime}
+              onChange={e => setEndTime(e.target.value)}
+              className="form-input focus:ring-violet-500 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Calculated hours display */}
+        {calculatedHours > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 bg-green-500/5 border border-green-500/20 rounded-lg text-sm text-green-700 dark:text-green-400">
+            <FileText className="w-4 h-4 shrink-0" />
+            <span className="font-medium">{calculatedHours}h</span> shift duration
+            {calculatedHours > 24 && <span className="text-xs text-theme-text-muted">(multi-day shift)</span>}
+          </div>
+        )}
+
+        {/* Calls */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-theme-text-secondary mb-1">Calls Responded</label>
             <input
               type="number"
               min="0"
-              value={form.calls_responded || 0}
-              onChange={e => setForm(prev => ({ ...prev, calls_responded: parseInt(e.target.value) || 0 }))}
+              value={callsResponded || 0}
+              onChange={e => setCallsResponded(parseInt(e.target.value) || 0)}
               className="form-input focus:ring-violet-500 text-sm"
             />
           </div>
@@ -249,9 +367,9 @@ export const ManualShiftReportPage: React.FC = () => {
                 <button
                   key={type}
                   type="button"
-                  onClick={() => toggleCallType(setForm, type)}
+                  onClick={() => toggleCallType(setCallTypes, type)}
                   className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                    form.call_types.includes(type)
+                    callTypes.includes(type)
                       ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30'
                       : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-blue-500/30'
                   }`}
@@ -268,8 +386,8 @@ export const ManualShiftReportPage: React.FC = () => {
           <label className="block text-sm font-medium text-theme-text-secondary mb-1">Overall Shift Narrative</label>
           <textarea
             rows={3}
-            value={form.officer_narrative}
-            onChange={e => setForm(prev => ({ ...prev, officer_narrative: e.target.value }))}
+            value={narrative}
+            onChange={e => setNarrative(e.target.value)}
             placeholder="General observations about the shift for leadership review..."
             className="form-input focus:ring-violet-500 resize-none text-sm"
           />
@@ -286,7 +404,6 @@ export const ManualShiftReportPage: React.FC = () => {
             )}
           </label>
 
-          {/* Member search */}
           <div className="relative mb-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
             <input
@@ -298,7 +415,6 @@ export const ManualShiftReportPage: React.FC = () => {
             />
           </div>
 
-          {/* Search results dropdown */}
           {filteredMembers.length > 0 && (
             <div className="mb-3 max-h-40 overflow-y-auto border border-theme-surface-border rounded-lg bg-theme-surface">
               {filteredMembers.map(m => (
@@ -321,7 +437,6 @@ export const ManualShiftReportPage: React.FC = () => {
             </p>
           )}
 
-          {/* Added crew list */}
           {crew.length === 0 ? (
             <p className="text-sm text-theme-text-muted py-4">Search and add members above.</p>
           ) : (
@@ -361,7 +476,6 @@ export const ManualShiftReportPage: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Inline evaluation */}
                     {isExpanded && (
                       <div className="px-4 pb-3 pt-1 border-t border-theme-surface-border space-y-3">
                         <div>
@@ -374,32 +488,23 @@ export const ManualShiftReportPage: React.FC = () => {
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-theme-text-secondary mb-1">Strengths</label>
-                          <input
-                            type="text"
-                            value={eval_?.areas_of_strength || ''}
+                          <input type="text" value={eval_?.areas_of_strength || ''}
                             onChange={e => updateEval(member.user_id, 'areas_of_strength', e.target.value)}
-                            className="form-input text-sm focus:ring-violet-500"
-                            placeholder="Areas of strength..."
+                            className="form-input text-sm focus:ring-violet-500" placeholder="Areas of strength..."
                           />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-theme-text-secondary mb-1">Areas for Improvement</label>
-                          <input
-                            type="text"
-                            value={eval_?.areas_for_improvement || ''}
+                          <input type="text" value={eval_?.areas_for_improvement || ''}
                             onChange={e => updateEval(member.user_id, 'areas_for_improvement', e.target.value)}
-                            className="form-input text-sm focus:ring-violet-500"
-                            placeholder="Areas to work on..."
+                            className="form-input text-sm focus:ring-violet-500" placeholder="Areas to work on..."
                           />
                         </div>
                         <div>
                           <label className="block text-xs font-medium text-theme-text-secondary mb-1">Remarks</label>
-                          <textarea
-                            rows={2}
-                            value={eval_?.remarks || ''}
+                          <textarea rows={2} value={eval_?.remarks || ''}
                             onChange={e => updateEval(member.user_id, 'remarks', e.target.value)}
-                            className="form-input text-sm focus:ring-violet-500 resize-none"
-                            placeholder="Additional notes..."
+                            className="form-input text-sm focus:ring-violet-500 resize-none" placeholder="Additional notes..."
                           />
                         </div>
                       </div>
@@ -413,17 +518,13 @@ export const ManualShiftReportPage: React.FC = () => {
 
         {/* Submit */}
         <div className="flex items-center gap-3 pt-2 border-t border-theme-surface-border">
-          <button
-            onClick={() => { void handleSubmit(true); }}
-            disabled={savingDraft || submitting}
+          <button onClick={() => { void handleSubmit(true); }} disabled={savingDraft || submitting}
             className="px-5 py-2.5 text-sm font-medium border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
           >
             {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             Save as Draft
           </button>
-          <button
-            onClick={() => { void handleSubmit(false); }}
-            disabled={submitting || savingDraft}
+          <button onClick={() => { void handleSubmit(false); }} disabled={submitting || savingDraft}
             className="px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}

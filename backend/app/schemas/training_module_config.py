@@ -104,6 +104,13 @@ class TrainingModuleConfigResponse(UTCResponseBase):
     shift_review_default_skills: Optional[List[str]] = None
     shift_review_default_tasks: Optional[List[str]] = None
 
+    # Manual shift entry (scheduling module fallback)
+    manual_entry_enabled: bool = False
+    manual_entry_require_apparatus: bool = True
+    manual_entry_apparatus_ids: Optional[List[str]] = None
+    manual_entry_default_start_time: Optional[str] = None
+    manual_entry_default_duration_hours: Optional[float] = None
+
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     updated_by: Optional[UUID] = None
@@ -167,6 +174,17 @@ class TrainingModuleConfigUpdate(BaseModel):
     shift_review_call_types: Optional[List[str]] = None
     shift_review_default_skills: Optional[List[str]] = None
     shift_review_default_tasks: Optional[List[str]] = None
+
+    # Manual shift entry
+    manual_entry_enabled: Optional[bool] = None
+    manual_entry_require_apparatus: Optional[bool] = None
+    manual_entry_apparatus_ids: Optional[List[str]] = None
+    manual_entry_default_start_time: Optional[str] = Field(
+        None, pattern=r"^\d{2}:\d{2}$"
+    )
+    manual_entry_default_duration_hours: Optional[float] = Field(
+        None, gt=0, le=48
+    )
 
 
 class MemberVisibilityResponse(BaseModel):

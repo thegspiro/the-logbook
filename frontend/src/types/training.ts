@@ -1316,6 +1316,11 @@ export interface TrainingModuleConfig {
   shift_review_call_types?: string[];
   shift_review_default_skills?: string[];
   shift_review_default_tasks?: string[];
+  manual_entry_enabled: boolean;
+  manual_entry_require_apparatus: boolean;
+  manual_entry_apparatus_ids?: string[];
+  manual_entry_default_start_time?: string;
+  manual_entry_default_duration_hours?: number;
 }
 
 export interface MemberVisibility {
