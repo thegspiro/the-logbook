@@ -8,6 +8,7 @@ import {
   ListChecks,
   Target,
   Download,
+  Upload,
   Search,
   ChevronRight,
   Award,
@@ -34,6 +35,40 @@ const TrainingProgramsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [importingRegistry, setImportingRegistry] = useState<string | null>(null);
+  const importFileRef = React.useRef<HTMLInputElement>(null);
+
+  const handleExportProgram = async (e: React.MouseEvent, programId: string, programName: string) => {
+    e.stopPropagation();
+    try {
+      const data = await trainingProgramService.exportProgram(programId);
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${programName.replace(/[^a-zA-Z0-9]/g, '_')}_pipeline.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Program exported');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Export failed'));
+    }
+  };
+
+  const handleImportProgram = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text) as Record<string, unknown>;
+      const result = await trainingProgramService.importProgram(data);
+      toast.success(result.message);
+      void loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Import failed'));
+    } finally {
+      if (importFileRef.current) importFileRef.current.value = '';
+    }
+  };
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -101,13 +136,30 @@ const TrainingProgramsPage: React.FC = () => {
           </div>
 
           {activeTab === 'programs' && (
-            <button
-              onClick={() => navigate('/training/programs/new')}
-              className="btn-primary flex items-center space-x-2"
-            >
-              <Plus className="w-5 h-5" aria-hidden="true" />
-              <span>New Pipeline</span>
-            </button>
+            <div className="flex items-center space-x-2">
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".json"
+                onChange={(e) => { void handleImportProgram(e); }}
+                className="hidden"
+                aria-label="Import pipeline JSON file"
+              />
+              <button
+                onClick={() => importFileRef.current?.click()}
+                className="flex items-center space-x-2 px-4 py-2 bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors"
+              >
+                <Upload className="w-5 h-5" aria-hidden="true" />
+                <span>Import</span>
+              </button>
+              <button
+                onClick={() => navigate('/training/programs/new')}
+                className="btn-primary flex items-center space-x-2"
+              >
+                <Plus className="w-5 h-5" aria-hidden="true" />
+                <span>New Pipeline</span>
+              </button>
+            </div>
           )}
         </div>
 
@@ -238,7 +290,17 @@ const TrainingProgramsPage: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => { void handleExportProgram(e, program.id, program.name); }}
+                            className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded-lg transition-colors"
+                            title="Export as JSON"
+                            aria-label={`Export ${program.name}`}
+                          >
+                            <Download className="w-4 h-4" aria-hidden="true" />
+                          </button>
+                          <ChevronRight className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
+                        </div>
                       </div>
                     </div>
                   ))

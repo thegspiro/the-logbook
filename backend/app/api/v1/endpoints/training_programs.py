@@ -856,6 +856,84 @@ async def duplicate_program(
     return new_program
 
 
+# ==================== Export / Import Endpoints ====================
+
+
+@router.get("/programs/{program_id}/export")
+async def export_program(
+    program_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Export a training program as portable JSON.
+
+    The export includes all phases, milestones, and the full definition
+    of each referenced requirement so the file can be imported by
+    another department.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    try:
+        data = await service.export_program_to_json(
+            program_id, current_user.organization_id
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return data
+
+
+@router.post("/programs/import")
+async def import_program(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Import a training program from a portable JSON export.
+
+    Creates the program, all phases, milestones, and any requirements
+    that don't already exist (matched by name + source). Requirements
+    that already exist in the department are reused.
+
+    **Requires permission: training.manage**
+    """
+    if "program" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid import format — missing 'program' key",
+        )
+
+    service = TrainingProgramService(db)
+    program = await service.import_program_from_json(
+        payload,
+        current_user.organization_id,
+        current_user.id,
+    )
+
+    await log_audit_event(
+        db,
+        event_type="training.program.imported",
+        resource="training",
+        severity="info",
+        event_data={
+            "program_id": str(program.id),
+            "program_name": program.name,
+            "action": "imported",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "success": True,
+        "program_id": str(program.id),
+        "program_name": program.name,
+        "message": f"Program '{program.name}' imported successfully",
+    }
+
+
 # ==================== Bulk Enrollment Endpoints ====================
 
 

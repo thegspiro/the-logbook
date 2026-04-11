@@ -651,6 +651,18 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  // ==================== Export / Import ====================
+
+  async exportProgram(programId: string): Promise<Record<string, unknown>> {
+    const response = await api.get<Record<string, unknown>>(`/training/programs/programs/${programId}/export`);
+    return response.data;
+  },
+
+  async importProgram(data: Record<string, unknown>): Promise<{ success: boolean; program_id: string; program_name: string; message: string }> {
+    const response = await api.post<{ success: boolean; program_id: string; program_name: string; message: string }>('/training/programs/programs/import', data);
+    return response.data;
+  },
+
   // ==================== Bulk Enrollment ====================
 
   /**

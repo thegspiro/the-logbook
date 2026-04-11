@@ -1232,6 +1232,351 @@ class TrainingProgramService:
 
         return new_program, None
 
+    # ==================== Export / Import ====================
+
+    async def export_program_to_json(
+        self, program_id: UUID, organization_id: UUID
+    ) -> dict:
+        """Export a training program as a portable JSON structure.
+
+        Includes all phases, milestones, and the full definition of each
+        referenced TrainingRequirement so the program can be imported by
+        another department without needing matching requirement IDs.
+        """
+        result = await self.db.execute(
+            select(TrainingProgram)
+            .options(
+                selectinload(TrainingProgram.phases)
+                .selectinload(ProgramPhase.requirements)
+                .selectinload(ProgramRequirement.requirement),
+                selectinload(TrainingProgram.phases)
+                .selectinload(ProgramPhase.milestones),
+            )
+            .where(
+                TrainingProgram.id == str(program_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        program = result.scalar_one_or_none()
+        if not program:
+            raise ValueError("Program not found")
+
+        # Serialize phases
+        phases = []
+        for phase in sorted(program.phases, key=lambda p: p.phase_number):
+            phase_reqs = []
+            for pr in sorted(phase.requirements, key=lambda r: r.sort_order):
+                req = pr.requirement
+                phase_reqs.append({
+                    "is_required": pr.is_required,
+                    "is_prerequisite": pr.is_prerequisite,
+                    "sort_order": pr.sort_order,
+                    "program_specific_description": pr.program_specific_description,
+                    "custom_deadline_days": pr.custom_deadline_days,
+                    "notification_message": pr.notification_message,
+                    "requirement": self._serialize_requirement(req) if req else None,
+                })
+            phase_milestones = []
+            for ms in sorted(phase.milestones, key=lambda m: m.created_at or ""):
+                phase_milestones.append({
+                    "name": ms.name,
+                    "description": ms.description,
+                    "completion_percentage_threshold": ms.completion_percentage_threshold,
+                    "notification_message": ms.notification_message,
+                    "requires_verification": ms.requires_verification,
+                    "verification_notes": ms.verification_notes,
+                })
+            phases.append({
+                "phase_number": phase.phase_number,
+                "name": phase.name,
+                "description": phase.description,
+                "requires_manual_advancement": phase.requires_manual_advancement,
+                "time_limit_days": phase.time_limit_days,
+                "requirements": phase_reqs,
+                "milestones": phase_milestones,
+            })
+
+        # Program-level requirements (no phase)
+        prog_reqs_result = await self.db.execute(
+            select(ProgramRequirement)
+            .options(selectinload(ProgramRequirement.requirement))
+            .where(
+                ProgramRequirement.program_id == str(program_id),
+                ProgramRequirement.phase_id.is_(None),
+            )
+        )
+        program_reqs = []
+        for pr in prog_reqs_result.scalars().all():
+            req = pr.requirement
+            program_reqs.append({
+                "is_required": pr.is_required,
+                "is_prerequisite": pr.is_prerequisite,
+                "sort_order": pr.sort_order,
+                "program_specific_description": pr.program_specific_description,
+                "custom_deadline_days": pr.custom_deadline_days,
+                "notification_message": pr.notification_message,
+                "requirement": self._serialize_requirement(req) if req else None,
+            })
+
+        # Program-level milestones
+        prog_ms_result = await self.db.execute(
+            select(ProgramMilestone).where(
+                ProgramMilestone.program_id == str(program_id),
+                ProgramMilestone.phase_id.is_(None),
+            )
+        )
+        program_milestones = []
+        for ms in prog_ms_result.scalars().all():
+            program_milestones.append({
+                "name": ms.name,
+                "description": ms.description,
+                "completion_percentage_threshold": ms.completion_percentage_threshold,
+                "notification_message": ms.notification_message,
+                "requires_verification": ms.requires_verification,
+                "verification_notes": ms.verification_notes,
+            })
+
+        return {
+            "export_version": "1.0",
+            "program": {
+                "name": program.name,
+                "description": program.description,
+                "code": program.code,
+                "version": program.version,
+                "target_position": program.target_position,
+                "target_roles": program.target_roles,
+                "structure_type": (
+                    program.structure_type.value
+                    if hasattr(program.structure_type, "value")
+                    else str(program.structure_type)
+                ),
+                "allows_concurrent_enrollment": program.allows_concurrent_enrollment,
+                "time_limit_days": program.time_limit_days,
+                "warning_days_before": program.warning_days_before,
+                "reminder_conditions": program.reminder_conditions,
+            },
+            "phases": phases,
+            "program_requirements": program_reqs,
+            "program_milestones": program_milestones,
+        }
+
+    @staticmethod
+    def _serialize_requirement(req: "TrainingRequirement") -> dict:
+        """Serialize a TrainingRequirement for portable JSON export."""
+        return {
+            "name": req.name,
+            "description": req.description,
+            "requirement_type": (
+                req.requirement_type.value
+                if hasattr(req.requirement_type, "value")
+                else str(req.requirement_type)
+            ),
+            "training_type": (
+                req.training_type.value
+                if hasattr(req.training_type, "value")
+                else req.training_type
+            ) if req.training_type else None,
+            "source": (
+                req.source.value
+                if hasattr(req.source, "value")
+                else str(req.source)
+            ),
+            "registry_name": req.registry_name,
+            "registry_code": req.registry_code,
+            "required_hours": req.required_hours,
+            "frequency": (
+                req.frequency.value
+                if hasattr(req.frequency, "value")
+                else str(req.frequency)
+            ),
+            "time_limit_days": req.time_limit_days,
+            "applies_to_all": req.applies_to_all,
+            "required_positions": req.required_positions,
+            "required_roles": req.required_roles,
+            "category_ids": req.category_ids,
+            "passing_score": req.passing_score,
+            "max_attempts": req.max_attempts,
+        }
+
+    async def import_program_from_json(
+        self,
+        data: dict,
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> TrainingProgram:
+        """Import a training program from a portable JSON export.
+
+        Creates the program, phases, milestones, and any referenced
+        requirements that don't already exist (matched by name + source).
+        """
+        prog_data = data.get("program", {})
+
+        program = TrainingProgram(
+            organization_id=organization_id,
+            name=prog_data.get("name", "Imported Program"),
+            description=prog_data.get("description"),
+            code=prog_data.get("code"),
+            version=prog_data.get("version", 1),
+            target_position=prog_data.get("target_position"),
+            target_roles=prog_data.get("target_roles"),
+            structure_type=prog_data.get("structure_type", "flexible"),
+            allows_concurrent_enrollment=prog_data.get(
+                "allows_concurrent_enrollment", True
+            ),
+            time_limit_days=prog_data.get("time_limit_days"),
+            warning_days_before=prog_data.get("warning_days_before"),
+            reminder_conditions=prog_data.get("reminder_conditions"),
+            active=True,
+            is_template=False,
+            created_by=created_by,
+        )
+        self.db.add(program)
+        await self.db.flush()
+
+        # Import phases
+        for phase_data in data.get("phases", []):
+            phase = ProgramPhase(
+                program_id=program.id,
+                phase_number=phase_data.get("phase_number", 0),
+                name=phase_data.get("name", ""),
+                description=phase_data.get("description"),
+                requires_manual_advancement=phase_data.get(
+                    "requires_manual_advancement", False
+                ),
+                time_limit_days=phase_data.get("time_limit_days"),
+            )
+            self.db.add(phase)
+            await self.db.flush()
+
+            for req_data in phase_data.get("requirements", []):
+                req_id = await self._resolve_or_create_requirement(
+                    req_data.get("requirement", {}),
+                    organization_id,
+                    created_by,
+                )
+                if req_id:
+                    self.db.add(ProgramRequirement(
+                        program_id=program.id,
+                        phase_id=phase.id,
+                        requirement_id=req_id,
+                        is_required=req_data.get("is_required", True),
+                        is_prerequisite=req_data.get("is_prerequisite", False),
+                        sort_order=req_data.get("sort_order", 0),
+                        program_specific_description=req_data.get(
+                            "program_specific_description"
+                        ),
+                        custom_deadline_days=req_data.get("custom_deadline_days"),
+                        notification_message=req_data.get("notification_message"),
+                    ))
+
+            for ms_data in phase_data.get("milestones", []):
+                self.db.add(ProgramMilestone(
+                    program_id=program.id,
+                    phase_id=phase.id,
+                    name=ms_data.get("name", ""),
+                    description=ms_data.get("description"),
+                    completion_percentage_threshold=ms_data.get(
+                        "completion_percentage_threshold"
+                    ),
+                    notification_message=ms_data.get("notification_message"),
+                    requires_verification=ms_data.get(
+                        "requires_verification", False
+                    ),
+                    verification_notes=ms_data.get("verification_notes"),
+                ))
+
+        # Program-level requirements
+        for req_data in data.get("program_requirements", []):
+            req_id = await self._resolve_or_create_requirement(
+                req_data.get("requirement", {}),
+                organization_id,
+                created_by,
+            )
+            if req_id:
+                self.db.add(ProgramRequirement(
+                    program_id=program.id,
+                    phase_id=None,
+                    requirement_id=req_id,
+                    is_required=req_data.get("is_required", True),
+                    is_prerequisite=req_data.get("is_prerequisite", False),
+                    sort_order=req_data.get("sort_order", 0),
+                    program_specific_description=req_data.get(
+                        "program_specific_description"
+                    ),
+                    custom_deadline_days=req_data.get("custom_deadline_days"),
+                    notification_message=req_data.get("notification_message"),
+                ))
+
+        # Program-level milestones
+        for ms_data in data.get("program_milestones", []):
+            self.db.add(ProgramMilestone(
+                program_id=program.id,
+                phase_id=None,
+                name=ms_data.get("name", ""),
+                description=ms_data.get("description"),
+                completion_percentage_threshold=ms_data.get(
+                    "completion_percentage_threshold"
+                ),
+                notification_message=ms_data.get("notification_message"),
+                requires_verification=ms_data.get(
+                    "requires_verification", False
+                ),
+                verification_notes=ms_data.get("verification_notes"),
+            ))
+
+        await self.db.commit()
+        await self.db.refresh(program)
+        return program
+
+    async def _resolve_or_create_requirement(
+        self,
+        req_data: dict,
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> str | None:
+        """Find an existing requirement by name+source, or create it."""
+        if not req_data or not req_data.get("name"):
+            return None
+
+        name = req_data["name"]
+        source = req_data.get("source", "department")
+
+        existing = await self.db.execute(
+            select(TrainingRequirement).where(
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.name == name,
+                TrainingRequirement.source == source,
+            )
+        )
+        found = existing.scalar_one_or_none()
+        if found:
+            return found.id
+
+        req = TrainingRequirement(
+            organization_id=organization_id,
+            name=name,
+            description=req_data.get("description"),
+            requirement_type=req_data.get("requirement_type", "hours"),
+            training_type=req_data.get("training_type"),
+            source=source,
+            registry_name=req_data.get("registry_name"),
+            registry_code=req_data.get("registry_code"),
+            required_hours=req_data.get("required_hours"),
+            frequency=req_data.get("frequency", "annual"),
+            time_limit_days=req_data.get("time_limit_days"),
+            applies_to_all=req_data.get("applies_to_all", False),
+            required_positions=req_data.get("required_positions"),
+            required_roles=req_data.get("required_roles"),
+            category_ids=req_data.get("category_ids"),
+            passing_score=req_data.get("passing_score"),
+            max_attempts=req_data.get("max_attempts"),
+            is_editable=True,
+            created_by=created_by,
+        )
+        self.db.add(req)
+        await self.db.flush()
+        return req.id
+
     # ==================== Bulk Enrollment Methods ====================
 
     async def bulk_enroll_members(
