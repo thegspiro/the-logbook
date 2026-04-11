@@ -21,6 +21,7 @@ from app.models.notification import (
     NotificationLog,
 )
 from app.models.training import (
+    AssignmentStatus,
     CompetencyLevel,
     EnrollmentStatus,
     MemberCompetency,
@@ -307,11 +308,35 @@ class ShiftCompletionService:
         from app.models.training import TrainingProgram
         from app.models.user import User
 
+        org_id_str = str(organization_id)
+
+        shift = (
+            await self.db.execute(
+                select(Shift).where(
+                    Shift.id == shift_id,
+                    Shift.organization_id == org_id_str,
+                )
+            )
+        ).scalar_one_or_none()
+        if not shift:
+            return []
+
+        active_statuses = [
+            AssignmentStatus.ASSIGNED,
+            AssignmentStatus.CONFIRMED,
+            AssignmentStatus.PENDING,
+        ]
         assignments = (
             await self.db.execute(
-                select(ShiftAssignment).where(
-                    ShiftAssignment.shift_id == shift_id,
+                select(ShiftAssignment)
+                .where(
+                    ShiftAssignment.shift_id == str(shift_id),
+                    ShiftAssignment.organization_id == org_id_str,
+                    ShiftAssignment.assignment_status.in_(
+                        active_statuses
+                    ),
                 )
+                .order_by(ShiftAssignment.created_at.asc())
             )
         ).scalars().all()
 
@@ -334,8 +359,7 @@ class ShiftCompletionService:
                     ProgramEnrollment.program_id == TrainingProgram.id,
                 ).where(
                     ProgramEnrollment.user_id.in_(user_ids),
-                    ProgramEnrollment.organization_id
-                    == str(organization_id),
+                    ProgramEnrollment.organization_id == org_id_str,
                     ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
                 )
             )
@@ -363,12 +387,13 @@ class ShiftCompletionService:
             uid = str(assignment.user_id)
             user = user_map.get(uid)
             enrollment_info = enrollment_map.get(uid, {})
+            pos = assignment.position
             result.append({
                 "user_id": uid,
                 "user_name": (
                     user.full_name if user else "Unknown"
                 ),
-                "position": assignment.position,
+                "position": pos.value if hasattr(pos, "value") else pos,
                 "has_active_enrollment": uid in enrollment_map,
                 "enrollment_id": enrollment_info.get(
                     "enrollment_id"

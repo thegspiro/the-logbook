@@ -100,6 +100,7 @@ export const ShiftReportsTab: React.FC = () => {
   const [expandedTraineeId, setExpandedTraineeId] = useState<string | null>(null);
   const [crewRemarks, setCrewRemarks] = useState<Record<string, string>>({});
   const [loadingCrew, setLoadingCrew] = useState(false);
+  const [crewLoadError, setCrewLoadError] = useState(false);
   const [shiftList, setShiftList] = useState<ShiftRecord[]>([]);
   const [loadingShifts, setLoadingShifts] = useState(false);
   const [shiftSearchQuery, setShiftSearchQuery] = useState('');
@@ -176,6 +177,7 @@ export const ShiftReportsTab: React.FC = () => {
   // Load crew status when a shift is selected
   const loadCrewForShift = useCallback(async (shiftId: string) => {
     setLoadingCrew(true);
+    setCrewLoadError(false);
     try {
       const crew = await shiftCompletionService.getShiftCrewStatus(shiftId);
       setCrewMembers(crew);
@@ -185,7 +187,8 @@ export const ShiftReportsTab: React.FC = () => {
       setCrewRemarks({});
       setExpandedTraineeId(null);
     } catch {
-      toast.error('Failed to load crew');
+      setCrewLoadError(true);
+      toast.error('Failed to load crew members');
     } finally {
       setLoadingCrew(false);
     }
@@ -338,7 +341,7 @@ export const ShiftReportsTab: React.FC = () => {
     if (draft.formData.officer_narrative) {
       setForm(prev => ({ ...prev, officer_narrative: draft.formData.officer_narrative as string }));
     }
-  }, [form.shift_id, crewMembers.length]); // eslint-disable-line react-hooks/exhaustive-deps -- restore once when crew loads
+  }, [form.shift_id, crewMembers.length]);
 
   // Sync offline queue when connectivity returns
   useEffect(() => {
@@ -537,6 +540,7 @@ export const ShiftReportsTab: React.FC = () => {
       setSelectedCrewIds(new Set());
       setTraineeEvals({});
       setCrewRemarks({});
+      setCrewLoadError(false);
       setExpandedTraineeId(null);
       setViewMode(asDraft ? 'drafts' : 'filed-by-me');
     } catch (err: unknown) {
@@ -1394,6 +1398,7 @@ export const ShiftReportsTab: React.FC = () => {
                       setLinkedShiftLabel(null);
                       setCrewMembers([]);
                       setSelectedCrewIds(new Set());
+                      setCrewLoadError(false);
                     }}
                     className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
                   >
@@ -1470,8 +1475,29 @@ export const ShiftReportsTab: React.FC = () => {
                   <div className="flex items-center gap-2 text-sm text-theme-text-muted py-4" role="status">
                     <Loader2 className="w-4 h-4 animate-spin" /> Loading crew...
                   </div>
+                ) : crewLoadError ? (
+                  <div className="flex items-center gap-3 text-sm py-4">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span className="text-theme-text-muted">Failed to load crew members.</span>
+                    <button
+                      type="button"
+                      onClick={() => { if (form.shift_id) void loadCrewForShift(form.shift_id); }}
+                      className="text-violet-600 dark:text-violet-400 hover:underline text-sm font-medium"
+                    >
+                      Retry
+                    </button>
+                  </div>
                 ) : crewMembers.length === 0 ? (
-                  <p className="text-sm text-theme-text-muted py-4">No crew members assigned to this shift.</p>
+                  <div className="flex items-center gap-3 text-sm py-4">
+                    <span className="text-theme-text-muted">No active crew members found for this shift.</span>
+                    <button
+                      type="button"
+                      onClick={() => { if (form.shift_id) void loadCrewForShift(form.shift_id); }}
+                      className="text-violet-600 dark:text-violet-400 hover:underline text-sm font-medium"
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 ) : (
                   <div className="space-y-2">
                     {crewMembers.map(member => {

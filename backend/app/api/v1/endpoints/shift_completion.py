@@ -139,9 +139,19 @@ async def get_shift_crew_status(
 ):
     """Get crew members for a shift with enrollment and report status."""
     service = ShiftCompletionService(db)
-    return await service.get_shift_crew_status(
-        current_user.organization_id, shift_id
-    )
+    try:
+        return await service.get_shift_crew_status(
+            current_user.organization_id, shift_id
+        )
+    except Exception as e:
+        logger.error(
+            "Failed to load crew status for shift {}: {}",
+            shift_id,
+            str(e),
+        )
+        raise HTTPException(
+            status_code=500, detail=safe_error_detail(e)
+        )
 
 
 @router.post(
