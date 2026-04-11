@@ -1000,6 +1000,7 @@ class ExternalTrainingSyncService:
             course_code=record_data.get("course_code"),
             description=record_data.get("description"),
             duration_minutes=record_data.get("duration_minutes"),
+            credit_hours=record_data.get("credit_hours"),
             completion_date=self._parse_date(record_data.get("completion_date")),
             score=record_data.get("score"),
             passed=record_data.get("passed", True),
@@ -1210,6 +1211,15 @@ class ExternalTrainingSyncService:
         notes_parts.append("Imported from external training provider")
         import_notes = ". ".join(notes_parts)
 
+        # Determine hours: prefer credit_hours from the provider (VS reports
+        # hours directly), fall back to converting duration_minutes.
+        if import_record.credit_hours and import_record.credit_hours > 0:
+            computed_hours = round(import_record.credit_hours, 2)
+        else:
+            computed_hours = round(
+                (import_record.duration_minutes or 0) / 60.0, 2
+            )
+
         # Create training record
         training_record = TrainingRecord(
             user_id=target_user_id,
@@ -1217,7 +1227,8 @@ class ExternalTrainingSyncService:
             course_name=import_record.course_title,
             course_code=import_record.course_code,
             training_type=TrainingType.CONTINUING_EDUCATION,
-            hours_completed=round((import_record.duration_minutes or 0) / 60.0, 2),
+            hours_completed=computed_hours,
+            credit_hours=import_record.credit_hours,
             completion_date=(
                 import_record.completion_date.date()
                 if import_record.completion_date

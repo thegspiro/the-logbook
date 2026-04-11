@@ -671,6 +671,7 @@ class ExternalTrainingImportResponse(UTCResponseBase):
     course_code: Optional[str] = None
     description: Optional[str] = None
     duration_minutes: Optional[int] = None
+    credit_hours: Optional[float] = None
     completion_date: Optional[datetime] = None
     score: Optional[float] = None
     passed: Optional[bool] = None
