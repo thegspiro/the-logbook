@@ -228,6 +228,7 @@ const IntegrationsPage: React.FC = () => {
   const [sfClientId, setSfClientId] = useState('');
   const [sfClientSecret, setSfClientSecret] = useState('');
   const [sfRefreshToken, setSfRefreshToken] = useState('');
+  const [sfEnvironment, setSfEnvironment] = useState('production');
   const [sfSyncDirection, setSfSyncDirection] = useState('push');
 
   useEffect(() => {
@@ -278,6 +279,7 @@ const IntegrationsPage: React.FC = () => {
     setSfClientId('');
     setSfClientSecret('');
     setSfRefreshToken('');
+    setSfEnvironment('production');
     setSfSyncDirection('push');
   };
 
@@ -302,6 +304,7 @@ const IntegrationsPage: React.FC = () => {
           client_id: sfClientId,
           client_secret: sfClientSecret || undefined,
           refresh_token: sfRefreshToken || undefined,
+          environment: sfEnvironment,
           sync_direction: sfSyncDirection,
         };
       default:
@@ -529,6 +532,21 @@ const IntegrationsPage: React.FC = () => {
               />
               <p className="text-xs text-theme-text-muted mt-1">
                 Obtain a refresh token by completing the OAuth flow in your Salesforce Connected App.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="sf-environment" className={labelClass}>Environment</label>
+              <select
+                id="sf-environment"
+                value={sfEnvironment}
+                onChange={(e) => setSfEnvironment(e.target.value)}
+                className={inputClass}
+              >
+                <option value="production">Production</option>
+                <option value="sandbox">Sandbox</option>
+              </select>
+              <p className="text-xs text-theme-text-muted mt-1">
+                Select Sandbox if connecting to a Salesforce sandbox org for testing.
               </p>
             </div>
             <div>

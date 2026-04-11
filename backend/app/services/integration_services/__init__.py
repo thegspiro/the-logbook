@@ -122,6 +122,7 @@ def _get_salesforce_credentials(integration: Integration) -> dict[str, Any]:
     creds: dict[str, Any] = {
         "instance_url": config.get("instance_url", ""),
         "api_version": config.get("api_version", "v62.0"),
+        "environment": config.get("environment", "production"),
     }
     for key in ("client_id", "client_secret", "refresh_token", "access_token"):
         val = integration.get_secret(key)
