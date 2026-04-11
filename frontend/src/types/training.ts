@@ -1224,7 +1224,7 @@ export interface CrewMemberEvaluation {
 }
 
 export interface BatchShiftReportCreate {
-  shift_id: string;
+  shift_id?: string;
   shift_date: string;
   hours_on_shift: number;
   calls_responded: number;

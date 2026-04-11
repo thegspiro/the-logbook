@@ -436,7 +436,7 @@ class ShiftCompletionService:
         self,
         organization_id: UUID,
         officer_id: UUID,
-        shift_id: str,
+        shift_id: Optional[str],
         shift_date: date,
         hours_on_shift: float,
         calls_responded: int,

@@ -162,8 +162,8 @@ class CrewMemberEvaluation(BaseModel):
 
 
 class BatchShiftReportCreate(BaseModel):
-    """Create shift reports for all crew members on a shift."""
-    shift_id: str
+    """Create shift reports for crew members, optionally linked to a shift."""
+    shift_id: Optional[str] = None
     shift_date: date
     hours_on_shift: float = Field(gt=0, le=48)
     calls_responded: int = Field(ge=0, default=0)
