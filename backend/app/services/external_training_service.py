@@ -57,10 +57,12 @@ class ExternalTrainingSyncService:
             Tuple of (success, message)
         """
         try:
-            if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
+            if provider.provider_type in (
+                ExternalProviderType.VECTOR_SOLUTIONS,
+                ExternalProviderType.TARGET_SOLUTIONS,
+            ):
+                # Vector Solutions acquired TargetSolutions; same API.
                 return await self._test_vector_solutions_connection(provider)
-            elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
-                return await self._test_target_solutions_connection(provider)
             elif provider.provider_type == ExternalProviderType.LEXIPOL:
                 return await self._test_lexipol_connection(provider)
             elif provider.provider_type == ExternalProviderType.I_AM_RESPONDING:
@@ -383,12 +385,12 @@ class ExternalTrainingSyncService:
         to_date: date,
     ) -> List[Dict[str, Any]]:
         """Fetch training records from external provider"""
-        if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
+        if provider.provider_type in (
+            ExternalProviderType.VECTOR_SOLUTIONS,
+            ExternalProviderType.TARGET_SOLUTIONS,
+        ):
+            # Vector Solutions acquired TargetSolutions; same API.
             return await self._fetch_vector_solutions_records(
-                provider, from_date, to_date
-            )
-        elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
-            return await self._fetch_target_solutions_records(
                 provider, from_date, to_date
             )
         elif provider.provider_type == ExternalProviderType.LEXIPOL:
@@ -411,6 +413,40 @@ class ExternalTrainingSyncService:
                 "then set site_id in the provider config."
             )
         return site_id
+
+    async def _vs_request(
+        self,
+        provider: ExternalTrainingProvider,
+        method: str,
+        url: str,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Execute an HTTP request against the Vector Solutions API.
+
+        Handles 429 rate-limit responses with exponential backoff
+        (up to 3 retries: 2s, 4s, 8s).
+        """
+        import asyncio
+
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            response = await self.http_client.request(method, url, **kwargs)
+            if response.status_code != 429:
+                return response
+            if attempt == max_retries:
+                return response
+            # Respect Retry-After header if present, else exponential backoff
+            retry_after = response.headers.get("Retry-After")
+            if retry_after and retry_after.isdigit():
+                wait = min(int(retry_after), 30)
+            else:
+                wait = 2 ** (attempt + 1)
+            logger.info(
+                "Vector Solutions rate limited (429) — retrying in %ds",
+                wait,
+            )
+            await asyncio.sleep(wait)
+        return response  # type: ignore[possibly-undefined]
 
     async def _fetch_vector_solutions_records(
         self,
@@ -444,29 +480,31 @@ class ExternalTrainingSyncService:
 
         url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
 
-        # Vector Solutions uses startrow/limit pagination (max 1000)
+        # Vector Solutions uses startrow/count pagination (max 1000)
         page_size = min(int(config.get("page_size", 1000)), 1000)
 
         params: Dict[str, Any] = {
-            "limit": page_size,
+            "count": page_size,
         }
 
-        # Add date filtering if the API supports it
+        # Add date filtering — prefer dedicated startDate/endDate params,
+        # fall back to JSON search query for older API versions.
         date_filter = config.get("date_filter_param")
         if date_filter:
             params[date_filter] = from_date.isoformat()
         else:
-            # Use search query for date filtering
-            params["q"] = (
-                f'{{"completionDate":"{from_date.isoformat()}..{to_date.isoformat()}"}}'
-            )
+            params["startDate"] = from_date.isoformat()
+            params["endDate"] = to_date.isoformat()
 
         all_records = []
         startrow = 0
+        total_count: Optional[int] = None
 
         while True:
             params["startrow"] = startrow
-            response = await self.http_client.get(url, headers=headers, params=params)
+            response = await self._vs_request(
+                provider, "GET", url, headers=headers, params=params
+            )
             response.raise_for_status()
 
             data = response.json()
@@ -476,13 +514,21 @@ class ExternalTrainingSyncService:
                 else data.get("data", data.get("credentials", data.get("records", [])))
             )
 
+            # Read total count from response envelope if available
+            if total_count is None and isinstance(data, dict):
+                total_count = data.get(
+                    "totalCount", data.get("total", data.get("count"))
+                )
+
             if not records:
                 break
 
             for record in records:
                 all_records.append(self._normalize_vector_solutions_record(record))
 
-            # Vector Solutions returns fewer than limit when no more pages
+            # Stop when we've fetched all records or received a short page
+            if total_count is not None and len(all_records) >= total_count:
+                break
             if len(records) < page_size:
                 break
             startrow += page_size
@@ -532,6 +578,9 @@ class ExternalTrainingSyncService:
             "duration_minutes": record.get(
                 "durationMinutes",
                 record.get("duration", record.get("creditMinutes", 0)),
+            ),
+            "credit_hours": record.get(
+                "creditHours", record.get("credits", record.get("hours", 0))
             ),
             "completion_date": record.get(
                 "completionDate",

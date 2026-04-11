@@ -178,13 +178,13 @@ const CreateProviderModal: React.FC<CreateProviderModalProps> = ({ isOpen, onClo
                 value={formData.api_base_url}
                 onChange={(e) => setFormData(prev => ({ ...prev, api_base_url: e.target.value }))}
                 className="w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary focus:outline-hidden focus:border-theme-focus-ring"
-                placeholder={formData.provider_type === 'vector_solutions' ? 'https://app.targetsolutions.com/v1' : 'https://api.example.com'}
+                placeholder={formData.provider_type === 'vector_solutions' ? 'https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1' : 'https://api.example.com'}
                 required
                 aria-required="true"
               />
               {formData.provider_type === 'vector_solutions' && (
                 <p className="mt-1 text-xs text-theme-text-muted">
-                  For Vector Solutions / TargetSolutions, use your organization's API base URL (e.g., https://app.targetsolutions.com/v1)
+                  For Vector Solutions / TargetSolutions, use your organization&apos;s API base URL (e.g., https://app.targetsolutions.com/tsapp/dashboard/pl/api/v1)
                 </p>
               )}
             </div>
