@@ -28,6 +28,7 @@ from app.models.training import (
     RequirementProgressStatus,
     RequirementSource,
     RequirementType,
+    TrainingCategory,
     TrainingProgram,
     TrainingRequirement,
 )
@@ -1384,6 +1385,30 @@ class TrainingProgramService:
                     continue
 
             try:
+                # Resolve category_ids from category_hour_distributions
+                # by matching registry_code on TrainingCategory.
+                category_ids = None
+                distributions = req_data.get("category_hour_distributions")
+                if distributions:
+                    resolved_ids = []
+                    for dist in distributions:
+                        rc = dist.get("registry_code")
+                        if not rc:
+                            continue
+                        cat_result = await self.db.execute(
+                            select(TrainingCategory).where(
+                                TrainingCategory.organization_id
+                                == str(organization_id),
+                                TrainingCategory.registry_code == rc,
+                                TrainingCategory.active.is_(True),
+                            )
+                        )
+                        cat = cat_result.scalar_one_or_none()
+                        if cat:
+                            resolved_ids.append(cat.id)
+                    if resolved_ids:
+                        category_ids = resolved_ids
+
                 # Create requirement from registry data
                 requirement = TrainingRequirement(
                     organization_id=organization_id,
@@ -1404,6 +1429,7 @@ class TrainingProgramService:
                     required_call_types=req_data.get("required_call_types"),
                     required_skills=req_data.get("required_skills"),
                     checklist_items=req_data.get("checklist_items"),
+                    category_ids=category_ids,
                     frequency=req_data.get("frequency", "annual"),
                     time_limit_days=req_data.get("time_limit_days"),
                     applies_to_all=req_data.get("applies_to_all", False),

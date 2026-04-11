@@ -395,6 +395,7 @@ class TrainingSubmissionService:
             course_name=submission.course_name,
             course_code=submission.course_code,
             training_type=submission.training_type,
+            category_id=submission.category_id,
             completion_date=submission.completion_date,
             hours_completed=submission.hours_completed,
             credit_hours=submission.credit_hours or submission.hours_completed,
