@@ -13,7 +13,7 @@ import type {
   Inspection,
   Room,
   FacilitySystem,
-} from '../pages/facilities/types';
+} from '../modules/facilities/types';
 
 // ============================================
 // Facilities Create / Update payloads

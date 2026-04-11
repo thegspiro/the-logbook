@@ -8,13 +8,9 @@ import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { ComplianceChecklist, ComplianceChecklistCreate } from '../../../services/facilitiesServices';
 import { enumLabel } from '../types';
+import { inputCls, labelCls, COMPLIANCE_TYPE_OPTIONS } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
-
-const COMPLIANCE_TYPE_OPTIONS = [
-  'nfpa', 'osha', 'ada', 'building_code', 'fire_code',
-  'environmental', 'insurance', 'other',
-] as const;
 
 interface Props {
   facilityId: string;
@@ -81,9 +77,6 @@ export default function ComplianceSection({ facilityId }: Props) {
       toast.error('Failed to delete checklist');
     }
   };
-
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
 
   return (
     <div className="bg-theme-surface border border-theme-surface-border rounded-xl">

@@ -626,11 +626,21 @@ async def update_facility_photo(
     """
     service = FacilitiesService(db)
 
-    photo = await service.update_photo(
-        photo_id=photo_id,
-        photo_data=photo_data,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        photo = await service.update_photo(
+            photo_id=photo_id,
+            photo_data=photo_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
 
     if not photo:
         raise HTTPException(
@@ -763,11 +773,21 @@ async def update_facility_document(
     """
     service = FacilitiesService(db)
 
-    document = await service.update_document(
-        document_id=document_id,
-        document_data=document_data,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        document = await service.update_document(
+            document_id=document_id,
+            document_data=document_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
 
     if not document:
         raise HTTPException(
@@ -1784,11 +1804,21 @@ async def update_facility_utility_reading(
     """
     service = FacilitiesService(db)
 
-    reading = await service.update_utility_reading(
-        reading_id=reading_id,
-        reading_data=reading_data,
-        organization_id=current_user.organization_id,
-    )
+    try:
+        reading = await service.update_utility_reading(
+            reading_id=reading_id,
+            reading_data=reading_data,
+            organization_id=current_user.organization_id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
 
     if not reading:
         raise HTTPException(

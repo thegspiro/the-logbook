@@ -37,7 +37,7 @@ const routeImportMap: Record<string, () => Promise<unknown>> = {
   '/scheduling': () => import('../pages/SchedulingPage'),
 
   // Facilities / Locations
-  '/facilities': () => import('../pages/FacilitiesPage'),
+  '/facilities': () => import('../modules/facilities/pages/FacilitiesDashboard'),
   '/locations': () => import('../pages/LocationsPage'),
 
   // Apparatus

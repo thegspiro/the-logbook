@@ -2,17 +2,14 @@
  * MaintenanceSection — Maintenance records for a single facility.
  */
 
-import { useState, useEffect, useCallback } from 'react';
 import {
   Wrench, Plus, Search, Loader2, X, CheckCircle2, Clock,
-  AlertTriangle, Calendar, DollarSign, Pencil,
+  AlertTriangle, Calendar, DollarSign, Pencil, RotateCcw,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { facilitiesService } from '../../../services/api';
-import type { MaintenanceRecordCreate } from '../../../services/facilitiesServices';
-import type { MaintenanceRecord, MaintenanceType } from '../types';
+import { inputCls, labelCls } from '../constants';
+import { useMaintenanceForm } from '../hooks/useMaintenanceForm';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate, formatDate, formatNumber } from '../../../utils/dateFormatting';
+import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 
 interface Props {
   facilityId: string;
@@ -20,150 +17,23 @@ interface Props {
 
 export default function MaintenanceSection({ facilityId }: Props) {
   const tz = useTimezone();
-  const [records, setRecords] = useState<MaintenanceRecord[]>([]);
-  const [maintenanceTypes, setMaintenanceTypes] = useState<MaintenanceType[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'overdue'>('all');
-  const [showModal, setShowModal] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<MaintenanceRecord | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    maintenance_type_id: '', description: '', scheduled_date: '',
-    due_date: '', performed_by: '', cost: '', vendor: '',
-    work_order_number: '', notes: '',
-  });
-
-  const loadRecords = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [data, types] = await Promise.all([
-        facilitiesService.getMaintenanceRecords({ facility_id: facilityId }),
-        facilitiesService.getMaintenanceTypes(),
-      ]);
-      setRecords(data);
-      setMaintenanceTypes(types);
-    } catch {
-      toast.error('Failed to load maintenance records');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [facilityId]);
-
-  useEffect(() => { void loadRecords(); }, [loadRecords]);
-
-  const filtered = records.filter(r => {
-    if (statusFilter === 'completed' && !r.isCompleted) return false;
-    if (statusFilter === 'pending' && r.isCompleted) return false;
-    if (statusFilter === 'overdue' && !r.isOverdue) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return !!(
-        r.description?.toLowerCase().includes(q) ||
-        r.vendor?.toLowerCase().includes(q) ||
-        r.workOrderNumber?.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
-  const openCreate = () => {
-    setEditingRecord(null);
-    setFormData({
-      maintenance_type_id: '', description: '', scheduled_date: '',
-      due_date: '', performed_by: '', cost: '', vendor: '',
-      work_order_number: '', notes: '',
-    });
-    setShowModal(true);
-  };
-
-  const openEdit = (record: MaintenanceRecord) => {
-    setEditingRecord(record);
-    setFormData({
-      maintenance_type_id: record.maintenanceTypeId || '',
-      description: record.description || '',
-      scheduled_date: record.scheduledDate || '',
-      due_date: record.dueDate || '',
-      performed_by: record.performedBy || '',
-      cost: record.cost?.toString() || '',
-      vendor: record.vendor || '',
-      work_order_number: record.workOrderNumber || '',
-      notes: record.notes || '',
-    });
-    setShowModal(true);
-  };
-
-  const handleSave = async () => {
-    if (!formData.description.trim()) { toast.error('Description is required'); return; }
-    setIsSaving(true);
-    try {
-      const payload: MaintenanceRecordCreate = {
-        facility_id: facilityId,
-        description: formData.description.trim(),
-      };
-      if (formData.maintenance_type_id) payload.maintenance_type_id = formData.maintenance_type_id;
-      if (formData.scheduled_date) payload.scheduled_date = formData.scheduled_date;
-      if (formData.due_date) payload.due_date = formData.due_date;
-      if (formData.performed_by.trim()) payload.performed_by = formData.performed_by.trim();
-      if (formData.cost) payload.cost = Number(formData.cost);
-      if (formData.vendor.trim()) payload.vendor = formData.vendor.trim();
-      if (formData.work_order_number.trim()) payload.work_order_number = formData.work_order_number.trim();
-      if (formData.notes.trim()) payload.notes = formData.notes.trim();
-
-      if (editingRecord) {
-        await facilitiesService.updateMaintenanceRecord(editingRecord.id, payload);
-        toast.success('Record updated');
-      } else {
-        await facilitiesService.createMaintenanceRecord(payload);
-        toast.success('Record created');
-      }
-      setShowModal(false);
-      void loadRecords();
-    } catch {
-      toast.error('Failed to save record');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleComplete = async (record: MaintenanceRecord) => {
-    try {
-      await facilitiesService.updateMaintenanceRecord(record.id, {
-        is_completed: true,
-        completed_date: getTodayLocalDate(tz),
-      });
-      toast.success('Marked as completed');
-      void loadRecords();
-    } catch {
-      toast.error('Failed to update record');
-    }
-  };
-
-  const handleDelete = async (record: MaintenanceRecord) => {
-    if (!window.confirm('Delete this maintenance record?')) return;
-    try {
-      await facilitiesService.deleteMaintenanceRecord(record.id);
-      toast.success('Record deleted');
-      void loadRecords();
-    } catch {
-      toast.error('Failed to delete record');
-    }
-  };
-
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
+  const {
+    records: filtered, maintenanceTypes, isLoading, loadError, reload,
+    searchQuery, setSearchQuery, statusFilter, setStatusFilter,
+    showModal, setShowModal, editingRecord, isSaving,
+    formData, setFormData, openCreate, openEdit, handleSave, handleComplete, handleDelete,
+  } = useMaintenanceForm({ facilityId });
 
   return (
     <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
       <div className="flex items-center justify-between p-5 border-b border-theme-surface-border">
         <h2 className="text-sm font-semibold text-theme-text-primary">Maintenance Records</h2>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+        <button onClick={() => openCreate()} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
           <Plus className="w-3.5 h-3.5" /> New Record
         </button>
       </div>
 
       <div className="p-5 space-y-4">
-        {/* Toolbar */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 max-w-xs">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
@@ -179,9 +49,16 @@ export default function MaintenanceSection({ facilityId }: Props) {
           </div>
         </div>
 
-        {/* Records List */}
         {isLoading ? (
           <div className="flex justify-center py-8" role="status" aria-live="polite"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
+        ) : loadError ? (
+          <div className="text-center py-8">
+            <Wrench className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
+            <p className="text-sm text-theme-text-muted mb-3">Failed to load maintenance records.</p>
+            <button onClick={() => { void reload(); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+              <RotateCcw className="w-3.5 h-3.5" /> Retry
+            </button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-8">
             <Wrench className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
@@ -232,7 +109,6 @@ export default function MaintenanceSection({ facilityId }: Props) {
         )}
       </div>
 
-      {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true"
           onKeyDown={e => { if (e.key === 'Escape') setShowModal(false); }}>

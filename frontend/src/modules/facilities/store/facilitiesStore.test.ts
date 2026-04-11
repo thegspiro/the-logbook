@@ -219,7 +219,7 @@ describe('facilitiesStore', () => {
 
       expect(result).toEqual(newFacility);
       expect(mockCreateFacility).toHaveBeenCalledWith({ name: 'New Station' });
-      expect(mockGetFacilities).toHaveBeenCalled();
+      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
     it('should propagate errors on creation failure', async () => {
@@ -241,7 +241,7 @@ describe('facilitiesStore', () => {
 
       expect(mockUpdateFacility).toHaveBeenCalledWith('f1', { name: 'Updated Station' });
       expect(mockGetFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalled();
+      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
     it('should propagate errors on update failure', async () => {
@@ -261,7 +261,7 @@ describe('facilitiesStore', () => {
       await useFacilitiesStore.getState().archiveFacility('f1');
 
       expect(mockArchiveFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalled();
+      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
     it('should restore facility and refresh list', async () => {
@@ -271,7 +271,7 @@ describe('facilitiesStore', () => {
       await useFacilitiesStore.getState().restoreFacility('f1');
 
       expect(mockRestoreFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalled();
+      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
     it('should propagate errors on archive failure', async () => {

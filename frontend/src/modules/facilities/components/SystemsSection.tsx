@@ -9,18 +9,9 @@ import { facilitiesService } from '../../../services/api';
 import type { FacilitySystemCreate } from '../../../services/facilitiesServices';
 import type { FacilitySystem } from '../types';
 import { enumLabel, SYSTEM_TYPES } from '../types';
+import { inputCls, labelCls, CONDITION_OPTIONS, CONDITION_COLORS } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, isPastDate } from '../../../utils/dateFormatting';
-
-const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'critical'] as const;
-
-const CONDITION_COLORS: Record<string, string> = {
-  excellent: 'text-emerald-600 dark:text-emerald-400',
-  good: 'text-blue-600 dark:text-blue-400',
-  fair: 'text-amber-600 dark:text-amber-400',
-  poor: 'text-orange-600 dark:text-orange-400',
-  critical: 'text-red-600 dark:text-red-400',
-};
 
 interface Props {
   facilityId: string;
@@ -139,10 +130,6 @@ export default function SystemsSection({ facilityId }: Props) {
       toast.error('Failed to delete system');
     }
   };
-
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
 
   return (
     <div className="bg-theme-surface border border-theme-surface-border rounded-xl">

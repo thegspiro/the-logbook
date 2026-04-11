@@ -8,11 +8,7 @@ import toast from 'react-hot-toast';
 import { facilitiesService } from '../../../services/api';
 import type { EmergencyContact, EmergencyContactCreate } from '../../../services/facilitiesServices';
 import { enumLabel } from '../types';
-
-const CONTACT_TYPE_OPTIONS = [
-  'utility', 'fire_alarm', 'security', 'elevator', 'hvac',
-  'plumbing', 'electrical', 'locksmith', 'hazmat', 'other',
-] as const;
+import { inputCls, labelCls, CONTACT_TYPE_OPTIONS } from '../constants';
 
 interface Props {
   facilityId: string;
@@ -115,9 +111,6 @@ export default function ContactsSection({ facilityId }: Props) {
       toast.error('Failed to delete contact');
     }
   };
-
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
 
   return (
     <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
