@@ -1863,6 +1863,113 @@ _get_requirement_date_window = get_requirement_date_window
 _evaluate_member_requirement = evaluate_member_requirement
 
 
+@router.get("/category-hours/{user_id}")
+async def get_category_hour_breakdown(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get per-category hour breakdown for a member.
+
+    Returns total hours completed in each training category within the
+    current biannual cycle, so training officers can verify NCCR topic
+    area progress against national/state minimums.
+    """
+    from app.models.training import TrainingCategory
+
+    org_id = str(current_user.organization_id)
+
+    # Verify target user belongs to same org
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id), User.organization_id == org_id)
+    )
+    if not user_result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+
+    # Default to a 2-year window for biannual NREMT cycles
+    today = date.today()
+    window_start = today.replace(year=today.year - 2)
+
+    records_result = await db.execute(
+        select(TrainingRecord).where(
+            TrainingRecord.user_id == str(user_id),
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.status == TrainingStatus.COMPLETED,
+            TrainingRecord.completion_date >= window_start,
+            TrainingRecord.category_id.isnot(None),
+        )
+    )
+    records = records_result.scalars().all()
+
+    # Sum hours per category
+    hours_by_category: dict[str, float] = {}
+    for rec in records:
+        cid = rec.category_id
+        hours_by_category[cid] = (
+            hours_by_category.get(cid, 0) + (rec.hours_completed or 0)
+        )
+
+    # Look up category details
+    cat_ids = list(hours_by_category.keys())
+    categories: dict[str, dict] = {}
+    if cat_ids:
+        cat_result = await db.execute(
+            select(TrainingCategory).where(
+                TrainingCategory.id.in_(cat_ids)
+            )
+        )
+        for cat in cat_result.scalars().all():
+            categories[cat.id] = {
+                "name": cat.name,
+                "code": cat.code,
+                "registry_code": cat.registry_code,
+            }
+
+    # Build response
+    breakdown = []
+    for cid, hours in sorted(
+        hours_by_category.items(),
+        key=lambda x: x[1],
+        reverse=True,
+    ):
+        cat_info = categories.get(cid, {})
+        breakdown.append({
+            "category_id": cid,
+            "category_name": cat_info.get("name", "Unknown"),
+            "category_code": cat_info.get("code"),
+            "registry_code": cat_info.get("registry_code"),
+            "hours_completed": round(hours, 2),
+        })
+
+    # Also include uncategorized hours
+    uncat_result = await db.execute(
+        select(TrainingRecord).where(
+            TrainingRecord.user_id == str(user_id),
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.status == TrainingStatus.COMPLETED,
+            TrainingRecord.completion_date >= window_start,
+            TrainingRecord.category_id.is_(None),
+        )
+    )
+    uncat_records = uncat_result.scalars().all()
+    uncat_hours = sum(r.hours_completed or 0 for r in uncat_records)
+
+    total_hours = sum(h for h in hours_by_category.values()) + uncat_hours
+
+    return {
+        "user_id": str(user_id),
+        "window_start": window_start.isoformat(),
+        "window_end": today.isoformat(),
+        "total_hours": round(total_hours, 2),
+        "uncategorized_hours": round(uncat_hours, 2),
+        "categories": breakdown,
+    }
+
+
 @router.get("/compliance-matrix")
 async def get_compliance_matrix(
     db: AsyncSession = Depends(get_db),

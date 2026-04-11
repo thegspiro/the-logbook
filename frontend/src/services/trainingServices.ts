@@ -355,6 +355,16 @@ export const externalTrainingService = {
     return response.data;
   },
 
+  /**
+   * Fetch training categories from the external provider and create mappings
+   */
+  async syncCategories(providerId: string): Promise<{ success: boolean; message: string; created: number; existing: number }> {
+    const response = await api.post<{ success: boolean; message: string; created: number; existing: number }>(
+      `/training/external/providers/${providerId}/sync-categories`
+    );
+    return response.data;
+  },
+
   // ==================== Category Mappings ====================
 
   /**
@@ -638,6 +648,18 @@ export const trainingProgramService = {
     const response = await api.post<TrainingProgram>(`/training/programs/programs/${programId}/duplicate`, null, {
       params: { new_name: newName, increment_version: incrementVersion },
     });
+    return response.data;
+  },
+
+  // ==================== Export / Import ====================
+
+  async exportProgram(programId: string): Promise<Record<string, unknown>> {
+    const response = await api.get<Record<string, unknown>>(`/training/programs/programs/${programId}/export`);
+    return response.data;
+  },
+
+  async importProgram(data: Record<string, unknown>): Promise<{ success: boolean; program_id: string; program_name: string; message: string }> {
+    const response = await api.post<{ success: boolean; program_id: string; program_name: string; message: string }>('/training/programs/programs/import', data);
     return response.data;
   },
 

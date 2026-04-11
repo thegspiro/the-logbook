@@ -1765,6 +1765,7 @@ class EventService:
             organization_id=organization_id,
             user_id=user_id,
             course_id=training_session.course_id,
+            category_id=training_session.category_id,
             course_name=training_session.course_name,
             course_code=training_session.course_code,
             training_type=training_session.training_type,

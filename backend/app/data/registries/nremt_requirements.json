@@ -1,61 +1,100 @@
 {
   "registry_name": "NREMT",
   "registry_description": "National Registry of Emergency Medical Technicians",
-  "last_updated": "2026-03-01",
+  "last_updated": "2026-04-11",
   "source_url": "https://www.nremt.org/recertification",
   "source": "national",
+  "nccr_topic_areas": [
+    {"code": "NCCR-AIRWAY", "name": "Airway, Respiration & Ventilation", "nremt_area_bls": "11", "nremt_area_als": "16"},
+    {"code": "NCCR-CARDIO", "name": "Cardiology", "nremt_area_bls": "12", "nremt_area_als": "17"},
+    {"code": "NCCR-TRAUMA", "name": "Trauma", "nremt_area_bls": "13", "nremt_area_als": "18"},
+    {"code": "NCCR-MEDICAL", "name": "Medical", "nremt_area_bls": "14", "nremt_area_als": "19"},
+    {"code": "NCCR-OPS", "name": "Operations", "nremt_area_bls": "15", "nremt_area_als": "20"}
+  ],
   "requirements": [
     {
-      "name": "EMR Continuing Education",
-      "description": "Emergency Medical Responder recertification continuing education",
-      "registry_code": "EMR",
+      "name": "NREMR National Component",
+      "description": "Emergency Medical Responder national component — NCCR topic area minimums",
+      "registry_code": "NREMR",
       "requirement_type": "hours",
       "training_type": "continuing_education",
       "required_hours": 40.0,
+      "national_component_hours": 8.0,
       "frequency": "biannual",
       "applies_to_all": false,
       "required_positions": ["emr"],
       "time_limit_days": 730,
-      "is_editable": true
+      "is_editable": true,
+      "category_hour_distributions": [
+        {"registry_code": "NCCR-AIRWAY", "min_hours": 1.5},
+        {"registry_code": "NCCR-CARDIO", "min_hours": 2.0},
+        {"registry_code": "NCCR-TRAUMA", "min_hours": 1.0},
+        {"registry_code": "NCCR-MEDICAL", "min_hours": 2.5},
+        {"registry_code": "NCCR-OPS", "min_hours": 1.0}
+      ]
     },
     {
-      "name": "EMT Continuing Education",
-      "description": "Emergency Medical Technician recertification continuing education",
-      "registry_code": "EMT",
+      "name": "NREMT National Component",
+      "description": "Emergency Medical Technician national component — NCCR topic area minimums",
+      "registry_code": "NREMT",
       "requirement_type": "hours",
       "training_type": "continuing_education",
       "required_hours": 50.0,
+      "national_component_hours": 20.0,
       "frequency": "biannual",
       "applies_to_all": false,
       "required_positions": ["emt"],
       "time_limit_days": 730,
-      "is_editable": true
+      "is_editable": true,
+      "category_hour_distributions": [
+        {"registry_code": "NCCR-AIRWAY", "min_hours": 4.0},
+        {"registry_code": "NCCR-CARDIO", "min_hours": 5.0},
+        {"registry_code": "NCCR-TRAUMA", "min_hours": 3.0},
+        {"registry_code": "NCCR-MEDICAL", "min_hours": 6.0},
+        {"registry_code": "NCCR-OPS", "min_hours": 2.0}
+      ]
     },
     {
-      "name": "AEMT Continuing Education",
-      "description": "Advanced Emergency Medical Technician recertification continuing education",
-      "registry_code": "AEMT",
+      "name": "NRAEMT National Component",
+      "description": "Advanced Emergency Medical Technician national component — NCCR topic area minimums",
+      "registry_code": "NRAEMT",
       "requirement_type": "hours",
       "training_type": "continuing_education",
       "required_hours": 75.0,
+      "national_component_hours": 25.0,
       "frequency": "biannual",
       "applies_to_all": false,
       "required_positions": ["aemt"],
       "time_limit_days": 730,
-      "is_editable": true
+      "is_editable": true,
+      "category_hour_distributions": [
+        {"registry_code": "NCCR-AIRWAY", "min_hours": 5.0},
+        {"registry_code": "NCCR-CARDIO", "min_hours": 6.0},
+        {"registry_code": "NCCR-TRAUMA", "min_hours": 4.0},
+        {"registry_code": "NCCR-MEDICAL", "min_hours": 7.0},
+        {"registry_code": "NCCR-OPS", "min_hours": 3.0}
+      ]
     },
     {
-      "name": "Paramedic Continuing Education",
-      "description": "Paramedic recertification continuing education",
-      "registry_code": "Paramedic",
+      "name": "NRP National Component",
+      "description": "Paramedic national component — NCCR topic area minimums",
+      "registry_code": "NRP",
       "requirement_type": "hours",
       "training_type": "continuing_education",
       "required_hours": 100.0,
+      "national_component_hours": 30.0,
       "frequency": "biannual",
       "applies_to_all": false,
       "required_positions": ["paramedic"],
       "time_limit_days": 730,
-      "is_editable": true
+      "is_editable": true,
+      "category_hour_distributions": [
+        {"registry_code": "NCCR-AIRWAY", "min_hours": 6.0},
+        {"registry_code": "NCCR-CARDIO", "min_hours": 7.0},
+        {"registry_code": "NCCR-TRAUMA", "min_hours": 5.0},
+        {"registry_code": "NCCR-MEDICAL", "min_hours": 8.0},
+        {"registry_code": "NCCR-OPS", "min_hours": 4.0}
+      ]
     },
     {
       "name": "CPR/BLS Certification",

@@ -175,13 +175,17 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
     else:
         windowed = completed
 
-    # ---- HOURS requirements: sum hours by training_type ----
+    # ---- HOURS requirements: sum hours by training_type and/or category ----
     if req_type == RequirementType.HOURS.value:
         type_matched = windowed
         if req.training_type:
             type_matched = [r for r in windowed if r.training_type == req.training_type]
-        if req.category_ids and not req.training_type:
-            type_matched = windowed
+        if req.category_ids:
+            cat_set = set(req.category_ids)
+            type_matched = [
+                r for r in type_matched
+                if r.category_id and r.category_id in cat_set
+            ]
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)
         required = req.required_hours or 0

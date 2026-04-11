@@ -143,6 +143,10 @@ class TrainingCategory(Base):
     # Category Details
     name = Column(String(255), nullable=False)
     code = Column(String(50))  # Short code like "FIRE", "EMS", "DRIVER"
+    # National/state standard identifier for linking to external registries.
+    # Examples: "NCCR-11" (NREMT topic area 11), "NFPA-1001" (NFPA standard).
+    # Used to auto-map external provider categories to national requirements.
+    registry_code = Column(String(100), nullable=True)
     description = Column(Text)
     color = Column(String(7))  # Hex color for UI display, e.g., "#FF5733"
 
@@ -2166,6 +2170,7 @@ class ExternalTrainingImport(Base):
     course_code = Column(String(100))
     description = Column(Text)
     duration_minutes = Column(Integer)  # Duration in minutes
+    credit_hours = Column(Float)  # Credit hours (from providers that report hours directly)
     completion_date = Column(DateTime(timezone=True))  # When completed
     score = Column(Float)  # Score if applicable
     passed = Column(Boolean)

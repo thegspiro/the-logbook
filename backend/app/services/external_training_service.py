@@ -57,10 +57,12 @@ class ExternalTrainingSyncService:
             Tuple of (success, message)
         """
         try:
-            if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
+            if provider.provider_type in (
+                ExternalProviderType.VECTOR_SOLUTIONS,
+                ExternalProviderType.TARGET_SOLUTIONS,
+            ):
+                # Vector Solutions acquired TargetSolutions; same API.
                 return await self._test_vector_solutions_connection(provider)
-            elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
-                return await self._test_target_solutions_connection(provider)
             elif provider.provider_type == ExternalProviderType.LEXIPOL:
                 return await self._test_lexipol_connection(provider)
             elif provider.provider_type == ExternalProviderType.I_AM_RESPONDING:
@@ -383,12 +385,12 @@ class ExternalTrainingSyncService:
         to_date: date,
     ) -> List[Dict[str, Any]]:
         """Fetch training records from external provider"""
-        if provider.provider_type == ExternalProviderType.VECTOR_SOLUTIONS:
+        if provider.provider_type in (
+            ExternalProviderType.VECTOR_SOLUTIONS,
+            ExternalProviderType.TARGET_SOLUTIONS,
+        ):
+            # Vector Solutions acquired TargetSolutions; same API.
             return await self._fetch_vector_solutions_records(
-                provider, from_date, to_date
-            )
-        elif provider.provider_type == ExternalProviderType.TARGET_SOLUTIONS:
-            return await self._fetch_target_solutions_records(
                 provider, from_date, to_date
             )
         elif provider.provider_type == ExternalProviderType.LEXIPOL:
@@ -412,6 +414,153 @@ class ExternalTrainingSyncService:
             )
         return site_id
 
+    async def _vs_request(
+        self,
+        provider: ExternalTrainingProvider,
+        method: str,
+        url: str,
+        **kwargs: Any,
+    ) -> httpx.Response:
+        """Execute an HTTP request against the Vector Solutions API.
+
+        Handles 429 rate-limit responses with exponential backoff
+        (up to 3 retries: 2s, 4s, 8s).
+        """
+        import asyncio
+
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            response = await self.http_client.request(method, url, **kwargs)
+            if response.status_code != 429:
+                return response
+            if attempt == max_retries:
+                return response
+            # Respect Retry-After header if present, else exponential backoff
+            retry_after = response.headers.get("Retry-After")
+            if retry_after and retry_after.isdigit():
+                wait = min(int(retry_after), 30)
+            else:
+                wait = 2 ** (attempt + 1)
+            logger.info(
+                "Vector Solutions rate limited (429) — retrying in %ds",
+                wait,
+            )
+            await asyncio.sleep(wait)
+        return response  # type: ignore[possibly-undefined]
+
+    async def fetch_vector_solutions_categories(
+        self,
+        provider: ExternalTrainingProvider,
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch the full training category catalog from Vector Solutions.
+
+        Calls GET /sites/{siteId}/categories to retrieve all categories
+        so they can be mapped to Logbook training categories before
+        syncing records.
+
+        Returns:
+            List of dicts with external_category_id and external_category_name.
+        """
+        headers = self._get_auth_headers(provider)
+        site_id = self._get_vector_site_id(provider)
+        url = f"{provider.api_base_url.rstrip('/')}/sites/{site_id}/categories"
+
+        response = await self._vs_request(
+            provider, "GET", url, headers=headers
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        raw_categories = (
+            data
+            if isinstance(data, list)
+            else data.get(
+                "categories", data.get("data", data.get("records", []))
+            )
+        )
+
+        categories: List[Dict[str, Any]] = []
+        for cat in raw_categories:
+            cat_id = str(
+                cat.get("id", cat.get("categoryId", cat.get("catId", "")))
+            )
+            cat_name = cat.get(
+                "name", cat.get("categoryName", cat.get("title", ""))
+            )
+            if not cat_id:
+                continue
+            categories.append({
+                "external_category_id": cat_id,
+                "external_category_name": cat_name,
+                "description": cat.get("description", ""),
+                "parent_id": str(
+                    cat.get("parentCategoryId", cat.get("parentId", ""))
+                ) or None,
+            })
+
+        return categories
+
+    async def sync_vector_solutions_categories(
+        self,
+        provider: ExternalTrainingProvider,
+    ) -> Dict[str, int]:
+        """
+        Fetch categories from Vector Solutions and create/update mappings.
+
+        Returns counts of new and existing mappings.
+        """
+        categories = await self.fetch_vector_solutions_categories(provider)
+
+        created = 0
+        existing = 0
+        for cat in categories:
+            ext_id = cat["external_category_id"]
+            result = await self.db.execute(
+                select(ExternalCategoryMapping)
+                .where(ExternalCategoryMapping.provider_id == provider.id)
+                .where(
+                    ExternalCategoryMapping.external_category_id == ext_id
+                )
+            )
+            mapping = result.scalar_one_or_none()
+            if mapping:
+                # Update name if it changed
+                if mapping.external_category_name != cat["external_category_name"]:
+                    mapping.external_category_name = cat["external_category_name"]
+                existing += 1
+            else:
+                new_mapping = ExternalCategoryMapping(
+                    provider_id=provider.id,
+                    organization_id=provider.organization_id,
+                    external_category_id=ext_id,
+                    external_category_name=cat["external_category_name"],
+                    is_mapped=False,
+                )
+                self.db.add(new_mapping)
+
+                # Try auto-mapping by name match
+                cat_result = await self.db.execute(
+                    select(TrainingCategory)
+                    .where(
+                        TrainingCategory.organization_id
+                        == provider.organization_id
+                    )
+                    .where(
+                        TrainingCategory.name == cat["external_category_name"]
+                    )
+                )
+                internal_cat = cat_result.scalar_one_or_none()
+                if internal_cat:
+                    new_mapping.internal_category_id = internal_cat.id
+                    new_mapping.is_mapped = True
+                    new_mapping.auto_mapped = True
+
+                created += 1
+
+        await self.db.flush()
+        return {"created": created, "existing": existing}
+
     async def _fetch_vector_solutions_records(
         self,
         provider: ExternalTrainingProvider,
@@ -424,7 +573,7 @@ class ExternalTrainingSyncService:
         API details:
         - Auth: AccessToken header
         - Endpoints are site-scoped: /sites/{siteId}/...
-        - Pagination: startrow & limit params (max 1000 per page)
+        - Pagination: startrow & count params (max 1000 per page)
         - Date filtering via query params
         - Response is JSON
         """
@@ -444,29 +593,31 @@ class ExternalTrainingSyncService:
 
         url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
 
-        # Vector Solutions uses startrow/limit pagination (max 1000)
+        # Vector Solutions uses startrow/count pagination (max 1000)
         page_size = min(int(config.get("page_size", 1000)), 1000)
 
         params: Dict[str, Any] = {
-            "limit": page_size,
+            "count": page_size,
         }
 
-        # Add date filtering if the API supports it
+        # Add date filtering — prefer dedicated startDate/endDate params,
+        # fall back to JSON search query for older API versions.
         date_filter = config.get("date_filter_param")
         if date_filter:
             params[date_filter] = from_date.isoformat()
         else:
-            # Use search query for date filtering
-            params["q"] = (
-                f'{{"completionDate":"{from_date.isoformat()}..{to_date.isoformat()}"}}'
-            )
+            params["startDate"] = from_date.isoformat()
+            params["endDate"] = to_date.isoformat()
 
         all_records = []
         startrow = 0
+        total_count: Optional[int] = None
 
         while True:
             params["startrow"] = startrow
-            response = await self.http_client.get(url, headers=headers, params=params)
+            response = await self._vs_request(
+                provider, "GET", url, headers=headers, params=params
+            )
             response.raise_for_status()
 
             data = response.json()
@@ -476,13 +627,21 @@ class ExternalTrainingSyncService:
                 else data.get("data", data.get("credentials", data.get("records", [])))
             )
 
+            # Read total count from response envelope if available
+            if total_count is None and isinstance(data, dict):
+                total_count = data.get(
+                    "totalCount", data.get("total", data.get("count"))
+                )
+
             if not records:
                 break
 
             for record in records:
                 all_records.append(self._normalize_vector_solutions_record(record))
 
-            # Vector Solutions returns fewer than limit when no more pages
+            # Stop when we've fetched all records or received a short page
+            if total_count is not None and len(all_records) >= total_count:
+                break
             if len(records) < page_size:
                 break
             startrow += page_size
@@ -529,13 +688,31 @@ class ExternalTrainingSyncService:
             "description": record.get(
                 "description", record.get("courseDescription", "")
             ),
+            "training_type": record.get(
+                "trainingType", record.get("type", record.get("courseType", ""))
+            ),
             "duration_minutes": record.get(
                 "durationMinutes",
                 record.get("duration", record.get("creditMinutes", 0)),
             ),
+            "credit_hours": record.get(
+                "creditHours", record.get("credits", record.get("hours", 0))
+            ),
             "completion_date": record.get(
                 "completionDate",
                 record.get("completedDate", record.get("dateCompleted")),
+            ),
+            "expiration_date": record.get(
+                "expirationDate",
+                record.get("expireDate", record.get("certExpirationDate")),
+            ),
+            "certification_number": record.get(
+                "certificationNumber",
+                record.get("certNumber", record.get("licenseNumber", "")),
+            ),
+            "issuing_agency": record.get(
+                "issuingAgency",
+                record.get("issuer", record.get("certifyingBody", "")),
             ),
             "score": record.get(
                 "score", record.get("percentScore", record.get("finalScore"))
@@ -838,6 +1015,7 @@ class ExternalTrainingSyncService:
             course_code=record_data.get("course_code"),
             description=record_data.get("description"),
             duration_minutes=record_data.get("duration_minutes"),
+            credit_hours=record_data.get("credit_hours"),
             completion_date=self._parse_date(record_data.get("completion_date")),
             score=record_data.get("score"),
             passed=record_data.get("passed", True),
@@ -860,6 +1038,50 @@ class ExternalTrainingSyncService:
 
         self.db.add(import_record)
         return "imported"
+
+    @staticmethod
+    def _map_training_type(raw_data: Optional[Dict[str, Any]]) -> TrainingType:
+        """Infer the Logbook TrainingType from external provider data.
+
+        Looks at trainingType, courseType, and category keywords to map
+        to the closest Logbook enum value.  Falls back to
+        CONTINUING_EDUCATION when no match is found.
+        """
+        if not raw_data:
+            return TrainingType.CONTINUING_EDUCATION
+
+        type_str = str(
+            raw_data.get(
+                "trainingType",
+                raw_data.get(
+                    "type", raw_data.get("courseType", "")
+                ),
+            )
+        ).lower().strip()
+
+        # Direct keyword matching
+        cert_keywords = ("certification", "license", "credential", "cert")
+        refresher_keywords = ("refresher", "recertification", "renewal")
+        skills_keywords = ("skills", "practical", "hands-on", "drill")
+        orientation_keywords = ("orientation", "onboarding", "induction")
+        specialty_keywords = ("specialty", "advanced", "technician", "hazmat")
+
+        if any(k in type_str for k in cert_keywords):
+            return TrainingType.CERTIFICATION
+        if any(k in type_str for k in refresher_keywords):
+            return TrainingType.REFRESHER
+        if any(k in type_str for k in skills_keywords):
+            return TrainingType.SKILLS_PRACTICE
+        if any(k in type_str for k in orientation_keywords):
+            return TrainingType.ORIENTATION
+        if any(k in type_str for k in specialty_keywords):
+            return TrainingType.SPECIALTY
+
+        # Check if the record has expiration data — likely a certification
+        if raw_data.get("expirationDate") or raw_data.get("expireDate"):
+            return TrainingType.CERTIFICATION
+
+        return TrainingType.CONTINUING_EDUCATION
 
     def _parse_date(self, date_value: Any) -> Optional[datetime]:
         """Parse various date formats to datetime"""
@@ -1048,19 +1270,54 @@ class ExternalTrainingSyncService:
         notes_parts.append("Imported from external training provider")
         import_notes = ". ".join(notes_parts)
 
+        # Determine hours: prefer credit_hours from the provider (VS reports
+        # hours directly), fall back to converting duration_minutes.
+        if import_record.credit_hours and import_record.credit_hours > 0:
+            computed_hours = round(import_record.credit_hours, 2)
+        else:
+            computed_hours = round(
+                (import_record.duration_minutes or 0) / 60.0, 2
+            )
+
+        # Determine training type from external data when available
+        training_type = self._map_training_type(import_record.raw_data)
+
+        # Parse expiration date if present in raw data
+        raw = import_record.raw_data or {}
+        expiration_str = raw.get(
+            "expirationDate",
+            raw.get("expireDate", raw.get("certExpirationDate")),
+        )
+        expiration_date = None
+        if expiration_str:
+            parsed = self._parse_date(expiration_str)
+            if parsed:
+                expiration_date = parsed.date()
+
         # Create training record
         training_record = TrainingRecord(
             user_id=target_user_id,
             organization_id=import_record.organization_id,
             course_name=import_record.course_title,
             course_code=import_record.course_code,
-            training_type=TrainingType.CONTINUING_EDUCATION,
-            hours_completed=round((import_record.duration_minutes or 0) / 60.0, 2),
+            training_type=training_type,
+            hours_completed=computed_hours,
+            credit_hours=import_record.credit_hours,
             completion_date=(
                 import_record.completion_date.date()
                 if import_record.completion_date
                 else None
             ),
+            expiration_date=expiration_date,
+            certification_number=raw.get(
+                "certificationNumber",
+                raw.get("certNumber", raw.get("licenseNumber")),
+            ),
+            issuing_agency=raw.get(
+                "issuingAgency",
+                raw.get("issuer", raw.get("certifyingBody")),
+            ),
+            score=import_record.score,
             passed=import_record.passed,
             status=TrainingStatus.COMPLETED,
             category_id=target_category_id,
