@@ -965,7 +965,7 @@ export const ShiftReportsTab: React.FC = () => {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  window.open(`/scheduling/shift-reports/print?id=${report.id}`, '_blank');
+                  window.print();
                 }}
                 className="text-xs text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1 transition-colors"
               >

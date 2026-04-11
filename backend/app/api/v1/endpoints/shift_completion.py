@@ -480,7 +480,10 @@ async def submit_all_drafts(
     )
 
     submitted = 0
+    failed = 0
     for draft in drafts:
+        if draft.officer_id != str(current_user.id):
+            continue
         try:
             await service.update_report(
                 report_id=draft.id,
@@ -492,7 +495,7 @@ async def submit_all_drafts(
             )
             submitted += 1
         except ValueError:
-            continue
+            failed += 1
 
     if submitted > 0:
         await log_audit_event(
