@@ -10,12 +10,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  FileText, Plus, Loader2, Star, Clock, Phone, ChevronDown,
+  FileText, Plus, Loader2, Clock, Phone, ChevronDown,
   ChevronUp, Check, X, Search, User as UserIcon, AlertCircle,
   Shield, Eye, EyeOff, ClipboardCheck, Pencil, Printer,
   BarChart3, TrendingUp, Users, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import StarRating from './StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -685,13 +686,7 @@ export const ShiftReportsTab: React.FC = () => {
     if (!rating) return <span className="text-theme-text-muted text-xs">No rating</span>;
 
     if (ratingScaleType === 'stars') {
-      return (
-        <div className="flex items-center gap-0.5">
-          {[1, 2, 3, 4, 5].map(i => (
-            <Star key={i} className={`w-3.5 h-3.5 ${i <= rating ? 'fill-amber-400 text-amber-700 dark:text-amber-400' : 'text-theme-text-muted'}`} />
-          ))}
-        </div>
-      );
+      return <StarRating value={rating} size="sm" label={`Rating: ${rating} out of 5`} />;
     }
 
     // Competency or custom labels
@@ -1129,14 +1124,11 @@ export const ShiftReportsTab: React.FC = () => {
                 <div>
                   <label className="block text-xs font-medium text-theme-text-secondary mb-1">{ratingLabel}</label>
                   <div className="flex items-center gap-1">
-                    {[1, 2, 3, 4, 5].map(val => (
-                      <button key={val} type="button"
-                        onClick={() => setDraftForm(p => ({ ...p, performance_rating: val }))}
-                        className="p-1"
-                      >
-                        <Star className={`w-5 h-5 ${(draftForm.performance_rating ?? 0) >= val ? 'fill-amber-400 text-amber-400' : 'text-theme-text-muted'}`} />
-                      </button>
-                    ))}
+                    <StarRating
+                      value={draftForm.performance_rating ?? 0}
+                      onChange={(val) => setDraftForm(p => ({ ...p, performance_rating: val }))}
+                      label={ratingLabel}
+                    />
                     {draftForm.performance_rating && ratingScaleType === 'competency' && (
                       <span className="ml-2 text-xs text-theme-text-muted">
                         {ratingScaleLabels[String(draftForm.performance_rating)] ?? ''}
@@ -1593,30 +1585,30 @@ export const ShiftReportsTab: React.FC = () => {
                                 <div>
                                   <label className="block text-xs font-medium text-theme-text-secondary mb-1">{ratingLabel}</label>
                                   <div className="flex items-center gap-1">
-                                    {Array.from({ length: ratingLevelCount }, (_, i) => i + 1).map(val => {
-                                      const label = ratingScaleLabels[String(val)] || `Level ${val}`;
-                                      const isActive = (eval_?.performance_rating ?? 0) >= val;
-                                      return ratingScaleType === 'stars' ? (
-                                        <button key={val} type="button"
-                                          onClick={() => updateTraineeEval(member.user_id, 'performance_rating', val)}
-                                          className="p-0.5"
-                                          title={label}
-                                        >
-                                          <Star className={`w-5 h-5 ${isActive ? 'fill-amber-400 text-amber-400' : 'text-theme-text-muted hover:text-amber-300'}`} />
-                                        </button>
-                                      ) : (
-                                        <button key={val} type="button"
-                                          onClick={() => updateTraineeEval(member.user_id, 'performance_rating', eval_?.performance_rating === val ? undefined : val)}
-                                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                                            eval_?.performance_rating === val
-                                              ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30'
-                                              : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
-                                          }`}
-                                        >
-                                          {label}
-                                        </button>
-                                      );
-                                    })}
+                                    {ratingScaleType === 'stars' ? (
+                                      <StarRating
+                                        value={eval_?.performance_rating ?? 0}
+                                        onChange={(val) => updateTraineeEval(member.user_id, 'performance_rating', val)}
+                                        max={ratingLevelCount}
+                                        label={ratingLabel}
+                                      />
+                                    ) : (
+                                      Array.from({ length: ratingLevelCount }, (_, i) => i + 1).map(val => {
+                                        const label = ratingScaleLabels[String(val)] || `Level ${val}`;
+                                        return (
+                                          <button key={val} type="button"
+                                            onClick={() => updateTraineeEval(member.user_id, 'performance_rating', eval_?.performance_rating === val ? undefined : val)}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
+                                              eval_?.performance_rating === val
+                                                ? 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30'
+                                                : 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border hover:border-violet-500/30'
+                                            }`}
+                                          >
+                                            {label}
+                                          </button>
+                                        );
+                                      })
+                                    )}
                                     {eval_?.performance_rating && ratingScaleType === 'stars' && (
                                       <span className="text-xs text-theme-text-muted ml-1">
                                         {ratingScaleLabels[String(eval_.performance_rating)] || `Level ${eval_.performance_rating}`}
