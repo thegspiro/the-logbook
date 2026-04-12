@@ -1639,6 +1639,33 @@ async def extend_checkout(
     }
 
 
+def _build_checkout_response(record: CheckOutRecord) -> dict:
+    """Build the standard dict response for a CheckOutRecord."""
+    return {
+        "checkout_id": record.id,
+        "item_id": record.item_id,
+        "item_name": record.item.name if record.item else "Unknown",
+        "user_id": record.user_id,
+        "user_name": (
+            f"{record.user.first_name} {record.user.last_name}".strip()
+            if record.user
+            else "Unknown"
+        ),
+        "checked_out_at": (
+            record.checked_out_at.isoformat()
+            if record.checked_out_at
+            else None
+        ),
+        "expected_return_at": (
+            record.expected_return_at.isoformat()
+            if record.expected_return_at
+            else None
+        ),
+        "is_overdue": record.is_overdue,
+        "checkout_reason": record.checkout_reason,
+    }
+
+
 @router.get("/checkout/active")
 async def get_active_checkouts(
     user_id: UUID | None = None,
@@ -1661,28 +1688,7 @@ async def get_active_checkouts(
         limit=limit,
     )
     return {
-        "checkouts": [
-            {
-                "checkout_id": c.id,
-                "item_id": c.item_id,
-                "item_name": c.item.name if c.item else "Unknown",
-                "user_id": c.user_id,
-                "user_name": (
-                    f"{c.user.first_name} {c.user.last_name}".strip()
-                    if c.user
-                    else "Unknown"
-                ),
-                "checked_out_at": (
-                    c.checked_out_at.isoformat() if c.checked_out_at else None
-                ),
-                "expected_return_at": (
-                    c.expected_return_at.isoformat() if c.expected_return_at else None
-                ),
-                "is_overdue": c.is_overdue,
-                "checkout_reason": c.checkout_reason,
-            }
-            for c in checkouts
-        ],
+        "checkouts": [_build_checkout_response(c) for c in checkouts],
         "total": len(checkouts),
         "skip": skip,
         "limit": limit,
@@ -1709,28 +1715,7 @@ async def get_overdue_checkouts(
         limit=limit,
     )
     return {
-        "checkouts": [
-            {
-                "checkout_id": c.id,
-                "item_id": c.item_id,
-                "item_name": c.item.name if c.item else "Unknown",
-                "user_id": c.user_id,
-                "user_name": (
-                    f"{c.user.first_name} {c.user.last_name}".strip()
-                    if c.user
-                    else "Unknown"
-                ),
-                "checked_out_at": (
-                    c.checked_out_at.isoformat() if c.checked_out_at else None
-                ),
-                "expected_return_at": (
-                    c.expected_return_at.isoformat() if c.expected_return_at else None
-                ),
-                "is_overdue": c.is_overdue,
-                "checkout_reason": c.checkout_reason,
-            }
-            for c in checkouts
-        ],
+        "checkouts": [_build_checkout_response(c) for c in checkouts],
         "total": len(checkouts),
         "skip": skip,
         "limit": limit,
@@ -2792,6 +2777,40 @@ async def review_equipment_request(
     }
 
 
+def _build_storage_area_response(
+    area: StorageArea,
+    item_count: int = 0,
+    children: list | None = None,
+    location_name: str | None = None,
+    parent_name: str | None = None,
+) -> dict:
+    """Build the standard dict response for a StorageArea."""
+    return {
+        "id": area.id,
+        "organization_id": area.organization_id,
+        "name": area.name,
+        "label": area.label,
+        "description": area.description,
+        "storage_type": (
+            area.storage_type.value
+            if hasattr(area.storage_type, "value")
+            else area.storage_type
+        ),
+        "parent_id": area.parent_id,
+        "location_id": area.location_id,
+        "barcode": area.barcode,
+        "sort_order": area.sort_order or 0,
+        "is_active": area.is_active,
+        "created_at": area.created_at,
+        "updated_at": area.updated_at,
+        "created_by": area.created_by,
+        "children": children if children is not None else [],
+        "item_count": item_count,
+        "location_name": location_name,
+        "parent_name": parent_name,
+    }
+
+
 # ============================================
 # Storage Area Endpoints
 # ============================================
@@ -2852,33 +2871,13 @@ async def list_storage_areas(
     loc_names = {row.id: row.name for row in loc_result.all()}
 
     def build_response(area: StorageArea) -> dict:
-        resp = {
-            "id": area.id,
-            "organization_id": area.organization_id,
-            "name": area.name,
-            "label": area.label,
-            "description": area.description,
-            "storage_type": (
-                area.storage_type.value
-                if hasattr(area.storage_type, "value")
-                else area.storage_type
-            ),
-            "parent_id": area.parent_id,
-            "location_id": area.location_id,
-            "barcode": area.barcode,
-            "sort_order": area.sort_order or 0,
-            "is_active": area.is_active,
-            "created_at": area.created_at,
-            "updated_at": area.updated_at,
-            "created_by": area.created_by,
-            "children": [],
-            "item_count": item_counts.get(area.id, 0),
-            "location_name": (
+        return _build_storage_area_response(
+            area,
+            item_count=item_counts.get(area.id, 0),
+            location_name=(
                 loc_names.get(area.location_id) if area.location_id else None
             ),
-            "parent_name": None,
-        }
-        return resp
+        )
 
     if flat:
         return [build_response(a) for a in areas]
@@ -2948,30 +2947,7 @@ async def create_storage_area(
         username=current_user.username,
     )
 
-    return {
-        "id": area.id,
-        "organization_id": area.organization_id,
-        "name": area.name,
-        "label": area.label,
-        "description": area.description,
-        "storage_type": (
-            area.storage_type.value
-            if hasattr(area.storage_type, "value")
-            else area.storage_type
-        ),
-        "parent_id": area.parent_id,
-        "location_id": area.location_id,
-        "barcode": area.barcode,
-        "sort_order": area.sort_order or 0,
-        "is_active": area.is_active,
-        "created_at": area.created_at,
-        "updated_at": area.updated_at,
-        "created_by": area.created_by,
-        "children": [],
-        "item_count": 0,
-        "location_name": None,
-        "parent_name": None,
-    }
+    return _build_storage_area_response(area)
 
 
 @router.put("/storage-areas/{area_id}", response_model=StorageAreaResponse)
@@ -3028,30 +3004,7 @@ async def update_storage_area(
         username=current_user.username,
     )
 
-    return {
-        "id": area.id,
-        "organization_id": area.organization_id,
-        "name": area.name,
-        "label": area.label,
-        "description": area.description,
-        "storage_type": (
-            area.storage_type.value
-            if hasattr(area.storage_type, "value")
-            else area.storage_type
-        ),
-        "parent_id": area.parent_id,
-        "location_id": area.location_id,
-        "barcode": area.barcode,
-        "sort_order": area.sort_order or 0,
-        "is_active": area.is_active,
-        "created_at": area.created_at,
-        "updated_at": area.updated_at,
-        "created_by": area.created_by,
-        "children": [],
-        "item_count": 0,
-        "location_name": None,
-        "parent_name": None,
-    }
+    return _build_storage_area_response(area)
 
 
 @router.delete("/storage-areas/{area_id}", status_code=status.HTTP_204_NO_CONTENT)

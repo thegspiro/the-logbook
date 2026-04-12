@@ -473,7 +473,7 @@ const Dashboard: React.FC = () => {
     }, tz);
   };
 
-  const formatShiftTime = (_dateStr: string, timeStr?: string) => {
+  const formatShiftTime = (timeStr?: string) => {
     if (!timeStr) return "";
     return formatTime(timeStr, tz);
   };
@@ -997,8 +997,8 @@ const Dashboard: React.FC = () => {
                           {formatShiftDate(shift.shift_date)}
                         </p>
                         <p className="text-xs text-theme-text-muted">
-                          {formatShiftTime(shift.shift_date, shift.start_time)}{" "}
-                          - {formatShiftTime(shift.shift_date, shift.end_time)}
+                          {formatShiftTime(shift.start_time)}{" "}
+                          - {formatShiftTime(shift.end_time)}
                         </p>
                         {shift.shift_officer_name && (
                           <p className="text-xs text-theme-text-muted mt-0.5 sm:hidden">
@@ -1060,8 +1060,8 @@ const Dashboard: React.FC = () => {
                           {formatShiftDate(shift.shift_date)}
                         </p>
                         <p className="text-xs text-theme-text-muted">
-                          {formatShiftTime(shift.shift_date, shift.start_time)} -{" "}
-                          {formatShiftTime(shift.shift_date, shift.end_time)}
+                          {formatShiftTime(shift.start_time)} -{" "}
+                          {formatShiftTime(shift.end_time)}
                         </p>
                       </div>
                     </div>
