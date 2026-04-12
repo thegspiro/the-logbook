@@ -76,7 +76,8 @@ const ProgramPrintPage: React.FC = () => {
   return (
     <>
       <style>{`
-        @media print { @page { size: letter; margin: 0.5in 0.6in; } body { margin: 0; } }
+        @page { size: letter; margin: 0.5in 0.6in; }
+        @media print { body { margin: 0; } }
         @media screen { body { background: #f3f4f6; } }
       `}</style>
 

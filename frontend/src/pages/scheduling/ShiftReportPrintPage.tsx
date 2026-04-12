@@ -71,13 +71,9 @@ const ShiftReportPrintPage: React.FC = () => {
   return (
     <>
       <style>{`
-        @media print {
-          @page { size: letter; margin: 0.6in 0.75in; }
-          body { margin: 0; padding: 0; }
-        }
-        @media screen {
-          body { background: #f3f4f6; }
-        }
+        @page { size: letter; margin: 0.6in 0.75in; }
+        @media print { body { margin: 0; padding: 0; } }
+        @media screen { body { background: #f3f4f6; } }
       `}</style>
 
       <div className="max-w-[8.5in] mx-auto bg-white print:shadow-none shadow-lg my-8 print:my-0">

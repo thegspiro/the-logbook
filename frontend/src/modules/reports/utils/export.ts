@@ -136,7 +136,8 @@ export function exportReportAsPrintablePdf(
   const html = `<!DOCTYPE html>
 <html><head><title>${safeTitle}</title>
 <style>
-  @media print { body { margin: 0.5in; } @page { size: landscape; } }
+  @page { size: letter landscape; margin: 0.5in; }
+  @media print { body { margin: 0; } }
   body { font-family: Arial, sans-serif; color: #333; }
   h1 { font-size: 18px; margin-bottom: 4px; }
   .meta { font-size: 11px; color: #666; margin-bottom: 16px; }

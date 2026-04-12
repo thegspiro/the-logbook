@@ -54,10 +54,8 @@ const ShiftCheckInPrintPage: React.FC = () => {
       </div>
 
       <style>{`
-        @media print {
-          body { margin: 0; }
-          @page { size: 4.5in 6in; margin: 0.25in; }
-        }
+        @page { size: 4.5in 6in; margin: 0.25in; }
+        @media print { body { margin: 0; } }
       `}</style>
     </div>
   );

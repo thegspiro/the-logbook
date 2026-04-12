@@ -52,7 +52,8 @@ const CompliancePrintPage: React.FC = () => {
   return (
     <>
       <style>{`
-        @media print { @page { size: letter landscape; margin: 0.4in 0.5in; } body { margin: 0; } }
+        @page { size: letter landscape; margin: 0.4in 0.5in; }
+        @media print { body { margin: 0; } }
         @media screen { body { background: #f3f4f6; } }
       `}</style>
 
