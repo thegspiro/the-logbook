@@ -5,16 +5,14 @@ SQLAlchemy models for external integration configurations.
 """
 
 import json
-import logging
 from typing import Any, Optional
 
+from loguru import logger
 from sqlalchemy import JSON, Boolean, Column, DateTime, Index, String, Text
 from sqlalchemy.sql import func
 
 from app.core.database import Base
 from app.core.utils import generate_uuid
-
-logger = logging.getLogger(__name__)
 
 
 class Integration(Base):

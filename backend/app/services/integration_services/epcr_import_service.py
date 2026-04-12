@@ -13,13 +13,12 @@ deleted after processing.
 
 import csv
 import io
-import logging
 from typing import Any
 from xml.etree import ElementTree
 
-from app.schemas.integration import EPCRImportRow
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from app.schemas.integration import EPCRImportRow
 
 # NEMSIS namespace
 NEMSIS_NS = "http://www.nemsis.org"

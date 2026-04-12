@@ -15,9 +15,9 @@ Security:
 
 import hashlib
 import hmac
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,8 +32,6 @@ from app.services.integration_services.salesforce_sync_service import (
 from app.services.integration_services.salesforce_service import (
     SalesforceService,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/public/v1/webhooks/salesforce",

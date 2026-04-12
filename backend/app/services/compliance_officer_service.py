@@ -6,7 +6,6 @@ annual compliance report generation, and NFPA 1401 record completeness
 validation for the compliance officer dashboard.
 """
 
-import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -36,8 +35,6 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 from app.services.training_compliance import evaluate_member_requirement
 from app.services.training_waiver_service import fetch_org_waivers
-
-logger = logging.getLogger(__name__)
 
 # ISO/FSRS training hour requirements per category (annual, per member)
 ISO_CATEGORIES = [

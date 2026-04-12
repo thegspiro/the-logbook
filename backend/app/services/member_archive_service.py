@@ -12,10 +12,10 @@ Workflow:
   5. Archived members can be reactivated by leadership if they return
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,8 +28,6 @@ from app.models.inventory import (
     ItemIssuance,
 )
 from app.models.user import Organization, User, UserStatus
-
-logger = logging.getLogger(__name__)
 
 
 async def check_and_auto_archive(

@@ -5,7 +5,6 @@ Business logic for document management, folder organization,
 and publishing meeting minutes as formatted documents.
 """
 
-import logging
 from datetime import datetime, timezone
 from html import escape
 from typing import List, Optional
@@ -24,8 +23,6 @@ from app.schemas.document import (
     FolderCreate,
     FolderUpdate,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class DocumentService:

@@ -5,12 +5,11 @@ Sends notifications to Slack channels via incoming webhook URLs
 using Slack Block Kit formatting.
 """
 
-import logging
 from typing import Any
 
-from app.services.integration_services.base import create_integration_client
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from app.services.integration_services.base import create_integration_client
 
 
 async def send_slack_notification(

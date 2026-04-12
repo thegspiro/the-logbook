@@ -7,12 +7,9 @@ from Apple Calendar, Google Calendar, Outlook, Thunderbird, etc.
 No OAuth required — uses a per-org token-protected URL.
 """
 
-import logging
 import secrets
 from datetime import datetime, timezone
 from typing import Any
-
-logger = logging.getLogger(__name__)
 
 
 def generate_feed_token() -> str:

@@ -8,13 +8,12 @@ Includes HMAC-SHA256 signature for payload verification.
 import hashlib
 import hmac
 import json
-import logging
 import time
 from typing import Any
 
-from app.services.integration_services.base import create_integration_client
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from app.services.integration_services.base import create_integration_client
 
 # Retry config
 MAX_RETRIES = 3

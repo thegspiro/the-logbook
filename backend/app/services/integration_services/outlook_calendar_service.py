@@ -7,13 +7,12 @@ via Microsoft Graph API.
 Requires: msal (already in requirements.txt).
 """
 
-import logging
 from typing import Any
+
+from loguru import logger
 
 from app.services.integration_services.base import create_integration_client
 from app.services.integration_services.calendar_interface import CalendarSyncInterface
-
-logger = logging.getLogger(__name__)
 
 GRAPH_API_BASE = "https://graph.microsoft.com/v1.0"
 

@@ -4,7 +4,6 @@ Meeting Minutes Service
 Business logic for meeting minutes management.
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import List, Optional
 from uuid import UUID
@@ -39,8 +38,6 @@ from app.schemas.minute import (
     MotionCreate,
     MotionUpdate,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class MinuteService:

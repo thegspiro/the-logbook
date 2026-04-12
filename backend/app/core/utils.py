@@ -4,7 +4,6 @@ Core Utilities
 Shared helper functions used across the application.
 """
 
-import logging
 import re
 import secrets
 import string
@@ -13,8 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Optional, TypeVar
 
 from fastapi import HTTPException, status
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # Patterns that suggest internal implementation details leaking
 _UNSAFE_PATTERNS = [

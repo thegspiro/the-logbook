@@ -7,10 +7,10 @@ manual entry, and approval workflows.
 
 import csv
 import io
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
+from loguru import logger
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, selectinload
@@ -24,8 +24,6 @@ from app.models.admin_hours import (
 )
 from app.models.event import Event
 from app.models.user import Organization, User
-
-logger = logging.getLogger(__name__)
 
 
 def _ensure_utc(dt: datetime) -> datetime:

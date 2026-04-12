@@ -5,7 +5,7 @@ Endpoints for document management including folders,
 document CRUD, and file uploads.
 """
 
-import logging
+import asyncio
 import os
 import uuid as uuid_lib
 from uuid import UUID
@@ -20,6 +20,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -40,8 +41,6 @@ from app.schemas.documents import (
     FoldersListResponse,
 )
 from app.services.documents_service import DocumentsService
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -246,7 +245,7 @@ async def upload_document(
 
     # Create upload directory
     org_dir = os.path.join(UPLOAD_DIR, str(current_user.organization_id))
-    os.makedirs(org_dir, exist_ok=True)
+    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
 
     # Derive file extension from detected MIME type (not user-supplied filename)
     # to prevent double-extension attacks (e.g. report.pdf.exe)
@@ -279,8 +278,11 @@ async def upload_document(
     file_path = os.path.join(org_dir, unique_name)
 
     # Save file
-    with open(file_path, "wb") as f:
-        f.write(content)
+    def _write_file(path: str, data: bytes) -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+
+    await asyncio.to_thread(_write_file, file_path, content)
 
     # Create document record
     doc_data = {

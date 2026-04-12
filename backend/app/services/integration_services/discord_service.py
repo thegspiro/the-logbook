@@ -5,12 +5,11 @@ Sends notifications to Discord channels via webhook URLs
 using Discord embed formatting.
 """
 
-import logging
 from typing import Any
 
-from app.services.integration_services.base import create_integration_client
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from app.services.integration_services.base import create_integration_client
 
 # Discord color constants (decimal, not hex)
 COLOR_BLUE = 0x3498DB

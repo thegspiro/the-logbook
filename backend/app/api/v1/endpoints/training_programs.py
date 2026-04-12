@@ -4,6 +4,7 @@ Training Program API Endpoints
 Endpoints for managing training programs, enrollments, and member progress tracking.
 """
 
+import asyncio
 from datetime import date
 from uuid import UUID
 
@@ -137,14 +138,17 @@ async def list_available_registries(
         "proboard": "backend/app/data/registries/proboard_requirements.json",
     }
 
+    def _read_json(p: Path):
+        with open(p) as f:
+            return json.load(f)
+
     registries = []
     for key, file_path in registry_files.items():
         path = Path(file_path)
         if not path.exists():
             continue
         try:
-            with open(path) as f:
-                data = json.load(f)
+            data = await asyncio.to_thread(_read_json, path)
             registries.append(
                 RegistryInfo(
                     key=key,

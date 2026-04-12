@@ -6,9 +6,9 @@ mappings so organizations have common hour-tracking buckets out of the box.
 Categories can be customised after seeding.
 """
 
-import logging
 from typing import Any, Dict, List
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,8 +17,6 @@ from app.models.admin_hours import (
     AdminHoursCategory,
     EventHourMapping,
 )
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_ADMIN_HOURS_CATEGORIES: List[Dict[str, Any]] = [
     {

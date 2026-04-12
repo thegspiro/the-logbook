@@ -7,7 +7,6 @@ Includes OAuth validation for Gmail and Microsoft 365.
 """
 
 import json
-import logging
 import smtplib
 import ssl
 import urllib.error
@@ -15,7 +14,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def test_smtp_connection(config: dict[str, Any]) -> tuple[bool, str, dict[str, Any]]:

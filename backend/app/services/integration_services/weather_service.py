@@ -5,13 +5,12 @@ Fetches active weather alerts from the NOAA/NWS API (api.weather.gov).
 Free, no API key required. Designed to run as a scheduled task every 15 min.
 """
 
-import logging
 from typing import Any
+
+from loguru import logger
 
 from app.schemas.integration import WeatherAlertResponse
 from app.services.integration_services.base import create_integration_client
-
-logger = logging.getLogger(__name__)
 
 # NWS API base — hardcoded, no user-provided URLs (SSRF-safe)
 NWS_API_BASE = "https://api.weather.gov"

@@ -5,11 +5,11 @@ Authenticated endpoints for triggering manual syncs, checking sync
 status, and managing field mappings between Logbook and Salesforce.
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,8 +23,6 @@ from app.models.user import User
 from app.services.integration_services.salesforce_sync_service import (
     get_salesforce_sync_service,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

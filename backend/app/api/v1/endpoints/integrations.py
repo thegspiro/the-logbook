@@ -4,7 +4,6 @@ Integrations API Endpoints
 Endpoints for managing external integration configurations.
 """
 
-import logging
 import re
 from typing import Any
 
@@ -25,8 +24,6 @@ from app.schemas.integration import (
     IntegrationUpdateRequest,
 )
 from app.utils.url_validator import validate_integration_url
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

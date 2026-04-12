@@ -5,10 +5,9 @@ Lightweight wrapper around Twilio for sending SMS notifications.
 Only sends if TWILIO_ENABLED is True and credentials are configured.
 """
 
-import logging
 from typing import List
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class SMSService:

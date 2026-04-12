@@ -11,7 +11,6 @@ The report:
   - Is saved to the Documents module for record-keeping
 """
 
-import logging
 from datetime import date, datetime, timedelta, timezone
 from html import escape
 from typing import Any, Dict, List, Optional, Tuple
@@ -24,8 +23,6 @@ from sqlalchemy.orm import selectinload
 from app.models.document import Document, DocumentFolder, DocumentStatus, DocumentType
 from app.models.inventory import CheckOutRecord, ItemAssignment
 from app.models.user import Organization, User
-
-logger = logging.getLogger(__name__)
 
 
 class PropertyReturnService:

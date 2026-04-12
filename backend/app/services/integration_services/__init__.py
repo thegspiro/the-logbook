@@ -5,12 +5,11 @@ Central dispatcher that routes integration actions to the correct
 service based on integration_type.
 """
 
-import logging
 from typing import Any
 
-from app.models.integration import Integration
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from app.models.integration import Integration
 
 
 async def test_integration_connection(integration: Integration) -> str:

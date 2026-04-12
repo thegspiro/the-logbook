@@ -4,7 +4,6 @@ Minutes Template Service
 Business logic for managing meeting minutes templates.
 """
 
-import logging
 from typing import List, Optional
 from uuid import UUID
 
@@ -22,8 +21,6 @@ from app.models.minute import (
     MinutesTemplate,
 )
 from app.schemas.minute import TemplateCreate, TemplateUpdate
-
-logger = logging.getLogger(__name__)
 
 
 class TemplateService:

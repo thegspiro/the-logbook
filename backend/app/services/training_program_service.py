@@ -4,6 +4,7 @@ Training Program Service
 Business logic for training program management, enrollment, and progress tracking.
 """
 
+import asyncio
 import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -1701,9 +1702,12 @@ class TrainingProgramService:
         if not file_path.exists():
             return 0, [f"Registry file not found: {registry_file_path}"], None, None
 
+        def _read_json(path: Path) -> Any:
+            with open(path, "r") as f:
+                return json.load(f)
+
         try:
-            with open(file_path, "r") as f:
-                registry_data = json.load(f)
+            registry_data = await asyncio.to_thread(_read_json, file_path)
         except json.JSONDecodeError as e:
             return 0, [f"Invalid JSON in registry file: {str(e)}"], None, None
 

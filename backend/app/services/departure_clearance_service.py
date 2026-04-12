@@ -13,12 +13,12 @@ inventory operation (unassign, check-in, pool return) so stock levels
 stay accurate.
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -34,8 +34,6 @@ from app.models.inventory import (
     ItemIssuance,
 )
 from app.models.user import User
-
-logger = logging.getLogger(__name__)
 
 
 class DepartureClearanceService:

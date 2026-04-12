@@ -18,6 +18,7 @@ import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
 from cryptography.fernet import Fernet
+from loguru import logger
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
@@ -361,9 +362,7 @@ def get_encryption_salt() -> bytes:
                 'Generate one with: python -c "import secrets; print(secrets.token_hex(16))"'
             )
         # Fallback for development only - log warning
-        import logging
-
-        logging.warning(
+        logger.warning(
             "SECURITY WARNING: ENCRYPTION_SALT not set. "
             "Using fallback salt. This is insecure for production!"
         )
@@ -673,8 +672,6 @@ async def is_rate_limited(
     """
     import time
 
-    from loguru import logger
-
     from app.core.cache import cache_manager
 
     if not cache_manager.is_connected or not cache_manager.redis_client:
@@ -749,8 +746,6 @@ def is_rate_limited_sync(key: str, limit: int, window_seconds: int) -> bool:
         True if rate limit exceeded, False otherwise
     """
     import asyncio
-
-    from loguru import logger
 
     try:
         loop = asyncio.get_event_loop()

@@ -8,16 +8,14 @@ this dispatcher sends notifications to all connected messaging integrations
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.integration import Integration
-
-logger = logging.getLogger(__name__)
 
 # Integration types that receive notifications
 MESSAGING_TYPES = {"slack", "discord", "microsoft-teams", "generic-webhook"}

@@ -5,10 +5,10 @@ Endpoints for meeting minutes management including CRUD, approval workflow,
 motions, action items, and full-text search.
 """
 
-import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
@@ -40,8 +40,6 @@ from app.schemas.minute import (
 from app.services.document_service import DocumentService
 from app.services.minute_service import MinuteService
 from app.services.template_service import TemplateService
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
