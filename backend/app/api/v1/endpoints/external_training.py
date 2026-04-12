@@ -489,8 +489,6 @@ async def trigger_sync(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    logger = logging.getLogger(__name__)
-
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
