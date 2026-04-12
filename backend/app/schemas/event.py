@@ -831,3 +831,42 @@ class EndEventResponse(BaseModel):
 
     checked_out_count: int
     actual_end_time: Optional[str] = None
+
+
+class VisibleEventTypesResponse(BaseModel):
+    """Response for visible event types configuration."""
+
+    visible_event_types: List[str]
+    custom_event_categories: List[EventCategoryConfig]
+    visible_custom_categories: List[str]
+
+
+class AttachmentUploadResponse(BaseModel):
+    """Response for uploading an event attachment."""
+
+    message: str
+    attachment: Dict[str, Any]
+    total_attachments: int
+
+
+class ExternalAttendeeCheckInResponse(BaseModel):
+    """Response for checking in an external attendee."""
+
+    status: str
+    attendee_id: str
+
+
+class SendRemindersResponse(BaseModel):
+    """Response for sending event reminders."""
+
+    message: str
+    sent_count: int
+
+
+class EligibleMemberResponse(BaseModel):
+    """A single member eligible for event check-in."""
+
+    id: str
+    first_name: str
+    last_name: str
+    email: str

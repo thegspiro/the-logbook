@@ -1819,62 +1819,79 @@ class EventService:
         self, event: Event, rsvp: EventRSVP, user_id: UUID, organization_id: UUID
     ) -> None:
         """
-        Auto-create a TrainingRecord if the event is a training session with auto_create_records enabled
+        Auto-create a TrainingRecord if the event is a training session
+        with auto_create_records enabled.
+
+        Errors are logged but do not propagate — the check-in has
+        already committed, so a training-record failure must not
+        cause the caller to return an error to the user.
         """
         if event.event_type != EventType.TRAINING:
             return
 
-        # Check if this event has a training session
-        session_result = await self.db.execute(
-            select(TrainingSession).where(TrainingSession.event_id == event.id)
-        )
-        training_session = session_result.scalar_one_or_none()
+        try:
+            # Check if this event has a training session
+            session_result = await self.db.execute(
+                select(TrainingSession).where(TrainingSession.event_id == event.id)
+            )
+            training_session = session_result.scalar_one_or_none()
 
-        if not training_session:
-            return
+            if not training_session:
+                return
 
-        if not training_session.auto_create_records:
-            return
+            if not training_session.auto_create_records:
+                return
 
-        # Check if training record already exists
-        existing_record_result = await self.db.execute(
-            select(TrainingRecord)
-            .where(TrainingRecord.user_id == str(user_id))
-            .where(TrainingRecord.course_name == training_session.course_name)
-            .where(TrainingRecord.scheduled_date == event.start_datetime.date())
-        )
-        existing_record = existing_record_result.scalar_one_or_none()
+            # Check if training record already exists
+            existing_record_result = await self.db.execute(
+                select(TrainingRecord)
+                .where(TrainingRecord.user_id == str(user_id))
+                .where(TrainingRecord.course_name == training_session.course_name)
+                .where(TrainingRecord.scheduled_date == event.start_datetime.date())
+            )
+            existing_record = existing_record_result.scalar_one_or_none()
 
-        if existing_record:
-            return  # Record already exists
+            if existing_record:
+                return  # Record already exists
 
-        # Create training record
-        training_record = TrainingRecord(
-            organization_id=organization_id,
-            user_id=user_id,
-            course_id=training_session.course_id,
-            category_id=training_session.category_id,
-            course_name=training_session.course_name,
-            course_code=training_session.course_code,
-            training_type=training_session.training_type,
-            scheduled_date=event.start_datetime.date(),
-            completion_date=None,  # Will be set when event ends or approved
-            status=TrainingStatus.IN_PROGRESS,
-            hours_completed=0.0,  # Will be calculated from attendance duration
-            credit_hours=training_session.credit_hours,
-            instructor=training_session.instructor,
-            location=event.location,
-            certification_number=None,  # Will be generated upon completion if applicable
-            issuing_agency=(
-                training_session.issuing_agency
-                if training_session.issues_certification
-                else None
-            ),
-            created_by=user_id,
-        )
+            # Create training record
+            training_record = TrainingRecord(
+                organization_id=organization_id,
+                user_id=user_id,
+                course_id=training_session.course_id,
+                category_id=training_session.category_id,
+                course_name=training_session.course_name,
+                course_code=training_session.course_code,
+                training_type=training_session.training_type,
+                scheduled_date=event.start_datetime.date(),
+                completion_date=None,
+                status=TrainingStatus.IN_PROGRESS,
+                hours_completed=0.0,
+                credit_hours=training_session.credit_hours,
+                instructor=training_session.instructor,
+                location=event.location,
+                certification_number=None,
+                issuing_agency=(
+                    training_session.issuing_agency
+                    if training_session.issues_certification
+                    else None
+                ),
+                created_by=user_id,
+            )
 
-        self.db.add(training_record)
-        await self.db.commit()
+            self.db.add(training_record)
+            await self.db.commit()
+        except Exception:
+            logger.error(
+                "Failed to auto-create training record for user {} "
+                "at event {} (session {}). Check-in succeeded but "
+                "training credit was not recorded.",
+                user_id,
+                event.id,
+                event.title,
+                exc_info=True,
+            )
+            await self.db.rollback()
 
     async def get_check_in_monitoring_stats(
         self, event_id: UUID, organization_id: UUID

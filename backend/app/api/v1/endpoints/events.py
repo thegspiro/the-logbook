@@ -30,11 +30,13 @@ from app.models.user import Organization, User, UserStatus
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     AnalyticsSummary,
+    AttachmentUploadResponse,
     BulkAddAttendees,
     BulkAddAttendeesResponse,
     CancelSeriesResponse,
     CheckInMonitoringStats,
     CheckInRequest,
+    EligibleMemberResponse,
     EndEventResponse,
     EventCancel,
     EventCreate,
@@ -48,6 +50,7 @@ from app.schemas.event import (
     EventTemplateResponse,
     EventTemplateUpdate,
     EventUpdate,
+    ExternalAttendeeCheckInResponse,
     FinalizeAttendanceResponse,
     ManagerAddAttendee,
     QRCheckInData,
@@ -59,6 +62,8 @@ from app.schemas.event import (
     RSVPOverride,
     RSVPResponse,
     SelfCheckInRequest,
+    SendRemindersResponse,
+    VisibleEventTypesResponse,
 )
 from app.models.notification import NotificationChannel
 from app.services.documents_service import DocumentsService
@@ -593,7 +598,7 @@ async def update_event_settings(
     return merged
 
 
-@router.get("/visible-event-types")
+@router.get("/visible-event-types", response_model=VisibleEventTypesResponse)
 async def get_visible_event_types(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1340,7 +1345,10 @@ async def get_rsvp_history(
     return history
 
 
-@router.get("/{event_id}/eligible-members")
+@router.get(
+    "/{event_id}/eligible-members",
+    response_model=list[EligibleMemberResponse],
+)
 async def get_eligible_members(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -2119,7 +2127,7 @@ ALLOWED_ATTACHMENT_MIME_TYPES = {
 MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25MB
 
 
-@router.post("/{event_id}/attachments")
+@router.post("/{event_id}/attachments", response_model=AttachmentUploadResponse)
 async def upload_event_attachment(
     event_id: UUID,
     file: UploadFile = File(...),
@@ -2211,11 +2219,11 @@ async def upload_event_attachment(
 
     await db.commit()
 
-    return {
-        "message": "Attachment uploaded successfully",
-        "attachment": attachments[-1],
-        "total_attachments": len(attachments),
-    }
+    return AttachmentUploadResponse(
+        message="Attachment uploaded successfully",
+        attachment=attachments[-1],
+        total_attachments=len(attachments),
+    )
 
 
 @router.get("/{event_id}/attachments")
@@ -2562,7 +2570,10 @@ async def update_external_attendee(
     )
 
 
-@router.patch("/{event_id}/external-attendees/{attendee_id}/check-in")
+@router.patch(
+    "/{event_id}/external-attendees/{attendee_id}/check-in",
+    response_model=ExternalAttendeeCheckInResponse,
+)
 async def check_in_external_attendee(
     event_id: UUID,
     attendee_id: UUID,
@@ -2584,7 +2595,9 @@ async def check_in_external_attendee(
     attendee.checked_in = True
     attendee.checked_in_at = datetime.now(dt_timezone.utc)
     await db.commit()
-    return {"status": "checked_in", "attendee_id": attendee.id}
+    return ExternalAttendeeCheckInResponse(
+        status="checked_in", attendee_id=attendee.id
+    )
 
 
 @router.delete(
@@ -2622,7 +2635,7 @@ class SendRemindersRequest(BaseModel):
     reminder_type: str  # "non_respondents" or "all"
 
 
-@router.post("/{event_id}/send-reminders")
+@router.post("/{event_id}/send-reminders", response_model=SendRemindersResponse)
 async def send_event_reminders(
     event_id: UUID,
     body: SendRemindersRequest,
@@ -2678,7 +2691,9 @@ async def send_event_reminders(
         event_id,
     )
 
-    return {"message": "Reminders sent successfully", "sent_count": len(user_ids)}
+    return SendRemindersResponse(
+        message="Reminders sent successfully", sent_count=len(user_ids)
+    )
 
 
 # ============================================
