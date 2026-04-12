@@ -15,16 +15,15 @@ import { Link } from 'react-router-dom';
 import { memberStatusService, userService } from '../services/api';
 import type { TrainingWaiverResponse, LeaveOfAbsenceResponse } from '../services/api';
 import type { User } from '../types/user';
-import { formatDate } from '../utils/dateFormatting';
+import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 
 type StatusFilter = 'all' | 'active' | 'future' | 'expired' | 'inactive';
 
-function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }) {
+function getStatusBadge(waiver: { start_date: string; end_date: string | null; active: boolean }, today: string) {
   if (!waiver.active) {
     return { label: 'Deactivated', color: 'bg-theme-surface-secondary text-theme-text-muted' };
   }
-  const today = new Date().toISOString().split('T')[0] ?? '';
   if (waiver.start_date > today) {
     return { label: 'Future', color: 'bg-blue-500/20 text-blue-700 dark:text-blue-400' };
   }
@@ -137,7 +136,7 @@ const TrainingWaiversTab: React.FC = () => {
 
   // Apply filters
   const filteredWaivers = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0] ?? '';
+    const today = getTodayLocalDate(tz);
     let result = waiverList;
 
     if (statusFilter === 'active') {
@@ -160,16 +159,16 @@ const TrainingWaiversTab: React.FC = () => {
     }
 
     return result;
-  }, [waiverList, statusFilter, searchQuery]);
+  }, [waiverList, statusFilter, searchQuery, tz]);
 
   // Summary stats
   const stats = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0] ?? '';
+    const today = getTodayLocalDate(tz);
     const active = waiverList.filter((w) => w.active && w.start_date <= today && (!w.end_date || w.end_date >= today));
     const future = waiverList.filter((w) => w.active && w.start_date > today);
     const expired = waiverList.filter((w) => w.active && w.end_date && w.end_date < today);
     return { active: active.length, future: future.length, expired: expired.length, total: waiverList.length };
-  }, [waiverList]);
+  }, [waiverList, tz]);
 
   if (loading) {
     return (
@@ -259,7 +258,7 @@ const TrainingWaiversTab: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-theme-surface-border">
               {filteredWaivers.map((waiver) => {
-                const badge = getStatusBadge(waiver);
+                const badge = getStatusBadge(waiver, getTodayLocalDate(tz));
                 return (
                   <tr key={waiver.id} className="hover:bg-theme-surface-hover">
                     <td className="px-4 py-3">

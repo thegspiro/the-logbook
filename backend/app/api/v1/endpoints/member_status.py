@@ -6,6 +6,7 @@ When a member is dropped (voluntarily or involuntarily), a property-return
 report is automatically generated, saved to documents, and optionally emailed.
 """
 
+import copy
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -793,7 +794,7 @@ async def update_membership_tier_config(
             )
 
     # Update org settings
-    settings = dict(organization.settings or {})
+    settings = copy.deepcopy(organization.settings or {})
     settings["membership_tiers"] = config
     organization.settings = settings
     await db.commit()

@@ -102,7 +102,7 @@ class AuditLogger:
         ip_address: str | None = None,
         user_agent: str | None = None,
         geo_location: dict[str, Any] | None = None,
-    ) -> AuditLog:
+    ) -> AuditLog | None:
         """
         Create a new tamper-proof audit log entry
 

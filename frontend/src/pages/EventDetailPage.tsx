@@ -204,21 +204,23 @@ export const EventDetailPage: React.FC = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const rows = rsvps.map(r => `
       <tr>
-        <td style="padding:8px;border:1px solid #ddd">${r.user_name ?? ''}</td>
-        <td style="padding:8px;border:1px solid #ddd">${r.status}</td>
+        <td style="padding:8px;border:1px solid #ddd">${esc(r.user_name ?? '')}</td>
+        <td style="padding:8px;border:1px solid #ddd">${esc(r.status)}</td>
         <td style="padding:8px;border:1px solid #ddd">${r.checked_in ? 'Yes' : 'No'}</td>
         <td style="padding:8px;border:1px solid #ddd">${r.guest_count ?? 0}</td>
         <td style="padding:8px;border:1px solid #ddd"></td>
       </tr>
     `).join('');
 
+    const safeTitle = esc(event.title);
     printWindow.document.write(`
-      <html><head><title>Attendance Roster - ${event.title}</title></head>
+      <html><head><title>Attendance Roster - ${safeTitle}</title></head>
       <body style="font-family:Arial,sans-serif;padding:20px">
-        <h1 style="font-size:24px;margin-bottom:4px">${event.title}</h1>
-        <p style="color:#666;margin-bottom:16px">${formatDateTime(event.start_datetime, tz)}</p>
+        <h1 style="font-size:24px;margin-bottom:4px">${safeTitle}</h1>
+        <p style="color:#666;margin-bottom:16px">${esc(formatDateTime(event.start_datetime, tz))}</p>
         <table style="width:100%;border-collapse:collapse">
           <thead><tr style="background:#f3f4f6">
             <th style="padding:8px;border:1px solid #ddd;text-align:left">Name</th>
