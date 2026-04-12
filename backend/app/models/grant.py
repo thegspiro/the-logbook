@@ -786,9 +786,9 @@ class FundraisingCampaign(Base):
     active = Column(Boolean, nullable=False, server_default="1")
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
@@ -863,9 +863,9 @@ class Donor(Base):
     active = Column(Boolean, nullable=False, server_default="1")
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
@@ -911,7 +911,7 @@ class Donation(Base):
     # Financial
     amount = Column(Numeric(10, 2), nullable=False)
     currency = Column(String(3), nullable=False, server_default="USD")
-    donation_date = Column(DateTime, nullable=False)
+    donation_date = Column(DateTime(timezone=True), nullable=False)
 
     # Payment
     payment_method = Column(
@@ -950,9 +950,9 @@ class Donation(Base):
 
     # Receipt and thank you tracking
     receipt_sent = Column(Boolean, nullable=False, server_default="0")
-    receipt_sent_at = Column(DateTime, nullable=True)
+    receipt_sent_at = Column(DateTime(timezone=True), nullable=True)
     thank_you_sent = Column(Boolean, nullable=False, server_default="0")
-    thank_you_sent_at = Column(DateTime, nullable=True)
+    thank_you_sent_at = Column(DateTime(timezone=True), nullable=True)
 
     # Tax
     tax_deductible = Column(Boolean, nullable=False, server_default="1")
@@ -964,9 +964,9 @@ class Donation(Base):
     recorded_by = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     # Metadata
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
@@ -1028,16 +1028,16 @@ class Pledge(Base):
     # Schedule and reminders
     payment_schedule = Column(JSON, nullable=True)
     reminder_enabled = Column(Boolean, nullable=False, server_default="1")
-    last_reminder_sent = Column(DateTime, nullable=True)
+    last_reminder_sent = Column(DateTime(timezone=True), nullable=True)
 
     # Notes
     notes = Column(Text, nullable=True)
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships
@@ -1087,7 +1087,7 @@ class FundraisingEvent(Base):
         SQLEnum(FundraisingEventType, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
     )
-    event_date = Column(DateTime, nullable=False)
+    event_date = Column(DateTime(timezone=True), nullable=False)
     location = Column(String(300), nullable=True)
 
     # Ticketing
@@ -1116,9 +1116,9 @@ class FundraisingEvent(Base):
 
     # Metadata
     created_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, nullable=False, server_default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     updated_at = Column(
-        DateTime, nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
     # Relationships

@@ -16,6 +16,7 @@ import secrets
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     Column,
     DateTime,
     Enum,
@@ -246,7 +247,7 @@ class EventRequestEmailTemplate(Base):
     # For "days_before_event" trigger: how many days before
     trigger_days_before = Column(Integer, nullable=True)
 
-    is_active = Column(Integer, nullable=False, default=1)
+    is_active = Column(Boolean, nullable=False, default=True)
     created_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

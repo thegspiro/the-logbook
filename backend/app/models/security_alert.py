@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.utils import generate_uuid
 
 
 class AlertType(str, enum.Enum):
@@ -55,7 +56,7 @@ class SecurityAlertRecord(Base):
 
     __tablename__ = "security_alerts"
 
-    id = Column(String(36), primary_key=True)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
 
     alert_type = Column(
         Enum(AlertType, values_callable=lambda x: [e.value for e in x]),

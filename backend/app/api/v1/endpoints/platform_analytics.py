@@ -5,7 +5,6 @@ Provides aggregated platform-wide analytics for IT admins:
 user adoption, module usage, operational activity, system health, and content metrics.
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy import cast, func, select, Date
@@ -29,7 +28,7 @@ from app.schemas.platform_analytics import (
     PlatformAnalyticsResponse,
 )
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 router = APIRouter()
 

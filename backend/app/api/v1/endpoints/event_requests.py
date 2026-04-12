@@ -11,6 +11,7 @@ checklist tasks via settings and work them in whatever order suits
 their workflow.
 """
 
+import copy
 import html as _html
 from datetime import datetime, timezone
 
@@ -1100,7 +1101,7 @@ async def update_task_completion(
             ),
         )
 
-    completions = dict(event_request.task_completions or {})
+    completions = copy.deepcopy(event_request.task_completions or {})
 
     if update.completed:
         completions[update.task_id] = {

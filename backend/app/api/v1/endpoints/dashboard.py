@@ -5,7 +5,6 @@ Provides aggregated statistics for the main dashboard,
 including an admin-level summary for Chiefs and department leaders.
 """
 
-import logging
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
@@ -23,7 +22,7 @@ from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import User, UserStatus
 from app.services.training_compliance import compute_org_compliance_pct
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 router = APIRouter()
 
