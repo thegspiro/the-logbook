@@ -301,9 +301,9 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const renderedCountRef = useRef(0);
   const totalLabelsRef = useRef(0);
 
-  // LABEL_PRESETS is a compile-time constant with known length, so index 0 is always valid
-  const defaultPreset = LABEL_PRESETS[0] as LabelPreset;
-  const preset = LABEL_PRESETS.find((p) => p.id === presetId) ?? defaultPreset;
+  const firstPreset = LABEL_PRESETS[0];
+  if (!firstPreset) throw new Error('LABEL_PRESETS must not be empty');
+  const preset = LABEL_PRESETS.find((p) => p.id === presetId) ?? firstPreset;
   const effectiveAutoRotate = autoRotateOverride ?? preset.autoRotate;
   const isLandscape = parseFloat(preset.width) > parseFloat(preset.height);
   const isThermal = preset.columns === 1;

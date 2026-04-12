@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { apparatusFuelLogService } from '../services/api';
 import type { ApparatusFuelLogCreate, FuelType } from '../types';
 
@@ -33,7 +34,7 @@ interface FormData {
 }
 
 const EMPTY: FormData = {
-  fuelDate: new Date().toISOString().split('T')[0] ?? '',
+  fuelDate: getTodayLocalDate(),
   fuelType: 'diesel',
   gallons: '',
   pricePerGallon: '',

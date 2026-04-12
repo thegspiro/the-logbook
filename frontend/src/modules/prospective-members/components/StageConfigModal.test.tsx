@@ -795,7 +795,7 @@ describe('StageConfigModal', () => {
     const eventTypeSelect = await screen.findByLabelText(/auto-link event type/i);
     // Ensure the mock data has been resolved and state updated
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
     // Allow microtasks to flush so upcomingEvents state is set
     await new Promise((r) => { setTimeout(r, 0); });
@@ -829,7 +829,7 @@ describe('StageConfigModal', () => {
 
     // Wait for events to load
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
     // Allow microtasks to flush so upcomingEvents state is set
     await new Promise((r) => { setTimeout(r, 0); });
@@ -852,7 +852,7 @@ describe('StageConfigModal', () => {
     await user.click(screen.getByText('Meeting'));
 
     await waitFor(() => {
-      expect(mockGetEvents).toHaveBeenCalled();
+      expect(mockGetEvents).toHaveBeenCalledWith();
     });
 
     // Select an event type with no upcoming events

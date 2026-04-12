@@ -18,7 +18,8 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { Pagination } from '../../../components/ux/Pagination';
-import { VariantCapsules, getDisplayName } from '../components/VariantCapsules';
+import { VariantCapsules } from '../components/VariantCapsules';
+import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
 
 interface SummaryCardProps {

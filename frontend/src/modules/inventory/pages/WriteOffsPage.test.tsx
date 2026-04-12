@@ -155,7 +155,7 @@ describe('WriteOffsPage', () => {
     mockGetWriteOffRequests.mockRejectedValue(new Error('Failed'));
     renderWithRouter(<WriteOffsPage />);
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith(expect.any(String));
     });
   });
 });

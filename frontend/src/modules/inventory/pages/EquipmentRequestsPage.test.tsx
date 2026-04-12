@@ -153,7 +153,7 @@ describe('EquipmentRequestsPage', () => {
     await user.click(screen.getByText('Review'));
     await user.click(await screen.findByText('Approve'));
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith(expect.any(String));
     });
   });
 

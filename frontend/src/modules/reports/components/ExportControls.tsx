@@ -12,7 +12,6 @@ interface ExportControlsProps {
   reportTitle: string;
   rows: Array<Record<string, unknown>>;
   columns?: Array<{ key: string; header: string }>;
-  summaryHtml?: string;
   disabled?: boolean;
 }
 
@@ -20,7 +19,6 @@ export const ExportControls: React.FC<ExportControlsProps> = ({
   reportTitle,
   rows,
   columns,
-  summaryHtml,
   disabled = false,
 }) => {
   return (
@@ -37,7 +35,7 @@ export const ExportControls: React.FC<ExportControlsProps> = ({
       <button
         type="button"
         disabled={disabled || rows.length === 0}
-        onClick={() => exportReportAsPrintablePdf(reportTitle, rows, columns, summaryHtml)}
+        onClick={() => exportReportAsPrintablePdf(reportTitle, rows, columns)}
         className="bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover focus:ring-theme-focus-ring inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
       >
         <Printer className="h-3.5 w-3.5" aria-hidden="true" />

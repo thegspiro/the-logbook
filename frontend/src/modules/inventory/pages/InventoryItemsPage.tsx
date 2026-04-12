@@ -24,7 +24,8 @@ import { MobileItemCard } from '../../../components/ux/MobileItemCard';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
-import { VariantCapsules, getDisplayName } from '../components/VariantCapsules';
+import { VariantCapsules } from '../components/VariantCapsules';
+import { getDisplayName } from '../utils/variantHelpers';
 import type {
   InventoryItem, InventoryCategory, InventorySummary, LocationInventorySummary,
   StorageAreaResponse, Location,

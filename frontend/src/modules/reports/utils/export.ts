@@ -110,7 +110,6 @@ export function exportReportAsPrintablePdf(
   reportTitle: string,
   rows: Array<Record<string, unknown>>,
   columns?: Array<{ key: string; header: string }>,
-  summaryHtml?: string,
   timezone?: string
 ): void {
   const cols =
@@ -145,7 +144,7 @@ export function exportReportAsPrintablePdf(
 </style></head><body>
 <h1>${safeTitle}</h1>
 <div class="meta">Generated: ${fmtDate(new Date(), timezone)} ${fmtTime(new Date(), timezone)}</div>
-${summaryHtml ? `<div style="margin-bottom:16px">${summaryHtml}</div>` : ''}
+${''}
 <table><thead><tr>${headerRow}</tr></thead><tbody>${bodyRows}</tbody></table>
 </body></html>`;
 
