@@ -9,15 +9,8 @@ import { facilitiesService } from '../../../services/api';
 import type { RoomCreate } from '../../../services/facilitiesServices';
 import type { Room } from '../types';
 import { enumLabel, ZONE_CLASSIFICATION_COLORS } from '../types';
+import { inputCls, labelCls, ROOM_TYPE_OPTIONS, ZONE_OPTIONS } from '../constants';
 import { formatNumber } from '../../../utils/dateFormatting';
-
-const ROOM_TYPE_OPTIONS = [
-  'apparatus_bay', 'bunk_room', 'kitchen', 'bathroom', 'office',
-  'training_room', 'storage', 'mechanical', 'lobby', 'common_area',
-  'laundry', 'gym', 'decontamination', 'dispatch', 'other',
-] as const;
-
-const ZONE_OPTIONS = ['hot', 'transition', 'cold', 'unclassified'] as const;
 
 interface Props {
   facilityId: string;
@@ -129,10 +122,6 @@ export default function RoomsSection({ facilityId }: Props) {
       toast.error('Failed to delete room');
     }
   };
-
-  const inputCls =
-    'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
 
   return (
     <div className="bg-theme-surface border border-theme-surface-border rounded-xl">

@@ -15,8 +15,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Building2, DoorOpen, ChevronDown, Loader2 } from 'lucide-react';
 import { facilitiesService } from '../services/api';
-import type { Facility, Room } from '../pages/facilities/types';
-import { enumLabel } from '../pages/facilities/types';
+import type { Facility, Room } from '../modules/facilities/types';
+import { enumLabel } from '../modules/facilities/types';
 import { formatNumber } from '../utils/dateFormatting';
 
 interface FacilityRoomPickerProps {

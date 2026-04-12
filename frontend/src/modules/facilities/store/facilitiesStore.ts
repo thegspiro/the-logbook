@@ -51,8 +51,6 @@ interface FacilitiesState {
   isLoadingDetail: boolean;
   isLoadingDashboard: boolean;
   error: string | null;
-  showArchived: boolean;
-  searchQuery: string;
 
   // Actions — data loading
   loadFacilities: () => Promise<void>;
@@ -70,8 +68,6 @@ interface FacilitiesState {
   restoreFacility: (facilityId: string) => Promise<void>;
 
   // Actions — UI state
-  setShowArchived: (show: boolean) => void;
-  setSearchQuery: (query: string) => void;
   clearSelectedFacility: () => void;
 }
 
@@ -90,15 +86,12 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
   isLoadingDetail: false,
   isLoadingDashboard: false,
   error: null,
-  showArchived: false,
-  searchQuery: '',
 
   // Load all facilities (list view)
   loadFacilities: async () => {
     set({ isLoading: true, error: null });
     try {
-      const { showArchived } = get();
-      const data = await facilitiesService.getFacilities({ is_archived: showArchived });
+      const data = await facilitiesService.getFacilities({ is_archived: false });
       set({ facilities: data, isLoading: false });
     } catch (err: unknown) {
       set({
@@ -202,8 +195,11 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
     try {
       const rooms = await facilitiesService.getRooms({ facility_id: facilityId });
       set({ selectedFacilityRooms: rooms });
-    } catch {
-      set({ selectedFacilityRooms: [] });
+    } catch (err: unknown) {
+      set({
+        selectedFacilityRooms: [],
+        error: getErrorMessage(err, 'Failed to load rooms'),
+      });
     }
   },
 
@@ -212,8 +208,11 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
     try {
       const systems = await facilitiesService.getSystems({ facility_id: facilityId });
       set({ selectedFacilitySystems: systems });
-    } catch {
-      set({ selectedFacilitySystems: [] });
+    } catch (err: unknown) {
+      set({
+        selectedFacilitySystems: [],
+        error: getErrorMessage(err, 'Failed to load building systems'),
+      });
     }
   },
 
@@ -222,8 +221,11 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
     try {
       const contacts = await facilitiesService.getEmergencyContacts({ facility_id: facilityId });
       set({ selectedFacilityContacts: contacts });
-    } catch {
-      set({ selectedFacilityContacts: [] });
+    } catch (err: unknown) {
+      set({
+        selectedFacilityContacts: [],
+        error: getErrorMessage(err, 'Failed to load emergency contacts'),
+      });
     }
   },
 
@@ -256,8 +258,6 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => ({
   },
 
   // UI state setters
-  setShowArchived: (show: boolean) => set({ showArchived: show }),
-  setSearchQuery: (query: string) => set({ searchQuery: query }),
   clearSelectedFacility: () =>
     set({
       selectedFacility: null,

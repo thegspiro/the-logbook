@@ -5,7 +5,7 @@
  * upcoming inspections), an action-items list, and a quick-access facility grid.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -27,6 +27,8 @@ import CreateFacilityModal from '../components/CreateFacilityModal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 
+const PREVIEW_ITEM_COUNT = 5;
+
 export default function FacilitiesDashboard() {
   const navigate = useNavigate();
   const tz = useTimezone();
@@ -42,6 +44,12 @@ export default function FacilitiesDashboard() {
   } = useFacilitiesStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  const facilityMap = useMemo(
+    () => new Map(facilities.map(f => [f.id, f.name])),
+    [facilities],
+  );
+  const getFacilityName = (id: string) => facilityMap.get(id) || 'Unknown';
 
   useEffect(() => {
     void loadDashboardStats();
@@ -142,8 +150,8 @@ export default function FacilitiesDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {stats.overdueMaintenanceRecords.slice(0, 5).map((record) => {
-                      const facilityName = facilities.find((f) => f.id === record.facilityId)?.name || 'Unknown';
+                    {stats.overdueMaintenanceRecords.slice(0, PREVIEW_ITEM_COUNT).map((record) => {
+                      const facilityName = getFacilityName(record.facilityId);
                       return (
                         <div
                           key={record.id}
@@ -193,8 +201,8 @@ export default function FacilitiesDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {stats.upcomingInspections.slice(0, 5).map((insp) => {
-                      const facilityName = facilities.find((f) => f.id === insp.facilityId)?.name || 'Unknown';
+                    {stats.upcomingInspections.slice(0, PREVIEW_ITEM_COUNT).map((insp) => {
+                      const facilityName = getFacilityName(insp.facilityId);
                       return (
                         <div
                           key={insp.id}
@@ -232,7 +240,7 @@ export default function FacilitiesDashboard() {
               </div>
               <div className="divide-y divide-theme-surface-border">
                 {stats.recentActivity.map((record) => {
-                  const facilityName = facilities.find((f) => f.id === record.facilityId)?.name || 'Unknown';
+                  const facilityName = getFacilityName(record.facilityId);
                   return (
                     <div key={record.id} className="flex items-center gap-3 px-5 py-3">
                       <div className="w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">

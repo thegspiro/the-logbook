@@ -74,8 +74,6 @@ describe('facilitiesStore', () => {
       isLoadingDetail: false,
       isLoadingDashboard: false,
       error: null,
-      showArchived: false,
-      searchQuery: '',
     });
   });
 
@@ -122,14 +120,6 @@ describe('facilitiesStore', () => {
       expect(useFacilitiesStore.getState().isLoading).toBe(false);
     });
 
-    it('should pass showArchived flag to the service', async () => {
-      useFacilitiesStore.setState({ showArchived: true });
-      mockGetFacilities.mockResolvedValue([]);
-
-      await useFacilitiesStore.getState().loadFacilities();
-
-      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: true });
-    });
   });
 
   describe('loadLookupData', () => {
@@ -219,7 +209,7 @@ describe('facilitiesStore', () => {
 
       expect(result).toEqual(newFacility);
       expect(mockCreateFacility).toHaveBeenCalledWith({ name: 'New Station' });
-      expect(mockGetFacilities).toHaveBeenCalled();
+      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
     it('should propagate errors on creation failure', async () => {
@@ -241,7 +231,7 @@ describe('facilitiesStore', () => {
 
       expect(mockUpdateFacility).toHaveBeenCalledWith('f1', { name: 'Updated Station' });
       expect(mockGetFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalled();
+      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
     it('should propagate errors on update failure', async () => {
@@ -261,7 +251,7 @@ describe('facilitiesStore', () => {
       await useFacilitiesStore.getState().archiveFacility('f1');
 
       expect(mockArchiveFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalled();
+      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
     it('should restore facility and refresh list', async () => {
@@ -271,7 +261,7 @@ describe('facilitiesStore', () => {
       await useFacilitiesStore.getState().restoreFacility('f1');
 
       expect(mockRestoreFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalled();
+      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
     it('should propagate errors on archive failure', async () => {
@@ -292,30 +282,6 @@ describe('facilitiesStore', () => {
   });
 
   describe('UI state setters', () => {
-    it('setShowArchived should update state', () => {
-      expect(useFacilitiesStore.getState().showArchived).toBe(false);
-
-      useFacilitiesStore.getState().setShowArchived(true);
-
-      expect(useFacilitiesStore.getState().showArchived).toBe(true);
-
-      useFacilitiesStore.getState().setShowArchived(false);
-
-      expect(useFacilitiesStore.getState().showArchived).toBe(false);
-    });
-
-    it('setSearchQuery should update state', () => {
-      expect(useFacilitiesStore.getState().searchQuery).toBe('');
-
-      useFacilitiesStore.getState().setSearchQuery('fire station');
-
-      expect(useFacilitiesStore.getState().searchQuery).toBe('fire station');
-
-      useFacilitiesStore.getState().setSearchQuery('');
-
-      expect(useFacilitiesStore.getState().searchQuery).toBe('');
-    });
-
     it('clearSelectedFacility should reset selected state', () => {
       useFacilitiesStore.setState({
         selectedFacility: mockFacility as never,

@@ -2,23 +2,15 @@
  * InspectionsSection — Inspection records for a single facility.
  */
 
-import { useState, useEffect, useCallback } from 'react';
 import {
   ClipboardCheck, Plus, Search, Loader2, X, CheckCircle2,
-  XCircle, MinusCircle, Calendar, AlertTriangle, Pencil,
+  XCircle, MinusCircle, Calendar, AlertTriangle, Pencil, RotateCcw,
 } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { facilitiesService } from '../../../services/api';
-import type { InspectionCreate } from '../../../services/facilitiesServices';
-import type { Inspection } from '../types';
 import { enumLabel } from '../types';
+import { inputCls, labelCls, INSPECTION_TYPE_OPTIONS } from '../constants';
+import { useInspectionForm } from '../hooks/useInspectionForm';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { getTodayLocalDate, formatDate } from '../../../utils/dateFormatting';
-
-const INSPECTION_TYPE_OPTIONS = [
-  'fire', 'building_code', 'health', 'ada', 'environmental',
-  'insurance', 'routine', 'other',
-] as const;
+import { formatDate } from '../../../utils/dateFormatting';
 
 interface Props {
   facilityId: string;
@@ -26,143 +18,18 @@ interface Props {
 
 export default function InspectionsSection({ facilityId }: Props) {
   const tz = useTimezone();
-  const [inspections, setInspections] = useState<Inspection[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [resultFilter, setResultFilter] = useState<'all' | 'passed' | 'failed' | 'pending'>('all');
-  const [showModal, setShowModal] = useState(false);
-  const [editingInspection, setEditingInspection] = useState<Inspection | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [formData, setFormData] = useState({
-    inspection_type: 'routine',
-    title: '',
-    description: '',
-    inspection_date: '',
-    next_inspection_date: '',
-    inspector_name: '',
-    inspector_organization: '',
-    passed: '',
-    findings: '',
-    corrective_actions: '',
-    corrective_action_deadline: '',
-    notes: '',
-  });
-
-  const loadInspections = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await facilitiesService.getInspections({ facility_id: facilityId });
-      setInspections(data);
-    } catch {
-      toast.error('Failed to load inspections');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [facilityId]);
-
-  useEffect(() => { void loadInspections(); }, [loadInspections]);
-
-  const filtered = inspections.filter(i => {
-    if (resultFilter === 'passed' && i.passed !== true) return false;
-    if (resultFilter === 'failed' && i.passed !== false) return false;
-    if (resultFilter === 'pending' && i.passed !== null && i.passed !== undefined) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      return !!(
-        i.title?.toLowerCase().includes(q) ||
-        i.inspectorName?.toLowerCase().includes(q) ||
-        i.inspectorOrganization?.toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
-  const openCreate = () => {
-    setEditingInspection(null);
-    setFormData({
-      inspection_type: 'routine', title: '', description: '',
-      inspection_date: getTodayLocalDate(tz), next_inspection_date: '',
-      inspector_name: '', inspector_organization: '', passed: '',
-      findings: '', corrective_actions: '', corrective_action_deadline: '', notes: '',
-    });
-    setShowModal(true);
-  };
-
-  const openEdit = (insp: Inspection) => {
-    setEditingInspection(insp);
-    setFormData({
-      inspection_type: insp.inspectionType || 'routine',
-      title: insp.title || '',
-      description: insp.description || '',
-      inspection_date: insp.inspectionDate || '',
-      next_inspection_date: insp.nextInspectionDate || '',
-      inspector_name: insp.inspectorName || '',
-      inspector_organization: insp.inspectorOrganization || '',
-      passed: insp.passed === true ? 'true' : insp.passed === false ? 'false' : '',
-      findings: insp.findings || '',
-      corrective_actions: insp.correctiveActions || '',
-      corrective_action_deadline: insp.correctiveActionDeadline || '',
-      notes: insp.notes || '',
-    });
-    setShowModal(true);
-  };
-
-  const handleSave = async () => {
-    if (!formData.title.trim()) { toast.error('Title is required'); return; }
-    if (!formData.inspection_date) { toast.error('Inspection date is required'); return; }
-    setIsSaving(true);
-    try {
-      const payload: InspectionCreate = {
-        facility_id: facilityId,
-        inspection_type: formData.inspection_type,
-        title: formData.title.trim(),
-        inspection_date: formData.inspection_date,
-        passed: formData.passed === 'true' ? true : formData.passed === 'false' ? false : null,
-      };
-      if (formData.description.trim()) payload.description = formData.description.trim();
-      if (formData.next_inspection_date) payload.next_inspection_date = formData.next_inspection_date;
-      if (formData.inspector_name.trim()) payload.inspector_name = formData.inspector_name.trim();
-      if (formData.inspector_organization.trim()) payload.inspector_organization = formData.inspector_organization.trim();
-      if (formData.findings.trim()) payload.findings = formData.findings.trim();
-      if (formData.corrective_actions.trim()) payload.corrective_actions = formData.corrective_actions.trim();
-      if (formData.corrective_action_deadline) payload.corrective_action_deadline = formData.corrective_action_deadline;
-      if (formData.notes.trim()) payload.notes = formData.notes.trim();
-
-      if (editingInspection) {
-        await facilitiesService.updateInspection(editingInspection.id, payload);
-        toast.success('Inspection updated');
-      } else {
-        await facilitiesService.createInspection(payload);
-        toast.success('Inspection created');
-      }
-      setShowModal(false);
-      void loadInspections();
-    } catch {
-      toast.error('Failed to save inspection');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDelete = async (insp: Inspection) => {
-    if (!window.confirm(`Delete inspection "${insp.title}"?`)) return;
-    try {
-      await facilitiesService.deleteInspection(insp.id);
-      toast.success('Inspection deleted');
-      void loadInspections();
-    } catch {
-      toast.error('Failed to delete inspection');
-    }
-  };
-
-  const inputCls = 'w-full bg-theme-input-bg border border-theme-input-border rounded-lg px-3 py-2 text-sm text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring';
-  const labelCls = 'block text-xs font-medium text-theme-text-muted mb-1';
+  const {
+    inspections: filtered, isLoading, loadError, reload,
+    searchQuery, setSearchQuery, resultFilter, setResultFilter,
+    showModal, setShowModal, editingInspection, isSaving,
+    formData, setFormData, openCreate, openEdit, handleSave, handleDelete,
+  } = useInspectionForm({ facilityId });
 
   return (
     <div className="bg-theme-surface border border-theme-surface-border rounded-xl">
       <div className="flex items-center justify-between p-5 border-b border-theme-surface-border">
         <h2 className="text-sm font-semibold text-theme-text-primary">Inspections</h2>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+        <button onClick={() => openCreate()} className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
           <Plus className="w-3.5 h-3.5" /> New Inspection
         </button>
       </div>
@@ -184,6 +51,14 @@ export default function InspectionsSection({ facilityId }: Props) {
 
         {isLoading ? (
           <div className="flex justify-center py-8" role="status" aria-live="polite"><Loader2 className="w-5 h-5 animate-spin text-theme-text-muted" /></div>
+        ) : loadError ? (
+          <div className="text-center py-8">
+            <ClipboardCheck className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
+            <p className="text-sm text-theme-text-muted mb-3">Failed to load inspections.</p>
+            <button onClick={() => { void reload(); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+              <RotateCcw className="w-3.5 h-3.5" /> Retry
+            </button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="text-center py-8">
             <ClipboardCheck className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
@@ -232,7 +107,6 @@ export default function InspectionsSection({ facilityId }: Props) {
         )}
       </div>
 
-      {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true"
           onKeyDown={e => { if (e.key === 'Escape') setShowModal(false); }}>

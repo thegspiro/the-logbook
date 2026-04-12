@@ -34,6 +34,7 @@ from app.models.facilities import (
     FacilityUtilityAccount,
     FacilityUtilityReading,
 )
+from app.models.location import Location
 from app.schemas.facilities import (
     FacilityAccessKeyCreate,
     FacilityAccessKeyUpdate,
@@ -137,6 +138,13 @@ class FacilitiesService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _apply_updates(self, instance, update_schema) -> None:
+        update_data = update_schema.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(instance, field, value)
+        await self.db.commit()
+        await self.db.refresh(instance)
+
     async def _ensure_system_defaults(self) -> None:
         """Create system-level facility types and statuses if missing.
 
@@ -194,61 +202,41 @@ class FacilitiesService:
                 )
             await self.db.flush()
 
-    async def _find_default_type(self, organization_id: str):
-        """Find the default facility type (Fire Station or any active type)."""
+    async def _find_default_lookup(self, model_class, preferred_name: str, organization_id: str):
+        """Find a default lookup record by preferred name, falling back to any active record."""
         result = await self.db.execute(
-            select(FacilityType).where(
+            select(model_class).where(
                 or_(
-                    FacilityType.organization_id == organization_id,
-                    FacilityType.organization_id.is_(None),
+                    model_class.organization_id == organization_id,
+                    model_class.organization_id.is_(None),
                 ),
-                FacilityType.is_active.is_(True),
-                FacilityType.name == "Fire Station",
+                model_class.is_active.is_(True),
+                model_class.name == preferred_name,
             )
         )
-        default_type = result.scalar_one_or_none()
-        if not default_type:
+        default = result.scalar_one_or_none()
+        if not default:
             result = await self.db.execute(
-                select(FacilityType)
+                select(model_class)
                 .where(
                     or_(
-                        FacilityType.organization_id == organization_id,
-                        FacilityType.organization_id.is_(None),
+                        model_class.organization_id == organization_id,
+                        model_class.organization_id.is_(None),
                     ),
-                    FacilityType.is_active.is_(True),
+                    model_class.is_active.is_(True),
                 )
                 .limit(1)
             )
-            default_type = result.scalar_one_or_none()
-        return default_type
+            default = result.scalar_one_or_none()
+        return default
+
+    async def _find_default_type(self, organization_id: str):
+        """Find the default facility type (Fire Station or any active type)."""
+        return await self._find_default_lookup(FacilityType, "Fire Station", organization_id)
 
     async def _find_default_status(self, organization_id: str):
         """Find the default facility status (Operational or any active status)."""
-        result = await self.db.execute(
-            select(FacilityStatus).where(
-                or_(
-                    FacilityStatus.organization_id == organization_id,
-                    FacilityStatus.organization_id.is_(None),
-                ),
-                FacilityStatus.is_active.is_(True),
-                FacilityStatus.name == "Operational",
-            )
-        )
-        default_status = result.scalar_one_or_none()
-        if not default_status:
-            result = await self.db.execute(
-                select(FacilityStatus)
-                .where(
-                    or_(
-                        FacilityStatus.organization_id == organization_id,
-                        FacilityStatus.organization_id.is_(None),
-                    ),
-                    FacilityStatus.is_active.is_(True),
-                )
-                .limit(1)
-            )
-            default_status = result.scalar_one_or_none()
-        return default_status
+        return await self._find_default_lookup(FacilityStatus, "Operational", organization_id)
 
     # =========================================================================
     # Facility Type Methods
@@ -367,12 +355,7 @@ class FacilitiesService:
                     f"Facility type with name '{type_data.name}' already exists"
                 )
 
-        update_data = type_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(facility_type, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(facility_type)
+        await self._apply_updates(facility_type, type_data)
 
         return facility_type
 
@@ -516,12 +499,7 @@ class FacilitiesService:
                     f"Facility status with name '{status_data.name}' already exists"
                 )
 
-        update_data = status_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(facility_status, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(facility_status)
+        await self._apply_updates(facility_status, status_data)
 
         return facility_status
 
@@ -859,6 +837,7 @@ class FacilitiesService:
             )
             for photo in result.scalars().all():
                 photo.is_primary = False
+            await self.db.flush()
 
         photo = FacilityPhoto(
             organization_id=organization_id,
@@ -901,6 +880,7 @@ class FacilitiesService:
             )
             for other_photo in existing.scalars().all():
                 other_photo.is_primary = False
+            await self.db.flush()
 
         for field, value in update_data.items():
             setattr(photo, field, value)
@@ -991,12 +971,7 @@ class FacilitiesService:
         if not document:
             return None
 
-        update_data = document_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(document, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(document)
+        await self._apply_updates(document, document_data)
 
         return document
 
@@ -1133,12 +1108,7 @@ class FacilitiesService:
                     f"Maintenance type with name '{type_data.name}' already exists"
                 )
 
-        update_data = type_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(maintenance_type, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(maintenance_type)
+        await self._apply_updates(maintenance_type, type_data)
 
         return maintenance_type
 
@@ -1433,12 +1403,7 @@ class FacilitiesService:
         if not system:
             return None
 
-        update_data = system_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(system, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(system)
+        await self._apply_updates(system, system_data)
 
         return system
 
@@ -1665,12 +1630,7 @@ class FacilitiesService:
         if not account:
             return None
 
-        update_data = account_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(account, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(account)
+        await self._apply_updates(account, account_data)
 
         return account
 
@@ -1771,12 +1731,7 @@ class FacilitiesService:
         if not reading:
             return None
 
-        update_data = reading_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(reading, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(reading)
+        await self._apply_updates(reading, reading_data)
 
         return reading
 
@@ -1880,12 +1835,7 @@ class FacilitiesService:
         if not key:
             return None
 
-        update_data = key_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(key, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(key)
+        await self._apply_updates(key, key_data)
 
         return key
 
@@ -2012,8 +1962,6 @@ class FacilitiesService:
 
     async def delete_room(self, room_id: str, organization_id: str) -> bool:
         """Delete room and its linked Location."""
-        from app.models.location import Location
-
         room = await self.get_room(room_id, organization_id)
         if not room:
             return False
@@ -2046,8 +1994,6 @@ class FacilitiesService:
         This makes rooms available to Events (location picker), Storage,
         and any other module that uses the Location model.
         """
-        from app.models.location import Location
-
         result = await self.db.execute(
             select(Location).where(
                 Location.facility_room_id == room.id,
@@ -2177,12 +2123,7 @@ class FacilitiesService:
         if not contact:
             return None
 
-        update_data = contact_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(contact, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(contact)
+        await self._apply_updates(contact, contact_data)
 
         return contact
 
@@ -2278,12 +2219,7 @@ class FacilitiesService:
         if not location:
             return None
 
-        update_data = location_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(location, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(location)
+        await self._apply_updates(location, location_data)
 
         return location
 
@@ -2615,12 +2551,7 @@ class FacilitiesService:
         if not occupant:
             return None
 
-        update_data = occupant_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(occupant, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(occupant)
+        await self._apply_updates(occupant, occupant_data)
 
         return occupant
 
@@ -2720,12 +2651,7 @@ class FacilitiesService:
         if not checklist:
             return None
 
-        update_data = checklist_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(checklist, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(checklist)
+        await self._apply_updates(checklist, checklist_data)
 
         return checklist
 
@@ -2818,12 +2744,7 @@ class FacilitiesService:
         if not item:
             return None
 
-        update_data = item_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(item, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(item)
+        await self._apply_updates(item, item_data)
 
         return item
 

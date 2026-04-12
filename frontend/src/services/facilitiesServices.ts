@@ -13,7 +13,7 @@ import type {
   Inspection,
   Room,
   FacilitySystem,
-} from '../pages/facilities/types';
+} from '../modules/facilities/types';
 
 // ============================================
 // Facilities Create / Update payloads
@@ -366,6 +366,15 @@ export interface FacilityPhoto {
   uploadedAt: string;
 }
 
+export interface FacilityPhotoCreate {
+  facility_id: string;
+  file_path: string;
+  file_name?: string;
+  mime_type?: string;
+  caption?: string;
+  is_primary?: boolean;
+}
+
 export interface FacilityDocument {
   id: string;
   facilityId: string;
@@ -377,6 +386,17 @@ export interface FacilityDocument {
   documentDate?: string;
   expirationDate?: string;
   uploadedAt: string;
+}
+
+export interface FacilityDocumentCreate {
+  facility_id: string;
+  file_path: string;
+  file_name?: string;
+  mime_type?: string;
+  document_type?: string;
+  description?: string;
+  document_date?: string;
+  expiration_date?: string;
 }
 
 export interface Occupant {
@@ -537,7 +557,7 @@ export const facilitiesService = {
     const response = await api.post<MaintenanceType>('/facilities/maintenance-types', data);
     return response.data;
   },
-  async updateMaintenanceType(typeId: string, data: Record<string, unknown>): Promise<MaintenanceType> {
+  async updateMaintenanceType(typeId: string, data: Partial<{ name: string; description?: string; category?: string; default_interval_value?: number; default_interval_unit?: string }>): Promise<MaintenanceType> {
     const response = await api.patch<MaintenanceType>(`/facilities/maintenance-types/${typeId}`, data);
     return response.data;
   },
@@ -689,11 +709,11 @@ export const facilitiesService = {
     const response = await api.get<FacilityPhoto[]>('/facilities/photos', { params });
     return response.data;
   },
-  async createPhoto(data: Record<string, unknown>): Promise<FacilityPhoto> {
+  async createPhoto(data: FacilityPhotoCreate): Promise<FacilityPhoto> {
     const response = await api.post<FacilityPhoto>('/facilities/photos', data);
     return response.data;
   },
-  async updatePhoto(photoId: string, data: Record<string, unknown>): Promise<FacilityPhoto> {
+  async updatePhoto(photoId: string, data: Partial<FacilityPhotoCreate>): Promise<FacilityPhoto> {
     const response = await api.patch<FacilityPhoto>(`/facilities/photos/${photoId}`, data);
     return response.data;
   },
@@ -706,11 +726,11 @@ export const facilitiesService = {
     const response = await api.get<FacilityDocument[]>('/facilities/documents', { params });
     return response.data;
   },
-  async createFacilityDocument(data: Record<string, unknown>): Promise<FacilityDocument> {
+  async createFacilityDocument(data: FacilityDocumentCreate): Promise<FacilityDocument> {
     const response = await api.post<FacilityDocument>('/facilities/documents', data);
     return response.data;
   },
-  async updateFacilityDocument(documentId: string, data: Record<string, unknown>): Promise<FacilityDocument> {
+  async updateFacilityDocument(documentId: string, data: Partial<FacilityDocumentCreate>): Promise<FacilityDocument> {
     const response = await api.patch<FacilityDocument>(`/facilities/documents/${documentId}`, data);
     return response.data;
   },
