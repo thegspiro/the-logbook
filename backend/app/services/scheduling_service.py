@@ -9,11 +9,15 @@ import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
+from loguru import logger
 from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.utils import generate_uuid
+from app.models.notification import NotificationLog
 from app.models.training import (
     AssignmentStatus,
     BasicApparatus,
@@ -37,11 +41,6 @@ from app.models.training import (
     TimeOffStatus,
     TrainingRequirement,
 )
-from loguru import logger
-from zoneinfo import ZoneInfo
-
-from app.core.utils import generate_uuid
-from app.models.notification import NotificationLog
 from app.models.user import (
     MemberLeaveOfAbsence,
     Organization,
@@ -191,10 +190,7 @@ class SchedulingService:
 
             if send_email and org:
                 try:
-                    from app.services.email_service import (
-                        EmailService,
-                        wrap_email_body,
-                    )
+                    from app.services.email_service import EmailService, wrap_email_body
 
                     recipient_result = await self.db.execute(
                         select(User.email).where(
@@ -3597,9 +3593,7 @@ class SchedulingService:
                         ShiftAttendance.shift_id == str(shift_id)
                     )
                 )
-                existing_user_ids = {
-                    row[0] for row in existing.all()
-                }
+                existing_user_ids = {row[0] for row in existing.all()}
                 for entry in manual_hours:
                     uid = str(entry["user_id"])
                     if uid in existing_user_ids:
@@ -3627,9 +3621,7 @@ class SchedulingService:
                 open_att.checked_out_at = shift.end_time or now
                 if open_att.checked_in_at:
                     delta = open_att.checked_out_at - open_att.checked_in_at
-                    open_att.duration_minutes = max(
-                        int(delta.total_seconds() / 60), 0
-                    )
+                    open_att.duration_minutes = max(int(delta.total_seconds() / 60), 0)
             await self.db.flush()
 
             # Snapshot call count
@@ -3647,7 +3639,9 @@ class SchedulingService:
                 ).where(ShiftAttendance.shift_id == str(shift_id))
             )
             total_min = hours_result.scalar() or 0
-            shift.total_hours = round(float(total_min) / 60.0, 1) if total_min > 0 else 0.0
+            shift.total_hours = (
+                round(float(total_min) / 60.0, 1) if total_min > 0 else 0.0
+            )
 
             # Snapshot per-member call counts onto attendance records
             member_call_counts = await self.compute_member_call_counts(shift_id)
@@ -3699,9 +3693,7 @@ class SchedulingService:
         narrative and ratings to complete each report.
         Returns the number of drafts created.
         """
-        from app.services.shift_completion_service import (
-            ShiftCompletionService,
-        )
+        from app.services.shift_completion_service import ShiftCompletionService
 
         att_result = await self.db.execute(
             select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift.id))

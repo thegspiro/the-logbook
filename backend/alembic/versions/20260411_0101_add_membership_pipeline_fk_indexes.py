@@ -5,7 +5,7 @@ created_by on membership_pipelines, email_template_id on
 membership_pipeline_steps, and uploaded_by on prospect_documents.
 These prevent full table scans on JOINs at scale.
 
-Revision ID: 20260411_0100
+Revision ID: 20260411_0101
 Revises: 20260404_0500
 Create Date: 2026-04-11
 """
@@ -13,8 +13,8 @@ Create Date: 2026-04-11
 from alembic import op
 
 
-revision = "20260411_0100"
-down_revision = "20260404_0500"
+revision = "20260411_0101"
+down_revision = "20260411_0100"
 branch_labels = None
 depends_on = None
 

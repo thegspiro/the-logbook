@@ -9,7 +9,6 @@ import asyncio
 import os
 import uuid
 
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from loguru import logger
 from sqlalchemy.exc import DataError

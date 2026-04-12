@@ -85,12 +85,10 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     "password_reset": [
         {"name": "first_name", "description": "Recipient's first name"},
         {"name": "reset_url", "description": "Password reset link"},
-
         {"name": "expiry_minutes", "description": "Minutes until link expires"},
     ],
     "inventory_change": [
         {"name": "first_name", "description": "Member's first name"},
-
         {"name": "change_date", "description": "Date the changes occurred"},
         {
             "name": "items_issued_html",
@@ -108,7 +106,6 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
     ],
     "member_dropped": [
         {"name": "member_name", "description": "Full name of the dropped member"},
-
         {
             "name": "drop_type_display",
             "description": "Type of separation (Voluntary/Involuntary)",
@@ -163,7 +160,6 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "event_title", "description": "Title of the cancelled event"},
         {"name": "event_date", "description": "Original event date"},
-
         {"name": "reason", "description": "Reason for cancellation"},
     ],
     "training_approval": [
@@ -209,7 +205,6 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "cert_name", "description": "Name of the certification"},
         {"name": "expiration_date", "description": "Expiration date of the cert"},
         {"name": "days_remaining", "description": "Days until expiration"},
-
         {"name": "renewal_url", "description": "Link to training/certification page"},
     ],
     "post_event_validation": [
@@ -218,7 +213,6 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "event_date", "description": "Date of the event"},
         {"name": "attendee_count", "description": "Number of attendees recorded"},
         {"name": "validation_url", "description": "Link to validate attendance"},
-
     ],
     "post_shift_validation": [
         {"name": "recipient_name", "description": "Shift officer's name"},
@@ -226,11 +220,9 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "shift_name", "description": "Name/label of the shift"},
         {"name": "attendee_count", "description": "Number of members on shift"},
         {"name": "validation_url", "description": "Link to validate attendance"},
-
     ],
     "property_return_reminder": [
         {"name": "member_name", "description": "Member's full name"},
-
         {"name": "item_count", "description": "Number of outstanding items"},
         {"name": "total_value", "description": "Total value of outstanding items"},
         {
@@ -253,7 +245,6 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "description": "Configured inactivity timeout threshold in days",
         },
         {"name": "pipeline_stage", "description": "Current pipeline stage"},
-
         {"name": "prospect_url", "description": "Link to prospect profile"},
     ],
     "election_rollback": [
@@ -261,14 +252,12 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "election_title", "description": "Title of the election"},
         {"name": "performer_name", "description": "Name of the person who rolled back"},
         {"name": "reason", "description": "Reason for the rollback"},
-
     ],
     "election_deleted": [
         {"name": "recipient_name", "description": "Recipient's display name"},
         {"name": "election_title", "description": "Title of the deleted election"},
         {"name": "performer_name", "description": "Name of the person who deleted it"},
         {"name": "reason", "description": "Reason for deletion"},
-
     ],
     "election_report": [
         {"name": "recipient_name", "description": "Recipient's display name"},
@@ -308,12 +297,10 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
             "name": "skipped_voters_text",
             "description": "Plain-text list of members who did not receive ballots with reasons",
         },
-
     ],
     "member_archived": [
         {"name": "member_name", "description": "Archived member's full name"},
         {"name": "previous_status", "description": "Member's status before archival"},
-
     ],
     "event_request_status": [
         {"name": "contact_name", "description": "Requester's name"},
@@ -321,7 +308,6 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "event_date", "description": "Scheduled event date (if set)"},
         {"name": "decline_reason", "description": "Reason for decline (if applicable)"},
         {"name": "message", "description": "Additional message from coordinator"},
-
     ],
     "it_password_notification": [
         {
@@ -331,11 +317,9 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         {"name": "user_email", "description": "Email of the user"},
         {"name": "request_time", "description": "Time the request was made"},
         {"name": "ip_address", "description": "IP address of the request"},
-
     ],
     "duplicate_application": [
         {"name": "applicant_name", "description": "Applicant's full name"},
-
         {
             "name": "original_date",
             "description": "Date the original application was received",
@@ -367,333 +351,375 @@ def _sample(*dicts: Dict[str, str]) -> Dict[str, str]:
 
 
 SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
-    "welcome": _sample({
-        "first_name": "John",
-        "last_name": "Doe",
-        "full_name": "John Doe",
-        "username": "jdoe",
-        "temp_password": "TempPass123!",
-    }),
-    "password_reset": _sample({
-        "first_name": "John",
-        "reset_url": "https://example.com/reset-password?token=sample-token",
-        "expiry_minutes": "30",
-    }),
-    "event_reminder": _sample({
-        "recipient_name": "John Doe",
-        "event_title": "Monthly Business Meeting",
-        "event_type": "Business Meeting",
-        "event_start": "March 15, 2026 at 07:00 PM",
-        "event_end": "09:00 PM",
-        "location_name": "Main Station \u2014 Meeting Room A",
-        "location_details": "123 Main St, Anytown, USA",
-        "event_url": "https://example.com/events/123",
-    }),
-    "series_end_reminder": _sample({
-        "recipient_name": "John Doe",
-        "event_title": "Weekly Officers Meeting",
-        "recurrence_pattern": "Weekly",
-        "series_end_date": "September 15, 2026",
-        "remaining_occurrences": "26",
-        "event_url": "https://example.com/events/456",
-    }),
-    "event_cancellation": _sample({
-        "recipient_name": "John Doe",
-        "event_title": "Monthly Business Meeting",
-        "event_date": "March 15, 2026",
-        "reason": "Inclement weather",
-    }),
-    "training_approval": _sample({
-        "course_name": "Hazardous Materials Awareness",
-        "event_title": "HazMat Refresher Training",
-        "event_date": "March 20, 2026 at 09:00 AM",
-        "attendee_count": "12",
-        "approval_deadline": "March 18, 2026",
-        "submitter_name": "Jane Smith",
-        "approval_url": "https://example.com/training/approve/123",
-    }),
-    "ballot_notification": _sample({
-        "recipient_name": "John Doe",
-        "election_title": "Captain Election 2026",
-        "meeting_date": "April 1, 2026 at 07:00 PM",
-        "custom_message": "Please review the candidates before voting.",
-        "ballot_url": "https://example.com/ballot?token=sample-token",
-        "voting_opens": "March 28, 2026 at 08:00 AM",
-        "voting_closes": "April 1, 2026 at 05:00 PM",
-        "positions": "Captain, Lieutenant",
-        "ballot_items_html": (
-            "<ul>"
-            "<li><strong>Captain</strong> — Officer Election (candidate selection)</li>"
-            "<li><strong>Lieutenant</strong> — Officer Election (candidate selection)</li>"
-            "</ul>"
-        ),
-        "ballot_items_text": (
-            "  - Captain — Officer Election (candidate selection)\n"
-            "  - Lieutenant — Officer Election (candidate selection)"
-        ),
-        "admin_contact_name": "FCVFD Secretary",
-        "admin_contact_email": "secretary@samplefd.org",
-    }),
-    "member_dropped": _sample({
-        "member_name": "John Doe",
-        "drop_type_display": "Voluntary Separation",
-        "reason": "Relocation",
-        "effective_date": "March 31, 2026",
-        "return_deadline": "April 14, 2026",
-        "item_count": "5",
-        "total_value": "2,450.00",
-        "items_list_html": (
-            '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
-            '<thead><tr style="background-color:#374151;color:white;">'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">#</th>'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Item</th>'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Serial #</th>'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Asset Tag</th>'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Condition</th>'
-            '<th style="padding:8px 10px;text-align:right;font-size:12px;">Value</th>'
-            "</tr></thead><tbody>"
-            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">1</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Coat (Size L)</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TC-2024-0456</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TCOAT-012</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$850.00</td></tr>'
-            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">2</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Pants (Size L)</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TP-2024-0789</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TPANT-012</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$650.00</td></tr>'
-            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">3</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Helmet (Black)</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-2024-0089</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-089</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Excellent</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$450.00</td></tr>'
-            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">4</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA Mask</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA-2023-0234</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA-234</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Fair</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$350.00</td></tr>'
-            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">5</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Radio (Portable)</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-2024-0567</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-567</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$150.00</td></tr>'
-            "</tbody>"
-            '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
-            '<td colspan="5" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
-            '<td style="padding:8px 10px;text-align:right;">$2,450.00</td>'
-            "</tr></tfoot></table>"
-        ),
-        "items_list_text": (
-            "Outstanding Items:\n"
-            "  1. Turnout Coat (Size L) — Serial: TC-2024-0456 — Asset Tag: TCOAT-012 — Condition: Good — $850.00\n"
-            "  2. Turnout Pants (Size L) — Serial: TP-2024-0789 — Asset Tag: TPANT-012 — Condition: Good — $650.00\n"
-            "  3. Helmet (Black) — Serial: HLM-2024-0089 — Asset Tag: HLM-089 — Condition: Excellent — $450.00\n"
-            "  4. SCBA Mask — Serial: SCBA-2023-0234 — Asset Tag: SCBA-234 — Condition: Fair — $350.00\n"
-            "  5. Radio (Portable) — Serial: RAD-2024-0567 — Asset Tag: RAD-567 — Condition: Good — $150.00\n"
-            "\n"
-            "Total Outstanding Value: $2,450.00"
-        ),
-        "performed_by_name": "Chief Robert Johnson",
-        "performed_by_title": "Fire Chief",
-    }),
-    "inventory_change": _sample({
-        "first_name": "John",
-        "change_date": "March 1, 2026",
-        "items_issued_html": (
-            "<h3>Items Issued</h3>"
-            "<ul><li>Turnout Coat (Size L) \u2014 Serial #TC-2024-0456</li>"
-            "<li>Helmet (Black) \u2014 Serial #HLM-2024-0089</li></ul>"
-        ),
-        "items_returned_html": (
-            "<h3>Items Returned</h3>"
-            "<ul><li>Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123</li></ul>"
-        ),
-        "items_issued_text": (
-            "Items Issued:\n"
-            "- Turnout Coat (Size L) \u2014 Serial #TC-2024-0456\n"
-            "- Helmet (Black) \u2014 Serial #HLM-2024-0089"
-        ),
-        "items_returned_text": (
-            "Items Returned:\n"
-            "- Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123"
-        ),
-    }),
-    "cert_expiration": _sample({
-        "recipient_name": "John Doe",
-        "cert_name": "EMT-Basic Certification",
-        "expiration_date": "April 15, 2026",
-        "days_remaining": "45",
-        "renewal_url": "https://example.com/training/certifications",
-    }),
-    "post_event_validation": _sample({
-        "recipient_name": "Jane Smith",
-        "event_title": "Monthly Business Meeting",
-        "event_date": "March 15, 2026",
-        "attendee_count": "24",
-        "validation_url": "https://example.com/events/123/validate",
-    }),
-    "post_shift_validation": _sample({
-        "recipient_name": "Capt. Mike Davis",
-        "shift_date": "March 14, 2026",
-        "shift_name": "Engine 1 \u2014 Night Shift",
-        "attendee_count": "6",
-        "validation_url": "https://example.com/scheduling/shifts/456/validate",
-    }),
-    "property_return_reminder": _sample({
-        "member_name": "John Doe",
-        "item_count": "3",
-        "total_value": "1,200.00",
-        "items_list_html": (
-            '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
-            '<thead><tr style="background-color:#374151;color:white;">'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">#</th>'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Item</th>'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Serial #</th>'
-            '<th style="padding:8px 10px;text-align:left;font-size:12px;">Asset Tag</th>'
-            '<th style="padding:8px 10px;text-align:right;font-size:12px;">Value</th>'
-            "</tr></thead><tbody>"
-            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">1</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Coat (Size L)</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TC-2024-0456</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TCOAT-012</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$500.00</td></tr>'
-            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">2</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Helmet (Black)</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-2024-0089</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-089</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$450.00</td></tr>'
-            '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">3</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Radio (Portable)</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-2024-0567</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-567</td>'
-            '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$250.00</td></tr>'
-            "</tbody>"
-            '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
-            '<td colspan="4" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
-            '<td style="padding:8px 10px;text-align:right;">$1,200.00</td>'
-            "</tr></tfoot></table>"
-        ),
-        "items_list_text": (
-            "Outstanding Items:\n"
-            "  1. Turnout Coat (Size L) — Serial: TC-2024-0456 — Asset Tag: TCOAT-012 — $500.00\n"
-            "  2. Helmet (Black) — Serial: HLM-2024-0089 — Asset Tag: HLM-089 — $450.00\n"
-            "  3. Radio (Portable) — Serial: RAD-2024-0567 — Asset Tag: RAD-567 — $250.00\n"
-            "\n"
-            "Total Outstanding Value: $1,200.00"
-        ),
-        "days_since_drop": "30",
-        "return_deadline": "April 30, 2026",
-    }),
-    "inactivity_warning": _sample({
-        "coordinator_name": "Jane Smith",
-        "prospect_name": "Alex Johnson",
-        "days_inactive": "21",
-        "timeout_days": "30",
-        "pipeline_stage": "Application Review",
-        "prospect_url": "https://example.com/prospective-members/789",
-    }),
-    "election_rollback": _sample({
-        "recipient_name": "Lt. Jane Smith",
-        "election_title": "Captain Election 2026",
-        "performer_name": "Secretary Robert Johnson",
-        "reason": "Ballots were distributed to ineligible members",
-    }),
-    "election_deleted": _sample({
-        "recipient_name": "Lt. Jane Smith",
-        "election_title": "Captain Election 2026",
-        "performer_name": "Secretary Robert Johnson",
-        "reason": "Election created in error — new election will be scheduled",
-    }),
-    "election_report": _sample({
-        "recipient_name": "Secretary Robert Johnson",
-        "election_title": "Captain Election 2026",
-        "election_type": "Officer Election",
-        "start_date": "March 28, 2026 at 08:00 AM",
-        "end_date": "April 1, 2026 at 05:00 PM",
-        "total_eligible_voters": "45",
-        "total_votes_cast": "38",
-        "voter_turnout_percentage": "84.4",
-        "quorum_status": "Quorum Met",
-        "quorum_detail": "Quorum requires 50% turnout. Actual: 84.4% (38/45).",
-        "results_html": (
-            '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
-            '<tr style="background:#f3f4f6;"><th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Position</th>'
-            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Candidate</th>'
-            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Votes</th>'
-            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">%</th>'
-            '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Result</th></tr>'
-            '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Captain</td>'
-            '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">John Smith</td>'
-            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">22</td>'
-            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">57.9%</td>'
-            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">\u2705 Elected</td></tr>'
-            '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Captain</td>'
-            '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">Jane Doe</td>'
-            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">16</td>'
-            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">42.1%</td>'
-            '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">&mdash;</td></tr>'
-            "</table>"
-        ),
-        "results_text": (
-            "Position: Captain\n"
-            "  John Smith — 22 votes (57.9%) — ELECTED\n"
-            "  Jane Doe — 16 votes (42.1%)"
-        ),
-        "ballot_recipients_html": (
-            "<ul>"
-            "<li>John Smith (jsmith@example.com)</li>"
-            "<li>Jane Doe (jdoe@example.com)</li>"
-            "<li>Mike Wilson (mwilson@example.com)</li>"
-            "<li>... and 35 others</li>"
-            "</ul>"
-        ),
-        "ballot_recipients_text": (
-            "  - John Smith (jsmith@example.com)\n"
-            "  - Jane Doe (jdoe@example.com)\n"
-            "  - Mike Wilson (mwilson@example.com)\n"
-            "  ... and 35 others"
-        ),
-        "skipped_voters_html": (
-            '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
-            '<tr style="background:#f3f4f6;"><th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Member</th>'
-            '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Reason</th></tr>'
-            '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Tom Brown</td>'
-            "<td style=\"padding:8px;border-bottom:1px solid #e5e7eb;\">Membership tier 'Social' is not eligible to vote</td></tr>"
-            '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Sarah Lee</td>'
-            '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">Not checked in as present at the meeting</td></tr>'
-            "</table>"
-        ),
-        "skipped_voters_text": (
-            "  - Tom Brown: Membership tier 'Social' is not eligible to vote\n"
-            "  - Sarah Lee: Not checked in as present at the meeting"
-        ),
-    }),
-    "member_archived": _sample({
-        "member_name": "John Doe",
-        "previous_status": "Dropped",
-    }),
-    "event_request_status": _sample({
-        "contact_name": "John Doe",
-        "status_label": "Scheduled",
-        "event_date": "April 15, 2026 at 06:00 PM",
-        "decline_reason": "",
-        "message": "Your event has been approved and added to the calendar.",
-    }),
-    "it_password_notification": _sample({
-        "user_name": "John Doe",
-        "user_email": "jdoe@example.com",
-        "request_time": "March 1, 2026 at 02:30 PM",
-        "ip_address": "192.168.1.100",
-    }),
-    "duplicate_application": _sample({
-        "applicant_name": "Alex Johnson",
-        "original_date": "February 15, 2026",
-    }),
+    "welcome": _sample(
+        {
+            "first_name": "John",
+            "last_name": "Doe",
+            "full_name": "John Doe",
+            "username": "jdoe",
+            "temp_password": "TempPass123!",
+        }
+    ),
+    "password_reset": _sample(
+        {
+            "first_name": "John",
+            "reset_url": "https://example.com/reset-password?token=sample-token",
+            "expiry_minutes": "30",
+        }
+    ),
+    "event_reminder": _sample(
+        {
+            "recipient_name": "John Doe",
+            "event_title": "Monthly Business Meeting",
+            "event_type": "Business Meeting",
+            "event_start": "March 15, 2026 at 07:00 PM",
+            "event_end": "09:00 PM",
+            "location_name": "Main Station \u2014 Meeting Room A",
+            "location_details": "123 Main St, Anytown, USA",
+            "event_url": "https://example.com/events/123",
+        }
+    ),
+    "series_end_reminder": _sample(
+        {
+            "recipient_name": "John Doe",
+            "event_title": "Weekly Officers Meeting",
+            "recurrence_pattern": "Weekly",
+            "series_end_date": "September 15, 2026",
+            "remaining_occurrences": "26",
+            "event_url": "https://example.com/events/456",
+        }
+    ),
+    "event_cancellation": _sample(
+        {
+            "recipient_name": "John Doe",
+            "event_title": "Monthly Business Meeting",
+            "event_date": "March 15, 2026",
+            "reason": "Inclement weather",
+        }
+    ),
+    "training_approval": _sample(
+        {
+            "course_name": "Hazardous Materials Awareness",
+            "event_title": "HazMat Refresher Training",
+            "event_date": "March 20, 2026 at 09:00 AM",
+            "attendee_count": "12",
+            "approval_deadline": "March 18, 2026",
+            "submitter_name": "Jane Smith",
+            "approval_url": "https://example.com/training/approve/123",
+        }
+    ),
+    "ballot_notification": _sample(
+        {
+            "recipient_name": "John Doe",
+            "election_title": "Captain Election 2026",
+            "meeting_date": "April 1, 2026 at 07:00 PM",
+            "custom_message": "Please review the candidates before voting.",
+            "ballot_url": "https://example.com/ballot?token=sample-token",
+            "voting_opens": "March 28, 2026 at 08:00 AM",
+            "voting_closes": "April 1, 2026 at 05:00 PM",
+            "positions": "Captain, Lieutenant",
+            "ballot_items_html": (
+                "<ul>"
+                "<li><strong>Captain</strong> — Officer Election (candidate selection)</li>"
+                "<li><strong>Lieutenant</strong> — Officer Election (candidate selection)</li>"
+                "</ul>"
+            ),
+            "ballot_items_text": (
+                "  - Captain — Officer Election (candidate selection)\n"
+                "  - Lieutenant — Officer Election (candidate selection)"
+            ),
+            "admin_contact_name": "FCVFD Secretary",
+            "admin_contact_email": "secretary@samplefd.org",
+        }
+    ),
+    "member_dropped": _sample(
+        {
+            "member_name": "John Doe",
+            "drop_type_display": "Voluntary Separation",
+            "reason": "Relocation",
+            "effective_date": "March 31, 2026",
+            "return_deadline": "April 14, 2026",
+            "item_count": "5",
+            "total_value": "2,450.00",
+            "items_list_html": (
+                '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
+                '<thead><tr style="background-color:#374151;color:white;">'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">#</th>'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Item</th>'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Serial #</th>'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Asset Tag</th>'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Condition</th>'
+                '<th style="padding:8px 10px;text-align:right;font-size:12px;">Value</th>'
+                "</tr></thead><tbody>"
+                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">1</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Coat (Size L)</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TC-2024-0456</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TCOAT-012</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$850.00</td></tr>'
+                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">2</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Pants (Size L)</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TP-2024-0789</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TPANT-012</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$650.00</td></tr>'
+                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">3</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Helmet (Black)</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-2024-0089</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-089</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Excellent</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$450.00</td></tr>'
+                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">4</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA Mask</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA-2023-0234</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">SCBA-234</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Fair</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$350.00</td></tr>'
+                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">5</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Radio (Portable)</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-2024-0567</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-567</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Good</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$150.00</td></tr>'
+                "</tbody>"
+                '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
+                '<td colspan="5" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
+                '<td style="padding:8px 10px;text-align:right;">$2,450.00</td>'
+                "</tr></tfoot></table>"
+            ),
+            "items_list_text": (
+                "Outstanding Items:\n"
+                "  1. Turnout Coat (Size L) — Serial: TC-2024-0456 — Asset Tag: TCOAT-012 — Condition: Good — $850.00\n"
+                "  2. Turnout Pants (Size L) — Serial: TP-2024-0789 — Asset Tag: TPANT-012 — Condition: Good — $650.00\n"
+                "  3. Helmet (Black) — Serial: HLM-2024-0089 — Asset Tag: HLM-089 — Condition: Excellent — $450.00\n"
+                "  4. SCBA Mask — Serial: SCBA-2023-0234 — Asset Tag: SCBA-234 — Condition: Fair — $350.00\n"
+                "  5. Radio (Portable) — Serial: RAD-2024-0567 — Asset Tag: RAD-567 — Condition: Good — $150.00\n"
+                "\n"
+                "Total Outstanding Value: $2,450.00"
+            ),
+            "performed_by_name": "Chief Robert Johnson",
+            "performed_by_title": "Fire Chief",
+        }
+    ),
+    "inventory_change": _sample(
+        {
+            "first_name": "John",
+            "change_date": "March 1, 2026",
+            "items_issued_html": (
+                "<h3>Items Issued</h3>"
+                "<ul><li>Turnout Coat (Size L) \u2014 Serial #TC-2024-0456</li>"
+                "<li>Helmet (Black) \u2014 Serial #HLM-2024-0089</li></ul>"
+            ),
+            "items_returned_html": (
+                "<h3>Items Returned</h3>"
+                "<ul><li>Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123</li></ul>"
+            ),
+            "items_issued_text": (
+                "Items Issued:\n"
+                "- Turnout Coat (Size L) \u2014 Serial #TC-2024-0456\n"
+                "- Helmet (Black) \u2014 Serial #HLM-2024-0089"
+            ),
+            "items_returned_text": (
+                "Items Returned:\n"
+                "- Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123"
+            ),
+        }
+    ),
+    "cert_expiration": _sample(
+        {
+            "recipient_name": "John Doe",
+            "cert_name": "EMT-Basic Certification",
+            "expiration_date": "April 15, 2026",
+            "days_remaining": "45",
+            "renewal_url": "https://example.com/training/certifications",
+        }
+    ),
+    "post_event_validation": _sample(
+        {
+            "recipient_name": "Jane Smith",
+            "event_title": "Monthly Business Meeting",
+            "event_date": "March 15, 2026",
+            "attendee_count": "24",
+            "validation_url": "https://example.com/events/123/validate",
+        }
+    ),
+    "post_shift_validation": _sample(
+        {
+            "recipient_name": "Capt. Mike Davis",
+            "shift_date": "March 14, 2026",
+            "shift_name": "Engine 1 \u2014 Night Shift",
+            "attendee_count": "6",
+            "validation_url": "https://example.com/scheduling/shifts/456/validate",
+        }
+    ),
+    "property_return_reminder": _sample(
+        {
+            "member_name": "John Doe",
+            "item_count": "3",
+            "total_value": "1,200.00",
+            "items_list_html": (
+                '<table style="border-collapse:collapse;width:100%;margin:16px 0;">'
+                '<thead><tr style="background-color:#374151;color:white;">'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">#</th>'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Item</th>'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Serial #</th>'
+                '<th style="padding:8px 10px;text-align:left;font-size:12px;">Asset Tag</th>'
+                '<th style="padding:8px 10px;text-align:right;font-size:12px;">Value</th>'
+                "</tr></thead><tbody>"
+                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">1</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Turnout Coat (Size L)</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TC-2024-0456</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">TCOAT-012</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$500.00</td></tr>'
+                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">2</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Helmet (Black)</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-2024-0089</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">HLM-089</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$450.00</td></tr>'
+                '<tr><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">3</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">Radio (Portable)</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-2024-0567</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">RAD-567</td>'
+                '<td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:right;">$250.00</td></tr>'
+                "</tbody>"
+                '<tfoot><tr style="font-weight:bold;background-color:#f3f4f6;">'
+                '<td colspan="4" style="padding:8px 10px;text-align:right;">Total Outstanding Value:</td>'
+                '<td style="padding:8px 10px;text-align:right;">$1,200.00</td>'
+                "</tr></tfoot></table>"
+            ),
+            "items_list_text": (
+                "Outstanding Items:\n"
+                "  1. Turnout Coat (Size L) — Serial: TC-2024-0456 — Asset Tag: TCOAT-012 — $500.00\n"
+                "  2. Helmet (Black) — Serial: HLM-2024-0089 — Asset Tag: HLM-089 — $450.00\n"
+                "  3. Radio (Portable) — Serial: RAD-2024-0567 — Asset Tag: RAD-567 — $250.00\n"
+                "\n"
+                "Total Outstanding Value: $1,200.00"
+            ),
+            "days_since_drop": "30",
+            "return_deadline": "April 30, 2026",
+        }
+    ),
+    "inactivity_warning": _sample(
+        {
+            "coordinator_name": "Jane Smith",
+            "prospect_name": "Alex Johnson",
+            "days_inactive": "21",
+            "timeout_days": "30",
+            "pipeline_stage": "Application Review",
+            "prospect_url": "https://example.com/prospective-members/789",
+        }
+    ),
+    "election_rollback": _sample(
+        {
+            "recipient_name": "Lt. Jane Smith",
+            "election_title": "Captain Election 2026",
+            "performer_name": "Secretary Robert Johnson",
+            "reason": "Ballots were distributed to ineligible members",
+        }
+    ),
+    "election_deleted": _sample(
+        {
+            "recipient_name": "Lt. Jane Smith",
+            "election_title": "Captain Election 2026",
+            "performer_name": "Secretary Robert Johnson",
+            "reason": "Election created in error — new election will be scheduled",
+        }
+    ),
+    "election_report": _sample(
+        {
+            "recipient_name": "Secretary Robert Johnson",
+            "election_title": "Captain Election 2026",
+            "election_type": "Officer Election",
+            "start_date": "March 28, 2026 at 08:00 AM",
+            "end_date": "April 1, 2026 at 05:00 PM",
+            "total_eligible_voters": "45",
+            "total_votes_cast": "38",
+            "voter_turnout_percentage": "84.4",
+            "quorum_status": "Quorum Met",
+            "quorum_detail": "Quorum requires 50% turnout. Actual: 84.4% (38/45).",
+            "results_html": (
+                '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
+                '<tr style="background:#f3f4f6;"><th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Position</th>'
+                '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Candidate</th>'
+                '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Votes</th>'
+                '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">%</th>'
+                '<th style="padding:8px;text-align:center;border-bottom:2px solid #e5e7eb;">Result</th></tr>'
+                '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Captain</td>'
+                '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">John Smith</td>'
+                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">22</td>'
+                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">57.9%</td>'
+                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">\u2705 Elected</td></tr>'
+                '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Captain</td>'
+                '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">Jane Doe</td>'
+                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">16</td>'
+                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">42.1%</td>'
+                '<td style="padding:8px;text-align:center;border-bottom:1px solid #e5e7eb;">&mdash;</td></tr>'
+                "</table>"
+            ),
+            "results_text": (
+                "Position: Captain\n"
+                "  John Smith — 22 votes (57.9%) — ELECTED\n"
+                "  Jane Doe — 16 votes (42.1%)"
+            ),
+            "ballot_recipients_html": (
+                "<ul>"
+                "<li>John Smith (jsmith@example.com)</li>"
+                "<li>Jane Doe (jdoe@example.com)</li>"
+                "<li>Mike Wilson (mwilson@example.com)</li>"
+                "<li>... and 35 others</li>"
+                "</ul>"
+            ),
+            "ballot_recipients_text": (
+                "  - John Smith (jsmith@example.com)\n"
+                "  - Jane Doe (jdoe@example.com)\n"
+                "  - Mike Wilson (mwilson@example.com)\n"
+                "  ... and 35 others"
+            ),
+            "skipped_voters_html": (
+                '<table style="width:100%;border-collapse:collapse;margin:10px 0;">'
+                '<tr style="background:#f3f4f6;"><th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Member</th>'
+                '<th style="padding:8px;text-align:left;border-bottom:2px solid #e5e7eb;">Reason</th></tr>'
+                '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Tom Brown</td>'
+                "<td style=\"padding:8px;border-bottom:1px solid #e5e7eb;\">Membership tier 'Social' is not eligible to vote</td></tr>"
+                '<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;">Sarah Lee</td>'
+                '<td style="padding:8px;border-bottom:1px solid #e5e7eb;">Not checked in as present at the meeting</td></tr>'
+                "</table>"
+            ),
+            "skipped_voters_text": (
+                "  - Tom Brown: Membership tier 'Social' is not eligible to vote\n"
+                "  - Sarah Lee: Not checked in as present at the meeting"
+            ),
+        }
+    ),
+    "member_archived": _sample(
+        {
+            "member_name": "John Doe",
+            "previous_status": "Dropped",
+        }
+    ),
+    "event_request_status": _sample(
+        {
+            "contact_name": "John Doe",
+            "status_label": "Scheduled",
+            "event_date": "April 15, 2026 at 06:00 PM",
+            "decline_reason": "",
+            "message": "Your event has been approved and added to the calendar.",
+        }
+    ),
+    "it_password_notification": _sample(
+        {
+            "user_name": "John Doe",
+            "user_email": "jdoe@example.com",
+            "request_time": "March 1, 2026 at 02:30 PM",
+            "ip_address": "192.168.1.100",
+        }
+    ),
+    "duplicate_application": _sample(
+        {
+            "applicant_name": "Alex Johnson",
+            "original_date": "February 15, 2026",
+        }
+    ),
 }
 
 # Default welcome email HTML body

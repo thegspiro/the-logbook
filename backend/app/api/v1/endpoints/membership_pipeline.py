@@ -682,9 +682,7 @@ async def list_prospects(
     now = datetime.now(timezone.utc)
     items = []
     for p in prospects:
-        enriched = MembershipPipelineService.enrich_prospect_list_item(
-            p, now
-        )
+        enriched = MembershipPipelineService.enrich_prospect_list_item(p, now)
         items.append(
             ProspectListResponse(
                 id=p.id,
@@ -692,33 +690,19 @@ async def list_prospects(
                 last_name=p.last_name,
                 email=p.email,
                 phone=p.phone,
-                status=(
-                    p.status.value
-                    if hasattr(p.status, "value")
-                    else p.status
-                ),
+                status=(p.status.value if hasattr(p.status, "value") else p.status),
                 pipeline_id=p.pipeline_id,
-                pipeline_name=(
-                    p.pipeline.name if p.pipeline else None
-                ),
+                pipeline_name=(p.pipeline.name if p.pipeline else None),
                 current_step_id=p.current_step_id,
-                current_step_name=(
-                    p.current_step.name
-                    if p.current_step
-                    else None
-                ),
+                current_step_name=(p.current_step.name if p.current_step else None),
                 created_at=p.created_at,
                 updated_at=enriched["last_activity"],
                 stage_entered_at=enriched["stage_entered_at"],
                 days_in_stage=enriched["days_in_stage"],
                 days_in_pipeline=enriched["days_in_pipeline"],
                 days_since_activity=enriched["days_since_activity"],
-                inactivity_alert_level=enriched[
-                    "inactivity_alert_level"
-                ],
-                inactivity_timeout_days=enriched[
-                    "inactivity_timeout_days"
-                ],
+                inactivity_alert_level=enriched["inactivity_alert_level"],
+                inactivity_timeout_days=enriched["inactivity_timeout_days"],
             )
         )
     return PaginatedProspectListResponse(

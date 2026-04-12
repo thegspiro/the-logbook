@@ -1517,9 +1517,7 @@ class EquipmentCheckService:
             # Optional email
             if cfg.get("send_email", False):
                 try:
-                    from app.services.email_service import (
-                        EmailService,
-                    )
+                    from app.services.email_service import EmailService
 
                     recip_result = await self.db.execute(
                         select(User.email).where(

@@ -5,7 +5,7 @@ Creates the evoc_levels table for organization-configurable EVOC
 required_evoc_level_id to apparatus and evoc_level_id to
 apparatus_operators to bridge training, apparatus, and scheduling.
 
-Revision ID: 20260324_0100
+Revision ID: 20260324_0101
 Revises: 20260321_0300
 Create Date: 2026-03-24 01:00:00.000000
 """
@@ -13,8 +13,8 @@ Create Date: 2026-03-24 01:00:00.000000
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260324_0100"
-down_revision = "20260321_0300"
+revision = "20260324_0101"
+down_revision = "20260323_0100"
 branch_labels = None
 depends_on = None
 

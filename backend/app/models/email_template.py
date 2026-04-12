@@ -7,9 +7,9 @@ Templates are managed by admins and used by the email service.
 
 import enum
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer
+from sqlalchemy import JSON, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Index, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 

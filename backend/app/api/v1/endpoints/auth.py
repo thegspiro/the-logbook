@@ -4,7 +4,6 @@ Authentication API Endpoints
 Endpoints for user authentication, registration, and session management.
 """
 
-from loguru import logger
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -15,6 +14,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import JSONResponse
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -6,7 +6,6 @@ and syncing training records from external platforms.
 """
 
 from datetime import date, datetime, timezone
-
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -47,9 +46,7 @@ from app.schemas.training import (
     SyncResponse,
 )
 from app.schemas.training import SyncStatus as SyncStatusEnum
-from app.schemas.training import (
-    TestConnectionResponse,
-)
+from app.schemas.training import TestConnectionResponse
 from app.services.external_training_service import ExternalTrainingSyncService
 
 router = APIRouter()

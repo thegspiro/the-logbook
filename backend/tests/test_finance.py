@@ -5,11 +5,14 @@ Tests for fiscal years, budgets, purchase requests, expense reports,
 check requests, dues, and approval chains.
 """
 
+import pytest
+
+pytestmark = [pytest.mark.integration]
+
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import (
@@ -37,7 +40,6 @@ from app.models.finance import (
 )
 from app.services.finance_service import FinanceService
 
-
 # ============================================
 # Fiscal Year Tests
 # ============================================
@@ -60,7 +62,9 @@ class TestFiscalYearService:
         assert fy.status == FiscalYearStatus.DRAFT
         assert fy.is_locked is False
 
-    async def test_activate_fiscal_year(self, db_session: AsyncSession, sample_org_data):
+    async def test_activate_fiscal_year(
+        self, db_session: AsyncSession, sample_org_data
+    ):
         """Test activating a fiscal year"""
         service = FinanceService(db_session)
         fy = await service.create_fiscal_year(
@@ -175,9 +179,7 @@ class TestBudgetService:
             start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
-        cat = await service.create_budget_category(
-            org_id=org_id, name="Training"
-        )
+        cat = await service.create_budget_category(org_id=org_id, name="Training")
         budget = await service.create_budget(
             org_id=org_id,
             created_by=user_id,
@@ -203,9 +205,7 @@ class TestBudgetService:
             start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
-        cat = await service.create_budget_category(
-            org_id=org_id, name="Training"
-        )
+        cat = await service.create_budget_category(org_id=org_id, name="Training")
         await service.create_budget(
             org_id=org_id,
             created_by=user_id,
@@ -488,9 +488,7 @@ class TestApprovalChainService:
 
         assert records[0].status == ApprovalStepStatus.AUTO_APPROVED
 
-    async def test_deny_step(
-        self, db_session: AsyncSession, sample_org_data
-    ):
+    async def test_deny_step(self, db_session: AsyncSession, sample_org_data):
         """Test denying an approval step"""
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
@@ -521,9 +519,7 @@ class TestApprovalChainService:
             user_id,
         )
 
-        denied = await service.deny_step(
-            records[0].id, user_id, "Budget exceeded"
-        )
+        denied = await service.deny_step(records[0].id, user_id, "Budget exceeded")
         assert denied.status == ApprovalStepStatus.DENIED
         assert denied.notes == "Budget exceeded"
 
@@ -655,9 +651,7 @@ class TestPurchaseRequestService:
         with pytest.raises(ValueError, match="Only draft"):
             await service.submit_purchase_request(pr.id, org_id)
 
-    async def test_pr_status_flow(
-        self, db_session: AsyncSession, sample_org_data
-    ):
+    async def test_pr_status_flow(self, db_session: AsyncSession, sample_org_data):
         """Test the full purchase request status flow"""
         service = FinanceService(db_session)
         org_id = sample_org_data["id"]
@@ -670,9 +664,7 @@ class TestPurchaseRequestService:
             start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
             end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
         )
-        cat = await service.create_budget_category(
-            org_id=org_id, name="Equipment"
-        )
+        cat = await service.create_budget_category(org_id=org_id, name="Equipment")
         budget = await service.create_budget(
             org_id=org_id,
             created_by=user_id,
@@ -813,9 +805,7 @@ class TestDuesService:
         assert schedule.name == "2026 Annual Dues"
         assert float(schedule.amount) == 250.00
 
-    async def test_dues_summary_empty(
-        self, db_session: AsyncSession, sample_org_data
-    ):
+    async def test_dues_summary_empty(self, db_session: AsyncSession, sample_org_data):
         """Test dues summary with no data"""
         service = FinanceService(db_session)
         summary = await service.get_dues_summary(sample_org_data["id"])

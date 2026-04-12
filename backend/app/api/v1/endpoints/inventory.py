@@ -9,10 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import (
-    APIRouter,
-    Depends,
-)
+from fastapi import APIRouter, Depends
 from fastapi import File as FastAPIFile
 from fastapi import (
     HTTPException,
@@ -53,10 +50,15 @@ from app.models.inventory import (
 from app.models.operational_rank import OperationalRank
 from app.models.user import User
 from app.schemas.inventory import (
+    AllowanceCheckResponse,
     BatchCheckoutRequest,
     BatchCheckoutResponse,
     BatchReturnRequest,
     BatchReturnResponse,
+    BulkIssuanceRequest,
+    BulkIssuanceResponse,
+    BulkIssuanceResultItem,
+    ChargeManagementResponse,
     CheckInRequest,
     CheckOutCreate,
     CheckoutExtendRequest,
@@ -65,6 +67,10 @@ from app.schemas.inventory import (
     CompleteClearanceRequest,
     DepartureClearanceCreate,
     DepartureClearanceResponse,
+    EquipmentKitCreate,
+    EquipmentKitDetailResponse,
+    EquipmentKitResponse,
+    EquipmentKitUpdate,
     EquipmentRequestCreate,
     EquipmentRequestReview,
     InventoryCategoryCreate,
@@ -74,6 +80,11 @@ from app.schemas.inventory import (
     InventoryItemResponse,
     InventoryItemUpdate,
     InventorySummary,
+    IssuanceAllowanceCreate,
+    IssuanceAllowanceResponse,
+    IssuanceAllowanceUpdate,
+    IssuanceChargeListItem,
+    IssuanceChargeRequest,
     ItemAssignmentCreate,
     ItemAssignmentResponse,
     ItemIssuanceCreate,
@@ -81,21 +92,36 @@ from app.schemas.inventory import (
     ItemIssuanceReturnRequest,
     ItemRetireRequest,
     ItemsListResponse,
+    ItemVariantGroupCreate,
+    ItemVariantGroupDetailResponse,
+    ItemVariantGroupResponse,
+    ItemVariantGroupUpdate,
     LabelGenerateRequest,
+    LocationInventorySummary,
     LowStockItem,
     MaintenanceRecordCreate,
     MaintenanceRecordResponse,
     MaintenanceRecordUpdate,
     MembersInventoryListResponse,
+    MemberSizePreferencesCreate,
+    MemberSizePreferencesResponse,
     NFPAComplianceCreate,
     NFPAComplianceResponse,
     NFPAComplianceUpdate,
     NFPAExposureRecordCreate,
     NFPAExposureRecordResponse,
     NFPASummaryResponse,
+    ReorderRequestCreate,
+    ReorderRequestResponse,
+    ReorderRequestUpdate,
     ResolveClearanceItemRequest,
+    ReturnRequestCreate,
+    ReturnRequestResponse,
+    ReturnRequestReview,
     ScanLookupListResponse,
     ScanLookupResponse,
+    SizeVariantCreate,
+    SizeVariantCreateResponse,
     StorageAreaCreate,
     StorageAreaResponse,
     StorageAreaUpdate,
@@ -104,35 +130,6 @@ from app.schemas.inventory import (
     WriteOffRequestCreate,
     WriteOffRequestResponse,
     WriteOffReview,
-    SizeVariantCreate,
-    SizeVariantCreateResponse,
-    BulkIssuanceRequest,
-    BulkIssuanceResponse,
-    BulkIssuanceResultItem,
-    IssuanceAllowanceCreate,
-    IssuanceAllowanceUpdate,
-    IssuanceAllowanceResponse,
-    AllowanceCheckResponse,
-    IssuanceChargeRequest,
-    ChargeManagementResponse,
-    IssuanceChargeListItem,
-    ReorderRequestCreate,
-    ReorderRequestResponse,
-    ReorderRequestUpdate,
-    ReturnRequestCreate,
-    ReturnRequestReview,
-    ReturnRequestResponse,
-    LocationInventorySummary,
-    ItemVariantGroupCreate,
-    ItemVariantGroupUpdate,
-    ItemVariantGroupResponse,
-    ItemVariantGroupDetailResponse,
-    EquipmentKitCreate,
-    EquipmentKitUpdate,
-    EquipmentKitResponse,
-    EquipmentKitDetailResponse,
-    MemberSizePreferencesCreate,
-    MemberSizePreferencesResponse,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
@@ -792,9 +789,7 @@ def _coerce_csv_row(
 
         if field == "purchase_price":
             try:
-                item_data[field] = float(
-                    value.replace("$", "").replace(",", "")
-                )
+                item_data[field] = float(value.replace("$", "").replace(",", ""))
             except ValueError:
                 row_errors.append(
                     {
@@ -950,9 +945,7 @@ async def import_items_csv(
         )
 
     for row_num, row in enumerate(rows, start=2):
-        item_data, category_name_raw, row_errors, fatal = _coerce_csv_row(
-            row, row_num
-        )
+        item_data, category_name_raw, row_errors, fatal = _coerce_csv_row(row, row_num)
         errors.extend(row_errors)
 
         if fatal:
@@ -1699,14 +1692,10 @@ def _build_checkout_response(record: CheckOutRecord) -> dict:
             else "Unknown"
         ),
         "checked_out_at": (
-            record.checked_out_at.isoformat()
-            if record.checked_out_at
-            else None
+            record.checked_out_at.isoformat() if record.checked_out_at else None
         ),
         "expected_return_at": (
-            record.expected_return_at.isoformat()
-            if record.expected_return_at
-            else None
+            record.expected_return_at.isoformat() if record.expected_return_at else None
         ),
         "is_overdue": record.is_overdue,
         "checkout_reason": record.checkout_reason,

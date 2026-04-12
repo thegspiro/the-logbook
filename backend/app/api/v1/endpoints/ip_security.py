@@ -16,11 +16,7 @@ from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
-from app.models.ip_security import (
-    BlockedAccessAttempt,
-    CountryBlockRule,
-    IPException,
-)
+from app.models.ip_security import BlockedAccessAttempt, CountryBlockRule, IPException
 from app.models.user import User
 from app.schemas.ip_security import (
     BlockedAttemptsListResponse,

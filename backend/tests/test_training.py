@@ -16,23 +16,45 @@ from uuid import uuid4
 from datetime import date, datetime
 
 from app.models.training import (
-    TrainingCategory, TrainingCourse, TrainingRecord, TrainingRequirement,
-    TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase,
-    ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress,
-    SkillEvaluation, SkillCheckoff, ExternalTrainingProvider,
-    TrainingStatus, TrainingType, RequirementType, RequirementSource,
-    RequirementFrequency, DueDateType, ProgramStructureType, EnrollmentStatus,
-    RequirementProgressStatus, ApprovalStatus, ExternalProviderType, SyncStatus,
+    TrainingCategory,
+    TrainingCourse,
+    TrainingRecord,
+    TrainingRequirement,
+    TrainingSession,
+    TrainingApproval,
+    TrainingProgram,
+    ProgramPhase,
+    ProgramRequirement,
+    ProgramMilestone,
+    ProgramEnrollment,
+    RequirementProgress,
+    SkillEvaluation,
+    SkillCheckoff,
+    ExternalTrainingProvider,
+    TrainingStatus,
+    TrainingType,
+    RequirementType,
+    RequirementSource,
+    RequirementFrequency,
+    DueDateType,
+    ProgramStructureType,
+    EnrollmentStatus,
+    RequirementProgressStatus,
+    ApprovalStatus,
+    ExternalProviderType,
+    SyncStatus,
 )
 from app.schemas.training import (
-    TrainingCategoryCreate, TrainingCourseCreate, TrainingRecordCreate,
+    TrainingCategoryCreate,
+    TrainingCourseCreate,
+    TrainingRecordCreate,
     TrainingRequirementCreate,
 )
 from app.schemas.training_program import (
-    TrainingRequirementEnhancedCreate, TrainingProgramCreate,
+    TrainingRequirementEnhancedCreate,
+    TrainingProgramCreate,
     ProgramEnrollmentCreate,
 )
-
 
 # ============================================
 # 1. Enum Tests (no database needed)
@@ -171,9 +193,9 @@ class TestTrainingEnums:
                     f"{enum_class.__name__}.{member.name} has non-lowercase value: "
                     f"'{member.value}'"
                 )
-                assert isinstance(member.value, str), (
-                    f"{enum_class.__name__}.{member.name} value is not a string"
-                )
+                assert isinstance(
+                    member.value, str
+                ), f"{enum_class.__name__}.{member.name} value is not a string"
 
     def test_all_enums_inherit_from_str(self):
         """Verify all enums inherit from str for proper SQLAlchemy serialization"""
@@ -192,9 +214,9 @@ class TestTrainingEnums:
             SyncStatus,
         ]
         for enum_class in all_enums:
-            assert issubclass(enum_class, str), (
-                f"{enum_class.__name__} does not inherit from str"
-            )
+            assert issubclass(
+                enum_class, str
+            ), f"{enum_class.__name__} does not inherit from str"
 
     def test_enum_values_are_unique_within_each_enum(self):
         """Verify no duplicate values within any single enum"""
@@ -214,9 +236,9 @@ class TestTrainingEnums:
         ]
         for enum_class in all_enums:
             values = [member.value for member in enum_class]
-            assert len(values) == len(set(values)), (
-                f"{enum_class.__name__} has duplicate values: {values}"
-            )
+            assert len(values) == len(
+                set(values)
+            ), f"{enum_class.__name__} has duplicate values: {values}"
 
 
 # ============================================
@@ -487,7 +509,9 @@ class TestTrainingModelInstantiation:
             name="SCBA Operations",
             description="Self-Contained Breathing Apparatus proficiency",
             category="Firefighting",
-            evaluation_criteria={"criteria": ["donning", "doffing", "emergency procedures"]},
+            evaluation_criteria={
+                "criteria": ["donning", "doffing", "emergency procedures"]
+            },
             passing_requirements="Must complete all criteria within time limit",
             required_for_programs=[str(uuid4())],
             active=True,
@@ -554,7 +578,11 @@ class TestTrainingModelInstantiation:
             status=ApprovalStatus.PENDING,
             approval_deadline=datetime(2025, 2, 1, 0, 0, 0),
             attendee_data=[
-                {"user_id": str(uuid4()), "check_in": "2025-01-15T09:00:00", "duration": 120}
+                {
+                    "user_id": str(uuid4()),
+                    "check_in": "2025-01-15T09:00:00",
+                    "duration": 120,
+                }
             ],
         )
         assert approval.status == ApprovalStatus.PENDING
@@ -831,6 +859,7 @@ class TestTrainingSchemas:
             name="Basic Requirement",
             requirement_type="hours",
             frequency="annual",
+            required_hours=1.0,
         )
         assert schema.name == "Basic Requirement"
         assert schema.frequency == "annual"
@@ -1051,12 +1080,12 @@ class TestRegistryData:
         for filename in registry_files:
             data = self._load_registry(filename)
             for req in data["requirements"]:
-                assert isinstance(req["name"], str), (
-                    f"Requirement name is not a string in {filename}"
-                )
-                assert len(req["name"]) > 0, (
-                    f"Empty requirement name found in {filename}"
-                )
+                assert isinstance(
+                    req["name"], str
+                ), f"Requirement name is not a string in {filename}"
+                assert (
+                    len(req["name"]) > 0
+                ), f"Empty requirement name found in {filename}"
 
     def test_registry_requirement_types_valid(self):
         """Verify all requirement_types in registry data match RequirementType enum"""
@@ -1185,7 +1214,11 @@ class TestRegistryData:
         ]
         for filename in registry_files:
             data = self._load_registry(filename)
-            codes = [req["registry_code"] for req in data["requirements"] if "registry_code" in req]
+            codes = [
+                req["registry_code"]
+                for req in data["requirements"]
+                if "registry_code" in req
+            ]
             assert len(codes) == len(set(codes)), (
                 f"Duplicate registry_codes found in {filename}: "
                 f"{[c for c in codes if codes.count(c) > 1]}"
@@ -1203,11 +1236,13 @@ class TestSeedTrainingData:
     def test_seed_module_imports(self):
         """Verify seed module (app.core.seed) can be imported"""
         from app.core import seed
+
         assert seed is not None
 
     def test_seed_functions_exist(self):
         """Verify all seed functions exist in seed module"""
         from app.core import seed
+
         assert hasattr(seed, "seed_organization")
         assert callable(seed.seed_organization)
         assert hasattr(seed, "seed_roles")
@@ -1234,6 +1269,7 @@ class TestSeedTrainingData:
             SkillCheckoff,
             ExternalTrainingProvider,
         )
+
         # Verify they are actual classes, not None
         assert TrainingCategory is not None
         assert TrainingCourse is not None
@@ -1267,6 +1303,7 @@ class TestSeedTrainingData:
             TrainingRequirementUpdate,
             TrainingRequirementResponse,
         )
+
         assert TrainingCategoryCreate is not None
         assert TrainingCategoryUpdate is not None
         assert TrainingCategoryResponse is not None
@@ -1302,6 +1339,7 @@ class TestSeedTrainingData:
             ProgramEnrollmentUpdate,
             ProgramEnrollmentResponse,
         )
+
         assert TrainingRequirementEnhancedCreate is not None
         assert TrainingRequirementEnhancedUpdate is not None
         assert TrainingRequirementEnhancedResponse is not None

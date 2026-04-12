@@ -301,9 +301,7 @@ class InventoryNotificationService:
     @staticmethod
     def _format_item_parts(item: Dict[str, Any]) -> tuple:
         """Extract common display parts for a notification line item."""
-        identifier = (
-            item.get("item_serial_number") or item.get("item_asset_tag") or ""
-        )
+        identifier = item.get("item_serial_number") or item.get("item_asset_tag") or ""
         qty_str = f" (x{item['quantity']})" if item["quantity"] > 1 else ""
         label = _ACTION_LABELS.get(item["action_type"], str(item["action_type"]))
         id_display = f" — {identifier}" if identifier else ""

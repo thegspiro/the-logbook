@@ -182,9 +182,7 @@ class TrainingModuleConfigUpdate(BaseModel):
     manual_entry_default_start_time: Optional[str] = Field(
         None, pattern=r"^\d{2}:\d{2}$"
     )
-    manual_entry_default_duration_hours: Optional[float] = Field(
-        None, gt=0, le=48
-    )
+    manual_entry_default_duration_hours: Optional[float] = Field(None, gt=0, le=48)
 
 
 class MemberVisibilityResponse(BaseModel):

@@ -144,19 +144,13 @@ class SalesforceConfig(BaseModel):
 
     # Accepts production (*.my.salesforce.com), sandbox
     # (*.sandbox.my.salesforce.com), and gov-cloud URLs.
-    instance_url: str = Field(
-        pattern=r"^https://[a-zA-Z0-9\-\.]+\.salesforce\.com$"
-    )
+    instance_url: str = Field(pattern=r"^https://[a-zA-Z0-9\-\.]+\.salesforce\.com$")
     client_id: str = ""
     client_secret: str = ""
     refresh_token: str = ""
     api_version: str = "v62.0"
-    environment: str = Field(
-        default="production", pattern=r"^(production|sandbox)$"
-    )
-    sync_direction: str = Field(
-        default="push", pattern=r"^(push|pull|both)$"
-    )
+    environment: str = Field(default="production", pattern=r"^(production|sandbox)$")
+    sync_direction: str = Field(default="push", pattern=r"^(push|pull|both)$")
     sync_types: List[str] = Field(default_factory=list)
 
 

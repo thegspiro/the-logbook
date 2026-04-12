@@ -30,9 +30,11 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.core.audit import log_audit_event
-from app.core.constants import ROLE_MEMBER
 from app.core.config import settings
+from app.core.constants import ROLE_MEMBER
 from app.core.database import get_db
+from app.core.security_middleware import check_rate_limit
+from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
 from app.models.user import Role, User, UserStatus, user_roles
 from app.schemas.role import UserRoleAssignment, UserRoleResponse
@@ -47,11 +49,8 @@ from app.schemas.user import (
     UserUpdate,
     UserWithRolesResponse,
 )
-from app.core.security_middleware import check_rate_limit
-from app.core.utils import safe_error_detail
 from app.services.organization_service import OrganizationService
 from app.services.user_service import UserService
-
 
 router = APIRouter()
 

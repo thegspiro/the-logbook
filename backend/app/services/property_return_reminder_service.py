@@ -338,14 +338,13 @@ class PropertyReturnReminderService:
         if not subject:
             import re
 
+            from app.services.email_service import build_email_logo_img
             from app.services.email_template_service import (
                 DEFAULT_CSS,
                 DEFAULT_PROPERTY_RETURN_REMINDER_HTML,
                 DEFAULT_PROPERTY_RETURN_REMINDER_SUBJECT,
                 DEFAULT_PROPERTY_RETURN_REMINDER_TEXT,
             )
-
-            from app.services.email_service import build_email_logo_img
 
             context["organization_logo_img"] = build_email_logo_img(org)
 

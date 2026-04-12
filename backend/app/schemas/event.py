@@ -5,10 +5,9 @@ Request and response schemas for event-related endpoints.
 """
 
 from datetime import datetime
+from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
-
-from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 

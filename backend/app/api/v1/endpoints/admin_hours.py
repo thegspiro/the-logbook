@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.seed_admin_hours import seed_admin_hours_data
 from app.core.utils import safe_error_detail
 from app.models.user import User
 from app.schemas.admin_hours import (
@@ -41,7 +42,6 @@ from app.schemas.admin_hours import (
     EventHourMappingResponse,
     EventHourMappingUpdate,
 )
-from app.core.seed_admin_hours import seed_admin_hours_data
 from app.services.admin_hours_service import AdminHoursService
 
 router = APIRouter()

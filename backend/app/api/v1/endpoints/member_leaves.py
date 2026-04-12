@@ -17,7 +17,6 @@ DELETE /users/leaves-of-absence/{id}             - Deactivate a leave
 
 from datetime import date, datetime
 
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession

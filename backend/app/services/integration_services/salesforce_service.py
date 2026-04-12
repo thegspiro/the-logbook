@@ -66,9 +66,7 @@ class SalesforceService:
             token_data = response.json()
             self._access_token = token_data.get("access_token", "")
             if not self._access_token:
-                raise Exception(
-                    "Salesforce token response missing access_token"
-                )
+                raise Exception("Salesforce token response missing access_token")
 
             # Salesforce returns the canonical instance_url in the token
             # response. Use it to handle org migrations transparently.
@@ -145,9 +143,7 @@ class SalesforceService:
                 "Salesforce authentication failed — "
                 "the access token may be expired or revoked"
             )
-        raise Exception(
-            f"Salesforce returned HTTP {response.status_code}"
-        )
+        raise Exception(f"Salesforce returned HTTP {response.status_code}")
 
     async def query(self, soql: str) -> list[dict[str, Any]]:
         """Execute a SOQL query and return all records (handles pagination)."""
@@ -159,9 +155,7 @@ class SalesforceService:
                 response.status_code,
                 response.text[:200],
             )
-            raise Exception(
-                f"Salesforce query failed (HTTP {response.status_code})"
-            )
+            raise Exception(f"Salesforce query failed (HTTP {response.status_code})")
 
         data = response.json()
         records: list[dict[str, Any]] = data.get("records", [])
@@ -182,9 +176,7 @@ class SalesforceService:
 
         return records
 
-    async def create_record(
-        self, sobject: str, fields: dict[str, Any]
-    ) -> str:
+    async def create_record(self, sobject: str, fields: dict[str, Any]) -> str:
         """Create a record in Salesforce. Returns the new record ID."""
         url = self._api_url(f"/sobjects/{sobject}")
         response = await self._request("POST", url, json=fields)
@@ -195,9 +187,7 @@ class SalesforceService:
                 response.status_code,
                 response.text[:200],
             )
-            raise Exception(
-                f"Failed to create {sobject} in Salesforce"
-            )
+            raise Exception(f"Failed to create {sobject} in Salesforce")
         result = response.json()
         record_id: str = result.get("id", "")
         return record_id
@@ -219,9 +209,7 @@ class SalesforceService:
         )
         return False
 
-    async def get_record(
-        self, sobject: str, record_id: str
-    ) -> dict[str, Any]:
+    async def get_record(self, sobject: str, record_id: str) -> dict[str, Any]:
         """Fetch a single Salesforce record by ID."""
         url = self._api_url(f"/sobjects/{sobject}/{record_id}")
         response = await self._request("GET", url)

@@ -27,12 +27,12 @@ from app.api.v1.email_test_helper import (
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit
 from app.core.utils import safe_error_detail
-from app.models.user import User
 from app.models.onboarding import (
     OnboardingChecklistItem,
     OnboardingSessionModel,
     OnboardingStatus,
 )
+from app.models.user import User
 from app.schemas.organization import OrganizationSetupCreate, OrganizationSetupResponse
 from app.services.auth_service import AuthService
 from app.services.onboarding import OnboardingService
@@ -973,6 +973,7 @@ async def create_system_owner(
         # session persists through the remaining onboarding steps.
         # Without cookies, loadUser() → /auth/me would 401.
         from fastapi.responses import JSONResponse
+
         from app.api.v1.endpoints.auth import _set_auth_cookies
 
         body = SystemOwnerResponse(

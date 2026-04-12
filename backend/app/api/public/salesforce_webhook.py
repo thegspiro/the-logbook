@@ -25,12 +25,10 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, rate_limiter
 from app.models.integration import Integration
+from app.services.integration_services.salesforce_service import SalesforceService
 from app.services.integration_services.salesforce_sync_service import (
     SalesforceSyncService,
     build_salesforce_credentials,
-)
-from app.services.integration_services.salesforce_service import (
-    SalesforceService,
 )
 
 router = APIRouter(
@@ -52,13 +50,9 @@ async def _rate_limit_webhook(request: Request) -> None:
         )
 
 
-def _verify_signature(
-    body: bytes, secret: str, provided_signature: str
-) -> bool:
+def _verify_signature(body: bytes, secret: str, provided_signature: str) -> bool:
     """Verify the HMAC-SHA256 signature from Salesforce."""
-    expected = hmac.new(
-        secret.encode("utf-8"), body, hashlib.sha256
-    ).hexdigest()
+    expected = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(f"sha256={expected}", provided_signature)
 
 
@@ -103,9 +97,7 @@ async def salesforce_inbound_webhook(
     webhook_secret = integration.get_secret("webhook_secret")
     if webhook_secret:
         sig_header = request.headers.get("X-Salesforce-Signature", "")
-        if not sig_header or not _verify_signature(
-            body, webhook_secret, sig_header
-        ):
+        if not sig_header or not _verify_signature(body, webhook_secret, sig_header):
             logger.warning(
                 "Salesforce webhook signature mismatch for integration %s",
                 integration_id,
@@ -144,9 +136,7 @@ async def salesforce_inbound_webhook(
             sync_service.parse_inbound_contact(record)
             processed += 1
         else:
-            logger.info(
-                "Ignoring unsupported sObject type: %s", sobject
-            )
+            logger.info("Ignoring unsupported sObject type: %s", sobject)
 
     # Audit log
     await log_audit_event(

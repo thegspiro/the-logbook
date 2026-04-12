@@ -11,17 +11,24 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 
-VALID_REVIEW_STATUSES = frozenset({
-    "draft", "pending_review", "approved", "flagged",
-})
+VALID_REVIEW_STATUSES = frozenset(
+    {
+        "draft",
+        "pending_review",
+        "approved",
+        "flagged",
+    }
+)
 
-REDACTABLE_FIELDS = frozenset({
-    "performance_rating",
-    "areas_of_strength",
-    "areas_for_improvement",
-    "officer_narrative",
-    "skills_observed",
-})
+REDACTABLE_FIELDS = frozenset(
+    {
+        "performance_rating",
+        "areas_of_strength",
+        "areas_for_improvement",
+        "officer_narrative",
+        "skills_observed",
+    }
+)
 
 
 class SkillObservation(BaseModel):
@@ -107,30 +114,25 @@ class ReportReview(BaseModel):
     def validate_review_status(cls, v: str) -> str:
         allowed = {"approved", "flagged"}
         if v not in allowed:
-            raise ValueError(
-                f"review_status must be one of {sorted(allowed)}"
-            )
+            raise ValueError(f"review_status must be one of {sorted(allowed)}")
         return v
 
     @field_validator("redact_fields")
     @classmethod
     def validate_redact_fields(
-        cls, v: Optional[List[str]],
+        cls,
+        v: Optional[List[str]],
     ) -> Optional[List[str]]:
         if v is None:
             return None
         invalid = set(v) - REDACTABLE_FIELDS
         if invalid:
-            raise ValueError(
-                f"Invalid redact fields: {sorted(invalid)}"
-            )
+            raise ValueError(f"Invalid redact fields: {sorted(invalid)}")
         return v
 
 
 class BatchReviewRequest(BaseModel):
-    report_ids: List[str] = Field(
-        ..., min_length=1, max_length=100
-    )
+    report_ids: List[str] = Field(..., min_length=1, max_length=100)
     review_status: str
     reviewer_notes: Optional[str] = None
 
@@ -139,39 +141,33 @@ class BatchReviewRequest(BaseModel):
     def validate_review_status(cls, v: str) -> str:
         allowed = {"approved", "flagged"}
         if v not in allowed:
-            raise ValueError(
-                f"review_status must be one of {sorted(allowed)}"
-            )
+            raise ValueError(f"review_status must be one of {sorted(allowed)}")
         return v
 
 
 class CrewMemberEvaluation(BaseModel):
     """Per-trainee evaluation data for batch shift report."""
+
     user_id: str
     performance_rating: Optional[int] = Field(None, ge=1, le=5)
     areas_of_strength: Optional[str] = None
     areas_for_improvement: Optional[str] = None
     remarks: Optional[str] = None
-    skills_observed: Optional[List[SkillObservation]] = Field(
-        None, max_length=100
-    )
-    tasks_performed: Optional[List[TaskPerformed]] = Field(
-        None, max_length=100
-    )
+    skills_observed: Optional[List[SkillObservation]] = Field(None, max_length=100)
+    tasks_performed: Optional[List[TaskPerformed]] = Field(None, max_length=100)
     enrollment_id: Optional[str] = None
 
 
 class BatchShiftReportCreate(BaseModel):
     """Create shift reports for crew members, optionally linked to a shift."""
+
     shift_id: Optional[str] = None
     shift_date: date
     hours_on_shift: float = Field(gt=0, le=48)
     calls_responded: int = Field(ge=0, default=0)
     call_types: Optional[List[str]] = Field(None, max_length=50)
     officer_narrative: Optional[str] = None
-    crew_member_ids: List[str] = Field(
-        ..., min_length=1, max_length=200
-    )
+    crew_member_ids: List[str] = Field(..., min_length=1, max_length=200)
     trainee_evaluations: Optional[List[CrewMemberEvaluation]] = None
     save_as_draft: bool = False
 

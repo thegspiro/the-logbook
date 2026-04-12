@@ -48,9 +48,7 @@ class AuditLogger:
         # json.dumps with sort_keys produces identical output regardless of
         # Python dict insertion order or MySQL JSON key reordering.
         event_data = log_data.get("event_data", {})
-        event_data_str = json.dumps(
-            event_data, sort_keys=True, default=str
-        )
+        event_data_str = json.dumps(event_data, sort_keys=True, default=str)
 
         data_string = "|".join(
             [
@@ -80,9 +78,7 @@ class AuditLogger:
             "event_type": log.event_type,
             "event_category": log.event_category,
             "severity": (
-                log.severity.value
-                if hasattr(log.severity, "value")
-                else log.severity
+                log.severity.value if hasattr(log.severity, "value") else log.severity
             ),
             "user_id": log.user_id,
             "ip_address": log.ip_address,
@@ -133,9 +129,7 @@ class AuditLogger:
                     "event_type": event_type,
                     "event_category": event_category,
                     "severity": (
-                        severity.value
-                        if hasattr(severity, "value")
-                        else severity
+                        severity.value if hasattr(severity, "value") else severity
                     ),
                     "user_id": user_id,
                     "ip_address": ip_address,

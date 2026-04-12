@@ -141,9 +141,9 @@ class TestPrimaryKeys:
             pk_cols = [col for col in table.columns if col.primary_key]
             if not pk_cols:
                 tables_without_pk.append(table_name)
-        assert not tables_without_pk, (
-            f"Tables missing primary keys: {tables_without_pk}"
-        )
+        assert (
+            not tables_without_pk
+        ), f"Tables missing primary keys: {tables_without_pk}"
 
     def test_uuid_pks_are_string_36(self):
         """UUID primary keys should be String(36) to hold standard UUIDs."""
@@ -194,10 +194,9 @@ class TestForeignKeyIntegrity:
                         broken_fks.append(
                             f"{table_name}.{col.name} → {target_table} (table not found)"
                         )
-        assert not broken_fks, (
-            f"Foreign keys referencing non-existent tables:\n" +
-            "\n".join(broken_fks)
-        )
+        assert (
+            not broken_fks
+        ), f"Foreign keys referencing non-existent tables:\n" + "\n".join(broken_fks)
 
     def test_all_fk_target_columns_exist(self):
         """FK target columns must exist in their respective tables."""
@@ -215,10 +214,9 @@ class TestForeignKeyIntegrity:
                                 f"{target_table_name}.{target_col_name} "
                                 f"(column not found)"
                             )
-        assert not broken_cols, (
-            f"Foreign keys referencing non-existent columns:\n" +
-            "\n".join(broken_cols)
-        )
+        assert (
+            not broken_cols
+        ), f"Foreign keys referencing non-existent columns:\n" + "\n".join(broken_cols)
 
     def test_fk_column_types_match_target(self):
         """FK column type should be compatible with the referenced PK type."""
@@ -241,9 +239,7 @@ class TestForeignKeyIntegrity:
                             f"{table_name}.{col.name} ({col_type}) → "
                             f"{target_col.table.name}.{target_col.name} ({target_type})"
                         )
-        assert not mismatches, (
-            f"Foreign key type mismatches:\n" + "\n".join(mismatches)
-        )
+        assert not mismatches, f"Foreign key type mismatches:\n" + "\n".join(mismatches)
 
     def test_fk_columns_have_ondelete(self):
         """Foreign keys should specify an ondelete action (CASCADE or SET NULL)."""
@@ -261,6 +257,7 @@ class TestForeignKeyIntegrity:
         # threshold, fail so new FKs are reviewed.
         if missing_ondelete:
             import warnings
+
             warnings.warn(
                 f"{len(missing_ondelete)} FKs without explicit ondelete action:\n"
                 + "\n".join(missing_ondelete[:10]),
@@ -284,9 +281,10 @@ class TestForeignKeyIntegrity:
                                 f"{table_name}.{col.name} has ondelete='SET NULL' "
                                 f"but nullable={col.nullable}"
                             )
-        assert not issues, (
-            "SET NULL FKs without nullable=True (MySQL error 1830):\n"
-            + "\n".join(issues)
+        assert (
+            not issues
+        ), "SET NULL FKs without nullable=True (MySQL error 1830):\n" + "\n".join(
+            issues
         )
 
     def test_self_referential_fks_are_nullable(self):
@@ -301,9 +299,7 @@ class TestForeignKeyIntegrity:
                                 f"{table_name}.{col.name}: self-referential FK "
                                 f"must be nullable to allow root records"
                             )
-        assert not issues, (
-            f"Non-nullable self-referential FKs:\n" + "\n".join(issues)
-        )
+        assert not issues, f"Non-nullable self-referential FKs:\n" + "\n".join(issues)
 
     def test_no_circular_mandatory_fks(self):
         """
@@ -332,12 +328,14 @@ class TestForeignKeyIntegrity:
                 if pair in checked:
                     continue
                 checked.add(pair)
-                if table_b in mandatory_deps and table_a in mandatory_deps.get(table_b, set()):
+                if table_b in mandatory_deps and table_a in mandatory_deps.get(
+                    table_b, set()
+                ):
                     circular.append(f"{table_a} ↔ {table_b}")
 
         assert not circular, (
-            f"Circular mandatory FK dependencies (would prevent inserts):\n" +
-            "\n".join(circular)
+            f"Circular mandatory FK dependencies (would prevent inserts):\n"
+            + "\n".join(circular)
         )
 
 
@@ -364,9 +362,9 @@ class TestRelationshipConsistency:
                     broken.append(
                         f"{table_name}.{rel_name} → {target_table} (not registered)"
                     )
-        assert not broken, (
-            f"Relationships pointing to unregistered tables:\n" + "\n".join(broken)
-        )
+        assert (
+            not broken
+        ), f"Relationships pointing to unregistered tables:\n" + "\n".join(broken)
 
     def test_back_populates_are_symmetric(self):
         """If relationship A→B has back_populates='x', then B must have relationship 'x' pointing back to A."""
@@ -394,9 +392,9 @@ class TestRelationshipConsistency:
                         f"{table_name}.{rel_name} back_populates='{bp}' "
                         f"but {target_cls.__name__} has no '{bp}' relationship"
                     )
-        assert not asymmetric, (
-            f"Asymmetric back_populates relationships:\n" + "\n".join(asymmetric)
-        )
+        assert (
+            not asymmetric
+        ), f"Asymmetric back_populates relationships:\n" + "\n".join(asymmetric)
 
 
 # ===========================================================================
@@ -434,9 +432,7 @@ class TestColumnConstraints:
                     col = table.columns[col_name]
                     if col.nullable:
                         issues.append(f"{table_name}.{col_name} should be NOT NULL")
-        assert not issues, (
-            f"Required columns that are nullable:\n" + "\n".join(issues)
-        )
+        assert not issues, f"Required columns that are nullable:\n" + "\n".join(issues)
 
     def test_organization_id_fks_are_not_nullable(self):
         """
@@ -448,9 +444,16 @@ class TestColumnConstraints:
         # Tables where org_id is legitimately nullable
         # Tables that support both system-defined (null org) and org-specific records
         nullable_ok = {
-            "apparatus_types", "apparatus_statuses", "apparatus_maintenance_types",
-            "facility_types", "facility_statuses", "facility_maintenance_types",
-            "onboarding_status", "onboarding_checklist",
+            "apparatus_types",
+            "apparatus_statuses",
+            "apparatus_maintenance_types",
+            "facility_types",
+            "facility_statuses",
+            "facility_maintenance_types",
+            "onboarding_status",
+            "onboarding_checklist",
+            "evoc_levels",
+            "message_history",
         }
         for table_name, table in _tables.items():
             if "organization_id" in table.columns:
@@ -458,8 +461,8 @@ class TestColumnConstraints:
                 if col.nullable and table_name not in nullable_ok:
                     issues.append(f"{table_name}.organization_id is nullable")
         assert not issues, (
-            f"Org-scoped tables with nullable organization_id (multi-tenancy leak risk):\n" +
-            "\n".join(issues)
+            f"Org-scoped tables with nullable organization_id (multi-tenancy leak risk):\n"
+            + "\n".join(issues)
         )
 
     def test_boolean_columns_have_defaults(self):
@@ -470,14 +473,14 @@ class TestColumnConstraints:
                 if isinstance(col.type, Boolean):
                     # Just check it has a default at all (server_default or default)
                     has_default = (
-                        col.server_default is not None
-                        or col.default is not None
+                        col.server_default is not None or col.default is not None
                     )
                     if not has_default and not col.nullable:
                         missing_defaults.append(f"{table_name}.{col.name}")
         # Report as a soft warning for visibility
         if missing_defaults:
             import warnings
+
             warnings.warn(
                 f"{len(missing_defaults)} non-nullable Boolean columns without defaults:\n"
                 + "\n".join(missing_defaults[:10]),
@@ -491,14 +494,28 @@ class TestColumnConstraints:
         The column may be named created_at, timestamp, submitted_at, voted_at,
         performed_at, blocked_at, etc.
         """
-        # Association / join tables and log tables with alternative timestamps
-        exempt = {"user_roles"}
+        # Association / join tables and kit-composition child tables
+        exempt = {"user_roles", "equipment_kit_items"}
         # Common timestamp column names
         timestamp_names = {
-            "created_at", "timestamp", "submitted_at", "voted_at",
-            "performed_at", "blocked_at", "uploaded_at", "responded_at",
-            "changed_at", "added_at", "assigned_at", "recorded_at",
-            "checked_at", "synced_at", "imported_at",
+            "created_at",
+            "timestamp",
+            "submitted_at",
+            "voted_at",
+            "performed_at",
+            "blocked_at",
+            "uploaded_at",
+            "responded_at",
+            "changed_at",
+            "added_at",
+            "assigned_at",
+            "recorded_at",
+            "checked_at",
+            "synced_at",
+            "imported_at",
+            "sent_at",
+            "exported_at",
+            "generated_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():
@@ -509,15 +526,13 @@ class TestColumnConstraints:
             if not has_timestamp:
                 # Only flag if the table has substantial data columns
                 non_pk_non_fk = [
-                    c for c in table.columns
-                    if not c.primary_key and not c.foreign_keys
+                    c for c in table.columns if not c.primary_key and not c.foreign_keys
                 ]
                 if len(non_pk_non_fk) > 2:
                     missing_timestamp.append(table_name)
-        assert not missing_timestamp, (
-            f"Tables missing any timestamp column:\n" +
-            "\n".join(missing_timestamp)
-        )
+        assert (
+            not missing_timestamp
+        ), f"Tables missing any timestamp column:\n" + "\n".join(missing_timestamp)
 
 
 # ===========================================================================
@@ -605,10 +620,9 @@ class TestIndexCoverage:
             if not indexed:
                 unindexed.append(f"{table_name}.{fk_col_name}")
 
-        assert not unindexed, (
-            f"Critical parent-child FK columns without indexes:\n" +
-            "\n".join(unindexed)
-        )
+        assert (
+            not unindexed
+        ), f"Critical parent-child FK columns without indexes:\n" + "\n".join(unindexed)
 
     def test_organization_id_is_indexed(self):
         """Organization_id columns must be indexed for multi-tenant queries."""
@@ -626,12 +640,13 @@ class TestIndexCoverage:
                 if "organization_id" in idx_col_names:
                     col_indexed = True
                     break
-            if table.columns["organization_id"].primary_key:
+            org_col = table.columns["organization_id"]
+            if org_col.primary_key or org_col.unique:
                 col_indexed = True
             if not col_indexed:
                 unindexed.append(table_name)
-        assert not unindexed, (
-            f"Tables with unindexed organization_id:\n" + "\n".join(unindexed)
+        assert not unindexed, f"Tables with unindexed organization_id:\n" + "\n".join(
+            unindexed
         )
 
     def test_status_columns_are_indexed(self):
@@ -669,8 +684,8 @@ class TestEnumConsistency:
                 if hasattr(col.type, "enums"):
                     if not col.type.enums:
                         empty_enums.append(f"{table_name}.{col.name}")
-        assert not empty_enums, (
-            f"Enum columns with no values defined:\n" + "\n".join(empty_enums)
+        assert not empty_enums, f"Enum columns with no values defined:\n" + "\n".join(
+            empty_enums
         )
 
     def test_enum_columns_do_not_have_duplicates(self):
@@ -686,8 +701,8 @@ class TestEnumConsistency:
                         duplicates.append(
                             f"{table_name}.{col.name}: duplicates {dupes}"
                         )
-        assert not duplicates, (
-            f"Enum columns with duplicate values:\n" + "\n".join(duplicates)
+        assert not duplicates, f"Enum columns with duplicate values:\n" + "\n".join(
+            duplicates
         )
 
     def test_python_enums_match_column_enums(self):
@@ -713,8 +728,8 @@ class TestEnumConsistency:
                                 f"values={py_values} names={py_names} "
                                 f"but column has {col_values}"
                             )
-        assert not mismatches, (
-            f"Python enum / column enum mismatches:\n" + "\n".join(mismatches)
+        assert not mismatches, f"Python enum / column enum mismatches:\n" + "\n".join(
+            mismatches
         )
 
     def test_latest_migration_enum_matches_python_enum(self):
@@ -734,7 +749,9 @@ class TestEnumConsistency:
 
         py_values = {e.value for e in EmailTemplateType}
 
-        versions_dir = pathlib.Path(__file__).resolve().parent.parent / "alembic" / "versions"
+        versions_dir = (
+            pathlib.Path(__file__).resolve().parent.parent / "alembic" / "versions"
+        )
         assert versions_dir.is_dir(), f"Alembic versions dir not found: {versions_dir}"
 
         # Find the latest migration file (sorted descending by filename)
@@ -751,11 +768,15 @@ class TestEnumConsistency:
                 # Migration files import `alembic.op` which is only available
                 # inside an Alembic context, so we mock it before importing.
                 import unittest.mock
+
                 spec = importlib.util.spec_from_file_location(mf.stem, mf)
                 mod = importlib.util.module_from_spec(spec)
                 with unittest.mock.patch.dict(
                     "sys.modules",
-                    {"alembic": unittest.mock.MagicMock(), "alembic.op": unittest.mock.MagicMock()},
+                    {
+                        "alembic": unittest.mock.MagicMock(),
+                        "alembic.op": unittest.mock.MagicMock(),
+                    },
                 ):
                     spec.loader.exec_module(mod)
                 migration_values = set(
@@ -766,9 +787,9 @@ class TestEnumConsistency:
                 migration_name = mf.name
                 break
 
-        assert migration_values is not None, (
-            "No Alembic migration found with ALL_TYPES or ALL_TEMPLATE_TYPES"
-        )
+        assert (
+            migration_values is not None
+        ), "No Alembic migration found with ALL_TYPES or ALL_TEMPLATE_TYPES"
 
         missing = py_values - migration_values
         extra = migration_values - py_values
@@ -800,14 +821,14 @@ class TestMultiTenancyIsolation:
 
     # Tables that are legitimately global (not org-scoped)
     GLOBAL_TABLES = {
-        "user_roles",            # Junction table, implicitly scoped via user
-        "sessions",              # Scoped via user_id
-        "password_history",      # Scoped via user_id
-        "onboarding_status",     # System-wide
+        "user_roles",  # Junction table, implicitly scoped via user
+        "sessions",  # Scoped via user_id
+        "password_history",  # Scoped via user_id
+        "onboarding_status",  # System-wide
         "onboarding_checklist",  # System-wide
-        "onboarding_sessions",   # System-wide
-        "audit_logs",            # Global audit trail
-        "audit_log_checkpoints", # Global audit
+        "onboarding_sessions",  # System-wide
+        "audit_logs",  # Global audit trail
+        "audit_log_checkpoints",  # Global audit
     }
 
     def test_data_tables_have_organization_scope(self):
@@ -852,7 +873,9 @@ class TestSchemaCrossReferences:
         users = _tables.get("users")
         assert users is not None
         org_fks = [
-            fk for col in users.columns for fk in col.foreign_keys
+            fk
+            for col in users.columns
+            for fk in col.foreign_keys
             if fk.column.table.name == "organizations"
         ]
         assert len(org_fks) > 0, "users table must have FK to organizations"
@@ -865,15 +888,15 @@ class TestSchemaCrossReferences:
         # Tables that intentionally use String-based IDs without FK constraints
         # for loose coupling (log/analytics tables, singletons, system tables)
         intentionally_standalone = {
-            "audit_logs",              # Append-only, references by string user_id
-            "audit_log_checkpoints",   # References audit_logs by range, not FK
-            "analytics_events",        # Loose coupling for analytics
-            "error_logs",              # Loose coupling for error tracking
-            "integrations",            # Standalone config table
-            "onboarding_status",       # System singleton
-            "onboarding_checklist",    # System-wide checklist
-            "onboarding_sessions",     # Temporary session storage
-            "security_alerts",         # Append-only, references user by string ID
+            "audit_logs",  # Append-only, references by string user_id
+            "audit_log_checkpoints",  # References audit_logs by range, not FK
+            "analytics_events",  # Loose coupling for analytics
+            "error_logs",  # Loose coupling for error tracking
+            "integrations",  # Standalone config table
+            "onboarding_status",  # System singleton
+            "onboarding_checklist",  # System-wide checklist
+            "onboarding_sessions",  # Temporary session storage
+            "security_alerts",  # Append-only, references user by string ID
         }
 
         # Build a set of tables that are referenced by FKs
@@ -887,13 +910,11 @@ class TestSchemaCrossReferences:
 
         all_connected = referenced | referencing | intentionally_standalone
         orphaned = set(_tables.keys()) - all_connected
-        real_orphans = [
-            t for t in orphaned
-            if len(_tables[t].columns) > 4
-        ]
-        assert not real_orphans, (
-            f"Orphaned tables (no FK connections to rest of schema):\n" +
-            "\n".join(real_orphans)
+        real_orphans = [t for t in orphaned if len(_tables[t].columns) > 4]
+        assert (
+            not real_orphans
+        ), f"Orphaned tables (no FK connections to rest of schema):\n" + "\n".join(
+            real_orphans
         )
 
     def test_user_roles_junction_has_both_fks(self):
@@ -915,9 +936,7 @@ class TestSchemaCrossReferences:
         if rsvps is None:
             pytest.skip("event_rsvps table not found")
         fk_targets = {
-            fk.column.table.name
-            for col in rsvps.columns
-            for fk in col.foreign_keys
+            fk.column.table.name for col in rsvps.columns for fk in col.foreign_keys
         }
         assert "events" in fk_targets, "event_rsvps must FK to events"
         assert "users" in fk_targets, "event_rsvps must FK to users"
@@ -928,9 +947,7 @@ class TestSchemaCrossReferences:
         if votes is None:
             pytest.skip("votes table not found")
         fk_targets = {
-            fk.column.table.name
-            for col in votes.columns
-            for fk in col.foreign_keys
+            fk.column.table.name for col in votes.columns for fk in col.foreign_keys
         }
         assert "elections" in fk_targets, "votes must FK to elections"
         assert "candidates" in fk_targets, "votes must FK to candidates"
@@ -941,9 +958,7 @@ class TestSchemaCrossReferences:
         if fields is None:
             pytest.skip("form_fields table not found")
         fk_targets = {
-            fk.column.table.name
-            for col in fields.columns
-            for fk in col.foreign_keys
+            fk.column.table.name for col in fields.columns for fk in col.foreign_keys
         }
         assert "forms" in fk_targets, "form_fields must FK to forms"
 
@@ -953,12 +968,12 @@ class TestSchemaCrossReferences:
         if records is None:
             pytest.skip("training_records table not found")
         fk_targets = {
-            fk.column.table.name
-            for col in records.columns
-            for fk in col.foreign_keys
+            fk.column.table.name for col in records.columns for fk in col.foreign_keys
         }
         assert "users" in fk_targets, "training_records must FK to users"
-        assert "training_courses" in fk_targets, "training_records must FK to training_courses"
+        assert (
+            "training_courses" in fk_targets
+        ), "training_records must FK to training_courses"
 
     def test_meeting_attendees_link_to_meetings_and_users(self):
         """Meeting attendees must connect meetings to users."""
@@ -966,9 +981,7 @@ class TestSchemaCrossReferences:
         if attendees is None:
             pytest.skip("meeting_attendees table not found")
         fk_targets = {
-            fk.column.table.name
-            for col in attendees.columns
-            for fk in col.foreign_keys
+            fk.column.table.name for col in attendees.columns for fk in col.foreign_keys
         }
         assert "meetings" in fk_targets, "meeting_attendees must FK to meetings"
         assert "users" in fk_targets, "meeting_attendees must FK to users"
@@ -990,8 +1003,8 @@ class TestNamingConventions:
                 bad_names.append(table_name)
             if "-" in table_name:
                 bad_names.append(f"{table_name} (contains hyphen)")
-        assert not bad_names, (
-            f"Table names not in lowercase_snake_case:\n" + "\n".join(bad_names)
+        assert not bad_names, f"Table names not in lowercase_snake_case:\n" + "\n".join(
+            bad_names
         )
 
     def test_column_names_are_lowercase_snake_case(self):
@@ -1003,15 +1016,15 @@ class TestNamingConventions:
                     bad_cols.append(f"{table_name}.{col.name}")
                 if "-" in col.name:
                     bad_cols.append(f"{table_name}.{col.name} (contains hyphen)")
-        assert not bad_cols, (
-            f"Column names not in lowercase_snake_case:\n" + "\n".join(bad_cols)
+        assert not bad_cols, f"Column names not in lowercase_snake_case:\n" + "\n".join(
+            bad_cols
         )
 
     def test_table_names_are_plural(self):
         """Table names should be plural (convention for collections)."""
         # Known exceptions that are singular by convention
         singular_ok = {
-            "onboarding_status",     # Represents a single status record
+            "onboarding_status",  # Represents a single status record
             "public_portal_config",  # Singleton config per org
         }
         likely_singular = []
@@ -1046,9 +1059,7 @@ class TestUniqueConstraints:
             if "organization_id" in idx_cols and "email" in idx_cols and idx.unique:
                 found = True
                 break
-        assert found, (
-            "users table must have a unique index on (organization_id, email)"
-        )
+        assert found, "users table must have a unique index on (organization_id, email)"
 
     def test_user_username_unique_per_org(self):
         """Username should be unique within an organization."""
@@ -1061,9 +1072,9 @@ class TestUniqueConstraints:
             if "organization_id" in idx_cols and "username" in idx_cols and idx.unique:
                 found = True
                 break
-        assert found, (
-            "users table must have a unique index on (organization_id, username)"
-        )
+        assert (
+            found
+        ), "users table must have a unique index on (organization_id, username)"
 
     def test_role_slug_unique_per_org(self):
         """Role slug should be unique within an organization."""
@@ -1076,9 +1087,7 @@ class TestUniqueConstraints:
             if "organization_id" in idx_cols and "slug" in idx_cols and idx.unique:
                 found = True
                 break
-        assert found, (
-            "roles table must have a unique index on (organization_id, slug)"
-        )
+        assert found, "roles table must have a unique index on (organization_id, slug)"
 
     def test_session_token_is_unique(self):
         """Session tokens must be globally unique."""

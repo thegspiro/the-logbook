@@ -464,38 +464,33 @@ class ExternalTrainingSyncService:
         site_id = self._get_vector_site_id(provider)
         url = f"{provider.api_base_url.rstrip('/')}/sites/{site_id}/categories"
 
-        response = await self._vs_request(
-            provider, "GET", url, headers=headers
-        )
+        response = await self._vs_request(provider, "GET", url, headers=headers)
         response.raise_for_status()
 
         data = response.json()
         raw_categories = (
             data
             if isinstance(data, list)
-            else data.get(
-                "categories", data.get("data", data.get("records", []))
-            )
+            else data.get("categories", data.get("data", data.get("records", [])))
         )
 
         categories: List[Dict[str, Any]] = []
         for cat in raw_categories:
-            cat_id = str(
-                cat.get("id", cat.get("categoryId", cat.get("catId", "")))
-            )
-            cat_name = cat.get(
-                "name", cat.get("categoryName", cat.get("title", ""))
-            )
+            cat_id = str(cat.get("id", cat.get("categoryId", cat.get("catId", ""))))
+            cat_name = cat.get("name", cat.get("categoryName", cat.get("title", "")))
             if not cat_id:
                 continue
-            categories.append({
-                "external_category_id": cat_id,
-                "external_category_name": cat_name,
-                "description": cat.get("description", ""),
-                "parent_id": str(
-                    cat.get("parentCategoryId", cat.get("parentId", ""))
-                ) or None,
-            })
+            categories.append(
+                {
+                    "external_category_id": cat_id,
+                    "external_category_name": cat_name,
+                    "description": cat.get("description", ""),
+                    "parent_id": str(
+                        cat.get("parentCategoryId", cat.get("parentId", ""))
+                    )
+                    or None,
+                }
+            )
 
         return categories
 
@@ -517,9 +512,7 @@ class ExternalTrainingSyncService:
             result = await self.db.execute(
                 select(ExternalCategoryMapping)
                 .where(ExternalCategoryMapping.provider_id == provider.id)
-                .where(
-                    ExternalCategoryMapping.external_category_id == ext_id
-                )
+                .where(ExternalCategoryMapping.external_category_id == ext_id)
             )
             mapping = result.scalar_one_or_none()
             if mapping:
@@ -540,13 +533,8 @@ class ExternalTrainingSyncService:
                 # Try auto-mapping by name match
                 cat_result = await self.db.execute(
                     select(TrainingCategory)
-                    .where(
-                        TrainingCategory.organization_id
-                        == provider.organization_id
-                    )
-                    .where(
-                        TrainingCategory.name == cat["external_category_name"]
-                    )
+                    .where(TrainingCategory.organization_id == provider.organization_id)
+                    .where(TrainingCategory.name == cat["external_category_name"])
                 )
                 internal_cat = cat_result.scalar_one_or_none()
                 if internal_cat:
@@ -1048,14 +1036,16 @@ class ExternalTrainingSyncService:
         if not raw_data:
             return TrainingType.CONTINUING_EDUCATION
 
-        type_str = str(
-            raw_data.get(
-                "trainingType",
+        type_str = (
+            str(
                 raw_data.get(
-                    "type", raw_data.get("courseType", "")
-                ),
+                    "trainingType",
+                    raw_data.get("type", raw_data.get("courseType", "")),
+                )
             )
-        ).lower().strip()
+            .lower()
+            .strip()
+        )
 
         # Direct keyword matching
         cert_keywords = ("certification", "license", "credential", "cert")
@@ -1273,9 +1263,7 @@ class ExternalTrainingSyncService:
         if import_record.credit_hours and import_record.credit_hours > 0:
             computed_hours = round(import_record.credit_hours, 2)
         else:
-            computed_hours = round(
-                (import_record.duration_minutes or 0) / 60.0, 2
-            )
+            computed_hours = round((import_record.duration_minutes or 0) / 60.0, 2)
 
         # Determine training type from external data when available
         training_type = self._map_training_type(import_record.raw_data)

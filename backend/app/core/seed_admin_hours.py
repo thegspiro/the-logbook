@@ -13,10 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
-from app.models.admin_hours import (
-    AdminHoursCategory,
-    EventHourMapping,
-)
+from app.models.admin_hours import AdminHoursCategory, EventHourMapping
 
 DEFAULT_ADMIN_HOURS_CATEGORIES: List[Dict[str, Any]] = [
     {

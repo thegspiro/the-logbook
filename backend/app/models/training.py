@@ -1555,6 +1555,7 @@ class TrainingModuleConfig(Base):
         coerce them to their intended defaults so callers always see
         ``True``/``False``, never ``None``.
         """
+
         def _b(val, default=True):
             return val if val is not None else default
 
@@ -2170,7 +2171,9 @@ class ExternalTrainingImport(Base):
     course_code = Column(String(100))
     description = Column(Text)
     duration_minutes = Column(Integer)  # Duration in minutes
-    credit_hours = Column(Float)  # Credit hours (from providers that report hours directly)
+    credit_hours = Column(
+        Float
+    )  # Credit hours (from providers that report hours directly)
     completion_date = Column(DateTime(timezone=True))  # When completed
     score = Column(Float)  # Score if applicable
     passed = Column(Boolean)

@@ -253,9 +253,7 @@ class InventoryCategory(Base):
     # Category Information
     name = Column(String(255), nullable=False)
     description = Column(Text)
-    item_type = Column(
-        Enum(ItemType, values_callable=_enum_values), nullable=False
-    )
+    item_type = Column(Enum(ItemType, values_callable=_enum_values), nullable=False)
 
     # Organization
     parent_category_id = Column(
@@ -543,9 +541,7 @@ class ItemAssignment(Base):
     assigned_by = Column(String(36), ForeignKey("users.id"))
     returned_by = Column(String(36), ForeignKey("users.id"))
     assignment_reason = Column(Text)
-    return_condition = Column(
-        Enum(ItemCondition, values_callable=_enum_values)
-    )
+    return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     return_notes = Column(Text)
 
     # Status
@@ -619,9 +615,7 @@ class ItemIssuance(Base):
 
     # Context
     issue_reason = Column(Text)
-    return_condition = Column(
-        Enum(ItemCondition, values_callable=_enum_values)
-    )
+    return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     return_notes = Column(Text)
 
     # Status
@@ -759,12 +753,8 @@ class CheckOutRecord(Base):
     checkout_reason = Column(Text)
 
     # Return Condition
-    checkout_condition = Column(
-        Enum(ItemCondition, values_callable=_enum_values)
-    )
-    return_condition = Column(
-        Enum(ItemCondition, values_callable=_enum_values)
-    )
+    checkout_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
+    return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     damage_notes = Column(Text)
 
     # Status
@@ -831,12 +821,8 @@ class MaintenanceRecord(Base):
     cost = Column(Numeric(10, 2))
 
     # Condition Assessment
-    condition_before = Column(
-        Enum(ItemCondition, values_callable=_enum_values)
-    )
-    condition_after = Column(
-        Enum(ItemCondition, values_callable=_enum_values)
-    )
+    condition_before = Column(Enum(ItemCondition, values_callable=_enum_values))
+    condition_after = Column(Enum(ItemCondition, values_callable=_enum_values))
 
     # Work Performed
     description = Column(Text)
@@ -1016,9 +1002,7 @@ class DepartureClearanceItem(Base):
         default=ClearanceLineDisposition.PENDING,
         nullable=False,
     )
-    return_condition = Column(
-        Enum(ItemCondition, values_callable=_enum_values)
-    )
+    return_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
     resolved_at = Column(DateTime(timezone=True))
     resolved_by = Column(String(36), ForeignKey("users.id"))
     resolution_notes = Column(Text)

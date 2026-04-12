@@ -11,7 +11,6 @@ import uuid as uuid_lib
 from datetime import datetime
 from datetime import timezone as dt_timezone
 from typing import Optional
-
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -26,6 +25,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import generate_uuid, safe_error_detail
 from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
+from app.models.notification import NotificationChannel
 from app.models.user import Organization, User, UserStatus
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
@@ -65,7 +65,6 @@ from app.schemas.event import (
     SendRemindersResponse,
     VisibleEventTypesResponse,
 )
-from app.models.notification import NotificationChannel
 from app.services.documents_service import DocumentsService
 from app.services.event_service import (
     BULK_ADD_MAX_SIZE,

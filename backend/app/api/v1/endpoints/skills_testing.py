@@ -24,9 +24,9 @@ from app.schemas.skills_testing import (
     SkillTemplateResponse,
     SkillTemplateUpdate,
     SkillTestCreate,
+    SkillTestingSummaryResponse,
     SkillTestListResponse,
     SkillTestResponse,
-    SkillTestingSummaryResponse,
     SkillTestUpdate,
 )
 
