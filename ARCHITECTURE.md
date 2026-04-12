@@ -1,6 +1,6 @@
 # The Logbook — Complete Architecture Reference
 
-> **Generated:** 2026-03-31
+> **Generated:** 2026-04-12
 > **Purpose:** Master reference for all connection points, data models, API routes, frontend pages, services, stores, data paths, and data sharing across the application.
 
 ---
@@ -91,6 +91,7 @@ All data is scoped by `organization_id`. Every query filters by the current user
 | `public_portal_router` | `/api/public/v1` | Public portal endpoints (API key auth) |
 | `public_forms_router` | `/api/public/v1/forms` | Public form access (rate limited) |
 | `public_display_router` | `/api/public/v1/display` | Location kiosk display (no auth) |
+| `salesforce_webhook_router` | `/public/v1/webhooks/salesforce` | Salesforce inbound webhooks (HMAC-validated) |
 
 ### Complete Route Registry
 
@@ -143,13 +144,14 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/platform-analytics` | `platform_analytics.py` | platform-analytics | 1 |
 | `/api/v1/errors` | `error_logs.py` | errors | 5 |
 | `/api/v1/integrations` | `integrations.py` | integrations | 5 |
+| `/api/v1/salesforce-sync` | `salesforce_sync.py` | salesforce-sync | 5 |
 | `/api/v1/scheduled` | `scheduled.py` | scheduled-tasks | 2 |
 | `/api/v1/admin-hours` | `admin_hours.py` | admin-hours | 21 |
 | `/api/v1/grants` | `grants.py` | grants | ~42 |
 | `/api/v1/operational-ranks` | `operational_ranks.py` | operational-ranks | 7 |
 | `/api/v1/onboarding` | `onboarding.py` | onboarding | 25 |
 | `/api/v1/public-portal` | `public_portal_admin.py` | public-portal-admin | 13 |
-| **Total** | | | **~835+** |
+| **Total** | | | **~845+** |
 
 ### Key Cross-Module API Endpoints
 
@@ -180,6 +182,13 @@ These endpoints bridge data across modules:
 | `/training/shift-reports/officer-analytics` | GET | Org-wide shift report analytics | Training + Users |
 | `/elections/{id}/send-report` | POST | Email election results to voters | Elections + Email |
 | `/elections/{id}/verify-receipt` | GET | Public vote receipt verification | Elections (public, rate-limited) |
+| `/salesforce-sync/push/members` | POST | Push members to Salesforce as Contacts | Users + Integrations |
+| `/salesforce-sync/push/training` | POST | Push training records to Salesforce as Tasks | Training + Integrations |
+| `/salesforce-sync/push/events` | POST | Push events to Salesforce | Events + Integrations |
+| `/salesforce-sync/pull/contacts` | POST | Pull Salesforce Contacts into Logbook | Users + Integrations |
+| `/training/programs/{id}/export` | POST | Export training program as shareable JSON | Training Programs |
+| `/training/programs/import` | POST | Import training program from JSON package | Training Programs |
+| `/training/external/providers/{id}/categories` | GET | Fetch external provider category catalog | Training + External Integrations |
 
 ---
 
@@ -192,7 +201,7 @@ These endpoints bridge data across modules:
 | `user.py` | Organization, User, Role, Session, MemberLeaveOfAbsence | organizations, users, roles, sessions, user_roles, member_leaves_of_absence |
 | `event.py` | Event, EventRSVP, EventExternalAttendee | events, event_attendees, event_external_attendees |
 | `event_request.py` | EventRequest, EventRequestActivity, EventRequestEmailTemplate | event_requests, event_request_activities, event_request_email_templates |
-| `training.py` | TrainingCategory, TrainingCourse, TrainingRecord, TrainingRequirement, TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport, Shift, ShiftAttendance, ShiftCall, ShiftCompletionReport | training_categories, training_courses, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls, shift_completion_reports |
+| `training.py` | TrainingCategory (+ `registry_code`), TrainingCourse, TrainingRecord, TrainingRequirement, TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport (+ `credit_hours`), Shift, ShiftAttendance, ShiftCall, ShiftCompletionReport | training_categories, training_courses, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls, shift_completion_reports |
 | `skills_testing.py` | SkillTemplate, SkillTest | skill_templates, skill_tests |
 | `election.py` | Election, Candidate, Vote, VotingToken | elections, candidates, ballots, voting_tokens |
 | `inventory.py` | InventoryCategory, InventoryItem, ItemAssignment, CheckOutRecord, MaintenanceRecord, StorageArea | inventory_categories, inventory_items, item_assignments, inventory_checkouts, maintenance_records, storage_areas |
@@ -382,6 +391,14 @@ All services in `backend/app/services/`:
 | `fundraising_service.py` | FundraisingService | FundraisingCampaign, Donor, Donation, Pledge | (fundraising-specific operations) |
 | `operational_rank_service.py` | OperationalRankService | OperationalRank | create_rank, update_rank, reorder_ranks |
 
+### Integration Services (`backend/app/services/integration_services/`)
+
+| Service File | Class | Purpose |
+|-------------|-------|---------|
+| `salesforce_service.py` | SalesforceService | Salesforce REST API client (OAuth 2.0, SOQL queries, CRUD operations) |
+| `salesforce_sync_service.py` | SalesforceSyncService | Bidirectional sync with configurable field mappings (members↔contacts, training→tasks, events→events) |
+| `notification_dispatcher.py` | NotificationDispatcher | Cross-integration notification routing |
+
 ### Specialized Services (No Direct Frontend Exposure)
 
 | Service File | Class | Purpose |
@@ -443,8 +460,9 @@ All Pydantic schemas in `backend/app/schemas/`:
 | `platform_analytics.py` | PlatformAnalyticsResponse | Response |
 | `public_portal.py` | PortalConfigResponse, APIKeyCreate, WhitelistEntry | Response/Create |
 | `operational_rank.py` | RankCreate, RankUpdate, RankResponse | Create/Update/Response |
-| `training_module_config.py` | ModuleConfigResponse, ModuleConfigUpdate | Response/Update |
+| `training_module_config.py` | ModuleConfigResponse, ModuleConfigUpdate (+ `manual_entry_enabled`, `manual_entry_apparatus_types`) | Response/Update |
 | `training_enhancements.py` | RecertificationPathway, InstructorQualification, TrainingEffectiveness, MultiAgencyTraining, XAPIStatement, CompetencyMatrix, ComplianceAttestation, ISOReadiness | Create/Response |
+| `integration.py` | IntegrationCreate, IntegrationResponse, SalesforceConfig, SalesforceFieldMapping, SyncStatusResponse | Create/Response |
 
 All Response schemas use `ConfigDict(from_attributes=True, alias_generator=to_camel, populate_by_name=True)` for automatic camelCase JSON serialization.
 
@@ -542,6 +560,7 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | `/training/skills-testing/test/new` | StartSkillTestPage | auth only |
 | `/training/skills-testing/test/:testId` | ActiveSkillTestPage | auth only |
 | `/training/skills-testing/test/:testId/active` | ActiveSkillTestPage | auth only |
+| `/training/manual-shift-report` | ManualShiftReportPage | `training.manage` |
 
 #### Apparatus
 
@@ -812,7 +831,7 @@ Creates axios instances with:
 | documents | Y | Y | — | — | — | — | — | — |
 | elections | Y | Y | — | — | — | — | — | — |
 | events | Y | Y | — | — | — | — | — | — |
-| facilities | Y | Y | — | — | — | — | — | — |
+| facilities | Y | Y | Y (2) | Y (7) | Y | Y | Y | 1 file |
 | forms | Y | Y | — | — | — | — | — | — |
 | grants-fundraising | Y | Y | Y (8) | — | Y | Y | Y | — |
 | integrations | Y | Y | — | — | — | — | — | — |
@@ -920,6 +939,11 @@ HIPAA exclusions (UNCACHEABLE_PREFIXES):
 | Scheduling | Notifications | Persistent dept. messages on dashboard | `DepartmentMessage.is_persistent` flag |
 | Inventory | Camera/Scanner | Barcode/QR lookup via camera | `GET /inventory/lookup` from `InventoryScanModal` |
 | Members | Camera/Scanner | Member ID QR/barcode lookup | `GET /users` from `MemberIdScannerModal` / `MemberScanPage` |
+| Integrations | Salesforce | Bidirectional member/training/event sync | `SalesforceSyncService` push/pull methods |
+| Salesforce | Users | Inbound contact sync via webhook | `POST /public/v1/webhooks/salesforce/{id}` |
+| Training Categories | NREMT Standards | Registry code linkage | `training_categories.registry_code` → NCCR codes |
+| Training Programs | Cross-Department | Program export/import as JSON | `POST /training/programs/{id}/export`, `POST /training/programs/import` |
+| External Training | Vector Solutions | Category catalog + credit hours | `GET /training/external/providers/{id}/categories`, `credit_hours` column |
 | All Modules | Audit | Audit trail | `log_audit_event()` in endpoints |
 | All Modules | Error Logs | Error tracking | `POST /errors/log` from frontend `errorTracker` |
 
@@ -1045,6 +1069,12 @@ The Reports module (`/reports`) generates cross-module reports:
 | Endpoint | Auth | Purpose |
 |----------|------|---------|
 | `GET /api/public/v1/display/{display_code}` | None | Kiosk QR code display for rooms |
+
+### Webhooks (`/public/v1/webhooks/`)
+
+| Endpoint | Auth | Rate Limit | Purpose |
+|----------|------|------------|---------|
+| `POST /public/v1/webhooks/salesforce/{integration_id}` | HMAC-SHA256 | 30/min/IP | Salesforce outbound message receiver |
 
 ### Token-Based Routes (No Session Auth)
 

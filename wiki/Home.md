@@ -68,6 +68,7 @@ docker-compose up -d
 - **[Apparatus](Module-Apparatus)** - Vehicle management (full module or lightweight basic)
 - **[Inventory](Module-Inventory)** - Equipment tracking, assignments, pool items, thermal labels
 - **[Compliance](Module-Compliance)** - Compliance tracking
+- **[Salesforce Integration](Integration-Salesforce)** - Bidirectional CRM sync *(2026-04-11)*
 
 ### 🔐 Security
 - **[Security Overview](Security-Overview)** - Security policy and compliance

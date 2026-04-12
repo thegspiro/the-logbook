@@ -44,6 +44,7 @@
 - [Medical Screening](../docs/MEDICAL_SCREENING_MODULE.md)
 - [Compliance](Module-Compliance)
 - [Compliance Config](../docs/COMPLIANCE_CONFIG.md)
+- [Salesforce Integration](Integration-Salesforce)
 
 ### 🔐 Security
 - [Overview](Security-Overview)

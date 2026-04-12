@@ -18,18 +18,19 @@ The Training module tracks courses, certifications, training requirements, progr
 10. [Waiver Management](#waiver-management)
 11. [Compliance Summary](#compliance-summary)
 12. [Shift Completion Reports](#shift-completion-reports)
-13. [External Training Integrations](#external-training-integrations)
-14. [Historical Import](#historical-import)
-15. [Competency Matrix](#competency-matrix)
-16. [Recertification Tracking](#recertification-tracking)
-17. [Instructor Management](#instructor-management)
-18. [Training Effectiveness Scoring](#training-effectiveness-scoring)
-19. [Multi-Agency Training](#multi-agency-training)
-20. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
-21. [Compliance Officer Dashboard](#compliance-officer-dashboard)
-22. [Training Record Attachments](#training-record-attachments)
-23. [Troubleshooting](#troubleshooting)
-24. [Skills Testing](#skills-testing)
+13. [Manual Shift Report Entry](#manual-shift-report-entry)
+14. [External Training Integrations](#external-training-integrations)
+15. [Historical Import](#historical-import)
+16. [Competency Matrix](#competency-matrix)
+17. [Recertification Tracking](#recertification-tracking)
+18. [Instructor Management](#instructor-management)
+19. [Training Effectiveness Scoring](#training-effectiveness-scoring)
+20. [Multi-Agency Training](#multi-agency-training)
+21. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
+22. [Compliance Officer Dashboard](#compliance-officer-dashboard)
+23. [Training Record Attachments](#training-record-attachments)
+24. [Troubleshooting](#troubleshooting)
+25. [Skills Testing](#skills-testing)
 
 ---
 
@@ -538,10 +539,62 @@ For ad-hoc reports (no shift selected), the full member list is shown.
 - **Batch review with more than 100 reports:** Rejected by `max_length=100` on the `BatchReviewRequest` schema. Select fewer reports and retry.
 - **Batch review with invalid or already-reviewed report IDs:** Valid reports are processed; a `failed` count is returned for reports that could not be reviewed (e.g., already approved, wrong org, or nonexistent ID).
 - **Flagged report re-approved:** Moves from the Flagged view to Approved status. If the report has a linked enrollment, deferred pipeline progress is triggered on approval.
+- **Submit-all-drafts scope:** *(2026-04-11)* The "Submit All Drafts" action now correctly scopes to the current officer's drafts only, preventing cross-officer draft submission.
+- **Enrollment ID validation:** *(2026-04-11)* Draft-to-submitted transition validates that the trainee still has an active enrollment before crediting program progress. If the enrollment was cancelled or completed in the interim, the report is submitted but no progress is credited.
+- **Draft regression guard:** *(2026-04-11)* The system prevents re-creation of draft reports for shifts that already have submitted or reviewed reports, avoiding duplicate credit.
 - **Non-authorized user accessing a report by ID:** Returns 403 Forbidden. Only the trainee, the filing officer, or users with `training.manage` permission can access a specific report. *(Security fix 2026-04-07)*
 - **Trainee accessing their own report:** Data is filtered by visibility settings (e.g., if `show_performance_rating` is off, the rating is stripped). `reviewer_notes` are always stripped for trainees regardless of settings.
 - **Skill linkage status:** When an apparatus-type skill name exactly matches a `SkillEvaluation.name` in the training module, it shows as "linked" (green) in the settings panel. Unlinked skills (amber) are still observed on reports but don't flow into formal competency tracking.
 - **No SkillEvaluation records in org:** All skills show amber "unlinked" tags in the apparatus settings panel.
+
+---
+
+## Manual Shift Report Entry *(2026-04-11)*
+
+**Required Permission:** `training.manage`
+
+For departments that do not use the Scheduling module, The Logbook provides a standalone manual shift report page at `/training/manual-shift-report`. This allows officers to file shift completion reports by entering shift data manually instead of linking to a scheduled shift.
+
+### Filing a Manual Shift Report
+
+1. Navigate to **Training Admin > Shift Reports** and click **Manual Entry**, or go directly to `/training/manual-shift-report`
+2. Select the **shift date** and enter **start time** and **end time** (handles midnight crossover for overnight shifts)
+3. Optionally select an **apparatus** — this auto-populates relevant skills and tasks for the evaluation
+4. The system auto-calculates **hours** from the start/end times
+5. Enter **calls responded** count and select **call types** from the tag selector
+6. Add a **shift narrative** (overall shift assessment)
+7. Search and select **crew members** from the member directory (checkbox list)
+8. For each crew member who needs an evaluation, expand their section and add:
+   - Performance rating (1-5 star scale)
+   - Areas of strength
+   - Areas for improvement
+   - Individual remarks
+9. Click **Submit Report** or **Save as Draft**
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Manual Shift Report page showing the date/time entry at the top, apparatus selector, hours display, crew member list with checkboxes, and an expanded trainee evaluation section with rating stars and text fields._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the apparatus selector on the manual entry form, showing the dropdown with apparatus types and the auto-populated skills section below it._
+
+### Admin Configuration
+
+Administrators can configure manual shift entry via the **ManualEntrySettingsPanel** on the Training Admin page:
+
+| Setting | Description |
+|---------|-------------|
+| **Enable Manual Entry** | Toggle the feature on/off for the department |
+| **Require Apparatus** | Make apparatus selection mandatory on the manual form |
+| **Allowed Apparatus** | Restrict which apparatus types are available (leave empty for all) |
+| **Default Start Time** | Pre-fill the start time field (e.g., "07:00") |
+| **Default Duration** | Pre-fill the shift duration, auto-calculating the end time |
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the ManualEntrySettingsPanel showing the enable toggle, apparatus requirement checkbox, apparatus multi-select, default start time input, and default duration input._
+
+### Edge Cases
+
+- **Manual report for a date with a scheduled shift**: A warning is shown, but the officer can proceed — manual and scheduled reports are independent
+- **Apparatus type with no skill/task mappings**: Form shows empty skills/tasks sections; officer can manually add entries
+- **Zero-hour shift (same start/end time)**: Validation prevents submission; minimum 15-minute shift duration required
+- **Midnight crossover**: If end time is earlier than start time, the system assumes the shift crosses midnight and calculates hours accordingly (e.g., 19:00 to 07:00 = 12 hours)
 
 ---
 
@@ -559,6 +612,66 @@ Supported integrations:
 
 > **Screenshot placeholder:**
 > _[Screenshot of the External Training Integrations page showing a connected provider with sync status, last sync date, and a list of recent imports]_
+
+### Vector Solutions Enhancements *(2026-04-11)*
+
+The Vector Solutions integration now includes:
+
+- **Category catalog fetch**: Before your first sync, fetch the full Vector Solutions category catalog to set up mappings upfront. Click **Fetch Categories** on the provider detail page to load all available VS categories, then map each to an internal training category
+- **Credit hours preservation**: The system now stores both the original **credit hours** from Vector Solutions (used for CE credit tracking) and the converted **clock hours** (used for compliance). Previously only clock hours were captured
+- **Improved type mapping**: Course types from Vector Solutions now correctly map to internal training types during import, preserving certification data and expiration dates
+- **Auto-sync scheduling**: After initial setup, syncs can be triggered manually or run on a scheduled basis via the background task system
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Vector Solutions category mapping table showing external VS categories on the left, internal training categories on the right with dropdown selectors, and a "Fetch Categories" button at the top. Show at least one mapped and one unmapped category._
+
+**Edge Cases:**
+- If a Vector Solutions category has no internal mapping, the record is imported with an "Unmapped" flag and the officer is prompted to complete the mapping
+- If credit hours differ from clock hours (e.g., a 2-hour course awards 3 CE credits), both values are stored independently
+- Duplicate detection uses member + course name + completion date — matching records are skipped with a logged reason
+
+### National Registry (NREMT) Standard Linkage *(2026-04-11)*
+
+Training categories can now be linked to **NREMT National Continued Competency Requirement (NCCR)** codes. This enables automatic compliance tracking against national recertification requirements.
+
+**How it works:**
+1. Navigate to **Training Admin > Requirements** and edit a training category
+2. In the **Registry Code** field, enter the NCCR code (e.g., `NCCR-CARDIOLOGY`, `NCCR-TRAUMA`)
+3. Training records filed under categories with a registry code automatically count toward the corresponding NCCR requirement
+4. The compliance matrix shows NCCR progress alongside department-specific requirements
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the training category edit form showing the new "Registry Code" field with an NCCR code entered, and a tooltip explaining that this links the category to national standards._
+
+**NREMT terminology updates:**
+- "Cardiovascular" category renamed to **"Cardiology"** to match official NREMT terminology
+- Hour distributions updated to match the official NREMT NCCR requirements for EMT, AEMT, and Paramedic certification levels
+
+### Training Program Export/Import *(2026-04-11)*
+
+Officers can share training programs between departments:
+
+**Exporting a Program:**
+1. Navigate to **Training > Programs**
+2. Open the program you want to share
+3. Click the **Export** button
+4. The system generates a JSON package containing all phases, requirements, milestones, and linked course definitions
+5. Save or share the JSON file with other departments
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Training Programs page with the Export button visible on a program card or detail view._
+
+**Importing a Program:**
+1. Navigate to **Training > Programs**
+2. Click **Import Program**
+3. Upload the JSON package file
+4. The system validates the package structure and reports any conflicts
+5. Review the import preview showing what will be created
+6. Confirm the import
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the import preview showing the program name, number of phases, requirements, and milestones that will be created, with a "Confirm Import" button._
+
+**Edge Cases:**
+- If an imported program references a course that already exists in your department, the existing course is reused (no duplicate created)
+- If a phase name matches an existing phase in another program, the new phase is created with an " (Imported)" suffix
+- Registry codes from the exporting department are included; you can map them to your own categories after import
 
 ---
 

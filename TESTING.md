@@ -131,6 +131,48 @@ cd frontend && npx vitest run src/pages/EventSelfCheckInPage.test.tsx
 cd frontend && npx vitest run src/pages/EventQRCodePage.test.tsx
 ```
 
+### Integration Test Suites (Backend — Added 2026-04-10)
+
+Cross-module integration tests validate end-to-end data flows:
+
+| Test File | Purpose | Key Flows Tested |
+|-----------|---------|-----------------|
+| `test_election_voting_flow.py` | Election lifecycle | Election creation → ballot setup → vote casting → result certification → receipt verification |
+| `test_event_lifecycle.py` | Event pipeline | Event creation → RSVP → check-in → attendance tracking → analytics generation |
+| `test_membership_pipeline_flow.py` | Prospect pipeline | Prospect creation → stage advancement → document upload → election package → conversion to active member |
+| `test_training_compliance_integration.py` | Training compliance | Training record creation → requirement evaluation → compliance matrix calculation → leave adjustment |
+| `test_shift_completion.py` | Shift reports (expanded) | Report creation → draft management → review workflow → pipeline progress → batch review |
+
+```bash
+# Run all integration tests
+cd backend && pytest -m integration -v
+
+# Run specific integration test
+cd backend && pytest tests/test_election_voting_flow.py -v
+cd backend && pytest tests/test_membership_pipeline_flow.py -v
+```
+
+### Frontend Test Fixes (2026-04-10)
+
+Fixed **39 pre-existing test failures** across 17 files and **7 store test assertion mismatches**:
+
+| Area | Files Fixed | Issue |
+|------|------------|-------|
+| Component tests | 17 files | Mock setup mismatches, missing provider wrappers, incorrect assertions |
+| Store tests | 5 files (auth, admin-hours, apparatus, medical-screening, skills-testing) | `toHaveBeenCalledWith()` used instead of `toHaveBeenCalled()` or with correct arguments |
+| Service tests | 2 files (trainingServices, inventoryService) | URL path mismatches and response shape errors |
+| Finance store | 1 file | Expanded from 25 to 75 tests with corrected assertions |
+
+### New Frontend Test Files (2026-04-10)
+
+| Test File | Purpose | Tests |
+|-----------|---------|-------|
+| `facilitiesStore.test.ts` | Facilities store state and API interactions | Full CRUD + search + filtering |
+| `onboardingStore.test.ts` | Onboarding flow state management | Step validation + session persistence |
+| `financeStore.test.ts` | Finance store operations | 75 tests covering all store actions |
+| `trainingServices.test.ts` | Training service URL paths | All endpoint URL and response contracts |
+| `inventoryService.test.ts` | Inventory service API contract | Item CRUD, assignments, checkouts |
+
 ### Backend Tests (1257+ tests)
 
 The backend test suite covers models, services, and API endpoints:

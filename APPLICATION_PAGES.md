@@ -217,6 +217,14 @@ Requires `training.manage` permission. Tab-based admin interface.
 >
 > The **Enhancements** tab provides access to recertification pathway management, instructor qualification tracking, training effectiveness evaluations (Kirkpatrick model), multi-agency session coordination, and compliance officer tools.
 
+### Manual Shift Report *(2026-04-11)*
+
+| URL | Page | Permission |
+|-----|------|------------|
+| `/training/manual-shift-report` | Manual Shift Report | `training.manage` |
+
+> For departments without the Scheduling module enabled. Officers can file shift completion reports by manually entering shift date, start/end times, apparatus, crew members, and trainee evaluations. Supports apparatus-specific skill/task auto-population and save-as-draft. Admin configuration via the **ManualEntrySettingsPanel** on the Training Admin page controls whether manual entry is enabled, which apparatus types are available, and default shift times.
+
 **Legacy redirects:**
 - `/training/officer` → `/training/admin?tab=dashboard`
 - `/training/submissions` → `/training/admin?tab=submissions`
@@ -417,6 +425,8 @@ The Scheduling Settings page uses a tabbed sub-navigation:
 |-----|------|------------|
 | `/integrations` | Integrations | Authenticated |
 
+> *(2026-04-11)* The Integrations page now includes **Salesforce CRM** as a connectable integration. Configuration requires `integrations.manage` permission. Features: OAuth 2.0 connection, bidirectional sync (members↔contacts, training→tasks, events→events), configurable field mappings, webhook-based real-time updates, and sync history dashboard. Supports both production and sandbox Salesforce environments.
+
 ---
 
 ## User Account
@@ -449,7 +459,7 @@ The Scheduling Settings page uses a tabbed sub-navigation:
 
 ---
 
-**Total: ~108 direct routes + 25 admin hub tabs across 18 modules**
+**Total: ~110 direct routes + 25 admin hub tabs across 18 modules**
 
 > **Note (2026-03-26):** Notification cards redesigned with expand/collapse, pinned-first sorting, contextual CTAs, and mark-as-read on collapse. Notification metadata column added for rich card rendering. Scheduling page supports `?tab=` deep-linking (schedule, my-shifts, open-shifts, requests, equipment-checks). Shift notifications deep-link to scheduling with shift pre-selected. In-process scheduled task runner replaces external cron. Standalone equipment checks (not tied to shifts). Flat scrollable check form with inline compartments and section headers. Text check type changed to read-only statement. Critical minimum quantity threshold on check items. Template clone preserves is_header and critical_minimum_quantity. EVOC certification levels integrated across training, apparatus, and scheduling. Training record category tracking. Virginia NCCR recertification standards. Event attendees importable into election ballot lists. Linked elections displayed on event and minutes detail pages. Apparatus type/status badges render actual icons. navigate(-1) replaced with hardcoded back paths and breadcrumbs. Chrome label printing fixed via iframe-based approach. App startup handles MySQL not ready with retry backoff.
 >

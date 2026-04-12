@@ -279,6 +279,51 @@ The public portal allows external access to:
 
 ---
 
+## Integrations *(2026-04-11)*
+
+**Required Permission:** `integrations.manage`
+
+Navigate to **Administration > Integrations** to manage external system connections.
+
+### Salesforce CRM Integration
+
+Connect The Logbook to Salesforce for bidirectional synchronization of members, training records, and events.
+
+**Setting up the Salesforce connection:**
+
+1. Navigate to **Integrations** and find the **Salesforce CRM** card
+2. Click **Connect**
+3. Enter your Salesforce **Instance URL** (e.g., `https://yourorg.salesforce.com`)
+4. Enter your Salesforce **Client ID** and **Client Secret** (from a Salesforce Connected App)
+5. The system tests the connection and, on success, saves the integration
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Integrations page showing the Salesforce CRM card with connection status (Connected/Disconnected), last sync timestamp, and Connect/Disconnect/Sync Now buttons._
+
+**Configuring field mappings:**
+
+After connecting, configure how Logbook fields map to Salesforce fields. Default mappings cover member contacts, training records as Tasks, and events. You can customize which fields sync and in which direction.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Salesforce field mapping configuration showing a table with Logbook fields on the left, Salesforce fields on the right, and sync direction dropdowns (Push/Pull/Both)._
+
+**Triggering a sync:**
+
+- Click **Sync Now** on the Integrations page for a manual sync
+- Or configure automatic sync via the scheduled tasks system
+
+**Webhook setup (for real-time updates):**
+
+To receive real-time updates from Salesforce:
+1. Copy the webhook URL shown on the integration detail page
+2. In Salesforce Setup, create an Outbound Message workflow that sends Contact changes to this URL
+3. The webhook validates HMAC-SHA256 signatures for security
+
+**Edge Cases:**
+- If Salesforce rate limits are hit during a bulk sync, the system pauses and retries with exponential backoff
+- If a member is deleted in Logbook but exists in Salesforce, the behavior depends on your conflict resolution setting
+- OAuth tokens auto-refresh when expired; no manual re-authentication needed
+
+---
+
 ## Error Monitoring
 
 **Required Permission:** `settings.manage`
