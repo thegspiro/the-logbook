@@ -198,7 +198,7 @@ describe('InventoryCategoriesPage', () => {
     await user.type(nameInput, 'Test');
     await user.click(screen.getByText('Create Category'));
     await waitFor(() => {
-      expect(mockToastError).toHaveBeenCalled();
+      expect(mockToastError).toHaveBeenCalledWith(expect.any(String));
     });
   });
 

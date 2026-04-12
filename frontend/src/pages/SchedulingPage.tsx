@@ -12,8 +12,6 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
   X,
   Loader2,
   Users,
@@ -32,14 +30,14 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "../stores/authStore";
 import { useTimezone } from "../hooks/useTimezone";
 import { useTheme } from "../contexts/ThemeContext";
-import { colorCardStyle } from "../utils/colorContrast";
-import { formatTime, formatDateCustom, localToUTC } from "../utils/dateFormatting";
+import { formatDateCustom, localToUTC } from "../utils/dateFormatting";
 import { schedulingService, useSchedulingStore } from "../modules/scheduling";
 import type {
   ShiftRecord,
   ShiftTemplateRecord,
 } from "../modules/scheduling";
-import { resolveTemplatePositions, normalizePositions } from "../modules/scheduling/services/api";
+import { resolveTemplatePositions } from "../modules/scheduling/services/api";
+import ShiftCard from "./scheduling/ShiftCard";
 import { trainingModuleConfigService } from "../services/api";
 import { lazyWithRetry } from "../utils/lazyWithRetry";
 import TimeQuarterHour from "../components/ux/TimeQuarterHour";
@@ -126,69 +124,6 @@ const computeEndDate = (
   const nextDay = new Date(startDate + "T12:00:00"); // noon to avoid DST edge cases
   nextDay.setDate(nextDay.getDate() + 1);
   return formatDateISO(nextDay);
-};
-
-const getShiftTemplateColor = (shift: ShiftRecord): string | undefined => {
-  if (shift.color) return undefined;
-  const timePart = shift.start_time.includes("T")
-    ? shift.start_time.split("T")[1] ?? ""
-    : shift.start_time;
-  const startHour = parseInt(timePart.split(":")[0] ?? "0", 10);
-  if (startHour >= 5 && startHour < 10)
-    return "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30";
-  if (startHour >= 10 && startHour < 17)
-    return "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30";
-  return "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30";
-};
-
-/**
- * Resolve shift card appearance based on staffing status.
- *
- * Fully staffed → green tint + green border (overrides template color).
- * Understaffed → amber tint + amber border (overrides template color).
- * No staffing target configured → falls back to template color.
- */
-const getShiftCardAppearance = (
-  shift: ShiftRecord,
-  resolvedTheme: "light" | "dark" | "high-contrast",
-): { className: string; style: React.CSSProperties | undefined } => {
-  if (isFullyStaffed(shift)) {
-    return {
-      className: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
-      style: undefined,
-    };
-  }
-  if (isUnderstaffed(shift)) {
-    return {
-      className: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
-      style: undefined,
-    };
-  }
-  return {
-    className: getShiftTemplateColor(shift) ?? "",
-    style: shift.color ? colorCardStyle(shift.color, resolvedTheme) : undefined,
-  };
-};
-
-/** Returns the minimum staffing target for a shift, or null if none is configured. */
-const getStaffingTarget = (shift: ShiftRecord): number | null => {
-  const positions = normalizePositions(
-    (shift.apparatus_positions ?? shift.positions) as unknown[] | null,
-  );
-  const requiredCount = positions.filter(p => p.required).length;
-  if (requiredCount > 0) return requiredCount;
-  if (shift.min_staffing != null && shift.min_staffing > 0) return shift.min_staffing;
-  return null;
-};
-
-const isUnderstaffed = (shift: ShiftRecord): boolean => {
-  const target = getStaffingTarget(shift);
-  return target != null && shift.attendee_count < target;
-};
-
-const isFullyStaffed = (shift: ShiftRecord): boolean => {
-  const target = getStaffingTarget(shift);
-  return target != null && shift.attendee_count >= target;
 };
 
 const TAB_CONFIG: {
@@ -764,57 +699,17 @@ const SchedulingPage: React.FC = () => {
                             isToday(date) ? "bg-violet-600/5" : ""
                           }`}
                         >
-                          {dayShifts.map((shift) => {
-                            const card = getShiftCardAppearance(shift, resolvedTheme);
-                            return (
-                            <button
+                          {dayShifts.map((shift) => (
+                            <ShiftCard
                               key={shift.id}
-                              onClick={() => handleShiftClick(shift)}
-                              className={`mb-2 p-2 rounded-lg border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${card.className}`}
-                              style={card.style}
-                            >
-                              <p className="font-medium truncate">
-                                {formatTime(shift.start_time, tz)}
-                                {shift.end_time
-                                  ? ` - ${formatTime(shift.end_time, tz)}`
-                                  : ""}
-                              </p>
-                              {shift.notes && (
-                                <p className="mt-1 opacity-80 line-clamp-2">
-                                  {shift.notes}
-                                </p>
-                              )}
-                              <div className="flex items-center gap-2 mt-1">
-                                {isUnderstaffed(shift) ? (
-                                  <span
-                                    className="text-amber-600 dark:text-amber-400 flex items-center gap-0.5"
-                                    title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
-                                  >
-                                    <AlertTriangle className="w-3 h-3" />
-                                  </span>
-                                ) : isFullyStaffed(shift) ? (
-                                  <span
-                                    className="text-green-600 dark:text-green-400 flex items-center gap-0.5"
-                                    title="Fully staffed"
-                                  >
-                                    <CheckCircle2 className="w-3 h-3" />
-                                  </span>
-                                ) : null}
-                                <span className="opacity-70 flex items-center gap-0.5">
-                                  <Users className="w-3 h-3" />{" "}
-                                  {shift.attendee_count}
-                                  {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`}
-                                </span>
-                                {shift.apparatus_unit_number && (
-                                  <span className="opacity-70 flex items-center gap-0.5">
-                                    <Truck className="w-3 h-3" />{" "}
-                                    {shift.apparatus_unit_number}
-                                  </span>
-                                )}
-                              </div>
-                            </button>
-                            );
-                          })}
+                              shift={shift}
+                              variant="desktop-week"
+                              selected={selectedShift?.id === shift.id}
+                              resolvedTheme={resolvedTheme}
+                              timezone={tz}
+                              onClick={handleShiftClick}
+                            />
+                          ))}
                         </div>
                       );
                     })}
@@ -865,57 +760,17 @@ const SchedulingPage: React.FC = () => {
                             </p>
                           ) : (
                             <div className="space-y-2">
-                              {dayShifts.map((shift) => {
-                                const card = getShiftCardAppearance(shift, resolvedTheme);
-                                return (
-                                <button
+                              {dayShifts.map((shift) => (
+                                <ShiftCard
                                   key={shift.id}
-                                  onClick={() => handleShiftClick(shift)}
-                                  className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${card.className}`}
-                                  style={card.style}
-                                >
-                                  <p className="font-medium">
-                                    {formatTime(shift.start_time, tz)}
-                                    {shift.end_time
-                                      ? ` - ${formatTime(shift.end_time, tz)}`
-                                      : ""}
-                                  </p>
-                                  {shift.notes && (
-                                    <p className="mt-1 opacity-80 line-clamp-2">
-                                      {shift.notes}
-                                    </p>
-                                  )}
-                                  <div className="flex items-center gap-3 mt-1.5">
-                                    {isUnderstaffed(shift) ? (
-                                      <span
-                                        className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs"
-                                        title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
-                                      >
-                                        <AlertTriangle className="w-3.5 h-3.5" />
-                                      </span>
-                                    ) : isFullyStaffed(shift) ? (
-                                      <span
-                                        className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs"
-                                        title="Fully staffed"
-                                      >
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                      </span>
-                                    ) : null}
-                                    <span className="opacity-70 flex items-center gap-1 text-xs">
-                                      <Users className="w-3.5 h-3.5" />{" "}
-                                      {shift.attendee_count}
-                                      {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`} staff
-                                    </span>
-                                    {shift.apparatus_unit_number && (
-                                      <span className="opacity-70 flex items-center gap-1 text-xs">
-                                        <Truck className="w-3.5 h-3.5" />{" "}
-                                        {shift.apparatus_unit_number}
-                                      </span>
-                                    )}
-                                  </div>
-                                </button>
-                                );
-                              })}
+                                  shift={shift}
+                                  variant="mobile"
+                                  selected={selectedShift?.id === shift.id}
+                                  resolvedTheme={resolvedTheme}
+                                  timezone={tz}
+                                  onClick={handleShiftClick}
+                                />
+                              ))}
                             </div>
                           )}
                         </div>
@@ -964,35 +819,17 @@ const SchedulingPage: React.FC = () => {
                           >
                             {date.getDate()}
                           </p>
-                          {dayShifts.map((shift) => {
-                            const card = getShiftCardAppearance(shift, resolvedTheme);
-                            return (
-                            <button
+                          {dayShifts.map((shift) => (
+                            <ShiftCard
                               key={shift.id}
-                              onClick={() => handleShiftClick(shift)}
-                              className={`mb-1 px-1.5 py-1 rounded-sm border text-xs w-full text-left cursor-pointer hover:ring-2 hover:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${card.className}`}
-                              style={card.style}
-                            >
-                              <p className="font-medium truncate">
-                                {isUnderstaffed(shift) ? (
-                                  <AlertTriangle className="w-3 h-3 inline text-amber-600 dark:text-amber-400 mr-0.5" />
-                                ) : isFullyStaffed(shift) ? (
-                                  <CheckCircle2 className="w-3 h-3 inline text-green-600 dark:text-green-400 mr-0.5" />
-                                ) : null}
-                                {formatTime(shift.start_time, tz)}
-                                {shift.apparatus_unit_number && (
-                                  <span className="ml-1 opacity-70">
-                                    {shift.apparatus_unit_number}
-                                  </span>
-                                )}
-                                <span className="ml-1 opacity-70">
-                                  ({shift.attendee_count}
-                                  {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`})
-                                </span>
-                              </p>
-                            </button>
-                            );
-                          })}
+                              shift={shift}
+                              variant="compact"
+                              selected={selectedShift?.id === shift.id}
+                              resolvedTheme={resolvedTheme}
+                              timezone={tz}
+                              onClick={handleShiftClick}
+                            />
+                          ))}
                         </div>
                       );
                     })}
@@ -1118,57 +955,18 @@ const SchedulingPage: React.FC = () => {
                                 </div>
                               </div>
                               <div className="p-3 space-y-2">
-                                {dayShifts.map((shift) => {
-                                  const card = getShiftCardAppearance(shift, resolvedTheme);
-                                  return (
-                                  <button
+                                {dayShifts.map((shift) => (
+                                  <ShiftCard
                                     key={shift.id}
-                                    onClick={() => handleShiftClick(shift)}
-                                    className={`p-3 rounded-lg border text-sm w-full text-left cursor-pointer active:ring-2 active:ring-violet-500/50 transition-all ${selectedShift?.id === shift.id ? 'ring-2 ring-violet-500' : ''} ${card.className}`}
-                                    style={card.style}
-                                  >
-                                    <p className="font-medium">
-                                      {formatTime(shift.start_time, tz)}
-                                      {shift.end_time
-                                        ? ` - ${formatTime(shift.end_time, tz)}`
-                                        : ""}
-                                    </p>
-                                    {shift.notes && (
-                                      <p className="mt-1 opacity-80 line-clamp-2">
-                                        {shift.notes}
-                                      </p>
-                                    )}
-                                    <div className="flex items-center gap-3 mt-1.5">
-                                      {isUnderstaffed(shift) ? (
-                                        <span
-                                          className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs"
-                                          title={`Understaffed: ${shift.attendee_count}/${getStaffingTarget(shift)} filled`}
-                                        >
-                                          <AlertTriangle className="w-3.5 h-3.5" />
-                                        </span>
-                                      ) : isFullyStaffed(shift) ? (
-                                        <span
-                                          className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs"
-                                          title="Fully staffed"
-                                        >
-                                          <CheckCircle2 className="w-3.5 h-3.5" />
-                                        </span>
-                                      ) : null}
-                                      <span className="opacity-70 flex items-center gap-1 text-xs">
-                                        <Users className="w-3.5 h-3.5" />{" "}
-                                        {shift.attendee_count}
-                                        {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`} staff
-                                      </span>
-                                      {shift.apparatus_unit_number && (
-                                        <span className="opacity-70 flex items-center gap-1 text-xs">
-                                          <Truck className="w-3.5 h-3.5" />{" "}
-                                          {shift.apparatus_unit_number}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </button>
-                                  );
-                                })}
+                                    shift={shift}
+                                    variant="mobile"
+                                    selected={selectedShift?.id === shift.id}
+                                    resolvedTheme={resolvedTheme}
+                                    timezone={tz}
+                                    onClick={handleShiftClick}
+                                    touchOnly
+                                  />
+                                ))}
                               </div>
                             </div>
                           );

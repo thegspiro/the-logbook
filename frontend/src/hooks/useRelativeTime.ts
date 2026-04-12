@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { formatShortDateTime } from '../utils/dateFormatting';
 
 const INTERVALS = [
   { seconds: 31536000, label: 'year' },
@@ -38,15 +39,7 @@ export function formatRelativeTime(dateStr: string | Date | null | undefined): s
 
 export function formatAbsoluteDate(dateStr: string | Date | null | undefined, tz?: string): string {
   if (!dateStr) return '';
-  const opts: Intl.DateTimeFormatOptions = {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  };
-  if (tz) opts.timeZone = tz;
-  return new Date(dateStr).toLocaleString('en-US', opts);
+  return formatShortDateTime(dateStr, tz);
 }
 
 /**

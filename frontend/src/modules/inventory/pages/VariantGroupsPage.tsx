@@ -9,7 +9,8 @@ import type { ItemVariantGroup, ItemVariantGroupCreate, InventoryCategory, Inven
 import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
-import { VariantCapsules, getDisplayName } from '../components/VariantCapsules';
+import { VariantCapsules } from '../components/VariantCapsules';
+import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
 
 interface GroupFormData {

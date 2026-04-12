@@ -5,16 +5,14 @@ Endpoints for managing external training providers (Vector Solutions, Target Sol
 and syncing training records from external platforms.
 """
 
-import logging
 from datetime import date, datetime, timezone
 
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-logger = logging.getLogger(__name__)
 
 from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
@@ -299,8 +297,6 @@ async def test_provider_connection(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    logger = logging.getLogger(__name__)
-
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))
@@ -366,7 +362,6 @@ async def perform_sync_task(
     """
     from app.core.database import async_session_factory
 
-    logger = logging.getLogger(__name__)
     logger.info(f"Starting background sync for provider {provider_id}")
 
     async with async_session_factory() as db:
@@ -494,8 +489,6 @@ async def trigger_sync(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    logger = logging.getLogger(__name__)
-
     result = await db.execute(
         select(ExternalTrainingProvider)
         .where(ExternalTrainingProvider.id == str(provider_id))

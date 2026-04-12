@@ -359,7 +359,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         setTimeout(() => setLookupError(null), 3000);
         return;
       }
-      addItemFromResult(response.results[0] as ScanLookupResult);
+      const firstResult = response.results[0];
+      if (firstResult) addItemFromResult(firstResult);
     } catch (err: unknown) {
       const is404 =
         err instanceof Error &&

@@ -11,15 +11,13 @@ These validators help prevent production issues by catching problems like:
 """
 
 import enum
-import logging
 from typing import List, Tuple
 
+from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import IdentifierType, OrganizationType
-
-logger = logging.getLogger(__name__)
 
 
 class StartupValidationError(Exception):

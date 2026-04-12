@@ -5,23 +5,24 @@ Database models for the public portal module that enables secure,
 read-only API access to selected organization data for public websites.
 """
 
-import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Column, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 
 from app.core.database import Base
-
-
-def UUID():
-    """Generate UUID that works with both PostgreSQL and MySQL"""
-    return str(uuid.uuid4())
-
-
-def _utc_iso() -> str:
-    """UTC timestamp as a 26-char naive ISO string (fits String(26) columns)."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")
+from app.core.utils import generate_uuid
 
 
 class PublicPortalConfig(Base):
@@ -34,7 +35,7 @@ class PublicPortalConfig(Base):
 
     __tablename__ = "public_portal_config"
 
-    id = Column(String(36), primary_key=True, default=UUID)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     organization_id = Column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
@@ -59,8 +60,10 @@ class PublicPortalConfig(Base):
     settings = Column(JSON, default=dict, nullable=False)
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=_utc_iso)
-    updated_at = Column(String(26), nullable=False, default=_utc_iso, onupdate=_utc_iso)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization", back_populates="public_portal_config")
@@ -90,7 +93,7 @@ class PublicPortalAPIKey(Base):
 
     __tablename__ = "public_portal_api_keys"
 
-    id = Column(String(36), primary_key=True, default=UUID)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     organization_id = Column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
@@ -116,10 +119,10 @@ class PublicPortalAPIKey(Base):
     rate_limit_override = Column(Integer, nullable=True)
 
     # Optional expiration date
-    expires_at = Column(String(26), nullable=True)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
 
     # Last time this key was used
-    last_used_at = Column(String(26), nullable=True)
+    last_used_at = Column(DateTime(timezone=True), nullable=True)
 
     # Active/revoked status
     is_active = Column(Boolean, default=True, nullable=False)
@@ -130,7 +133,7 @@ class PublicPortalAPIKey(Base):
     )
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=_utc_iso)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     # Relationships
     organization = relationship("Organization")
@@ -154,13 +157,12 @@ class PublicPortalAPIKey(Base):
         """Check if the API key has expired"""
         if not self.expires_at:
             return False
-        try:
-            expiry = datetime.fromisoformat(self.expires_at)
-            if expiry.tzinfo is None:
-                expiry = expiry.replace(tzinfo=timezone.utc)
-            return datetime.now(timezone.utc) > expiry
-        except (ValueError, TypeError):
-            return False
+        expiry = (
+            self.expires_at.replace(tzinfo=timezone.utc)
+            if self.expires_at.tzinfo is None
+            else self.expires_at
+        )
+        return datetime.now(timezone.utc) > expiry
 
     @property
     def effective_rate_limit(self) -> int:
@@ -181,7 +183,7 @@ class PublicPortalAccessLog(Base):
 
     __tablename__ = "public_portal_access_log"
 
-    id = Column(String(36), primary_key=True, default=UUID)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     organization_id = Column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
@@ -214,7 +216,7 @@ class PublicPortalAccessLog(Base):
     referer = Column(String(500), nullable=True)
 
     # Timestamp of the request
-    timestamp = Column(String(26), nullable=False, default=_utc_iso)
+    timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
     # Security flags
     flagged_suspicious = Column(Boolean, default=False, nullable=False)
@@ -247,7 +249,7 @@ class PublicPortalDataWhitelist(Base):
 
     __tablename__ = "public_portal_data_whitelist"
 
-    id = Column(String(36), primary_key=True, default=UUID)
+    id = Column(String(36), primary_key=True, default=generate_uuid)
     organization_id = Column(
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
@@ -270,8 +272,10 @@ class PublicPortalDataWhitelist(Base):
     is_enabled = Column(Boolean, default=False, nullable=False)
 
     # Timestamps
-    created_at = Column(String(26), nullable=False, default=_utc_iso)
-    updated_at = Column(String(26), nullable=False, default=_utc_iso, onupdate=_utc_iso)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization")

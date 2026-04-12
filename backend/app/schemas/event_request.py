@@ -141,7 +141,7 @@ class EmailTemplateUpdate(BaseModel):
     body_text: Optional[str] = None
     trigger: Optional[str] = None
     trigger_days_before: Optional[int] = Field(None, ge=1, le=90)
-    is_active: Optional[int] = None
+    is_active: Optional[bool] = None
 
 
 class EmailTemplateResponse(UTCResponseBase):
@@ -154,7 +154,7 @@ class EmailTemplateResponse(UTCResponseBase):
     body_text: Optional[str] = None
     trigger: Optional[str] = None
     trigger_days_before: Optional[int] = None
-    is_active: int = 1
+    is_active: bool = True
     created_at: datetime
     updated_at: datetime
 

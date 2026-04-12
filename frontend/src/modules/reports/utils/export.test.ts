@@ -70,9 +70,9 @@ describe('downloadFile', () => {
     downloadFile('test content', 'test.csv');
 
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-    expect(appendSpy).toHaveBeenCalled();
-    expect(clickSpy).toHaveBeenCalled();
-    expect(removeSpy).toHaveBeenCalled();
+    expect(appendSpy).toHaveBeenCalledWith(expect.any(Node));
+    expect(clickSpy).toHaveBeenCalledWith();
+    expect(removeSpy).toHaveBeenCalledWith(expect.any(Node));
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:test');
   });
 });

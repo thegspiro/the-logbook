@@ -5,11 +5,11 @@ Business logic for syncing training records from external providers
 like Vector Solutions, Target Solutions, Lexipol, etc.
 """
 
-import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,8 +28,6 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import User
-
-logger = logging.getLogger(__name__)
 
 
 class ExternalTrainingSyncService:

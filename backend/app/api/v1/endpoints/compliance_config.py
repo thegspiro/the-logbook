@@ -5,7 +5,6 @@ API endpoints for managing compliance configuration, profiles,
 and compliance report generation/retrieval.
 """
 
-import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -29,8 +28,6 @@ from app.services.compliance_config_service import (
     ComplianceConfigService,
     ComplianceReportService,
 )
-
-logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

@@ -244,7 +244,7 @@ async def log_access(
     )
 
     db.add(access_log)
-    await db.commit()
+    await db.flush()
 
     # Log to application logs if flagged
     if flagged_suspicious:

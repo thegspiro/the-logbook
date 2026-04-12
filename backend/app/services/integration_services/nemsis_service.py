@@ -15,12 +15,11 @@ What this CANNOT export (data doesn't exist in The Logbook):
   - ePatient, eVitals, eMedications, eProcedures — lives in ePCR system
 """
 
-import logging
 from datetime import datetime
 from typing import Any
 from xml.etree.ElementTree import Element, SubElement, tostring
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 NEMSIS_NAMESPACE = "http://www.nemsis.org"
 

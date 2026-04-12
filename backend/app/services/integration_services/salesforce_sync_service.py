@@ -11,10 +11,10 @@ Mapping strategy:
   Shift Call       → Salesforce Task  (with custom fields)
 """
 
-import logging
 from datetime import date, datetime
 from typing import Any, Optional
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,8 +22,6 @@ from app.models.integration import Integration
 from app.services.integration_services.salesforce_service import (
     SalesforceService,
 )
-
-logger = logging.getLogger(__name__)
 
 
 # ============================================================

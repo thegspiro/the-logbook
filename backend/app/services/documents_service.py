@@ -9,11 +9,11 @@ interface used by the documents API endpoint (using direct returns
 and HTTPException-style error handling rather than tuple returns).
 """
 
-import logging
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,8 +25,6 @@ from app.models.document import (
     FolderVisibility,
 )
 from app.models.user import User
-
-logger = logging.getLogger(__name__)
 
 # Permissions that grant leadership-level access to all folders
 LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}

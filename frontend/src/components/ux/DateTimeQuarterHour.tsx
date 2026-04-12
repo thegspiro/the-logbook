@@ -7,6 +7,7 @@
 
 import React, { useMemo } from 'react';
 import TimeQuarterHour from './TimeQuarterHour';
+import { getTodayLocalDate } from '../../utils/dateFormatting';
 
 interface DateTimeQuarterHourProps {
   /** datetime-local string, e.g. "2026-03-14T09:30" */
@@ -45,7 +46,7 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
   };
 
   const handleTimeChange = (newTime: string) => {
-    const date = datePart || (new Date().toISOString().split('T')[0] ?? '');
+    const date = datePart || getTodayLocalDate();
     onChange(`${date}T${newTime}`);
   };
 

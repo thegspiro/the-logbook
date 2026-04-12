@@ -7,6 +7,7 @@ with type validation and defaults.
 
 from functools import lru_cache
 
+from loguru import logger
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -378,9 +379,7 @@ class Settings(BaseSettings):
         else:
             origins = v
         if "*" in origins:
-            import logging
-
-            logging.warning(
+            logger.warning(
                 "SECURITY WARNING: ALLOWED_ORIGINS contains wildcard '*'. "
                 "This allows any origin to make credentialed requests."
             )

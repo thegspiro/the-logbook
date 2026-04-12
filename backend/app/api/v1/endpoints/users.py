@@ -52,10 +52,6 @@ from app.core.utils import safe_error_detail
 from app.services.organization_service import OrganizationService
 from app.services.user_service import UserService
 
-# NOTE: Authentication is now implemented
-# from app.api.dependencies import get_current_active_user, get_user_organization
-# from app.models.user import Organization
-
 
 router = APIRouter()
 
@@ -334,8 +330,6 @@ async def create_member(
 
     # Send welcome email with temporary password via background task
     if user_data.send_welcome_email:
-        from loguru import logger
-
         from app.models.user import Organization as OrgModel
         from app.services.email_service import EmailService
 

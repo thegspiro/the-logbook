@@ -641,6 +641,244 @@ async def download_import_template(
     )
 
 
+# ---------------------------------------------------------------------------
+# CSV import helpers
+# ---------------------------------------------------------------------------
+
+_CSV_COLUMN_TO_FIELD = {
+    "name": "name",
+    "description": "description",
+    "serial number": "serial_number",
+    "serial_number": "serial_number",
+    "serialnumber": "serial_number",
+    "asset tag": "asset_tag",
+    "asset_tag": "asset_tag",
+    "assettag": "asset_tag",
+    "status": "status",
+    "condition": "condition",
+    "tracking type": "tracking_type",
+    "tracking_type": "tracking_type",
+    "trackingtype": "tracking_type",
+    "quantity": "quantity",
+    "manufacturer": "manufacturer",
+    "model number": "model_number",
+    "model_number": "model_number",
+    "modelnumber": "model_number",
+    "purchase date": "purchase_date",
+    "purchase_date": "purchase_date",
+    "purchasedate": "purchase_date",
+    "purchase price": "purchase_price",
+    "purchase_price": "purchase_price",
+    "purchaseprice": "purchase_price",
+    "purchase order": "purchase_order",
+    "purchase_order": "purchase_order",
+    "purchaseorder": "purchase_order",
+    "vendor": "vendor",
+    "warranty expiration": "warranty_expiration",
+    "warranty_expiration": "warranty_expiration",
+    "warrantyexpiration": "warranty_expiration",
+    "storage location": "storage_location",
+    "storage_location": "storage_location",
+    "storagelocation": "storage_location",
+    "station": "station",
+    "size": "size",
+    "color": "color",
+    "notes": "notes",
+    "item type": "item_type",
+    "item_type": "item_type",
+    "itemtype": "item_type",
+    "type": "item_type",
+}
+
+_VALID_STATUSES = {
+    "available",
+    "assigned",
+    "checked_out",
+    "in_maintenance",
+    "lost",
+    "stolen",
+    "retired",
+}
+_VALID_CONDITIONS = {
+    "excellent",
+    "good",
+    "fair",
+    "poor",
+    "damaged",
+    "out_of_service",
+    "retired",
+}
+_VALID_TRACKING = {"individual", "pool"}
+_VALID_ITEM_TYPES = {
+    "uniform",
+    "ppe",
+    "tool",
+    "equipment",
+    "vehicle",
+    "electronics",
+    "consumable",
+    "other",
+}
+
+
+def _validate_csv_headers(
+    fieldnames: list[str],
+) -> tuple[Dict[str, str], Optional[str]]:
+    """Normalize CSV headers and locate the required 'Name' column.
+
+    Returns ``(header_map, name_col)`` where *header_map* maps raw column
+    names to their lowercased/stripped form and *name_col* is the raw column
+    name that maps to ``"name"``, or ``None`` if it is missing.
+    """
+    header_map: Dict[str, str] = {}
+    name_col: Optional[str] = None
+    for raw_name in fieldnames:
+        normalized = raw_name.strip().lower()
+        header_map[raw_name] = normalized
+        if normalized == "name" and name_col is None:
+            name_col = raw_name
+    return header_map, name_col
+
+
+def _resolve_category(
+    name: Optional[str], cat_by_name: Dict[str, str]
+) -> Optional[str]:
+    """Return the category ID for *name* (case-insensitive), or ``None``."""
+    if not name:
+        return None
+    return cat_by_name.get(name.strip().lower())
+
+
+def _coerce_csv_row(
+    row: Dict[str, Any],
+    row_num: int,
+) -> tuple[Dict[str, Any], Optional[str], list[Dict[str, Any]], bool]:
+    """Convert a raw CSV row dict into typed item fields.
+
+    Returns ``(item_data, category_name_raw, row_errors, fatal)`` where
+    *fatal* is ``True`` when a validation error means the row should be
+    skipped entirely (mirrors the original ``break`` behaviour).
+    """
+    item_data: Dict[str, Any] = {}
+    category_name_raw: Optional[str] = None
+    row_errors: list[Dict[str, Any]] = []
+    fatal = False
+
+    for raw_col, value in row.items():
+        if not value or not value.strip():
+            continue
+        value = value.strip()
+        normalized = raw_col.strip().lower()
+
+        if normalized in ("category", "category_name", "categoryname"):
+            category_name_raw = value
+            continue
+
+        field = _CSV_COLUMN_TO_FIELD.get(normalized)
+        if not field:
+            continue
+
+        if field == "quantity":
+            try:
+                item_data[field] = int(value)
+            except ValueError:
+                row_errors.append(
+                    {
+                        "row": row_num,
+                        "error": f"Invalid quantity value: '{value}'",
+                    }
+                )
+            continue
+
+        if field == "purchase_price":
+            try:
+                item_data[field] = float(
+                    value.replace("$", "").replace(",", "")
+                )
+            except ValueError:
+                row_errors.append(
+                    {
+                        "row": row_num,
+                        "error": f"Invalid purchase price: '{value}'",
+                    }
+                )
+            continue
+
+        if field == "status":
+            val = value.lower().replace(" ", "_")
+            if val not in _VALID_STATUSES:
+                row_errors.append(
+                    {
+                        "row": row_num,
+                        "error": (
+                            f"Invalid status: '{value}'. Must be one of: "
+                            f"{', '.join(sorted(_VALID_STATUSES))}"
+                        ),
+                    }
+                )
+                fatal = True
+                break
+            item_data[field] = val
+            continue
+
+        if field == "condition":
+            val = value.lower().replace(" ", "_")
+            if val not in _VALID_CONDITIONS:
+                row_errors.append(
+                    {
+                        "row": row_num,
+                        "error": (
+                            f"Invalid condition: '{value}'. "
+                            f"Must be one of: "
+                            f"{', '.join(sorted(_VALID_CONDITIONS))}"
+                        ),
+                    }
+                )
+                fatal = True
+                break
+            item_data[field] = val
+            continue
+
+        if field == "tracking_type":
+            val = value.lower()
+            if val not in _VALID_TRACKING:
+                row_errors.append(
+                    {
+                        "row": row_num,
+                        "error": (
+                            f"Invalid tracking type: '{value}'. "
+                            f"Must be 'individual' or 'pool'"
+                        ),
+                    }
+                )
+                fatal = True
+                break
+            item_data[field] = val
+            continue
+
+        if field == "item_type":
+            val = value.lower().replace(" ", "_")
+            if val not in _VALID_ITEM_TYPES:
+                row_errors.append(
+                    {
+                        "row": row_num,
+                        "error": (
+                            f"Invalid item type: '{value}'. "
+                            f"Must be one of: "
+                            f"{', '.join(sorted(_VALID_ITEM_TYPES))}"
+                        ),
+                    }
+                )
+                fatal = True
+                break
+            # item_type lives on the category, not the item
+            continue
+
+        item_data[field] = value
+
+    return item_data, category_name_raw, row_errors, fatal
+
+
 @router.post("/items/import")
 async def import_items_csv(
     file: UploadFile = FastAPIFile(...),
@@ -665,7 +903,6 @@ async def import_items_csv(
             detail="Invalid file type. Please upload a CSV file.",
         )
 
-    # Read and decode file
     try:
         raw = await file.read()
         try:
@@ -685,107 +922,19 @@ async def import_items_csv(
             detail="CSV file is empty or has no header row.",
         )
 
-    # Normalize headers: lowercase + strip
-    header_map: Dict[str, str] = {}
-    for raw_name in reader.fieldnames:
-        header_map[raw_name] = raw_name.strip().lower()
-
-    # Check required 'name' column exists
-    name_col = None
-    for raw_name, normalized in header_map.items():
-        if normalized == "name":
-            name_col = raw_name
-            break
-
+    header_map, name_col = _validate_csv_headers(list(reader.fieldnames))
     if not name_col:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="CSV must contain a 'Name' column.",
         )
 
-    # Pre-load categories for name matching
     service = InventoryService(db)
     categories = await service.get_categories(
         organization_id=current_user.organization_id, active_only=True
     )
-    cat_by_name: Dict[str, str] = {}
-    for cat in categories:
-        cat_by_name[cat.name.strip().lower()] = str(cat.id)
-
-    # Map normalized column names to item fields
-    COLUMN_TO_FIELD = {
-        "name": "name",
-        "description": "description",
-        "serial number": "serial_number",
-        "serial_number": "serial_number",
-        "serialnumber": "serial_number",
-        "asset tag": "asset_tag",
-        "asset_tag": "asset_tag",
-        "assettag": "asset_tag",
-        "status": "status",
-        "condition": "condition",
-        "tracking type": "tracking_type",
-        "tracking_type": "tracking_type",
-        "trackingtype": "tracking_type",
-        "quantity": "quantity",
-        "manufacturer": "manufacturer",
-        "model number": "model_number",
-        "model_number": "model_number",
-        "modelnumber": "model_number",
-        "purchase date": "purchase_date",
-        "purchase_date": "purchase_date",
-        "purchasedate": "purchase_date",
-        "purchase price": "purchase_price",
-        "purchase_price": "purchase_price",
-        "purchaseprice": "purchase_price",
-        "purchase order": "purchase_order",
-        "purchase_order": "purchase_order",
-        "purchaseorder": "purchase_order",
-        "vendor": "vendor",
-        "warranty expiration": "warranty_expiration",
-        "warranty_expiration": "warranty_expiration",
-        "warrantyexpiration": "warranty_expiration",
-        "storage location": "storage_location",
-        "storage_location": "storage_location",
-        "storagelocation": "storage_location",
-        "station": "station",
-        "size": "size",
-        "color": "color",
-        "notes": "notes",
-        "item type": "item_type",
-        "item_type": "item_type",
-        "itemtype": "item_type",
-        "type": "item_type",
-    }
-
-    VALID_STATUSES = {
-        "available",
-        "assigned",
-        "checked_out",
-        "in_maintenance",
-        "lost",
-        "stolen",
-        "retired",
-    }
-    VALID_CONDITIONS = {
-        "excellent",
-        "good",
-        "fair",
-        "poor",
-        "damaged",
-        "out_of_service",
-        "retired",
-    }
-    VALID_TRACKING = {"individual", "pool"}
-    VALID_ITEM_TYPES = {
-        "uniform",
-        "ppe",
-        "tool",
-        "equipment",
-        "vehicle",
-        "electronics",
-        "consumable",
-        "other",
+    cat_by_name: Dict[str, str] = {
+        cat.name.strip().lower(): str(cat.id) for cat in categories
     }
 
     imported = 0
@@ -800,144 +949,44 @@ async def import_items_csv(
             detail="CSV file contains no data rows.",
         )
 
-    for row_num, row in enumerate(rows, start=2):  # Row 1 is header
-        # Build item data from CSV columns
-        item_data: Dict[str, Any] = {}
-        category_name_raw: Optional[str] = None
+    for row_num, row in enumerate(rows, start=2):
+        item_data, category_name_raw, row_errors, fatal = _coerce_csv_row(
+            row, row_num
+        )
+        errors.extend(row_errors)
 
-        for raw_col, value in row.items():
-            if not value or not value.strip():
-                continue
-            value = value.strip()
-            normalized = raw_col.strip().lower()
-
-            # Handle category column separately
-            if normalized in ("category", "category_name", "categoryname"):
-                category_name_raw = value
-                continue
-
-            field = COLUMN_TO_FIELD.get(normalized)
-            if not field:
-                continue
-
-            # Type conversions
-            if field == "quantity":
-                try:
-                    item_data[field] = int(value)
-                except ValueError:
-                    errors.append(
-                        {
-                            "row": row_num,
-                            "error": f"Invalid quantity value: '{value}'",
-                        }
-                    )
-                    continue
-            elif field == "purchase_price":
-                try:
-                    item_data[field] = float(value.replace("$", "").replace(",", ""))
-                except ValueError:
-                    errors.append(
-                        {
-                            "row": row_num,
-                            "error": f"Invalid purchase price: '{value}'",
-                        }
-                    )
-                    continue
-            elif field == "status":
-                val = value.lower().replace(" ", "_")
-                if val not in VALID_STATUSES:
-                    errors.append(
-                        {
-                            "row": row_num,
-                            "error": f"Invalid status: '{value}'. Must be one of: {', '.join(sorted(VALID_STATUSES))}",
-                        }
-                    )
-                    failed += 1
-                    break
-                item_data[field] = val
-            elif field == "condition":
-                val = value.lower().replace(" ", "_")
-                if val not in VALID_CONDITIONS:
-                    errors.append(
-                        {
-                            "row": row_num,
-                            "error": (
-                                f"Invalid condition: '{value}'. "
-                                f"Must be one of: {', '.join(sorted(VALID_CONDITIONS))}"
-                            ),
-                        }
-                    )
-                    failed += 1
-                    break
-                item_data[field] = val
-            elif field == "tracking_type":
-                val = value.lower()
-                if val not in VALID_TRACKING:
-                    errors.append(
-                        {
-                            "row": row_num,
-                            "error": f"Invalid tracking type: '{value}'. Must be 'individual' or 'pool'",
-                        }
-                    )
-                    failed += 1
-                    break
-                item_data[field] = val
-            elif field == "item_type":
-                val = value.lower().replace(" ", "_")
-                if val not in VALID_ITEM_TYPES:
-                    errors.append(
-                        {
-                            "row": row_num,
-                            "error": (
-                                f"Invalid item type: '{value}'. "
-                                f"Must be one of: {', '.join(sorted(VALID_ITEM_TYPES))}"
-                            ),
-                        }
-                    )
-                    failed += 1
-                    break
-                # item_type lives on the category, not the item — store for possible category creation
-                continue
-            else:
-                item_data[field] = value
-        else:
-            # Only reach here if loop completed without break (no fatal field error)
-            # Require name
-            if not item_data.get("name"):
-                errors.append(
-                    {"row": row_num, "error": "Missing required 'Name' column value"}
-                )
-                failed += 1
-                continue
-
-            # Match category by name
-            if category_name_raw:
-                cat_id = cat_by_name.get(category_name_raw.strip().lower())
-                if cat_id:
-                    item_data["category_id"] = cat_id
-                else:
-                    warnings.append(
-                        f"Row {row_num}: Category '{category_name_raw}' not found — item imported without category"
-                    )
-
-            # Create item (barcode auto-generated by service)
-            item_data.pop("barcode", None)
-            new_item, error = await service.create_item(
-                organization_id=current_user.organization_id,
-                item_data=item_data,
-                created_by=current_user.id,
-            )
-
-            if error:
-                errors.append({"row": row_num, "error": error})
-                failed += 1
-            else:
-                imported += 1
+        if fatal:
+            failed += 1
             continue
 
-        # If we broke out of the inner loop (fatal field error), the row already
-        # got an error entry above — just continue to the next row.
-        continue
+        if not item_data.get("name"):
+            errors.append(
+                {"row": row_num, "error": "Missing required 'Name' column value"}
+            )
+            failed += 1
+            continue
+
+        cat_id = _resolve_category(category_name_raw, cat_by_name)
+        if category_name_raw and not cat_id:
+            warnings.append(
+                f"Row {row_num}: Category '{category_name_raw}' "
+                f"not found — item imported without category"
+            )
+        if cat_id:
+            item_data["category_id"] = cat_id
+
+        item_data.pop("barcode", None)
+        new_item, error = await service.create_item(
+            organization_id=current_user.organization_id,
+            item_data=item_data,
+            created_by=current_user.id,
+        )
+
+        if error:
+            errors.append({"row": row_num, "error": error})
+            failed += 1
+        else:
+            imported += 1
 
     if imported > 0:
         await log_audit_event(
@@ -963,7 +1012,7 @@ async def import_items_csv(
         "imported": imported,
         "failed": failed,
         "total_rows": len(rows),
-        "errors": errors[:50],  # Cap error list to prevent huge responses
+        "errors": errors[:50],
         "warnings": warnings[:50],
     }
 
@@ -1583,8 +1632,6 @@ async def extend_checkout(
 
     **Authentication required**
     """
-    from sqlalchemy import select
-
     result = await db.execute(
         select(CheckOutRecord).where(
             CheckOutRecord.id == str(checkout_id),
@@ -1639,6 +1686,33 @@ async def extend_checkout(
     }
 
 
+def _build_checkout_response(record: CheckOutRecord) -> dict:
+    """Build the standard dict response for a CheckOutRecord."""
+    return {
+        "checkout_id": record.id,
+        "item_id": record.item_id,
+        "item_name": record.item.name if record.item else "Unknown",
+        "user_id": record.user_id,
+        "user_name": (
+            f"{record.user.first_name} {record.user.last_name}".strip()
+            if record.user
+            else "Unknown"
+        ),
+        "checked_out_at": (
+            record.checked_out_at.isoformat()
+            if record.checked_out_at
+            else None
+        ),
+        "expected_return_at": (
+            record.expected_return_at.isoformat()
+            if record.expected_return_at
+            else None
+        ),
+        "is_overdue": record.is_overdue,
+        "checkout_reason": record.checkout_reason,
+    }
+
+
 @router.get("/checkout/active")
 async def get_active_checkouts(
     user_id: UUID | None = None,
@@ -1661,28 +1735,7 @@ async def get_active_checkouts(
         limit=limit,
     )
     return {
-        "checkouts": [
-            {
-                "checkout_id": c.id,
-                "item_id": c.item_id,
-                "item_name": c.item.name if c.item else "Unknown",
-                "user_id": c.user_id,
-                "user_name": (
-                    f"{c.user.first_name} {c.user.last_name}".strip()
-                    if c.user
-                    else "Unknown"
-                ),
-                "checked_out_at": (
-                    c.checked_out_at.isoformat() if c.checked_out_at else None
-                ),
-                "expected_return_at": (
-                    c.expected_return_at.isoformat() if c.expected_return_at else None
-                ),
-                "is_overdue": c.is_overdue,
-                "checkout_reason": c.checkout_reason,
-            }
-            for c in checkouts
-        ],
+        "checkouts": [_build_checkout_response(c) for c in checkouts],
         "total": len(checkouts),
         "skip": skip,
         "limit": limit,
@@ -1709,28 +1762,7 @@ async def get_overdue_checkouts(
         limit=limit,
     )
     return {
-        "checkouts": [
-            {
-                "checkout_id": c.id,
-                "item_id": c.item_id,
-                "item_name": c.item.name if c.item else "Unknown",
-                "user_id": c.user_id,
-                "user_name": (
-                    f"{c.user.first_name} {c.user.last_name}".strip()
-                    if c.user
-                    else "Unknown"
-                ),
-                "checked_out_at": (
-                    c.checked_out_at.isoformat() if c.checked_out_at else None
-                ),
-                "expected_return_at": (
-                    c.expected_return_at.isoformat() if c.expected_return_at else None
-                ),
-                "is_overdue": c.is_overdue,
-                "checkout_reason": c.checkout_reason,
-            }
-            for c in checkouts
-        ],
+        "checkouts": [_build_checkout_response(c) for c in checkouts],
         "total": len(checkouts),
         "skip": skip,
         "limit": limit,
@@ -2659,7 +2691,6 @@ async def list_equipment_requests(
 
     Members see their own requests. Admins with inventory.manage see all org requests.
     """
-    from sqlalchemy import select
     from sqlalchemy.orm import selectinload
 
     query = (
@@ -2740,8 +2771,6 @@ async def review_equipment_request(
 
     **Requires permission: inventory.manage**
     """
-    from sqlalchemy import select
-
     result = await db.execute(
         select(EquipmentRequest).where(
             EquipmentRequest.id == str(request_id),
@@ -2792,6 +2821,40 @@ async def review_equipment_request(
     }
 
 
+def _build_storage_area_response(
+    area: StorageArea,
+    item_count: int = 0,
+    children: list | None = None,
+    location_name: str | None = None,
+    parent_name: str | None = None,
+) -> dict:
+    """Build the standard dict response for a StorageArea."""
+    return {
+        "id": area.id,
+        "organization_id": area.organization_id,
+        "name": area.name,
+        "label": area.label,
+        "description": area.description,
+        "storage_type": (
+            area.storage_type.value
+            if hasattr(area.storage_type, "value")
+            else area.storage_type
+        ),
+        "parent_id": area.parent_id,
+        "location_id": area.location_id,
+        "barcode": area.barcode,
+        "sort_order": area.sort_order or 0,
+        "is_active": area.is_active,
+        "created_at": area.created_at,
+        "updated_at": area.updated_at,
+        "created_by": area.created_by,
+        "children": children if children is not None else [],
+        "item_count": item_count,
+        "location_name": location_name,
+        "parent_name": parent_name,
+    }
+
+
 # ============================================
 # Storage Area Endpoints
 # ============================================
@@ -2810,7 +2873,6 @@ async def list_storage_areas(
     Returns a hierarchical tree by default, or flat list if flat=true.
     """
     from sqlalchemy import func as sqlfunc
-    from sqlalchemy import select
 
     query = (
         select(StorageArea)
@@ -2852,33 +2914,13 @@ async def list_storage_areas(
     loc_names = {row.id: row.name for row in loc_result.all()}
 
     def build_response(area: StorageArea) -> dict:
-        resp = {
-            "id": area.id,
-            "organization_id": area.organization_id,
-            "name": area.name,
-            "label": area.label,
-            "description": area.description,
-            "storage_type": (
-                area.storage_type.value
-                if hasattr(area.storage_type, "value")
-                else area.storage_type
-            ),
-            "parent_id": area.parent_id,
-            "location_id": area.location_id,
-            "barcode": area.barcode,
-            "sort_order": area.sort_order or 0,
-            "is_active": area.is_active,
-            "created_at": area.created_at,
-            "updated_at": area.updated_at,
-            "created_by": area.created_by,
-            "children": [],
-            "item_count": item_counts.get(area.id, 0),
-            "location_name": (
+        return _build_storage_area_response(
+            area,
+            item_count=item_counts.get(area.id, 0),
+            location_name=(
                 loc_names.get(area.location_id) if area.location_id else None
             ),
-            "parent_name": None,
-        }
-        return resp
+        )
 
     if flat:
         return [build_response(a) for a in areas]
@@ -2948,30 +2990,7 @@ async def create_storage_area(
         username=current_user.username,
     )
 
-    return {
-        "id": area.id,
-        "organization_id": area.organization_id,
-        "name": area.name,
-        "label": area.label,
-        "description": area.description,
-        "storage_type": (
-            area.storage_type.value
-            if hasattr(area.storage_type, "value")
-            else area.storage_type
-        ),
-        "parent_id": area.parent_id,
-        "location_id": area.location_id,
-        "barcode": area.barcode,
-        "sort_order": area.sort_order or 0,
-        "is_active": area.is_active,
-        "created_at": area.created_at,
-        "updated_at": area.updated_at,
-        "created_by": area.created_by,
-        "children": [],
-        "item_count": 0,
-        "location_name": None,
-        "parent_name": None,
-    }
+    return _build_storage_area_response(area)
 
 
 @router.put("/storage-areas/{area_id}", response_model=StorageAreaResponse)
@@ -2982,8 +3001,6 @@ async def update_storage_area(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Update a storage area"""
-    from sqlalchemy import select
-
     result = await db.execute(
         select(StorageArea)
         .where(StorageArea.id == str(area_id))
@@ -3028,30 +3045,7 @@ async def update_storage_area(
         username=current_user.username,
     )
 
-    return {
-        "id": area.id,
-        "organization_id": area.organization_id,
-        "name": area.name,
-        "label": area.label,
-        "description": area.description,
-        "storage_type": (
-            area.storage_type.value
-            if hasattr(area.storage_type, "value")
-            else area.storage_type
-        ),
-        "parent_id": area.parent_id,
-        "location_id": area.location_id,
-        "barcode": area.barcode,
-        "sort_order": area.sort_order or 0,
-        "is_active": area.is_active,
-        "created_at": area.created_at,
-        "updated_at": area.updated_at,
-        "created_by": area.created_by,
-        "children": [],
-        "item_count": 0,
-        "location_name": None,
-        "parent_name": None,
-    }
+    return _build_storage_area_response(area)
 
 
 @router.delete("/storage-areas/{area_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -3061,8 +3055,6 @@ async def delete_storage_area(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Delete (deactivate) a storage area"""
-    from sqlalchemy import select
-
     result = await db.execute(
         select(StorageArea)
         .where(StorageArea.id == str(area_id))
@@ -3662,14 +3654,12 @@ async def inventory_websocket(
             return
 
         # Verify user is still active (not revoked/deactivated)
-        from sqlalchemy import select as sa_select
-
         from app.core.database import async_session_factory
         from app.models.user import User as UserModel
 
         async with async_session_factory() as db:
             result = await db.execute(
-                sa_select(UserModel).where(
+                select(UserModel).where(
                     UserModel.id == user_id,
                     UserModel.organization_id == org_id,
                     UserModel.is_active.is_(True),

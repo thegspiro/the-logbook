@@ -7,10 +7,9 @@ for submission to state fire marshal offices.
 
 import csv
 import io
-import logging
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # NFIRS 5.0 Basic Module fields (subset — most commonly required)
 NFIRS_BASIC_FIELDS = [

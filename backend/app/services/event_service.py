@@ -7,13 +7,13 @@ Business logic for event management.
 import calendar
 import csv
 import io
-import logging
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from loguru import logger
 from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -41,8 +41,6 @@ from app.schemas.event import (
 from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
-
-logger = logging.getLogger(__name__)
 
 
 class EventService:
@@ -2415,8 +2413,6 @@ class EventService:
         Returns:
             Tuple of (list of user IDs to remind, error message or None).
         """
-        from loguru import logger as _logger
-
         # Verify the event exists and belongs to the organization
         result = await self.db.execute(
             select(Event).where(
@@ -2441,7 +2437,7 @@ class EventService:
         all_member_ids = [str(row[0]) for row in members_result.all()]
 
         if reminder_type == "all":
-            _logger.info(
+            logger.info(
                 "Sending reminders to all {} members for event {}",
                 len(all_member_ids),
                 event_id,
@@ -2456,7 +2452,7 @@ class EventService:
 
         non_respondents = [uid for uid in all_member_ids if uid not in rsvp_user_ids]
 
-        _logger.info(
+        logger.info(
             "Sending reminders to {} non-respondents (out of {} total) " "for event {}",
             len(non_respondents),
             len(all_member_ids),
@@ -2682,8 +2678,6 @@ class EventService:
         Raises:
             ValueError: If the event is not found or is cancelled.
         """
-        from loguru import logger as _logger
-
         # Verify the event exists and belongs to the organization
         result = await self.db.execute(
             select(Event).where(
@@ -2757,7 +2751,7 @@ class EventService:
         }
         label = type_labels.get(notification_type, notification_type)
 
-        _logger.info(
+        logger.info(
             "Event notification: type={}, target={}, event={}, "
             "recipients={}, custom_message={}",
             notification_type,
@@ -2816,7 +2810,7 @@ class EventService:
             if entry:
                 delivered_count += 1
             else:
-                _logger.warning(
+                logger.warning(
                     "Failed to deliver notification to user {}: {}",
                     uid,
                     error,

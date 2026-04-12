@@ -116,7 +116,7 @@ async def acknowledge_alert(
     alert_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("audit.view")),
+    current_user: User = Depends(require_permission("audit.export")),
 ):
     """
     Acknowledge a security alert
@@ -152,7 +152,7 @@ async def resolve_alert(
     alert_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("audit.view")),
+    current_user: User = Depends(require_permission("audit.export")),
 ):
     """
     Mark a security alert as resolved

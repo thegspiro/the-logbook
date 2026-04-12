@@ -8,12 +8,11 @@ Requires: google-api-python-client, google-auth, google-auth-oauthlib
 (already in requirements.txt).
 """
 
-import logging
 from typing import Any
 
-from app.services.integration_services.calendar_interface import CalendarSyncInterface
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from app.services.integration_services.calendar_interface import CalendarSyncInterface
 
 
 def _build_service(credentials_json: dict[str, Any]) -> Any:

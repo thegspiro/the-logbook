@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Tuple
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -567,9 +568,7 @@ class TrainingSessionService:
 
         except Exception as e:
             # Log error but don't fail the finalization
-            import logging
-
-            logging.error(f"Failed to send training officer notification: {e}")
+            logger.error(f"Failed to send training officer notification: {e}")
 
     async def get_training_approval_by_token(
         self,
@@ -849,8 +848,6 @@ class TrainingSessionService:
         a program is finalized. Finds the active enrollment and matching
         requirement progress record, then increments the progress value.
         """
-        from loguru import logger
-
         try:
             # Find the member's active enrollment in this program
             enrollment_result = await self.db.execute(

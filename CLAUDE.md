@@ -19,7 +19,7 @@ discover it, you own it.
 Fixing an error means resolving its root cause. The following are **not** fixes:
 
 - Adding `// @ts-ignore`, `// eslint-disable`, or `# noqa` to silence a
-  violation (see the flake8 rule in §10 for the narrow `# noqa: F401` exception)
+  violation (see Pitfall #10 "Python Lint Violations" for the narrow `# noqa: F401` exception)
 - Casting to `any` or `unknown` to suppress a type error
 - Wrapping a broken call in a try/catch to hide a runtime failure
 - Deleting a test that is failing
@@ -40,6 +40,7 @@ A task is not complete if any of the following are true after your changes:
 - `flake8` reports violations in any modified Python file
 - `npm run lint` exits non-zero
 - Any existing test is newly failing
+
 ## Code Comments & Documentation
 
 Comments exist to explain **why**, not **what**. Experienced developers can read
@@ -62,7 +63,6 @@ Write a comment when the code alone cannot communicate:
   silently break it
 - **Intentional departures from convention** — if code deliberately does
   something that looks wrong but is correct for a specific reason, say so
-```python
 
 ## Pre-Commit Verification Checklist
 

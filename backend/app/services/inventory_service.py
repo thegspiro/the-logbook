@@ -5,13 +5,13 @@ Business logic for inventory management including items, categories,
 assignments, checkouts, maintenance, and reporting.
 """
 
-import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -45,8 +45,6 @@ from app.models.inventory import (
 from app.models.user import User
 from app.core.audit import log_audit_event
 from app.core.utils import generate_uuid as _gen
-
-logger = logging.getLogger(__name__)
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -158,8 +156,6 @@ class InventoryService:
             )
         except Exception as e:
             # Notification queue failure must not break the primary operation
-            from loguru import logger
-
             logger.warning(f"Failed to queue inventory notification: {e}")
 
     # ------------------------------------------------------------------

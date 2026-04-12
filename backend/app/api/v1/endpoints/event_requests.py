@@ -11,10 +11,12 @@ checklist tasks via settings and work them in whatever order suits
 their workflow.
 """
 
+import copy
 import html as _html
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -164,9 +166,7 @@ async def _send_request_notification(
                         template, context, organization=org
                     )
             except Exception as tmpl_err:
-                import logging
-
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     f"Failed to load event_request_status template, using default: {tmpl_err}"
                 )
 
@@ -1100,7 +1100,7 @@ async def update_task_completion(
             ),
         )
 
-    completions = dict(event_request.task_completions or {})
+    completions = copy.deepcopy(event_request.task_completions or {})
 
     if update.completed:
         completions[update.task_id] = {

@@ -44,6 +44,13 @@ class ElectionService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    @staticmethod
+    def _ensure_utc(dt: datetime | None) -> datetime | None:
+        """Stamp naive datetimes with UTC tzinfo."""
+        if dt is not None and dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+
     # ------------------------------------------------------------------
     # Audit helpers
     # ------------------------------------------------------------------
@@ -612,16 +619,8 @@ class ElectionService:
 
         # Check if election is open
         now = datetime.now(timezone.utc)
-        start = (
-            election.start_date.replace(tzinfo=timezone.utc)
-            if election.start_date and election.start_date.tzinfo is None
-            else election.start_date
-        )
-        end = (
-            election.end_date.replace(tzinfo=timezone.utc)
-            if election.end_date and election.end_date.tzinfo is None
-            else election.end_date
-        )
+        start = self._ensure_utc(election.start_date)
+        end = self._ensure_utc(election.end_date)
         if election.status != ElectionStatus.OPEN:
             return VoterEligibility(
                 is_eligible=False,
@@ -1504,11 +1503,7 @@ class ElectionService:
         # SECURITY: Check if results can be viewed
         # Results are ONLY visible after the election closing time has passed
         current_time = datetime.now(timezone.utc)
-        end_date = (
-            election.end_date.replace(tzinfo=timezone.utc)
-            if election.end_date and election.end_date.tzinfo is None
-            else election.end_date
-        )
+        end_date = self._ensure_utc(election.end_date)
         election_has_closed = end_date is not None and current_time > end_date
 
         can_view = (
@@ -2425,6 +2420,210 @@ class ElectionService:
 
         return election, notifications_sent, None
 
+    async def _notify_leadership(
+        self,
+        election: Election,
+        performed_by: UUID,
+        organization_id: UUID,
+        reason: str,
+        *,
+        subject_prefix: str,
+        header_color: str,
+        header_title: str,
+        badge_text: str,
+        badge_css_class: str,
+        detail_items_html: str,
+        detail_items_text: str,
+        reason_label: str,
+        html_preamble: str,
+        text_preamble: str,
+        html_postamble: str,
+        text_postamble: str,
+        footer_text: str,
+        extra_styles: str = "",
+        skip_performer: bool = False,
+        log_label: str = "notification",
+    ) -> int:
+        """
+        Shared helper that sends a templated leadership email notification.
+
+        Callers supply the pieces that differ between rollback and deletion
+        alerts; the boilerplate (DB lookups, HTML skeleton, send loop) lives
+        here once.
+
+        Returns: Number of notifications sent
+        """
+        from app.services.email_service import (
+            EmailService,
+            build_email_logo_html,
+        )
+
+        leadership_roles = LEADERSHIP_ROLE_SLUGS
+
+        users_result = await self.db.execute(
+            select(User)
+            .join(User.roles)
+            .where(User.organization_id == str(organization_id))
+            .where(User.is_active == True)  # noqa: E712
+            .options(selectinload(User.roles))
+        )
+        all_users = users_result.scalars().all()
+
+        leadership_users = [
+            user
+            for user in all_users
+            if any(role.slug in leadership_roles for role in user.roles)
+        ]
+
+        if not leadership_users:
+            return 0
+
+        performer_result = await self.db.execute(
+            select(User).where(User.id == str(performed_by))
+        )
+        performer = performer_result.scalar_one_or_none()
+        performer_name = performer.full_name if performer else "Unknown"
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        organization = org_result.scalar_one_or_none()
+
+        if not organization:
+            return 0
+
+        email_service = EmailService(organization)
+
+        safe_title = html.escape(election.title)
+        safe_performer = html.escape(performer_name)
+        safe_reason = html.escape(reason)
+        safe_org_name = html.escape(organization.name)
+
+        org_tz = getattr(organization, "timezone", None) or "America/New_York"
+        formatted_time = (
+            datetime.now(timezone.utc)
+            .astimezone(ZoneInfo(org_tz))
+            .strftime("%B %d, %Y at %I:%M %p")
+        )
+
+        logo_html = build_email_logo_html(organization)
+
+        # Render detail list items with common variables
+        rendered_detail_html = detail_items_html.format(
+            safe_title=safe_title,
+            safe_performer=safe_performer,
+            formatted_time=formatted_time,
+        )
+        rendered_detail_text = detail_items_text.format(
+            title=election.title,
+            performer_name=performer_name,
+            formatted_time=formatted_time,
+        )
+
+        details_border = header_color
+
+        sent_count = 0
+        for user in leadership_users:
+            if skip_performer and str(user.id) == str(performed_by):
+                continue
+
+            safe_first_name = html.escape(user.first_name)
+
+            subject = f"{subject_prefix}{election.title}"
+
+            html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background-color: {header_color}; color: white; padding: 20px; text-align: center; }}
+        .{badge_css_class} {{ background-color: #fef2f2; color: #991b1b; padding: 8px 16px; border-radius: 4px; display: inline-block; margin: 10px 0; font-weight: bold; }}
+        .content {{ padding: 20px; background-color: #f9fafb; }}
+        .details {{ background-color: white; padding: 15px; border-left: 4px solid {details_border}; margin: 15px 0; }}
+        .reason {{ background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 15px 0; }}
+        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}{extra_styles}
+    </style>
+</head>
+<body>
+    <div class="container">
+        {logo_html}
+        <div class="header">
+            <h1>{header_title}</h1>
+            <div class="{badge_css_class}">{badge_text}</div>
+        </div>
+        <div class="content">
+            <p>Dear {safe_first_name},</p>
+
+            {html_preamble}
+
+            <div class="details">
+                <h3>Election Details:</h3>
+                <ul>
+                    {rendered_detail_html}
+                </ul>
+            </div>
+
+            <div class="reason">
+                <h3>{reason_label}:</h3>
+                <p>{safe_reason}</p>
+            </div>
+
+            {html_postamble.format(safe_performer=safe_performer)}
+
+            <p>Best regards,<br>{safe_org_name} Election System</p>
+        </div>
+        <div class="footer">
+            <p>{footer_text}</p>
+        </div>
+    </div>
+</body>
+</html>
+            """
+
+            text_body_preamble = text_preamble
+            text_body_postamble = text_postamble.format(
+                performer_name=performer_name,
+            )
+
+            text_body = f"""{subject_prefix}{election.title}
+
+Dear {user.first_name},
+
+{text_body_preamble}
+
+ELECTION DETAILS:
+{rendered_detail_text}
+
+{reason_label.upper()}:
+{reason}
+
+{text_body_postamble}
+
+Best regards,
+{organization.name} Election System
+            """
+
+            try:
+                success_count_user, failure_count_user = (
+                    await email_service.send_email(
+                        to_emails=[user.email],
+                        subject=subject,
+                        html_body=html_body,
+                        text_body=text_body,
+                    )
+                )
+                if success_count_user > 0:
+                    sent_count += 1
+            except Exception as e:
+                logger.error(
+                    f"Failed to send {log_label} to {user.email}: {e}"
+                )
+                continue
+
+        return sent_count
+
     async def _notify_leadership_of_rollback(
         self,
         election: Election,
@@ -2435,179 +2634,67 @@ class ElectionService:
         reason: str,
     ) -> int:
         """
-        Send email notifications to leadership about election rollback
+        Send email notifications to leadership about election rollback.
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import (
-            EmailService,
-            build_email_logo_html,
+        return await self._notify_leadership(
+            election=election,
+            performed_by=performed_by,
+            organization_id=organization_id,
+            reason=reason,
+            subject_prefix="ALERT: Election Rolled Back - ",
+            header_color="#dc2626",
+            header_title="\u26a0\ufe0f Election Rollback Alert",
+            badge_text="REQUIRES ATTENTION",
+            badge_css_class="alert-badge",
+            detail_items_html=(
+                "<li><strong>Title:</strong> {safe_title}</li>"
+                f"<li><strong>Status Changed:</strong> {from_status.upper()}"
+                f" \u2192 {to_status.upper()}</li>"
+                "<li><strong>Performed By:</strong> {safe_performer}</li>"
+                "<li><strong>Date/Time:</strong> {formatted_time}</li>"
+            ),
+            detail_items_text=(
+                "- Title: {title}\n"
+                f"- Status Changed: {from_status.upper()}"
+                f" \u2192 {to_status.upper()}\n"
+                "- Performed By: {performer_name}\n"
+                "- Date/Time: {formatted_time}"
+            ),
+            reason_label="Reason for Rollback",
+            html_preamble=(
+                "<p>This is an important notification regarding"
+                " an election rollback.</p>"
+            ),
+            text_preamble=(
+                "This is an important notification regarding"
+                " an election rollback."
+            ),
+            html_postamble=(
+                "<p>This rollback has been logged in the election's"
+                " audit trail. Please review the election details and"
+                " coordinate with your team as needed.</p>\n\n"
+                "            <p>If you have any questions or concerns"
+                " about this rollback, please contact {safe_performer}"
+                " or review the election at your earliest"
+                " convenience.</p>"
+            ),
+            text_postamble=(
+                "This rollback has been logged in the election's"
+                " audit trail. Please review the election details and"
+                " coordinate with your team as needed.\n\n"
+                "If you have any questions or concerns about this"
+                " rollback, please contact {performer_name} or review"
+                " the election at your earliest convenience."
+            ),
+            footer_text=(
+                "This is an automated notification from the election"
+                " management system."
+            ),
+            skip_performer=True,
+            log_label="rollback notification",
         )
-
-        # Get leadership users (Chief, President, Vice President, Secretary roles)
-        leadership_roles = LEADERSHIP_ROLE_SLUGS
-
-        users_result = await self.db.execute(
-            select(User)
-            .join(User.roles)
-            .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)  # noqa: E712
-            .options(selectinload(User.roles))
-        )
-        all_users = users_result.scalars().all()
-
-        # Filter to leadership users
-        leadership_users = [
-            user
-            for user in all_users
-            if any(role.slug in leadership_roles for role in user.roles)
-        ]
-
-        if not leadership_users:
-            return 0
-
-        # Get the user who performed the rollback
-        performer_result = await self.db.execute(
-            select(User).where(User.id == str(performed_by))
-        )
-        performer = performer_result.scalar_one_or_none()
-        performer_name = performer.full_name if performer else "Unknown"
-
-        # Get organization for email service
-        org_result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
-        )
-        organization = org_result.scalar_one_or_none()
-
-        if not organization:
-            return 0
-
-        # Initialize email service
-        email_service = EmailService(organization)
-
-        # HTML-escape user-supplied data to prevent injection in emails
-        safe_title = html.escape(election.title)
-        safe_performer = html.escape(performer_name)
-        safe_reason = html.escape(reason)
-        safe_org_name = html.escape(organization.name)
-
-        # Compute timestamp once for all recipients
-        org_tz = getattr(organization, "timezone", None) or "America/New_York"
-        formatted_time = (
-            datetime.now(timezone.utc)
-            .astimezone(ZoneInfo(org_tz))
-            .strftime("%B %d, %Y at %I:%M %p")
-        )
-
-        logo_html = build_email_logo_html(organization)
-
-        # Send notifications
-        sent_count = 0
-        for user in leadership_users:
-            # Don't notify the person who performed the rollback
-            if str(user.id) == str(performed_by):
-                continue
-
-            subject = f"ALERT: Election Rolled Back - {election.title}"
-
-            safe_first_name = html.escape(user.first_name)
-
-            html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #dc2626; color: white; padding: 20px; text-align: center; }}
-        .alert-badge {{ background-color: #fef2f2; color: #991b1b; padding: 8px 16px; border-radius: 4px; display: inline-block; margin: 10px 0; font-weight: bold; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        .details {{ background-color: white; padding: 15px; border-left: 4px solid #dc2626; margin: 15px 0; }}
-        .reason {{ background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 15px 0; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        {logo_html}
-        <div class="header">
-            <h1>⚠️ Election Rollback Alert</h1>
-            <div class="alert-badge">REQUIRES ATTENTION</div>
-        </div>
-        <div class="content">
-            <p>Dear {safe_first_name},</p>
-
-            <p>This is an important notification regarding an election rollback.</p>
-
-            <div class="details">
-                <h3>Election Details:</h3>
-                <ul>
-                    <li><strong>Title:</strong> {safe_title}</li>
-                    <li><strong>Status Changed:</strong> {from_status.upper()} → {to_status.upper()}</li>
-                    <li><strong>Performed By:</strong> {safe_performer}</li>
-                    <li><strong>Date/Time:</strong> {formatted_time}</li>
-                </ul>
-            </div>
-
-            <div class="reason">
-                <h3>Reason for Rollback:</h3>
-                <p>{safe_reason}</p>
-            </div>
-
-            <p>This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.</p>
-
-            <p>If you have any questions or concerns about this rollback, please contact {safe_performer} or review the election at your earliest convenience.</p>
-
-            <p>Best regards,<br>{safe_org_name} Election System</p>
-        </div>
-        <div class="footer">
-            <p>This is an automated notification from the election management system.</p>
-        </div>
-    </div>
-</body>
-</html>
-            """
-
-            text_body = f"""ALERT: Election Rolled Back
-
-Dear {user.first_name},
-
-This is an important notification regarding an election rollback.
-
-ELECTION DETAILS:
-- Title: {election.title}
-- Status Changed: {from_status.upper()} → {to_status.upper()}
-- Performed By: {performer_name}
-- Date/Time: {formatted_time}
-
-REASON FOR ROLLBACK:
-{reason}
-
-This rollback has been logged in the election's audit trail. Please review the election details and coordinate with your team as needed.
-
-If you have any questions or concerns about this rollback, please contact {performer_name} or review the election at your earliest convenience.
-
-Best regards,
-{organization.name} Election System
-            """
-
-            try:
-                # Send email
-                success_count_user, failure_count_user = await email_service.send_email(
-                    to_emails=[user.email],
-                    subject=subject,
-                    html_body=html_body,
-                    text_body=text_body,
-                )
-                if success_count_user > 0:
-                    sent_count += 1
-            except Exception as e:
-                logger.error(
-                    f"Failed to send rollback notification to {user.email}: {e}"
-                )
-                continue
-
-        return sent_count
 
     async def _notify_leadership_of_deletion(
         self,
@@ -2618,174 +2705,82 @@ Best regards,
         vote_count: int = 0,
     ) -> int:
         """
-        Send critical email notifications to all leadership about an election deletion.
+        Send critical email notifications to all leadership about an
+        election deletion.
 
-        This is triggered when a non-draft election (open or closed) is deleted,
-        which is a major red-flag event.
+        This is triggered when a non-draft election (open or closed) is
+        deleted, which is a major red-flag event.
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import (
-            EmailService,
-            build_email_logo_html,
-        )
-
-        leadership_roles = LEADERSHIP_ROLE_SLUGS
-
-        users_result = await self.db.execute(
-            select(User)
-            .join(User.roles)
-            .where(User.organization_id == str(organization_id))
-            .where(User.is_active == True)  # noqa: E712
-            .options(selectinload(User.roles))
-        )
-        all_users = users_result.scalars().all()
-
-        leadership_users = [
-            user
-            for user in all_users
-            if any(role.slug in leadership_roles for role in user.roles)
-        ]
-
-        if not leadership_users:
-            return 0
-
-        performer_result = await self.db.execute(
-            select(User).where(User.id == str(performed_by))
-        )
-        performer = performer_result.scalar_one_or_none()
-        performer_name = performer.full_name if performer else "Unknown"
-
-        org_result = await self.db.execute(
-            select(Organization).where(Organization.id == str(organization_id))
-        )
-        organization = org_result.scalar_one_or_none()
-
-        if not organization:
-            return 0
-
-        email_service = EmailService(organization)
-
-        safe_title = html.escape(election.title)
-        safe_performer = html.escape(performer_name)
-        safe_reason = html.escape(reason)
-        safe_org_name = html.escape(organization.name)
         election_status = election.status.value.upper()
 
-        # Compute timestamp once for all recipients
-        org_tz = getattr(organization, "timezone", None) or "America/New_York"
-        formatted_time = (
-            datetime.now(timezone.utc)
-            .astimezone(ZoneInfo(org_tz))
-            .strftime("%B %d, %Y at %I:%M %p")
+        return await self._notify_leadership(
+            election=election,
+            performed_by=performed_by,
+            organization_id=organization_id,
+            reason=reason,
+            subject_prefix="CRITICAL: Election DELETED - ",
+            header_color="#7f1d1d",
+            header_title="ELECTION DELETED",
+            badge_text="CRITICAL - REQUIRES IMMEDIATE ATTENTION",
+            badge_css_class="critical-badge",
+            extra_styles=(
+                "\n        .warning { background-color: #fef2f2;"
+                " padding: 15px; border-left: 4px solid #dc2626;"
+                " margin: 15px 0; }"
+            ),
+            detail_items_html=(
+                "<li><strong>Title:</strong> {safe_title}</li>"
+                f"<li><strong>Status at Deletion:</strong>"
+                f" {election_status}</li>"
+                f"<li><strong>Active Votes at Deletion:</strong>"
+                f" {vote_count}</li>"
+                "<li><strong>Deleted By:</strong> {safe_performer}</li>"
+                "<li><strong>Date/Time:</strong> {formatted_time}</li>"
+            ),
+            detail_items_text=(
+                "- Title: {title}\n"
+                f"- Status at Deletion: {election_status}\n"
+                f"- Active Votes at Deletion: {vote_count}\n"
+                "- Deleted By: {performer_name}\n"
+                "- Date/Time: {formatted_time}"
+            ),
+            reason_label="Reason Given",
+            html_preamble=(
+                '<div class="warning">'
+                f"<p><strong>An election has been permanently deleted"
+                f" while in {election_status} status.</strong></p>"
+                "<p>This is a critical action that has been"
+                " automatically flagged. All leadership members have"
+                " been notified.</p>"
+                "</div>"
+            ),
+            text_preamble=(
+                f"An election has been permanently deleted while in"
+                f" {election_status} status.\n"
+                "This is a critical action that has been automatically"
+                " flagged. All leadership members have been notified."
+            ),
+            html_postamble=(
+                "<p>This deletion has been logged in the audit trail"
+                " with <strong>CRITICAL</strong> severity. Please"
+                " review this action and coordinate with your team"
+                " immediately if this was not authorized.</p>"
+            ),
+            text_postamble=(
+                "This deletion has been logged in the audit trail with"
+                " CRITICAL severity. Please review this action and"
+                " coordinate with your team immediately if this was"
+                " not authorized."
+            ),
+            footer_text=(
+                "This is an automated critical notification from the"
+                " election management system."
+            ),
+            skip_performer=False,
+            log_label="deletion notification",
         )
-
-        logo_html = build_email_logo_html(organization)
-
-        sent_count = 0
-        for user in leadership_users:
-            safe_first_name = html.escape(user.first_name)
-
-            subject = f"CRITICAL: Election DELETED - {election.title}"
-
-            html_body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
-        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
-        .header {{ background-color: #7f1d1d; color: white; padding: 20px; text-align: center; }}
-        .critical-badge {{ background-color: #fef2f2; color: #991b1b; padding: 8px 16px; border-radius: 4px; display: inline-block; margin: 10px 0; font-weight: bold; font-size: 16px; }}
-        .content {{ padding: 20px; background-color: #f9fafb; }}
-        .details {{ background-color: white; padding: 15px; border-left: 4px solid #7f1d1d; margin: 15px 0; }}
-        .reason {{ background-color: #fffbeb; padding: 15px; border-left: 4px solid #f59e0b; margin: 15px 0; }}
-        .warning {{ background-color: #fef2f2; padding: 15px; border-left: 4px solid #dc2626; margin: 15px 0; }}
-        .footer {{ padding: 20px; text-align: center; font-size: 12px; color: #6b7280; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        {logo_html}
-        <div class="header">
-            <h1>ELECTION DELETED</h1>
-            <div class="critical-badge">CRITICAL - REQUIRES IMMEDIATE ATTENTION</div>
-        </div>
-        <div class="content">
-            <p>Dear {safe_first_name},</p>
-
-            <div class="warning">
-                <p><strong>An election has been permanently deleted while in {election_status} status.</strong></p>
-                <p>This is a critical action that has been automatically flagged. All leadership members have been notified.</p>
-            </div>
-
-            <div class="details">
-                <h3>Election Details:</h3>
-                <ul>
-                    <li><strong>Title:</strong> {safe_title}</li>
-                    <li><strong>Status at Deletion:</strong> {election_status}</li>
-                    <li><strong>Active Votes at Deletion:</strong> {vote_count}</li>
-                    <li><strong>Deleted By:</strong> {safe_performer}</li>
-                    <li><strong>Date/Time:</strong> {formatted_time}</li>
-                </ul>
-            </div>
-
-            <div class="reason">
-                <h3>Reason Given:</h3>
-                <p>{safe_reason}</p>
-            </div>
-
-            <p>This deletion has been logged in the audit trail with <strong>CRITICAL</strong> severity. Please review this action and coordinate with your team immediately if this was not authorized.</p>
-
-            <p>Best regards,<br>{safe_org_name} Election System</p>
-        </div>
-        <div class="footer">
-            <p>This is an automated critical notification from the election management system.</p>
-        </div>
-    </div>
-</body>
-</html>
-            """
-
-            text_body = f"""CRITICAL: Election DELETED
-
-Dear {user.first_name},
-
-An election has been permanently deleted while in {election_status} status.
-This is a critical action that has been automatically flagged. All leadership members have been notified.
-
-ELECTION DETAILS:
-- Title: {election.title}
-- Status at Deletion: {election_status}
-- Active Votes at Deletion: {vote_count}
-- Deleted By: {performer_name}
-- Date/Time: {formatted_time}
-
-REASON GIVEN:
-{reason}
-
-This deletion has been logged in the audit trail with CRITICAL severity. Please review this action and coordinate with your team immediately if this was not authorized.
-
-Best regards,
-{organization.name} Election System
-            """
-
-            try:
-                success_count_user, failure_count_user = await email_service.send_email(
-                    to_emails=[user.email],
-                    subject=subject,
-                    html_body=html_body,
-                    text_body=text_body,
-                )
-                if success_count_user > 0:
-                    sent_count += 1
-            except Exception as e:
-                logger.error(
-                    f"Failed to send deletion notification to {user.email}: {e}"
-                )
-                continue
-
-        return sent_count
 
     async def _generate_voting_token(
         self,
@@ -2816,11 +2811,7 @@ Best regards,
 
         # Token expires when election ends (or 30 days if election is longer)
         max_expiry = datetime.now(timezone.utc) + timedelta(days=30)
-        end_for_expiry = (
-            election_end_date.replace(tzinfo=timezone.utc)
-            if election_end_date and election_end_date.tzinfo is None
-            else election_end_date
-        )
+        end_for_expiry = self._ensure_utc(election_end_date)
         expires_at = min(end_for_expiry, max_expiry) if end_for_expiry else max_expiry
 
         voting_token = VotingToken(
@@ -4034,11 +4025,7 @@ Best regards,
             return None, None, "Invalid voting token"
 
         # Check if token has expired
-        token_exp = (
-            voting_token.expires_at.replace(tzinfo=timezone.utc)
-            if voting_token.expires_at.tzinfo is None
-            else voting_token.expires_at
-        )
+        token_exp = self._ensure_utc(voting_token.expires_at)
         if datetime.now(timezone.utc) > token_exp:
             return None, None, "Voting token has expired"
 
@@ -4063,16 +4050,8 @@ Best regards,
 
         # Check if election is still open
         now = datetime.now(timezone.utc)
-        start = (
-            election.start_date.replace(tzinfo=timezone.utc)
-            if election.start_date and election.start_date.tzinfo is None
-            else election.start_date
-        )
-        end = (
-            election.end_date.replace(tzinfo=timezone.utc)
-            if election.end_date and election.end_date.tzinfo is None
-            else election.end_date
-        )
+        start = self._ensure_utc(election.start_date)
+        end = self._ensure_utc(election.end_date)
         if election.status != ElectionStatus.OPEN:
             return None, None, f"Election is {election.status.value}"
 

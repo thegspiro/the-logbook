@@ -5,6 +5,7 @@ CRUD endpoints for managing email templates.
 Accessible by admins via the membership module admin area.
 """
 
+import asyncio
 import os
 import uuid
 
@@ -422,14 +423,17 @@ async def upload_attachment(
     attachment_dir = os.path.join(
         "storage", "email_attachments", current_user.organization_id
     )
-    os.makedirs(attachment_dir, exist_ok=True)
+    await asyncio.to_thread(os.makedirs, attachment_dir, exist_ok=True)
 
     file_id = str(uuid.uuid4())
     storage_filename = f"{file_id}{ext}"
     storage_path = os.path.join(attachment_dir, storage_filename)
 
-    with open(storage_path, "wb") as f:
-        f.write(contents)
+    def _write_file(path: str, data: bytes) -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+
+    await asyncio.to_thread(_write_file, storage_path, contents)
 
     # Human-readable file size
     size = len(contents)

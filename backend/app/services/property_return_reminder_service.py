@@ -8,12 +8,12 @@ Designed to be called periodically (e.g., daily via cron, scheduler, or
 manual API call).
 """
 
-import logging
 from datetime import datetime, timezone
 from html import escape
 from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,8 +21,6 @@ from sqlalchemy.orm import selectinload
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.models.inventory import CheckOutRecord, ItemAssignment, PropertyReturnReminder
 from app.models.user import Organization, User, UserStatus
-
-logger = logging.getLogger(__name__)
 
 # Reminder thresholds in days
 REMINDER_THRESHOLDS = [

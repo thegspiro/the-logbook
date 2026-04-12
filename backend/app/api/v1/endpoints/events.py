@@ -4,6 +4,7 @@ Event API Endpoints
 Endpoints for event management including events, RSVPs, and attendance tracking.
 """
 
+import asyncio
 import copy
 import os
 import uuid as uuid_lib
@@ -2283,13 +2284,16 @@ async def upload_event_attachment(
     org_dir = os.path.join(
         ATTACHMENT_UPLOAD_DIR, str(current_user.organization_id), str(event_id)
     )
-    os.makedirs(org_dir, exist_ok=True)
+    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
 
     unique_name = f"{uuid_lib.uuid4().hex}{ext}"
     file_path = os.path.join(org_dir, unique_name)
 
-    with open(file_path, "wb") as f:
-        f.write(content)
+    def _write_file(path: str, data: bytes) -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+
+    await asyncio.to_thread(_write_file, file_path, content)
 
     # Update event attachments list (deep copy to ensure SQLAlchemy detects the change)
     attachments = copy.deepcopy(event.attachments or [])

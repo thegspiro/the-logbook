@@ -6,12 +6,11 @@ Supports syncing contacts, events, training records, and incidents
 between The Logbook and a department's Salesforce org.
 """
 
-import logging
 from typing import Any
 
-from app.services.integration_services.base import create_integration_client
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from app.services.integration_services.base import create_integration_client
 
 # Salesforce REST API base path template
 _API_PATH = "/services/data/{version}"
