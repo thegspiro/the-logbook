@@ -38,6 +38,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | Table | Description |
 |-------|-------------|
 | `training_records` | Individual training completions (with `rank_at_completion`, `station_at_completion`) |
+| `training_categories` | Course categories with optional `registry_code` for NREMT NCCR linkage *(2026-04-11)* |
 | `training_courses` | Course definitions and categories |
 | `training_requirements` | Department training requirements (hours, shifts, calls, certs) |
 | `training_programs` | Structured multi-phase training curricula |
@@ -46,7 +47,8 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `training_waivers` | Training requirement waivers (auto-linked from LOA or manual) |
 | `training_submissions` | Self-reported training pending review |
 | `shift_completion_reports` | Post-shift training reports with encrypted evaluation fields, review workflow (`draft`/`pending_review`/`approved`/`flagged`), trainee acknowledgment, skills observed, tasks performed, call type tracking, pipeline progress linkage, and audit trail (`data_sources`) *(updated 2026-03-28)* |
-| `training_module_configs` | Module configuration including trainee visibility settings (`show_*`), report form section toggles (`form_show_*`), per-apparatus-type skills/tasks mappings, rating scale customization, and shift review defaults *(updated 2026-04-04)* |
+| `training_module_configs` | Module configuration including trainee visibility settings (`show_*`), report form section toggles (`form_show_*`), per-apparatus-type skills/tasks mappings, rating scale customization, shift review defaults, and manual entry settings (`manual_entry_enabled`, `manual_entry_apparatus_types`) *(updated 2026-04-11)* |
+| `external_training_imports` | Individual import records with status and `credit_hours` for CE credit preservation *(updated 2026-04-11)* |
 
 ### Membership
 
@@ -136,9 +138,10 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `pipelines` | Application pipeline configurations |
-| `pipeline_stages` | Stages within pipelines |
+| `pipelines` | Application pipeline configurations. FK indexes added on `created_by` *(2026-04-11)* |
+| `pipeline_stages` | Stages within pipelines. FK index added on `email_template_id` *(2026-04-11)* |
 | `applicants` | Prospective member records |
+| `prospect_documents` | Applicant documents. FK index added on `uploaded_by` *(2026-04-11)* |
 
 ### Facilities
 

@@ -62,6 +62,10 @@ frontend/src/pages/
 ├── ShiftAttendancePage.tsx         # Attendance records for a shift
 ├── ShiftReportPage.tsx             # Shift completion reports (training integration)
 └── ApparatusBasicPage.tsx          # Lightweight apparatus management
+
+frontend/src/pages/training/
+├── ManualShiftReportPage.tsx       # Manual shift report entry (no scheduling module required) (2026-04-11)
+└── ManualEntrySettingsPanel.tsx    # Admin config for manual shift entry (2026-04-11)
 ```
 
 ### Backend

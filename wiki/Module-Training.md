@@ -17,9 +17,10 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Training Waivers** — Leave of Absence auto-linking, waiver management, proportional requirement adjustment. Supports permanent waivers (no end date), New Member waiver type, and multi-select "Applies To" (Training + Meetings + Shifts can be combined)
 - **Bulk Record Creation** — Up to 500 records per request with duplicate detection (same member + course name + completion date within ±1 day)
 - **Rank & Station Snapshots** — `rank_at_completion` and `station_at_completion` captured on every record
-- **External Integrations** — Connect external training providers (Vector Solutions, Target Solutions, Lexipol, iAmResponding, Custom API) with category and user mapping
+- **External Integrations** — Connect external training providers (Vector Solutions, Target Solutions, Lexipol, iAmResponding, Custom API) with category and user mapping. *(2026-04-11)* Vector Solutions integration now includes upfront category catalog fetch, credit hours preservation, and improved type mapping with auto-sync
 - **Historical Import** — CSV import with preview and validation
-- **Registry Integration** — NFPA Standards, NREMT Certifications, Pro Board one-click import with source URL citations and last-updated timestamps
+- **Registry Integration** — NFPA Standards, NREMT Certifications, Pro Board one-click import with source URL citations and last-updated timestamps. *(2026-04-11)* NREMT NCCR hour distributions corrected to match official requirements; "Cardiovascular" renamed to "Cardiology" per NREMT terminology
+- **National Registry Standard Linkage** — *(2026-04-11)* Training categories can be linked to NREMT NCCR codes via the `registry_code` column, enabling automatic compliance tracking against national continued competency requirements
 - **Registry Generator Tool** — Standalone CLI tool (`scripts/generate_registry.py`) for generating registries from standards bodies, with `--list` flag to show available registries
 - **Source Tracking on Imports** — Imported requirements include `source`, `source_url`, and `last_updated` fields for traceability
 - **Training Record Attachments** — Upload certificates, transcripts, and completion letters to training records
@@ -33,6 +34,10 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Quarter-Hour Time Picker** — *(2026-03-15)* New `DateTimeQuarterHour` UX component replacing browser `datetime-local` inputs (which ignore `step="900"`). Splits date/time into a native date picker and a select dropdown restricted to `:00`, `:15`, `:30`, `:45`
 - **Quick Duration Buttons** — *(2026-03-15)* 1-hour, 2-hour, 4-hour, and 8-hour buttons on the training session form, matching the pattern in EventForm. Appear once a start date is set and auto-populate end date/time
 - **Course Auto-Populate** — *(2026-03-15)* Selecting an existing course in the session creation form auto-fills training type, credit hours, instructor, expiration months, and max participants with a details preview card
+- **Training Program Export/Import** — *(2026-04-11)* Export training programs (including phases, requirements, milestones) as shareable JSON packages for cross-department sharing. Import validates structure and auto-creates missing courses/requirements
+- **Manual Shift Report Page** — *(2026-04-11)* Standalone page at `/training/manual-shift-report` for departments without the Scheduling module. Officers manually enter shift date, start/end times, apparatus, crew members, and trainee evaluations. Supports apparatus-specific skill/task auto-population
+- **Manual Entry Admin Config** — *(2026-04-11)* `ManualEntrySettingsPanel` on the Training Admin page controls manual entry availability, allowed apparatus types, default start times, and default shift duration
+- **Category Tracking Fixes** — *(2026-04-11)* Training record creation now properly captures and persists training category through the event/session pipeline, ensuring accurate NCCR and compliance matrix calculations
 
 ---
 
@@ -54,6 +59,7 @@ The Training module tracks courses, certifications, training requirements, progr
 | `/training/skills-testing/test/new` | Start Skill Test | Authenticated |
 | `/training/skills-testing/test/:testId` | Active Skill Test | Authenticated |
 | `/training/skills-testing/test/:testId/active` | Active Skill Test (alias) | Authenticated |
+| `/training/manual-shift-report` | Manual Shift Report | `training.manage` |
 | `/members/:userId/training` | Member Training History | Authenticated |
 
 ### Training Admin Tabs
@@ -202,6 +208,14 @@ PATCH  /api/v1/training/external/providers/{id}/user-mappings/{mappingId}  # Upd
 GET    /api/v1/training/external/providers/{id}/imports    # Import records list
 POST   /api/v1/training/external/providers/{id}/imports/{importId}/import  # Import single
 POST   /api/v1/training/external/providers/{id}/imports/bulk  # Bulk import
+GET    /api/v1/training/external/providers/{id}/categories   # Fetch provider category catalog (2026-04-11)
+```
+
+### Training Program Export/Import *(2026-04-11)*
+
+```
+POST   /api/v1/training/programs/programs/{id}/export        # Export program as shareable JSON
+POST   /api/v1/training/programs/import                      # Import program from JSON package
 ```
 
 ### Shift Completion Reports
@@ -346,7 +360,7 @@ GET    /api/v1/compliance/incomplete-records                # List incomplete re
 
 | Table | Model | Description |
 |-------|-------|-------------|
-| `training_categories` | TrainingCategory | Course categories (EMS, Fire, Hazmat, etc.) with custom colors |
+| `training_categories` | TrainingCategory | Course categories (EMS, Fire, Hazmat, etc.) with custom colors and optional `registry_code` for NREMT NCCR linkage *(2026-04-11)* |
 | `training_courses` | TrainingCourse | Course definitions with hours, certification flag, expiration months |
 | `training_records` | TrainingRecord | Individual training completions with rank/station snapshots |
 | `training_requirements` | TrainingRequirement | Requirement definitions with type, frequency, role targeting |
@@ -366,7 +380,7 @@ GET    /api/v1/compliance/incomplete-records                # List incomplete re
 | `external_category_mappings` | ExternalCategoryMapping | Map external categories to internal |
 | `external_user_mappings` | ExternalUserMapping | Map external users to internal members |
 | `external_training_sync_logs` | ExternalTrainingSyncLog | Sync history and status |
-| `external_training_imports` | ExternalTrainingImport | Individual import records with status |
+| `external_training_imports` | ExternalTrainingImport | Individual import records with status and `credit_hours` for CE credit preservation *(2026-04-11)* |
 | `shifts` | Shift | Shift definitions (used by shift completion reports) |
 | `shift_attendance` | ShiftAttendance | Shift attendance records |
 | `shift_calls` | ShiftCall | Calls responded during shifts |

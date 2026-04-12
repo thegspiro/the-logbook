@@ -7,6 +7,193 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Salesforce Integration, Vector Solutions Enhancements, Facilities & Membership Refactoring, Test Coverage Expansion (2026-04-10 — 2026-04-12)
+
+#### Salesforce CRM Integration
+
+- **Salesforce connection**: New integration for syncing department contacts and donors with Salesforce CRM. Configure via **Administration > Integrations** with Salesforce instance URL, client ID, and client secret. Supports OAuth 2.0 client credentials flow
+- **Bidirectional sync**: Full two-way synchronization between The Logbook members/donors and Salesforce contacts/accounts. Field mappings are configurable per organization. Sync direction options: push-only, pull-only, or bidirectional
+- **Webhook receiver**: Public endpoint receives Salesforce outbound messages for real-time updates. Validates Salesforce Organization ID and HMAC signatures. Processes Contact and Account object changes
+- **Sync status dashboard**: IntegrationsPage updated with Salesforce connection status, last sync timestamp, sync history, and manual sync trigger button
+- **Conflict resolution**: When records are modified on both sides between syncs, configurable strategies (Salesforce wins, Logbook wins, most recent wins) prevent data loss
+
+**Edge Cases:**
+| Scenario | Behavior |
+|----------|----------|
+| Salesforce API rate limit exceeded during sync | Sync pauses, retries with exponential backoff, logs partial progress |
+| Webhook received for unmapped Salesforce object | Event logged and skipped; no error returned to Salesforce |
+| Member deleted in Logbook but exists in Salesforce | Configurable: soft-delete in Salesforce or unlink without delete |
+| Salesforce field mapping references nonexistent field | Mapping validation on save rejects invalid field references |
+| OAuth token expires mid-sync | Auto-refresh token and retry from the failed record |
+
+#### Vector Solutions Integration Enhancements
+
+- **Category catalog fetch**: New endpoint `GET /api/v1/training/external/providers/{id}/categories` fetches the full category catalog from Vector Solutions for upfront mapping before first sync. Frontend shows a mapping table where officers match external categories to internal training categories
+- **Credit hours column**: New `credit_hours` column on `external_training_imports` table stores the original credit hours from Vector Solutions (separate from the `hours` field which may be converted). Migration: `20260411_0100_add_credit_hours_to_external_training_imports`
+- **Improved type mapping**: External training records now correctly map Vector Solutions course types to internal training types during import, preserving certification data and auto-syncing completion records
+- **API spec compliance**: Fixed Vector Solutions API client to match their actual authentication flow (API key in header, not query parameter) and pagination format (offset-based, not cursor-based)
+
+**Edge Cases:**
+| Scenario | Behavior |
+|----------|----------|
+| Vector Solutions category has no internal mapping | Record imported with a "Unmapped" category flag; officer prompted to map |
+| Credit hours differ from clock hours | Both values stored; `credit_hours` used for CE credit, `hours` for compliance |
+| Duplicate record detected during import | Skipped with duplicate reason logged; deduplication uses member + course + date |
+
+#### National Registry (NREMT) Standard Linkage
+
+- **Registry code on training categories**: New `registry_code` column on `training_categories` links internal categories to NREMT National Continued Competency Requirement (NCCR) codes. Migration: `20260411_0200_add_registry_code_to_training_categories`
+- **NREMT hour distribution corrections**: Updated `nremt_requirements.json` to match official NREMT NCCR hour distributions for all certification levels (EMT, AEMT, Paramedic)
+- **NCCR terminology update**: Renamed "Cardiovascular" category to "Cardiology" to match official NREMT terminology
+- **Compliance auto-tracking**: Training records filed under categories with `registry_code` set automatically count toward the corresponding NCCR requirement, eliminating manual cross-referencing
+
+**Edge Cases:**
+| Scenario | Behavior |
+|----------|----------|
+| Category has registry_code but no matching NCCR requirement exists | Hours counted in category but not toward NCCR compliance; warning shown on compliance report |
+| NREMT hour distribution updated after records already filed | Existing records retain original credit; re-calculation available via compliance matrix refresh |
+
+#### Training Program Export/Import
+
+- **Export programs**: Officers can export training programs (including phases, requirements, milestones) as JSON packages for sharing between departments. Export accessible from the Training Programs page via a new **Export** button
+- **Import programs**: Departments can import shared program packages, which auto-create courses and requirements that don't already exist. Import flow validates the package structure and reports any conflicts
+- **Cross-department sharing**: Enables mutual aid training programs and standardized curricula across departments
+
+**Edge Cases:**
+| Scenario | Behavior |
+|----------|----------|
+| Imported program references a course that already exists | Existing course reused; no duplicate created |
+| Imported program has a phase name matching an existing phase | New phase created with " (Imported)" suffix to avoid collision |
+| Export includes category registry codes | Registry codes included; importing department maps them to their own categories |
+
+#### Training Category Tracking Improvements
+
+- **Category on record creation**: Training record creation now properly captures and persists the training category, ensuring records appear in the correct NCCR buckets and compliance reports
+- **Category in reporting**: Fixed gaps where category data was lost between the event/session flow and the final training record, ensuring accurate compliance matrix calculations
+
+#### Manual Shift Report Page
+
+- **Standalone shift reporting**: New page at `/training/manual-shift-report` for departments that do not use the Scheduling module. Officers can file shift completion reports by manually entering shift data (date, apparatus, start/end times, crew members) instead of linking to a scheduled shift
+- **Apparatus selector**: Manual entry form includes an apparatus type dropdown that auto-populates relevant skills and tasks
+- **Start/end datetime fields**: Manual reports capture precise shift start and end times for accurate hours calculation
+- **Admin configuration**: New `ManualEntrySettingsPanel` on the Training Admin page lets administrators enable/disable manual shift entry and configure default apparatus types, skills, and tasks available in the manual form
+- **Route**: Added to training module routes, accessible to users with `training.manage` permission
+
+**Edge Cases:**
+| Scenario | Behavior |
+|----------|----------|
+| Manual report filed for a date that has a scheduled shift | Warning shown; officer can proceed (reports are independent) |
+| Apparatus type has no skill/task mappings configured | Form shows empty skills/tasks sections; officer can manually add entries |
+| Manual report with zero hours (same start/end time) | Validation prevents submission; minimum 15-minute shift required |
+
+#### Shift Completion Service Hardening
+
+- **20+ security and data integrity fixes**: Comprehensive hardening of the shift completion report pipeline for production readiness
+- **Submit-all-drafts scope**: Fixed `POST /api/v1/training/shift-reports/drafts/submit-all` to correctly scope draft submission to the current officer's reports only, preventing cross-officer draft submission
+- **Print button fix**: Restored broken print functionality on shift report cards in ShiftReportsTab
+- **Enrollment ID whitelist**: Draft-to-submitted transition now validates that the trainee still has an active enrollment before crediting program progress
+- **Draft regression guard**: Prevents re-creation of draft reports that were already submitted or reviewed
+
+#### Email Service & Audit Log Integrity
+
+- **Loguru format fix**: Fixed remaining `%d` format placeholders in email service to use Loguru's `{}` style, preventing "TypeError: not all arguments converted during string formatting" crashes
+- **Hash chain helper**: Extracted `_build_hash_data()` helper in `core/audit.py` to prevent drift between hash verification, creation, and rehashing operations. Previously, the hash chain could report false "compromised" results if field ordering differed between creation and verification
+- **Audit integrity verification**: Hash chain integrity checks now produce consistent results regardless of the order fields were added to audit log entries
+
+#### Facilities Module Refactoring
+
+- **Legacy page removal**: Deleted duplicate `FacilitiesPage.tsx`, `FacilityDetailPanel.tsx`, `InspectionsTab.tsx`, and `MaintenanceTab.tsx` from `pages/facilities/` — all functionality now lives in `modules/facilities/`
+- **Shared constants extracted**: New `modules/facilities/constants.ts` centralizes status colors, priority colors, maintenance type labels, inspection type labels, and system type options used across all facilities components
+- **Custom hooks**: Extracted `useInspectionForm` and `useMaintenanceForm` hooks from components to separate form state management from rendering, reducing component complexity
+- **Type consolidation**: Moved `types.ts` from `pages/facilities/` to `modules/facilities/types/facilities.ts` and re-exported from the module barrel
+- **Data integrity fixes**: Fixed nullable column handling and cascading delete behavior in facilities service
+- **Type safety**: Added proper TypeScript typing to all facilities components and store
+
+#### Membership & Prospective Members Module Improvements
+
+- **Drawer sub-components**: Extracted `ApplicantActionPanels`, `LinkedEventsSection`, and `ElectionPackageSection` from the monolithic `ApplicantDetailDrawer` for better maintainability
+- **ElectionPackageSection**: New component displays election ballot package information for applicants in the voting stage, showing ballot items, voting deadlines, and results
+- **LinkedEventsSection**: New component shows events linked to a prospective member (orientation sessions, interviews, ride-alongs) with event details and attendance status
+- **Stage color consolidation**: Pipeline stage colors centralized in `prospective-members/constants.ts` for consistent rendering across Kanban board, table view, and detail drawer
+- **Accessibility improvements**: Added ARIA labels, keyboard navigation, and focus management to the pipeline builder and Kanban board
+- **Security fixes**: Added FK indexes for membership pipeline tables (migration: `20260411_0100_add_membership_pipeline_fk_indexes`), preventing slow cascading queries on large pipelines
+- **Membership tier service**: Fixed edge cases in tier advancement logic for members transitioning from prospect to active status
+
+**Edge Cases:**
+| Scenario | Behavior |
+|----------|----------|
+| Applicant linked to an election that is deleted | Election reference cleared; "Election Removed" placeholder shown |
+| Pipeline stage reorder while applicants are in-flight | Applicants retain their current stage; reorder only affects visual display |
+| Applicant has linked events from a disabled module | Events section hidden; data preserved for when module is re-enabled |
+
+#### Test Coverage Expansion
+
+- **39 pre-existing frontend test failures fixed** across 17 files — every existing test now passes
+- **7 store test assertion mismatches fixed**: admin-hours, apparatus, medical-screening, auth, and skills-testing stores
+- **New backend integration tests**:
+  - `test_election_voting_flow.py` — Complete election lifecycle from creation through vote casting and result certification
+  - `test_event_lifecycle.py` — Event creation, RSVP, check-in, and analytics pipeline
+  - `test_membership_pipeline_flow.py` — Prospect creation, stage advancement, and conversion to active member
+  - `test_training_compliance_integration.py` — Training record creation, requirement evaluation, and compliance matrix generation
+  - `test_shift_completion.py` — Comprehensive shift completion service tests (expanded)
+- **New frontend tests**:
+  - `facilitiesStore.test.ts` — Facilities store state management and API interactions
+  - `onboardingStore.test.ts` — Onboarding flow state and step validation
+  - `financeStore.test.ts` — Expanded from 25 to 75 tests with corrected assertions
+  - `trainingServices.test.ts` — Training service URL paths and response handling
+  - `inventoryService.test.ts` — Inventory service API contract validation
+- **ESLint cleanup**: Fixed all pre-existing ESLint errors across the codebase
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/integrations/salesforce/connect` | Initialize Salesforce OAuth connection |
+| `POST` | `/api/v1/integrations/salesforce/disconnect` | Disconnect Salesforce integration |
+| `POST` | `/api/v1/salesforce-sync/sync` | Trigger manual bidirectional Salesforce sync |
+| `GET` | `/api/v1/salesforce-sync/status` | Get current sync status and history |
+| `PUT` | `/api/v1/salesforce-sync/field-mappings` | Update field mapping configuration |
+| `GET` | `/api/v1/salesforce-sync/field-mappings` | Get current field mappings |
+| `POST` | `/api/public/salesforce/webhook` | Receive Salesforce outbound messages (public, HMAC-validated) |
+| `GET` | `/api/v1/training/external/providers/{id}/categories` | Fetch external provider's category catalog |
+| `POST` | `/api/v1/training/programs/programs/{id}/export` | Export training program as shareable JSON |
+| `POST` | `/api/v1/training/programs/import` | Import training program from JSON package |
+
+**New Frontend Routes:**
+
+| Route | Page | Description |
+|-------|------|-------------|
+| `/training/manual-shift-report` | `ManualShiftReportPage` | Manual shift report entry for departments without scheduling |
+
+**New Frontend Components:**
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| `ManualShiftReportPage` | `pages/training/ManualShiftReportPage.tsx` | Manual shift completion report form |
+| `ManualEntrySettingsPanel` | `pages/training/ManualEntrySettingsPanel.tsx` | Admin config panel for manual shift entry |
+| `ElectionPackageSection` | `modules/prospective-members/components/ElectionPackageSection.tsx` | Election ballot info for pipeline applicants |
+| `ApplicantActionPanels` | `modules/prospective-members/components/ApplicantActionPanels.tsx` | Action panels extracted from applicant drawer |
+| `LinkedEventsSection` | `modules/prospective-members/components/LinkedEventsSection.tsx` | Linked events display for prospective members |
+
+**New Database Migrations:**
+
+| Migration | Description |
+|-----------|-------------|
+| `20260411_0100_add_credit_hours_to_external_training_imports` | Adds `credit_hours` column to `external_training_imports` |
+| `20260411_0200_add_registry_code_to_training_categories` | Adds `registry_code` column to `training_categories` |
+| `20260411_0100_add_membership_pipeline_fk_indexes` | Adds foreign key indexes to membership pipeline tables |
+
+**New Schema Fields:**
+
+| Schema | Field | Type | Description |
+|--------|-------|------|-------------|
+| `ExternalTrainingImport` | `credit_hours` | `float \| None` | Original credit hours from external provider |
+| `TrainingCategory` | `registry_code` | `str \| None` | NREMT NCCR registry code linkage |
+| `TrainingModuleConfig` | `manual_entry_enabled` | `bool` | Enable manual shift report entry |
+| `TrainingModuleConfig` | `manual_entry_apparatus_types` | `list[str]` | Available apparatus types for manual entry |
+
+---
+
 ### Shift Report Redesign, Email Templates, Inventory Variants & Print Support (2026-04-07 — 2026-04-09)
 
 #### Shift Report Creation Redesign — Shift-First Batch Workflow

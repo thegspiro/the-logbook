@@ -38,6 +38,8 @@ Navigate to **Shift Scheduling** in the sidebar. The scheduling page is organize
 | **Reports** | Hours, coverage, and compliance reports |
 | **Settings** | Notification preferences, shift rules, coverage settings, and shift report configuration (section toggles, apparatus skills/tasks, rating scale) |
 
+> **Note:** *(2026-04-11)* Departments that do not use the Scheduling module can file shift completion reports via the standalone **Manual Shift Report** page at `/training/manual-shift-report`. See [Training > Manual Shift Report Entry](./02-training.md#manual-shift-report-entry) for details.
+
 > **Screenshot placeholder:**
 > _[Screenshot of the Scheduling page showing the tab bar at the top with all seven tabs, and the Schedule (calendar) tab active showing a monthly calendar view with color-coded shifts]_
 

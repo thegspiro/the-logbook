@@ -25,6 +25,19 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Shift Completion Reports** — Officers file reports that auto-credit training programs
 - **Leave of Absence Integration** — Members on leave excluded from scheduling
 - **Multiple Reports** — Hours, coverage, call volume, availability analytics
+- **Manual Shift Report Page** — *(2026-04-11)* Standalone page at `/training/manual-shift-report` for departments without the scheduling module enabled. Officers manually enter shift date, start/end times, apparatus, crew, and trainee evaluations
+- **Shift Report Hardening** — *(2026-04-11)* 20+ security and data integrity fixes for production readiness including submit-all-drafts scope fix, enrollment ID whitelist validation, draft regression guard, and print button restoration
+
+---
+
+## Recent Improvements (2026-04-11)
+
+### Shift Completion Service Hardening
+- **Submit-all-drafts scope**: `POST /api/v1/training/shift-reports/drafts/submit-all` now correctly scopes to the current officer's drafts only
+- **Enrollment ID validation**: Draft-to-submitted transition validates that the trainee still has an active enrollment before crediting program progress
+- **Draft regression guard**: Prevents re-creation of draft reports for shifts that already have submitted or reviewed reports
+- **Print button fix**: Restored broken print functionality on shift report cards in ShiftReportsTab
+- **Crew loading fix**: Fixed crew members not loading in shift completion report form when navigating directly to a shift
 
 ---
 

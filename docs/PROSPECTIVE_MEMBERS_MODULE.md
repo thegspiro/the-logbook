@@ -42,6 +42,9 @@ frontend/src/modules/prospective-members/
 │   ├── PipelineTable.tsx       # Table view with sorting and pagination
 │   ├── ApplicantCard.tsx       # Card component for kanban columns
 │   ├── ApplicantDetailDrawer.tsx # Slide-out applicant details panel
+│   ├── ApplicantActionPanels.tsx # Status-conditional action footer (active/hold/withdrawn/inactive) *(2026-04-11)*
+│   ├── ElectionPackageSection.tsx # Election ballot package display and management *(2026-04-11)*
+│   ├── LinkedEventsSection.tsx  # Linked events display with search and link/unlink *(2026-04-11)*
 │   ├── ConversionModal.tsx     # Convert applicant to member modal
 │   └── StageConfigModal.tsx    # Stage configuration with timeout overrides
 └── pages/
@@ -82,6 +85,23 @@ frontend/src/modules/prospective-members/
 | `TIMEOUT_PRESET_LABELS` | Human-readable labels for timeout presets |
 | `DEFAULT_INACTIVITY_CONFIG` | Default config: 3_months, 80% warning, coordinator notifications on |
 | `DEFAULT_ELECTION_PACKAGE_FIELDS` | Default included fields: email, documents, stage history on; phone, address, DOB off |
+| `STAGE_COLORS` | *(2026-04-11)* Centralized stage color map for consistent rendering across Kanban, table, and drawer views |
+
+### Extracted Sub-Components *(2026-04-11)*
+
+The `ApplicantDetailDrawer` was decomposed into focused sub-components:
+
+| Component | Description |
+|-----------|-------------|
+| `ApplicantActionPanels` | Status-conditional action footer. Shows different button sets based on applicant status: Active (back/withdraw/hold/skip/reject/advance/convert), On Hold (withdraw/reject/resume), Withdrawn (reactivate), Inactive (reject/reactivate). Optional notes textarea for action justification |
+| `ElectionPackageSection` | Displays election ballot package for applicants in the `election_vote` stage. Shows package status (draft/ready/added_to_ballot/elected/not_elected), applicant snapshot, editable coordinator notes, and election assignment dropdown |
+| `LinkedEventsSection` | Shows events linked to a prospective member (orientation, interviews, ride-alongs). Supports search-and-link for upcoming events, unlink for existing links, and visual distinction for cancelled events |
+
+### Security & Performance Improvements *(2026-04-11)*
+
+- **FK indexes**: Added indexes on `membership_pipelines.created_by`, `membership_pipeline_steps.email_template_id`, and `prospect_documents.uploaded_by` to prevent slow cascading queries on large pipelines (migration: `20260411_0100_add_membership_pipeline_fk_indexes`)
+- **Accessibility**: Added ARIA labels, keyboard navigation, and focus management to the pipeline builder and Kanban board
+- **Membership tier service**: Fixed edge cases in tier advancement logic for members transitioning from prospect to active status
 
 ---
 

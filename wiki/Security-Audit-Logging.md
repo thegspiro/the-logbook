@@ -33,6 +33,8 @@ Every significant action in the system is recorded in the audit log with:
 | **Membership Pipeline** | Pipeline created/deleted, prospect created/advanced/transferred *(2026-03-29)* |
 | **Messages** | Message creation and deletion *(2026-03-29)* |
 | **Shift Completion Reports** | Report created, updated, reviewed (approved/flagged/redacted), acknowledged by trainee, bulk submitted *(2026-04-07)* |
+| **Salesforce Sync** | Sync triggered, sync completed, webhook received, contact created/updated *(2026-04-11)* |
+| **Training Programs** | Program exported, program imported *(2026-04-11)* |
 | **Security** | Alert generated, alert acknowledged, integrity check |
 
 ---
@@ -72,6 +74,10 @@ curl http://YOUR-IP:3001/api/v1/security/audit-log/integrity
 | `hash_mismatch` | Entry data was modified after creation |
 | `chain_broken` | Entry was deleted or reordered |
 | `missing_entry` | Gap in the sequence |
+
+### Hash Chain Reliability Fix *(2026-04-11)*
+
+A `_build_hash_data()` helper was extracted in `core/audit.py` to prevent drift between hash verification, creation, and rehashing operations. Previously, the hash chain could report false "compromised" results if the field ordering differed between when an entry was created and when it was verified. The helper ensures consistent field ordering across all hash operations.
 
 ---
 

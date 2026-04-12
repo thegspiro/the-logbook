@@ -189,6 +189,18 @@ Click on any facility from the dashboard to open its full-page detail view at `/
 
 > **Edge case:** If a facility was created during onboarding, it is automatically linked to a Location record so it appears in the Events location picker. Rooms added later also auto-create Location records. If you delete a room, its linked Location record is preserved (with a note that the room was removed) to avoid breaking existing event references.
 
+### Facilities Module Architecture *(2026-04-11)*
+
+The facilities module was refactored for maintainability:
+
+- **Shared constants**: Status colors, priority colors, maintenance types, inspection types, room types, and NFPA zone options are centralized in `modules/facilities/constants.ts` and used consistently across all section components
+- **Custom hooks**: Form state management for inspections (`useInspectionForm`) and maintenance records (`useMaintenanceForm`) is extracted into dedicated hooks, supporting create/edit/delete operations with search and status filtering
+- **Type consolidation**: All facilities TypeScript types live in `modules/facilities/types/` with a barrel export
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the maintenance form showing the type dropdown (with 16 NFPA-aligned options), priority selector (low/medium/high/critical with color badges), date fields, and vendor/cost inputs._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the inspections list with the result filter dropdown (All/Passed/Failed/Pending) showing filtered results with inspector name, organization, and pass/fail status badges._
+
 ---
 
 ## Facility Maintenance
