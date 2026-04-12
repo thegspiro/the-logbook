@@ -12,7 +12,7 @@ import { eventService, meetingsService } from '../services/api';
 import { electionService } from '../services/electionService';
 import type { ElectionListItem } from '../types/election';
 import { getStatusBadgeClass } from '../utils/electionHelpers';
-import type { Event, EventListItem, RSVP, RSVPStatus, EventStats, RSVPHistory } from '../types/event';
+import type { Event, EventListItem, RSVP, EventStats, RSVPHistory } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
@@ -20,6 +20,9 @@ import { RSVPStatusBadge } from '../components/RSVPStatusBadge';
 import { downloadICSFile } from '../utils/eventHelpers';
 import { formatDateTime, formatShortDateTime, formatTime, formatForDateTimeInput, localToUTC } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useRSVPForm } from '../hooks/useRSVPForm';
+import { useEventNotifications } from '../hooks/useEventNotifications';
+import { useOverrideAttendance } from '../hooks/useOverrideAttendance';
 import { EventType as EventTypeEnum, RSVPStatus as RSVPStatusEnum } from '../constants/enums';
 import { Bell, Repeat, CalendarPlus, Clock, ChevronDown, MapPin, StopCircle } from 'lucide-react';
 import { SimpleMarkdown } from '../utils/simpleMarkdown';
@@ -27,7 +30,6 @@ import { EventAttachmentsList } from '../components/event-detail/EventAttachment
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
 import { EventNotificationPanel } from '../components/event-detail/EventNotificationPanel';
 import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
-import type { NotificationType, NotificationTarget } from '../components/event-detail/EventNotificationPanel';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
 import EventCancelModal from '../components/event-detail/EventCancelModal';
 import EventCancelSeriesModal from '../components/event-detail/EventCancelSeriesModal';
@@ -46,15 +48,9 @@ export const EventDetailPage: React.FC = () => {
   const [stats, setStats] = useState<EventStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showRSVPModal, setShowRSVPModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [showRecordTimesModal, setShowRecordTimesModal] = useState(false);
-  const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>(RSVPStatusEnum.GOING);
-  const [guestCount, setGuestCount] = useState(0);
-  const [rsvpNotes, setRsvpNotes] = useState('');
-  const [rsvpDietaryRestrictions, setRsvpDietaryRestrictions] = useState('');
-  const [rsvpAccessibilityNeeds, setRsvpAccessibilityNeeds] = useState('');
   const [showCancelSeriesModal, setShowCancelSeriesModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEndEventConfirm, setShowEndEventConfirm] = useState(false);
@@ -64,13 +60,8 @@ export const EventDetailPage: React.FC = () => {
   const [memberSearch, setMemberSearch] = useState('');
   const [actualStartTime, setActualStartTime] = useState('');
   const [actualEndTime, setActualEndTime] = useState('');
-  const [showOverrideModal, setShowOverrideModal] = useState(false);
-  const [editingRsvp, setEditingRsvp] = useState<RSVP | null>(null);
-  const [overrideCheckIn, setOverrideCheckIn] = useState('');
-  const [overrideCheckOut, setOverrideCheckOut] = useState('');
   const [removeConfirmUserId, setRemoveConfirmUserId] = useState<string | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const [rsvpApplyToSeries, setRsvpApplyToSeries] = useState(false);
   const [seriesEvents, setSeriesEvents] = useState<EventListItem[]>([]);
   const [showAllOccurrences, setShowAllOccurrences] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
@@ -78,15 +69,6 @@ export const EventDetailPage: React.FC = () => {
   const [templateDescription, setTemplateDescription] = useState('');
   const [bulkAddLoading, setBulkAddLoading] = useState(false);
   const [rsvpHistory, setRsvpHistory] = useState<RSVPHistory[]>([]);
-  const [showReminderMenu, setShowReminderMenu] = useState(false);
-  const [sendingReminders, setSendingReminders] = useState(false);
-  // Notification panel state
-  const [notificationType, setNotificationType] = useState<NotificationType>('announcement');
-  const [notificationTarget, setNotificationTarget] = useState<NotificationTarget>('all');
-  const [notificationMessage, setNotificationMessage] = useState('');
-  const [sendingNotification, setSendingNotification] = useState(false);
-  const [showNotifyConfirm, setShowNotifyConfirm] = useState(false);
-  const [lastNotification, setLastNotification] = useState<{ type: string; target: string; recipients: number; sentAt: string } | null>(null);
   const [linkedElections, setLinkedElections] = useState<ElectionListItem[]>([]);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const reminderMenuRef = useRef<HTMLDivElement>(null);
@@ -95,19 +77,42 @@ export const EventDetailPage: React.FC = () => {
   const tz = useTimezone();
   const canManage = checkPermission('events.manage');
 
+  // Extracted hooks for RSVP form, notifications, and override attendance
+  const rsvpForm = useRSVPForm({
+    eventId,
+    event,
+    onSuccess: async () => {
+      await fetchEvent();
+      if (canManage) {
+        await fetchRSVPs();
+        await fetchStats();
+      }
+    },
+  });
+  const notifications = useEventNotifications(eventId);
+  const override = useOverrideAttendance({
+    eventId,
+    timezone: tz,
+    onSuccess: async () => {
+      await fetchRSVPs();
+      await fetchStats();
+    },
+  });
+
   // Close actions menu and reminder menu on click outside
+  const closeReminderMenu = notifications.setShowReminderMenu;
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
         setShowActionsMenu(false);
       }
       if (reminderMenuRef.current && !reminderMenuRef.current.contains(e.target as Node)) {
-        setShowReminderMenu(false);
+        closeReminderMenu(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [closeReminderMenu]);
 
   useEffect(() => {
     if (eventId) {
@@ -286,48 +291,7 @@ export const EventDetailPage: React.FC = () => {
     setMemberSearch('');
   };
 
-  const handleRSVP = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!eventId) return;
-
-    try {
-      setSubmitting(true);
-      setSubmitError(null);
-
-      const rsvpPayload = {
-        status: rsvpStatus,
-        guest_count: guestCount,
-        notes: rsvpNotes || undefined,
-        dietary_restrictions: rsvpDietaryRestrictions || undefined,
-        accessibility_needs: rsvpAccessibilityNeeds || undefined,
-      };
-
-      if (rsvpApplyToSeries && event && (event.is_recurring || event.recurrence_parent_id)) {
-        const result = await eventService.rsvpToSeries(eventId, rsvpPayload);
-        toast.success(`RSVP applied to ${result.rsvp_count} events in the series`);
-      } else {
-        await eventService.createOrUpdateRSVP(eventId, rsvpPayload);
-        toast.success('RSVP submitted successfully');
-      }
-
-      setShowRSVPModal(false);
-      setRsvpStatus(RSVPStatusEnum.GOING);
-      setGuestCount(0);
-      setRsvpNotes('');
-      setRsvpDietaryRestrictions('');
-      setRsvpAccessibilityNeeds('');
-      setRsvpApplyToSeries(false);
-      await fetchEvent();
-      if (canManage) {
-        await fetchRSVPs();
-        await fetchStats();
-      }
-    } catch (err) {
-      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to submit RSVP');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // handleRSVP is now in rsvpForm.handleSubmit
 
   const handleCancelEvent = async (payload: { cancellationReason: string; sendNotifications: boolean }) => {
     if (!eventId) return;
@@ -406,48 +370,9 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
-  const handleSendReminders = async (reminderType: 'non_respondents' | 'all') => {
-    if (!eventId) return;
+  // handleSendReminders is now in notifications.handleSendReminders
 
-    try {
-      setSendingReminders(true);
-      setShowReminderMenu(false);
-      const result = await eventService.sendReminders(eventId, reminderType);
-      toast.success(`${result.sent_count} reminder(s) queued`);
-    } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>;
-      toast.error(axiosErr.response?.data?.detail || 'Failed to send reminders');
-    } finally {
-      setSendingReminders(false);
-    }
-  };
-
-  const handleSendNotification = async () => {
-    if (!eventId) return;
-
-    try {
-      setSendingNotification(true);
-      setShowNotifyConfirm(false);
-      const result = await eventService.sendEventNotification(eventId, {
-        notification_type: notificationType,
-        message: notificationMessage.trim() || undefined,
-        target: notificationTarget,
-      });
-      toast.success(result.message);
-      setLastNotification({
-        type: notificationType,
-        target: notificationTarget,
-        recipients: result.recipients_count,
-        sentAt: new Date().toISOString(),
-      });
-      setNotificationMessage('');
-    } catch (err) {
-      const axiosErr = err as AxiosError<{ detail?: string }>;
-      toast.error(axiosErr.response?.data?.detail || 'Failed to send notification');
-    } finally {
-      setSendingNotification(false);
-    }
-  };
+  // handleSendNotification is now in notifications.handleSendNotification
 
   const handleDeleteEvent = async (scope: 'single' | 'series') => {
     if (!eventId || !event) return;
@@ -551,50 +476,7 @@ export const EventDetailPage: React.FC = () => {
     }
   };
 
-  const openOverrideModal = (rsvp: RSVP) => {
-    setEditingRsvp(rsvp);
-    setOverrideCheckIn(
-      rsvp.override_check_in_at
-        ? formatForDateTimeInput(rsvp.override_check_in_at, tz)
-        : rsvp.checked_in_at
-          ? formatForDateTimeInput(rsvp.checked_in_at, tz)
-          : ''
-    );
-    setOverrideCheckOut(
-      rsvp.override_check_out_at
-        ? formatForDateTimeInput(rsvp.override_check_out_at, tz)
-        : rsvp.checked_out_at
-          ? formatForDateTimeInput(rsvp.checked_out_at, tz)
-          : ''
-    );
-    setShowOverrideModal(true);
-    setSubmitError(null);
-  };
-
-  const handleOverrideAttendance = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!eventId || !editingRsvp) return;
-
-    try {
-      setSubmitting(true);
-      setSubmitError(null);
-
-      const data: import('../types/event').RSVPOverride = {};
-      if (overrideCheckIn) data.override_check_in_at = localToUTC(overrideCheckIn, tz);
-      if (overrideCheckOut) data.override_check_out_at = localToUTC(overrideCheckOut, tz);
-
-      await eventService.overrideAttendance(eventId, editingRsvp.user_id, data);
-      setShowOverrideModal(false);
-      setEditingRsvp(null);
-      await fetchRSVPs();
-      await fetchStats();
-      toast.success('Attendance times updated');
-    } catch (err) {
-      setSubmitError((err as AxiosError<{ detail?: string }>).response?.data?.detail || 'Failed to update attendance');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  // openOverrideModal/handleOverrideAttendance now in override hook
 
   const handleRemoveAttendee = async (userId: string) => {
     if (!eventId) return;
@@ -780,7 +662,7 @@ export const EventDetailPage: React.FC = () => {
               )}
               {canRSVP && (
                 <button
-                  onClick={() => setShowRSVPModal(true)}
+                  onClick={rsvpForm.openModal}
                   className="btn-primary font-medium inline-flex items-center rounded-md text-sm"
                 >
                   {event.user_rsvp_status ? 'Update RSVP' : 'RSVP Now'}
@@ -833,25 +715,25 @@ export const EventDetailPage: React.FC = () => {
                   {!event.is_cancelled && (
                     <div className="relative" ref={reminderMenuRef}>
                       <button
-                        onClick={() => setShowReminderMenu(!showReminderMenu)}
-                        disabled={sendingReminders}
+                        onClick={() => notifications.setShowReminderMenu(!notifications.showReminderMenu)}
+                        disabled={notifications.sendingReminders}
                         className="inline-flex items-center px-4 py-2 border border-theme-surface-border rounded-md shadow-xs text-sm font-medium text-theme-text-secondary bg-theme-surface hover:bg-theme-surface-hover disabled:opacity-50"
                       >
                         <Bell className="mr-2 h-4 w-4" />
-                        {sendingReminders ? 'Sending...' : 'Send Reminders'}
+                        {notifications.sendingReminders ? 'Sending...' : 'Send Reminders'}
                         <ChevronDown className="ml-1 h-4 w-4" />
                       </button>
-                      {showReminderMenu && (
+                      {notifications.showReminderMenu && (
                         <div className="absolute right-0 mt-2 w-56 rounded-lg bg-theme-surface-modal border border-theme-surface-border shadow-lg z-20">
                           <div className="py-1">
                             <button
-                              onClick={() => void handleSendReminders('non_respondents')}
+                              onClick={() => void notifications.handleSendReminders('non_respondents')}
                               className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
                             >
                               Non-respondents only
                             </button>
                             <button
-                              onClick={() => void handleSendReminders('all')}
+                              onClick={() => void notifications.handleSendReminders('all')}
                               className="w-full text-left px-4 py-2.5 text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
                             >
                               All members
@@ -1196,7 +1078,7 @@ export const EventDetailPage: React.FC = () => {
                 <RSVPStatusBadge status={event.user_rsvp_status} />
                 {canRSVP && (
                   <button
-                    onClick={() => setShowRSVPModal(true)}
+                    onClick={rsvpForm.openModal}
                     className="text-sm text-red-700 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                   >
                     Change RSVP
@@ -1226,7 +1108,7 @@ export const EventDetailPage: React.FC = () => {
               removeConfirmUserId={removeConfirmUserId}
               onSetRemoveConfirmUserId={setRemoveConfirmUserId}
               onCheckIn={(userId) => { void handleCheckIn(userId); }}
-              onOpenOverrideModal={openOverrideModal}
+              onOpenOverrideModal={override.openModal}
               onRemoveAttendee={(userId) => { void handleRemoveAttendee(userId); }}
               onPrintRoster={printRoster}
               onExportCSV={exportAttendanceCSV}
@@ -1235,17 +1117,17 @@ export const EventDetailPage: React.FC = () => {
           {/* Notifications Panel (for managers) */}
           {canManage && !event.is_cancelled && (
             <EventNotificationPanel
-              notificationType={notificationType}
-              onNotificationTypeChange={setNotificationType}
-              notificationTarget={notificationTarget}
-              onNotificationTargetChange={setNotificationTarget}
-              notificationMessage={notificationMessage}
-              onNotificationMessageChange={setNotificationMessage}
-              sendingNotification={sendingNotification}
-              showNotifyConfirm={showNotifyConfirm}
-              onShowNotifyConfirm={setShowNotifyConfirm}
-              onSendNotification={() => void handleSendNotification()}
-              lastNotification={lastNotification}
+              notificationType={notifications.notificationType}
+              onNotificationTypeChange={notifications.setNotificationType}
+              notificationTarget={notifications.notificationTarget}
+              onNotificationTargetChange={notifications.setNotificationTarget}
+              notificationMessage={notifications.notificationMessage}
+              onNotificationMessageChange={notifications.setNotificationMessage}
+              sendingNotification={notifications.sendingNotification}
+              showNotifyConfirm={notifications.showNotifyConfirm}
+              onShowNotifyConfirm={notifications.setShowNotifyConfirm}
+              onSendNotification={() => void notifications.handleSendNotification()}
+              lastNotification={notifications.lastNotification}
               timezone={tz}
             />
           )}
@@ -1377,25 +1259,25 @@ export const EventDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {showRSVPModal && (
+      {rsvpForm.showRSVPModal && (
         <EventRSVPModal
           event={event}
-          rsvpStatus={rsvpStatus}
-          onRsvpStatusChange={setRsvpStatus}
-          guestCount={guestCount}
-          onGuestCountChange={setGuestCount}
-          rsvpNotes={rsvpNotes}
-          onRsvpNotesChange={setRsvpNotes}
-          rsvpDietaryRestrictions={rsvpDietaryRestrictions}
-          onRsvpDietaryRestrictionsChange={setRsvpDietaryRestrictions}
-          rsvpAccessibilityNeeds={rsvpAccessibilityNeeds}
-          onRsvpAccessibilityNeedsChange={setRsvpAccessibilityNeeds}
-          rsvpApplyToSeries={rsvpApplyToSeries}
-          onRsvpApplyToSeriesChange={setRsvpApplyToSeries}
-          submitting={submitting}
-          submitError={submitError}
-          onSubmit={(e) => { void handleRSVP(e); }}
-          onClose={() => { setShowRSVPModal(false); setSubmitError(null); }}
+          rsvpStatus={rsvpForm.rsvpStatus}
+          onRsvpStatusChange={rsvpForm.setRsvpStatus}
+          guestCount={rsvpForm.guestCount}
+          onGuestCountChange={rsvpForm.setGuestCount}
+          rsvpNotes={rsvpForm.rsvpNotes}
+          onRsvpNotesChange={rsvpForm.setRsvpNotes}
+          rsvpDietaryRestrictions={rsvpForm.rsvpDietaryRestrictions}
+          onRsvpDietaryRestrictionsChange={rsvpForm.setRsvpDietaryRestrictions}
+          rsvpAccessibilityNeeds={rsvpForm.rsvpAccessibilityNeeds}
+          onRsvpAccessibilityNeedsChange={rsvpForm.setRsvpAccessibilityNeeds}
+          rsvpApplyToSeries={rsvpForm.rsvpApplyToSeries}
+          onRsvpApplyToSeriesChange={rsvpForm.setRsvpApplyToSeries}
+          submitting={rsvpForm.submitting}
+          submitError={rsvpForm.submitError}
+          onSubmit={(e) => { void rsvpForm.handleSubmit(e); }}
+          onClose={rsvpForm.closeModal}
         />
       )}
 
@@ -1447,17 +1329,17 @@ export const EventDetailPage: React.FC = () => {
         />
       )}
 
-      {showOverrideModal && editingRsvp && (
+      {override.showOverrideModal && override.editingRsvp && (
         <EventOverrideAttendanceModal
-          editingRsvp={editingRsvp}
-          overrideCheckIn={overrideCheckIn}
-          onOverrideCheckInChange={setOverrideCheckIn}
-          overrideCheckOut={overrideCheckOut}
-          onOverrideCheckOutChange={setOverrideCheckOut}
-          submitting={submitting}
-          submitError={submitError}
-          onSubmit={(e) => { void handleOverrideAttendance(e); }}
-          onClose={() => { setShowOverrideModal(false); setEditingRsvp(null); setSubmitError(null); }}
+          editingRsvp={override.editingRsvp}
+          overrideCheckIn={override.overrideCheckIn}
+          onOverrideCheckInChange={override.setOverrideCheckIn}
+          overrideCheckOut={override.overrideCheckOut}
+          onOverrideCheckOutChange={override.setOverrideCheckOut}
+          submitting={override.submitting}
+          submitError={override.submitError}
+          onSubmit={(e) => { void override.handleSubmit(e); }}
+          onClose={override.closeModal}
         />
       )}
 

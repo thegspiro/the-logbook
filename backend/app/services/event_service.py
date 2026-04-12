@@ -43,6 +43,11 @@ from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
 
 
+DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
+
+BULK_ADD_MAX_SIZE = 200
+
+
 class EventService:
     """Service for event management"""
 
@@ -82,7 +87,7 @@ class EventService:
 
         # Set default allowed_rsvp_statuses if not provided and RSVP is required
         if event_data.requires_rsvp and not event_dict.get("allowed_rsvp_statuses"):
-            event_dict["allowed_rsvp_statuses"] = ["going", "not_going"]
+            event_dict["allowed_rsvp_statuses"] = DEFAULT_ALLOWED_RSVP_STATUSES
 
         # Create event
         event = Event(
@@ -138,6 +143,7 @@ class EventService:
     async def list_events(
         self,
         organization_id: UUID,
+        user_id: Optional[UUID] = None,
         event_type: Optional[str] = None,
         custom_category: Optional[str] = None,
         exclude_event_types: Optional[List[str]] = None,
@@ -149,12 +155,47 @@ class EventService:
         include_drafts: bool = False,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[Event]:
-        """List events with filtering"""
+    ) -> List[Dict[str, Any]]:
+        """List events with filtering.
+
+        Returns dicts with event fields plus pre-computed rsvp_count,
+        going_count, and user_rsvp_status — avoiding N+1 queries.
+        """
+        # Aggregate RSVP counts as correlated subqueries
+        rsvp_count_sq = (
+            select(func.count(EventRSVP.id))
+            .where(EventRSVP.event_id == Event.id)
+            .correlate(Event)
+            .scalar_subquery()
+            .label("rsvp_count")
+        )
+        going_count_sq = (
+            select(func.count(EventRSVP.id))
+            .where(EventRSVP.event_id == Event.id)
+            .where(EventRSVP.status == RSVPStatus.GOING)
+            .correlate(Event)
+            .scalar_subquery()
+            .label("going_count")
+        )
+
+        columns = [Event, rsvp_count_sq, going_count_sq]
+
+        # Optionally include current user's RSVP status
+        if user_id:
+            user_rsvp_sq = (
+                select(EventRSVP.status)
+                .where(EventRSVP.event_id == Event.id)
+                .where(EventRSVP.user_id == str(user_id))
+                .correlate(Event)
+                .scalar_subquery()
+                .label("user_rsvp_status")
+            )
+            columns.append(user_rsvp_sq)
+
         query = (
-            select(Event)
+            select(*columns)
             .where(Event.organization_id == str(organization_id))
-            .options(selectinload(Event.rsvps), selectinload(Event.location_obj))
+            .options(selectinload(Event.location_obj))
         )
 
         if not include_drafts:
@@ -189,7 +230,28 @@ class EventService:
         query = query.order_by(Event.start_datetime).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
-        return list(result.scalars().all())
+        rows = result.all()
+
+        items: List[Dict[str, Any]] = []
+        for row in rows:
+            event = row[0]
+            item: Dict[str, Any] = {
+                "event": event,
+                "rsvp_count": row[1] or 0,
+                "going_count": row[2] or 0,
+                "user_rsvp_status": None,
+            }
+            if user_id:
+                raw_status = row[3]
+                if raw_status is not None:
+                    item["user_rsvp_status"] = (
+                        raw_status.value
+                        if hasattr(raw_status, "value")
+                        else raw_status
+                    )
+            items.append(item)
+
+        return items
 
     async def update_event(
         self,
@@ -572,11 +634,12 @@ class EventService:
         organization_id: UUID,
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """Create or update an RSVP"""
-        # Verify event exists and belongs to organization
+        # Lock the event row to serialize concurrent RSVP capacity checks
         event_result = await self.db.execute(
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -597,7 +660,7 @@ class EventService:
             return None, "RSVP deadline has passed"
 
         # Validate RSVP status against allowed statuses
-        allowed_statuses = event.allowed_rsvp_statuses or ["going", "not_going"]
+        allowed_statuses = event.allowed_rsvp_statuses or DEFAULT_ALLOWED_RSVP_STATUSES
         if rsvp_data.status not in allowed_statuses:
             return (
                 None,
@@ -634,12 +697,13 @@ class EventService:
             )
             self.db.add(rsvp)
 
-        # Check capacity if user is going
+        # Check capacity if user is going (event row is locked, so this
+        # count is consistent — no other transaction can commit a new
+        # "going" RSVP for this event until we release the lock)
         old_status_was_going = (
             existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
         )
         if rsvp_data.status == RSVPStatus.GOING.value and event.max_attendees:
-            # Count current "going" RSVPs, excluding this user's RSVP if updating
             capacity_query = (
                 select(func.count(EventRSVP.id))
                 .where(EventRSVP.event_id == str(event_id))
@@ -758,9 +822,34 @@ class EventService:
         """
         Promote the earliest waitlisted RSVP for an event to 'going'.
 
+        Uses SELECT ... FOR UPDATE to prevent two concurrent promotions
+        from both succeeding when only one capacity slot is available.
+
         Returns the promoted RSVP or None if no waitlisted users exist.
         """
-        # Find the earliest waitlisted RSVP by responded_at
+        # Lock the event row to serialize promotions against capacity
+        event_result = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        event = event_result.scalar_one_or_none()
+        if not event or not event.max_attendees:
+            return None
+
+        # Verify there is actually capacity before promoting
+        going_count_result = await self.db.execute(
+            select(func.count(EventRSVP.id))
+            .where(EventRSVP.event_id == str(event_id))
+            .where(EventRSVP.status == RSVPStatus.GOING)
+        )
+        going_count = going_count_result.scalar() or 0
+
+        if going_count >= event.max_attendees:
+            return None
+
+        # Lock and fetch the earliest waitlisted RSVP
         result = await self.db.execute(
             select(EventRSVP)
             .where(EventRSVP.event_id == str(event_id))
@@ -768,6 +857,7 @@ class EventService:
             .where(EventRSVP.status == RSVPStatus.WAITLISTED)
             .order_by(EventRSVP.responded_at.asc())
             .limit(1)
+            .with_for_update()
         )
         waitlisted_rsvp = result.scalar_one_or_none()
 
@@ -1729,62 +1819,79 @@ class EventService:
         self, event: Event, rsvp: EventRSVP, user_id: UUID, organization_id: UUID
     ) -> None:
         """
-        Auto-create a TrainingRecord if the event is a training session with auto_create_records enabled
+        Auto-create a TrainingRecord if the event is a training session
+        with auto_create_records enabled.
+
+        Errors are logged but do not propagate — the check-in has
+        already committed, so a training-record failure must not
+        cause the caller to return an error to the user.
         """
         if event.event_type != EventType.TRAINING:
             return
 
-        # Check if this event has a training session
-        session_result = await self.db.execute(
-            select(TrainingSession).where(TrainingSession.event_id == event.id)
-        )
-        training_session = session_result.scalar_one_or_none()
+        try:
+            # Check if this event has a training session
+            session_result = await self.db.execute(
+                select(TrainingSession).where(TrainingSession.event_id == event.id)
+            )
+            training_session = session_result.scalar_one_or_none()
 
-        if not training_session:
-            return
+            if not training_session:
+                return
 
-        if not training_session.auto_create_records:
-            return
+            if not training_session.auto_create_records:
+                return
 
-        # Check if training record already exists
-        existing_record_result = await self.db.execute(
-            select(TrainingRecord)
-            .where(TrainingRecord.user_id == str(user_id))
-            .where(TrainingRecord.course_name == training_session.course_name)
-            .where(TrainingRecord.scheduled_date == event.start_datetime.date())
-        )
-        existing_record = existing_record_result.scalar_one_or_none()
+            # Check if training record already exists
+            existing_record_result = await self.db.execute(
+                select(TrainingRecord)
+                .where(TrainingRecord.user_id == str(user_id))
+                .where(TrainingRecord.course_name == training_session.course_name)
+                .where(TrainingRecord.scheduled_date == event.start_datetime.date())
+            )
+            existing_record = existing_record_result.scalar_one_or_none()
 
-        if existing_record:
-            return  # Record already exists
+            if existing_record:
+                return  # Record already exists
 
-        # Create training record
-        training_record = TrainingRecord(
-            organization_id=organization_id,
-            user_id=user_id,
-            course_id=training_session.course_id,
-            category_id=training_session.category_id,
-            course_name=training_session.course_name,
-            course_code=training_session.course_code,
-            training_type=training_session.training_type,
-            scheduled_date=event.start_datetime.date(),
-            completion_date=None,  # Will be set when event ends or approved
-            status=TrainingStatus.IN_PROGRESS,
-            hours_completed=0.0,  # Will be calculated from attendance duration
-            credit_hours=training_session.credit_hours,
-            instructor=training_session.instructor,
-            location=event.location,
-            certification_number=None,  # Will be generated upon completion if applicable
-            issuing_agency=(
-                training_session.issuing_agency
-                if training_session.issues_certification
-                else None
-            ),
-            created_by=user_id,
-        )
+            # Create training record
+            training_record = TrainingRecord(
+                organization_id=organization_id,
+                user_id=user_id,
+                course_id=training_session.course_id,
+                category_id=training_session.category_id,
+                course_name=training_session.course_name,
+                course_code=training_session.course_code,
+                training_type=training_session.training_type,
+                scheduled_date=event.start_datetime.date(),
+                completion_date=None,
+                status=TrainingStatus.IN_PROGRESS,
+                hours_completed=0.0,
+                credit_hours=training_session.credit_hours,
+                instructor=training_session.instructor,
+                location=event.location,
+                certification_number=None,
+                issuing_agency=(
+                    training_session.issuing_agency
+                    if training_session.issues_certification
+                    else None
+                ),
+                created_by=user_id,
+            )
 
-        self.db.add(training_record)
-        await self.db.commit()
+            self.db.add(training_record)
+            await self.db.commit()
+        except Exception:
+            logger.error(
+                "Failed to auto-create training record for user {} "
+                "at event {} (session {}). Check-in succeeded but "
+                "training credit was not recorded.",
+                user_id,
+                event.id,
+                event.title,
+                exc_info=True,
+            )
+            await self.db.rollback()
 
     async def get_check_in_monitoring_stats(
         self, event_id: UUID, organization_id: UUID

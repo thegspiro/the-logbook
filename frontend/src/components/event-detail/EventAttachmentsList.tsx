@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { Paperclip, Download } from 'lucide-react';
+import { EmptyState } from '../ux';
 import type { EventAttachment } from '../../types/event';
 
 export interface EventAttachmentsListProps {
@@ -19,7 +20,21 @@ export const EventAttachmentsList: React.FC<EventAttachmentsListProps> = ({
   eventId,
   getAttachmentDownloadUrl,
 }) => {
-  if (attachments.length === 0) return null;
+  if (attachments.length === 0) {
+    return (
+      <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">
+        <h2 className="text-lg font-medium text-theme-text-primary mb-4 flex items-center gap-2">
+          <Paperclip className="h-5 w-5" />
+          Attachments
+        </h2>
+        <EmptyState
+          icon={Paperclip}
+          title="No attachments"
+          description="No files have been attached to this event."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="bg-theme-surface backdrop-blur-xs rounded-lg shadow-sm p-6">

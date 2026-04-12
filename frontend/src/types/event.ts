@@ -64,6 +64,7 @@ export interface Event {
 export interface EventListItem {
   id: string;
   title: string;
+  description?: string;
   event_type: EventType;
   custom_category?: string;
   start_datetime: string;

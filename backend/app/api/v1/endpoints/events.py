@@ -30,9 +30,14 @@ from app.models.user import Organization, User, UserStatus
 from app.schemas.documents import DocumentFolderResponse
 from app.schemas.event import (
     AnalyticsSummary,
+    AttachmentUploadResponse,
     BulkAddAttendees,
+    BulkAddAttendeesResponse,
+    CancelSeriesResponse,
     CheckInMonitoringStats,
     CheckInRequest,
+    EligibleMemberResponse,
+    EndEventResponse,
     EventCancel,
     EventCreate,
     EventListItem,
@@ -45,8 +50,11 @@ from app.schemas.event import (
     EventTemplateResponse,
     EventTemplateUpdate,
     EventUpdate,
+    ExternalAttendeeCheckInResponse,
+    FinalizeAttendanceResponse,
     ManagerAddAttendee,
     QRCheckInData,
+    RSVPToSeriesResponse,
     RecordActualTimes,
     RecurringEventCreate,
     RSVPCreate,
@@ -54,10 +62,16 @@ from app.schemas.event import (
     RSVPOverride,
     RSVPResponse,
     SelfCheckInRequest,
+    SendRemindersResponse,
+    VisibleEventTypesResponse,
 )
 from app.models.notification import NotificationChannel
 from app.services.documents_service import DocumentsService
-from app.services.event_service import EventService
+from app.services.event_service import (
+    BULK_ADD_MAX_SIZE,
+    DEFAULT_ALLOWED_RSVP_STATUSES,
+    EventService,
+)
 from app.services.notifications_service import NotificationsService
 
 router = APIRouter()
@@ -143,6 +157,34 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
     )
 
 
+def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
+    """Build an RSVPResponse from an EventRSVP model and optional User."""
+    status_val = rsvp.status.value if hasattr(rsvp.status, "value") else rsvp.status
+    return RSVPResponse(
+        id=rsvp.id,
+        event_id=rsvp.event_id,
+        user_id=rsvp.user_id,
+        status=status_val,
+        guest_count=rsvp.guest_count,
+        notes=rsvp.notes,
+        dietary_restrictions=rsvp.dietary_restrictions,
+        accessibility_needs=rsvp.accessibility_needs,
+        responded_at=rsvp.responded_at,
+        updated_at=rsvp.updated_at,
+        checked_in=rsvp.checked_in,
+        checked_in_at=rsvp.checked_in_at,
+        checked_out_at=rsvp.checked_out_at,
+        attendance_duration_minutes=rsvp.attendance_duration_minutes,
+        override_check_in_at=rsvp.override_check_in_at,
+        override_check_out_at=rsvp.override_check_out_at,
+        override_duration_minutes=rsvp.override_duration_minutes,
+        overridden_by=rsvp.overridden_by,
+        overridden_at=rsvp.overridden_at,
+        user_name=f"{user.first_name} {user.last_name}" if user else None,
+        user_email=user.email if user else None,
+    )
+
+
 # ============================================
 # Event Endpoints
 # ============================================
@@ -182,8 +224,9 @@ async def list_events(
         exclude_list = [t.strip() for t in exclude_event_types.split(",") if t.strip()]
 
     service = EventService(db)
-    events = await service.list_events(
+    rows = await service.list_events(
         organization_id=current_user.organization_id,
+        user_id=current_user.id,
         event_type=event_type,
         custom_category=custom_category,
         exclude_event_types=exclude_list,
@@ -197,40 +240,18 @@ async def list_events(
         limit=limit,
     )
 
-    # Convert to list items with basic info
     event_list = []
-    for event in events:
-        rsvp_count = len(event.rsvps) if event.rsvps else 0
-        going_count = (
-            sum(1 for rsvp in event.rsvps if rsvp.status == RSVPStatus.GOING)
-            if event.rsvps
-            else 0
-        )
-
+    for row in rows:
+        event = row["event"]
         location_name = None
         if event.location_obj:
             location_name = event.location_obj.name
-
-        # Find the current user's RSVP status for this event
-        user_rsvp_status = None
-        if event.rsvps:
-            for rsvp in event.rsvps:
-                if str(rsvp.user_id) == str(current_user.id):
-                    user_rsvp_status = (
-                        (
-                            rsvp.status.value
-                            if hasattr(rsvp.status, "value")
-                            else rsvp.status
-                        )
-                        if rsvp.status
-                        else None
-                    )
-                    break
 
         event_list.append(
             EventListItem(
                 id=event.id,
                 title=event.title,
+                description=event.description,
                 event_type=(
                     (
                         event.event_type.value
@@ -252,9 +273,9 @@ async def list_events(
                 is_cancelled=event.is_cancelled,
                 is_recurring=event.is_recurring or False,
                 recurrence_parent_id=event.recurrence_parent_id,
-                rsvp_count=rsvp_count,
-                going_count=going_count,
-                user_rsvp_status=user_rsvp_status,
+                rsvp_count=row["rsvp_count"],
+                going_count=row["going_count"],
+                user_rsvp_status=row["user_rsvp_status"],
             )
         )
 
@@ -436,7 +457,7 @@ EVENT_SETTINGS_DEFAULTS = {
         "check_in_minutes_after": 15,
         "require_checkout": False,
         "requires_rsvp": False,
-        "allowed_rsvp_statuses": ["going", "not_going"],
+        "allowed_rsvp_statuses": DEFAULT_ALLOWED_RSVP_STATUSES,
         "allow_guests": False,
         "is_mandatory": False,
         "send_reminders": True,
@@ -577,7 +598,7 @@ async def update_event_settings(
     return merged
 
 
-@router.get("/visible-event-types")
+@router.get("/visible-event-types", response_model=VisibleEventTypesResponse)
 async def get_visible_event_types(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1119,7 +1140,7 @@ async def cancel_event(
         )
 
 
-@router.post("/{event_id}/cancel-series")
+@router.post("/{event_id}/cancel-series", response_model=CancelSeriesResponse)
 async def cancel_event_series(
     event_id: UUID,
     cancel_data: EventCancel,
@@ -1167,10 +1188,10 @@ async def cancel_event_series(
             username=current_user.username,
         )
 
-        return {
-            "message": f"Successfully cancelled {cancelled_count} event(s) in the series",
-            "cancelled_count": cancelled_count,
-        }
+        return CancelSeriesResponse(
+            message=f"Successfully cancelled {cancelled_count} event(s) in the series",
+            cancelled_count=cancelled_count,
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
@@ -1212,23 +1233,10 @@ async def create_or_update_rsvp(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
-    return RSVPResponse(
-        id=rsvp.id,
-        event_id=rsvp.event_id,
-        user_id=rsvp.user_id,
-        status=rsvp.status.value,
-        guest_count=rsvp.guest_count,
-        notes=rsvp.notes,
-        responded_at=rsvp.responded_at,
-        updated_at=rsvp.updated_at,
-        checked_in=rsvp.checked_in,
-        checked_in_at=rsvp.checked_in_at,
-        user_name=f"{current_user.first_name} {current_user.last_name}",
-        user_email=current_user.email,
-    )
+    return _build_rsvp_response(rsvp, user=current_user)
 
 
-@router.post("/{event_id}/rsvp-series")
+@router.post("/{event_id}/rsvp-series", response_model=RSVPToSeriesResponse)
 async def rsvp_to_series(
     event_id: UUID,
     rsvp_data: RSVPCreate,
@@ -1270,10 +1278,10 @@ async def rsvp_to_series(
             detail=safe_error_detail(e),
         )
 
-    return {
-        "message": f"RSVP applied to {rsvp_count} events in the series",
-        "rsvp_count": rsvp_count,
-    }
+    return RSVPToSeriesResponse(
+        message=f"RSVP applied to {rsvp_count} events in the series",
+        rsvp_count=rsvp_count,
+    )
 
 
 @router.get("/{event_id}/rsvps", response_model=list[RSVPResponse])
@@ -1300,30 +1308,7 @@ async def list_event_rsvps(
         limit=limit,
     )
 
-    # Build response using eager-loaded user data
-    rsvp_responses = []
-    for rsvp in rsvps:
-        # User is already loaded via selectinload in the service layer
-        user = rsvp.user
-
-        rsvp_responses.append(
-            RSVPResponse(
-                id=rsvp.id,
-                event_id=rsvp.event_id,
-                user_id=rsvp.user_id,
-                status=rsvp.status.value,
-                guest_count=rsvp.guest_count,
-                notes=rsvp.notes,
-                responded_at=rsvp.responded_at,
-                updated_at=rsvp.updated_at,
-                checked_in=rsvp.checked_in,
-                checked_in_at=rsvp.checked_in_at,
-                user_name=f"{user.first_name} {user.last_name}" if user else None,
-                user_email=user.email if user else None,
-            )
-        )
-
-    return rsvp_responses
+    return [_build_rsvp_response(rsvp, user=rsvp.user) for rsvp in rsvps]
 
 
 @router.get("/{event_id}/rsvp-history", response_model=list[RSVPHistoryResponse])
@@ -1360,7 +1345,10 @@ async def get_rsvp_history(
     return history
 
 
-@router.get("/{event_id}/eligible-members")
+@router.get(
+    "/{event_id}/eligible-members",
+    response_model=list[EligibleMemberResponse],
+)
 async def get_eligible_members(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1447,20 +1435,7 @@ async def check_in_attendee(
         username=current_user.username,
     )
 
-    return RSVPResponse(
-        id=rsvp.id,
-        event_id=rsvp.event_id,
-        user_id=rsvp.user_id,
-        status=rsvp.status.value,
-        guest_count=rsvp.guest_count,
-        notes=rsvp.notes,
-        responded_at=rsvp.responded_at,
-        updated_at=rsvp.updated_at,
-        checked_in=rsvp.checked_in,
-        checked_in_at=rsvp.checked_in_at,
-        user_name=f"{user.first_name} {user.last_name}" if user else None,
-        user_email=user.email if user else None,
-    )
+    return _build_rsvp_response(rsvp, user=user)
 
 
 @router.post("/{event_id}/add-attendee", response_model=RSVPResponse)
@@ -1511,28 +1486,10 @@ async def manager_add_attendee(
         username=current_user.username,
     )
 
-    return RSVPResponse(
-        id=rsvp.id,
-        event_id=rsvp.event_id,
-        user_id=rsvp.user_id,
-        status=rsvp.status.value,
-        guest_count=rsvp.guest_count,
-        notes=rsvp.notes,
-        responded_at=rsvp.responded_at,
-        updated_at=rsvp.updated_at,
-        checked_in=rsvp.checked_in,
-        checked_in_at=rsvp.checked_in_at,
-        checked_out_at=rsvp.checked_out_at,
-        attendance_duration_minutes=rsvp.attendance_duration_minutes,
-        override_check_in_at=rsvp.override_check_in_at,
-        override_check_out_at=rsvp.override_check_out_at,
-        override_duration_minutes=rsvp.override_duration_minutes,
-        user_name=f"{user.first_name} {user.last_name}" if user else None,
-        user_email=user.email if user else None,
-    )
+    return _build_rsvp_response(rsvp, user=user)
 
 
-@router.post("/{event_id}/bulk-add-attendees")
+@router.post("/{event_id}/bulk-add-attendees", response_model=BulkAddAttendeesResponse)
 async def bulk_add_attendees(
     event_id: UUID,
     data: BulkAddAttendees,
@@ -1548,11 +1505,29 @@ async def bulk_add_attendees(
     **Authentication required**
     **Requires permission: events.manage**
     """
+    if len(data.user_ids) > BULK_ADD_MAX_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot add more than {BULK_ADD_MAX_SIZE} attendees at once",
+        )
+
     service = EventService(db)
     created_count = 0
     errors = []
 
+    # Pre-fetch all users in a single query to avoid N+1
+    user_results = await db.execute(
+        select(User)
+        .where(User.id.in_([str(uid) for uid in data.user_ids]))
+        .where(User.organization_id == str(current_user.organization_id))
+    )
+    valid_users = {u.id for u in user_results.scalars().all()}
+
     for user_id in data.user_ids:
+        if str(user_id) not in valid_users:
+            errors.append({"user_id": str(user_id), "error": "User not found in organization"})
+            continue
+
         rsvp, error = await service.manager_add_attendee(
             event_id=event_id,
             user_id=user_id,
@@ -1581,10 +1556,10 @@ async def bulk_add_attendees(
         username=current_user.username,
     )
 
-    return {
-        "created_count": created_count,
-        "errors": errors,
-    }
+    return BulkAddAttendeesResponse(
+        created_count=created_count,
+        errors=errors,
+    )
 
 
 @router.patch("/{event_id}/rsvps/{user_id}/override", response_model=RSVPResponse)
@@ -1636,25 +1611,7 @@ async def override_rsvp_attendance(
         username=current_user.username,
     )
 
-    return RSVPResponse(
-        id=rsvp.id,
-        event_id=rsvp.event_id,
-        user_id=rsvp.user_id,
-        status=rsvp.status.value,
-        guest_count=rsvp.guest_count,
-        notes=rsvp.notes,
-        responded_at=rsvp.responded_at,
-        updated_at=rsvp.updated_at,
-        checked_in=rsvp.checked_in,
-        checked_in_at=rsvp.checked_in_at,
-        checked_out_at=rsvp.checked_out_at,
-        attendance_duration_minutes=rsvp.attendance_duration_minutes,
-        override_check_in_at=rsvp.override_check_in_at,
-        override_check_out_at=rsvp.override_check_out_at,
-        override_duration_minutes=rsvp.override_duration_minutes,
-        user_name=f"{user.first_name} {user.last_name}" if user else None,
-        user_email=user.email if user else None,
-    )
+    return _build_rsvp_response(rsvp, user=user)
 
 
 @router.delete("/{event_id}/rsvps/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1739,20 +1696,7 @@ async def promote_from_waitlist(
         username=current_user.username,
     )
 
-    return RSVPResponse(
-        id=rsvp.id,
-        event_id=rsvp.event_id,
-        user_id=rsvp.user_id,
-        status=rsvp.status.value,
-        guest_count=rsvp.guest_count,
-        notes=rsvp.notes,
-        responded_at=rsvp.responded_at,
-        updated_at=rsvp.updated_at,
-        checked_in=rsvp.checked_in,
-        checked_in_at=rsvp.checked_in_at,
-        user_name=f"{user.first_name} {user.last_name}" if user else None,
-        user_email=user.email if user else None,
-    )
+    return _build_rsvp_response(rsvp, user=user)
 
 
 @router.get("/{event_id}/stats", response_model=EventStats)
@@ -1811,7 +1755,7 @@ async def record_actual_times(
     return _build_event_response(event)
 
 
-@router.post("/{event_id}/finalize-attendance")
+@router.post("/{event_id}/finalize-attendance", response_model=FinalizeAttendanceResponse)
 async def finalize_attendance(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1839,10 +1783,10 @@ async def finalize_attendance(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
-    return {"updated_count": updated_count}
+    return FinalizeAttendanceResponse(updated_count=updated_count)
 
 
-@router.post("/{event_id}/end-event")
+@router.post("/{event_id}/end-event", response_model=EndEventResponse)
 async def end_event(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1876,10 +1820,10 @@ async def end_event(
         details={"checked_out_count": checked_out_count},
     )
 
-    return {
-        "checked_out_count": checked_out_count,
-        "actual_end_time": event.actual_end_time.isoformat() if event else None,
-    }
+    return EndEventResponse(
+        checked_out_count=checked_out_count,
+        actual_end_time=event.actual_end_time.isoformat() if event else None,
+    )
 
 
 # ============================================
@@ -1945,27 +1889,7 @@ async def self_check_in(
     if error:
         # Special case: already checked in - return success with message
         if error == "ALREADY_CHECKED_IN":
-            # Get user details
-            user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
-            user = user_result.scalar_one_or_none()
-
-            response = RSVPResponse(
-                id=rsvp.id,
-                event_id=rsvp.event_id,
-                user_id=rsvp.user_id,
-                status=rsvp.status.value,
-                guest_count=rsvp.guest_count,
-                notes=rsvp.notes,
-                responded_at=rsvp.responded_at,
-                updated_at=rsvp.updated_at,
-                checked_in=rsvp.checked_in,
-                checked_in_at=rsvp.checked_in_at,
-                checked_out_at=rsvp.checked_out_at,
-                attendance_duration_minutes=rsvp.attendance_duration_minutes,
-                user_name=f"{user.first_name} {user.last_name}" if user else None,
-                user_email=user.email if user else None,
-            )
-            # Add custom header to indicate already checked in
+            response = _build_rsvp_response(rsvp, user=current_user)
             from fastapi.responses import JSONResponse
 
             return JSONResponse(
@@ -1975,10 +1899,6 @@ async def self_check_in(
             )
 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
-
-    # Get user details
-    user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
-    user = user_result.scalar_one_or_none()
 
     await log_audit_event(
         db=db,
@@ -1993,22 +1913,7 @@ async def self_check_in(
         username=current_user.username,
     )
 
-    return RSVPResponse(
-        id=rsvp.id,
-        event_id=rsvp.event_id,
-        user_id=rsvp.user_id,
-        status=rsvp.status.value,
-        guest_count=rsvp.guest_count,
-        notes=rsvp.notes,
-        responded_at=rsvp.responded_at,
-        updated_at=rsvp.updated_at,
-        checked_in=rsvp.checked_in,
-        checked_in_at=rsvp.checked_in_at,
-        checked_out_at=rsvp.checked_out_at,
-        attendance_duration_minutes=rsvp.attendance_duration_minutes,
-        user_name=f"{user.first_name} {user.last_name}" if user else None,
-        user_email=user.email if user else None,
-    )
+    return _build_rsvp_response(rsvp, user=current_user)
 
 
 @router.get("/{event_id}/check-in-monitoring", response_model=CheckInMonitoringStats)
@@ -2222,7 +2127,7 @@ ALLOWED_ATTACHMENT_MIME_TYPES = {
 MAX_ATTACHMENT_SIZE = 25 * 1024 * 1024  # 25MB
 
 
-@router.post("/{event_id}/attachments")
+@router.post("/{event_id}/attachments", response_model=AttachmentUploadResponse)
 async def upload_event_attachment(
     event_id: UUID,
     file: UploadFile = File(...),
@@ -2314,11 +2219,11 @@ async def upload_event_attachment(
 
     await db.commit()
 
-    return {
-        "message": "Attachment uploaded successfully",
-        "attachment": attachments[-1],
-        "total_attachments": len(attachments),
-    }
+    return AttachmentUploadResponse(
+        message="Attachment uploaded successfully",
+        attachment=attachments[-1],
+        total_attachments=len(attachments),
+    )
 
 
 @router.get("/{event_id}/attachments")
@@ -2665,7 +2570,10 @@ async def update_external_attendee(
     )
 
 
-@router.patch("/{event_id}/external-attendees/{attendee_id}/check-in")
+@router.patch(
+    "/{event_id}/external-attendees/{attendee_id}/check-in",
+    response_model=ExternalAttendeeCheckInResponse,
+)
 async def check_in_external_attendee(
     event_id: UUID,
     attendee_id: UUID,
@@ -2687,7 +2595,9 @@ async def check_in_external_attendee(
     attendee.checked_in = True
     attendee.checked_in_at = datetime.now(dt_timezone.utc)
     await db.commit()
-    return {"status": "checked_in", "attendee_id": attendee.id}
+    return ExternalAttendeeCheckInResponse(
+        status="checked_in", attendee_id=attendee.id
+    )
 
 
 @router.delete(
@@ -2725,7 +2635,7 @@ class SendRemindersRequest(BaseModel):
     reminder_type: str  # "non_respondents" or "all"
 
 
-@router.post("/{event_id}/send-reminders")
+@router.post("/{event_id}/send-reminders", response_model=SendRemindersResponse)
 async def send_event_reminders(
     event_id: UUID,
     body: SendRemindersRequest,
@@ -2781,7 +2691,9 @@ async def send_event_reminders(
         event_id,
     )
 
-    return {"message": "Reminders sent successfully", "sent_count": len(user_ids)}
+    return SendRemindersResponse(
+        message="Reminders sent successfully", sent_count=len(user_ids)
+    )
 
 
 # ============================================

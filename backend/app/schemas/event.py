@@ -276,6 +276,7 @@ class EventListItem(UTCResponseBase):
 
     id: UUID
     title: str
+    description: Optional[str] = None
     event_type: str
     custom_category: Optional[str] = None
     start_datetime: datetime
@@ -373,7 +374,7 @@ class ManagerAddAttendee(BaseModel):
 class BulkAddAttendees(BaseModel):
     """Schema for bulk-adding multiple attendees to an event"""
 
-    user_ids: List[UUID]
+    user_ids: List[UUID] = Field(..., max_length=200)
     status: str = Field(
         default="going", description="RSVP status: going, not_going, maybe"
     )
@@ -713,6 +714,7 @@ class RecurringEventCreate(BaseModel):
         description="Allowed RSVP statuses. Defaults to ['going', 'not_going']",
     )
     template_id: Optional[UUID] = None  # Created from a template
+    is_draft: bool = False
 
     @model_validator(mode="after")
     def validate_recurrence_fields(self):
@@ -782,3 +784,89 @@ class AnalyticsSummary(BaseModel):
     event_type_distribution: List[EventTypeDistribution]
     monthly_event_counts: List[MonthlyEventCount]
     top_events: List[TopEventByAttendance]
+
+
+# ============================================================
+# Typed response models for operations that previously
+# returned untyped dicts
+# ============================================================
+
+
+class CancelSeriesResponse(BaseModel):
+    """Response for cancelling a recurring event series."""
+
+    message: str
+    cancelled_count: int
+
+
+class RSVPToSeriesResponse(BaseModel):
+    """Response for batch RSVP to a recurring series."""
+
+    message: str
+    rsvp_count: int
+
+
+class BulkAddAttendeesError(BaseModel):
+    """A single error from a bulk-add operation."""
+
+    user_id: str
+    error: str
+
+
+class BulkAddAttendeesResponse(BaseModel):
+    """Response for bulk-adding attendees."""
+
+    created_count: int
+    errors: List[BulkAddAttendeesError]
+
+
+class FinalizeAttendanceResponse(BaseModel):
+    """Response for finalizing event attendance."""
+
+    updated_count: int
+
+
+class EndEventResponse(BaseModel):
+    """Response for ending an in-progress event."""
+
+    checked_out_count: int
+    actual_end_time: Optional[str] = None
+
+
+class VisibleEventTypesResponse(BaseModel):
+    """Response for visible event types configuration."""
+
+    visible_event_types: List[str]
+    custom_event_categories: List[EventCategoryConfig]
+    visible_custom_categories: List[str]
+
+
+class AttachmentUploadResponse(BaseModel):
+    """Response for uploading an event attachment."""
+
+    message: str
+    attachment: Dict[str, Any]
+    total_attachments: int
+
+
+class ExternalAttendeeCheckInResponse(BaseModel):
+    """Response for checking in an external attendee."""
+
+    status: str
+    attendee_id: str
+
+
+class SendRemindersResponse(BaseModel):
+    """Response for sending event reminders."""
+
+    message: str
+    sent_count: int
+
+
+class EligibleMemberResponse(BaseModel):
+    """A single member eligible for event check-in."""
+
+    id: str
+    first_name: str
+    last_name: str
+    email: str
