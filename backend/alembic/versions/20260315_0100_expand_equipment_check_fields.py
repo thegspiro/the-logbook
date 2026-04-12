@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers
 revision = "a9f3e7c10001"
-down_revision = None  # Alembic will auto-detect
+down_revision = "b7c8d9e0f1a2"
 branch_labels = None
 depends_on = None
 

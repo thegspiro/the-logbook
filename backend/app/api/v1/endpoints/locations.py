@@ -5,7 +5,6 @@ Endpoints for location management including CRUD operations and event queries.
 """
 
 from datetime import timedelta
-
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status

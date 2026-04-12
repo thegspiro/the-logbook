@@ -1,6 +1,6 @@
 """Create prospect event links table
 
-Revision ID: 20260312_0100
+Revision ID: 20260312_0101
 Revises: 20260308_0300
 Create Date: 2026-03-12
 
@@ -9,8 +9,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = "20260312_0100"
-down_revision = "20260308_0300"
+revision = "20260312_0101"
+down_revision = "20260312_0200"
 branch_labels = None
 depends_on = None
 

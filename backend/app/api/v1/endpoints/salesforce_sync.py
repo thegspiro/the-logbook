@@ -32,9 +32,7 @@ router = APIRouter()
 # ============================================================
 
 
-async def _get_sf_integration(
-    db: AsyncSession, organization_id: str
-) -> Integration:
+async def _get_sf_integration(db: AsyncSession, organization_id: str) -> Integration:
     """Load the connected Salesforce integration or raise 404."""
     result = await db.execute(
         select(Integration).where(
@@ -88,9 +86,7 @@ def _training_record_to_dict(rec: TrainingRecord) -> dict[str, Any]:
         "status": rec.status.value if rec.status else "completed",
         "certification_number": rec.certification_number,
         "expiration_date": rec.expiration_date,
-        "training_type": (
-            rec.training_type.value if rec.training_type else ""
-        ),
+        "training_type": (rec.training_type.value if rec.training_type else ""),
         "instructor": rec.instructor,
     }
 
@@ -101,9 +97,7 @@ def _event_to_dict(event: Event) -> dict[str, Any]:
         "id": event.id,
         "title": event.title,
         "description": event.description,
-        "event_type": (
-            event.event_type.value if event.event_type else "other"
-        ),
+        "event_type": (event.event_type.value if event.event_type else "other"),
         "location": event.location,
         "start_datetime": event.start_datetime,
         "end_datetime": event.end_datetime,
@@ -119,21 +113,15 @@ def _event_to_dict(event: Event) -> dict[str, Any]:
 @router.get("/status")
 async def salesforce_sync_status(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("integrations.manage")
-    ),
+    current_user: User = Depends(require_permission("integrations.manage")),
 ):
     """Get the current Salesforce sync status for this organization."""
-    integration = await _get_sf_integration(
-        db, str(current_user.organization_id)
-    )
+    integration = await _get_sf_integration(db, str(current_user.organization_id))
     config = integration.config or {}
     return {
         "connected": True,
         "last_sync_at": (
-            integration.last_sync_at.isoformat()
-            if integration.last_sync_at
-            else None
+            integration.last_sync_at.isoformat() if integration.last_sync_at else None
         ),
         "sync_direction": config.get("sync_direction", "push"),
         "sync_types": config.get("sync_types", []),
@@ -145,9 +133,7 @@ async def salesforce_sync_status(
 @router.post("/push/members")
 async def push_members_to_salesforce(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("integrations.manage")
-    ),
+    current_user: User = Depends(require_permission("integrations.manage")),
 ):
     """Push all active members to Salesforce as Contacts."""
     org_id = str(current_user.organization_id)
@@ -199,9 +185,7 @@ async def push_members_to_salesforce(
 @router.post("/push/training")
 async def push_training_to_salesforce(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("integrations.manage")
-    ),
+    current_user: User = Depends(require_permission("integrations.manage")),
 ):
     """Push all training records to Salesforce as Tasks."""
     org_id = str(current_user.organization_id)
@@ -251,9 +235,7 @@ async def push_training_to_salesforce(
 @router.post("/push/events")
 async def push_events_to_salesforce(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("integrations.manage")
-    ),
+    current_user: User = Depends(require_permission("integrations.manage")),
 ):
     """Push all non-cancelled events to Salesforce."""
     org_id = str(current_user.organization_id)
@@ -283,9 +265,7 @@ async def push_events_to_salesforce(
             else:
                 failed += 1
         except Exception:
-            logger.warning(
-                "Failed to push event %s", event.id, exc_info=True
-            )
+            logger.warning("Failed to push event %s", event.id, exc_info=True)
             failed += 1
 
     integration = await _get_sf_integration(db, org_id)
@@ -318,9 +298,7 @@ async def push_events_to_salesforce(
 @router.post("/pull/contacts")
 async def pull_contacts_from_salesforce(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("integrations.manage")
-    ),
+    current_user: User = Depends(require_permission("integrations.manage")),
 ):
     """Pull Contacts from Salesforce (incremental since last sync)."""
     org_id = str(current_user.organization_id)
@@ -332,9 +310,7 @@ async def pull_contacts_from_salesforce(
         )
 
     integration = await _get_sf_integration(db, org_id)
-    contacts = await sync_service.pull_contacts(
-        since=integration.last_sync_at
-    )
+    contacts = await sync_service.pull_contacts(since=integration.last_sync_at)
 
     integration.last_sync_at = datetime.now(timezone.utc)
     await db.commit()

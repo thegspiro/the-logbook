@@ -6,8 +6,10 @@ user adoption, module usage, operational activity, system health, and content me
 """
 
 from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import cast, func, select, Date
+from loguru import logger
+from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
@@ -27,8 +29,6 @@ from app.schemas.platform_analytics import (
     ModuleUsage,
     PlatformAnalyticsResponse,
 )
-
-from loguru import logger
 
 router = APIRouter()
 

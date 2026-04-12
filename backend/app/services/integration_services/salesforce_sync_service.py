@@ -19,10 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.integration import Integration
-from app.services.integration_services.salesforce_service import (
-    SalesforceService,
-)
-
+from app.services.integration_services.salesforce_service import SalesforceService
 
 # ============================================================
 # Default field mappings  (Logbook field → Salesforce field)
@@ -137,9 +134,7 @@ class SalesforceSyncService:
         self.sf = sf_service
         self.integration = integration
         config = integration.config or {}
-        self._custom_mappings: dict[str, Any] = config.get(
-            "field_mappings", {}
-        )
+        self._custom_mappings: dict[str, Any] = config.get("field_mappings", {})
 
     # ============================================================
     # Outbound: Logbook → Salesforce
@@ -305,24 +300,18 @@ class SalesforceSyncService:
         for rec in records:
             lb_fields = _reverse_map_fields(rec, CONTACT_TO_MEMBER)
             lb_fields["salesforce_id"] = rec.get("Id", "")
-            lb_fields["logbook_member_id"] = rec.get(
-                "Logbook_Member_ID__c", ""
-            )
+            lb_fields["logbook_member_id"] = rec.get("Logbook_Member_ID__c", "")
             mapped.append(lb_fields)
         return mapped
 
-    def parse_inbound_contact(
-        self, sf_contact: dict[str, Any]
-    ) -> dict[str, Any]:
+    def parse_inbound_contact(self, sf_contact: dict[str, Any]) -> dict[str, Any]:
         """Convert an inbound Salesforce Contact payload to Logbook fields.
 
         Used by the webhook handler to process Salesforce Outbound Messages.
         """
         lb_fields = _reverse_map_fields(sf_contact, CONTACT_TO_MEMBER)
         lb_fields["salesforce_id"] = sf_contact.get("Id", "")
-        lb_fields["logbook_member_id"] = sf_contact.get(
-            "Logbook_Member_ID__c", ""
-        )
+        lb_fields["logbook_member_id"] = sf_contact.get("Logbook_Member_ID__c", "")
         return lb_fields
 
     # ============================================================
@@ -338,9 +327,7 @@ class SalesforceSyncService:
         failed = 0
         for member in members:
             try:
-                existing = await self._find_contact_by_logbook_id(
-                    member.get("id", "")
-                )
+                existing = await self._find_contact_by_logbook_id(member.get("id", ""))
                 result = await self.push_member(member)
                 if result:
                     if existing:
@@ -393,9 +380,7 @@ class SalesforceSyncService:
     # Internal helpers
     # ============================================================
 
-    async def _find_contact_by_logbook_id(
-        self, logbook_id: str
-    ) -> str | None:
+    async def _find_contact_by_logbook_id(self, logbook_id: str) -> str | None:
         """Find a Salesforce Contact by the Logbook external ID."""
         if not logbook_id:
             return None
@@ -411,10 +396,7 @@ class SalesforceSyncService:
             return None
         # Escape single quotes in SOQL
         safe_value = value.replace("'", "\\'")
-        soql = (
-            f"SELECT Id FROM {sobject} "
-            f"WHERE {field} = '{safe_value}' LIMIT 1"
-        )
+        soql = f"SELECT Id FROM {sobject} " f"WHERE {field} = '{safe_value}' LIMIT 1"
         try:
             records = await self.sf.query(soql)
             if records:

@@ -86,9 +86,7 @@ async def dispatch_notification(
         await db.commit()
 
     # Dispatch to sync-type integrations (Salesforce) in the background
-    await _dispatch_to_sync_integrations(
-        db, organization_id, event_type, payload
-    )
+    await _dispatch_to_sync_integrations(db, organization_id, event_type, payload)
 
 
 async def _send_to_integration(
@@ -251,11 +249,9 @@ async def _send_to_salesforce(
     payload: dict[str, Any],
 ) -> None:
     """Route an internal event to the appropriate Salesforce push method."""
+    from app.services.integration_services.salesforce_service import SalesforceService
     from app.services.integration_services.salesforce_sync_service import (
         build_salesforce_credentials,
-    )
-    from app.services.integration_services.salesforce_service import (
-        SalesforceService,
     )
 
     creds = build_salesforce_credentials(integration)
@@ -264,31 +260,40 @@ async def _send_to_salesforce(
     # suitable for writes, so we use the SF service directly for pushes.
 
     if event_type.startswith("event.") and event_type != "event.cancelled":
-        await sf.create_record("Event", {
-            "Subject": payload.get("title", ""),
-            "Description": payload.get("description", ""),
-            "StartDateTime": payload.get("start_time", ""),
-            "EndDateTime": payload.get("end_time", ""),
-            "Location": payload.get("location", ""),
-            "Logbook_Event_ID__c": payload.get("id", ""),
-        })
+        await sf.create_record(
+            "Event",
+            {
+                "Subject": payload.get("title", ""),
+                "Description": payload.get("description", ""),
+                "StartDateTime": payload.get("start_time", ""),
+                "EndDateTime": payload.get("end_time", ""),
+                "Location": payload.get("location", ""),
+                "Logbook_Event_ID__c": payload.get("id", ""),
+            },
+        )
 
     elif event_type.startswith("training."):
-        await sf.create_record("Task", {
-            "Subject": payload.get("course_name", payload.get("title", "")),
-            "Status": "Completed",
-            "ActivityDate": payload.get("completion_date", ""),
-            "Hours_Completed__c": payload.get("hours", 0),
-            "Task_Source__c": "Logbook Training",
-            "Logbook_Training_ID__c": payload.get("id", ""),
-        })
+        await sf.create_record(
+            "Task",
+            {
+                "Subject": payload.get("course_name", payload.get("title", "")),
+                "Status": "Completed",
+                "ActivityDate": payload.get("completion_date", ""),
+                "Hours_Completed__c": payload.get("hours", 0),
+                "Task_Source__c": "Logbook Training",
+                "Logbook_Training_ID__c": payload.get("id", ""),
+            },
+        )
 
     elif event_type.startswith("member."):
-        await sf.create_record("Contact", {
-            "FirstName": payload.get("first_name", ""),
-            "LastName": payload.get("last_name", ""),
-            "Email": payload.get("email", ""),
-            "Phone": payload.get("phone", ""),
-            "Title": payload.get("rank", ""),
-            "Logbook_Member_ID__c": payload.get("id", ""),
-        })
+        await sf.create_record(
+            "Contact",
+            {
+                "FirstName": payload.get("first_name", ""),
+                "LastName": payload.get("last_name", ""),
+                "Email": payload.get("email", ""),
+                "Phone": payload.get("phone", ""),
+                "Title": payload.get("rank", ""),
+                "Logbook_Member_ID__c": payload.get("id", ""),
+            },
+        )

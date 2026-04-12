@@ -337,20 +337,25 @@ class MessagingService:
         )
 
         # Load only active, non-expired message IDs + targeting fields
-        query = select(DepartmentMessage).where(
-            DepartmentMessage.organization_id == organization_id,
-            DepartmentMessage.is_active == True,  # noqa: E712
-        ).where(
-            or_(
-                DepartmentMessage.expires_at.is_(None),
-                DepartmentMessage.expires_at > now,
+        query = (
+            select(DepartmentMessage)
+            .where(
+                DepartmentMessage.organization_id == organization_id,
+                DepartmentMessage.is_active == True,  # noqa: E712
+            )
+            .where(
+                or_(
+                    DepartmentMessage.expires_at.is_(None),
+                    DepartmentMessage.expires_at > now,
+                )
             )
         )
         result = await self.db.execute(query)
         all_messages = result.scalars().all()
 
         visible_ids = [
-            m.id for m in all_messages
+            m.id
+            for m in all_messages
             if self._is_targeted(m, user_id, user_role_names, user_status)
         ]
         if not visible_ids:

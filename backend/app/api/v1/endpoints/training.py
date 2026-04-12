@@ -1882,8 +1882,7 @@ async def get_category_hour_breakdown(
 
     # Verify target user belongs to same org
     user_result = await db.execute(
-        select(User)
-        .where(User.id == str(user_id), User.organization_id == org_id)
+        select(User).where(User.id == str(user_id), User.organization_id == org_id)
     )
     if not user_result.scalar_one_or_none():
         raise HTTPException(
@@ -1909,8 +1908,8 @@ async def get_category_hour_breakdown(
     hours_by_category: dict[str, float] = {}
     for rec in records:
         cid = rec.category_id
-        hours_by_category[cid] = (
-            hours_by_category.get(cid, 0) + (rec.hours_completed or 0)
+        hours_by_category[cid] = hours_by_category.get(cid, 0) + (
+            rec.hours_completed or 0
         )
 
     # Look up category details
@@ -1918,9 +1917,7 @@ async def get_category_hour_breakdown(
     categories: dict[str, dict] = {}
     if cat_ids:
         cat_result = await db.execute(
-            select(TrainingCategory).where(
-                TrainingCategory.id.in_(cat_ids)
-            )
+            select(TrainingCategory).where(TrainingCategory.id.in_(cat_ids))
         )
         for cat in cat_result.scalars().all():
             categories[cat.id] = {
@@ -1937,13 +1934,15 @@ async def get_category_hour_breakdown(
         reverse=True,
     ):
         cat_info = categories.get(cid, {})
-        breakdown.append({
-            "category_id": cid,
-            "category_name": cat_info.get("name", "Unknown"),
-            "category_code": cat_info.get("code"),
-            "registry_code": cat_info.get("registry_code"),
-            "hours_completed": round(hours, 2),
-        })
+        breakdown.append(
+            {
+                "category_id": cid,
+                "category_name": cat_info.get("name", "Unknown"),
+                "category_code": cat_info.get("code"),
+                "registry_code": cat_info.get("registry_code"),
+                "hours_completed": round(hours, 2),
+            }
+        )
 
     # Also include uncategorized hours
     uncat_result = await db.execute(

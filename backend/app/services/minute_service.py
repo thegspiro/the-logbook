@@ -12,6 +12,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.utils import generate_uuid
 from app.models.minute import (
     DEFAULT_ANNUAL_SECTIONS,
     DEFAULT_BUSINESS_SECTIONS,
@@ -766,8 +767,6 @@ class MinuteService:
             section_defaults = DEFAULT_SPECIAL_SECTIONS
         elif minutes_type == MinutesMeetingType.COMMITTEE:
             section_defaults = DEFAULT_COMMITTEE_SECTIONS
-
-        from app.core.utils import generate_uuid
 
         meeting_date_dt = (
             datetime.combine(

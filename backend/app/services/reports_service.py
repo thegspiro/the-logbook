@@ -19,6 +19,7 @@ from app.models.admin_hours import (
     AdminHoursEntryStatus,
 )
 from app.models.event import Event, EventRSVP
+from app.models.operational_rank import OperationalRank
 from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
@@ -30,7 +31,6 @@ from app.models.training import (
     TrainingRequirement,
     TrainingStatus,
 )
-from app.models.operational_rank import OperationalRank
 from app.models.user import User, UserStatus
 
 
@@ -850,10 +850,7 @@ class ReportsService:
         filters: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Generate a fleet status report with vehicle condition, maintenance, and mileage."""
-        from app.models.apparatus import (
-            Apparatus,
-            ApparatusMaintenance,
-        )
+        from app.models.apparatus import Apparatus, ApparatusMaintenance
 
         apparatus_query = (
             select(Apparatus)

@@ -8,21 +8,20 @@ including an admin-level summary for Chiefs and department leaders.
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
+from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_active_user, require_permission
 from app.core.database import get_db
+from app.models.admin_hours import AdminHoursEntry, AdminHoursEntryStatus
 from app.models.event import Event, EventExternalAttendee, EventRSVP, EventType
 from app.models.meeting import ActionItemStatus, MeetingActionItem
 from app.models.minute import ActionItem, MeetingMinutes, MinutesActionItemStatus
-from app.models.admin_hours import AdminHoursEntry, AdminHoursEntryStatus
 from app.models.training import TrainingRecord, TrainingStatus
 from app.models.user import User, UserStatus
 from app.services.training_compliance import compute_org_compliance_pct
-
-from loguru import logger
 
 router = APIRouter()
 

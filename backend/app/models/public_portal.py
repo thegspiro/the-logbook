@@ -60,9 +60,14 @@ class PublicPortalConfig(Base):
     settings = Column(JSON, default=dict, nullable=False)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     updated_at = Column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     # Relationships
@@ -133,7 +138,9 @@ class PublicPortalAPIKey(Base):
     )
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     # Relationships
     organization = relationship("Organization")
@@ -216,7 +223,9 @@ class PublicPortalAccessLog(Base):
     referer = Column(String(500), nullable=True)
 
     # Timestamp of the request
-    timestamp = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    timestamp = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
     # Security flags
     flagged_suspicious = Column(Boolean, default=False, nullable=False)
@@ -272,9 +281,14 @@ class PublicPortalDataWhitelist(Base):
     is_enabled = Column(Boolean, default=False, nullable=False)
 
     # Timestamps
-    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     updated_at = Column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
     # Relationships

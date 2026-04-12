@@ -22,10 +22,10 @@ from app.core.security_middleware import (
     verify_csrf_token,
 )
 
-
 # ---------------------------------------------------------------------------
 # RateLimiter
 # ---------------------------------------------------------------------------
+
 
 class TestRateLimiter:
 
@@ -33,7 +33,9 @@ class TestRateLimiter:
     def test_first_request_is_not_limited(self):
         """The very first request for a given key should not be rate-limited."""
         limiter = RateLimiter()
-        is_limited, reason = limiter.is_rate_limited("ip-1", max_requests=5, window_seconds=60)
+        is_limited, reason = limiter.is_rate_limited(
+            "ip-1", max_requests=5, window_seconds=60
+        )
         assert is_limited is False
         assert reason is None
 
@@ -42,7 +44,9 @@ class TestRateLimiter:
         """Requests within the limit should all be allowed."""
         limiter = RateLimiter()
         for _ in range(4):
-            is_limited, _ = limiter.is_rate_limited("ip-2", max_requests=5, window_seconds=60)
+            is_limited, _ = limiter.is_rate_limited(
+                "ip-2", max_requests=5, window_seconds=60
+            )
             assert is_limited is False
 
     @pytest.mark.unit
@@ -54,7 +58,9 @@ class TestRateLimiter:
             limiter.is_rate_limited(key, max_requests=5, window_seconds=60)
 
         # The 6th request should be rate-limited
-        is_limited, reason = limiter.is_rate_limited(key, max_requests=5, window_seconds=60)
+        is_limited, reason = limiter.is_rate_limited(
+            key, max_requests=5, window_seconds=60
+        )
         assert is_limited is True
         assert reason is not None
         assert "locked" in reason.lower() or "too many" in reason.lower()
@@ -65,10 +71,14 @@ class TestRateLimiter:
         limiter = RateLimiter()
         key = "ip-4"
         for _ in range(6):
-            limiter.is_rate_limited(key, max_requests=5, window_seconds=60, lockout_seconds=1800)
+            limiter.is_rate_limited(
+                key, max_requests=5, window_seconds=60, lockout_seconds=1800
+            )
 
         # Still locked
-        is_limited, reason = limiter.is_rate_limited(key, max_requests=5, window_seconds=60)
+        is_limited, reason = limiter.is_rate_limited(
+            key, max_requests=5, window_seconds=60
+        )
         assert is_limited is True
         assert "locked" in reason.lower()
 
@@ -79,12 +89,16 @@ class TestRateLimiter:
         key = "ip-5"
         # Trigger lockout with very short lockout window
         for _ in range(6):
-            limiter.is_rate_limited(key, max_requests=5, window_seconds=60, lockout_seconds=1)
+            limiter.is_rate_limited(
+                key, max_requests=5, window_seconds=60, lockout_seconds=1
+            )
 
         # Simulate lockout expiry by moving the lockout timestamp into the past
         limiter.lockouts[key] = time.time() - 1
 
-        is_limited, reason = limiter.is_rate_limited(key, max_requests=5, window_seconds=60)
+        is_limited, reason = limiter.is_rate_limited(
+            key, max_requests=5, window_seconds=60
+        )
         assert is_limited is False
         assert reason is None
 
@@ -97,7 +111,9 @@ class TestRateLimiter:
             limiter.is_rate_limited("key-A", max_requests=5, window_seconds=60)
 
         # Key B should still be fine
-        is_limited, _ = limiter.is_rate_limited("key-B", max_requests=5, window_seconds=60)
+        is_limited, _ = limiter.is_rate_limited(
+            "key-B", max_requests=5, window_seconds=60
+        )
         assert is_limited is False
 
     @pytest.mark.unit
@@ -119,7 +135,9 @@ class TestRateLimiter:
         limiter = RateLimiter()
         key = "ip-7"
         for _ in range(6):
-            limiter.is_rate_limited(key, max_requests=5, window_seconds=60, lockout_seconds=1800)
+            limiter.is_rate_limited(
+                key, max_requests=5, window_seconds=60, lockout_seconds=1800
+            )
 
         _, reason = limiter.is_rate_limited(key, max_requests=5, window_seconds=60)
         # Reason should mention seconds remaining
@@ -216,6 +234,7 @@ class TestRateLimiter:
 # CSRFProtection
 # ---------------------------------------------------------------------------
 
+
 class TestCSRFProtection:
 
     @pytest.mark.unit
@@ -275,7 +294,9 @@ class TestCSRFProtection:
     def test_validate_uses_constant_time_comparison(self):
         """The validation should use secrets.compare_digest (constant-time)."""
         token = "test-csrf-token-value"
-        with patch.object(secrets, 'compare_digest', wraps=secrets.compare_digest) as mock_compare:
+        with patch.object(
+            secrets, "compare_digest", wraps=secrets.compare_digest
+        ) as mock_compare:
             result = CSRFProtection.validate_token(token, token)
             assert result is True
             mock_compare.assert_called_once_with(token, token)
@@ -284,6 +305,7 @@ class TestCSRFProtection:
 # ---------------------------------------------------------------------------
 # InputSanitizer
 # ---------------------------------------------------------------------------
+
 
 class TestInputSanitizer:
 
@@ -460,6 +482,7 @@ class TestInputSanitizer:
 # SecurityHeadersMiddleware
 # ---------------------------------------------------------------------------
 
+
 class TestSecurityHeadersMiddleware:
     """Tests for SecurityHeadersMiddleware (pure ASGI middleware).
 
@@ -481,23 +504,31 @@ class TestSecurityHeadersMiddleware:
     @staticmethod
     def _make_app(status: int = 200):
         """Return a minimal ASGI app that sends a response with *status*."""
+
         async def app(scope, receive, send):
-            await send({
-                "type": "http.response.start",
-                "status": status,
-                "headers": [],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": b"",
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": status,
+                    "headers": [],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": b"",
+                }
+            )
+
         return app
 
     @staticmethod
     def _make_send(sent: list):
         """Return an async send callable that records messages into *sent*."""
+
         async def _send(message):
             sent.append(message)
+
         return _send
 
     @staticmethod
@@ -506,10 +537,7 @@ class TestSecurityHeadersMiddleware:
         into a ``{name: value}`` dict (both decoded from bytes)."""
         for msg in messages:
             if msg["type"] == "http.response.start":
-                return {
-                    k.decode(): v.decode()
-                    for k, v in msg.get("headers", [])
-                }
+                return {k.decode(): v.decode() for k, v in msg.get("headers", [])}
         return {}
 
     @pytest.mark.unit
@@ -519,10 +547,15 @@ class TestSecurityHeadersMiddleware:
         sent: list = []
         middleware = SecurityHeadersMiddleware(self._make_app())
 
-        await middleware(self._make_scope("/api/v1/users"), self._noop_receive, self._make_send(sent))
+        await middleware(
+            self._make_scope("/api/v1/users"), self._noop_receive, self._make_send(sent)
+        )
 
         headers = self._headers_dict(sent)
-        assert headers["cache-control"] == "no-store, no-cache, must-revalidate, proxy-revalidate"
+        assert (
+            headers["cache-control"]
+            == "no-store, no-cache, must-revalidate, proxy-revalidate"
+        )
         assert headers["pragma"] == "no-cache"
         assert headers["expires"] == "0"
 
@@ -533,7 +566,11 @@ class TestSecurityHeadersMiddleware:
         sent: list = []
         middleware = SecurityHeadersMiddleware(self._make_app())
 
-        await middleware(self._make_scope("/static/logo.png"), self._noop_receive, self._make_send(sent))
+        await middleware(
+            self._make_scope("/static/logo.png"),
+            self._noop_receive,
+            self._make_send(sent),
+        )
 
         headers = self._headers_dict(sent)
         assert "cache-control" not in headers
@@ -545,10 +582,15 @@ class TestSecurityHeadersMiddleware:
         sent: list = []
         middleware = SecurityHeadersMiddleware(self._make_app())
 
-        await middleware(self._make_scope("/api/v1/data"), self._noop_receive, self._make_send(sent))
+        await middleware(
+            self._make_scope("/api/v1/data"), self._noop_receive, self._make_send(sent)
+        )
 
         headers = self._headers_dict(sent)
-        assert headers["strict-transport-security"] == "max-age=31536000; includeSubDomains"
+        assert (
+            headers["strict-transport-security"]
+            == "max-age=31536000; includeSubDomains"
+        )
         assert headers["x-content-type-options"] == "nosniff"
         assert headers["x-frame-options"] == "DENY"
         assert headers["x-xss-protection"] == "1; mode=block"
@@ -563,7 +605,11 @@ class TestSecurityHeadersMiddleware:
         sent: list = []
         middleware = SecurityHeadersMiddleware(self._make_app())
 
-        await middleware(self._make_scope("/api/v1/resource"), self._noop_receive, self._make_send(sent))
+        await middleware(
+            self._make_scope("/api/v1/resource"),
+            self._noop_receive,
+            self._make_send(sent),
+        )
 
         headers = self._headers_dict(sent)
         csp = headers["content-security-policy"]
@@ -594,6 +640,7 @@ class TestSecurityHeadersMiddleware:
 # ---------------------------------------------------------------------------
 # verify_csrf_token dependency
 # ---------------------------------------------------------------------------
+
 
 class TestVerifyCSRFTokenDependency:
 
@@ -647,6 +694,7 @@ class TestVerifyCSRFTokenDependency:
 
         request = MagicMock()
         request.method = "POST"
+        request.scope = {"type": "http", "path": "/api/v1/test"}
         request.headers = {"X-CSRF-Token": "wrong-token"}
         request.cookies = {"csrf_token": "correct-token"}
 
@@ -662,6 +710,7 @@ class TestVerifyCSRFTokenDependency:
 
         request = MagicMock()
         request.method = "POST"
+        request.scope = {"type": "http", "path": "/api/v1/test"}
         request.headers = {}  # no X-CSRF-Token
         request.cookies = {"csrf_token": "some-token"}
 
@@ -677,6 +726,7 @@ class TestVerifyCSRFTokenDependency:
 
         request = MagicMock()
         request.method = "PUT"
+        request.scope = {"type": "http", "path": "/api/v1/test"}
         request.headers = {"X-CSRF-Token": "bad"}
         request.cookies = {"csrf_token": "good"}
 
@@ -692,6 +742,7 @@ class TestVerifyCSRFTokenDependency:
 
         request = MagicMock()
         request.method = "DELETE"
+        request.scope = {"type": "http", "path": "/api/v1/test"}
         request.headers = {"X-CSRF-Token": "bad"}
         request.cookies = {"csrf_token": "good"}
 
@@ -707,6 +758,7 @@ class TestVerifyCSRFTokenDependency:
 
         request = MagicMock()
         request.method = "PATCH"
+        request.scope = {"type": "http", "path": "/api/v1/test"}
         request.headers = {"X-CSRF-Token": "bad"}
         request.cookies = {"csrf_token": "good"}
 

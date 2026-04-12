@@ -19,6 +19,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.election import Election, ElectionStatus
+from app.models.event import Event
 from app.models.membership_pipeline import (
     ActionType,
     InterviewRecommendation,
@@ -35,12 +37,10 @@ from app.models.membership_pipeline import (
     ProspectStepProgress,
     StepProgressStatus,
 )
-from app.models.election import Election, ElectionStatus
-from app.models.event import Event
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
+from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
-    FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP,
-    LABEL_MAP as _SHARED_LABEL_MAP,
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
 
@@ -561,6 +561,7 @@ class MembershipPipelineService:
         and inactivity_timeout_days.  Called by the list_prospects
         endpoint to keep business logic out of the endpoint layer.
         """
+
         def _ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
             if dt is not None and dt.tzinfo is None:
                 return dt.replace(tzinfo=timezone.utc)
@@ -579,21 +580,14 @@ class MembershipPipelineService:
         p_created_at = _ensure_utc(prospect.created_at)
         p_updated_at = _ensure_utc(prospect.updated_at)
 
-        days_in_stage = (
-            (now - stage_entered_at).days if stage_entered_at else 0
-        )
-        days_in_pipeline = (
-            (now - p_created_at).days if p_created_at else 0
-        )
+        days_in_stage = (now - stage_entered_at).days if stage_entered_at else 0
+        days_in_pipeline = (now - p_created_at).days if p_created_at else 0
         last_activity = p_updated_at or p_created_at
-        days_since_activity = (
-            (now - last_activity).days if last_activity else 0
-        )
+        days_since_activity = (now - last_activity).days if last_activity else 0
 
         timeout_days = (
             prospect.current_step.inactivity_timeout_days
-            if prospect.current_step
-            and prospect.current_step.inactivity_timeout_days
+            if prospect.current_step and prospect.current_step.inactivity_timeout_days
             else None
         )
         inactivity_alert_level = "normal"
@@ -1582,9 +1576,7 @@ class MembershipPipelineService:
             }
 
         except ValueError as e:
-            logger.warning(
-                f"Auto-enrollment skipped for user {user_id}: {e}"
-            )
+            logger.warning(f"Auto-enrollment skipped for user {user_id}: {e}")
             return None
         except Exception as e:
             logger.error(
@@ -1856,9 +1848,7 @@ class MembershipPipelineService:
                             "public_status_enabled",
                             False,
                         ):
-                            from app.core.config import (
-                                settings as app_settings,
-                            )
+                            from app.core.config import settings as app_settings
 
                             frontend_url = (
                                 getattr(app_settings, "FRONTEND_URL", "") or ""
@@ -2980,7 +2970,10 @@ class MembershipPipelineService:
 
         base_dir = Path("/uploads/").resolve()
         resolved = Path(file_path).resolve()
-        if not str(resolved).startswith(str(base_dir) + os.sep) and resolved != base_dir:
+        if (
+            not str(resolved).startswith(str(base_dir) + os.sep)
+            and resolved != base_dir
+        ):
             raise ValueError(
                 "Invalid file_path: must be under /uploads/ and may not contain path traversal"
             )

@@ -8,20 +8,9 @@ and QuickBooks export mappings.
 
 import enum
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Enum as SQLEnum,
-    ForeignKey,
-    Index,
-    Integer,
-    JSON,
-    Numeric,
-    String,
-    Text,
-    func,
-)
+from sqlalchemy import JSON, Boolean, Column, DateTime
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import ForeignKey, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base

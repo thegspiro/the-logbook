@@ -7,7 +7,6 @@ Used by both the dashboard admin-summary and the training compliance-matrix endp
 
 import calendar
 from datetime import date, timedelta
-
 from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy import select
@@ -183,8 +182,7 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
         if req.category_ids:
             cat_set = set(req.category_ids)
             type_matched = [
-                r for r in type_matched
-                if r.category_id and r.category_id in cat_set
+                r for r in type_matched if r.category_id and r.category_id in cat_set
             ]
 
         total_hours = sum(r.hours_completed or 0 for r in type_matched)

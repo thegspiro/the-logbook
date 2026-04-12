@@ -12,9 +12,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.schemas.base import UTCResponseBase
-
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
+from app.schemas.base import UTCResponseBase
 
 
 class OrganizationTypeEnum(str, Enum):

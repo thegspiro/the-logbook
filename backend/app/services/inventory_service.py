@@ -16,6 +16,8 @@ from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.audit import log_audit_event
+from app.core.utils import generate_uuid as _gen
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -43,8 +45,6 @@ from app.models.inventory import (
     WriteOffStatus,
 )
 from app.models.user import User
-from app.core.audit import log_audit_event
-from app.core.utils import generate_uuid as _gen
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -2199,7 +2199,11 @@ class InventoryService:
             if not lookup:
                 lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
-                results.append(self._batch_result(code, None, "none", False, f"No item found for code '{code}'"))
+                results.append(
+                    self._batch_result(
+                        code, None, "none", False, f"No item found for code '{code}'"
+                    )
+                )
                 failed += 1
                 continue
 
@@ -2216,8 +2220,14 @@ class InventoryService:
                         quantity=quantity,
                         reason=reason,
                     )
-                    results.append(self._batch_result(code, item, "issued", not err, err))
-                    successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
+                    results.append(
+                        self._batch_result(code, item, "issued", not err, err)
+                    )
+                    successful, failed = (
+                        (successful + 1, failed)
+                        if not err
+                        else (successful, failed + 1)
+                    )
 
                 elif item.status in (ItemStatus.AVAILABLE, ItemStatus.ASSIGNED):
                     # Individual available/assigned item → (re)assign
@@ -2229,11 +2239,25 @@ class InventoryService:
                         assignment_type=AssignmentType.PERMANENT,
                         reason=reason,
                     )
-                    results.append(self._batch_result(code, item, "assigned", not err, err))
-                    successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
+                    results.append(
+                        self._batch_result(code, item, "assigned", not err, err)
+                    )
+                    successful, failed = (
+                        (successful + 1, failed)
+                        if not err
+                        else (successful, failed + 1)
+                    )
 
                 else:
-                    results.append(self._batch_result(code, item, "none", False, f"Item is not available (status: {item.status.value})"))
+                    results.append(
+                        self._batch_result(
+                            code,
+                            item,
+                            "none",
+                            False,
+                            f"Item is not available (status: {item.status.value})",
+                        )
+                    )
                     failed += 1
 
             except Exception as e:
@@ -2302,7 +2326,11 @@ class InventoryService:
             if not lookup:
                 lookup = await self.lookup_by_code(code, organization_id)
             if not lookup:
-                results.append(self._batch_result(code, None, "none", False, f"No item found for code '{code}'"))
+                results.append(
+                    self._batch_result(
+                        code, None, "none", False, f"No item found for code '{code}'"
+                    )
+                )
                 failed += 1
                 continue
 
@@ -2311,7 +2339,15 @@ class InventoryService:
             try:
                 condition = ItemCondition(condition_str)
             except ValueError:
-                results.append(self._batch_result(code, item, "none", False, f"Invalid return condition: '{condition_str}'"))
+                results.append(
+                    self._batch_result(
+                        code,
+                        item,
+                        "none",
+                        False,
+                        f"Invalid return condition: '{condition_str}'",
+                    )
+                )
                 failed += 1
                 continue
 
@@ -2329,8 +2365,14 @@ class InventoryService:
                         return_notes=damage_notes or notes,
                         expected_user_id=user_id,
                     )
-                    results.append(self._batch_result(code, item, "unassigned", not err, err))
-                    successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
+                    results.append(
+                        self._batch_result(code, item, "unassigned", not err, err)
+                    )
+                    successful, failed = (
+                        (successful + 1, failed)
+                        if not err
+                        else (successful, failed + 1)
+                    )
                     continue
 
                 # Check if checked out to this user
@@ -2355,8 +2397,14 @@ class InventoryService:
                         return_condition=condition,
                         damage_notes=damage_notes,
                     )
-                    results.append(self._batch_result(code, item, "checked_in", not err, err))
-                    successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
+                    results.append(
+                        self._batch_result(code, item, "checked_in", not err, err)
+                    )
+                    successful, failed = (
+                        (successful + 1, failed)
+                        if not err
+                        else (successful, failed + 1)
+                    )
                     continue
 
                 # Check for pool issuance to this user
@@ -2383,15 +2431,28 @@ class InventoryService:
                             return_notes=damage_notes or notes,
                             quantity_returned=quantity,
                         )
-                        results.append(self._batch_result(code, item, "returned_to_pool", not err, err))
-                        successful, failed = (successful + 1, failed) if not err else (successful, failed + 1)
+                        results.append(
+                            self._batch_result(
+                                code, item, "returned_to_pool", not err, err
+                            )
+                        )
+                        successful, failed = (
+                            (successful + 1, failed)
+                            if not err
+                            else (successful, failed + 1)
+                        )
                         continue
 
                 # Item not held by this user
-                results.append(self._batch_result(
-                    code, item, "none", False,
-                    "Item is not assigned to, checked out by, or issued to this member",
-                ))
+                results.append(
+                    self._batch_result(
+                        code,
+                        item,
+                        "none",
+                        False,
+                        "Item is not assigned to, checked out by, or issued to this member",
+                    )
+                )
                 failed += 1
 
             except Exception as e:
@@ -2747,9 +2808,7 @@ class InventoryService:
             barcode_obj = code128.Code128(
                 barcode_value, barWidth=bar_width_unit, barHeight=bar_height
             )
-            while (
-                barcode_obj.width > max_barcode_width and bar_width_unit > min_bar
-            ):
+            while barcode_obj.width > max_barcode_width and bar_width_unit > min_bar:
                 bar_width_unit -= 0.001 * inch
                 barcode_obj = code128.Code128(
                     barcode_value, barWidth=bar_width_unit, barHeight=bar_height

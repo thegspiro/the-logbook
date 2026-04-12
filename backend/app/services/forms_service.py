@@ -1759,9 +1759,7 @@ class FormsService:
         from loguru import logger
 
         from app.models.membership_pipeline import ProspectStepProgress
-        from app.services.membership_pipeline_service import (
-            MembershipPipelineService,
-        )
+        from app.services.membership_pipeline_service import MembershipPipelineService
 
         old_pipeline_id = prospect.pipeline_id
         logger.info(

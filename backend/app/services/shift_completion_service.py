@@ -7,11 +7,10 @@ including automatic pipeline requirement progress updates.
 
 import copy
 from datetime import date, datetime, timezone
-
-from loguru import logger
 from typing import Dict, List, Optional
 from uuid import UUID
 
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -223,15 +222,13 @@ class ShiftCompletionService:
                     select(ProgramEnrollment).where(
                         ProgramEnrollment.id == enrollment_id,
                         ProgramEnrollment.user_id == trainee_id,
-                        ProgramEnrollment.organization_id
-                        == str(organization_id),
+                        ProgramEnrollment.organization_id == str(organization_id),
                     )
                 )
             ).scalar_one_or_none()
             if not enrollment:
                 raise ValueError(
-                    "Enrollment not found or does not "
-                    "belong to this trainee"
+                    "Enrollment not found or does not " "belong to this trainee"
                 )
 
         report = ShiftCompletionReport(
@@ -351,18 +348,20 @@ class ShiftCompletionService:
             AssignmentStatus.PENDING,
         ]
         assignments = (
-            await self.db.execute(
-                select(ShiftAssignment)
-                .where(
-                    ShiftAssignment.shift_id == str(shift_id),
-                    ShiftAssignment.organization_id == org_id_str,
-                    ShiftAssignment.assignment_status.in_(
-                        active_statuses
-                    ),
+            (
+                await self.db.execute(
+                    select(ShiftAssignment)
+                    .where(
+                        ShiftAssignment.shift_id == str(shift_id),
+                        ShiftAssignment.organization_id == org_id_str,
+                        ShiftAssignment.assignment_status.in_(active_statuses),
+                    )
+                    .order_by(ShiftAssignment.created_at.asc())
                 )
-                .order_by(ShiftAssignment.created_at.asc())
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         if not assignments:
             return []
@@ -370,18 +369,20 @@ class ShiftCompletionService:
         user_ids = [a.user_id for a in assignments]
 
         users = (
-            await self.db.execute(
-                select(User).where(User.id.in_(user_ids))
-            )
-        ).scalars().all()
+            (await self.db.execute(select(User).where(User.id.in_(user_ids))))
+            .scalars()
+            .all()
+        )
         user_map = {str(u.id): u for u in users}
 
         active_enrollments = (
             await self.db.execute(
-                select(ProgramEnrollment, TrainingProgram.name).join(
+                select(ProgramEnrollment, TrainingProgram.name)
+                .join(
                     TrainingProgram,
                     ProgramEnrollment.program_id == TrainingProgram.id,
-                ).where(
+                )
+                .where(
                     ProgramEnrollment.user_id.in_(user_ids),
                     ProgramEnrollment.organization_id == org_id_str,
                     ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
@@ -396,16 +397,17 @@ class ShiftCompletionService:
             }
 
         existing_reports = (
-            await self.db.execute(
-                select(
-                    ShiftCompletionReport.trainee_id
-                ).where(
-                    ShiftCompletionReport.shift_id == shift_id,
-                    ShiftCompletionReport.organization_id
-                    == org_id_str,
+            (
+                await self.db.execute(
+                    select(ShiftCompletionReport.trainee_id).where(
+                        ShiftCompletionReport.shift_id == shift_id,
+                        ShiftCompletionReport.organization_id == org_id_str,
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         reported_ids = set(str(tid) for tid in existing_reports)
 
         result = []
@@ -414,21 +416,17 @@ class ShiftCompletionService:
             user = user_map.get(uid)
             enrollment_info = enrollment_map.get(uid, {})
             pos = assignment.position
-            result.append({
-                "user_id": uid,
-                "user_name": (
-                    user.full_name if user else "Unknown"
-                ),
-                "position": pos.value if hasattr(pos, "value") else pos,
-                "has_active_enrollment": uid in enrollment_map,
-                "enrollment_id": enrollment_info.get(
-                    "enrollment_id"
-                ),
-                "program_name": enrollment_info.get(
-                    "program_name"
-                ),
-                "has_existing_report": uid in reported_ids,
-            })
+            result.append(
+                {
+                    "user_id": uid,
+                    "user_name": (user.full_name if user else "Unknown"),
+                    "position": pos.value if hasattr(pos, "value") else pos,
+                    "has_active_enrollment": uid in enrollment_map,
+                    "enrollment_id": enrollment_info.get("enrollment_id"),
+                    "program_name": enrollment_info.get("program_name"),
+                    "has_existing_report": uid in reported_ids,
+                }
+            )
 
         return result
 
@@ -471,25 +469,12 @@ class ShiftCompletionService:
                     calls_responded=calls_responded,
                     call_types=call_types,
                     shift_id=shift_id,
-                    performance_rating=evaluation.get(
-                        "performance_rating"
-                    ),
-                    areas_of_strength=evaluation.get(
-                        "areas_of_strength"
-                    ),
-                    areas_for_improvement=evaluation.get(
-                        "areas_for_improvement"
-                    ),
-                    officer_narrative=(
-                        evaluation.get("remarks")
-                        or officer_narrative
-                    ),
-                    skills_observed=evaluation.get(
-                        "skills_observed"
-                    ),
-                    tasks_performed=evaluation.get(
-                        "tasks_performed"
-                    ),
+                    performance_rating=evaluation.get("performance_rating"),
+                    areas_of_strength=evaluation.get("areas_of_strength"),
+                    areas_for_improvement=evaluation.get("areas_for_improvement"),
+                    officer_narrative=(evaluation.get("remarks") or officer_narrative),
+                    skills_observed=evaluation.get("skills_observed"),
+                    tasks_performed=evaluation.get("tasks_performed"),
                     enrollment_id=evaluation.get("enrollment_id"),
                     review_status=review_status,
                     commit=False,
@@ -532,9 +517,7 @@ class ShiftCompletionService:
             self.db.add(notification)
             await self.db.commit()
         except Exception as e:
-            logger.error(
-                f"Failed to send notification: {e}"
-            )
+            logger.error(f"Failed to send notification: {e}")
 
     async def _resolve_skill_evaluations(
         self,
@@ -823,9 +806,7 @@ class ShiftCompletionService:
                     continue
 
                 if value_to_add > 0:
-                    from app.schemas.training_program import (
-                        RequirementProgressUpdate,
-                    )
+                    from app.schemas.training_program import RequirementProgressUpdate
 
                     new_value = (progress.progress_value or 0) + value_to_add
 
@@ -914,25 +895,16 @@ class ShiftCompletionService:
         if not report:
             return None
         if report.organization_id != str(organization_id):
-            raise ValueError(
-                "Report not found in this organization"
-            )
+            raise ValueError("Report not found in this organization")
         if report.officer_id != officer_id:
-            raise ValueError(
-                "Only the filing officer can update this report"
-            )
+            raise ValueError("Only the filing officer can update this report")
 
         was_draft = report.review_status == "draft"
 
         # Prevent regression to draft once pipeline has run
         new_status = updates.get("review_status")
-        if (
-            new_status == "draft"
-            and not was_draft
-        ):
-            raise ValueError(
-                "Cannot revert to draft after submission"
-            )
+        if new_status == "draft" and not was_draft:
+            raise ValueError("Cannot revert to draft after submission")
 
         for field, value in updates.items():
             if field in UPDATABLE_FIELDS:
@@ -1143,9 +1115,7 @@ class ShiftCompletionService:
             "notes": reviewer_notes,
             "timestamp": now.isoformat(),
         }
-        existing_history = copy.deepcopy(
-            report.review_history or []
-        )
+        existing_history = copy.deepcopy(report.review_history or [])
         existing_history.append(history_entry)
         report.review_history = existing_history
 
@@ -1180,9 +1150,7 @@ class ShiftCompletionService:
                 f" has been flagged for revision."
             )
             if reviewer_notes:
-                flag_msg += (
-                    f" Reviewer comment: {reviewer_notes}"
-                )
+                flag_msg += f" Reviewer comment: {reviewer_notes}"
             await self._send_notification(
                 organization_id=organization_id,
                 recipient_id=str(report.officer_id),

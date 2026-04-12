@@ -202,7 +202,9 @@ class FacilitiesService:
                 )
             await self.db.flush()
 
-    async def _find_default_lookup(self, model_class, preferred_name: str, organization_id: str):
+    async def _find_default_lookup(
+        self, model_class, preferred_name: str, organization_id: str
+    ):
         """Find a default lookup record by preferred name, falling back to any active record."""
         result = await self.db.execute(
             select(model_class).where(
@@ -232,11 +234,15 @@ class FacilitiesService:
 
     async def _find_default_type(self, organization_id: str):
         """Find the default facility type (Fire Station or any active type)."""
-        return await self._find_default_lookup(FacilityType, "Fire Station", organization_id)
+        return await self._find_default_lookup(
+            FacilityType, "Fire Station", organization_id
+        )
 
     async def _find_default_status(self, organization_id: str):
         """Find the default facility status (Operational or any active status)."""
-        return await self._find_default_lookup(FacilityStatus, "Operational", organization_id)
+        return await self._find_default_lookup(
+            FacilityStatus, "Operational", organization_id
+        )
 
     # =========================================================================
     # Facility Type Methods

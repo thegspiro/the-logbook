@@ -252,11 +252,7 @@ async def resolve_check_templates(
     are found, falls back to templates matching the apparatus's type code
     that have no specific apparatus assigned.
     """
-    from app.models.apparatus import (
-        Apparatus,
-        ApparatusType,
-        EquipmentCheckTemplate,
-    )
+    from app.models.apparatus import Apparatus, ApparatusType, EquipmentCheckTemplate
 
     tmpl_result = await db.execute(
         select(EquipmentCheckTemplate)
@@ -357,7 +353,8 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     Checks both meeting_action_items and minutes_action_items tables.
     Sends notifications at 3 days before, 1 day before, and on overdue.
     """
-    from datetime import date, timedelta, timezone as _tz_reminders
+    from datetime import date, timedelta
+    from datetime import timezone as _tz_reminders
 
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
@@ -1549,11 +1546,7 @@ async def run_end_of_shift_checklist_reminders(
 
     from app.core.utils import generate_uuid
     from app.models.notification import NotificationChannel, NotificationLog
-    from app.models.training import (
-        Shift,
-        ShiftAssignment,
-        ShiftEquipmentCheck,
-    )
+    from app.models.training import Shift, ShiftAssignment, ShiftEquipmentCheck
 
     now = datetime.now(dt_timezone.utc)
 
@@ -1569,9 +1562,7 @@ async def run_end_of_shift_checklist_reminders(
 
         lookahead_end = now + timedelta(hours=1)
 
-        org_tz = ZoneInfo(
-            org.timezone if org.timezone else "America/New_York"
-        )
+        org_tz = ZoneInfo(org.timezone if org.timezone else "America/New_York")
 
         shifts_result = await db_session.execute(
             select(Shift)
@@ -1617,9 +1608,7 @@ async def run_end_of_shift_checklist_reminders(
                 .where(ShiftEquipmentCheck.template_id.in_(tmpl_ids))
             )
             done_ids = {r[0] for r in done_result.all()}
-            pending = [
-                t for t in eos_templates if str(t.id) not in done_ids
-            ]
+            pending = [t for t in eos_templates if str(t.id) not in done_ids]
 
             if not pending:
                 shift.activities = {
@@ -1640,9 +1629,7 @@ async def run_end_of_shift_checklist_reminders(
                 else ""
             )
 
-            subject = (
-                f"End-of-Shift Checklists Due \u2014 {shift_date_str}"
-            )
+            subject = f"End-of-Shift Checklists Due \u2014 {shift_date_str}"
             checklist_list = ", ".join(pending_names)
             message = (
                 f"Your shift on {shift_date_str} ends at "
@@ -1655,31 +1642,21 @@ async def run_end_of_shift_checklist_reminders(
                 select(ShiftAssignment)
                 .where(ShiftAssignment.shift_id == str(shift.id))
                 .where(
-                    ShiftAssignment.assignment_status.notin_(
-                        ["declined", "cancelled"]
-                    )
+                    ShiftAssignment.assignment_status.notin_(["declined", "cancelled"])
                 )
             )
             assignments = list(assign_result.scalars().all())
-            member_ids = [
-                str(a.user_id) for a in assignments if a.user_id
-            ]
+            member_ids = [str(a.user_id) for a in assignments if a.user_id]
 
-            shift_action_url = (
-                f"/scheduling?shift={shift.id}&tab=equipment-checks"
-            )
+            shift_action_url = f"/scheduling?shift={shift.id}&tab=equipment-checks"
             shift_metadata = {
                 "shift_id": str(shift.id),
                 "reminder_type": "end_of_shift_checklist",
                 "shift_start_time": (
-                    shift.start_time.isoformat()
-                    if shift.start_time
-                    else None
+                    shift.start_time.isoformat() if shift.start_time else None
                 ),
                 "shift_end_time": (
-                    shift.end_time.isoformat()
-                    if shift.end_time
-                    else None
+                    shift.end_time.isoformat() if shift.end_time else None
                 ),
             }
 
@@ -1716,9 +1693,7 @@ async def run_end_of_shift_checklist_reminders(
         await db_session.commit()
         return org_notifications
 
-    return await _for_each_org(
-        db, "end_of_shift_checklist_reminders", process
-    )
+    return await _for_each_org(db, "end_of_shift_checklist_reminders", process)
 
 
 def _format_relative_time(event_time: datetime, now: datetime) -> str:
@@ -1752,11 +1727,7 @@ async def run_audit_log_archival(db: AsyncSession) -> Dict[str, Any]:
 
     from sqlalchemy import func
 
-    from app.core.audit import (
-        audit_logger,
-        log_audit_event,
-        verify_audit_log_integrity,
-    )
+    from app.core.audit import audit_logger, log_audit_event, verify_audit_log_integrity
     from app.models.audit import AuditLog, AuditLogCheckpoint
 
     now = datetime.now(timezone.utc)
@@ -1904,10 +1875,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
 
     from sqlalchemy.orm import selectinload
 
-    from app.models.email_template import (
-        ScheduledEmail,
-        ScheduledEmailStatus,
-    )
+    from app.models.email_template import ScheduledEmail, ScheduledEmailStatus
     from app.services.email_service import EmailService
     from app.services.email_template_service import EmailTemplateService
 
@@ -2188,25 +2156,19 @@ async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
 
             sms_svc = SMSService()
             if sms_svc.enabled:
-                admin_phones = [
-                    a.phone for a in admins if getattr(a, "phone", None)
-                ]
+                admin_phones = [a.phone for a in admins if getattr(a, "phone", None)]
                 if admin_phones:
                     sms_body = (
                         f"Low Stock Alert: {len(low_stock)} inventory item(s) "
                         f"below reorder point. Check the inventory dashboard."
                     )
-                    sms_sent = await sms_svc.send_bulk_sms(
-                        admin_phones, sms_body
-                    )
+                    sms_sent = await sms_svc.send_bulk_sms(admin_phones, sms_body)
                     logger.info(
                         f"Low stock SMS sent to {sms_sent}/"
                         f"{len(admin_phones)} admins for org {org.id}"
                     )
         except Exception as sms_err:
-            logger.warning(
-                f"SMS low stock alerts failed for org {org.id}: {sms_err}"
-            )
+            logger.warning(f"SMS low stock alerts failed for org {org.id}: {sms_err}")
 
         return alerts_sent
 
@@ -2244,9 +2206,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
         alerts_sent = 0
 
         for uid, user_checkouts in by_user.items():
-            user_obj = (
-                user_checkouts[0].user if user_checkouts[0].user else None
-            )
+            user_obj = user_checkouts[0].user if user_checkouts[0].user else None
             if not user_obj or not user_obj.email:
                 continue
 
@@ -2254,9 +2214,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             for co in user_checkouts:
                 item_name = co.item.name if co.item else "Unknown"
                 due_date = (
-                    co.expected_return_at.astimezone(org_tz).strftime(
-                        "%B %d, %Y"
-                    )
+                    co.expected_return_at.astimezone(org_tz).strftime("%B %d, %Y")
                     if co.expected_return_at
                     else "N/A"
                 )
@@ -2278,8 +2236,7 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
             success_count, _ = await email_svc.send_email(
                 to_emails=[user_obj.email],
                 subject=(
-                    f"Overdue Equipment Reminder"
-                    f" — {len(user_checkouts)} item(s)"
+                    f"Overdue Equipment Reminder" f" — {len(user_checkouts)} item(s)"
                 ),
                 html_body=html_body,
                 text_body=(
@@ -2314,15 +2271,9 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
             return 0
 
         past_due = [i for i in items_due if i["days_until_retirement"] <= 0]
-        within_30 = [
-            i for i in items_due if 0 < i["days_until_retirement"] <= 30
-        ]
-        within_90 = [
-            i for i in items_due if 30 < i["days_until_retirement"] <= 90
-        ]
-        within_180 = [
-            i for i in items_due if 90 < i["days_until_retirement"] <= 180
-        ]
+        within_30 = [i for i in items_due if 0 < i["days_until_retirement"] <= 30]
+        within_90 = [i for i in items_due if 30 < i["days_until_retirement"] <= 90]
+        within_180 = [i for i in items_due if 90 < i["days_until_retirement"] <= 180]
 
         def _build_section(title: str, items: list, color: str) -> str:
             if not items:
@@ -2386,10 +2337,7 @@ async def run_nfpa_retirement_alerts(db: AsyncSession) -> Dict[str, Any]:
             email_svc = EmailService(organization=org)
             success_count, _ = await email_svc.send_email(
                 to_emails=admin_emails,
-                subject=(
-                    f"NFPA Retirement Alert"
-                    f" — {len(items_due)} PPE item(s)"
-                ),
+                subject=(f"NFPA Retirement Alert" f" — {len(items_due)} PPE item(s)"),
                 html_body=html_body,
                 text_body=(
                     f"{len(items_due)} PPE items are approaching NFPA"
@@ -2411,10 +2359,10 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     On the configured report_day_of_month, generates monthly reports.
     On January 1st, generates yearly reports.
     """
+    from datetime import timezone as _tz_compliance
+
     from app.models.compliance_config import ComplianceConfig
     from app.services.compliance_config_service import ComplianceReportService
-
-    from datetime import timezone as _tz_compliance
 
     today = datetime.now(_tz_compliance.utc)
     results = []
@@ -3083,9 +3031,7 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     for provider in providers:
         sync_service = ExternalTrainingSyncService(db)
         try:
-            await sync_service.sync_training_records(
-                provider, sync_type="incremental"
-            )
+            await sync_service.sync_training_records(provider, sync_type="incremental")
             synced += 1
         except Exception:
             logger.warning(

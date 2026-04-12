@@ -17,12 +17,8 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.api.dependencies import get_current_user, require_permission
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
-from app.models.training import (
-    ShiftEquipmentCheck,
-    ShiftEquipmentCheckItem,
-)
+from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
 from app.models.user import User
-from app.utils.image_processing import optimize_image
 from app.schemas.equipment_check import (
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
@@ -45,6 +41,7 @@ from app.schemas.equipment_check import (
     TemplateChangeLogListResponse,
 )
 from app.services.equipment_check_service import EquipmentCheckService
+from app.utils.image_processing import optimize_image
 
 router = APIRouter()
 
@@ -445,10 +442,8 @@ async def delete_item(
     current_user: User = Depends(require_permission("equipment_check.manage")),
 ):
     """Delete a check template item."""
-    from app.models.apparatus import (
-        CheckTemplateCompartment as CTC,
-        CheckTemplateItem as CTI,
-    )
+    from app.models.apparatus import CheckTemplateCompartment as CTC
+    from app.models.apparatus import CheckTemplateItem as CTI
 
     service = EquipmentCheckService(db)
     item_result = await db.execute(select(CTI).where(CTI.id == item_id))

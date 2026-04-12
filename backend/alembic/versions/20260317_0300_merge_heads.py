@@ -7,14 +7,7 @@ Create Date: 2026-03-17 03:00:00.000000
 
 # revision identifiers
 revision = "merge_all_heads_0317"
-down_revision = (
-    "a7f3e2d91b04",
-    "dc01a",
-    "a1b2c3d4e5f6",
-    "a9f3e7c10004",
-    "20260312_0200",
-    "20260313_0100",
-)
+down_revision = "a9f3e7c10005"
 branch_labels = None
 depends_on = None
 

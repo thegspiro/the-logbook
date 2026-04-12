@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.core.constants import ROLE_MEMBER
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -24,7 +25,6 @@ from app.core.security import (
     validate_password_strength,
     verify_password,
 )
-from app.core.constants import ROLE_MEMBER
 from app.models.user import Organization, PasswordHistory, Role
 from app.models.user import Session as UserSession
 from app.models.user import User, UserStatus

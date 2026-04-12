@@ -18,9 +18,9 @@ import jwt
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
 from cryptography.fernet import Fernet
-from loguru import logger
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from loguru import logger
 
 from app.core.config import settings
 

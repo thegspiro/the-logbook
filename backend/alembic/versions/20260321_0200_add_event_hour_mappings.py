@@ -14,7 +14,7 @@ from alembic import op
 
 # revision identifiers
 revision = "20260321_0200"
-down_revision = "20260321_0100"
+down_revision = "20260321_0101"
 branch_labels = None
 depends_on = None
 

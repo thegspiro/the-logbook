@@ -39,13 +39,13 @@ from app.schemas.scheduling import (
     ShiftAttendanceCreate,
     ShiftAttendanceResponse,
     ShiftAttendanceUpdate,
-    ShiftFinalizeRequest,
     ShiftCallCreate,
     ShiftCallResponse,
     ShiftCallUpdate,
     ShiftComplianceResponse,
     ShiftCreate,
     ShiftDetailResponse,
+    ShiftFinalizeRequest,
     ShiftPatternCreate,
     ShiftPatternResponse,
     ShiftPatternUpdate,
@@ -1688,7 +1688,8 @@ async def list_apparatus_options(
 
     # 1. Try the full Apparatus module
     try:
-        from app.models.apparatus import Apparatus as FullApparatus, ApparatusType
+        from app.models.apparatus import Apparatus as FullApparatus
+        from app.models.apparatus import ApparatusType
 
         result = await db.execute(
             select(FullApparatus, ApparatusType.name.label("type_name"))

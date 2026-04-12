@@ -22,9 +22,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
 from app.core.config import settings
-from app.core.constants import (
-    LEADERSHIP_ROLE_SLUGS,
-)
+from app.core.constants import LEADERSHIP_ROLE_SLUGS
 from app.models.election import Candidate, Election, ElectionStatus, Vote, VotingToken
 from app.models.membership_pipeline import ProspectElectionPackage
 from app.models.user import Organization, User
@@ -2453,10 +2451,7 @@ class ElectionService:
 
         Returns: Number of notifications sent
         """
-        from app.services.email_service import (
-            EmailService,
-            build_email_logo_html,
-        )
+        from app.services.email_service import EmailService, build_email_logo_html
 
         leadership_roles = LEADERSHIP_ROLE_SLUGS
 
@@ -2606,20 +2601,16 @@ Best regards,
             """
 
             try:
-                success_count_user, failure_count_user = (
-                    await email_service.send_email(
-                        to_emails=[user.email],
-                        subject=subject,
-                        html_body=html_body,
-                        text_body=text_body,
-                    )
+                success_count_user, failure_count_user = await email_service.send_email(
+                    to_emails=[user.email],
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
                 )
                 if success_count_user > 0:
                     sent_count += 1
             except Exception as e:
-                logger.error(
-                    f"Failed to send {log_label} to {user.email}: {e}"
-                )
+                logger.error(f"Failed to send {log_label} to {user.email}: {e}")
                 continue
 
         return sent_count
@@ -2668,8 +2659,7 @@ Best regards,
                 " an election rollback.</p>"
             ),
             text_preamble=(
-                "This is an important notification regarding"
-                " an election rollback."
+                "This is an important notification regarding" " an election rollback."
             ),
             html_postamble=(
                 "<p>This rollback has been logged in the election's"
@@ -3468,20 +3458,22 @@ Best regards,
             rid = params.pop("recipient_id")
             cc_emails = params.pop("cc_emails", None)
             try:
-                subj, html_body, text_body = await email_service.render_ballot_notification(
-                    recipient_name=params["recipient_name"],
-                    election_title=params["election_title"],
-                    ballot_url=params["ballot_url"],
-                    meeting_date=params["meeting_date"],
-                    custom_message=params["custom_message"],
-                    start_date=params["start_date"],
-                    end_date=params["end_date"],
-                    positions=params["positions"],
-                    ballot_items_html=params["ballot_items_html"],
-                    ballot_items_text=params["ballot_items_text"],
-                    admin_contact_name=params["admin_contact_name"],
-                    admin_contact_email=params["admin_contact_email"],
-                    template=ballot_template,
+                subj, html_body, text_body = (
+                    await email_service.render_ballot_notification(
+                        recipient_name=params["recipient_name"],
+                        election_title=params["election_title"],
+                        ballot_url=params["ballot_url"],
+                        meeting_date=params["meeting_date"],
+                        custom_message=params["custom_message"],
+                        start_date=params["start_date"],
+                        end_date=params["end_date"],
+                        positions=params["positions"],
+                        ballot_items_html=params["ballot_items_html"],
+                        ballot_items_text=params["ballot_items_text"],
+                        admin_contact_name=params["admin_contact_name"],
+                        admin_contact_email=params["admin_contact_email"],
+                        template=ballot_template,
+                    )
                 )
                 recipients, msg_str = email_service.build_message(
                     to_email=params["to_email"],

@@ -44,8 +44,8 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects import mysql
-from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import relationship, synonym
 from sqlalchemy.sql import and_, func
 

@@ -6,16 +6,7 @@ Persists security alerts so they survive server restarts.
 
 import enum
 
-from sqlalchemy import (
-    JSON,
-    Boolean,
-    Column,
-    DateTime,
-    Enum,
-    Index,
-    String,
-    Text,
-)
+from sqlalchemy import JSON, Boolean, Column, DateTime, Enum, Index, String, Text
 from sqlalchemy.sql import func
 
 from app.core.database import Base

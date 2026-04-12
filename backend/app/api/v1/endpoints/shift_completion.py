@@ -32,9 +32,7 @@ from app.schemas.shift_completion import (
     TraineeAcknowledgment,
 )
 from app.services.shift_completion_service import ShiftCompletionService
-from app.services.training_module_config_service import (
-    TrainingModuleConfigService,
-)
+from app.services.training_module_config_service import TrainingModuleConfigService
 
 router = APIRouter()
 
@@ -69,12 +67,8 @@ async def preview_shift_data(
     if not await service.validate_shift_ownership(
         shift_id, current_user.organization_id
     ):
-        raise HTTPException(
-            status_code=404, detail="Shift not found"
-        )
-    hours = await service._get_trainee_hours_from_shift(
-        shift_id, trainee_id
-    )
+        raise HTTPException(status_code=404, detail="Shift not found")
+    hours = await service._get_trainee_hours_from_shift(shift_id, trainee_id)
     calls, call_types = await service._get_trainee_call_data_from_shift(
         shift_id, trainee_id
     )
@@ -157,9 +151,7 @@ async def get_shift_crew_status(
             shift_id,
             str(e),
         )
-        raise HTTPException(
-            status_code=500, detail=safe_error_detail(e)
-        )
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.post(
@@ -178,9 +170,7 @@ async def batch_create_shift_reports(
     Trainees with evaluations get full evaluation data.
     """
     config_service = TrainingModuleConfigService(db)
-    config = await config_service.get_config(
-        current_user.organization_id
-    )
+    config = await config_service.get_config(current_user.organization_id)
     if data.save_as_draft:
         review_status = "draft"
     elif config.report_review_required:
@@ -201,10 +191,7 @@ async def batch_create_shift_reports(
             officer_narrative=data.officer_narrative,
             crew_member_ids=data.crew_member_ids,
             trainee_evaluations=(
-                [
-                    e.model_dump()
-                    for e in data.trainee_evaluations
-                ]
+                [e.model_dump() for e in data.trainee_evaluations]
                 if data.trainee_evaluations
                 else None
             ),
@@ -228,13 +215,9 @@ async def batch_create_shift_reports(
         )
         return result
     except ValueError as e:
-        raise HTTPException(
-            status_code=400, detail=safe_error_detail(e)
-        )
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=safe_error_detail(e)
-        )
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.get("/my-reports", response_model=list[ShiftCompletionReportResponse])

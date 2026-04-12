@@ -3,7 +3,7 @@
 Add serial_found, lot_found, and updated_serial columns to track
 when members record new serial/lot numbers during equipment checks.
 
-Revision ID: a9f3e7c10002
+Revision ID: a9f3e7c10002_2
 Revises: a9f3e7c10001
 Create Date: 2026-03-15 02:00:00.000000
 """
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers
-revision = "a9f3e7c10002"
-down_revision = "a9f3e7c10001"
+revision = "a9f3e7c10002_2"
+down_revision = "a9f3e7c10002"
 branch_labels = None
 depends_on = None
 

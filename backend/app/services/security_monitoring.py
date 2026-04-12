@@ -213,10 +213,8 @@ class SecurityMonitoringService:
         if len(self.alerts) > self._MAX_IN_MEMORY_ALERTS:
             self.alerts = self.alerts[-self._MAX_IN_MEMORY_ALERTS :]
         try:
-            from app.models.security_alert import (
-                AlertType as DBAlertType,
-                ThreatLevel as DBThreatLevel,
-            )
+            from app.models.security_alert import AlertType as DBAlertType
+            from app.models.security_alert import ThreatLevel as DBThreatLevel
 
             # Serialize details — convert non-serializable types
             serializable_details = {}
@@ -854,10 +852,8 @@ class SecurityMonitoringService:
         Falls back to in-memory list if no db session is provided.
         """
         if db is not None:
-            from app.models.security_alert import (
-                AlertType as DBAlertType,
-                ThreatLevel as DBThreatLevel,
-            )
+            from app.models.security_alert import AlertType as DBAlertType
+            from app.models.security_alert import ThreatLevel as DBThreatLevel
 
             query = select(SecurityAlertRecord).order_by(
                 SecurityAlertRecord.timestamp.desc()

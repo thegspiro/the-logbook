@@ -19,8 +19,12 @@ VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 def _parse_migrations():
     """Parse all migration files and extract revision metadata."""
     migrations = []
-    revision_re = re.compile(r"^revision(?:\s*:\s*\w+)?\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
-    down_rev_re = re.compile(r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*['\"](.+?)['\"]", re.MULTILINE)
+    revision_re = re.compile(
+        r"^revision(?:\s*:\s*\w+)?\s*=\s*['\"](.+?)['\"]", re.MULTILINE
+    )
+    down_rev_re = re.compile(
+        r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*['\"](.+?)['\"]", re.MULTILINE
+    )
     down_rev_none_re = re.compile(
         r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*None", re.MULTILINE
     )
@@ -34,13 +38,15 @@ def _parse_migrations():
         down_none = down_rev_none_re.search(content)
 
         if rev_match:
-            migrations.append({
-                "file": path.name,
-                "path": path,
-                "revision": rev_match.group(1),
-                "down_revision": down_match.group(1) if down_match else None,
-                "is_base": down_none is not None and not down_match,
-            })
+            migrations.append(
+                {
+                    "file": path.name,
+                    "path": path,
+                    "revision": rev_match.group(1),
+                    "down_revision": down_match.group(1) if down_match else None,
+                    "is_base": down_none is not None and not down_match,
+                }
+            )
     return migrations
 
 
@@ -57,14 +63,12 @@ class TestNoDuplicateRevisions:
             rev = m["revision"]
             if rev in seen:
                 duplicates.append(
-                    f"Revision '{rev}' used by both "
-                    f"{seen[rev]} and {m['file']}"
+                    f"Revision '{rev}' used by both " f"{seen[rev]} and {m['file']}"
                 )
             seen[rev] = m["file"]
 
-        assert duplicates == [], (
-            "Duplicate Alembic revision IDs found:\n"
-            + "\n".join(f"  - {d}" for d in duplicates)
+        assert duplicates == [], "Duplicate Alembic revision IDs found:\n" + "\n".join(
+            f"  - {d}" for d in duplicates
         )
 
     def test_no_duplicate_down_revisions(self):
@@ -77,8 +81,7 @@ class TestNoDuplicateRevisions:
                 continue
             if down in seen:
                 forks.append(
-                    f"down_revision '{down}' shared by "
-                    f"{seen[down]} and {m['file']}"
+                    f"down_revision '{down}' shared by " f"{seen[down]} and {m['file']}"
                 )
             seen[down] = m["file"]
 
@@ -110,9 +113,8 @@ class TestMigrationChain:
                     f"does not match any revision"
                 )
 
-        assert broken == [], (
-            "Broken migration chain links:\n"
-            + "\n".join(f"  - {b}" for b in broken)
+        assert broken == [], "Broken migration chain links:\n" + "\n".join(
+            f"  - {b}" for b in broken
         )
 
     def test_all_migrations_reachable_from_base(self):
@@ -134,11 +136,10 @@ class TestMigrationChain:
             current = down_to_child.get(current)
 
         unreachable = set(rev_to_file.keys()) - visited
-        assert unreachable == set(), (
-            "Migrations not reachable from base:\n"
-            + "\n".join(
-                f"  - {rev_to_file[r]} (revision={r})" for r in unreachable
-            )
+        assert (
+            unreachable == set()
+        ), "Migrations not reachable from base:\n" + "\n".join(
+            f"  - {rev_to_file[r]} (revision={r})" for r in unreachable
         )
 
     def test_exactly_one_head(self):
@@ -146,9 +147,7 @@ class TestMigrationChain:
         all_down_revisions = {
             m["down_revision"] for m in MIGRATIONS if m["down_revision"]
         }
-        heads = [
-            m for m in MIGRATIONS if m["revision"] not in all_down_revisions
-        ]
+        heads = [m for m in MIGRATIONS if m["revision"] not in all_down_revisions]
         assert len(heads) == 1, (
             f"Expected exactly 1 head migration, found {len(heads)}: "
             f"{[h['file'] for h in heads]}"
@@ -163,12 +162,15 @@ class TestMigrationFileQuality:
         missing = []
         for path in sorted(VERSIONS_DIR.glob("*.py")):
             content = path.read_text(encoding="utf-8")
-            if "revision" not in content or ("revision = " not in content and "revision:" not in content):
+            if "revision" not in content or (
+                "revision = " not in content and "revision:" not in content
+            ):
                 missing.append(path.name)
 
-        assert missing == [], (
-            "Migration files missing revision identifier:\n"
-            + "\n".join(f"  - {m}" for m in missing)
+        assert (
+            missing == []
+        ), "Migration files missing revision identifier:\n" + "\n".join(
+            f"  - {m}" for m in missing
         )
 
     def test_all_migrations_have_upgrade_function(self):
@@ -178,9 +180,10 @@ class TestMigrationFileQuality:
             if "def upgrade" not in content:
                 missing.append(path.name)
 
-        assert missing == [], (
-            "Migration files missing upgrade() function:\n"
-            + "\n".join(f"  - {m}" for m in missing)
+        assert (
+            missing == []
+        ), "Migration files missing upgrade() function:\n" + "\n".join(
+            f"  - {m}" for m in missing
         )
 
     def test_all_migrations_have_downgrade_function(self):
@@ -190,9 +193,10 @@ class TestMigrationFileQuality:
             if "def downgrade" not in content:
                 missing.append(path.name)
 
-        assert missing == [], (
-            "Migration files missing downgrade() function:\n"
-            + "\n".join(f"  - {m}" for m in missing)
+        assert (
+            missing == []
+        ), "Migration files missing downgrade() function:\n" + "\n".join(
+            f"  - {m}" for m in missing
         )
 
     def test_filename_matches_revision_id(self):
@@ -212,9 +216,10 @@ class TestMigrationFileQuality:
                         f"does not match filename prefix"
                     )
 
-        assert mismatches == [], (
-            "Migration filenames don't match their revision IDs:\n"
-            + "\n".join(f"  - {m}" for m in mismatches)
+        assert (
+            mismatches == []
+        ), "Migration filenames don't match their revision IDs:\n" + "\n".join(
+            f"  - {m}" for m in mismatches
         )
 
     def test_downgrade_is_not_empty_pass(self):
@@ -225,15 +230,21 @@ class TestMigrationFileQuality:
             re.MULTILINE,
         )
 
+        # Merge migrations legitimately use pass for both upgrade and downgrade
+        upgrade_pass_re = re.compile(
+            r"def upgrade\(\)[^:]*:\s*\n(\s+)pass\s*$",
+            re.MULTILINE,
+        )
         for path in sorted(VERSIONS_DIR.glob("*.py")):
             content = path.read_text(encoding="utf-8")
             if downgrade_re.search(content):
+                if upgrade_pass_re.search(content):
+                    continue
                 empty_downgrades.append(path.name)
 
         assert empty_downgrades == [], (
             "Migrations with empty downgrade() (just 'pass') — these are "
-            "not reversible:\n"
-            + "\n".join(f"  - {f}" for f in empty_downgrades)
+            "not reversible:\n" + "\n".join(f"  - {f}" for f in empty_downgrades)
         )
 
     def test_no_drop_table_without_if_exists(self):
@@ -241,7 +252,7 @@ class TestMigrationFileQuality:
         violations = []
         # Match op.execute containing DROP TABLE without IF EXISTS
         drop_re = re.compile(
-            r'DROP\s+TABLE\s+(?!IF\s+EXISTS)',
+            r"DROP\s+TABLE\s+(?!IF\s+EXISTS)",
             re.IGNORECASE,
         )
 
@@ -253,8 +264,7 @@ class TestMigrationFileQuality:
 
         assert violations == [], (
             "Migrations using DROP TABLE without IF EXISTS "
-            "(not idempotent on re-run):\n"
-            + "\n".join(f"  - {v}" for v in violations)
+            "(not idempotent on re-run):\n" + "\n".join(f"  - {v}" for v in violations)
         )
 
     def test_date_based_revisions_are_chronologically_ordered(self):
@@ -292,7 +302,8 @@ class TestMigrationFileQuality:
                     )
             current = child
 
-        assert out_of_order == [], (
-            "Migration revision IDs are not in chronological order:\n"
-            + "\n".join(f"  - {o}" for o in out_of_order)
+        assert (
+            out_of_order == []
+        ), "Migration revision IDs are not in chronological order:\n" + "\n".join(
+            f"  - {o}" for o in out_of_order
         )

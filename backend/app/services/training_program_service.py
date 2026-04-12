@@ -1250,8 +1250,9 @@ class TrainingProgramService:
                 selectinload(TrainingProgram.phases)
                 .selectinload(ProgramPhase.requirements)
                 .selectinload(ProgramRequirement.requirement),
-                selectinload(TrainingProgram.phases)
-                .selectinload(ProgramPhase.milestones),
+                selectinload(TrainingProgram.phases).selectinload(
+                    ProgramPhase.milestones
+                ),
             )
             .where(
                 TrainingProgram.id == str(program_id),
@@ -1268,34 +1269,42 @@ class TrainingProgramService:
             phase_reqs = []
             for pr in sorted(phase.requirements, key=lambda r: r.sort_order):
                 req = pr.requirement
-                phase_reqs.append({
-                    "is_required": pr.is_required,
-                    "is_prerequisite": pr.is_prerequisite,
-                    "sort_order": pr.sort_order,
-                    "program_specific_description": pr.program_specific_description,
-                    "custom_deadline_days": pr.custom_deadline_days,
-                    "notification_message": pr.notification_message,
-                    "requirement": self._serialize_requirement(req) if req else None,
-                })
+                phase_reqs.append(
+                    {
+                        "is_required": pr.is_required,
+                        "is_prerequisite": pr.is_prerequisite,
+                        "sort_order": pr.sort_order,
+                        "program_specific_description": pr.program_specific_description,
+                        "custom_deadline_days": pr.custom_deadline_days,
+                        "notification_message": pr.notification_message,
+                        "requirement": (
+                            self._serialize_requirement(req) if req else None
+                        ),
+                    }
+                )
             phase_milestones = []
             for ms in sorted(phase.milestones, key=lambda m: m.created_at or ""):
-                phase_milestones.append({
-                    "name": ms.name,
-                    "description": ms.description,
-                    "completion_percentage_threshold": ms.completion_percentage_threshold,
-                    "notification_message": ms.notification_message,
-                    "requires_verification": ms.requires_verification,
-                    "verification_notes": ms.verification_notes,
-                })
-            phases.append({
-                "phase_number": phase.phase_number,
-                "name": phase.name,
-                "description": phase.description,
-                "requires_manual_advancement": phase.requires_manual_advancement,
-                "time_limit_days": phase.time_limit_days,
-                "requirements": phase_reqs,
-                "milestones": phase_milestones,
-            })
+                phase_milestones.append(
+                    {
+                        "name": ms.name,
+                        "description": ms.description,
+                        "completion_percentage_threshold": ms.completion_percentage_threshold,
+                        "notification_message": ms.notification_message,
+                        "requires_verification": ms.requires_verification,
+                        "verification_notes": ms.verification_notes,
+                    }
+                )
+            phases.append(
+                {
+                    "phase_number": phase.phase_number,
+                    "name": phase.name,
+                    "description": phase.description,
+                    "requires_manual_advancement": phase.requires_manual_advancement,
+                    "time_limit_days": phase.time_limit_days,
+                    "requirements": phase_reqs,
+                    "milestones": phase_milestones,
+                }
+            )
 
         # Program-level requirements (no phase)
         prog_reqs_result = await self.db.execute(
@@ -1309,15 +1318,17 @@ class TrainingProgramService:
         program_reqs = []
         for pr in prog_reqs_result.scalars().all():
             req = pr.requirement
-            program_reqs.append({
-                "is_required": pr.is_required,
-                "is_prerequisite": pr.is_prerequisite,
-                "sort_order": pr.sort_order,
-                "program_specific_description": pr.program_specific_description,
-                "custom_deadline_days": pr.custom_deadline_days,
-                "notification_message": pr.notification_message,
-                "requirement": self._serialize_requirement(req) if req else None,
-            })
+            program_reqs.append(
+                {
+                    "is_required": pr.is_required,
+                    "is_prerequisite": pr.is_prerequisite,
+                    "sort_order": pr.sort_order,
+                    "program_specific_description": pr.program_specific_description,
+                    "custom_deadline_days": pr.custom_deadline_days,
+                    "notification_message": pr.notification_message,
+                    "requirement": self._serialize_requirement(req) if req else None,
+                }
+            )
 
         # Program-level milestones
         prog_ms_result = await self.db.execute(
@@ -1328,14 +1339,16 @@ class TrainingProgramService:
         )
         program_milestones = []
         for ms in prog_ms_result.scalars().all():
-            program_milestones.append({
-                "name": ms.name,
-                "description": ms.description,
-                "completion_percentage_threshold": ms.completion_percentage_threshold,
-                "notification_message": ms.notification_message,
-                "requires_verification": ms.requires_verification,
-                "verification_notes": ms.verification_notes,
-            })
+            program_milestones.append(
+                {
+                    "name": ms.name,
+                    "description": ms.description,
+                    "completion_percentage_threshold": ms.completion_percentage_threshold,
+                    "notification_message": ms.notification_message,
+                    "requires_verification": ms.requires_verification,
+                    "verification_notes": ms.verification_notes,
+                }
+            )
 
         return {
             "export_version": "1.0",
@@ -1373,14 +1386,16 @@ class TrainingProgramService:
                 else str(req.requirement_type)
             ),
             "training_type": (
-                req.training_type.value
-                if hasattr(req.training_type, "value")
-                else req.training_type
-            ) if req.training_type else None,
+                (
+                    req.training_type.value
+                    if hasattr(req.training_type, "value")
+                    else req.training_type
+                )
+                if req.training_type
+                else None
+            ),
             "source": (
-                req.source.value
-                if hasattr(req.source, "value")
-                else str(req.source)
+                req.source.value if hasattr(req.source, "value") else str(req.source)
             ),
             "registry_name": req.registry_name,
             "registry_code": req.registry_code,
@@ -1456,35 +1471,39 @@ class TrainingProgramService:
                     created_by,
                 )
                 if req_id:
-                    self.db.add(ProgramRequirement(
-                        program_id=program.id,
-                        phase_id=phase.id,
-                        requirement_id=req_id,
-                        is_required=req_data.get("is_required", True),
-                        is_prerequisite=req_data.get("is_prerequisite", False),
-                        sort_order=req_data.get("sort_order", 0),
-                        program_specific_description=req_data.get(
-                            "program_specific_description"
-                        ),
-                        custom_deadline_days=req_data.get("custom_deadline_days"),
-                        notification_message=req_data.get("notification_message"),
-                    ))
+                    self.db.add(
+                        ProgramRequirement(
+                            program_id=program.id,
+                            phase_id=phase.id,
+                            requirement_id=req_id,
+                            is_required=req_data.get("is_required", True),
+                            is_prerequisite=req_data.get("is_prerequisite", False),
+                            sort_order=req_data.get("sort_order", 0),
+                            program_specific_description=req_data.get(
+                                "program_specific_description"
+                            ),
+                            custom_deadline_days=req_data.get("custom_deadline_days"),
+                            notification_message=req_data.get("notification_message"),
+                        )
+                    )
 
             for ms_data in phase_data.get("milestones", []):
-                self.db.add(ProgramMilestone(
-                    program_id=program.id,
-                    phase_id=phase.id,
-                    name=ms_data.get("name", ""),
-                    description=ms_data.get("description"),
-                    completion_percentage_threshold=ms_data.get(
-                        "completion_percentage_threshold"
-                    ),
-                    notification_message=ms_data.get("notification_message"),
-                    requires_verification=ms_data.get(
-                        "requires_verification", False
-                    ),
-                    verification_notes=ms_data.get("verification_notes"),
-                ))
+                self.db.add(
+                    ProgramMilestone(
+                        program_id=program.id,
+                        phase_id=phase.id,
+                        name=ms_data.get("name", ""),
+                        description=ms_data.get("description"),
+                        completion_percentage_threshold=ms_data.get(
+                            "completion_percentage_threshold"
+                        ),
+                        notification_message=ms_data.get("notification_message"),
+                        requires_verification=ms_data.get(
+                            "requires_verification", False
+                        ),
+                        verification_notes=ms_data.get("verification_notes"),
+                    )
+                )
 
         # Program-level requirements
         for req_data in data.get("program_requirements", []):
@@ -1494,36 +1513,38 @@ class TrainingProgramService:
                 created_by,
             )
             if req_id:
-                self.db.add(ProgramRequirement(
-                    program_id=program.id,
-                    phase_id=None,
-                    requirement_id=req_id,
-                    is_required=req_data.get("is_required", True),
-                    is_prerequisite=req_data.get("is_prerequisite", False),
-                    sort_order=req_data.get("sort_order", 0),
-                    program_specific_description=req_data.get(
-                        "program_specific_description"
-                    ),
-                    custom_deadline_days=req_data.get("custom_deadline_days"),
-                    notification_message=req_data.get("notification_message"),
-                ))
+                self.db.add(
+                    ProgramRequirement(
+                        program_id=program.id,
+                        phase_id=None,
+                        requirement_id=req_id,
+                        is_required=req_data.get("is_required", True),
+                        is_prerequisite=req_data.get("is_prerequisite", False),
+                        sort_order=req_data.get("sort_order", 0),
+                        program_specific_description=req_data.get(
+                            "program_specific_description"
+                        ),
+                        custom_deadline_days=req_data.get("custom_deadline_days"),
+                        notification_message=req_data.get("notification_message"),
+                    )
+                )
 
         # Program-level milestones
         for ms_data in data.get("program_milestones", []):
-            self.db.add(ProgramMilestone(
-                program_id=program.id,
-                phase_id=None,
-                name=ms_data.get("name", ""),
-                description=ms_data.get("description"),
-                completion_percentage_threshold=ms_data.get(
-                    "completion_percentage_threshold"
-                ),
-                notification_message=ms_data.get("notification_message"),
-                requires_verification=ms_data.get(
-                    "requires_verification", False
-                ),
-                verification_notes=ms_data.get("verification_notes"),
-            ))
+            self.db.add(
+                ProgramMilestone(
+                    program_id=program.id,
+                    phase_id=None,
+                    name=ms_data.get("name", ""),
+                    description=ms_data.get("description"),
+                    completion_percentage_threshold=ms_data.get(
+                        "completion_percentage_threshold"
+                    ),
+                    notification_message=ms_data.get("notification_message"),
+                    requires_verification=ms_data.get("requires_verification", False),
+                    verification_notes=ms_data.get("verification_notes"),
+                )
+            )
 
         await self.db.commit()
         await self.db.refresh(program)

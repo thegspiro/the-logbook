@@ -8,7 +8,6 @@ API key authentication, rate limiting, and access logging.
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-
 import bcrypt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import APIKeyHeader

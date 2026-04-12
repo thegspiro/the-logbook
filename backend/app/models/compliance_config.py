@@ -9,13 +9,13 @@ thresholds, role-based profiles, and report scheduling.
 from enum import Enum as PyEnum
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
     Float,
     ForeignKey,
     Integer,
-    JSON,
     String,
     Text,
     func,
@@ -247,6 +247,7 @@ class ComplianceReport(Base):
         String(36),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
 
     # -- Report metadata --

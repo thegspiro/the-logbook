@@ -28,6 +28,7 @@ class TestConnectionManager:
         """Connecting a WebSocket should track it under the organization."""
         mgr = ConnectionManager()
         ws = AsyncMock()
+        ws.client_state.name = "CONNECTING"
 
         await mgr.connect(ws, "org-1")
 

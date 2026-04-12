@@ -6,10 +6,9 @@ meeting attendance calculation for voting eligibility.
 """
 
 from datetime import date, datetime, timezone
-
-from dateutil.relativedelta import relativedelta
 from typing import Any, Dict, List, Optional
 
+from dateutil.relativedelta import relativedelta
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession

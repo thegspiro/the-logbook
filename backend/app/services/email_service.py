@@ -227,16 +227,20 @@ def wrap_email_body(
     """
     logo_img = build_email_logo_img(organization)
     logo_div = f'<div class="logo">{logo_img}</div>' if logo_img else ""
-    org_name = (
-        _html.escape(getattr(organization, "name", ""))
+    org_name = _html.escape(getattr(organization, "name", "")) if organization else ""
+    if not footer_text:
+        footer_text = f"This is an automated message from {org_name}."
+    org_phone = (
+        _html.escape(getattr(organization, "phone", None) or "") if organization else ""
+    )
+    org_email_addr = (
+        _html.escape(getattr(organization, "email", None) or "") if organization else ""
+    )
+    org_website = (
+        _html.escape(getattr(organization, "website", None) or "")
         if organization
         else ""
     )
-    if not footer_text:
-        footer_text = f"This is an automated message from {org_name}."
-    org_phone = _html.escape(getattr(organization, "phone", None) or "") if organization else ""
-    org_email_addr = _html.escape(getattr(organization, "email", None) or "") if organization else ""
-    org_website = _html.escape(getattr(organization, "website", None) or "") if organization else ""
     contact_parts = [p for p in (org_phone, org_email_addr, org_website) if p]
     contact_line = (
         f'<p style="font-size: 11px; color: #9ca3af;">{" | ".join(contact_parts)}</p>'
@@ -685,9 +689,7 @@ class EmailService:
                 part.set_payload(f.read())
             encoders.encode_base64(part)
             filename = _sanitize_header(os.path.basename(resolved))
-            part.add_header(
-                "Content-Disposition", "attachment", filename=filename
-            )
+            part.add_header("Content-Disposition", "attachment", filename=filename)
             attachment_parts.append(part)
 
         # Build one MIME message per recipient
@@ -733,7 +735,9 @@ class EmailService:
 
                 batch.append((all_recipients, msg.as_string()))
             except Exception as e:
-                logger.error(f"Failed to build email for {_redact_email(to_email)}: {e}")
+                logger.error(
+                    f"Failed to build email for {_redact_email(to_email)}: {e}"
+                )
 
         # Send through a single SMTP connection when possible
         if len(batch) == 1:
@@ -794,10 +798,7 @@ class EmailService:
     ) -> None:
         """Write a MessageHistory record for the send attempt."""
         from app.core.utils import generate_uuid
-        from app.models.email_template import (
-            MessageHistory,
-            MessageHistoryStatus,
-        )
+        from app.models.email_template import MessageHistory, MessageHistoryStatus
 
         org_id = str(self.organization.id) if self.organization else None
         status = (
@@ -1226,7 +1227,11 @@ class EmailService:
                 loaded_template = await svc.get_template(
                     organization_id, EmailTemplateType.WELCOME
                 )
-                if loaded_template and loaded_template.allow_attachments and loaded_template.attachments:
+                if (
+                    loaded_template
+                    and loaded_template.allow_attachments
+                    and loaded_template.attachments
+                ):
                     stored_paths = [a.storage_path for a in loaded_template.attachments]
                     attachment_paths = (attachment_paths or []) + stored_paths
             except Exception as e:

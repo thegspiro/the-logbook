@@ -17,7 +17,6 @@ import pytest
 
 from app.models.election import Candidate, Election, ElectionStatus, Vote
 
-
 # ---------------------------------------------------------------------------
 # Helpers — lightweight stubs that don't require a real DB session
 # ---------------------------------------------------------------------------
@@ -164,8 +163,15 @@ class TestVoteSigning:
             vote_rank=None,
             voted_at=datetime.now(timezone.utc),
         )
-        vote_normal = _make_vote(election.id, **base, is_proxy_vote=False, proxy_delegating_user_id=None)
-        vote_proxy = _make_vote(election.id, **base, is_proxy_vote=True, proxy_delegating_user_id=str(uuid4()))
+        vote_normal = _make_vote(
+            election.id, **base, is_proxy_vote=False, proxy_delegating_user_id=None
+        )
+        vote_proxy = _make_vote(
+            election.id,
+            **base,
+            is_proxy_vote=True,
+            proxy_delegating_user_id=str(uuid4()),
+        )
         assert service._sign_vote(vote_normal) != service._sign_vote(vote_proxy)
 
     def test_sign_vote_tampered_candidate_detected(self):
@@ -245,12 +251,8 @@ class TestChainHash:
 
     def test_chain_is_order_sensitive(self):
         service = _make_service()
-        c_ab = service._compute_chain_hash(
-            service._compute_chain_hash(None, "a"), "b"
-        )
-        c_ba = service._compute_chain_hash(
-            service._compute_chain_hash(None, "b"), "a"
-        )
+        c_ab = service._compute_chain_hash(service._compute_chain_hash(None, "a"), "b")
+        c_ba = service._compute_chain_hash(service._compute_chain_hash(None, "b"), "a")
         assert c_ab != c_ba
 
 
@@ -570,16 +572,20 @@ class TestEligibleBallotItems:
     async def test_role_type_filters_items(self):
         service = _make_service()
         ballot_items = [
-            {"id": "1", "title": "Officer Vote", "eligible_voter_types": ["operational"]},
+            {
+                "id": "1",
+                "title": "Officer Vote",
+                "eligible_voter_types": ["operational"],
+            },
             {"id": "2", "title": "General Vote", "eligible_voter_types": ["all"]},
         ]
         election = _make_election(ballot_items=ballot_items, voter_overrides=None)
 
-        # User without an operational role
+        # User without an operational membership type ("active" maps to operational)
         user = MagicMock()
         user.id = str(uuid4())
         user.roles = []  # no roles at all
-        user.membership_type = "active"
+        user.membership_type = "honorary"
         user.status = "active"
 
         mock_org = MagicMock()
