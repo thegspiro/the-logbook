@@ -92,7 +92,8 @@ const MemberTrainingPrintPage: React.FC = () => {
   return (
     <>
       <style>{`
-        @media print { @page { size: letter; margin: 0.5in 0.6in; } body { margin: 0; } }
+        @page { size: letter; margin: 0.5in 0.6in; }
+        @media print { body { margin: 0; } }
         @media screen { body { background: #f3f4f6; } }
       `}</style>
 
@@ -249,7 +250,7 @@ const MemberTrainingPrintPage: React.FC = () => {
           {/* Footer */}
           <div style={{ marginTop: '24pt', borderTop: '1px solid #ddd', paddingTop: '6pt', display: 'flex', justifyContent: 'space-between', fontSize: '8pt', color: '#aaa' }}>
             <span>The Logbook — Member Training Record</span>
-            <span>Page 1 of 1</span>
+            <span>Generated {formatDate(new Date(), tz)}</span>
           </div>
         </div>
       </div>
