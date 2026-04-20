@@ -88,9 +88,11 @@ def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
     parts: list[str] = []
     for key in extra_lines:
         if key == "location":
-            val = getattr(item, "location_name", None) or getattr(
-                item, "location_id", None
-            )
+            # Prefer the resolved relationship name over the raw UUID.
+            loc = getattr(item, "location", None)
+            val = getattr(loc, "name", None) if loc else None
+            if not val:
+                val = getattr(item, "location_id", None)
             if val:
                 parts.append(str(val))
         elif key == "category":
@@ -104,11 +106,8 @@ def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
             if cond:
                 val = cond.value if hasattr(cond, "value") else str(cond)
                 parts.append(val.replace("_", " ").title())
-        elif key == "custom":
-            # Custom text is handled by the caller pre-populating item.notes
-            # or by adding it to the extra_lines list as "custom:text"
-            if ":" in key:
-                parts.append(key.split(":", 1)[1])
+        elif key.startswith("custom:"):
+            parts.append(key.split(":", 1)[1])
     return " | ".join(parts)
 
 
@@ -537,6 +536,7 @@ class InventoryService:
             .where(InventoryItem.organization_id == str(organization_id))
             .options(
                 selectinload(InventoryItem.category),
+                selectinload(InventoryItem.location),
                 selectinload(InventoryItem.assigned_to_user),
                 selectinload(InventoryItem.checkout_records),
                 selectinload(InventoryItem.maintenance_records),

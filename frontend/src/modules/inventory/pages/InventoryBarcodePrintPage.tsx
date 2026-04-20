@@ -169,7 +169,11 @@ function buildExtraText(item: InventoryItem, extraLines?: string[]): string | nu
   if (!extraLines || extraLines.length === 0) return null;
   const parts: string[] = [];
   for (const key of extraLines) {
-    if (key === 'location' && item.location_id) parts.push(item.location_id.slice(0, 12));
+    if (key === 'location') {
+      // Prefer the human-readable storage_location over the raw UUID.
+      const loc = item.storage_location || item.station;
+      if (loc) parts.push(loc);
+    }
     if (key === 'category' && item.category_name) parts.push(item.category_name);
     if (key === 'condition' && item.condition) parts.push(item.condition.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
   }
@@ -350,6 +354,8 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const prevCopiesRef = useRef(copies);
   const prevPresetRef = useRef(presetId);
   if (prevItemsRef.current !== items || prevCopiesRef.current !== copies || prevPresetRef.current !== presetId) {
+    // Capture before updating refs so the comparison works correctly.
+    const presetChanged = prevPresetRef.current !== presetId;
     renderedCountRef.current = 0;
     setBarcodesReady(false);
     prevItemsRef.current = items;
@@ -357,7 +363,7 @@ const InventoryBarcodePrintPage: React.FC = () => {
     prevPresetRef.current = presetId;
     // Reset rotation override when switching presets so each preset
     // uses its own default until the user explicitly overrides it.
-    if (prevPresetRef.current !== presetId) {
+    if (presetChanged) {
       setAutoRotateOverride(null);
     }
   }
