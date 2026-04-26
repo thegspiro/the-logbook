@@ -12,7 +12,7 @@ export interface OnboardingData {
   navigationLayout: 'top' | 'left' | null;
 
   // Email Configuration
-  emailPlatform: 'gmail' | 'microsoft' | 'selfhosted' | 'other' | null;
+  emailPlatform: 'gmail' | 'microsoft' | 'selfhosted' | 'cloudflare' | 'other' | null;
   emailConfig?: EmailConfig | undefined;
   emailConfigMethod?: 'oauth' | 'apppassword' | undefined;
 
@@ -32,6 +32,10 @@ export interface OnboardingData {
 }
 
 export interface EmailConfig {
+  // Cloudflare Email Service
+  cloudflareAccountId?: string;
+  cloudflareApiToken?: string;
+
   // Gmail OAuth
   googleClientId?: string;
   googleClientSecret?: string;

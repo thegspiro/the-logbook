@@ -64,6 +64,9 @@ export interface DepartmentEmailSettings {
 export interface EmailServiceSettings {
   enabled: boolean;
   platform: string;
+  // Cloudflare Email Service
+  cloudflare_account_id?: string;
+  cloudflare_api_token?: string;
   // Gmail / Google Workspace
   google_client_id?: string;
   google_client_secret?: string;
