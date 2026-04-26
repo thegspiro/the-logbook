@@ -616,6 +616,16 @@ def test_cloudflare_email(
             {"required": ["cloudflareAccountId", "cloudflareApiToken"]},
         )
 
+    import re
+
+    if not re.fullmatch(r"[a-f0-9]{32}", account_id):
+        return (
+            False,
+            "Invalid Account ID format. It should be a 32-character hex string "
+            "from your Cloudflare dashboard.",
+            {},
+        )
+
     details["account_id_present"] = True
     details["api_token_present"] = True
 

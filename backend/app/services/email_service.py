@@ -615,9 +615,13 @@ class EmailService:
         if not cfg:
             raise ValueError("Cloudflare Email Service is not configured")
 
+        account_id = cfg["account_id"]
+        if not re.fullmatch(r"[a-f0-9]{32}", account_id):
+            raise ValueError("Invalid Cloudflare account ID format")
+
         url = (
             f"https://api.cloudflare.com/client/v4/accounts/"
-            f"{cfg['account_id']}/email/sending/send"
+            f"{account_id}/email/sending/send"
         )
         headers = {
             "Authorization": f"Bearer {cfg['api_token']}",
