@@ -38,9 +38,10 @@ The onboarding process consists of 10 steps:
 - Select email platform for notifications:
   - Gmail / Google Workspace
   - Microsoft 365 / Outlook
-  - Self-hosted email server
-  - Other providers
-- Configure SMTP settings
+  - Self-hosted email server (SMTP)
+  - Cloudflare Email Service (REST API — no SMTP server needed)
+  - Other providers / Skip
+- Configure platform-specific settings (OAuth credentials, SMTP host/port, or Cloudflare Account ID and API Token)
 
 #### Step 4: File Storage
 - Choose file storage solution:

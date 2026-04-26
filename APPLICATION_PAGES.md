@@ -25,8 +25,8 @@ Complete reference of all pages in the application, organized by module.
 | `/onboarding` | Onboarding Check | Entry point / status check |
 | `/onboarding/start` | Organization Setup | Step 1 - create organization |
 | `/onboarding/navigation-choice` | Navigation Choice | Choose navigation layout |
-| `/onboarding/email-platform` | Email Platform | Select email provider |
-| `/onboarding/email-config` | Email Configuration | Configure email settings |
+| `/onboarding/email-platform` | Email Platform | Select email provider (Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other/Skip) |
+| `/onboarding/email-config` | Email Configuration | Configure email settings (platform-specific: OAuth, SMTP, or Cloudflare API credentials) |
 | `/onboarding/file-storage` | File Storage | Choose file storage provider |
 | `/onboarding/file-storage-config` | File Storage Config | Configure file storage |
 | `/onboarding/authentication` | Authentication | Choose auth method |

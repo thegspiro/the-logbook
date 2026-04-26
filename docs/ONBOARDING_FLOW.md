@@ -74,6 +74,7 @@ This document describes the complete onboarding flow for The Logbook application
 │ - Google Workspace           │
 │ - Microsoft 365              │
 │ - SMTP (Generic)             │
+│ - Cloudflare Email Service   │
 └──────────┬───────────────────┘
            │
            ├─ If "None" → Navigate to /onboarding/file-storage
@@ -357,13 +358,14 @@ Response: {
 - Google Workspace
 - Microsoft 365
 - SMTP (Generic)
+- Cloudflare Email Service
 
 **Navigation**:
 - If "None" → `/onboarding/file-storage`
 - If service selected → `/onboarding/email-config`
 
 **Data Storage**: Zustand store (persisted to localStorage)
-- `emailPlatform` = "none" | "google" | "microsoft" | "smtp"
+- `emailPlatform` = "none" | "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other"
 
 ---
 
@@ -376,31 +378,51 @@ Response: {
 - Client ID
 - Client Secret
 - OAuth Redirect URI
+- App Password (alternative to OAuth)
 
 **Microsoft 365**:
 - Tenant ID
 - Client ID
 - Client Secret
 
-**SMTP**:
+**SMTP (Self-Hosted)**:
 - SMTP Host
 - SMTP Port
+- Encryption (TLS/SSL/None)
 - Username
 - Password
 - From Email
-- Use TLS/SSL
+- From Name
 
-**API Call**:
+**Cloudflare Email Service**:
+- Account ID (32-character hex string from Cloudflare dashboard)
+- API Token (created with email sending permission)
+- From Email
+- From Name
+
+**Common fields** (all platforms):
+- From Email Address
+- From Name
+
+**API Call** (test connection):
 ```
-POST /api/v1/onboarding/notifications
+POST /api/v1/onboarding/test-email
 Body: {
-  email_enabled: boolean,
-  smtp_host?: string,
-  smtp_port?: number,
-  smtp_user?: string,
-  smtp_from_email?: string
+  platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
+  config: { ...platform-specific fields... }
 }
 ```
+
+**API Call** (save config):
+```
+POST /api/v1/onboarding/save-email-config
+Body: {
+  platform: "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other",
+  config: { ...platform-specific fields... }
+}
+```
+
+**Data path**: Config is encrypted server-side (AES-256), stored in the onboarding session, and persisted to the organization's `settings.email_service` JSON column on completion. Secret fields (`cloudflare_api_token`, `smtp_password`, etc.) are prefixed with `enc:` before storage.
 
 **Navigation**:
 - Button: "Save & Continue" → `/onboarding/file-storage`
@@ -825,7 +847,7 @@ The onboarding flow uses a **Zustand store** persisted to `localStorage` (key: `
     "navigationLayout": "top",                  // "top" | "left"
 
     // Email
-    "emailPlatform": "gmail",                   // "gmail" | "microsoft" | "selfhosted" | "other" | null
+    "emailPlatform": "gmail",                   // "gmail" | "microsoft" | "selfhosted" | "cloudflare" | "other" | null
     "emailConfigured": false,
 
     // File Storage

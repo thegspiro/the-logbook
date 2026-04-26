@@ -398,20 +398,28 @@ Management"]**
 
 **[SCREEN: Show the email platform options]**
 
-> "You have several options. **SMTP** is the most universal — you can use any
-> email provider. Gmail, Outlook, your department's email host — anything with
-> SMTP credentials. **Mailgun**, **SendGrid**, and **Amazon SES** are dedicated
-> email services that handle high volumes more reliably."
+> "You have several options. **Gmail** and **Microsoft 365** integrate via
+> OAuth or app passwords. **Self-Hosted SMTP** is the most universal — any
+> email provider with SMTP credentials. And if your domain is on
+> **Cloudflare**, you can use **Cloudflare Email Service** — it sends via
+> REST API, so you don't need an SMTP server at all. Cloudflare handles
+> SPF, DKIM, and DMARC automatically."
 
-> "For most departments, SMTP with your existing email provider works perfectly
-> fine. You only need a dedicated service if you're sending hundreds of emails
-> per day."
+> "For most departments, Gmail or Microsoft 365 with an app password is the
+> easiest path. Cloudflare is a good option if you're already managing your
+> DNS there and want a simple setup."
 
 **[SCREEN: Select SMTP and show the configuration fields]**
 
-> "Enter your SMTP server, port, username, and password. For Gmail, that's
-> `smtp.gmail.com` on port 587. You'll need to create an app-specific password
-> if you're using Gmail with two-factor authentication."
+> "For SMTP, enter your server, port, username, and password. For Gmail,
+> that's `smtp.gmail.com` on port 587. You'll need to create an app-specific
+> password if you're using Gmail with two-factor authentication."
+
+**[SCREEN: Select Cloudflare and show the configuration fields]**
+
+> "For Cloudflare, you just need your Account ID — it's on your Cloudflare
+> dashboard sidebar — and an API token with email sending permission. No
+> server addresses or ports to worry about."
 
 > "If you're not ready to configure email yet, skip this step. The platform
 > works perfectly without it — you just won't get automated notifications."

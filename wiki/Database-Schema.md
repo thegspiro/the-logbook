@@ -198,6 +198,32 @@ All data is scoped by `organization_id`. Key constraints:
 
 ---
 
+## Organization Settings JSON Structure (email_service)
+
+The `organizations.settings` JSON column stores email platform configuration under the `email_service` key. No database migration is needed when adding new email platforms — the JSON structure is flexible. Secret fields are AES-256 encrypted (prefixed with `enc:`).
+
+| Field | Type | Platforms | Description |
+|-------|------|-----------|-------------|
+| `enabled` | boolean | all | Whether org-specific email config is active |
+| `platform` | string | all | `gmail`, `microsoft`, `selfhosted`, `cloudflare`, or `other` |
+| `from_email` | string | all | Sender email address |
+| `from_name` | string | all | Sender display name |
+| `smtp_host` | string | gmail, microsoft, selfhosted | SMTP server hostname |
+| `smtp_port` | integer | gmail, microsoft, selfhosted | SMTP server port |
+| `smtp_user` | string | gmail, microsoft, selfhosted | SMTP username |
+| `smtp_password` | string (encrypted) | gmail, microsoft, selfhosted | SMTP password |
+| `smtp_encryption` | string | gmail, microsoft, selfhosted | `tls`, `ssl`, or `none` |
+| `google_client_id` | string | gmail | Google OAuth Client ID |
+| `google_client_secret` | string (encrypted) | gmail | Google OAuth Client Secret |
+| `google_app_password` | string (encrypted) | gmail | Google App Password (alternative to OAuth) |
+| `microsoft_tenant_id` | string | microsoft | Azure AD Tenant ID |
+| `microsoft_client_id` | string | microsoft | Azure AD Client ID |
+| `microsoft_client_secret` | string (encrypted) | microsoft | Azure AD Client Secret |
+| `cloudflare_account_id` | string | cloudflare | Cloudflare Account ID (32-char hex) |
+| `cloudflare_api_token` | string (encrypted) | cloudflare | Cloudflare API token with email sending permission |
+
+---
+
 ## Recent Schema Changes (2026-04-04)
 
 ### New Columns

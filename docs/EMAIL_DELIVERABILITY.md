@@ -36,6 +36,7 @@ Replace the `include:` with your SMTP provider:
 |----------|-------------|
 | Google Workspace | `include:_spf.google.com` |
 | Microsoft 365 | `include:spf.protection.outlook.com` |
+| Cloudflare Email Service | Automatic — managed by Cloudflare when domain DNS is on Cloudflare |
 | Amazon SES | `include:amazonses.com` |
 | SendGrid | `include:sendgrid.net` |
 | Mailgun | `include:mailgun.org` |
@@ -59,6 +60,9 @@ their DNS records:
   Authenticate email. Add the provided TXT record.
 - **Microsoft 365:** Exchange Admin > Protection > DKIM. Enable and add
   the CNAME records.
+- **Cloudflare Email Service:** Automatic — Cloudflare configures SPF, DKIM,
+  and DMARC when your domain's DNS is managed through Cloudflare. No manual
+  DNS record setup required.
 - **SendGrid:** Settings > Sender Authentication > Authenticate Your Domain.
 - **Amazon SES:** Verified Identities > Domain > DKIM. Add the 3 CNAME records.
 - **Mailgun:** Domain Settings > DNS Records. Add the TXT record.
@@ -111,10 +115,10 @@ rejected outright.
 
 ## 5. Application Configuration
 
-### Environment Variables
+### Option A: SMTP (Gmail, Microsoft 365, Self-Hosted)
 
 ```bash
-# Required for email
+# Required for SMTP email
 EMAIL_ENABLED=true
 SMTP_HOST=smtp.yourdomain.com        # Your SMTP relay
 SMTP_PORT=587                         # 587 for STARTTLS, 465 for SSL
@@ -128,6 +132,28 @@ SMTP_ENCRYPTION=tls                   # tls, ssl, or none
 # Must resolve in DNS and match your PTR record
 SMTP_EHLO_HOSTNAME=mail.yourdomain.com
 ```
+
+### Option B: Cloudflare Email Service (REST API)
+
+If your domain's DNS is managed by Cloudflare, you can send email via their
+REST API instead of SMTP. Cloudflare handles SPF, DKIM, and DMARC
+automatically — no DNS records to configure manually.
+
+```bash
+# Required for Cloudflare email
+CLOUDFLARE_EMAIL_ENABLED=true
+CLOUDFLARE_ACCOUNT_ID=a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4  # 32-char hex from dashboard
+CLOUDFLARE_API_TOKEN=your-api-token                        # Token with email sending permission
+
+# Still needed for the sender address
+SMTP_FROM_EMAIL=noreply@yourdomain.com
+SMTP_FROM_NAME="Your Organization"
+```
+
+> **Note:** Cloudflare Email Service does not support file attachments.
+> Emails that would normally include attachments (e.g., compliance reports)
+> will be sent without them when Cloudflare is the active backend. A warning
+> is logged when this occurs.
 
 ### What the app handles automatically
 

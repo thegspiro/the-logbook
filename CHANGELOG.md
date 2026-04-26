@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Cloudflare Email Service Integration (2026-04-26)
+
+#### Cloudflare Email Service — New Email Platform Option
+
+- **New platform: Cloudflare Email Service**: Added as a fifth email platform option alongside Gmail, Microsoft 365, Self-Hosted SMTP, and Other. Cloudflare Email Service sends transactional email via REST API — no SMTP server required. Domain DNS must be managed by Cloudflare. Currently in public beta at $0.35 per 1,000 messages
+- **Backend REST API sending path**: New `_cloudflare_send()` method in `EmailService` uses `httpx.AsyncClient` to call `POST /client/v4/accounts/{account_id}/email/sending/send`. Sends up to 5 requests concurrently via `asyncio.Semaphore`. Retries transient errors (429 rate limits, 5xx server errors) up to 3 times with exponential backoff (1s, 2s, 4s)
+- **Configuration**: New env vars `CLOUDFLARE_EMAIL_ENABLED`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` for global config. Org-level config via `cloudflare_account_id` and `cloudflare_api_token` fields in `EmailServiceSettings` (stored encrypted at rest, redacted in API responses)
+- **Connection testing**: New `test_cloudflare_email()` validates the API token via Cloudflare's `/user/tokens/verify` endpoint during onboarding and settings configuration
+- **Onboarding flow**: Cloudflare appears as a platform card (Cloud icon, orange gradient) in the Email Platform Choice step. Configuration form collects Account ID and API Token with setup instructions
+- **Settings page**: Cloudflare platform button and configuration fields added to Email Settings section under Administration > Organization Settings
+- **SSRF prevention**: Account ID validated against `[a-f0-9]{32}` regex before URL interpolation in both sending and testing paths
+- **Automatic DNS auth**: Cloudflare handles SPF, DKIM, and DMARC automatically when the domain is managed through Cloudflare DNS — no manual DNS record configuration required
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Attachments included with Cloudflare backend | Warning logged; attachments omitted (Cloudflare REST API does not support file attachments) |
+| `send_batch` called with Cloudflare as active backend | Warning logged; falls back to SMTP path since `send_batch` uses pre-built MIME strings that Cloudflare's REST API cannot accept |
+| Cloudflare API returns 429 (rate limit) | Retries up to 3 times with exponential backoff (1s, 2s, 4s) |
+| Cloudflare API returns 5xx (server error) | Retries up to 3 times with exponential backoff |
+| Invalid Account ID format (not 32-char hex) | `ValueError` raised before any HTTP request is made |
+| `EMAIL_ENABLED=false` but `CLOUDFLARE_EMAIL_ENABLED=true` | Email sending works — Cloudflare path bypasses the SMTP enabled check |
+| Org-level Cloudflare config with global SMTP fallback | Org config takes priority; global SMTP is used only when org email is disabled |
+
+**Files Changed:**
+
+| Layer | Files |
+|-------|-------|
+| Backend schemas | `schemas/organization.py` — `cloudflare_account_id`, `cloudflare_api_token` fields, encryption, redaction |
+| Backend config | `core/config.py` — `CLOUDFLARE_EMAIL_ENABLED`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` |
+| Backend service | `services/email_service.py` — `_get_cloudflare_config()`, `_cloudflare_send()`, `_use_cloudflare`, updated `send_email()` and `send_batch()` |
+| Backend test helper | `api/v1/email_test_helper.py` — `test_cloudflare_email()` |
+| Backend onboarding | `api/v1/onboarding.py` — platform validation, test dispatch, persistence mapping |
+| Frontend types | `types/user.ts`, `modules/onboarding/types/index.ts` |
+| Frontend onboarding | `EmailPlatformChoice.tsx`, `EmailConfiguration.tsx` |
+| Frontend settings | `EmailSettingsSection.tsx` |
+| Env examples | `.env.example`, `.env.example.full` |
+
 ### Salesforce Integration, Vector Solutions Enhancements, Facilities & Membership Refactoring, Test Coverage Expansion (2026-04-10 — 2026-04-12)
 
 #### Salesforce CRM Integration

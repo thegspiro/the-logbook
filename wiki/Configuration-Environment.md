@@ -87,13 +87,27 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 
 | Variable | Description | Default |
 |----------|-------------|---------|
+| `EMAIL_ENABLED` | Enable email sending (SMTP) | `false` |
 | `SMTP_HOST` | SMTP server hostname | — |
 | `SMTP_PORT` | SMTP server port | `587` |
 | `SMTP_USER` | SMTP username | — |
 | `SMTP_PASSWORD` | SMTP password | — |
 | `SMTP_FROM_EMAIL` | Sender email address | — |
 | `SMTP_FROM_NAME` | Sender display name | `The Logbook` |
-| `SMTP_TLS` | Use TLS encryption | `true` |
+| `SMTP_ENCRYPTION` | Encryption mode: `tls`, `ssl`, or `none` | `tls` |
+| `SMTP_EHLO_HOSTNAME` | Explicit EHLO hostname (must resolve in DNS) | domain of `SMTP_FROM_EMAIL` |
+
+### Cloudflare Email Service (Alternative to SMTP)
+
+Use these variables instead of the SMTP variables above to send email via Cloudflare's REST API. Requires your domain's DNS to be managed by Cloudflare. Cloudflare handles SPF/DKIM/DMARC automatically.
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CLOUDFLARE_EMAIL_ENABLED` | Enable Cloudflare Email Service | `false` |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID (32-char hex, from dashboard sidebar) | — |
+| `CLOUDFLARE_API_TOKEN` | API token with email sending permission | — |
+
+> **Note:** Set either SMTP variables or Cloudflare variables — not both. If both are configured, org-level settings take priority, then Cloudflare, then SMTP. The `SMTP_FROM_EMAIL` and `SMTP_FROM_NAME` variables are still used for the sender address when Cloudflare is the active backend at the global level.
 
 ---
 
