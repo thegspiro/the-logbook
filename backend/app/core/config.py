@@ -423,6 +423,11 @@ class Settings(BaseSettings):
         None  # EHLO hostname; defaults to from_email domain
     )
 
+    # Cloudflare Email Service (alternative to SMTP)
+    CLOUDFLARE_EMAIL_ENABLED: bool = False
+    CLOUDFLARE_ACCOUNT_ID: str | None = None
+    CLOUDFLARE_API_TOKEN: str | None = None
+
     # ============================================
     # SMS (Twilio)
     # ============================================

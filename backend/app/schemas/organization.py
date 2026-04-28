@@ -79,6 +79,7 @@ _EMAIL_SECRET_FIELDS = frozenset(
         "google_app_password",
         "microsoft_client_secret",
         "smtp_password",
+        "cloudflare_api_token",
     }
 )
 
@@ -184,7 +185,14 @@ class EmailServiceSettings(BaseModel):
     )
     platform: str = Field(
         default="other",
-        description="Email platform: gmail, microsoft, selfhosted, other",
+        description="Email platform: gmail, microsoft, selfhosted, cloudflare, other",
+    )
+    # Cloudflare Email Service
+    cloudflare_account_id: Optional[str] = Field(
+        None, description="Cloudflare account ID"
+    )
+    cloudflare_api_token: Optional[str] = Field(
+        None, description="Cloudflare API token with email sending permission"
     )
     # Gmail / Google Workspace
     google_client_id: Optional[str] = Field(None, description="Google OAuth Client ID")
@@ -223,6 +231,7 @@ class EmailServiceSettings(BaseModel):
                 "google_app_password": _redact(self.google_app_password),
                 "microsoft_client_secret": _redact(self.microsoft_client_secret),
                 "smtp_password": _redact(self.smtp_password),
+                "cloudflare_api_token": _redact(self.cloudflare_api_token),
             }
         )
 

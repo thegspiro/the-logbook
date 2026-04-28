@@ -276,6 +276,7 @@ class EmailService:
         """
         self.organization = organization
         self._smtp_config = self._get_smtp_config()
+        self._cloudflare_config = self._get_cloudflare_config()
 
     def _make_message_id(self) -> str:
         """Generate a unique RFC 5322 Message-ID header value.
@@ -407,6 +408,45 @@ class EmailService:
             "from_name": settings.SMTP_FROM_NAME,
             "encryption": getattr(settings, "SMTP_ENCRYPTION", "tls"),
         }
+
+    def _get_cloudflare_config(self) -> Optional[Dict[str, Any]]:
+        """Get Cloudflare Email Service config if the platform is set to cloudflare.
+
+        Returns None when Cloudflare is not the active email platform,
+        signalling that the SMTP path should be used instead.
+        """
+        if self.organization and self.organization.settings:
+            decrypted = decrypt_settings_secrets(self.organization.settings)
+            org_email = decrypted.get("email_service", {})
+            if org_email.get("enabled") and org_email.get("platform") == "cloudflare":
+                account_id = org_email.get("cloudflare_account_id")
+                api_token = org_email.get("cloudflare_api_token")
+                if account_id and api_token:
+                    return {
+                        "account_id": account_id,
+                        "api_token": api_token,
+                        "from_email": org_email.get("from_email")
+                        or self._smtp_config.get("from_email"),
+                        "from_name": org_email.get("from_name")
+                        or self._smtp_config.get("from_name"),
+                    }
+
+        if getattr(settings, "CLOUDFLARE_EMAIL_ENABLED", False):
+            account_id = getattr(settings, "CLOUDFLARE_ACCOUNT_ID", None)
+            api_token = getattr(settings, "CLOUDFLARE_API_TOKEN", None)
+            if account_id and api_token:
+                return {
+                    "account_id": account_id,
+                    "api_token": api_token,
+                    "from_email": settings.SMTP_FROM_EMAIL,
+                    "from_name": settings.SMTP_FROM_NAME,
+                }
+
+        return None
+
+    @property
+    def _use_cloudflare(self) -> bool:
+        return self._cloudflare_config is not None
 
     def _get_ehlo_hostname(self) -> str:
         """Return the hostname used for SMTP EHLO/HELO.
@@ -554,6 +594,121 @@ class EmailService:
         logger.info("Batch send complete: {}/{} succeeded", succeeded, len(results))
         return results
 
+    async def _cloudflare_send(
+        self,
+        to_emails: List[str],
+        subject: str,
+        html_body: str,
+        text_body: Optional[str] = None,
+        cc_emails: Optional[List[str]] = None,
+        bcc_emails: Optional[List[str]] = None,
+        reply_to: Optional[str] = None,
+    ) -> List[bool]:
+        """Send emails via Cloudflare Email Service REST API.
+
+        Sends up to 5 requests concurrently (per-recipient). Retries
+        transient errors (429 rate-limit, 5xx server errors) up to 3
+        times with exponential backoff.
+        """
+        import httpx
+
+        cfg = self._cloudflare_config
+        if not cfg:
+            raise ValueError("Cloudflare Email Service is not configured")
+
+        account_id = cfg["account_id"]
+        if not re.fullmatch(r"[a-f0-9]{32}", account_id):
+            raise ValueError("Invalid Cloudflare account ID format")
+
+        url = (
+            f"https://api.cloudflare.com/client/v4/accounts/"
+            f"{account_id}/email/sending/send"
+        )
+        headers = {
+            "Authorization": f"Bearer {cfg['api_token']}",
+            "Content-Type": "application/json",
+        }
+        from_field: Dict[str, str] = {"address": cfg["from_email"]}
+        if cfg.get("from_name"):
+            from_field["name"] = _sanitize_header(cfg["from_name"])
+
+        max_retries = 3
+        concurrency = asyncio.Semaphore(5)
+
+        async def _send_one(
+            client: "httpx.AsyncClient", to_email: str
+        ) -> bool:
+            payload: Dict[str, Any] = {
+                "to": [to_email],
+                "from": from_field,
+                "subject": _sanitize_header(subject),
+            }
+            if html_body:
+                payload["html"] = html_body
+            if text_body:
+                payload["text"] = text_body
+            if cc_emails:
+                payload["cc"] = cc_emails
+            if bcc_emails:
+                payload["bcc"] = bcc_emails
+            if reply_to:
+                payload["reply_to"] = reply_to
+
+            async with concurrency:
+                for attempt in range(max_retries + 1):
+                    try:
+                        resp = await client.post(
+                            url, headers=headers, json=payload
+                        )
+                        if resp.status_code in (200, 201, 202):
+                            return True
+
+                        retryable = resp.status_code == 429 or resp.status_code >= 500
+                        if retryable and attempt < max_retries:
+                            delay = 2 ** attempt
+                            logger.warning(
+                                "Cloudflare API %d for %s, retrying in %ds "
+                                "(attempt %d/%d)",
+                                resp.status_code,
+                                _redact_email(to_email),
+                                delay,
+                                attempt + 1,
+                                max_retries,
+                            )
+                            await asyncio.sleep(delay)
+                            continue
+
+                        body = resp.text[:500]
+                        logger.error(
+                            "Cloudflare email API error (status=%d) to=%s: %s",
+                            resp.status_code,
+                            _redact_email(to_email),
+                            body,
+                        )
+                        return False
+                    except Exception as e:
+                        if attempt < max_retries:
+                            await asyncio.sleep(2 ** attempt)
+                            continue
+                        logger.error(
+                            "Cloudflare email send failed to=%s: %s",
+                            _redact_email(to_email),
+                            e,
+                        )
+                        return False
+            return False  # unreachable, satisfies type checker
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            results = await asyncio.gather(
+                *[_send_one(client, addr) for addr in to_emails]
+            )
+
+        succeeded = sum(1 for r in results if r)
+        logger.info(
+            "Cloudflare batch send complete: %d/%d succeeded", succeeded, len(results)
+        )
+        return list(results)
+
     def build_message(
         self,
         to_email: str,
@@ -607,21 +762,31 @@ class EmailService:
         return all_recipients, msg.as_string()
 
     async def send_batch(self, messages: List[Tuple[List[str], str]]) -> List[bool]:
-        """Send pre-built messages through a single SMTP connection.
+        """Send pre-built MIME messages through a single SMTP connection.
 
         Each item is ``(all_recipients, mime_message_string)`` as returned
         by :meth:`build_message`.
+
+        Note: Cloudflare Email Service does not support raw MIME.  When
+        Cloudflare is the active backend, callers should use
+        :meth:`send_email` instead.
         """
         if not messages:
             return []
-        if not settings.EMAIL_ENABLED and not (
+        email_enabled = settings.EMAIL_ENABLED or self._use_cloudflare or (
             self.organization
             and (self.organization.settings or {})
             .get("email_service", {})
             .get("enabled")
-        ):
+        )
+        if not email_enabled:
             logger.info("Email disabled. Would batch-send {} messages.", len(messages))
             return [False] * len(messages)
+        if self._use_cloudflare:
+            logger.warning(
+                "send_batch called with Cloudflare backend; raw MIME is not "
+                "supported — falling back to SMTP"
+            )
         return await asyncio.to_thread(self._smtp_send_batch, messages)
 
     async def send_email(
@@ -657,12 +822,13 @@ class EmailService:
         Returns:
             Tuple of (success_count, failure_count)
         """
-        if not settings.EMAIL_ENABLED and not (
+        email_enabled = settings.EMAIL_ENABLED or self._use_cloudflare or (
             self.organization
             and (self.organization.settings or {})
             .get("email_service", {})
             .get("enabled")
-        ):
+        )
+        if not email_enabled:
             logger.info(
                 "Email disabled. Would send to %d recipients: %s",
                 len(to_emails),
@@ -674,87 +840,111 @@ class EmailService:
         # attributes so they survive Gmail's <style> stripping.
         html_body = inline_email_css(html_body)
 
-        safe_from_name = _sanitize_header(self._smtp_config["from_name"])
-        safe_subject = _sanitize_header(subject)
-
-        # Pre-read attachment payloads once (avoids re-reading per recipient)
-        attachment_parts: List[MIMEBase] = []
-        for filepath in attachment_paths or []:
-            resolved = os.path.realpath(filepath)
-            if not os.path.isfile(resolved):
-                logger.warning("Attachment not found, skipping")
-                continue
-            with open(resolved, "rb") as f:
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(f.read())
-            encoders.encode_base64(part)
-            filename = _sanitize_header(os.path.basename(resolved))
-            part.add_header("Content-Disposition", "attachment", filename=filename)
-            attachment_parts.append(part)
-
-        # Build one MIME message per recipient
-        batch: List[Tuple[List[str], str]] = []
-        for to_email in to_emails:
-            try:
-                if attachment_parts:
-                    msg = MIMEMultipart("mixed")
-                    alt_part = MIMEMultipart("alternative")
-                    if text_body:
-                        alt_part.attach(MIMEText(text_body, "plain", "utf-8"))
-                    alt_part.attach(MIMEText(html_body, "html", "utf-8"))
-                    msg.attach(alt_part)
-                    for part in attachment_parts:
-                        msg.attach(part)
-                else:
-                    msg = MIMEMultipart("alternative")
-                    if text_body:
-                        msg.attach(MIMEText(text_body, "plain", "utf-8"))
-                    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-                msg["From"] = f"{safe_from_name} <{self._smtp_config['from_email']}>"
-                msg["To"] = to_email
-                msg["Subject"] = safe_subject
-                msg["Date"] = datetime.now(timezone.utc).strftime(
-                    "%a, %d %b %Y %H:%M:%S +0000"
+        # --- Cloudflare Email Service path (REST API, no SMTP) ---
+        if self._use_cloudflare:
+            if attachment_paths:
+                logger.warning(
+                    "Cloudflare Email Service does not support file attachments; "
+                    "attachments will be omitted"
                 )
-                msg["Message-ID"] = self._make_message_id()
-                msg["MIME-Version"] = "1.0"
-                msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
-                if reply_to:
-                    msg["Reply-To"] = reply_to
-                if list_unsubscribe:
-                    msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
-                    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-
-                all_recipients = [to_email]
-                if cc_emails:
-                    msg["Cc"] = ", ".join(cc_emails)
-                    all_recipients.extend(cc_emails)
-                if bcc_emails:
-                    all_recipients.extend(bcc_emails)
-
-                batch.append((all_recipients, msg.as_string()))
-            except Exception as e:
-                logger.error(
-                    f"Failed to build email for {_redact_email(to_email)}: {e}"
-                )
-
-        # Send through a single SMTP connection when possible
-        if len(batch) == 1:
-            try:
-                await asyncio.to_thread(self._smtp_send, batch[0][0], batch[0][1])
-                results = [True]
-            except Exception as e:
-                logger.error(
-                    "Failed to send email to {}: {}",
-                    _redact_email(to_emails[0] if to_emails else "?"),
-                    e,
-                )
-                results = [False]
-        elif batch:
-            results = await asyncio.to_thread(self._smtp_send_batch, batch)
+            results = await self._cloudflare_send(
+                to_emails=to_emails,
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                cc_emails=cc_emails,
+                bcc_emails=bcc_emails,
+                reply_to=reply_to,
+            )
         else:
-            results = []
+            # --- SMTP path ---
+            safe_from_name = _sanitize_header(self._smtp_config["from_name"])
+            safe_subject = _sanitize_header(subject)
+
+            # Pre-read attachment payloads once (avoids re-reading per recipient)
+            attachment_parts: List[MIMEBase] = []
+            for filepath in attachment_paths or []:
+                resolved = os.path.realpath(filepath)
+                if not os.path.isfile(resolved):
+                    logger.warning("Attachment not found, skipping")
+                    continue
+                with open(resolved, "rb") as f:
+                    part = MIMEBase("application", "octet-stream")
+                    part.set_payload(f.read())
+                encoders.encode_base64(part)
+                filename = _sanitize_header(os.path.basename(resolved))
+                part.add_header(
+                    "Content-Disposition", "attachment", filename=filename
+                )
+                attachment_parts.append(part)
+
+            # Build one MIME message per recipient
+            batch: List[Tuple[List[str], str]] = []
+            for to_email in to_emails:
+                try:
+                    if attachment_parts:
+                        msg = MIMEMultipart("mixed")
+                        alt_part = MIMEMultipart("alternative")
+                        if text_body:
+                            alt_part.attach(MIMEText(text_body, "plain", "utf-8"))
+                        alt_part.attach(MIMEText(html_body, "html", "utf-8"))
+                        msg.attach(alt_part)
+                        for part in attachment_parts:
+                            msg.attach(part)
+                    else:
+                        msg = MIMEMultipart("alternative")
+                        if text_body:
+                            msg.attach(MIMEText(text_body, "plain", "utf-8"))
+                        msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+                    msg["From"] = (
+                        f"{safe_from_name} <{self._smtp_config['from_email']}>"
+                    )
+                    msg["To"] = to_email
+                    msg["Subject"] = safe_subject
+                    msg["Date"] = datetime.now(timezone.utc).strftime(
+                        "%a, %d %b %Y %H:%M:%S +0000"
+                    )
+                    msg["Message-ID"] = self._make_message_id()
+                    msg["MIME-Version"] = "1.0"
+                    msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
+                    if reply_to:
+                        msg["Reply-To"] = reply_to
+                    if list_unsubscribe:
+                        msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+                        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+
+                    all_recipients = [to_email]
+                    if cc_emails:
+                        msg["Cc"] = ", ".join(cc_emails)
+                        all_recipients.extend(cc_emails)
+                    if bcc_emails:
+                        all_recipients.extend(bcc_emails)
+
+                    batch.append((all_recipients, msg.as_string()))
+                except Exception as e:
+                    logger.error(
+                        f"Failed to build email for {_redact_email(to_email)}: {e}"
+                    )
+
+            # Send through a single SMTP connection when possible
+            if len(batch) == 1:
+                try:
+                    await asyncio.to_thread(
+                        self._smtp_send, batch[0][0], batch[0][1]
+                    )
+                    results = [True]
+                except Exception as e:
+                    logger.error(
+                        "Failed to send email to {}: {}",
+                        _redact_email(to_emails[0] if to_emails else "?"),
+                        e,
+                    )
+                    results = [False]
+            elif batch:
+                results = await asyncio.to_thread(self._smtp_send_batch, batch)
+            else:
+                results = []
 
         success_count = sum(1 for r in results if r)
         failure_count = len(to_emails) - success_count

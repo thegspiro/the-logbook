@@ -381,7 +381,7 @@ All services in `backend/app/services/`:
 | `documents_service.py` | DocumentsService | Document, DocumentFolder | (alternate document service) |
 | `forms_service.py` | FormsService | Form, FormField, FormSubmission, FormIntegration | create_form, publish_form, submit_form, manage_integrations |
 | `email_template_service.py` | EmailTemplateService | EmailTemplate, EmailAttachment | get_templates, update_template, preview, schedule_email |
-| `email_service.py` | EmailService | — | send_email, send_templated_email |
+| `email_service.py` | EmailService | — | send_email, send_batch, _cloudflare_send (REST API via httpx), _smtp_send, _smtp_send_batch |
 | `membership_pipeline_service.py` | MembershipPipelineService | MembershipPipeline, ProspectiveMember | create_pipeline, create_prospect, advance_prospect, complete_step |
 | `admin_hours_service.py` | AdminHoursService | AdminHoursCategory, AdminHoursEntry | manage_categories, clock_in, clock_out, create_manual_entry, review_entry |
 | `notifications_service.py` | NotificationsService | NotificationRule, NotificationLog | create_rule, send_notification, get_user_notifications |

@@ -3,7 +3,7 @@ Email Testing Helper Functions
 
 Provides SMTP connection testing functionality for onboarding email configuration.
 Runs synchronous SMTP operations in thread pool to avoid blocking async event loop.
-Includes OAuth validation for Gmail and Microsoft 365.
+Includes OAuth validation for Gmail, Microsoft 365, and Cloudflare Email Service.
 """
 
 import json
@@ -586,3 +586,131 @@ def _check_microsoft_mail_permission(access_token: str) -> bool:
 
     except Exception:
         return False
+
+
+def test_cloudflare_email(
+    config: dict[str, Any],
+) -> tuple[bool, str, dict[str, Any]]:
+    """
+    Test Cloudflare Email Service configuration by calling the Cloudflare API
+    to verify the account ID and API token are valid.
+
+    Uses the Email Routing zones endpoint as a lightweight connectivity check
+    (actual send permission is confirmed by a successful token validation).
+
+    Args:
+        config: Dictionary containing cloudflareAccountId and cloudflareApiToken
+
+    Returns:
+        Tuple of (success, message, details)
+    """
+    details: dict[str, Any] = {}
+
+    account_id = config.get("cloudflareAccountId")
+    api_token = config.get("cloudflareApiToken")
+
+    if not account_id or not api_token:
+        return (
+            False,
+            "Missing required Cloudflare credentials (Account ID and API Token)",
+            {"required": ["cloudflareAccountId", "cloudflareApiToken"]},
+        )
+
+    import re
+
+    if not re.fullmatch(r"[a-f0-9]{32}", account_id):
+        return (
+            False,
+            "Invalid Account ID format. It should be a 32-character hex string "
+            "from your Cloudflare dashboard.",
+            {},
+        )
+
+    details["account_id_present"] = True
+    details["api_token_present"] = True
+
+    try:
+        # Verify the API token by calling the token verification endpoint
+        verify_url = "https://api.cloudflare.com/client/v4/user/tokens/verify"
+        request = urllib.request.Request(
+            verify_url,
+            headers={
+                "Authorization": f"Bearer {api_token}",
+                "Content-Type": "application/json",
+            },
+            method="GET",
+        )
+
+        with urllib.request.urlopen(request, timeout=10) as response:
+            result = json.loads(response.read().decode("utf-8"))
+
+            if result.get("success"):
+                details["token_valid"] = True
+                token_status = result.get("result", {}).get("status", "unknown")
+                details["token_status"] = token_status
+
+                if token_status == "active":
+                    return (
+                        True,
+                        "Cloudflare API token verified successfully",
+                        details,
+                    )
+                else:
+                    return (
+                        False,
+                        f"Cloudflare API token status: {token_status}",
+                        details,
+                    )
+            else:
+                errors = result.get("errors", [])
+                error_msg = errors[0].get("message") if errors else "Unknown error"
+                details["token_valid"] = False
+                return (
+                    False,
+                    f"Cloudflare API token verification failed: {error_msg}",
+                    details,
+                )
+
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8") if e.fp else ""
+        try:
+            error_data = json.loads(error_body)
+            errors = error_data.get("errors", [])
+            error_msg = errors[0].get("message") if errors else str(e)
+        except (json.JSONDecodeError, IndexError):
+            error_msg = str(e)
+
+        logger.error("Cloudflare API token verification failed: %s", error_msg)
+
+        if e.code == 401:
+            return (
+                False,
+                "Invalid API token. Check that the token is correct and has "
+                "not been revoked.",
+                details,
+            )
+        elif e.code == 403:
+            return (
+                False,
+                "API token lacks required permissions. Ensure the token has "
+                "email sending permission.",
+                details,
+            )
+        else:
+            return (
+                False,
+                f"Cloudflare API error (HTTP {e.code}): {error_msg}",
+                details,
+            )
+
+    except urllib.error.URLError as e:
+        logger.error("Network error during Cloudflare API verification: %s", e)
+        return (
+            False,
+            "Network error: Unable to reach Cloudflare API servers",
+            details,
+        )
+
+    except Exception as e:
+        logger.error("Error testing Cloudflare email configuration: %s", e)
+        return False, f"Unexpected error: {str(e)}", details

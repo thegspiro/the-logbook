@@ -1605,9 +1605,30 @@ docker-compose up -d
 ### Problem: Email notifications not sending
 
 **Fix:**
-1. Verify SMTP is configured in **Administration > Email Settings**
-2. Check **Events > Settings > Email Triggers** — each status change trigger must be toggled on
-3. Verify `notify_requester` and/or `notify_assignee` sub-toggles are enabled for the relevant trigger
+1. Verify your email platform is configured in **Administration > Organization Settings > Email** tab
+2. For SMTP platforms (Gmail, Microsoft 365, Self-Hosted): verify host, port, credentials, and encryption settings
+3. For Cloudflare Email Service: verify Account ID (32-character hex) and API Token are correct. Use the **Test Connection** button to validate
+4. Check **Events > Settings > Email Triggers** — each status change trigger must be toggled on
+5. Verify `notify_requester` and/or `notify_assignee` sub-toggles are enabled for the relevant trigger
+6. Check backend logs for specific error messages: `docker-compose logs backend | grep -i "email\|cloudflare\|smtp"`
+
+### Problem: Cloudflare email sending fails with "Invalid Cloudflare account ID format"
+
+**Fix:** The Account ID must be exactly 32 lowercase hexadecimal characters (e.g., `a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4`). Find it on your Cloudflare dashboard sidebar under **Account ID**. Do not use your Zone ID or any other identifier.
+
+### Problem: Cloudflare email sending returns 401 or 403
+
+**Fix:**
+1. Verify the API token has not been revoked — check **My Profile > API Tokens** in the Cloudflare dashboard
+2. Ensure the token was created with **Email Sending** permission
+3. Confirm Email Routing is enabled on your domain in the Cloudflare dashboard
+4. If you just created the token, wait a few seconds for propagation and retry
+
+### Problem: Emails sent via Cloudflare are missing attachments
+
+**Cause:** Cloudflare Email Service REST API does not support file attachments. When Cloudflare is the active email backend, attachment paths are logged as a warning and omitted from the email.
+
+**Workaround:** If attachments are critical, use an SMTP-based platform (Gmail, Microsoft 365, or Self-Hosted) instead of Cloudflare, or host attachments as downloadable links.
 
 ### Problem: Template variables showing as literal text
 

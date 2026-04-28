@@ -41,9 +41,11 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 ### What Is Encrypted
 
 - Sensitive personal information (SSN, medical data when applicable)
-- API keys and integration credentials
+- API keys and integration credentials (including Cloudflare API tokens, Google/Microsoft OAuth secrets, SMTP passwords)
 - MFA secrets
 - Backup encryption keys
+
+> **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256 encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
 
 ### Key Rotation
 

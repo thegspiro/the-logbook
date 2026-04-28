@@ -398,19 +398,32 @@ thresholds]**
 
 ### EMAIL CONFIGURATION (23:00 – 24:00)
 
-> "If you didn't set up email during onboarding, this is where you do it. Click
-> on Email Configuration and enter your SMTP server details."
+> "If you didn't set up email during onboarding, this is where you do it. Go
+> to **Administration > Organization Settings**, click the **Email** tab, and
+> select your platform."
 
-**[SCREEN: Show email configuration form]**
+**[SCREEN: Show email settings with platform buttons — Gmail, Microsoft 365, Self-Hosted SMTP, Cloudflare, Other]**
 
-> "Once configured, test it by sending a test email. The platform will send a
-> test message to the address you specify and confirm delivery."
+> "You can choose Gmail, Microsoft 365, Self-Hosted SMTP, or Cloudflare Email
+> Service. For SMTP-based platforms, enter your server, port, and credentials.
+> For Cloudflare, enter your Account ID and API Token — Cloudflare handles
+> all the DNS authentication automatically."
+
+**[SCREEN: Show Cloudflare configuration fields with Account ID and API Token]**
+
+> "Once configured, use the **Test Connection** button to verify everything
+> works. For SMTP, this tests the server connection and authentication. For
+> Cloudflare, it validates your API token against Cloudflare's servers."
 
 **[SCREEN: Show sending a test email and the success confirmation]**
 
 > "With email enabled, the platform can send: event reminders, training
 > expiration warnings, shift schedule notifications, password reset links,
 > election announcements, and custom notifications."
+
+> "One thing to note: Cloudflare Email Service doesn't support file
+> attachments. If your department sends compliance reports or other files
+> by email, use one of the SMTP-based platforms instead."
 
 ### CALENDAR SYNC (24:00 – 24:30)
 

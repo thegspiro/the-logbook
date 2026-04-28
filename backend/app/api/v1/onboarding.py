@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
 from app.api.v1.email_test_helper import (
+    test_cloudflare_email,
     test_gmail_oauth,
     test_microsoft_oauth,
     test_smtp_connection,
@@ -208,7 +209,7 @@ class EmailTestRequest(BaseModel):
 
     @validator("platform")
     def validate_platform(cls, v):
-        valid_platforms = ["gmail", "microsoft", "selfhosted", "other"]
+        valid_platforms = ["gmail", "microsoft", "selfhosted", "cloudflare", "other"]
         if v not in valid_platforms:
             raise ValueError(f'Platform must be one of: {", ".join(valid_platforms)}')
         return v
@@ -591,6 +592,8 @@ async def _persist_session_data_to_org(
                 "microsoft_tenant_id": raw_config.get("microsoftTenantId"),
                 "microsoft_client_id": raw_config.get("microsoftClientId"),
                 "microsoft_client_secret": raw_config.get("microsoftClientSecret"),
+                "cloudflare_account_id": raw_config.get("cloudflareAccountId"),
+                "cloudflare_api_token": raw_config.get("cloudflareApiToken"),
             }
             # Remove None values so only configured fields are stored
             email_settings = {k: v for k, v in email_settings.items() if v is not None}
@@ -1213,6 +1216,9 @@ async def test_email_configuration(
         elif platform == "microsoft":
             # Test Microsoft 365 configuration (OAuth)
             test_func = partial(test_microsoft_oauth, config)
+        elif platform == "cloudflare":
+            # Test Cloudflare Email Service API token
+            test_func = partial(test_cloudflare_email, config)
         elif platform == "selfhosted" or platform == "other":
             # Test self-hosted SMTP configuration
             test_func = partial(test_smtp_connection, config)

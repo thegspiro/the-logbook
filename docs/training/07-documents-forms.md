@@ -535,7 +535,7 @@ She clicks **Export CSV** to download the data for the monthly operations report
 | Public form shows 404 error | Fixed in March 2026 — a doubled `/v1` in the API URL path has been corrected. Pull latest code and rebuild. |
 | Forms page not visible in navigation | The Forms page now requires `forms.view` permission (changed from `settings.manage` in March 2026). Ask your administrator to grant `forms.view` to your role. |
 | Integration reprocessing fails | Check that the target module (Membership or Inventory) is enabled and the field mapping is correct. Review the error details on the failed submission. |
-| Not receiving email notifications | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. |
+| Not receiving email notifications | Check your notification preferences in My Account > Notifications. Verify your email address is correct. Check your spam folder. If using Cloudflare Email Service, verify the API token is valid in Administration > Organization Settings > Email tab. |
 | Slack integration not posting | Verify the webhook URL is correct and the Slack channel exists. Check the integration logs for errors. |
 | Calendar events not syncing | Ensure the calendar integration is connected. Some calendar apps cache iCal feeds and may take up to 24 hours to refresh. |
 | Form submissions not appearing in pipeline | Fixed in March 2026 — multiple field mapping issues resolved. Pull latest backend code. Check backend logs for "Field mapping" warnings if issues persist. |

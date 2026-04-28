@@ -3,6 +3,7 @@ import {
   Loader2,
   Mail,
   Server,
+  Cloud,
   Info,
   Eye,
   EyeOff,
@@ -79,11 +80,12 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
       {/* Platform selection */}
       <div>
         <label className="block text-sm font-medium text-theme-text-primary mb-2">Email Platform</label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {([
             { id: 'gmail', label: 'Gmail', icon: <Mail className="w-4 h-4" /> },
             { id: 'microsoft', label: 'Microsoft 365', icon: <Mail className="w-4 h-4" /> },
             { id: 'selfhosted', label: 'Self-Hosted SMTP', icon: <Server className="w-4 h-4" /> },
+            { id: 'cloudflare', label: 'Cloudflare', icon: <Cloud className="w-4 h-4" /> },
             { id: 'other', label: 'Other / None', icon: <Mail className="w-4 h-4" /> },
           ] as const).map((p) => (
             <button
@@ -275,6 +277,43 @@ const EmailSettingsSection: React.FC<EmailSettingsSectionProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {emailSettings.platform === 'cloudflare' && (
+        <div className="space-y-4 border-t border-theme-surface-border pt-4">
+          <p className="text-sm font-medium text-theme-text-primary">Cloudflare Email Service</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs text-theme-text-muted mb-1">Account ID</label>
+              <input
+                type="text"
+                value={emailSettings.cloudflare_account_id || ''}
+                onChange={(e) => onEmailSettingsChange(s => ({ ...s, cloudflare_account_id: e.target.value }))}
+                placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-theme-text-muted mb-1">API Token</label>
+              <div className="relative">
+                <input
+                  type={emailPasswordVisible ? 'text' : 'password'}
+                  value={emailSettings.cloudflare_api_token || ''}
+                  onChange={(e) => onEmailSettingsChange(s => ({ ...s, cloudflare_api_token: e.target.value }))}
+                  placeholder="API token with email sending permission"
+                  className="w-full rounded-md bg-theme-input-bg border border-theme-input-border text-theme-text-primary px-3 py-2 pr-10 text-sm focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                />
+                <button type="button" onClick={onTogglePasswordVisible} className="absolute right-2 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text-primary">
+                  {emailPasswordVisible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-start gap-2 text-xs text-theme-text-muted">
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>Domain DNS must be managed by Cloudflare. Emails are sent via REST API — no SMTP server required.</span>
           </div>
         </div>
       )}

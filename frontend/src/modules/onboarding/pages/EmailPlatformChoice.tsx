@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Server, Info } from 'lucide-react';
+import { Mail, Server, Cloud, Info } from 'lucide-react';
 import { OnboardingHeader, ProgressIndicator, BackButton, ResetProgressButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
 
@@ -18,7 +18,7 @@ const MicrosoftIcon = () => (
 );
 
 interface EmailPlatform {
-  id: 'gmail' | 'microsoft' | 'selfhosted' | 'other';
+  id: 'gmail' | 'microsoft' | 'selfhosted' | 'cloudflare' | 'other';
   name: string;
   description: string;
   icon: React.ReactNode;
@@ -83,6 +83,19 @@ const EmailPlatformChoice: React.FC = () => {
         'Custom configuration',
       ],
       setupInfo: 'You\'ll need SMTP server details (host, port, credentials).',
+    },
+    {
+      id: 'cloudflare',
+      name: 'Cloudflare',
+      description: 'Cloudflare Email Service (REST API)',
+      icon: <Cloud aria-hidden="true" className="w-10 h-10" />,
+      color: 'from-orange-500 to-amber-500',
+      features: [
+        'REST API — no SMTP server needed',
+        'Automatic SPF/DKIM/DMARC',
+        '$0.35 per 1,000 emails',
+      ],
+      setupInfo: 'You\'ll need your Cloudflare Account ID and an API token with email sending permission.',
     },
     {
       id: 'other',

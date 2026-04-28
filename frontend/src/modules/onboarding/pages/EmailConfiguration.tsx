@@ -10,6 +10,10 @@ import { useOnboardingStore } from '../store';
 import { getErrorMessage } from '@/utils/errorHandling';
 
 interface EmailConfig {
+  // Cloudflare Email Service
+  cloudflareAccountId?: string;
+  cloudflareApiToken?: string;
+
   // Gmail/Google Workspace
   googleClientId?: string;
   googleClientSecret?: string;
@@ -87,6 +91,16 @@ const EmailConfiguration: React.FC = () => {
       return;
     }
 
+    if (emailPlatform === 'cloudflare') {
+      const missingFields = [];
+      if (!config.cloudflareAccountId) missingFields.push('Account ID');
+      if (!config.cloudflareApiToken) missingFields.push('API Token');
+      if (missingFields.length > 0) {
+        toast.error(`Missing required Cloudflare fields: ${missingFields.join(', ')}`);
+        return;
+      }
+    }
+
     if (emailPlatform === 'selfhosted') {
       // Check for missing SMTP fields and list them
       const missingFields = [];
@@ -155,6 +169,16 @@ const EmailConfiguration: React.FC = () => {
     if (!isValidEmail(config.fromEmail)) {
       toast.error('Please enter a valid email address');
       return;
+    }
+
+    if (emailPlatform === 'cloudflare') {
+      const missingFields = [];
+      if (!config.cloudflareAccountId) missingFields.push('Account ID');
+      if (!config.cloudflareApiToken) missingFields.push('API Token');
+      if (missingFields.length > 0) {
+        toast.error(`Missing required Cloudflare fields: ${missingFields.join(', ')}`);
+        return;
+      }
     }
 
     if (emailPlatform === 'selfhosted') {
@@ -537,6 +561,64 @@ const EmailConfiguration: React.FC = () => {
           </>
         );
 
+      case 'cloudflare':
+        return (
+          <>
+            <div className="alert-info mb-6">
+              <div className="flex items-start space-x-3">
+                <AlertCircle aria-hidden="true" className="w-5 h-5 text-theme-alert-info-icon shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-theme-alert-info-title text-sm font-medium mb-1">
+                    Cloudflare Email Service
+                  </p>
+                  <p className="text-theme-alert-info-text text-sm">
+                    Sends transactional email via Cloudflare's REST API. Your domain's DNS must be managed by Cloudflare.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
+                  Account ID <span className="text-theme-accent-red">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={config.cloudflareAccountId || ''}
+                  onChange={(e) => handleInputChange('cloudflareAccountId', e.target.value)}
+                  placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  className="form-input placeholder-theme-text-muted py-3"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-theme-text-secondary mb-2">
+                  API Token <span className="text-theme-accent-red">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={config.cloudflareApiToken || ''}
+                  onChange={(e) => handleInputChange('cloudflareApiToken', e.target.value)}
+                  placeholder="API token with email sending permission"
+                  className="form-input placeholder-theme-text-muted py-3"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 bg-theme-surface-secondary rounded-lg p-4 text-sm text-theme-text-secondary">
+              <p className="font-medium text-theme-text-primary mb-2">How to get Cloudflare credentials:</p>
+              <ol className="list-decimal list-inside space-y-1">
+                <li>Log into the Cloudflare dashboard</li>
+                <li>Copy your Account ID from the Overview page sidebar</li>
+                <li>Go to My Profile → API Tokens → Create Token</li>
+                <li>Create a token with the Email Sending permission</li>
+                <li>Enable Email Routing on your domain</li>
+              </ol>
+            </div>
+          </>
+        );
+
       default:
         return null;
     }
@@ -561,7 +643,7 @@ const EmailConfiguration: React.FC = () => {
               <Mail aria-hidden="true" className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-4xl md:text-5xl font-bold text-theme-text-primary mb-3">
-              Configure {emailPlatform === 'gmail' ? 'Gmail' : emailPlatform === 'microsoft' ? 'Microsoft 365' : 'SMTP'} Email
+              Configure {emailPlatform === 'gmail' ? 'Gmail' : emailPlatform === 'microsoft' ? 'Microsoft 365' : emailPlatform === 'cloudflare' ? 'Cloudflare' : 'SMTP'} Email
             </h2>
             <p className="text-xl text-theme-text-secondary">
               Set up email notifications for your department
