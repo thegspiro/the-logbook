@@ -591,7 +591,7 @@ class ShiftCompletionService:
                 f"with {trigger_text}. Please review the report and "
                 f"plan any follow-up coaching or remediation."
             )
-            action_url = f"/scheduling/reports/{report.id}"
+            action_url = f"/scheduling?tab=shift-reports&report={report.id}"
             metadata = {
                 "report_id": str(report.id),
                 "trainee_id": str(report.trainee_id),

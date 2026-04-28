@@ -1457,7 +1457,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 subject = f"Shift Report \u2014 {shift_date_str} at {start_str}"
 
                 # In-app notification for each assigned member
-                check_in_url = f"/scheduling/check-in?shift={shift.id}"
+                check_in_url = f"/scheduling/checkin?shift={shift.id}"
                 shift_start_iso = (
                     shift.start_time.isoformat() if shift.start_time else None
                 )
@@ -1478,13 +1478,6 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     shift_metadata["shift_end_time"] = shift_end_iso
 
                 for r in roster:
-                    # Personalize the action URL: each member gets a
-                    # mark-arrival deep link to their own check-in.
-                    member_url = (
-                        f"{check_in_url}&user={r['user_id']}"
-                        if "?" in check_in_url
-                        else f"{check_in_url}?user={r['user_id']}"
-                    )
                     try:
                         notif = NotificationLog(
                             id=generate_uuid(),
@@ -1494,7 +1487,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             category="shift_reminder",
                             subject=subject,
                             message=message,
-                            action_url=member_url,
+                            action_url=check_in_url,
                             notification_metadata=shift_metadata,
                             delivered=True,
                         )
@@ -1585,7 +1578,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             e_pos = _html.escape(r["position_label"])
                             arrival_url = (
                                 f"{settings.FRONTEND_URL}/scheduling/"
-                                f"check-in?shift={shift.id}&user={r['user_id']}"
+                                f"checkin?shift={shift.id}"
                             )
                             try:
                                 sent, _ = await email_svc.send_email(
@@ -2063,7 +2056,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     message = "\n".join(summary_lines)
 
                     action_url = (
-                        f"/scheduling/reports/{report_id}"
+                        f"/scheduling?tab=shift-reports&report={report_id}"
                         if report_id
                         else f"/scheduling?shift={shift.id}"
                     )
@@ -2370,7 +2363,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     if report.shift_date
                     else "Unknown"
                 )
-                report_url = f"/scheduling/reports/{report.id}"
+                report_url = (
+                    f"/scheduling?tab=shift-reports&report={report.id}"
+                )
                 full_url = f"{settings.FRONTEND_URL}{report_url}"
                 trainee_subject = (
                     f"Reminder: Acknowledge your shift report from {shift_date_str}"
