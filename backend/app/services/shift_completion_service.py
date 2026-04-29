@@ -538,18 +538,44 @@ class ShiftCompletionService:
         (<= 2 on the 5-point scale) or when the officer recorded
         ``areas_for_improvement``. The shift officer who filed the
         report is excluded from the recipient list to avoid self-alerts.
-        """
-        rating = report.performance_rating
-        improvement_text = (report.areas_for_improvement or "").strip()
-        low_rating = rating is not None and rating <= 2
-        has_improvement = bool(improvement_text)
-        if not low_rating and not has_improvement:
-            return
 
+        The performance-rating threshold defaults to 2 (out of 5) and
+        can be overridden per org via
+        ``settings["shift_reports"]["follow_up"]["low_rating_threshold"]``.
+        Setting the threshold to 0 disables the low-rating trigger
+        entirely (the improvement-text trigger still fires).
+        """
         from app.core.constants import ROLE_TRAINING_OFFICER
-        from app.models.user import Role, user_roles
+        from app.models.user import Organization, Role, User, user_roles
 
         try:
+            org_row = (
+                await self.db.execute(
+                    select(Organization).where(
+                        Organization.id == str(organization_id)
+                    )
+                )
+            ).scalar_one_or_none()
+            org_settings = (org_row.settings if org_row else None) or {}
+            fu_cfg = (org_settings.get("shift_reports") or {}).get(
+                "follow_up", {}
+            )
+            try:
+                threshold = int(fu_cfg.get("low_rating_threshold", 2))
+            except (TypeError, ValueError):
+                threshold = 2
+
+            rating = report.performance_rating
+            improvement_text = (report.areas_for_improvement or "").strip()
+            low_rating = (
+                threshold > 0
+                and rating is not None
+                and rating <= threshold
+            )
+            has_improvement = bool(improvement_text)
+            if not low_rating and not has_improvement:
+                return
+
             role_result = await self.db.execute(
                 select(Role)
                 .where(Role.slug == ROLE_TRAINING_OFFICER)
@@ -558,8 +584,6 @@ class ShiftCompletionService:
             t_role = role_result.scalar_one_or_none()
             if not t_role:
                 return
-
-            from app.models.user import User
 
             officers_result = await self.db.execute(
                 select(User)

@@ -1373,13 +1373,18 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             f"{unit_number} \u2014 {name}" if unit_number else name
                         )
 
-                # Resolve roster (member name + position)
+                # Resolve roster (member name + position).
+                # Exclude inactive users — a member who was assigned to
+                # the shift before being deactivated should not receive
+                # reminders or appear in the roster sent to others.
                 member_ids = [str(a.user_id) for a in assignments if a.user_id]
                 roster: list[dict] = []
                 user_map: dict = {}
                 if member_ids:
                     user_rows = await db.execute(
-                        select(User).where(User.id.in_(member_ids))
+                        select(User)
+                        .where(User.id.in_(member_ids))
+                        .where(User.is_active == True)  # noqa: E712
                     )
                     user_map = {str(u.id): u for u in user_rows.scalars().all()}
                 for assignment in assignments:
@@ -1915,17 +1920,29 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
             if not ms_cfg.get("enabled", True):
                 continue
 
+            # By default, wait for the officer to finalize the shift
+            # before sending the summary — duration_minutes is computed
+            # at check-out / finalization, so an unfinalized shift can
+            # report 0 hours for members who haven't been checked out
+            # yet. Orgs that want preliminary numbers can opt in.
+            require_finalized = ms_cfg.get("require_finalized", True)
+
             lookback_hours = ms_cfg.get("lookback_hours", 4)
             lookback = now - timedelta(hours=lookback_hours)
             org_tz = ZoneInfo(org.timezone if org.timezone else "America/New_York")
 
-            shifts_result = await db.execute(
+            shifts_query = (
                 select(Shift)
                 .where(Shift.organization_id == str(org.id))
                 .where(Shift.end_time.isnot(None))
                 .where(Shift.end_time <= now)
                 .where(Shift.end_time >= lookback)
             )
+            if require_finalized:
+                shifts_query = shifts_query.where(
+                    Shift.is_finalized == True  # noqa: E712
+                )
+            shifts_result = await db.execute(shifts_query)
             shifts = list(shifts_result.scalars().all())
 
             for shift in shifts:
@@ -2035,7 +2052,13 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     call_types = call_info["types"]
                     report_id = report_by_trainee.get(uid)
 
-                    subject = f"Shift Summary — {shift_date_str}"
+                    is_preliminary = not bool(shift.is_finalized)
+                    subject_prefix = (
+                        "Preliminary Shift Summary"
+                        if is_preliminary
+                        else "Shift Summary"
+                    )
+                    subject = f"{subject_prefix} — {shift_date_str}"
                     summary_lines = [
                         f"Your shift on {shift_date_str} ({time_range}) "
                         f"has ended.",
@@ -2047,6 +2070,12 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     if call_types:
                         summary_lines.append(
                             "Call types: " + ", ".join(call_types[:5])
+                        )
+                    if is_preliminary:
+                        summary_lines.append(
+                            "These figures are preliminary — your hours "
+                            "and call count may change once the shift "
+                            "officer finalizes the shift."
                         )
                     if report_id:
                         summary_lines.append(
@@ -2068,6 +2097,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                         "call_types": call_types,
                         "apparatus_name": apparatus_name,
                         "report_id": report_id,
+                        "is_preliminary": is_preliminary,
                         "shift_start_time": (
                             shift.start_time.isoformat() if shift.start_time else None
                         ),
@@ -2168,16 +2198,34 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     "officer's notes and acknowledge it.</p>"
                                 )
 
+                            preliminary_html = ""
+                            if is_preliminary:
+                                preliminary_html = (
+                                    "<p style='background:#fff7ed;"
+                                    "border-left:4px solid #f97316;"
+                                    "padding:8px 12px;color:#7c2d12'>"
+                                    "<strong>Preliminary:</strong> these "
+                                    "figures may change once the shift "
+                                    "officer finalizes the shift.</p>"
+                                )
+
+                            email_title = (
+                                "Preliminary End-of-Shift Summary"
+                                if is_preliminary
+                                else "End-of-Shift Summary"
+                            )
+
                             e_first = _html.escape(user.first_name or "")
                             sent, _ = await email_svc.send_email(
                                 to_emails=[user.email],
                                 subject=subject,
                                 html_body=wrap_email_body(
                                     org,
-                                    "End-of-Shift Summary",
+                                    email_title,
                                     f"<p>Hello {e_first},</p>"
                                     "<p>Your shift has ended. Below is a "
                                     "summary of what was recorded:</p>"
+                                    f"{preliminary_html}"
                                     f"{details_html}"
                                     f"{call_types_html}"
                                     f"{report_html}"
