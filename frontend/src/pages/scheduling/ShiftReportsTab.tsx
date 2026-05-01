@@ -60,6 +60,7 @@ export const ShiftReportsTab: React.FC = () => {
   const [searchParams] = useSearchParams();
 
   const linkedShiftId = searchParams.get('shift') || undefined;
+  const linkedReportId = searchParams.get('report') || undefined;
 
   const initialView = (): ViewMode => {
     if (linkedShiftId && canManage) return 'create';
@@ -71,7 +72,7 @@ export const ShiftReportsTab: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(initialView);
   const [reports, setReports] = useState<ShiftCompletionReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(linkedReportId ?? null);
   const [config, setConfig] = useState<TrainingModuleConfig | null>(null);
 
   // Create form state
