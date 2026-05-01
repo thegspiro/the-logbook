@@ -33,6 +33,8 @@ import {
   CreditCard,
   X,
   CheckCheck,
+  Plus,
+  ShieldAlert,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -129,6 +131,16 @@ const Dashboard: React.FC = () => {
     administrative: 0,
   });
   const [loadingHours, setLoadingHours] = useState(true);
+
+  // Expiring certifications for the current user (for the cert-expiry banner)
+  type MyCert = {
+    id: string;
+    course_name: string;
+    expiration_date: string | null;
+    is_expired: boolean;
+    days_until_expiry: number | null;
+  };
+  const [myCerts, setMyCerts] = useState<MyCert[]>([]);
 
   // Department Messages
   const [deptMessages, setDeptMessages] = useState<InboxMessage[]>([]);
@@ -408,6 +420,7 @@ const Dashboard: React.FC = () => {
         standby: schedulingSummary?.total_hours_this_month || 0,
         administrative: adminHoursSummary?.totalHours ?? 0,
       });
+      setMyCerts(trainingSummary?.certifications ?? []);
     } catch {
       // Hours are non-critical
     } finally {
@@ -512,20 +525,147 @@ const Dashboard: React.FC = () => {
           : "Dashboard content loaded."}
       </div>
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full">
-        {/* Welcome Header */}
-        <div className="mb-6 sm:mb-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-theme-text-primary mb-1">
-            Welcome to {departmentName}
-          </h2>
-          <p className="text-theme-text-secondary text-sm sm:text-base">
-            {formatDateCustom(new Date(), {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            }, tz)}
-          </p>
-        </div>
+        {/* "Now" Header — answers: what's next, what needs me, what's expiring */}
+        {(() => {
+          const firstName = currentUser?.first_name?.trim();
+          const greeting = firstName ? `Hi, ${firstName}` : `Welcome to ${departmentName}`;
+          const nextEvent = upcomingEvents[0];
+          const nextShift = myShifts[0];
+          // Pick the soonest of next event / next shift as the "what's next" answer.
+          const nextEventStart = nextEvent ? new Date(nextEvent.start_datetime).getTime() : Infinity;
+          const nextShiftStart = nextShift
+            ? new Date(`${nextShift.shift_date}T${nextShift.start_time || "00:00"}`).getTime()
+            : Infinity;
+          const showShiftFirst = nextShiftStart < nextEventStart;
+          // Cert urgency: expired or expiring within 60 days.
+          const urgentCerts = myCerts.filter(
+            (c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= 60),
+          );
+          const overdueActionItems = adminSummary?.overdue_action_items ?? 0;
+          return (
+            <div className="mb-6 sm:mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-theme-text-primary mb-1">
+                {greeting}
+              </h2>
+              <p className="text-theme-text-secondary text-sm sm:text-base mb-3">
+                {formatDateCustom(new Date(), {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                }, tz)}
+                {" · "}
+                {departmentName}
+              </p>
+              <div className="flex flex-wrap gap-2 text-xs sm:text-sm" aria-label="At a glance">
+                {showShiftFirst && nextShift ? (
+                  <button
+                    onClick={() => navigate("/scheduling")}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
+                  >
+                    <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Next shift: {formatShiftDate(nextShift.shift_date)} {formatShiftTime(nextShift.start_time)}</span>
+                  </button>
+                ) : nextEvent ? (
+                  <button
+                    onClick={() => navigate(`/events/${nextEvent.id}`)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors"
+                  >
+                    <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Next: {nextEvent.title} · {formatShortDateTime(nextEvent.start_datetime, tz)}</span>
+                  </button>
+                ) : (
+                  !loadingUpcomingEvents && !loadingMyShifts && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-theme-surface-secondary border border-theme-surface-border text-theme-text-muted">
+                      <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span>Nothing scheduled</span>
+                    </span>
+                  )
+                )}
+                {urgentCerts.length > 0 && (
+                  <button
+                    onClick={() => navigate("/training/my-training")}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>
+                      {urgentCerts.length} cert{urgentCerts.length === 1 ? "" : "s"}{" "}
+                      {urgentCerts.some((c) => c.is_expired) ? "expired" : "expiring"}
+                    </span>
+                  </button>
+                )}
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => navigate("/notifications?tab=inbox")}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition-colors"
+                  >
+                    <Bell className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{unreadCount} unread</span>
+                  </button>
+                )}
+                {overdueActionItems > 0 && (
+                  <button
+                    onClick={() => navigate("/action-items")}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/40 text-red-700 dark:text-red-300 hover:bg-red-500/20 transition-colors"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{overdueActionItems} overdue</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Cert expiry banner — only if the current user has any cert expired or expiring within 60d */}
+        {(() => {
+          const urgent = myCerts
+            .filter((c) => c.is_expired || (c.days_until_expiry !== null && c.days_until_expiry <= 60))
+            .sort((a, b) => (a.days_until_expiry ?? -Infinity) - (b.days_until_expiry ?? -Infinity));
+          const top = urgent[0];
+          if (!top) return null;
+          const expiredCount = urgent.filter((c) => c.is_expired).length;
+          const subtitle = expiredCount > 0
+            ? `${expiredCount} expired${urgent.length > expiredCount ? `, ${urgent.length - expiredCount} expiring soon` : ""}`
+            : `${urgent.length} expiring within 60 days`;
+          return (
+            <button
+              onClick={() => navigate("/training/my-training")}
+              className="w-full mb-6 sm:mb-8 bg-red-500/10 border-l-4 border-red-500 rounded-lg p-4 hover:bg-red-500/15 transition-colors text-left flex items-center gap-3 sm:gap-4"
+              aria-label={`${urgent.length} of your certifications need attention`}
+            >
+              <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden="true" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-theme-text-primary">
+                  Action needed: {top.course_name}
+                  {top.is_expired ? " is expired" :
+                    top.days_until_expiry !== null ? ` expires in ${top.days_until_expiry} days` : " expires soon"}
+                </h3>
+                <p className="text-xs text-theme-text-muted mt-0.5">{subtitle}</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-theme-text-muted shrink-0" aria-hidden="true" />
+            </button>
+          );
+        })()}
+
+        {/* Fat primary action: Log Training — most-used action, top placement */}
+        <button
+          onClick={() => navigate("/training/submit")}
+          className="w-full mb-6 sm:mb-8 group bg-gradient-to-br from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 active:from-red-800 active:to-red-900 text-white rounded-xl shadow-md hover:shadow-lg transition-all p-5 sm:p-6 flex items-center gap-4 text-left focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          aria-label="Log a training session"
+        >
+          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white/15 group-hover:bg-white/20 flex items-center justify-center shrink-0">
+            <Plus className="w-7 h-7 sm:w-8 sm:h-8" strokeWidth={2.5} aria-hidden="true" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-lg sm:text-xl font-bold leading-tight">Log Training</div>
+            <div className="text-sm text-red-100 mt-0.5">
+              Record a drill or session — pick course, hours, done.
+            </div>
+          </div>
+          <ChevronRight className="w-6 h-6 opacity-80 group-hover:translate-x-0.5 transition-transform shrink-0" aria-hidden="true" />
+        </button>
 
         {/* PWA Install Banner */}
         {canInstall && !dismissedInstall && (
