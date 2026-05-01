@@ -569,7 +569,20 @@ const MyTrainingPage: React.FC = () => {
           {v?.show_certification_status && data.certifications && data.certifications.length > 0 && (
             <Section title="Certifications" icon={Award}>
               <div className="space-y-2">
-                {data.certifications.map((c) => (
+                {[...data.certifications]
+                  .sort((a, b) => {
+                    // Default sort: expired first, then soonest-expiring, then valid (no expiry).
+                    // Cert expiry is the highest-priority data point on this page —
+                    // a chief shouldn't have to hunt for what's about to lapse.
+                    if (a.is_expired !== b.is_expired) return a.is_expired ? -1 : 1;
+                    const aDays = a.days_until_expiry;
+                    const bDays = b.days_until_expiry;
+                    if (aDays === null && bDays === null) return 0;
+                    if (aDays === null) return 1;
+                    if (bDays === null) return -1;
+                    return aDays - bDays;
+                  })
+                  .map((c) => (
                   <div key={c.id} className="flex items-center justify-between bg-theme-surface rounded-lg p-3">
                     <div>
                       <p className="text-sm font-medium text-theme-text-primary">{c.course_name}</p>

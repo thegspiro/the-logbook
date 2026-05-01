@@ -24,6 +24,7 @@ export { EmptyState } from './EmptyState';
 export { ConfirmDialog } from './ConfirmDialog';
 export { SuccessAnimation } from './SuccessAnimation';
 export { Tooltip } from './Tooltip';
+export { Avatar } from './Avatar';
 
 // Data & Interaction
 export { CommandPalette } from './CommandPalette';

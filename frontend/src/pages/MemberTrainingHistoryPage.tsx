@@ -12,6 +12,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { trainingService, userService } from '../services/api';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
+import { EmptyState } from '../components/ux';
+import { GraduationCap } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
@@ -277,20 +279,29 @@ export const MemberTrainingHistoryPage: React.FC = () => {
         {/* Training Records List */}
         <div className="card overflow-hidden">
           {filteredTrainings.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-theme-text-muted">No training records found.</p>
-              {searchQuery || filterStatus !== 'all' ? (
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setFilterStatus('all');
-                  }}
-                  className="mt-2 text-sm text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                >
-                  Clear filters
-                </button>
-              ) : null}
-            </div>
+            <EmptyState
+              icon={GraduationCap}
+              title="No training records found"
+              description={
+                searchQuery || filterStatus !== 'all'
+                  ? 'Try adjusting your search or filters.'
+                  : 'No training has been recorded for this member yet.'
+              }
+              actions={
+                searchQuery || filterStatus !== 'all'
+                  ? [
+                      {
+                        label: 'Clear filters',
+                        onClick: () => {
+                          setSearchQuery('');
+                          setFilterStatus('all');
+                        },
+                        variant: 'secondary',
+                      },
+                    ]
+                  : undefined
+              }
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-theme-surface-border">

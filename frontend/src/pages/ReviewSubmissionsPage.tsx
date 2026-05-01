@@ -26,6 +26,7 @@ import { trainingSubmissionService, trainingService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import { SubmissionStatus } from '../constants/enums';
+import { EmptyState } from '../components/ux';
 import type {
   TrainingSubmission,
   SelfReportConfig,
@@ -906,26 +907,24 @@ const ReviewSubmissionsPage: React.FC = () => {
             <p className="text-theme-text-muted mt-4">Loading submissions...</p>
           </div>
         ) : submissions.length === 0 ? (
-          <div className="text-center py-16 bg-theme-surface rounded-lg border border-theme-surface-border">
+          <div className="bg-theme-surface rounded-lg border border-theme-surface-border">
             {activeView === 'pending' ? (
-              <>
-                <CheckCircle2 className="w-16 h-16 text-green-500/50 mx-auto mb-4" />
-                <p className="text-theme-text-muted text-lg">All caught up!</p>
-                <p className="text-theme-text-muted text-sm mt-1">No submissions waiting for review.</p>
-              </>
+              <EmptyState
+                icon={CheckCircle2}
+                title="All caught up!"
+                description="No submissions waiting for review."
+              />
             ) : (
-              <>
-                <FileText className="w-16 h-16 text-theme-text-muted mx-auto mb-4" />
-                <p className="text-theme-text-muted">No submissions found</p>
-                {statusFilter && (
-                  <button
-                    onClick={() => setStatusFilter('')}
-                    className="mt-2 text-red-700 dark:text-red-400 text-sm hover:text-red-800 dark:hover:text-red-300"
-                  >
-                    Clear filter
-                  </button>
-                )}
-              </>
+              <EmptyState
+                icon={FileText}
+                title="No submissions found"
+                description={statusFilter ? 'Try clearing the status filter to see more.' : 'Submissions will appear here once members start logging training.'}
+                actions={
+                  statusFilter
+                    ? [{ label: 'Clear filter', onClick: () => setStatusFilter(''), variant: 'secondary' }]
+                    : undefined
+                }
+              />
             )}
           </div>
         ) : (

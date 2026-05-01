@@ -19,6 +19,7 @@ import type { ActionItemSummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { EmptyState } from '../components/ux';
 
 const STATUS_BADGES: Record<string, string> = {
   open: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-400',
@@ -147,10 +148,11 @@ const ActionItemsPage: React.FC = () => {
           {error}
         </div>
       ) : items.length === 0 ? (
-        <div className="text-center py-12 text-theme-text-muted">
-          <CheckCircle2 className="h-12 w-12 mx-auto mb-3 opacity-50" />
-          <p>No action items found</p>
-        </div>
+        <EmptyState
+          icon={CheckCircle2}
+          title="No action items"
+          description="Nothing on your plate right now. Action items from meetings and minutes will show up here."
+        />
       ) : (
         <div className="space-y-2">
           {items.map(item => (
