@@ -40,6 +40,12 @@ Recommended crontab (add to host or container cron):
 # Every 30 minutes — end-of-shift checklist reminders
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=end_of_shift_checklist_reminders
 
+# Every 30 minutes — per-member end-of-shift summary email + in-app notification
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=end_of_shift_summary
+
+# Daily at 8:00 AM — escalate unacknowledged trainee shift reports
+0 8 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=trainee_report_escalation
+
 # Weekly on Sundays at 2:00 AM — audit log archival and integrity checkpoint
 0 2 * * 0 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=audit_log_archival
 
@@ -207,6 +213,18 @@ SCHEDULE = {
         "frequency": "every 15 minutes",
         "recommended_time": "*/15 * * * *",
         "cron": "*/15 * * * *",
+    },
+    "end_of_shift_summary": {
+        "description": "Send each member who attended a shift an end-of-shift summary (email + in-app) with hours, calls, and a link to their completion report",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
+    "trainee_report_escalation": {
+        "description": "Escalate shift completion reports awaiting trainee acknowledgment beyond the configured window (default 7 days)",
+        "frequency": "daily",
+        "recommended_time": "08:00",
+        "cron": "0 8 * * *",
     },
     "external_training_auto_sync": {
         "description": "Sync training records from external providers (Vector Solutions, etc.) that have auto-sync enabled and are due",
@@ -1273,7 +1291,12 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
     from app.core.config import settings
     from app.core.utils import generate_uuid
     from app.models.notification import NotificationChannel, NotificationLog
-    from app.models.training import Shift, ShiftAssignment
+    from app.models.training import (
+        BasicApparatus,
+        Shift,
+        ShiftAssignment,
+        ShiftPosition,
+    )
     from app.services.email_service import EmailService
 
     now = datetime.now(dt_timezone.utc)
@@ -1335,6 +1358,54 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     }
                     continue
 
+                # Resolve apparatus name
+                apparatus_name = None
+                if shift.apparatus_id:
+                    app_result = await db.execute(
+                        select(BasicApparatus.unit_number, BasicApparatus.name).where(
+                            BasicApparatus.id == str(shift.apparatus_id)
+                        )
+                    )
+                    row = app_result.one_or_none()
+                    if row:
+                        unit_number, name = row
+                        apparatus_name = (
+                            f"{unit_number} \u2014 {name}" if unit_number else name
+                        )
+
+                # Resolve roster (member name + position).
+                # Exclude inactive users — a member who was assigned to
+                # the shift before being deactivated should not receive
+                # reminders or appear in the roster sent to others.
+                member_ids = [str(a.user_id) for a in assignments if a.user_id]
+                roster: list[dict] = []
+                user_map: dict = {}
+                if member_ids:
+                    user_rows = await db.execute(
+                        select(User)
+                        .where(User.id.in_(member_ids))
+                        .where(User.is_active == True)  # noqa: E712
+                    )
+                    user_map = {str(u.id): u for u in user_rows.scalars().all()}
+                for assignment in assignments:
+                    user = user_map.get(str(assignment.user_id))
+                    if not user:
+                        continue
+                    pos = assignment.position
+                    pos_value = (
+                        pos.value if isinstance(pos, ShiftPosition) else str(pos or "")
+                    )
+                    roster.append(
+                        {
+                            "user_id": str(assignment.user_id),
+                            "name": user.full_name or user.email or "Member",
+                            "first_name": user.first_name,
+                            "email": user.email,
+                            "position": pos_value,
+                            "position_label": pos_value.replace("_", " ").title(),
+                        }
+                    )
+
                 # Fetch equipment check templates for the apparatus
                 checklist_names: list[str] = []
                 if shift.apparatus_id and start_checklists_enabled:
@@ -1356,49 +1427,73 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     if shift.start_time
                     else ""
                 )
+                end_str = (
+                    shift.end_time.astimezone(org_tz).strftime("%H:%M")
+                    if shift.end_time
+                    else ""
+                )
+                time_range = (
+                    f"{start_str} \u2013 {end_str}" if start_str and end_str else start_str
+                )
 
-                message = f"Your shift on {shift_date_str} " f"starts at {start_str}."
+                # Build structured in-app message
+                msg_lines: list[str] = [
+                    f"Your shift on {shift_date_str} starts at {start_str}.",
+                ]
+                if apparatus_name:
+                    msg_lines.append(f"Apparatus: {apparatus_name}")
+                if roster:
+                    roster_summary = "; ".join(
+                        f"{r['name']} ({r['position_label']})" for r in roster[:8]
+                    )
+                    if len(roster) > 8:
+                        roster_summary += f"; +{len(roster) - 8} more"
+                    msg_lines.append(f"Crew: {roster_summary}")
                 if checklist_names:
-                    checklist_list = ", ".join(checklist_names)
-                    message += (
-                        f" Equipment checklists to complete: " f"{checklist_list}."
+                    msg_lines.append(
+                        f"Start-of-shift checklists: {', '.join(checklist_names)}"
                     )
                 else:
-                    message += (
-                        " No equipment checklists are assigned " "for this shift."
+                    msg_lines.append(
+                        "No equipment checklists are assigned for this shift."
                     )
+                message = "\n".join(msg_lines)
 
-                subject = f"Shift Reminder \u2014 {shift_date_str} at {start_str}"
+                subject = f"Shift Report \u2014 {shift_date_str} at {start_str}"
 
                 # In-app notification for each assigned member
-                shift_action_url = (
-                    f"/scheduling?tab=equipment-checks" f"&shift={shift.id}"
-                )
+                check_in_url = f"/scheduling/checkin?shift={shift.id}"
                 shift_start_iso = (
                     shift.start_time.isoformat() if shift.start_time else None
                 )
                 shift_end_iso = shift.end_time.isoformat() if shift.end_time else None
-                shift_metadata = {}
+                shift_metadata: dict = {
+                    "shift_id": str(shift.id),
+                    "apparatus_name": apparatus_name,
+                    "time_range": time_range,
+                    "checklists": checklist_names,
+                    "roster": [
+                        {"name": r["name"], "position": r["position_label"]}
+                        for r in roster
+                    ],
+                }
                 if shift_start_iso:
                     shift_metadata["shift_start_time"] = shift_start_iso
                 if shift_end_iso:
                     shift_metadata["shift_end_time"] = shift_end_iso
-                if shift.id:
-                    shift_metadata["shift_id"] = str(shift.id)
 
-                member_ids = [str(a.user_id) for a in assignments if a.user_id]
-                for mid in member_ids:
+                for r in roster:
                     try:
                         notif = NotificationLog(
                             id=generate_uuid(),
                             organization_id=str(org.id),
-                            recipient_id=mid,
+                            recipient_id=r["user_id"],
                             channel=NotificationChannel.IN_APP,
                             category="shift_reminder",
                             subject=subject,
                             message=message,
-                            action_url=shift_action_url,
-                            notification_metadata=shift_metadata or None,
+                            action_url=check_in_url,
+                            notification_metadata=shift_metadata,
                             delivered=True,
                         )
                         db.add(notif)
@@ -1406,24 +1501,16 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     except Exception as e:
                         logger.error(
                             f"Failed to create shift reminder notification "
-                            f"for user {mid}, shift {shift.id}: {e}"
+                            f"for user {r['user_id']}, shift {shift.id}: {e}"
                         )
 
-                # Optional email
-                if reminder_cfg.get("send_email", False) and member_ids:
+                # Email \u2014 sent by default. Set send_email=False in
+                # org.settings["shift_reminders"] to suppress.
+                if reminder_cfg.get("send_email", True) and roster:
                     try:
-                        user_result = await db.execute(
-                            select(User.id, User.email, User.first_name).where(
-                                User.id.in_(member_ids),
-                                User.email.isnot(None),
-                                User.is_active == True,  # noqa: E712
-                            )
-                        )
-                        users = list(user_result.all())
                         from app.services.email_service import wrap_email_body
 
                         cc_emails = reminder_cfg.get("cc_emails", [])
-                        full_url = f"{settings.FRONTEND_URL}/scheduling"
                         email_svc = EmailService(organization=org)
 
                         checklist_html = ""
@@ -1432,7 +1519,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                                 f"<li>{_html.escape(n)}</li>" for n in checklist_names
                             )
                             checklist_html = (
-                                "<p><strong>Equipment checklists "
+                                "<p><strong>Start-of-shift checklists "
                                 "to complete:</strong></p>"
                                 f"<ul>{items}</ul>"
                             )
@@ -1442,33 +1529,114 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                                 "are assigned for this shift.</em></p>"
                             )
 
-                        for uid, email, first_name in users:
-                            e_first = _html.escape(first_name or "")
-                            e_date = _html.escape(shift_date_str)
-                            e_time = _html.escape(start_str)
+                        roster_html = ""
+                        if roster:
+                            roster_rows = "".join(
+                                f"<tr><td style='padding:4px 8px'>"
+                                f"{_html.escape(r['name'])}</td>"
+                                f"<td style='padding:4px 8px;color:#555'>"
+                                f"{_html.escape(r['position_label'])}</td></tr>"
+                                for r in roster
+                            )
+                            roster_html = (
+                                "<p><strong>Crew roster:</strong></p>"
+                                "<table style='border-collapse:collapse;"
+                                "margin:0 0 12px 0' role='presentation'>"
+                                f"{roster_rows}</table>"
+                            )
+
+                        details_rows = []
+                        if apparatus_name:
+                            details_rows.append(
+                                "<tr><td style='padding:2px 8px;color:#555'>"
+                                "Apparatus</td>"
+                                "<td style='padding:2px 8px'>"
+                                f"<strong>{_html.escape(apparatus_name)}"
+                                "</strong></td></tr>"
+                            )
+                        details_rows.append(
+                            "<tr><td style='padding:2px 8px;color:#555'>"
+                            "Date</td>"
+                            f"<td style='padding:2px 8px'><strong>"
+                            f"{_html.escape(shift_date_str)}"
+                            "</strong></td></tr>"
+                        )
+                        details_rows.append(
+                            "<tr><td style='padding:2px 8px;color:#555'>"
+                            "Time</td>"
+                            f"<td style='padding:2px 8px'><strong>"
+                            f"{_html.escape(time_range)}"
+                            "</strong></td></tr>"
+                        )
+                        details_html = (
+                            "<table style='border-collapse:collapse;"
+                            "margin:0 0 12px 0' role='presentation'>"
+                            + "".join(details_rows)
+                            + "</table>"
+                        )
+
+                        for r in roster:
+                            email = r["email"]
+                            if not email:
+                                continue
+                            e_first = _html.escape(r["first_name"] or "")
+                            e_pos = _html.escape(r["position_label"])
+                            arrival_url = (
+                                f"{settings.FRONTEND_URL}/scheduling/"
+                                f"checkin?shift={shift.id}"
+                            )
                             try:
                                 sent, _ = await email_svc.send_email(
                                     to_emails=[email],
                                     subject=subject,
                                     html_body=wrap_email_body(
                                         org,
-                                        "Shift Reminder",
+                                        "Start-of-Shift Report",
                                         f"<p>Hello {e_first},</p>"
-                                        f"<p>Your shift on "
-                                        f"<strong>{e_date}</strong> "
-                                        f"starts at "
-                                        f"<strong>{e_time}</strong>."
-                                        f"</p>"
+                                        "<p>Your upcoming shift report is "
+                                        "below. Please arrive on time and "
+                                        "mark your arrival when you get "
+                                        "to the station.</p>"
+                                        f"{details_html}"
+                                        f"<p><strong>Your position:</strong> "
+                                        f"{e_pos}</p>"
+                                        f"{roster_html}"
                                         f"{checklist_html}"
-                                        f'<p style="text-align: center;">'
-                                        f'<a href="{_html.escape(full_url)}" '
-                                        f'class="button" role="link">'
-                                        f"View Schedule</a></p>",
+                                        "<p style='text-align: center;'>"
+                                        f"<a href='{_html.escape(arrival_url)}' "
+                                        "class='button' role='link'>"
+                                        "Mark Arrival</a></p>",
                                     ),
                                     text_body=(
-                                        f"Hi {first_name},\n\n"
-                                        f"{message}\n\n"
-                                        f"View Schedule: {full_url}"
+                                        f"Hi {r['first_name'] or ''},\n\n"
+                                        f"Start-of-Shift Report\n"
+                                        f"Date: {shift_date_str}\n"
+                                        f"Time: {time_range}\n"
+                                        + (
+                                            f"Apparatus: {apparatus_name}\n"
+                                            if apparatus_name
+                                            else ""
+                                        )
+                                        + f"Your position: {r['position_label']}\n"
+                                        + (
+                                            "Crew: "
+                                            + ", ".join(
+                                                f"{m['name']} "
+                                                f"({m['position_label']})"
+                                                for m in roster
+                                            )
+                                            + "\n"
+                                            if roster
+                                            else ""
+                                        )
+                                        + (
+                                            "Start-of-shift checklists: "
+                                            + ", ".join(checklist_names)
+                                            + "\n"
+                                            if checklist_names
+                                            else ""
+                                        )
+                                        + f"\nMark Arrival: {arrival_url}"
                                     ),
                                     cc_emails=cc_emails or None,
                                     db=db,
@@ -1478,13 +1646,13 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     org_emails += 1
                             except Exception as email_err:
                                 logger.error(
-                                    "Shift reminder email failed " "for %s: %s",
+                                    "Shift reminder email failed for %s: %s",
                                     _redact_email(email),
                                     email_err,
                                 )
                     except Exception as e:
                         logger.error(
-                            "Failed to send shift reminder emails " "for shift %s: %s",
+                            "Failed to send shift reminder emails for shift %s: %s",
                             shift.id,
                             e,
                         )
@@ -1694,6 +1862,718 @@ async def run_end_of_shift_checklist_reminders(
         return org_notifications
 
     return await _for_each_org(db, "end_of_shift_checklist_reminders", process)
+
+
+async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Send each member who attended a shift a personalized end-of-shift
+    summary via email AND in-app notification.
+
+    Runs every 30 minutes. Looks for shifts that ended within the last
+    configurable window (default 4 hours) and, for each ShiftAttendance
+    record on the shift, sends one email + one in-app notification with:
+      - shift date, time range, and apparatus
+      - hours recorded for the member
+      - calls the member responded to
+      - link to view their completion report (if filed)
+
+    Per-member dispatch is idempotent: each member's summary is recorded
+    in shift.activities["member_summaries_sent"] (a list of user IDs)
+    so a member is only emailed once even if the job re-runs.
+
+    Controlled by org.settings["shift_reports"]["member_summary"]:
+      - enabled (bool, default True)
+      - lookback_hours (int, default 4)
+    """
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+    from zoneinfo import ZoneInfo
+
+    from app.core.config import settings
+    from app.core.utils import generate_uuid
+    from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.training import (
+        BasicApparatus,
+        Shift,
+        ShiftAttendance,
+        ShiftCall,
+        ShiftCompletionReport,
+    )
+    from app.services.email_service import EmailService
+
+    now = datetime.now(dt_timezone.utc)
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_notifications = 0
+    total_emails = 0
+    results = []
+
+    for org in organizations:
+        org_notifications = 0
+        org_emails = 0
+
+        try:
+            sr_cfg = (org.settings or {}).get("shift_reports", {})
+            ms_cfg = sr_cfg.get("member_summary", {})
+            if not ms_cfg.get("enabled", True):
+                continue
+
+            # By default, wait for the officer to finalize the shift
+            # before sending the summary — duration_minutes is computed
+            # at check-out / finalization, so an unfinalized shift can
+            # report 0 hours for members who haven't been checked out
+            # yet. Orgs that want preliminary numbers can opt in.
+            require_finalized = ms_cfg.get("require_finalized", True)
+
+            lookback_hours = ms_cfg.get("lookback_hours", 4)
+            lookback = now - timedelta(hours=lookback_hours)
+            org_tz = ZoneInfo(org.timezone if org.timezone else "America/New_York")
+
+            shifts_query = (
+                select(Shift)
+                .where(Shift.organization_id == str(org.id))
+                .where(Shift.end_time.isnot(None))
+                .where(Shift.end_time <= now)
+                .where(Shift.end_time >= lookback)
+            )
+            if require_finalized:
+                shifts_query = shifts_query.where(
+                    Shift.is_finalized == True  # noqa: E712
+                )
+            shifts_result = await db.execute(shifts_query)
+            shifts = list(shifts_result.scalars().all())
+
+            for shift in shifts:
+                activities = shift.activities or {}
+                already_sent = set(activities.get("member_summaries_sent") or [])
+
+                # Resolve apparatus once per shift
+                apparatus_name = None
+                if shift.apparatus_id:
+                    app_result = await db.execute(
+                        select(BasicApparatus.unit_number, BasicApparatus.name).where(
+                            BasicApparatus.id == str(shift.apparatus_id)
+                        )
+                    )
+                    row = app_result.one_or_none()
+                    if row:
+                        unit_number, name = row
+                        apparatus_name = (
+                            f"{unit_number} — {name}" if unit_number else name
+                        )
+
+                # All attendance records for the shift
+                att_result = await db.execute(
+                    select(ShiftAttendance).where(
+                        ShiftAttendance.shift_id == str(shift.id)
+                    )
+                )
+                attendance_records = list(att_result.scalars().all())
+                if not attendance_records:
+                    continue
+
+                # Pre-load all calls for the shift so we can attribute
+                # responses to each member without a per-member query.
+                calls_result = await db.execute(
+                    select(
+                        ShiftCall.responding_members,
+                        ShiftCall.incident_type,
+                    ).where(ShiftCall.shift_id == str(shift.id))
+                )
+                shift_calls = list(calls_result.all())
+
+                # Map user_id -> { count, types }
+                per_member_calls: dict = {}
+                for members, incident_type in shift_calls:
+                    if not members:
+                        continue
+                    for mid in members:
+                        bucket = per_member_calls.setdefault(
+                            str(mid), {"count": 0, "types": []}
+                        )
+                        bucket["count"] += 1
+                        if incident_type:
+                            bucket["types"].append(incident_type)
+
+                # Pre-load completion reports keyed by trainee
+                rep_result = await db.execute(
+                    select(
+                        ShiftCompletionReport.id,
+                        ShiftCompletionReport.trainee_id,
+                    ).where(ShiftCompletionReport.shift_id == str(shift.id))
+                )
+                report_by_trainee = {str(r[1]): str(r[0]) for r in rep_result.all()}
+
+                shift_date_str = (
+                    shift.shift_date.strftime("%b %d, %Y")
+                    if shift.shift_date
+                    else "Unknown"
+                )
+                start_str = (
+                    shift.start_time.astimezone(org_tz).strftime("%H:%M")
+                    if shift.start_time
+                    else ""
+                )
+                end_str = (
+                    shift.end_time.astimezone(org_tz).strftime("%H:%M")
+                    if shift.end_time
+                    else ""
+                )
+                time_range = (
+                    f"{start_str} – {end_str}" if start_str and end_str else start_str
+                )
+
+                # Resolve member users in one query
+                user_ids = [str(att.user_id) for att in attendance_records if att.user_id]
+                user_rows = await db.execute(
+                    select(User).where(User.id.in_(user_ids))
+                )
+                user_map = {str(u.id): u for u in user_rows.scalars().all()}
+
+                newly_sent: list[str] = []
+
+                for att in attendance_records:
+                    uid = str(att.user_id)
+                    if uid in already_sent:
+                        continue
+                    user = user_map.get(uid)
+                    if not user or not user.is_active:
+                        continue
+
+                    hours = (
+                        round((att.duration_minutes or 0) / 60.0, 2)
+                        if att.duration_minutes
+                        else 0.0
+                    )
+                    call_info = per_member_calls.get(uid, {"count": 0, "types": []})
+                    call_count = call_info["count"]
+                    call_types = call_info["types"]
+                    report_id = report_by_trainee.get(uid)
+
+                    is_preliminary = not bool(shift.is_finalized)
+                    subject_prefix = (
+                        "Preliminary Shift Summary"
+                        if is_preliminary
+                        else "Shift Summary"
+                    )
+                    subject = f"{subject_prefix} — {shift_date_str}"
+                    summary_lines = [
+                        f"Your shift on {shift_date_str} ({time_range}) "
+                        f"has ended.",
+                        f"Hours recorded: {hours}",
+                        f"Calls responded: {call_count}",
+                    ]
+                    if apparatus_name:
+                        summary_lines.insert(1, f"Apparatus: {apparatus_name}")
+                    if call_types:
+                        summary_lines.append(
+                            "Call types: " + ", ".join(call_types[:5])
+                        )
+                    if is_preliminary:
+                        summary_lines.append(
+                            "These figures are preliminary — your hours "
+                            "and call count may change once the shift "
+                            "officer finalizes the shift."
+                        )
+                    if report_id:
+                        summary_lines.append(
+                            "A shift completion report has been filed for "
+                            "you — please review and acknowledge it."
+                        )
+                    message = "\n".join(summary_lines)
+
+                    action_url = (
+                        f"/scheduling?tab=shift-reports&report={report_id}"
+                        if report_id
+                        else f"/scheduling?shift={shift.id}"
+                    )
+
+                    metadata = {
+                        "shift_id": str(shift.id),
+                        "hours_recorded": hours,
+                        "calls_responded": call_count,
+                        "call_types": call_types,
+                        "apparatus_name": apparatus_name,
+                        "report_id": report_id,
+                        "is_preliminary": is_preliminary,
+                        "shift_start_time": (
+                            shift.start_time.isoformat() if shift.start_time else None
+                        ),
+                        "shift_end_time": (
+                            shift.end_time.isoformat() if shift.end_time else None
+                        ),
+                    }
+
+                    # In-app notification
+                    try:
+                        notif = NotificationLog(
+                            id=generate_uuid(),
+                            organization_id=str(org.id),
+                            recipient_id=uid,
+                            channel=NotificationChannel.IN_APP,
+                            category="shift_summary",
+                            subject=subject,
+                            message=message,
+                            action_url=action_url,
+                            notification_metadata=metadata,
+                            delivered=True,
+                        )
+                        db.add(notif)
+                        org_notifications += 1
+                    except Exception as e:
+                        logger.error(
+                            "Failed end-of-shift in-app summary for user "
+                            "%s, shift %s: %s",
+                            uid,
+                            shift.id,
+                            e,
+                        )
+
+                    # Email
+                    prefs = user.notification_preferences or {}
+                    wants_email = prefs.get("email_notifications", True)
+                    if wants_email and user.email:
+                        try:
+                            from app.services.email_service import wrap_email_body
+
+                            full_url = f"{settings.FRONTEND_URL}{action_url}"
+                            email_svc = EmailService(organization=org)
+
+                            details_rows = [
+                                "<tr><td style='padding:2px 8px;color:#555'>"
+                                "Date</td>"
+                                f"<td style='padding:2px 8px'><strong>"
+                                f"{_html.escape(shift_date_str)}"
+                                "</strong></td></tr>",
+                                "<tr><td style='padding:2px 8px;color:#555'>"
+                                "Time</td>"
+                                f"<td style='padding:2px 8px'><strong>"
+                                f"{_html.escape(time_range)}"
+                                "</strong></td></tr>",
+                                "<tr><td style='padding:2px 8px;color:#555'>"
+                                "Hours</td>"
+                                f"<td style='padding:2px 8px'><strong>"
+                                f"{hours}"
+                                "</strong></td></tr>",
+                                "<tr><td style='padding:2px 8px;color:#555'>"
+                                "Calls</td>"
+                                f"<td style='padding:2px 8px'><strong>"
+                                f"{call_count}"
+                                "</strong></td></tr>",
+                            ]
+                            if apparatus_name:
+                                details_rows.insert(
+                                    0,
+                                    "<tr><td style='padding:2px 8px;color:#555'>"
+                                    "Apparatus</td>"
+                                    "<td style='padding:2px 8px'><strong>"
+                                    f"{_html.escape(apparatus_name)}"
+                                    "</strong></td></tr>",
+                                )
+                            details_html = (
+                                "<table style='border-collapse:collapse;"
+                                "margin:0 0 12px 0' role='presentation'>"
+                                + "".join(details_rows)
+                                + "</table>"
+                            )
+
+                            call_types_html = ""
+                            if call_types:
+                                items = "".join(
+                                    f"<li>{_html.escape(t)}</li>"
+                                    for t in call_types[:10]
+                                )
+                                call_types_html = (
+                                    "<p><strong>Call types:</strong></p>"
+                                    f"<ul>{items}</ul>"
+                                )
+
+                            report_html = ""
+                            if report_id:
+                                report_html = (
+                                    "<p>A shift completion report has been "
+                                    "filed for you. Please review the "
+                                    "officer's notes and acknowledge it.</p>"
+                                )
+
+                            preliminary_html = ""
+                            if is_preliminary:
+                                preliminary_html = (
+                                    "<p style='background:#fff7ed;"
+                                    "border-left:4px solid #f97316;"
+                                    "padding:8px 12px;color:#7c2d12'>"
+                                    "<strong>Preliminary:</strong> these "
+                                    "figures may change once the shift "
+                                    "officer finalizes the shift.</p>"
+                                )
+
+                            email_title = (
+                                "Preliminary End-of-Shift Summary"
+                                if is_preliminary
+                                else "End-of-Shift Summary"
+                            )
+
+                            e_first = _html.escape(user.first_name or "")
+                            sent, _ = await email_svc.send_email(
+                                to_emails=[user.email],
+                                subject=subject,
+                                html_body=wrap_email_body(
+                                    org,
+                                    email_title,
+                                    f"<p>Hello {e_first},</p>"
+                                    "<p>Your shift has ended. Below is a "
+                                    "summary of what was recorded:</p>"
+                                    f"{preliminary_html}"
+                                    f"{details_html}"
+                                    f"{call_types_html}"
+                                    f"{report_html}"
+                                    "<p style='text-align: center;'>"
+                                    f"<a href='{_html.escape(full_url)}' "
+                                    "class='button' role='link'>"
+                                    "View Shift Details</a></p>",
+                                ),
+                                text_body=(
+                                    f"Hi {user.first_name or ''},\n\n"
+                                    f"End-of-Shift Summary\n"
+                                    f"Date: {shift_date_str}\n"
+                                    f"Time: {time_range}\n"
+                                    + (
+                                        f"Apparatus: {apparatus_name}\n"
+                                        if apparatus_name
+                                        else ""
+                                    )
+                                    + f"Hours recorded: {hours}\n"
+                                    f"Calls responded: {call_count}\n"
+                                    + (
+                                        "Call types: "
+                                        + ", ".join(call_types)
+                                        + "\n"
+                                        if call_types
+                                        else ""
+                                    )
+                                    + (
+                                        "\nA shift completion report has been "
+                                        "filed for you — please review and "
+                                        "acknowledge it.\n"
+                                        if report_id
+                                        else ""
+                                    )
+                                    + f"\nView Shift Details: {full_url}"
+                                ),
+                                db=db,
+                                template_type="post_shift_validation",
+                            )
+                            if sent > 0:
+                                org_emails += 1
+                        except Exception as email_err:
+                            logger.error(
+                                "End-of-shift summary email failed for %s: %s",
+                                _redact_email(user.email),
+                                email_err,
+                            )
+
+                    newly_sent.append(uid)
+
+                if newly_sent:
+                    shift.activities = {
+                        **activities,
+                        "member_summaries_sent": list(already_sent | set(newly_sent)),
+                    }
+
+            await db.commit()
+
+        except Exception as e:
+            logger.error(f"End-of-shift summary failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+            continue
+
+        total_notifications += org_notifications
+        total_emails += org_emails
+        if org_notifications > 0 or org_emails > 0:
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "notifications": org_notifications,
+                    "emails_sent": org_emails,
+                }
+            )
+
+    logger.info(
+        f"End-of-shift summary complete: {total_notifications} in-app, "
+        f"{total_emails} emails across {len(organizations)} orgs"
+    )
+    return {
+        "task": "end_of_shift_summary",
+        "total_notifications": total_notifications,
+        "total_emails_sent": total_emails,
+        "organizations": results,
+    }
+
+
+async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Escalate shift completion reports awaiting trainee acknowledgment.
+
+    Runs daily. For each approved ShiftCompletionReport that has not been
+    acknowledged by the trainee within N days (default 7), send an
+    escalation reminder to the trainee AND notify the filing officer plus
+    training officers that the trainee is overdue.
+
+    Controlled by org.settings["shift_reports"]["follow_up"]:
+      - enabled (bool, default True)
+      - acknowledgment_days (int, default 7)
+      - max_reminders (int, default 3) — stop reminding after N reminders
+    """
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
+    from app.core.config import settings
+    from app.core.constants import ROLE_TRAINING_OFFICER
+    from app.core.utils import generate_uuid
+    from app.models.notification import NotificationChannel, NotificationLog
+    from app.models.training import ShiftCompletionReport
+    from app.models.user import Role, user_roles
+    from app.services.email_service import EmailService, wrap_email_body
+
+    now = datetime.now(dt_timezone.utc)
+
+    orgs = await db.execute(select(Organization))
+    organizations = list(orgs.scalars().all())
+
+    total_escalations = 0
+    total_emails = 0
+    results = []
+
+    for org in organizations:
+        org_escalations = 0
+        org_emails = 0
+
+        try:
+            sr_cfg = (org.settings or {}).get("shift_reports", {})
+            fu_cfg = sr_cfg.get("follow_up", {})
+            if not fu_cfg.get("enabled", True):
+                continue
+
+            ack_days = int(fu_cfg.get("acknowledgment_days", 7))
+            max_reminders = int(fu_cfg.get("max_reminders", 3))
+            cutoff = now - timedelta(days=ack_days)
+
+            # Find unacknowledged approved reports created before cutoff
+            rep_result = await db.execute(
+                select(ShiftCompletionReport)
+                .where(ShiftCompletionReport.organization_id == str(org.id))
+                .where(ShiftCompletionReport.review_status == "approved")
+                .where(ShiftCompletionReport.trainee_acknowledged == False)  # noqa: E712
+                .where(ShiftCompletionReport.created_at <= cutoff)
+            )
+            reports = list(rep_result.scalars().all())
+            if not reports:
+                continue
+
+            # Resolve training officers for the org once
+            t_role_result = await db.execute(
+                select(Role)
+                .where(Role.slug == ROLE_TRAINING_OFFICER)
+                .where(Role.organization_id == str(org.id))
+            )
+            t_role = t_role_result.scalar_one_or_none()
+            training_officers: list = []
+            if t_role:
+                t_users = await db.execute(
+                    select(User)
+                    .join(user_roles, User.id == user_roles.c.user_id)
+                    .where(user_roles.c.position_id == t_role.id)
+                    .where(User.organization_id == str(org.id))
+                    .where(User.is_active == True)  # noqa: E712
+                )
+                training_officers = list(t_users.scalars().all())
+
+            email_svc = EmailService(organization=org)
+
+            for report in reports:
+                # Track reminder count via review_history JSON
+                history = list(report.review_history or [])
+                reminders_sent = sum(
+                    1 for entry in history if entry.get("status") == "ack_reminder"
+                )
+                if reminders_sent >= max_reminders:
+                    continue
+
+                trainee = report.trainee
+                officer = report.officer
+                if not trainee:
+                    continue
+
+                shift_date_str = (
+                    report.shift_date.strftime("%b %d, %Y")
+                    if report.shift_date
+                    else "Unknown"
+                )
+                report_url = (
+                    f"/scheduling?tab=shift-reports&report={report.id}"
+                )
+                full_url = f"{settings.FRONTEND_URL}{report_url}"
+                trainee_subject = (
+                    f"Reminder: Acknowledge your shift report from {shift_date_str}"
+                )
+                trainee_message = (
+                    f"You have a shift completion report from "
+                    f"{shift_date_str} that needs your acknowledgment. "
+                    f"Please review and confirm so your training "
+                    f"progress can be finalized."
+                )
+
+                # Reminder to trainee — in-app + email
+                try:
+                    db.add(
+                        NotificationLog(
+                            id=generate_uuid(),
+                            organization_id=str(org.id),
+                            recipient_id=str(trainee.id),
+                            channel=NotificationChannel.IN_APP,
+                            category="shift_report_followup",
+                            subject=trainee_subject,
+                            message=trainee_message,
+                            action_url=report_url,
+                            notification_metadata={
+                                "report_id": str(report.id),
+                                "reminder_number": reminders_sent + 1,
+                            },
+                            delivered=True,
+                        )
+                    )
+                    org_escalations += 1
+                except Exception as e:
+                    logger.error(
+                        "Failed in-app trainee escalation for report %s: %s",
+                        report.id,
+                        e,
+                    )
+
+                if trainee.email:
+                    try:
+                        e_first = _html.escape(trainee.first_name or "")
+                        e_date = _html.escape(shift_date_str)
+                        sent, _ = await email_svc.send_email(
+                            to_emails=[trainee.email],
+                            subject=trainee_subject,
+                            html_body=wrap_email_body(
+                                org,
+                                "Action Required: Acknowledge Shift Report",
+                                f"<p>Hello {e_first},</p>"
+                                f"<p>You have a shift completion report "
+                                f"from <strong>{e_date}</strong> awaiting "
+                                "your acknowledgment.</p>"
+                                "<p>Reviewing and acknowledging the report "
+                                "lets your training progress be finalized.</p>"
+                                "<p style='text-align: center;'>"
+                                f"<a href='{_html.escape(full_url)}' "
+                                "class='button' role='link'>"
+                                "Review Report</a></p>",
+                            ),
+                            text_body=(
+                                f"Hi {trainee.first_name or ''},\n\n"
+                                f"{trainee_message}\n\n"
+                                f"Review Report: {full_url}"
+                            ),
+                            db=db,
+                            template_type="post_shift_validation",
+                        )
+                        if sent > 0:
+                            org_emails += 1
+                    except Exception as e:
+                        logger.error(
+                            "Failed trainee escalation email for %s: %s",
+                            _redact_email(trainee.email),
+                            e,
+                        )
+
+                # Notify officer + training officers (in-app only, to avoid
+                # spamming them with one email per overdue report)
+                officer_subject = (
+                    f"Trainee report unacknowledged — {shift_date_str}"
+                )
+                officer_message = (
+                    f"{trainee.full_name or trainee.email or 'Trainee'} "
+                    f"has not acknowledged the shift report you filed for "
+                    f"{shift_date_str} ({ack_days}+ days overdue)."
+                )
+                officer_recipients = set()
+                if officer:
+                    officer_recipients.add(str(officer.id))
+                for to_user in training_officers:
+                    officer_recipients.add(str(to_user.id))
+                officer_recipients.discard(str(trainee.id))
+
+                for rid in officer_recipients:
+                    try:
+                        db.add(
+                            NotificationLog(
+                                id=generate_uuid(),
+                                organization_id=str(org.id),
+                                recipient_id=rid,
+                                channel=NotificationChannel.IN_APP,
+                                category="shift_report_followup",
+                                subject=officer_subject,
+                                message=officer_message,
+                                action_url=report_url,
+                                notification_metadata={
+                                    "report_id": str(report.id),
+                                    "trainee_id": str(trainee.id),
+                                    "days_overdue": ack_days,
+                                },
+                                delivered=True,
+                            )
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "Failed officer escalation notification "
+                            "for report %s, recipient %s: %s",
+                            report.id,
+                            rid,
+                            e,
+                        )
+
+                # Append to review_history so we can rate-limit
+                history.append(
+                    {
+                        "status": "ack_reminder",
+                        "timestamp": now.isoformat(),
+                        "reminder_number": reminders_sent + 1,
+                    }
+                )
+                report.review_history = history
+
+            await db.commit()
+
+        except Exception as e:
+            logger.error(f"Trainee report escalation failed for org {org.id}: {e}")
+            results.append({"org_id": str(org.id), "error": str(e)})
+            continue
+
+        total_escalations += org_escalations
+        total_emails += org_emails
+        if org_escalations > 0:
+            results.append(
+                {
+                    "org_id": str(org.id),
+                    "escalations": org_escalations,
+                    "emails_sent": org_emails,
+                }
+            )
+
+    logger.info(
+        f"Trainee report escalation complete: {total_escalations} reports, "
+        f"{total_emails} emails across {len(organizations)} orgs"
+    )
+    return {
+        "task": "trainee_report_escalation",
+        "total_escalations": total_escalations,
+        "total_emails_sent": total_emails,
+        "organizations": results,
+    }
 
 
 def _format_relative_time(event_time: datetime, now: datetime) -> str:
@@ -3065,6 +3945,8 @@ TASK_RUNNERS = {
     "post_shift_validation": run_post_shift_validation,
     "shift_reminders": run_shift_reminders,
     "end_of_shift_checklist_reminders": run_end_of_shift_checklist_reminders,
+    "end_of_shift_summary": run_end_of_shift_summary,
+    "trainee_report_escalation": run_trainee_report_escalation,
     "audit_log_archival": run_audit_log_archival,
     "scheduled_emails": run_scheduled_emails,
     "inventory_low_stock_alerts": run_inventory_low_stock_alerts,

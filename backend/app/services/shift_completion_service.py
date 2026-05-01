@@ -309,6 +309,10 @@ class ShiftCompletionService:
                     f"review and acknowledgment."
                 ),
             )
+            await self._maybe_alert_training_officers(
+                organization_id=organization_id,
+                report=report,
+            )
 
         return report
 
@@ -503,6 +507,8 @@ class ShiftCompletionService:
         recipient_id: str,
         subject: str,
         message: str,
+        action_url: Optional[str] = None,
+        notification_metadata: Optional[Dict] = None,
     ) -> None:
         """Send an in-app training notification."""
         try:
@@ -513,11 +519,135 @@ class ShiftCompletionService:
                 category=NotificationCategory.TRAINING,
                 subject=subject,
                 message=message,
+                action_url=action_url,
+                notification_metadata=notification_metadata,
             )
             self.db.add(notification)
             await self.db.commit()
         except Exception as e:
             logger.error(f"Failed to send notification: {e}")
+
+    async def _maybe_alert_training_officers(
+        self,
+        organization_id: UUID,
+        report: ShiftCompletionReport,
+    ) -> None:
+        """Alert training officers when a report flags trainee follow-up.
+
+        Triggered when an approved report has a low performance rating
+        (<= 2 on the 5-point scale) or when the officer recorded
+        ``areas_for_improvement``. The shift officer who filed the
+        report is excluded from the recipient list to avoid self-alerts.
+
+        The performance-rating threshold defaults to 2 (out of 5) and
+        can be overridden per org via
+        ``settings["shift_reports"]["follow_up"]["low_rating_threshold"]``.
+        Setting the threshold to 0 disables the low-rating trigger
+        entirely (the improvement-text trigger still fires).
+        """
+        from app.core.constants import ROLE_TRAINING_OFFICER
+        from app.models.user import Organization, Role, User, user_roles
+
+        try:
+            org_row = (
+                await self.db.execute(
+                    select(Organization).where(
+                        Organization.id == str(organization_id)
+                    )
+                )
+            ).scalar_one_or_none()
+            org_settings = (org_row.settings if org_row else None) or {}
+            fu_cfg = (org_settings.get("shift_reports") or {}).get(
+                "follow_up", {}
+            )
+            try:
+                threshold = int(fu_cfg.get("low_rating_threshold", 2))
+            except (TypeError, ValueError):
+                threshold = 2
+
+            rating = report.performance_rating
+            improvement_text = (report.areas_for_improvement or "").strip()
+            low_rating = (
+                threshold > 0
+                and rating is not None
+                and rating <= threshold
+            )
+            has_improvement = bool(improvement_text)
+            if not low_rating and not has_improvement:
+                return
+
+            role_result = await self.db.execute(
+                select(Role)
+                .where(Role.slug == ROLE_TRAINING_OFFICER)
+                .where(Role.organization_id == str(organization_id))
+            )
+            t_role = role_result.scalar_one_or_none()
+            if not t_role:
+                return
+
+            officers_result = await self.db.execute(
+                select(User)
+                .join(user_roles, User.id == user_roles.c.user_id)
+                .where(user_roles.c.position_id == t_role.id)
+                .where(User.organization_id == str(organization_id))
+                .where(User.is_active == True)  # noqa: E712
+            )
+            officers = list(officers_result.scalars().all())
+            if not officers:
+                return
+
+            trainee_name = report.trainee_name or "A trainee"
+            shift_date_str = (
+                report.shift_date.strftime("%b %d, %Y")
+                if report.shift_date
+                else "an unknown date"
+            )
+            triggers = []
+            if low_rating:
+                triggers.append(f"performance rating {rating}/5")
+            if has_improvement:
+                triggers.append("areas for improvement noted")
+            trigger_text = " and ".join(triggers)
+
+            subject = f"Trainee follow-up needed — {trainee_name}"
+            message = (
+                f"{trainee_name}'s shift on {shift_date_str} was filed "
+                f"with {trigger_text}. Please review the report and "
+                f"plan any follow-up coaching or remediation."
+            )
+            action_url = f"/scheduling?tab=shift-reports&report={report.id}"
+            metadata = {
+                "report_id": str(report.id),
+                "trainee_id": str(report.trainee_id),
+                "performance_rating": rating,
+                "low_rating": low_rating,
+                "areas_for_improvement_present": has_improvement,
+            }
+
+            officer_id_str = (
+                str(report.officer_id) if report.officer_id else None
+            )
+            for to_user in officers:
+                if officer_id_str and str(to_user.id) == officer_id_str:
+                    continue
+                notification = NotificationLog(
+                    organization_id=str(organization_id),
+                    recipient_id=str(to_user.id),
+                    channel=NotificationChannel.IN_APP,
+                    category=NotificationCategory.TRAINING,
+                    subject=subject,
+                    message=message,
+                    action_url=action_url,
+                    notification_metadata=metadata,
+                )
+                self.db.add(notification)
+            await self.db.commit()
+        except Exception as e:
+            logger.error(
+                "Failed to alert training officers for report %s: %s",
+                getattr(report, "id", "?"),
+                e,
+            )
 
     async def _resolve_skill_evaluations(
         self,
