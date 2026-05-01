@@ -218,11 +218,12 @@ class AttendanceDashboardService:
         The member won't be able to vote in this meeting, but their
         attendance percentage won't be penalized.
         """
-        # Find or create the attendance record
+        # Find or create the attendance record (org-scoped)
         result = await self.db.execute(
             select(MeetingAttendee).where(
                 MeetingAttendee.meeting_id == meeting_id,
                 MeetingAttendee.user_id == user_id,
+                MeetingAttendee.organization_id == organization_id,
             )
         )
         attendee = result.scalar_one_or_none()
@@ -230,6 +231,7 @@ class AttendanceDashboardService:
         if not attendee:
             # Create a record with waiver
             attendee = MeetingAttendee(
+                organization_id=organization_id,
                 meeting_id=meeting_id,
                 user_id=user_id,
                 present=False,
@@ -265,6 +267,7 @@ class AttendanceDashboardService:
         result = await self.db.execute(
             select(MeetingAttendee).where(
                 MeetingAttendee.meeting_id == meeting_id,
+                MeetingAttendee.organization_id == organization_id,
                 MeetingAttendee.waiver_reason.isnot(None),
             )
         )

@@ -9,6 +9,7 @@ from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
@@ -355,8 +356,6 @@ async def grant_attendance_waiver(
 
     **Requires permission: meetings.manage**
     """
-    from sqlalchemy import select
-
     from app.core.audit import log_audit_event
 
     # Verify the meeting belongs to this org
@@ -372,6 +371,18 @@ async def grant_attendance_waiver(
     if not meeting:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found"
+        )
+
+    # Verify the target user belongs to the same organization
+    user_result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found in organization",
         )
 
     service = AttendanceDashboardService(db)
@@ -412,7 +423,19 @@ async def list_attendance_waivers(
 
     **Requires permission: meetings.manage**
     """
+    from app.models.meeting import Meeting
     from app.services.attendance_dashboard_service import AttendanceDashboardService
+
+    # Verify the meeting belongs to this org before disclosing waiver data
+    result = await db.execute(
+        select(Meeting)
+        .where(Meeting.id == str(meeting_id))
+        .where(Meeting.organization_id == str(current_user.organization_id))
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found"
+        )
 
     service = AttendanceDashboardService(db)
     return await service.list_waivers(

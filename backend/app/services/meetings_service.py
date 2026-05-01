@@ -21,6 +21,7 @@ from app.models.meeting import (
     MeetingStatus,
     MeetingType,
 )
+from app.models.user import User
 
 
 class MeetingsService:
@@ -221,6 +222,18 @@ class MeetingsService:
             meeting = await self.get_meeting_by_id(meeting_id, organization_id)
             if not meeting:
                 return None, "Meeting not found"
+
+            # Verify the attendee belongs to the same organization
+            attendee_user_id = attendee_data.get("user_id")
+            if attendee_user_id is None:
+                return None, "user_id is required"
+            user_result = await self.db.execute(
+                select(User)
+                .where(User.id == str(attendee_user_id))
+                .where(User.organization_id == str(organization_id))
+            )
+            if user_result.scalar_one_or_none() is None:
+                return None, "User not found in organization"
 
             attendee = MeetingAttendee(
                 organization_id=organization_id,

@@ -1026,6 +1026,8 @@ class EventService:
 
         now = datetime.now(dt_timezone.utc)
 
+        was_update = existing_rsvp is not None
+
         if existing_rsvp:
             # Update existing RSVP
             existing_rsvp.status = RSVPStatus(status)
@@ -1059,6 +1061,10 @@ class EventService:
 
         await self.db.commit()
         await self.db.refresh(rsvp)
+
+        # Transient attribute the endpoint reads to audit-log overwrites.
+        # Not a mapped column; lost when the object is detached.
+        rsvp.was_update = was_update
 
         return rsvp, None
 
