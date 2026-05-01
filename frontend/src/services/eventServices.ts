@@ -5,6 +5,8 @@
 import api from './apiClient';
 import type { CheckInMonitoringStats, CheckInRequest, Event, EventCancel, EventCreate, EventListItem, EventStats, EventUpdate, RSVP, RSVPCreate } from '../types/event';
 import type { DocumentFolder } from './formsServices';
+import { enqueueGeneric } from '../utils/genericOfflineQueue';
+import { usePendingSyncStore } from '../stores/pendingSyncStore';
 
 export interface CSVImportRowError {
   row: number;
@@ -117,9 +119,30 @@ export const eventService = {
   },
 
   /**
-   * Create or update an RSVP
+   * Create or update an RSVP. When offline the request is enqueued and
+   * resolved with an optimistic placeholder; the sync engine flushes
+   * it when connectivity returns.
    */
   async createOrUpdateRSVP(eventId: string, rsvpData: RSVPCreate): Promise<RSVP> {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await enqueueGeneric(
+        'event-rsvp',
+        `/events/${eventId}/rsvp`,
+        rsvpData,
+        `RSVP: ${rsvpData.status}`,
+      );
+      void usePendingSyncStore.getState().refresh();
+      return {
+        id: 'pending-sync',
+        event_id: eventId,
+        user_id: '',
+        status: rsvpData.status,
+        guest_count: rsvpData.guest_count ?? 0,
+        responded_at: new Date().toISOString(),
+        checked_in: false,
+        offline_pending: true,
+      } as unknown as RSVP;
+    }
     const response = await api.post<RSVP>(`/events/${eventId}/rsvp`, rsvpData);
     return response.data;
   },

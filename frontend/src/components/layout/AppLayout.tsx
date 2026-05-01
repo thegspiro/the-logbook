@@ -9,6 +9,7 @@ import { useIdleTimer } from '../../hooks/useIdleTimer';
 import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useNotificationPoller } from '../../hooks/useNotificationCount';
+import { useOfflineSyncEngine } from '../../hooks/useOfflineSyncEngine';
 
 /** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
  *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
@@ -46,6 +47,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // Poll for unread notification count (shared across nav components)
   useNotificationPoller();
+
+  // Drain the offline write queue when connectivity returns
+  useOfflineSyncEngine();
 
   useEffect(() => {
     // Load branding from localStorage first (persists across sessions/logout)
