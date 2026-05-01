@@ -191,6 +191,66 @@ export const errorLogsService = {
 };
 
 // ============================================
+// Audit Log Service (admin-only, requires audit.view)
+// ============================================
+
+export type AuditSeverity = 'info' | 'warning' | 'critical';
+
+export interface AuditLogEntry {
+  id: number;
+  timestamp: string | null;
+  event_type: string;
+  event_category: string;
+  severity: AuditSeverity | null;
+  user_id: string | null;
+  username: string | null;
+  ip_address: string | null;
+  event_data: Record<string, unknown>;
+}
+
+export interface AuditLogListResponse {
+  logs: AuditLogEntry[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface AuditLogStats {
+  total: number;
+  by_severity: Partial<Record<AuditSeverity, number>>;
+  by_category: Record<string, number>;
+}
+
+export interface AuditLogFilters {
+  event_type?: string | undefined;
+  event_category?: string | undefined;
+  severity?: AuditSeverity | undefined;
+  user_id?: string | undefined;
+  search?: string | undefined;
+  start_date?: string | undefined;
+  end_date?: string | undefined;
+  skip?: number | undefined;
+  limit?: number | undefined;
+}
+
+export const auditLogService = {
+  async list(filters: AuditLogFilters = {}): Promise<AuditLogListResponse> {
+    const response = await api.get<AuditLogListResponse>('/audit-logs', { params: filters });
+    return response.data;
+  },
+
+  async getStats(): Promise<AuditLogStats> {
+    const response = await api.get<AuditLogStats>('/audit-logs/stats');
+    return response.data;
+  },
+
+  async getEntry(id: number): Promise<AuditLogEntry> {
+    const response = await api.get<AuditLogEntry>(`/audit-logs/${id}`);
+    return response.data;
+  },
+};
+
+// ============================================
 // Facilities Service
 // ============================================
 

@@ -480,6 +480,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 permission: "analytics.view",
               },
               {
+                label: "Audit Log",
+                path: "/admin/audit-log",
+                icon: ShieldCheck,
+                permission: "audit.view",
+              },
+              {
                 label: "Error Monitor",
                 path: "/admin/errors",
                 icon: AlertTriangle,
