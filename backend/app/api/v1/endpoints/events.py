@@ -1471,15 +1471,19 @@ async def manager_add_attendee(
     user_result = await db.execute(select(User).where(User.id == rsvp.user_id))
     user = user_result.scalar_one_or_none()
 
+    was_update = getattr(rsvp, "was_update", False)
     await log_audit_event(
         db=db,
-        event_type="event_attendee_added",
+        event_type=(
+            "event_attendee_overwritten" if was_update else "event_attendee_added"
+        ),
         event_category="events",
-        severity="info",
+        severity="warning" if was_update else "info",
         event_data={
             "event_id": str(event_id),
             "added_user_id": str(attendee_data.user_id),
             "checked_in": attendee_data.checked_in,
+            "overwrote_existing_rsvp": was_update,
         },
         user_id=str(current_user.id),
         username=current_user.username,

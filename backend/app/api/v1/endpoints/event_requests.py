@@ -696,8 +696,36 @@ async def update_event_request_status(
     if update.decline_reason:
         event_request.decline_reason = update.decline_reason
     if update.assigned_to:
+        # Verify the assignee belongs to the same organization
+        assignee_result = await db.execute(
+            select(User)
+            .where(User.id == update.assigned_to)
+            .where(User.organization_id == current_user.organization_id)
+        )
+        if assignee_result.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=400,
+                detail=safe_error_detail(
+                    ValueError("Assignee not found in organization")
+                ),
+            )
         event_request.assigned_to = update.assigned_to
     if update.event_id:
+        # Verify the linked event belongs to the same organization
+        from app.models.event import Event
+
+        linked_result = await db.execute(
+            select(Event)
+            .where(Event.id == update.event_id)
+            .where(Event.organization_id == current_user.organization_id)
+        )
+        if linked_result.scalar_one_or_none() is None:
+            raise HTTPException(
+                status_code=400,
+                detail=safe_error_detail(
+                    ValueError("Linked event not found in organization")
+                ),
+            )
         event_request.event_id = update.event_id
 
     activity = EventRequestActivity(
