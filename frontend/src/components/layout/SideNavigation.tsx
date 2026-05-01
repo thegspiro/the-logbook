@@ -39,13 +39,14 @@ import {
   ScanLine,
   Stethoscope,
 } from "lucide-react";
-import { Sun, Moon, Monitor, Contrast } from "lucide-react";
+import { Sun, Moon, Monitor, Contrast, WifiOff } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../stores/authStore";
 import { organizationService } from "../../services/api";
 import { prefetchRoute } from "../../utils/routePrefetch";
 import { useNotificationCountStore } from "../../hooks/useNotificationCount";
+import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 
 interface SideNavigationProps {
   departmentName: string;
@@ -80,6 +81,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const { theme, setTheme } = useTheme();
   const { user: currentUser, checkPermission } = useAuthStore();
   const notifUnreadCount = useNotificationCountStore((s) => s.unreadCount);
+  const isOnline = useOnlineStatus();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["Settings"]);
@@ -137,6 +139,21 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     const currentIndex = order.indexOf(theme as (typeof order)[number]);
     const nextIndex = (currentIndex + 1) % order.length;
     setTheme(order[nextIndex] ?? "system");
+  };
+
+  // Quick toggle for high-contrast mode — one tap, restorable.
+  const toggleHighContrast = () => {
+    if (theme === "high-contrast") {
+      const previous = (localStorage.getItem("preHighContrastTheme") as
+        | "light"
+        | "dark"
+        | "system"
+        | null) || "system";
+      setTheme(previous);
+    } else {
+      localStorage.setItem("preHighContrastTheme", theme);
+      setTheme("high-contrast");
+    }
   };
 
   const ThemeIcon =
@@ -816,6 +833,24 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
 
           {/* Theme Toggle & Logout */}
           <div className="p-4 border-t border-theme-surface-border space-y-1">
+            {!isOnline && (
+              <div
+                className={`flex items-center rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 ${
+                  collapsed ? "justify-center p-2" : "px-3 py-2"
+                }`}
+                role="status"
+                aria-live="polite"
+                title="You are offline. Submissions will queue and sync when reconnected."
+              >
+                <WifiOff
+                  className={`w-4 h-4 shrink-0 ${collapsed ? "" : "mr-2"}`}
+                  aria-hidden="true"
+                />
+                {!collapsed && (
+                  <span className="text-xs font-medium">Offline — will sync when reconnected</span>
+                )}
+              </div>
+            )}
             <button
               onClick={cycleTheme}
               className={`w-full flex items-center text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
@@ -830,6 +865,37 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
               />
               {!collapsed && (
                 <span className="text-sm font-medium">Theme: {themeLabel}</span>
+              )}
+            </button>
+            <button
+              onClick={toggleHighContrast}
+              aria-pressed={theme === "high-contrast"}
+              className={`w-full flex items-center rounded-lg transition-all focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                theme === "high-contrast"
+                  ? "text-amber-600 dark:text-amber-400 bg-amber-500/10"
+                  : "text-theme-text-secondary hover:bg-theme-surface-hover hover:text-theme-text-primary"
+              } ${collapsed ? "justify-center p-3" : "px-4 py-3"}`}
+              title={
+                collapsed
+                  ? theme === "high-contrast"
+                    ? "High contrast on — click to restore"
+                    : "Turn on high contrast"
+                  : undefined
+              }
+              aria-label={
+                theme === "high-contrast"
+                  ? "High contrast on — click to restore previous theme"
+                  : "Turn on high contrast"
+              }
+            >
+              <Contrast
+                className={`w-5 h-5 shrink-0 ${collapsed ? "" : "mr-3"}`}
+                aria-hidden="true"
+              />
+              {!collapsed && (
+                <span className="text-sm font-medium">
+                  {theme === "high-contrast" ? "High contrast on" : "High contrast"}
+                </span>
               )}
             </button>
             <button

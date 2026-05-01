@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog } from 'lucide-react';
+import { LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog, WifiOff } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { organizationService } from '../../services/api';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
+import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -38,6 +39,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const { theme, setTheme } = useTheme();
   const { checkPermission } = useAuthStore();
   const notifUnreadCount = useNotificationCountStore((s) => s.unreadCount);
+  const isOnline = useOnlineStatus();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
@@ -72,6 +74,18 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
     const currentIndex = order.indexOf(theme as typeof order[number]);
     const nextIndex = (currentIndex + 1) % order.length;
     setTheme(order[nextIndex] ?? 'system');
+  };
+
+  // Quick toggle for high-contrast mode — older volunteers and night shifts need this
+  // reachable without opening the theme menu. Remembers the previous theme for restore.
+  const toggleHighContrast = () => {
+    if (theme === 'high-contrast') {
+      const previous = (localStorage.getItem('preHighContrastTheme') as 'light' | 'dark' | 'system' | null) || 'system';
+      setTheme(previous);
+    } else {
+      localStorage.setItem('preHighContrastTheme', theme);
+      setTheme('high-contrast');
+    }
   };
 
   const themeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : theme === 'high-contrast' ? Contrast : Monitor;
@@ -335,6 +349,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 
             {/* ── Utility icons ── */}
             <div className="flex items-center border-l border-theme-surface-border ml-1 pl-2 space-x-1">
+              {!isOnline && (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-medium"
+                  role="status"
+                  aria-live="polite"
+                  title="You are offline. Submissions will queue and sync when reconnected."
+                >
+                  <WifiOff className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Offline</span>
+                </span>
+              )}
               <a
                 href="/notifications?tab=inbox"
                 onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
@@ -371,6 +396,17 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                 aria-label={`Current theme: ${themeLabel}. Click to cycle theme.`}
               >
                 <ThemeIcon className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <button
+                onClick={toggleHighContrast}
+                aria-pressed={theme === 'high-contrast'}
+                className={`p-2 rounded-md hover:bg-theme-surface-hover transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                  theme === 'high-contrast' ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-secondary'
+                }`}
+                title={theme === 'high-contrast' ? 'High contrast on — click to restore' : 'Turn on high contrast'}
+                aria-label={theme === 'high-contrast' ? 'High contrast on — click to restore previous theme' : 'Turn on high contrast'}
+              >
+                <Contrast className="w-4 h-4" aria-hidden="true" />
               </button>
               <button
                 onClick={onLogout}
@@ -482,6 +518,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 
               {/* ── Mobile utility links ── */}
               <div className="border-t border-theme-surface-border mt-2 pt-2 space-y-1">
+                {!isOnline && (
+                  <div
+                    className="px-3 py-2 rounded-md text-sm font-medium flex items-center space-x-2 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                    role="status"
+                    aria-live="polite"
+                  >
+                    <WifiOff className="w-4 h-4" aria-hidden="true" />
+                    <span>Offline — changes will sync when reconnected</span>
+                  </div>
+                )}
                 <a
                   href="/notifications?tab=inbox"
                   onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
@@ -515,6 +561,16 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                 >
                   <ThemeIcon className="w-4 h-4" aria-hidden="true" />
                   <span>Theme: {themeLabel}</span>
+                </button>
+                <button
+                  onClick={toggleHighContrast}
+                  aria-pressed={theme === 'high-contrast'}
+                  className={`px-3 py-2 rounded-md text-sm font-medium hover:bg-theme-surface-hover transition-colors flex items-center space-x-2 focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                    theme === 'high-contrast' ? 'text-amber-600 dark:text-amber-400' : 'text-theme-text-secondary'
+                  }`}
+                >
+                  <Contrast className="w-4 h-4" aria-hidden="true" />
+                  <span>{theme === 'high-contrast' ? 'High contrast on' : 'High contrast'}</span>
                 </button>
                 <button
                   onClick={onLogout}

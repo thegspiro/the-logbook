@@ -111,6 +111,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <p className="text-center text-theme-text-muted text-xs mt-1.5 tracking-wide">
           Powered by The Logbook
         </p>
+        <p className="mt-2 text-center text-[11px] text-theme-text-muted">
+          End-to-end encrypted &middot; Self-hosted &middot; HIPAA-aware
+        </p>
       </div>
     </footer>
   );
