@@ -864,6 +864,8 @@ const Dashboard: React.FC = () => {
             description="Standby hours"
             loading={loadingHours}
             valueColor="text-yellow-700 dark:text-yellow-400"
+            onClick={() => navigate("/scheduling?tab=my-shifts&view=past")}
+            hoverClass="hover:border-yellow-500/40"
           />
 
           <DashboardStatCard
