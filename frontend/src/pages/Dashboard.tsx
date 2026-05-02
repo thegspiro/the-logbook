@@ -794,7 +794,7 @@ const Dashboard: React.FC = () => {
                 value={adminSummary?.upcoming_events_count ?? 0}
                 icon={Calendar}
                 iconColor="text-purple-700 dark:text-purple-400"
-                description="Scheduled"
+                description="Next 30 days"
                 loading={loadingAdmin}
               />
 
