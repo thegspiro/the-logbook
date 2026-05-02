@@ -30,8 +30,8 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
-    "db:migrate": "cd backend && alembic upgrade head",
-    "db:rollback": "cd backend && alembic downgrade -1",
+    "db:migrate": "cd backend && python -m alembic upgrade head",
+    "db:rollback": "cd backend && python -m alembic downgrade -1",
     "db:seed": "cd backend && python scripts/seed_data.py",
     "db:reset": "npm run db:rollback && npm run db:migrate && npm run db:seed",
     "clean": "rm -rf node_modules frontend/node_modules frontend/dist backend/__pycache__ backend/**/__pycache__ backend/.pytest_cache"
