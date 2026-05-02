@@ -11,10 +11,10 @@ import {
   Loader2, ChevronDown, AlertTriangle,
   Bell, LogIn,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
-import type { ShiftRecord } from '../../modules/scheduling/services/api';
+import type { ShiftRecord, ShiftAttendanceRecord } from '../../modules/scheduling/services/api';
 import type { Assignment } from '../../types/scheduling';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
@@ -27,13 +27,16 @@ interface MyShiftsTabProps {
 
 export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const tz = useTimezone();
+  const [searchParams] = useSearchParams();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'upcoming' | 'past'>('upcoming');
+  const [view, setView] = useState<'upcoming' | 'past'>(
+    searchParams.get('view') === 'past' ? 'past' : 'upcoming',
+  );
 
-  // Attendance history for hours display
+  // Attendance history for hours display, keyed by shift_id.
   const [attendanceMap, setAttendanceMap] = useState<
-    Map<string, { checked_in_at?: string; checked_out_at?: string; duration_minutes?: number }>
+    Map<string, ShiftAttendanceRecord>
   >(new Map());
 
   // Swap request modal
@@ -70,7 +73,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
         schedulingService.getMyAttendanceHistory().catch(() => []),
       ]);
       setAssignments(assignData);
-      const map = new Map<string, typeof attHistory[0]>();
+      const map = new Map<string, ShiftAttendanceRecord>();
       for (const att of attHistory) {
         map.set(att.shift_id, att);
       }
@@ -208,9 +211,43 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     const shiftDate = a.shift?.shift_date || '';
     return shiftDate >= today && a.status !== AssignmentStatus.DECLINED && a.status !== AssignmentStatus.CANCELLED;
   });
-  const past = assignments.filter(a => {
+  const pastAssignments = assignments.filter(a => {
     const shiftDate = a.shift?.shift_date || '';
     return shiftDate < today;
+  });
+
+  // Past shifts may exist as ShiftAttendance records without a corresponding
+  // ShiftAssignment row (walk-on attendance, deleted assignments). Synthesize
+  // assignment-shaped entries for those so the Past list matches the hours
+  // counted on the dashboard. The synthetic 'completed' status isn't in the
+  // backend AssignmentStatus enum, so we cast through unknown.
+  const assignedShiftIds = new Set(
+    pastAssignments.map(a => a.shift_id).filter((id): id is string => Boolean(id)),
+  );
+  const attendanceOnlyPast = [...attendanceMap.entries()]
+    .filter(([shiftId, att]) => {
+      if (assignedShiftIds.has(shiftId)) return false;
+      const date = att.shift_date || '';
+      return date && date < today;
+    })
+    .map(([shiftId, att]) => ({
+      id: `attendance-${att.id}`,
+      user_id: '',
+      shift_id: shiftId,
+      position: '—',
+      status: 'completed',
+      shift: {
+        id: shiftId,
+        shift_date: att.shift_date || '',
+        start_time: att.shift_start_time || '',
+        end_time: att.shift_end_time,
+      },
+    })) as unknown as Assignment[];
+
+  const past = [...pastAssignments, ...attendanceOnlyPast].sort((a, b) => {
+    const dateA = a.shift?.shift_date || '';
+    const dateB = b.shift?.shift_date || '';
+    return dateB.localeCompare(dateA);
   });
 
   const displayList = view === 'upcoming' ? upcoming : past;

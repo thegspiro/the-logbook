@@ -39,7 +39,7 @@ import {
   ScanLine,
   Stethoscope,
 } from "lucide-react";
-import { Sun, Moon, Monitor, Contrast, WifiOff } from "lucide-react";
+import { Sun, Moon, Monitor, Contrast, WifiOff, RefreshCw, Loader2 } from "lucide-react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { useTheme } from "../../contexts/ThemeContext";
 import { useAuthStore } from "../../stores/authStore";
@@ -47,6 +47,8 @@ import { organizationService } from "../../services/api";
 import { prefetchRoute } from "../../utils/routePrefetch";
 import { useNotificationCountStore } from "../../hooks/useNotificationCount";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
+import { usePendingSyncStore } from "../../stores/pendingSyncStore";
+import { triggerOfflineDrain } from "../../hooks/useOfflineSyncEngine";
 
 interface SideNavigationProps {
   departmentName: string;
@@ -82,6 +84,8 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
   const { user: currentUser, checkPermission } = useAuthStore();
   const notifUnreadCount = useNotificationCountStore((s) => s.unreadCount);
   const isOnline = useOnlineStatus();
+  const pendingSyncCount = usePendingSyncStore((s) => s.count);
+  const pendingSyncStatus = usePendingSyncStore((s) => s.status);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState<string[]>(["Settings"]);
@@ -480,6 +484,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 permission: "analytics.view",
               },
               {
+                label: "Audit Log",
+                path: "/admin/audit-log",
+                icon: ShieldCheck,
+                permission: "audit.view",
+              },
+              {
                 label: "Error Monitor",
                 path: "/admin/errors",
                 icon: AlertTriangle,
@@ -840,16 +850,43 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 }`}
                 role="status"
                 aria-live="polite"
-                title="You are offline. Submissions will queue and sync when reconnected."
+                title={
+                  pendingSyncCount > 0
+                    ? `Offline · ${pendingSyncCount} pending. Will sync when reconnected.`
+                    : "You are offline. Submissions will queue and sync when reconnected."
+                }
               >
                 <WifiOff
                   className={`w-4 h-4 shrink-0 ${collapsed ? "" : "mr-2"}`}
                   aria-hidden="true"
                 />
                 {!collapsed && (
-                  <span className="text-xs font-medium">Offline — will sync when reconnected</span>
+                  <span className="text-xs font-medium">
+                    {pendingSyncCount > 0
+                      ? `Offline · ${pendingSyncCount} pending`
+                      : "Offline — will sync when reconnected"}
+                  </span>
                 )}
               </div>
+            )}
+            {isOnline && pendingSyncCount > 0 && (
+              <button
+                onClick={() => { void triggerOfflineDrain(); }}
+                className={`w-full flex items-center rounded-lg bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-500/25 transition-colors focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring ${
+                  collapsed ? "justify-center p-2" : "px-3 py-2"
+                }`}
+                title={collapsed ? `${pendingSyncCount} pending sync — click to retry` : undefined}
+                aria-label={`${pendingSyncCount} pending sync. Click to retry now.`}
+              >
+                {pendingSyncStatus === 'syncing' ? (
+                  <Loader2 className={`w-4 h-4 shrink-0 animate-spin ${collapsed ? "" : "mr-2"}`} aria-hidden="true" />
+                ) : (
+                  <RefreshCw className={`w-4 h-4 shrink-0 ${collapsed ? "" : "mr-2"}`} aria-hidden="true" />
+                )}
+                {!collapsed && (
+                  <span className="text-xs font-medium">{pendingSyncCount} pending sync — retry</span>
+                )}
+              </button>
             )}
             <button
               onClick={cycleTheme}

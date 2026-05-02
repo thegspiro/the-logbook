@@ -1450,38 +1450,40 @@ class TrainingModuleConfig(Base):
     # -- Member visibility: what members see on their own training page --
 
     # Training records & history
-    show_training_history = Column(Boolean, default=True)
-    show_training_hours = Column(Boolean, default=True)
-    show_certification_status = Column(Boolean, default=True)
+    show_training_history = Column(Boolean, default=True, server_default="1")
+    show_training_hours = Column(Boolean, default=True, server_default="1")
+    show_certification_status = Column(Boolean, default=True, server_default="1")
 
     # Pipeline / program progress
-    show_pipeline_progress = Column(Boolean, default=True)
-    show_requirement_details = Column(Boolean, default=True)
+    show_pipeline_progress = Column(Boolean, default=True, server_default="1")
+    show_requirement_details = Column(Boolean, default=True, server_default="1")
 
     # Shift completion reports
-    show_shift_reports = Column(Boolean, default=True)
-    show_shift_stats = Column(Boolean, default=True)
+    show_shift_reports = Column(Boolean, default=True, server_default="1")
+    show_shift_stats = Column(Boolean, default=True, server_default="1")
 
     # Officer-written content visibility to members
     show_officer_narrative = Column(
-        Boolean, default=False
+        Boolean, default=False, server_default="0"
     )  # Officer narrative on shift reports
-    show_performance_rating = Column(Boolean, default=True)  # 1-5 star ratings
-    show_areas_of_strength = Column(Boolean, default=True)
-    show_areas_for_improvement = Column(Boolean, default=True)
-    show_skills_observed = Column(Boolean, default=True)
+    show_performance_rating = Column(
+        Boolean, default=True, server_default="1"
+    )  # 1-5 star ratings
+    show_areas_of_strength = Column(Boolean, default=True, server_default="1")
+    show_areas_for_improvement = Column(Boolean, default=True, server_default="1")
+    show_skills_observed = Column(Boolean, default=True, server_default="1")
 
     # Self-reported submissions
-    show_submission_history = Column(Boolean, default=True)
+    show_submission_history = Column(Boolean, default=True, server_default="1")
 
     # Reports access
     allow_member_report_export = Column(
-        Boolean, default=False
+        Boolean, default=False, server_default="0"
     )  # Can members download their own data
 
     # Shift report review workflow
     report_review_required = Column(
-        Boolean, default=False
+        Boolean, default=False, server_default="0"
     )  # Must reports be approved before trainee can see?
     report_review_role = Column(
         String(50), default="training_officer"
@@ -1502,17 +1504,17 @@ class TrainingModuleConfig(Base):
     apparatus_type_tasks = Column(JSON, nullable=True)
 
     # Report form sections — which optional sections appear on the form
-    form_show_performance_rating = Column(Boolean, default=True)
-    form_show_areas_of_strength = Column(Boolean, default=True)
-    form_show_areas_for_improvement = Column(Boolean, default=True)
-    form_show_officer_narrative = Column(Boolean, default=True)
-    form_show_skills_observed = Column(Boolean, default=True)
-    form_show_tasks_performed = Column(Boolean, default=True)
-    form_show_call_types = Column(Boolean, default=True)
+    form_show_performance_rating = Column(Boolean, default=True, server_default="1")
+    form_show_areas_of_strength = Column(Boolean, default=True, server_default="1")
+    form_show_areas_for_improvement = Column(Boolean, default=True, server_default="1")
+    form_show_officer_narrative = Column(Boolean, default=True, server_default="1")
+    form_show_skills_observed = Column(Boolean, default=True, server_default="1")
+    form_show_tasks_performed = Column(Boolean, default=True, server_default="1")
+    form_show_call_types = Column(Boolean, default=True, server_default="1")
 
     # Feature toggles
-    shift_reports_enabled = Column(Boolean, default=True)
-    shift_reports_include_training = Column(Boolean, default=True)
+    shift_reports_enabled = Column(Boolean, default=True, server_default="1")
+    shift_reports_include_training = Column(Boolean, default=True, server_default="1")
 
     # Shift review defaults (configurable by training officers)
     shift_review_call_types = Column(
@@ -1526,8 +1528,8 @@ class TrainingModuleConfig(Base):
     )  # Default tasks to track, e.g. ["Apparatus check-off", ...]
 
     # Manual shift entry (fallback for orgs without scheduling module)
-    manual_entry_enabled = Column(Boolean, default=False)
-    manual_entry_require_apparatus = Column(Boolean, default=True)
+    manual_entry_enabled = Column(Boolean, default=False, server_default="0")
+    manual_entry_require_apparatus = Column(Boolean, default=True, server_default="1")
     manual_entry_apparatus_ids = Column(
         JSON, nullable=True
     )  # BasicApparatus IDs available for selection; null = all active

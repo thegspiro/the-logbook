@@ -307,6 +307,9 @@ export const ASSIGNMENT_STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20',
   cancelled: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
   no_show: 'bg-gray-500/10 text-gray-700 dark:text-gray-300 border-gray-500/20',
+  // Synthetic status for past shifts derived from attendance records when no
+  // ShiftAssignment row exists (e.g. walk-on attendance).
+  completed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
 };
 
 export const REQUEST_STATUS_COLORS: Record<string, string> = {

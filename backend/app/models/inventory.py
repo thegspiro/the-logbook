@@ -1079,6 +1079,13 @@ class InventoryNotificationQueue(Base):
     # Processing state
     processed = Column(Boolean, default=False, nullable=False, index=True)
     processed_at = Column(DateTime(timezone=True))
+    # Circuit-breaker fields: track delivery attempts so a persistently
+    # failing email destination (e.g. expired SMTP creds) eventually stops
+    # retrying instead of looping forever and spamming the logs.
+    attempt_count = Column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    last_attempt_at = Column(DateTime(timezone=True))
 
     # Timestamps
     created_at = Column(

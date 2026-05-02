@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog, WifiOff } from 'lucide-react';
+import { LogOut, Menu, X, Sun, Moon, Monitor, Contrast, ChevronDown, Bell, UserCog, WifiOff, RefreshCw, Loader2 } from 'lucide-react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuthStore } from '../../stores/authStore';
 import { organizationService } from '../../services/api';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { usePendingSyncStore } from '../../stores/pendingSyncStore';
+import { triggerOfflineDrain } from '../../hooks/useOfflineSyncEngine';
 
 interface TopNavigationProps {
   departmentName: string;
@@ -40,6 +42,8 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
   const { checkPermission } = useAuthStore();
   const notifUnreadCount = useNotificationCountStore((s) => s.unreadCount);
   const isOnline = useOnlineStatus();
+  const pendingSyncCount = usePendingSyncStore((s) => s.count);
+  const pendingSyncStatus = usePendingSyncStore((s) => s.status);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [expandedMobileMenus, setExpandedMobileMenus] = useState<string[]>([]);
@@ -182,6 +186,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         ...(isModuleOn('public_info') ? [{ label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' }] : []),
         { label: 'Platform Analytics', path: '/admin/platform-analytics', permission: 'settings.manage' },
         { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },
+        { label: 'Audit Log', path: '/admin/audit-log', permission: 'audit.view' },
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
       ],
     } as NavItem] : []),
@@ -349,16 +354,36 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
 
             {/* ── Utility icons ── */}
             <div className="flex items-center border-l border-theme-surface-border ml-1 pl-2 space-x-1">
-              {!isOnline && (
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-medium"
-                  role="status"
-                  aria-live="polite"
-                  title="You are offline. Submissions will queue and sync when reconnected."
-                >
-                  <WifiOff className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Offline</span>
-                </span>
+              {(!isOnline || pendingSyncCount > 0) && (
+                pendingSyncCount > 0 && isOnline ? (
+                  <button
+                    onClick={() => { void triggerOfflineDrain(); }}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-500/15 border border-blue-500/40 text-blue-700 dark:text-blue-300 text-xs font-medium hover:bg-blue-500/25 transition-colors"
+                    title="Click to retry syncing pending submissions"
+                    aria-label={`${pendingSyncCount} pending sync. Click to retry.`}
+                  >
+                    {pendingSyncStatus === 'syncing' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                    )}
+                    <span>{pendingSyncCount} pending sync</span>
+                  </button>
+                ) : (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-700 dark:text-amber-300 text-xs font-medium"
+                    role="status"
+                    aria-live="polite"
+                    title={
+                      pendingSyncCount > 0
+                        ? `Offline · ${pendingSyncCount} pending. Will sync when reconnected.`
+                        : 'You are offline. Submissions will queue and sync when reconnected.'
+                    }
+                  >
+                    <WifiOff className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>{pendingSyncCount > 0 ? `Offline · ${pendingSyncCount} pending` : 'Offline'}</span>
+                  </span>
+                )
               )}
               <a
                 href="/notifications?tab=inbox"
@@ -525,8 +550,25 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
                     aria-live="polite"
                   >
                     <WifiOff className="w-4 h-4" aria-hidden="true" />
-                    <span>Offline — changes will sync when reconnected</span>
+                    <span>
+                      {pendingSyncCount > 0
+                        ? `Offline · ${pendingSyncCount} pending — will sync when reconnected`
+                        : 'Offline — changes will sync when reconnected'}
+                    </span>
                   </div>
+                )}
+                {isOnline && pendingSyncCount > 0 && (
+                  <button
+                    onClick={() => { void triggerOfflineDrain(); }}
+                    className="w-full px-3 py-2 rounded-md text-sm font-medium flex items-center space-x-2 bg-blue-500/15 text-blue-700 dark:text-blue-300 hover:bg-blue-500/25 transition-colors"
+                  >
+                    {pendingSyncStatus === 'syncing' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" aria-hidden="true" />
+                    )}
+                    <span>{pendingSyncCount} pending sync — tap to retry</span>
+                  </button>
                 )}
                 <a
                   href="/notifications?tab=inbox"

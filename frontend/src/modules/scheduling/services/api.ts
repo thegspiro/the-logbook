@@ -123,6 +123,11 @@ export interface ShiftAttendanceRecord {
   duration_minutes?: number;
   call_count?: number;
   created_at: string;
+  // Populated by /scheduling/my-attendance-history so the frontend can
+  // render attendance-only shifts without a separate shift lookup.
+  shift_date?: string;
+  shift_start_time?: string;
+  shift_end_time?: string;
 }
 
 export interface SchedulingSummary {
@@ -392,10 +397,13 @@ export const schedulingService = {
   },
 
   // Attendance history
-  async getMyAttendanceHistory(limit = 50): Promise<ShiftAttendanceRecord[]> {
+  async getMyAttendanceHistory(
+    options: { limit?: number; start_date?: string; end_date?: string } = {},
+  ): Promise<ShiftAttendanceRecord[]> {
+    const { limit = 50, start_date, end_date } = options;
     const response = await api.get<ShiftAttendanceRecord[]>(
       '/scheduling/my-attendance-history',
-      { params: { limit } },
+      { params: { limit, start_date, end_date } },
     );
     return response.data;
   },

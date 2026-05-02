@@ -198,11 +198,16 @@ const SchedulingPage: React.FC = () => {
     }
   }, [searchParams, activeTab]);
 
-  // Load shift reports feature flag
+  // Load shift reports feature flag. Failure here must not blank the page —
+  // a single config-endpoint regression should leave the rest of scheduling
+  // usable, so we fall back to the default and surface the error in the
+  // console for diagnosability.
   useEffect(() => {
     trainingModuleConfigService.getConfig()
       .then(cfg => setShiftReportsEnabled(cfg.shift_reports_enabled ?? true))
-      .catch(() => { /* default to enabled */ });
+      .catch((err: unknown) => {
+        console.warn('SchedulingPage: failed to load training module config; defaulting shift_reports_enabled=true', err);
+      });
   }, []);
 
   // Calendar state

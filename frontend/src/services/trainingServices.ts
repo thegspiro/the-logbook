@@ -3,6 +3,8 @@
  */
 
 import api from './apiClient';
+import { enqueueGeneric } from '../utils/genericOfflineQueue';
+import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import type { SkillTemplate, SkillTemplateCreate, SkillTemplateListItem, SkillTemplateUpdate, SkillTest, SkillTestCreate, SkillTestListItem, SkillTestUpdate, SkillTestingSummary } from '../types/skillsTesting';
 import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramEnrollment, ProgramEnrollmentCreate, ProgramMilestone, ProgramMilestoneCreate, ProgramPhase, ProgramPhaseCreate, ProgramRequirement, ProgramRequirementCreate, ProgramWithDetails, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
@@ -753,6 +755,27 @@ export const trainingSubmissionService = {
 
   // Member submissions
   async createSubmission(data: TrainingSubmissionCreate): Promise<TrainingSubmission> {
+    // If the device is offline, persist the submission to IndexedDB so it
+    // syncs when connectivity returns. This is the most-used action in the
+    // product and must never silently drop because of weak station wifi.
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      await enqueueGeneric(
+        'training-submission',
+        '/training/submissions',
+        data,
+        `Training: ${data.course_name}`,
+      );
+      void usePendingSyncStore.getState().refresh();
+      // Caller expects a TrainingSubmission. Synthesise an optimistic
+      // record so UIs that update immediately don't crash. The real
+      // server-assigned id replaces this when the queued request flushes.
+      return {
+        ...(data as unknown as TrainingSubmission),
+        id: 'pending-sync',
+        status: 'pending_review',
+        offline_pending: true,
+      } as unknown as TrainingSubmission;
+    }
     const response = await api.post<TrainingSubmission>('/training/submissions', data);
     return response.data;
   },
