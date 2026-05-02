@@ -21,7 +21,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
-import { Breadcrumbs, SkeletonPage, EmptyState, Pagination } from '../components/ux';
+import { Breadcrumbs, SkeletonPage, EmptyState, Pagination, Avatar } from '../components/ux';
 import { SortableHeader, sortItems } from '../components/ux/SortableHeader';
 import type { SortDirection } from '../components/ux/SortableHeader';
 import type { MemberStats } from '../types/member';
@@ -233,12 +233,6 @@ const Members: React.FC = () => {
     }
   };
 
-  const getInitials = (firstName?: string, lastName?: string) => {
-    const first = firstName?.charAt(0) || '';
-    const last = lastName?.charAt(0) || '';
-    return (first + last).toUpperCase() || '?';
-  };
-
   return (
     <div className="min-h-screen">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
@@ -402,17 +396,12 @@ const Members: React.FC = () => {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center min-w-0 flex-1">
-                    {member.photo_url ? (
-                      <img
-                        src={member.photo_url}
-                        alt={`${member.first_name} ${member.last_name}`}
-                        className="w-10 h-10 rounded-full object-cover shrink-0"
-                      />
-                    ) : (
-                      <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold shrink-0">
-                        {getInitials(member.first_name, member.last_name)}
-                      </div>
-                    )}
+                    <Avatar
+                      firstName={member.first_name}
+                      lastName={member.last_name}
+                      photoUrl={member.photo_url}
+                      size="md"
+                    />
                     <div className="ml-3 min-w-0">
                       <div className="text-theme-text-primary font-medium truncate">
                         {member.first_name} {member.last_name}
@@ -542,17 +531,12 @@ const Members: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          {member.photo_url ? (
-                            <img
-                              src={member.photo_url}
-                              alt={`${member.first_name} ${member.last_name}`}
-                              className="w-10 h-10 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold">
-                              {getInitials(member.first_name, member.last_name)}
-                            </div>
-                          )}
+                          <Avatar
+                            firstName={member.first_name}
+                            lastName={member.last_name}
+                            photoUrl={member.photo_url}
+                            size="md"
+                          />
                           <div className="ml-3">
                             <div className="text-theme-text-primary font-medium">
                               {member.first_name} {member.last_name}

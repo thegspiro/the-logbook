@@ -10,7 +10,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plus,
   Search,
-  Users,
   Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -18,6 +17,8 @@ import { useSkillsTestingStore } from '../stores/skillsTestingStore';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import type { SkillTestListItem } from '../types/skillsTesting';
+import { EmptyState } from '../components/ux';
+import { ClipboardList } from 'lucide-react';
 
 // ── Sub-components ─────────────────────────────────────────────
 
@@ -168,17 +169,21 @@ const SkillsTestingTestRecordsTab: React.FC = () => {
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500" />
         </div>
       ) : filteredTests.length === 0 ? (
-        <div className="text-center py-12 bg-theme-surface rounded-lg border border-theme-surface-border">
-          <Users className="w-12 h-12 mx-auto text-theme-text-muted mb-3" />
-          <p className="text-theme-text-muted">No test records found</p>
-          {templates.length > 0 && (
-            <button
-              onClick={() => navigate('/training/skills-testing/test/new')}
-              className="btn-primary mt-4 text-sm"
-            >
-              Start a New Test
-            </button>
-          )}
+        <div className="bg-theme-surface rounded-lg border border-theme-surface-border">
+          <EmptyState
+            icon={ClipboardList}
+            title="No test records found"
+            description={
+              templates.length > 0
+                ? 'No skills tests have been recorded yet. Start one to track member progress.'
+                : 'Add a test template before recording skills tests.'
+            }
+            actions={
+              templates.length > 0
+                ? [{ label: 'Start a new test', onClick: () => navigate('/training/skills-testing/test/new') }]
+                : undefined
+            }
+          />
         </div>
       ) : (
         <div className="space-y-3">
