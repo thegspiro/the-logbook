@@ -16,6 +16,11 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Give up on a queued notification after this many failed delivery attempts.
+# Prevents persistent SMTP failures (expired creds, blocked sender) from
+# producing a forever-growing pile of retried records and log noise.
+_MAX_DELIVERY_ATTEMPTS = 5
+
 from app.core.utils import generate_uuid
 from app.models.email_template import EmailTemplateType
 from app.models.inventory import (
@@ -205,18 +210,41 @@ class InventoryNotificationService:
                 }
 
                 sent = await self._send_notification_email(user, org, context)
+                now = datetime.now(timezone.utc)
                 if sent:
                     emails_sent += 1
                     # Mark all records as processed only on successful send
                     for rec in member_records:
                         rec.processed = True
-                        rec.processed_at = datetime.now(timezone.utc)
+                        rec.processed_at = now
                     records_processed += len(member_records)
                 else:
-                    # Email failed — leave records unprocessed for retry on next run
-                    logger.warning(
-                        f"Email send failed for user {member_id}; will retry on next run"
-                    )
+                    # Email failed. Bump the attempt counter on every record so
+                    # a chronically failing destination eventually stops looping.
+                    max_attempts = max(
+                        (rec.attempt_count or 0) for rec in member_records
+                    ) + 1
+                    for rec in member_records:
+                        rec.attempt_count = (rec.attempt_count or 0) + 1
+                        rec.last_attempt_at = now
+                    if max_attempts >= _MAX_DELIVERY_ATTEMPTS:
+                        # Exhausted retries — give up and mark processed so the
+                        # next scheduled run doesn't pick these up again.
+                        for rec in member_records:
+                            rec.processed = True
+                            rec.processed_at = now
+                        records_processed += len(member_records)
+                        logger.error(
+                            f"Inventory notification for user {member_id} "
+                            f"abandoned after {max_attempts} failed delivery "
+                            f"attempts; check SMTP credentials"
+                        )
+                    else:
+                        logger.warning(
+                            f"Email send failed for user {member_id} "
+                            f"(attempt {max_attempts}/{_MAX_DELIVERY_ATTEMPTS}); "
+                            "will retry on next run"
+                        )
 
             except Exception as e:
                 logger.error(

@@ -563,28 +563,59 @@ async def get_active_shift_for_apparatus(
 @router.get("/my-attendance-history")
 async def get_my_attendance_history(
     limit: int = Query(50, ge=1, le=200),
+    start_date: str | None = None,
+    end_date: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get the current member's attendance history."""
+    """Get the current member's attendance history.
+
+    Optional ``start_date`` / ``end_date`` (YYYY-MM-DD) bound the lookup by
+    shift date so callers can paginate further back than ``limit`` records.
+    """
     from app.models.training import Shift, ShiftAttendance
 
-    result = await db.execute(
-        select(ShiftAttendance)
-        .join(
-            Shift,
-            ShiftAttendance.shift_id == Shift.id,
+    try:
+        start = date.fromisoformat(start_date) if start_date else None
+        end = date.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
+
+    query = (
+        select(ShiftAttendance, Shift)
+        .join(Shift, ShiftAttendance.shift_id == Shift.id)
         .where(
             ShiftAttendance.user_id == str(current_user.id),
             Shift.organization_id == str(current_user.organization_id),
         )
-        .order_by(ShiftAttendance.created_at.desc())
-        .limit(limit)
     )
-    records = list(result.scalars().all())
+    if start:
+        query = query.where(Shift.shift_date >= start)
+    if end:
+        query = query.where(Shift.shift_date <= end)
+    query = query.order_by(Shift.shift_date.desc()).limit(limit)
+
+    result = await db.execute(query)
+    rows = result.all()
+    records = [r[0] for r in rows]
+    shift_by_attendance = {r[0].id: r[1] for r in rows}
     service = SchedulingService(db)
-    return await service.enrich_attendance_records(records)
+    enriched = await service.enrich_attendance_records(records)
+    for entry in enriched:
+        shift = shift_by_attendance.get(entry["id"])
+        if shift is not None:
+            entry["shift_date"] = (
+                str(shift.shift_date) if shift.shift_date else None
+            )
+            entry["shift_start_time"] = (
+                shift.start_time.isoformat() if shift.start_time else None
+            )
+            entry["shift_end_time"] = (
+                shift.end_time.isoformat() if shift.end_time else None
+            )
+    return enriched
 
 
 @router.get(

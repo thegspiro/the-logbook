@@ -168,13 +168,15 @@ async def get_admin_summary(
     except Exception as exc:
         logger.warning("admin-summary: training compliance query failed: %s", exc)
 
-    # ── Upcoming events ──
+    # ── Upcoming events (rolling 30-day window) ──
     upcoming_events = 0
     try:
+        now_utc = datetime.now(timezone.utc)
         result = await db.execute(
             select(func.count(Event.id)).where(
                 Event.organization_id == org_id,
-                Event.start_datetime >= datetime.now(timezone.utc),
+                Event.start_datetime >= now_utc,
+                Event.start_datetime < now_utc + timedelta(days=30),
                 Event.is_cancelled == False,  # noqa: E712
             )
         )

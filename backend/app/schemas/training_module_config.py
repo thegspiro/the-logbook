@@ -21,6 +21,8 @@ _BOOL_FIELD_DEFAULTS: Dict[str, bool] = {
     "shift_reports_enabled": True,
     "shift_reports_include_training": True,
     "report_review_required": False,
+    "manual_entry_enabled": False,
+    "manual_entry_require_apparatus": True,
 }
 
 

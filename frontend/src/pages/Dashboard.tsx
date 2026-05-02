@@ -106,7 +106,6 @@ const Dashboard: React.FC = () => {
     [],
   );
   const unreadCount = useNotificationCountStore((s) => s.unreadCount);
-  const setUnreadCount = useNotificationCountStore((s) => s.setUnreadCount);
   const decrementUnread = useNotificationCountStore((s) => s.decrement);
   const clearUnread = useNotificationCountStore((s) => s.clear);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
@@ -261,12 +260,13 @@ const Dashboard: React.FC = () => {
 
   const loadNotifications = async () => {
     try {
-      const [data, countData] = await Promise.all([
-        notificationsService.getMyNotifications({ include_read: false, limit: 10 }),
-        notificationsService.getMyUnreadCount(),
-      ]);
+      // The unread count is maintained by useNotificationPoller (mounted
+      // in AppLayout), so we only need to fetch the notification list here.
+      const data = await notificationsService.getMyNotifications({
+        include_read: false,
+        limit: 10,
+      });
       setNotifications(data.logs || []);
-      setUnreadCount(countData.unread_count);
     } catch {
       // Notifications are non-critical
     } finally {
@@ -794,7 +794,7 @@ const Dashboard: React.FC = () => {
                 value={adminSummary?.upcoming_events_count ?? 0}
                 icon={Calendar}
                 iconColor="text-purple-700 dark:text-purple-400"
-                description="Scheduled"
+                description="Next 30 days"
                 loading={loadingAdmin}
               />
 
@@ -864,6 +864,8 @@ const Dashboard: React.FC = () => {
             description="Standby hours"
             loading={loadingHours}
             valueColor="text-yellow-700 dark:text-yellow-400"
+            onClick={() => navigate("/scheduling?tab=my-shifts&view=past")}
+            hoverClass="hover:border-yellow-500/40"
           />
 
           <DashboardStatCard
