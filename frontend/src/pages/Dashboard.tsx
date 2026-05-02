@@ -106,7 +106,6 @@ const Dashboard: React.FC = () => {
     [],
   );
   const unreadCount = useNotificationCountStore((s) => s.unreadCount);
-  const setUnreadCount = useNotificationCountStore((s) => s.setUnreadCount);
   const decrementUnread = useNotificationCountStore((s) => s.decrement);
   const clearUnread = useNotificationCountStore((s) => s.clear);
   const [loadingNotifications, setLoadingNotifications] = useState(true);
@@ -261,12 +260,13 @@ const Dashboard: React.FC = () => {
 
   const loadNotifications = async () => {
     try {
-      const [data, countData] = await Promise.all([
-        notificationsService.getMyNotifications({ include_read: false, limit: 10 }),
-        notificationsService.getMyUnreadCount(),
-      ]);
+      // The unread count is maintained by useNotificationPoller (mounted
+      // in AppLayout), so we only need to fetch the notification list here.
+      const data = await notificationsService.getMyNotifications({
+        include_read: false,
+        limit: 10,
+      });
       setNotifications(data.logs || []);
-      setUnreadCount(countData.unread_count);
     } catch {
       // Notifications are non-critical
     } finally {
