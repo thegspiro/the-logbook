@@ -111,6 +111,7 @@ export {
   securityService,
   analyticsApiService,
   errorLogsService,
+  auditLogService,
   platformAnalyticsService,
   dashboardService,
   reportsService,
@@ -121,6 +122,7 @@ export {
 export type {
   TrainingSessionResponse, TrainingSessionCreate,
   ErrorLogRecord, ErrorLogStats,
+  AuditLogEntry, AuditLogListResponse, AuditLogStats, AuditLogFilters, AuditSeverity,
   TemplateVariable, EmailTemplate, EmailAttachment, EmailTemplateUpdate, EmailTemplatePreview,
   NotificationRuleRecord, NotificationLogRecord, NotificationsSummary,
   DepartmentMessageRecord, InboxMessage, MessageStats, RoleOption,

@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     admin_hours,
     analytics,
     apparatus,
+    audit_logs,
     auth,
     compliance_config,
     compliance_officer,
@@ -147,6 +148,7 @@ api_router.include_router(
     platform_analytics.router, prefix="/platform-analytics", tags=["platform-analytics"]
 )
 api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
+api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])
 api_router.include_router(
     integrations.router, prefix="/integrations", tags=["integrations"]
 )

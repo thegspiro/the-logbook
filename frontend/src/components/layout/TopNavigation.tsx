@@ -182,6 +182,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         ...(isModuleOn('public_info') ? [{ label: 'Public Portal', path: '/admin/public-portal', permission: 'settings.manage' }] : []),
         { label: 'Platform Analytics', path: '/admin/platform-analytics', permission: 'settings.manage' },
         { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },
+        { label: 'Audit Log', path: '/admin/audit-log', permission: 'audit.view' },
         { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
       ],
     } as NavItem] : []),
