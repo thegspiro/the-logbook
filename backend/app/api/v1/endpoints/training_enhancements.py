@@ -583,6 +583,12 @@ async def export_report(
                     start_date=data.start_date,
                     end_date=data.end_date,
                 )
+            elif data.report_type == "member_records":
+                pdf_buf = await service.generate_bulk_pdf(
+                    current_user.organization_id,
+                    start_date=data.start_date,
+                    end_date=data.end_date,
+                )
             else:
                 pdf_buf = await service.generate_compliance_pdf(
                     current_user.organization_id,
@@ -608,6 +614,12 @@ async def export_report(
                 raise ValueError("user_id is required for individual reports")
             csv_content = await service.generate_individual_csv(
                 str(data.user_id),
+                current_user.organization_id,
+                start_date=data.start_date,
+                end_date=data.end_date,
+            )
+        elif data.report_type == "member_records":
+            csv_content = await service.generate_bulk_csv(
                 current_user.organization_id,
                 start_date=data.start_date,
                 end_date=data.end_date,

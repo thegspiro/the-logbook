@@ -10,11 +10,19 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { trainingService, userService } from '../services/api';
+import { reportExportService } from '../services/trainingServices';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { EmptyState } from '../components/ux';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Download } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
+import { getErrorMessage } from '../utils/errorHandling';
+import {
+  getTrainingPeriodWindow,
+  TRAINING_PERIOD_LABELS,
+  TrainingExportPeriod,
+} from '../utils/trainingPeriods';
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
@@ -37,6 +45,39 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Export
+  const [exportPeriod, setExportPeriod] = useState<TrainingExportPeriod>(
+    TrainingExportPeriod.YEAR,
+  );
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format: 'csv' | 'pdf') => {
+    if (!userId) return;
+    try {
+      setExporting(true);
+      const window = getTrainingPeriodWindow(exportPeriod, tz);
+      const blob = await reportExportService.exportReport({
+        report_type: 'individual',
+        format,
+        user_id: userId,
+        start_date: window.start_date,
+        end_date: window.end_date,
+      });
+      const memberName = user?.full_name || user?.username || 'member';
+      const safeName = memberName.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `training_${safeName}_${exportPeriod}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to export training record'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (userId) {
@@ -209,12 +250,42 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 {user.full_name || user.username}
               </p>
             </div>
-            <button
-              onClick={() => window.open(`/training/print/member?id=${userId}&name=${encodeURIComponent(user.full_name || user.username)}`, '_blank')}
-              className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors print:hidden"
-            >
-              Print Record
-            </button>
+            <div className="flex flex-wrap items-center gap-2 print:hidden">
+              <select
+                aria-label="Export period"
+                value={exportPeriod}
+                onChange={(e) => setExportPeriod(e.target.value as TrainingExportPeriod)}
+                className="text-sm px-3 py-2 border border-theme-surface-border rounded-lg bg-theme-surface text-theme-text-primary"
+              >
+                {Object.values(TrainingExportPeriod).map((p) => (
+                  <option key={p} value={p}>
+                    {TRAINING_PERIOD_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => void handleExport('csv')}
+                disabled={exporting}
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                CSV
+              </button>
+              <button
+                onClick={() => void handleExport('pdf')}
+                disabled={exporting}
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                PDF
+              </button>
+              <button
+                onClick={() => window.open(`/training/print/member?id=${userId}&name=${encodeURIComponent(user.full_name || user.username)}`, '_blank')}
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+              >
+                Print Record
+              </button>
+            </div>
           </div>
         </div>
 

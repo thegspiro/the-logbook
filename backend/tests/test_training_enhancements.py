@@ -6,7 +6,9 @@ training effectiveness, multi-agency training, and xAPI support.
 """
 
 import pytest
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
+
+from pydantic import ValidationError
 
 from app.models.training import (
     CompetencyLevel,
@@ -22,29 +24,20 @@ from app.models.training import (
     XAPIStatement,
 )
 from app.schemas.training_enhancements import (
-    CompetencyLevelEnum,
     CompetencyMatrixCreate,
-    CompetencyMatrixResponse,
     CompetencyMatrixUpdate,
     EvaluationLevelEnum,
     InstructorQualificationCreate,
-    InstructorQualificationResponse,
     InstructorQualificationUpdate,
-    MemberCompetencyResponse,
     MultiAgencyTrainingCreate,
-    MultiAgencyTrainingResponse,
     MultiAgencyTrainingUpdate,
     ParticipatingOrganization,
     RecertificationPathwayCreate,
-    RecertificationPathwayResponse,
     RecertificationPathwayUpdate,
-    RenewalTaskResponse,
     ReportExportRequest,
     TrainingEffectivenessCreate,
-    TrainingEffectivenessResponse,
     XAPIBatchCreate,
     XAPIStatementCreate,
-    XAPIStatementResponse,
 )
 
 
@@ -134,7 +127,11 @@ class TestModelInstantiation:
             name="Firefighter I Competencies",
             position="firefighter",
             skill_requirements=[
-                {"skill_evaluation_id": "skill-1", "required_level": "competent", "priority": "required"},
+                {
+                    "skill_evaluation_id": "skill-1",
+                    "required_level": "competent",
+                    "priority": "required",
+                },
             ],
         )
         assert matrix.name == "Firefighter I Competencies"
@@ -236,7 +233,11 @@ class TestSchemaValidation:
             name="Driver/Operator Skills",
             position="driver",
             skill_requirements=[
-                {"skill_evaluation_id": "s1", "required_level": "competent", "priority": "required"},
+                {
+                    "skill_evaluation_id": "s1",
+                    "required_level": "competent",
+                    "priority": "required",
+                },
             ],
         )
         assert data.position == "driver"
@@ -286,9 +287,15 @@ class TestSchemaValidation:
             exercise_type="full_scale",
             exercise_date=date(2026, 9, 15),
             participating_organizations=[
-                ParticipatingOrganization(name="Fire Dept A", role="host", participant_count=20),
-                ParticipatingOrganization(name="Fire Dept B", role="participant", participant_count=15),
-                ParticipatingOrganization(name="EMS Agency", role="participant", participant_count=10),
+                ParticipatingOrganization(
+                    name="Fire Dept A", role="host", participant_count=20
+                ),
+                ParticipatingOrganization(
+                    name="Fire Dept B", role="participant", participant_count=15
+                ),
+                ParticipatingOrganization(
+                    name="EMS Agency", role="participant", participant_count=10
+                ),
             ],
             lead_agency="Fire Dept A",
             total_participants=45,
@@ -301,12 +308,19 @@ class TestSchemaValidation:
         data = XAPIStatementCreate(
             raw_statement={
                 "actor": {"mbox": "mailto:john@example.com", "name": "John Smith"},
-                "verb": {"id": "http://adlnet.gov/expapi/verbs/completed", "display": {"en-US": "completed"}},
+                "verb": {
+                    "id": "http://adlnet.gov/expapi/verbs/completed",
+                    "display": {"en-US": "completed"},
+                },
                 "object": {
                     "id": "http://example.com/activities/fire-safety-101",
                     "definition": {"name": {"en-US": "Fire Safety 101"}},
                 },
-                "result": {"score": {"raw": 92, "min": 0, "max": 100}, "success": True, "completion": True},
+                "result": {
+                    "score": {"raw": 92, "min": 0, "max": 100},
+                    "success": True,
+                    "completion": True,
+                },
                 "timestamp": "2026-01-15T10:30:00Z",
             }
         )
@@ -316,8 +330,16 @@ class TestSchemaValidation:
     def test_xapi_batch_create_valid(self):
         data = XAPIBatchCreate(
             statements=[
-                {"actor": {"mbox": "mailto:a@b.com"}, "verb": {"id": "completed"}, "object": {"id": "course-1"}},
-                {"actor": {"mbox": "mailto:c@d.com"}, "verb": {"id": "completed"}, "object": {"id": "course-2"}},
+                {
+                    "actor": {"mbox": "mailto:a@b.com"},
+                    "verb": {"id": "completed"},
+                    "object": {"id": "course-1"},
+                },
+                {
+                    "actor": {"mbox": "mailto:c@d.com"},
+                    "verb": {"id": "completed"},
+                    "object": {"id": "course-2"},
+                },
             ]
         )
         assert len(data.statements) == 2
@@ -339,6 +361,25 @@ class TestSchemaValidation:
             user_id="550e8400-e29b-41d4-a716-446655440000",
         )
         assert data.format == "pdf"
+
+    def test_report_export_member_records_valid(self):
+        data = ReportExportRequest(
+            report_type="member_records",
+            format="pdf",
+            start_date=date(2026, 1, 1),
+            end_date=date(2026, 3, 31),
+        )
+        assert data.report_type == "member_records"
+        assert data.user_id is None
+
+    def test_report_export_member_records_lifetime_omits_start(self):
+        data = ReportExportRequest(report_type="member_records", format="csv")
+        assert data.start_date is None
+        assert data.end_date is None
+
+    def test_report_export_rejects_unknown_type(self):
+        with pytest.raises(ValidationError):
+            ReportExportRequest(report_type="bogus_type", format="csv")
 
     def test_participating_organization_schema(self):
         org = ParticipatingOrganization(
@@ -425,9 +466,7 @@ class TestModelRepr:
         assert "reaction" in repr(e).lower()
 
     def test_multi_agency_repr(self):
-        m = MultiAgencyTraining(
-            exercise_name="Drill", exercise_type="joint_training"
-        )
+        m = MultiAgencyTraining(exercise_name="Drill", exercise_type="joint_training")
         assert "Drill" in repr(m)
 
     def test_xapi_statement_repr(self):

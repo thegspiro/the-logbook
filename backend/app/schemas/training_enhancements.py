@@ -513,7 +513,7 @@ class ReportExportRequest(BaseModel):
 
     report_type: str = Field(
         ...,
-        pattern=r"^(compliance|individual|department|certification|hours_summary|state_report)$",
+        pattern=r"^(compliance|individual|department|certification|hours_summary|state_report|member_records)$",
     )
     format: str = Field("csv", pattern=r"^(csv|pdf)$")
     user_id: Optional[UUID] = None
