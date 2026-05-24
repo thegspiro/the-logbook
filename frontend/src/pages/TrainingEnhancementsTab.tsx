@@ -974,7 +974,7 @@ const ReportsSection: React.FC = () => {
     setExporting(true);
     try {
       const blob = await reportExportService.exportReport({
-        report_type: reportType as 'compliance' | 'department',
+        report_type: reportType as 'compliance' | 'hours_summary' | 'certification',
         format: 'csv',
       });
       const url = URL.createObjectURL(blob);

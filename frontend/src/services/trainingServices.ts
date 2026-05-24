@@ -853,9 +853,17 @@ export const trainingModuleConfigService = {
     return response.data;
   },
 
-  async exportMyTraining(format: 'csv' | 'pdf' = 'csv'): Promise<Blob> {
+  async exportMyTraining(
+    format: 'csv' | 'pdf' = 'csv',
+    startDate?: string,
+    endDate?: string,
+  ): Promise<Blob> {
     const response = await api.get('/training/module-config/my-training/export', {
-      params: { format },
+      params: {
+        format,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      },
       responseType: 'blob',
     });
     return response.data as Blob;

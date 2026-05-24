@@ -25,6 +25,8 @@ vi.mock('../hooks/useTimezone', () => ({
 
 vi.mock('../utils/dateFormatting', () => ({
   formatDate: (date: string) => date || 'N/A',
+  getTodayLocalDate: () => '2026-05-24',
+  toLocalDateString: () => '2025-05-24',
 }));
 
 // Mock auth store
@@ -180,7 +182,11 @@ describe('MyTrainingPage', () => {
     await user.click(exportBtn);
 
     await waitFor(() => {
-      expect(mockExportMyTraining).toHaveBeenCalledWith('csv');
+      expect(mockExportMyTraining).toHaveBeenCalledWith(
+        'csv',
+        expect.any(String),
+        expect.any(String),
+      );
     });
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
 

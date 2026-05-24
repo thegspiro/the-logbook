@@ -11,7 +11,7 @@ import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
@@ -24,10 +24,12 @@ from app.models.training import (
     RenewalTask,
     RenewalTaskStatus,
     SkillCheckoff,
+    TrainingCategory,
     TrainingEffectivenessEvaluation,
     TrainingRecord,
     TrainingRequirement,
     TrainingStatus,
+    TrainingType,
     XAPIStatement,
 )
 from app.models.user import User, UserStatus
@@ -1431,3 +1433,179 @@ class ReportExportService:
         writer.write(out)
         out.seek(0)
         return out
+
+    async def generate_hours_summary_csv(
+        self,
+        organization_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> str:
+        """Generate a training-hours summary CSV broken down by member,
+        category, and training type (for state/annual reporting).
+
+        A missing ``start_date`` means no lower bound (lifetime).
+        """
+        if not end_date:
+            end_date = date.today()
+
+        cat_result = await self.db.execute(
+            select(TrainingCategory).where(
+                TrainingCategory.organization_id == organization_id
+            )
+        )
+        category_names = {str(c.id): c.name for c in cat_result.scalars().all()}
+
+        users_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == organization_id)
+            .where(User.status == UserStatus.ACTIVE)
+            .where(User.deleted_at.is_(None))
+            .order_by(User.last_name, User.first_name)
+        )
+        users = users_result.scalars().all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "Member Name",
+                "Email",
+                "Category",
+                "Training Type",
+                "Total Hours",
+                "Credit Hours",
+                "Records",
+            ]
+        )
+
+        for user in users:
+            query = (
+                select(TrainingRecord)
+                .where(TrainingRecord.user_id == str(user.id))
+                .where(TrainingRecord.organization_id == organization_id)
+                .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+                .where(TrainingRecord.completion_date <= end_date)
+            )
+            if start_date:
+                query = query.where(TrainingRecord.completion_date >= start_date)
+            records = (await self.db.execute(query)).scalars().all()
+
+            buckets: Dict[tuple, Dict[str, float]] = {}
+            for r in records:
+                training_type = (
+                    r.training_type.value
+                    if hasattr(r.training_type, "value")
+                    else str(r.training_type)
+                )
+                category = (
+                    category_names.get(str(r.category_id), "Uncategorized")
+                    if r.category_id
+                    else "Uncategorized"
+                )
+                bucket = buckets.setdefault(
+                    (category, training_type),
+                    {"hours": 0.0, "credit": 0.0, "count": 0.0},
+                )
+                bucket["hours"] += float(r.hours_completed or 0)
+                bucket["credit"] += float(r.credit_hours or 0)
+                bucket["count"] += 1
+
+            member_name = f"{user.first_name} {user.last_name}"
+            for (category, training_type), agg in sorted(buckets.items()):
+                writer.writerow(
+                    [
+                        member_name,
+                        user.email,
+                        category,
+                        training_type,
+                        f"{agg['hours']:.1f}",
+                        f"{agg['credit']:.1f}",
+                        str(int(agg["count"])),
+                    ]
+                )
+
+        return output.getvalue()
+
+    async def generate_certification_csv(
+        self,
+        organization_id: str,
+        end_date: Optional[date] = None,
+    ) -> str:
+        """Generate a CSV of members' certifications with expiration status
+        (valid / expiring soon / expired) for renewal tracking."""
+        as_of = end_date or date.today()
+
+        users_result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == organization_id)
+            .where(User.status == UserStatus.ACTIVE)
+            .where(User.deleted_at.is_(None))
+        )
+        user_map = {str(u.id): u for u in users_result.scalars().all()}
+
+        query = (
+            select(TrainingRecord)
+            .where(TrainingRecord.organization_id == organization_id)
+            .where(TrainingRecord.status == TrainingStatus.COMPLETED)
+            .where(
+                or_(
+                    TrainingRecord.certification_number.isnot(None),
+                    TrainingRecord.expiration_date.isnot(None),
+                    TrainingRecord.training_type == TrainingType.CERTIFICATION,
+                )
+            )
+            .order_by(TrainingRecord.expiration_date)
+        )
+        records = (await self.db.execute(query)).scalars().all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "Member Name",
+                "Email",
+                "Certification",
+                "Certification #",
+                "Issuing Agency",
+                "Completion Date",
+                "Expiration Date",
+                "Status",
+                "Days Until Expiry",
+            ]
+        )
+
+        for r in records:
+            user = user_map.get(str(r.user_id))
+            if not user:
+                # Skip records for inactive/other members.
+                continue
+            member_name = f"{user.first_name} {user.last_name}"
+            if r.expiration_date:
+                days = (r.expiration_date - as_of).days
+                if days < 0:
+                    status = "Expired"
+                elif days <= 90:
+                    status = "Expiring Soon"
+                else:
+                    status = "Valid"
+                days_str = str(days)
+                exp_str = str(r.expiration_date)
+            else:
+                status = "No Expiration"
+                days_str = ""
+                exp_str = ""
+            writer.writerow(
+                [
+                    member_name,
+                    user.email,
+                    r.course_name,
+                    r.certification_number or "",
+                    r.issuing_agency or "",
+                    str(r.completion_date) if r.completion_date else "",
+                    exp_str,
+                    status,
+                    days_str,
+                ]
+            )
+
+        return output.getvalue()

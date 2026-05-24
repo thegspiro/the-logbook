@@ -624,6 +624,17 @@ async def export_report(
                 start_date=data.start_date,
                 end_date=data.end_date,
             )
+        elif data.report_type == "hours_summary":
+            csv_content = await service.generate_hours_summary_csv(
+                current_user.organization_id,
+                start_date=data.start_date,
+                end_date=data.end_date,
+            )
+        elif data.report_type == "certification":
+            csv_content = await service.generate_certification_csv(
+                current_user.organization_id,
+                end_date=data.end_date,
+            )
         else:
             # Default to compliance report for other types
             csv_content = await service.generate_compliance_csv(

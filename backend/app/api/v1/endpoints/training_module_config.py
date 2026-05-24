@@ -452,13 +452,17 @@ async def get_my_training_summary(
 @router.get("/my-training/export")
 async def export_my_training(
     format: str = Query("csv", pattern=r"^(csv|pdf)$"),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Download the current member's own training history as CSV or PDF.
 
     Gated by the organization's ``allow_member_report_export`` setting so that
-    officers control whether members may export their own records.
+    officers control whether members may export their own records. Omitting
+    ``start_date`` returns the member's entire history (e.g. for an outside
+    audit or a prospective employer).
     """
     config_service = TrainingModuleConfigService(db)
     config = await config_service.get_config(current_user.organization_id)
@@ -476,7 +480,10 @@ async def export_my_training(
     try:
         if format == "pdf":
             pdf_buf = await export_service.generate_individual_pdf(
-                user_id, current_user.organization_id
+                user_id,
+                current_user.organization_id,
+                start_date=start_date,
+                end_date=end_date,
             )
             return StreamingResponse(
                 pdf_buf,
@@ -489,7 +496,10 @@ async def export_my_training(
             )
 
         csv_content = await export_service.generate_individual_csv(
-            user_id, current_user.organization_id
+            user_id,
+            current_user.organization_id,
+            start_date=start_date,
+            end_date=end_date,
         )
         return Response(
             content=csv_content,
