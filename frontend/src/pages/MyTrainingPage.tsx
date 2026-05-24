@@ -24,7 +24,9 @@ import {
   Shield,
   Send,
   BarChart3,
+  Download,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { trainingModuleConfigService } from '../services/api';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
@@ -318,6 +320,7 @@ const MyTrainingPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [isOfficer, setIsOfficer] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -351,6 +354,23 @@ const MyTrainingPage: React.FC = () => {
     // Reload the data to reflect visibility changes
     const trainingData = await trainingModuleConfigService.getMyTraining();
     setData(trainingData);
+  };
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const blob = await trainingModuleConfigService.exportMyTraining('csv');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'my_training_record.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to export training record'));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const v = data?.visibility;
@@ -388,6 +408,16 @@ const MyTrainingPage: React.FC = () => {
             </p>
           </div>
           <div className="flex items-center space-x-3">
+            {v?.allow_member_report_export && (
+              <button
+                onClick={() => void handleExport()}
+                disabled={exporting}
+                className="flex items-center space-x-2 rounded-lg border border-theme-surface-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text-secondary transition-colors hover:bg-theme-surface-hover disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                <span>{exporting ? 'Exporting…' : 'Export CSV'}</span>
+              </button>
+            )}
             <button
               onClick={() => navigate('/training/submit')}
               className="btn-primary flex font-medium items-center space-x-2 text-sm"

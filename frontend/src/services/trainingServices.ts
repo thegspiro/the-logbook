@@ -852,6 +852,14 @@ export const trainingModuleConfigService = {
     const response = await api.get<{ id: string; name: string; category: string | null }[]>('/training/module-config/skill-names');
     return response.data;
   },
+
+  async exportMyTraining(format: 'csv' | 'pdf' = 'csv'): Promise<Blob> {
+    const response = await api.get('/training/module-config/my-training/export', {
+      params: { format },
+      responseType: 'blob',
+    });
+    return response.data as Blob;
+  },
 };
 
 // ============================================
