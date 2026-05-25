@@ -6,10 +6,10 @@ instructor qualifications, training effectiveness, multi-agency training,
 report exports, document uploads, and xAPI ingestion.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -679,20 +679,30 @@ async def get_compliance_forecast(
 # ============================================
 
 
-@router.post("/records/{record_id}/attachments")
-async def upload_record_attachment(
-    record_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Upload a document/certificate for a training record.
+# Certificates/documents attached to a training record. MIME type is verified
+# from the file's magic bytes (not the client-supplied Content-Type).
+TRAINING_ATTACHMENT_DIR = "/app/uploads/training_attachments"
+ALLOWED_ATTACHMENT_MIME = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
+MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
-    Note: This endpoint currently stores attachment metadata.
-    Full file upload integration with MinIO/S3 should be configured
-    in the deployment environment.
+
+async def _load_record_for_attachment(db: AsyncSession, record_id: str, current_user):
+    """Fetch a training record in the caller's org, enforcing attachment access.
+
+    The record owner may manage their own attachments; everyone else needs
+    ``training.manage``.
     """
     from sqlalchemy import select
 
+    from app.api.dependencies import _collect_user_permissions, _has_permission
     from app.models.training import TrainingRecord
 
     result = await db.execute(
@@ -704,13 +714,110 @@ async def upload_record_attachment(
     if not record:
         raise HTTPException(status_code=404, detail="Training record not found")
 
-    # Placeholder: In production, this would accept multipart file upload
-    # and store to MinIO/S3, returning the file URL
-    return {
-        "message": "Attachment endpoint ready. Configure MinIO/S3 for file storage.",
-        "record_id": record_id,
-        "current_attachments": record.attachments or [],
+    if str(record.user_id) != str(current_user.id) and not _has_permission(
+        "training.manage", _collect_user_permissions(current_user)
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized to access this record's attachments.",
+        )
+    return record
+
+
+@router.post("/records/{record_id}/attachments")
+async def upload_record_attachment(
+    record_id: str,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Upload and store a document/certificate for a training record."""
+    import asyncio
+    import os
+    import uuid as uuid_lib
+
+    import magic
+    from sqlalchemy.orm.attributes import flag_modified
+
+    record = await _load_record_for_attachment(db, record_id, current_user)
+
+    content = await file.read()
+    if len(content) > MAX_ATTACHMENT_BYTES:
+        raise HTTPException(
+            status_code=400, detail="File too large. Maximum size is 25MB."
+        )
+
+    detected_mime = magic.from_buffer(content[:2048], mime=True)
+    ext = ALLOWED_ATTACHMENT_MIME.get(detected_mime)
+    if not ext:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"File type not allowed (detected: {detected_mime}). "
+                "Allowed: PDF, Word, or image files."
+            ),
+        )
+
+    org_dir = os.path.join(TRAINING_ATTACHMENT_DIR, str(current_user.organization_id))
+    await asyncio.to_thread(os.makedirs, org_dir, exist_ok=True)
+    # Use a server-generated name + magic-derived extension to prevent
+    # double-extension attacks (e.g. cert.pdf.exe).
+    stored_name = f"{uuid_lib.uuid4().hex}{ext}"
+    file_path = os.path.join(org_dir, stored_name)
+
+    def _write_file(path: str, data: bytes) -> None:
+        with open(path, "wb") as f:
+            f.write(data)
+
+    await asyncio.to_thread(_write_file, file_path, content)
+
+    attachment = {
+        "file_name": file.filename or stored_name,
+        "file_path": file_path,
+        "file_type": detected_mime,
+        "file_size": len(content),
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_by": str(current_user.id),
     }
+    # Plain JSON column — reassign so SQLAlchemy detects the change
+    # (CLAUDE.md pitfall #12).
+    record.attachments = list(record.attachments or []) + [attachment]
+    flag_modified(record, "attachments")
+
+    try:
+        await db.commit()
+        await db.refresh(record)
+    except Exception as e:
+        await asyncio.to_thread(_safe_remove, file_path)
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+
+    return {
+        "record_id": record_id,
+        "attachments": _sanitize_attachments(record.attachments or []),
+    }
+
+
+def _safe_remove(path: str) -> None:
+    import os
+
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
+def _sanitize_attachments(attachments: list) -> list:
+    """Strip server file paths; expose only client-safe metadata + index."""
+    return [
+        {
+            "index": i,
+            "file_name": a.get("file_name") if isinstance(a, dict) else a,
+            "file_type": a.get("file_type") if isinstance(a, dict) else None,
+            "file_size": a.get("file_size") if isinstance(a, dict) else None,
+            "uploaded_at": a.get("uploaded_at") if isinstance(a, dict) else None,
+        }
+        for i, a in enumerate(attachments)
+    ]
 
 
 @router.get("/records/{record_id}/attachments")
@@ -719,18 +826,41 @@ async def get_record_attachments(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Get attachments for a training record"""
-    from sqlalchemy import select
+    """List attachments for a training record (metadata only, no file paths)."""
+    record = await _load_record_for_attachment(db, record_id, current_user)
+    return {
+        "record_id": record_id,
+        "attachments": _sanitize_attachments(record.attachments or []),
+    }
 
-    from app.models.training import TrainingRecord
 
-    result = await db.execute(
-        select(TrainingRecord)
-        .where(TrainingRecord.id == record_id)
-        .where(TrainingRecord.organization_id == current_user.organization_id)
+@router.get("/records/{record_id}/attachments/{index}/download")
+async def download_record_attachment(
+    record_id: str,
+    index: int,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Stream a stored training-record attachment by its index."""
+    import os
+
+    from fastapi.responses import FileResponse
+
+    record = await _load_record_for_attachment(db, record_id, current_user)
+    attachments = record.attachments or []
+    if index < 0 or index >= len(attachments):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+
+    attachment = attachments[index]
+    if not isinstance(attachment, dict) or not attachment.get("file_path"):
+        raise HTTPException(status_code=404, detail="Attachment file unavailable")
+
+    file_path = attachment["file_path"]
+    if not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="Attachment file not found")
+
+    return FileResponse(
+        file_path,
+        media_type=attachment.get("file_type") or "application/octet-stream",
+        filename=attachment.get("file_name") or os.path.basename(file_path),
     )
-    record = result.scalar_one_or_none()
-    if not record:
-        raise HTTPException(status_code=404, detail="Training record not found")
-
-    return {"record_id": record_id, "attachments": record.attachments or []}

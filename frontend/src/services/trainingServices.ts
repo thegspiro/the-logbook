@@ -1146,19 +1146,31 @@ export const reportExportService = {
 
 // ==================== Document/Certificate Services ====================
 
+export interface TrainingAttachment {
+  index: number;
+  file_name: string | null;
+  file_type: string | null;
+  file_size: number | null;
+  uploaded_at: string | null;
+}
+
 export const documentService = {
-  async getRecordAttachments(recordId: string): Promise<{ record_id: string; attachments: string[] }> {
-    const response = await api.get<{ record_id: string; attachments: string[] }>(`/training/records/${recordId}/attachments`);
+  async getRecordAttachments(recordId: string): Promise<{ record_id: string; attachments: TrainingAttachment[] }> {
+    const response = await api.get<{ record_id: string; attachments: TrainingAttachment[] }>(`/training/records/${recordId}/attachments`);
     return response.data;
   },
 
-  async uploadAttachment(recordId: string, file: File): Promise<{ message: string; record_id: string }> {
+  async uploadAttachment(recordId: string, file: File): Promise<{ record_id: string; attachments: TrainingAttachment[] }> {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await api.post<{ message: string; record_id: string }>(`/training/records/${recordId}/attachments`, formData, {
+    const response = await api.post<{ record_id: string; attachments: TrainingAttachment[] }>(`/training/records/${recordId}/attachments`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
+  },
+
+  getAttachmentDownloadUrl(recordId: string, index: number): string {
+    return `/api/v1/training/records/${recordId}/attachments/${index}/download`;
   },
 };
 
