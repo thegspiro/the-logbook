@@ -589,11 +589,16 @@ async def export_report(
                     start_date=data.start_date,
                     end_date=data.end_date,
                 )
-            else:
+            elif data.report_type == "compliance":
                 pdf_buf = await service.generate_compliance_pdf(
                     current_user.organization_id,
                     start_date=data.start_date,
                     end_date=data.end_date,
+                )
+            else:
+                raise ValueError(
+                    f"PDF export is not available for report type "
+                    f"'{data.report_type}'."
                 )
             filename = f"training_report_{data.report_type}.pdf"
             return StreamingResponse(
@@ -636,11 +641,8 @@ async def export_report(
                 end_date=data.end_date,
             )
         else:
-            # Default to compliance report for other types
-            csv_content = await service.generate_compliance_csv(
-                current_user.organization_id,
-                start_date=data.start_date,
-                end_date=data.end_date,
+            raise ValueError(
+                f"Report type '{data.report_type}' is not supported for export."
             )
 
         return Response(

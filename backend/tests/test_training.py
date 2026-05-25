@@ -557,14 +557,13 @@ class TestTrainingModelInstantiation:
             issues_certification=False,
             auto_create_records=True,
             require_completion_confirmation=False,
-            approval_required=True,
             approval_deadline_days=7,
             is_finalized=False,
         )
         assert session.course_name == "Hose Operations"
         assert session.training_type == TrainingType.SKILLS_PRACTICE
         assert session.credit_hours == 4.0
-        assert session.approval_required is True
+        assert session.require_completion_confirmation is False
 
     def test_create_training_approval(self):
         """Create TrainingApproval"""

@@ -174,7 +174,6 @@ class TrainingSessionService:
             expiration_months=session_data.expiration_months,
             auto_create_records=session_data.auto_create_records,
             require_completion_confirmation=session_data.require_completion_confirmation,
-            approval_required=session_data.approval_required,
             approval_deadline_days=session_data.approval_deadline_days,
             created_by=created_by,
         )
@@ -320,7 +319,6 @@ class TrainingSessionService:
                 expiration_months=session_data.expiration_months,
                 auto_create_records=session_data.auto_create_records,
                 require_completion_confirmation=session_data.require_completion_confirmation,
-                approval_required=session_data.approval_required,
                 approval_deadline_days=session_data.approval_deadline_days,
                 created_by=created_by,
             )

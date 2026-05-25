@@ -89,7 +89,6 @@ class TrainingSessionCreate(BaseModel):
     )
 
     # Approval settings
-    approval_required: bool = Field(default=True)
     approval_deadline_days: int = Field(default=7, ge=1, le=30)
 
 
@@ -182,7 +181,6 @@ class TrainingSessionResponse(UTCResponseBase):
 
     auto_create_records: bool
     require_completion_confirmation: bool
-    approval_required: bool
     approval_deadline_days: int
 
     is_finalized: bool

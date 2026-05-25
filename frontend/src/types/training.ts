@@ -71,7 +71,6 @@ export interface TrainingSession {
   // Auto-completion & approval settings
   auto_create_records?: boolean;
   require_completion_confirmation?: boolean;
-  approval_required?: boolean;
   approval_deadline_days?: number;
 
   // Finalization status
