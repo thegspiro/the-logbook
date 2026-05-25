@@ -457,6 +457,22 @@ class TrainingSessionService:
         training_session.finalized_at = now
         training_session.finalized_by = finalized_by
 
+        # When the session does not require explicit instructor confirmation,
+        # auto-approve and complete the records immediately rather than routing
+        # through the token-based officer approval workflow. (Capture the flag
+        # before commit expires the ORM object.)
+        requires_confirmation = training_session.require_completion_confirmation
+        if not requires_confirmation:
+            training_approval.status = ApprovalStatus.APPROVED
+            training_approval.approved_by = str(finalized_by)
+            training_approval.approved_at = now
+            attendees = [AttendeeApprovalData(**a) for a in attendee_data]
+            await self._finalize_training_records(
+                approval=training_approval,
+                attendees=attendees,
+                approved_by=finalized_by,
+            )
+
         # Capture values before commit expires the relationships
         event_title = event.title
         event_start = event.start_datetime
@@ -465,17 +481,19 @@ class TrainingSessionService:
         await self.db.commit()
         await self.db.refresh(training_approval)
 
-        # Send email notification to training officers
-        await self._notify_training_officers(
-            organization_id=organization_id,
-            event_title=event_title,
-            event_start=event_start,
-            course_name=session_course,
-            approval_token=approval_token,
-            attendee_count=len(attendee_data),
-            approval_deadline=approval_deadline,
-            finalized_by=finalized_by,
-        )
+        # Notify training officers only when their confirmation is required;
+        # an auto-approved session has nothing pending to act on.
+        if requires_confirmation:
+            await self._notify_training_officers(
+                organization_id=organization_id,
+                event_title=event_title,
+                event_start=event_start,
+                course_name=session_course,
+                approval_token=approval_token,
+                attendee_count=len(attendee_data),
+                approval_deadline=approval_deadline,
+                finalized_by=finalized_by,
+            )
 
         return training_approval, None
 
