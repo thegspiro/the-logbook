@@ -10,7 +10,7 @@ from typing import Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -788,7 +788,12 @@ class TrainingSessionService:
             # Round to 2 decimal places
             hours_completed = round(hours_completed, 2)
 
-            # Check for existing training record for this user/session
+            # Find an existing record for this user/session on the event date.
+            # Check-in (auto_create_records) creates an IN_PROGRESS record keyed
+            # by scheduled_date with a NULL completion_date, so match on either
+            # date and prefer the not-yet-completed one — otherwise finalizing
+            # would leave that record orphaned and create a duplicate.
+            event_date = event.start_datetime.date()
             existing_record_result = await self.db.execute(
                 select(TrainingRecord)
                 .where(TrainingRecord.user_id == str(attendee.user_id))
@@ -797,13 +802,20 @@ class TrainingSessionService:
                     == str(training_session.organization_id)
                 )
                 .where(TrainingRecord.course_name == training_session.course_name)
-                .where(TrainingRecord.completion_date == event.start_datetime.date())
+                .where(
+                    or_(
+                        TrainingRecord.scheduled_date == event_date,
+                        TrainingRecord.completion_date == event_date,
+                    )
+                )
+                .order_by(TrainingRecord.completion_date.is_(None).desc())
             )
-            existing_record = existing_record_result.scalar_one_or_none()
+            existing_record = existing_record_result.scalars().first()
 
             if existing_record:
-                # Update existing record
+                # Promote/refresh the existing record to completed
                 existing_record.hours_completed = hours_completed
+                existing_record.completion_date = event_date
                 existing_record.status = "completed"
                 existing_record.updated_at = datetime.now(timezone.utc)
             else:
