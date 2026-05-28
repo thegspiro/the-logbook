@@ -22,3 +22,6 @@ ignore =
 per-file-ignores =
     # Allow unused imports in __init__.py
     __init__.py:F401
+    # seed_test_users.py keeps a hand-aligned data table (inside a `# fmt: off`
+    # block) for readability; ignore the column-alignment spacing codes for it.
+    seed_test_users.py:E241,E231
