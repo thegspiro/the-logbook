@@ -670,10 +670,14 @@ class IPSecurityService:
         await db.commit()
         await db.refresh(rule)
 
-        # Update GeoIP service
+        # Update GeoIP service (this worker) and notify the others.
         geoip = get_geoip_service()
         if geoip:
             geoip.add_blocked_country(country_code)
+
+        from app.core.geoip_sync import publish_geoip_invalidation
+
+        await publish_geoip_invalidation()
 
         logger.info(f"Added blocked country: {country_code} by admin {admin_id}")
 

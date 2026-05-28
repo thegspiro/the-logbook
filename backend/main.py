@@ -1439,6 +1439,22 @@ async def lifespan(app: FastAPI):
                 except Exception as e:
                     logger.warning(f"Could not load dynamic country block rules: {e}")
 
+                # Behind a reverse proxy, every request's peer is the proxy, so
+                # without TRUSTED_PROXY_IPS the middleware sees only the proxy's
+                # (private) IP and geo-blocking/allowlisting silently do nothing.
+                if settings.ENVIRONMENT in (
+                    "production",
+                    "staging",
+                ) and not settings.get_trusted_proxy_ips():
+                    logger.warning(
+                        "GEOIP_ENABLED is true but TRUSTED_PROXY_IPS is empty. "
+                        "Behind a reverse proxy every request appears to originate "
+                        "from the proxy's private IP, so geo-blocking and IP "
+                        "allowlisting will NOT see real client IPs and are "
+                        "effectively disabled. Set TRUSTED_PROXY_IPS to your "
+                        "proxy's IP(s)."
+                    )
+
                 logger.info(
                     f"✓ GeoIP service initialized. Blocked countries: {blocked_countries or 'none'}"
                 )
@@ -1473,6 +1489,12 @@ async def lifespan(app: FastAPI):
     from app.core.websocket_manager import ws_manager
 
     await ws_manager.start_listener()
+
+    # Start GeoIP invalidation listener so country-block changes made on any
+    # worker propagate to every worker (after Redis is connected).
+    from app.core.geoip_sync import geoip_invalidation_listener
+
+    await geoip_invalidation_listener.start()
 
     # Helper: use Redis SETNX to ensure a background task runs on only one worker.
     # Returns True if this worker should run the task.
@@ -1789,6 +1811,7 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
     await ws_manager.stop_listener()
+    await geoip_invalidation_listener.stop()
     await database_manager.disconnect()
     await cache_manager.disconnect()
     logger.info("Shutdown complete")
