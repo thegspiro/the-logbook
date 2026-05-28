@@ -927,20 +927,18 @@ export const applicantService = {
       );
     }
 
-    // For now, record the document metadata (actual file storage TBD)
+    // Send the actual file as multipart/form-data; the backend stores the
+    // bytes under the prospect's folder and re-validates the type via magic
+    // bytes before recording the metadata.
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('document_type', documentType);
+    if (stageId) formData.append('step_id', stageId);
+
     const response = await api.post<BackendDocumentResponse>(
       `/prospective-members/prospects/${applicantId}/documents`,
-      null,
-      {
-        params: {
-          document_type: documentType,
-          file_name: file.name,
-          file_path: `/uploads/prospects/${applicantId}/${file.name}`,
-          file_size: file.size,
-          mime_type: file.type || undefined,
-          step_id: stageId || undefined,
-        },
-      }
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
     );
     return mapDocumentResponse(response.data, applicantId);
   },

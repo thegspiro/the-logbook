@@ -6,6 +6,7 @@ pipeline configuration, prospect tracking, step progression, and
 transfer to full membership.
 """
 
+import asyncio
 import copy
 import re
 import secrets
@@ -2964,18 +2965,20 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
-        # Validate file_path: must resolve to a location under /uploads/
-        # to prevent path traversal via symlinks or unicode tricks.
+        # Validate file_path: must resolve to a location under the uploads
+        # volume (mounted at /app/uploads in docker-compose) to prevent path
+        # traversal via symlinks or unicode tricks.
         from pathlib import Path
 
-        base_dir = Path("/uploads/").resolve()
+        base_dir = Path("/app/uploads").resolve()
         resolved = Path(file_path).resolve()
         if (
             not str(resolved).startswith(str(base_dir) + os.sep)
             and resolved != base_dir
         ):
             raise ValueError(
-                "Invalid file_path: must be under /uploads/ and may not contain path traversal"
+                "Invalid file_path: must be under /app/uploads and may not "
+                "contain path traversal"
             )
 
         # Sanitise file_name to prevent path injection through the file name
@@ -3046,8 +3049,24 @@ class MembershipPipelineService:
             performed_by=deleted_by,
         )
 
+        # Remove the stored file from disk before dropping the DB row so the
+        # two stay consistent. Best-effort: a missing file must not block the
+        # metadata deletion.
+        stored_path = doc.file_path
         await self.db.delete(doc)
         await self.db.commit()
+
+        if stored_path:
+            import os
+
+            try:
+                if os.path.exists(stored_path):
+                    await asyncio.to_thread(os.remove, stored_path)
+            except OSError as exc:
+                logger.warning(
+                    f"Failed to remove prospect document file {stored_path}: {exc}"
+                )
+
         return True
 
     # =========================================================================

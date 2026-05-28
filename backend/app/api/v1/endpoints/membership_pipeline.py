@@ -5,10 +5,25 @@ Endpoints for managing prospective member pipelines, prospects,
 step progression, and transfer to full membership.
 """
 
+import asyncio
+import os
+import uuid as uuid_lib
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import magic
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1084,6 +1099,32 @@ async def get_prospect_activity(
 # Prospect Document Endpoints
 # ============================================
 
+# Files are stored under a per-prospect subfolder of the uploads volume
+# (mounted at /app/uploads in docker-compose) so each individual's documents
+# are grouped together.
+PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
+MAX_PROSPECT_DOCUMENT_SIZE = 10 * 1024 * 1024  # 10 MB — matches the frontend limit
+
+# Allowed document types mapped to their canonical extension. The MIME type is
+# validated via magic bytes (not the HTTP Content-Type header) to prevent
+# content-type spoofing.
+PROSPECT_DOCUMENT_MIME_EXTENSIONS = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/gif": ".gif",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
+
+
+def _remove_prospect_document_file(path: str) -> None:
+    """Best-effort cleanup of a stored file after a failed upload."""
+    try:
+        os.remove(path)
+    except OSError:
+        logger.warning(f"Failed to clean up prospect document file: {path}")
+
 
 @router.get(
     "/prospects/{prospect_id}/documents", response_model=list[ProspectDocumentResponse]
@@ -1116,47 +1157,146 @@ async def list_prospect_documents(
 )
 async def add_prospect_document(
     prospect_id: UUID,
-    document_type: str = Query(
+    file: UploadFile = File(..., description="The document file to store"),
+    document_type: str = Form(
         ..., description="Type of document (e.g. application, id, background_check)"
     ),
-    file_name: str = Query(..., description="Original file name"),
-    file_path: str = Query(..., description="Storage path for the file"),
-    file_size: int = Query(0, ge=0, description="File size in bytes"),
-    mime_type: str | None = Query(None, description="MIME type of the file"),
-    step_id: UUID | None = Query(None, description="Associated pipeline step"),
+    step_id: UUID | None = Form(None, description="Associated pipeline step"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
     ),
 ):
     """
-    Add a document record for a prospect.
+    Upload and store a document for a prospect.
 
-    Note: The actual file upload should be handled by a separate file storage service.
-    This endpoint records the document metadata.
+    The file is persisted under a per-prospect folder in the uploads volume and
+    its metadata is recorded against the prospect. Retrieve it via the
+    `/documents/{document_id}/download` endpoint.
 
     **Requires permission: members.manage**
     """
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty."
+        )
+    if len(content) > MAX_PROSPECT_DOCUMENT_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum size is 10MB.",
+        )
+
+    # Validate the real content via magic bytes, not the client-supplied type.
+    detected_mime = magic.from_buffer(content[:2048], mime=True)
+    ext = PROSPECT_DOCUMENT_MIME_EXTENSIONS.get(detected_mime)
+    if ext is None:
+        logger.warning(
+            f"Prospect document rejected: detected MIME '{detected_mime}' "
+            f"(claimed: '{file.content_type}') for file '{file.filename}'"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"File type not allowed. Detected type: {detected_mime}. "
+                "Allowed: PDF, Word, JPEG, PNG, GIF."
+            ),
+        )
+
+    # Random UUID filename with a MIME-derived extension (never the user-supplied
+    # name) avoids collisions and double-extension attacks (e.g. resume.pdf.exe).
+    prospect_dir = os.path.join(PROSPECT_DOCUMENT_DIR, str(prospect_id))
+    await asyncio.to_thread(os.makedirs, prospect_dir, exist_ok=True)
+    stored_path = os.path.join(prospect_dir, f"{uuid_lib.uuid4().hex}{ext}")
+
+    def _write_file(path: str, data: bytes) -> None:
+        with open(path, "wb") as fh:
+            fh.write(data)
+
+    await asyncio.to_thread(_write_file, stored_path, content)
+
     service = MembershipPipelineService(db)
     try:
         doc = await service.add_prospect_document(
             prospect_id=str(prospect_id),
             organization_id=current_user.organization_id,
             document_type=document_type,
-            file_name=file_name,
-            file_path=file_path,
-            file_size=file_size,
-            mime_type=mime_type,
+            file_name=file.filename or os.path.basename(stored_path),
+            file_path=stored_path,
+            file_size=len(content),
+            mime_type=detected_mime,
             step_id=str(step_id) if step_id else None,
             uploaded_by=current_user.id,
         )
     except ValueError as e:
+        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception:
+        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
+        raise
     if not doc:
+        await asyncio.to_thread(_remove_prospect_document_file, stored_path)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
     return doc
+
+
+@router.get("/prospects/{prospect_id}/documents/{document_id}/download")
+async def download_prospect_document(
+    prospect_id: UUID,
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "members.view", "prospective_members.view", "prospective_members.manage"
+        )
+    ),
+):
+    """
+    Download a stored prospect document.
+
+    **Requires permission: members.view**
+    """
+    service = MembershipPipelineService(db)
+    # get_prospect_documents enforces that the prospect belongs to the caller's
+    # organization, so this also scopes access to the document.
+    docs = await service.get_prospect_documents(
+        str(prospect_id), current_user.organization_id
+    )
+    doc = next((d for d in docs if d.id == str(document_id)), None)
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    # Defence-in-depth: ensure the stored path resolves inside the uploads
+    # directory before serving it, in case the DB value is ever tampered with.
+    resolved_path = os.path.realpath(doc.file_path)
+    allowed_base = os.path.realpath(PROSPECT_DOCUMENT_DIR)
+    if (
+        not resolved_path.startswith(allowed_base + os.sep)
+        and resolved_path != allowed_base
+    ):
+        logger.warning(
+            f"Path traversal attempt blocked for prospect document {document_id}: "
+            f"{doc.file_path} resolved to {resolved_path}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
+        )
+
+    if not os.path.exists(resolved_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document file not found on disk",
+        )
+
+    return FileResponse(
+        path=resolved_path,
+        filename=doc.file_name or "download",
+        media_type=doc.mime_type or "application/octet-stream",
+    )
 
 
 @router.delete(
