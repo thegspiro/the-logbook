@@ -1420,6 +1420,25 @@ async def lifespan(app: FastAPI):
                     blocked_countries=blocked_countries,
                     enabled=True,
                 )
+
+                # Overlay dynamic country rules managed via the
+                # /ip-security/blocked-countries API so admin changes are the
+                # source of truth over the config defaults and survive restarts.
+                try:
+                    from app.core.database import async_session_factory
+                    from app.services.ip_security_service import (
+                        ip_security_service,
+                    )
+
+                    async with async_session_factory() as db:
+                        blocked_countries = (
+                            await ip_security_service.sync_blocked_countries_to_geoip(
+                                db
+                            )
+                        )
+                except Exception as e:
+                    logger.warning(f"Could not load dynamic country block rules: {e}")
+
                 logger.info(
                     f"✓ GeoIP service initialized. Blocked countries: {blocked_countries or 'none'}"
                 )
