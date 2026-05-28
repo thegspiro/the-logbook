@@ -2,17 +2,30 @@
 
 ## IMPORTANT: Fix All Errors — Non-Negotiable
 
-**Always fix every error you encounter — compilation errors, type errors, lint
-violations, warnings, and failing tests — regardless of whether they are
-pre-existing or outside the scope of your current task.**
+**Never ignore or silently pass over an error you encounter — compilation
+errors, type errors, lint violations, warnings, or failing tests — regardless
+of whether it is pre-existing or outside the scope of your current task. Every
+error you encounter must be addressed before the task is complete. There are
+exactly two acceptable responses, and silence is neither:**
+
+1. **Fix it** at its root cause, in the same commit. This is the default and
+   the strongly preferred response.
+2. **Escalate it** — when, and only when, the fix genuinely exceeds the current
+   scope (see "Hard Stop" below) — by stopping and reporting the complete list
+   of errors before proceeding.
+
+These two paths share one non-negotiable principle: **you never continue past a
+known error without either fixing it or surfacing it.** Acknowledging an error
+and moving on is a violation; describing it as context and continuing is a
+violation.
 
 ### There Are No Acceptable Pre-Existing Errors
 
 The phrase "pre-existing error" is not a valid reason to skip a fix. If an
-error existed before your current task began, it still must be resolved in the
-same commit. Do not acknowledge an error while moving on past it. Do not
-describe an error as context and then continue without fixing it. If you
-discover it, you own it.
+error existed before your current task began, it still must be resolved — by
+default in the same commit. If you discover it, you own it. The age or origin
+of an error never downgrades your obligation to address it; it only ever
+determines which of the two responses above applies.
 
 ### What "Fix" Means
 
@@ -26,11 +39,12 @@ Fixing an error means resolving its root cause. The following are **not** fixes:
 
 ### Hard Stop Before Continuing
 
-If fixing a discovered error would exceed the scope of the current task (e.g.,
+This is the escalation path from response #2 above — the *only* sanctioned
+alternative to fixing an error, never a license to ignore one. If fixing a
+discovered error would genuinely exceed the scope of the current task (e.g.,
 hundreds of strict-mode violations across unrelated files), **stop and report
-the full list of errors before proceeding.** Do not continue past an error
-state silently. A complete inventory with no action taken is acceptable.
-Silently continuing past a known error is never acceptable.
+the full list of errors before proceeding.** A complete inventory with no
+action taken is acceptable; silently continuing past a known error is not.
 
 ### Completion Gate
 
