@@ -63,7 +63,7 @@ TEST_USERS = [
     ("banderson",   "Brian",     "Anderson",   "emt",             "Headquarters", "active",        "active",       ["emt", "member", "communications_officer"]),
     ("ltaylor",     "Lisa",      "Taylor",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "historian"]),
     ("jwhite",      "Jason",     "White",      "emt",             "Headquarters", "active",        "active",       ["emt", "member", "public_outreach"]),
-    ("nharris",     "Nicole",    "Harris",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "membership_committee_chair"]),
+    ("nharris",     "Nicole",    "Harris",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "membership_coordinator"]),
     ("tmartin",     "Thomas",    "Martin",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "fundraising_chair"]),
     ("rjackson",    "Rachel",    "Jackson",    "emt",             "Headquarters", "active",        "active",       ["emt", "member", "facilities_manager"]),
     ("dthomas",     "Daniel",    "Thomas",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "meeting_hall_coordinator"]),
@@ -194,7 +194,7 @@ async def get_or_create_positions(
         ("Scheduling Officer", "scheduling_officer", 44),
         ("Meeting Hall Coordinator", "meeting_hall_coordinator", 43),
         # Committee chairs
-        ("Membership Committee Chair", "membership_committee_chair", 42),
+        ("Membership Coordinator", "membership_coordinator", 42),
         ("Fundraising Chair", "fundraising_chair", 41),
         # Community
         ("Public Outreach", "public_outreach", 38),

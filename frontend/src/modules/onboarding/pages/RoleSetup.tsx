@@ -378,8 +378,8 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         permissions: generateRolePermissions(modules, 'specialist', ['apparatus', 'inventory']),
       },
       {
-        id: 'membership_committee_chair',
-        name: 'Membership Committee Chair',
+        id: 'membership_coordinator',
+        name: 'Membership Coordinator',
         description: 'Manages member records, applications, and onboarding/offboarding',
         icon: UserPlus,
         priority: 55,
