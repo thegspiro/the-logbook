@@ -10,11 +10,20 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import { trainingService, userService } from '../services/api';
+import { reportExportService, documentService } from '../services/trainingServices';
+import type { TrainingAttachment } from '../services/trainingServices';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { EmptyState } from '../components/ux';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Download, Paperclip, Upload, X } from 'lucide-react';
 import { formatDate } from '../utils/dateFormatting';
+import { getErrorMessage } from '../utils/errorHandling';
+import {
+  getTrainingPeriodWindow,
+  TRAINING_PERIOD_LABELS,
+  TrainingExportPeriod,
+} from '../utils/trainingPeriods';
 import { useTimezone } from '../hooks/useTimezone';
 import type { TrainingRecord } from '../types/training';
 import type { UserWithRoles } from '../types/role';
@@ -22,6 +31,110 @@ import type { UserWithRoles } from '../types/role';
 type FilterStatus = 'all' | 'completed' | 'scheduled' | 'in_progress' | 'expired' | 'expiring_soon';
 type SortField = 'date' | 'course' | 'hours' | 'status';
 type SortOrder = 'asc' | 'desc';
+
+const RecordAttachmentsModal: React.FC<{
+  recordId: string;
+  courseName: string;
+  onClose: () => void;
+}> = ({ recordId, courseName, onClose }) => {
+  const [attachments, setAttachments] = useState<TrainingAttachment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const res = await documentService.getRecordAttachments(recordId);
+        if (active) setAttachments(res.attachments);
+      } catch (err) {
+        toast.error(getErrorMessage(err, 'Failed to load attachments'));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [recordId]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploading(true);
+      const res = await documentService.uploadAttachment(recordId, file);
+      setAttachments(res.attachments);
+      toast.success('Attachment uploaded');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to upload attachment'));
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-theme-surface rounded-lg shadow-xl max-w-lg w-full p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="text-lg font-semibold text-theme-text-primary flex items-center gap-2">
+            <Paperclip className="w-5 h-5" /> Attachments
+          </h3>
+          <button onClick={onClose} aria-label="Close" className="text-theme-text-muted hover:text-theme-text-primary">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-sm text-theme-text-muted mb-4">{courseName}</p>
+
+        {loading ? (
+          <p className="text-sm text-theme-text-muted py-2">Loading…</p>
+        ) : attachments.length === 0 ? (
+          <p className="text-sm text-theme-text-muted py-2">No attachments yet.</p>
+        ) : (
+          <ul className="space-y-2 mb-4">
+            {attachments.map((a) => (
+              <li
+                key={a.index}
+                className="flex items-center justify-between border border-theme-surface-border rounded-lg px-3 py-2 gap-3"
+              >
+                <span className="text-sm text-theme-text-primary truncate">
+                  {a.file_name || `Attachment ${a.index + 1}`}
+                </span>
+                <a
+                  href={documentService.getAttachmentDownloadUrl(recordId, a.index)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-red-600 hover:text-red-500 inline-flex items-center gap-1 shrink-0"
+                >
+                  <Download className="w-4 h-4" /> Download
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <label className="inline-flex items-center gap-2 px-4 py-2 border border-theme-surface-border rounded-lg text-sm font-medium text-theme-text-secondary hover:bg-theme-surface-hover cursor-pointer">
+          <Upload className="w-4 h-4" />
+          <span>{uploading ? 'Uploading…' : 'Upload certificate'}</span>
+          <input
+            type="file"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => void handleUpload(e)}
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx"
+          />
+        </label>
+      </div>
+    </div>
+  );
+};
 
 export const MemberTrainingHistoryPage: React.FC = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -37,6 +150,42 @@ export const MemberTrainingHistoryPage: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Export
+  const [exportPeriod, setExportPeriod] = useState<TrainingExportPeriod>(
+    TrainingExportPeriod.YEAR,
+  );
+  const [exporting, setExporting] = useState(false);
+
+  // Attachments
+  const [attachmentRecord, setAttachmentRecord] = useState<TrainingRecord | null>(null);
+
+  const handleExport = async (format: 'csv' | 'pdf') => {
+    if (!userId) return;
+    try {
+      setExporting(true);
+      const window = getTrainingPeriodWindow(exportPeriod, tz);
+      const blob = await reportExportService.exportReport({
+        report_type: 'individual',
+        format,
+        user_id: userId,
+        start_date: window.start_date,
+        end_date: window.end_date,
+      });
+      const memberName = user?.full_name || user?.username || 'member';
+      const safeName = memberName.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `training_${safeName}_${exportPeriod}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to export training record'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     if (userId) {
@@ -209,12 +358,42 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                 {user.full_name || user.username}
               </p>
             </div>
-            <button
-              onClick={() => window.open(`/training/print/member?id=${userId}&name=${encodeURIComponent(user.full_name || user.username)}`, '_blank')}
-              className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors print:hidden"
-            >
-              Print Record
-            </button>
+            <div className="flex flex-wrap items-center gap-2 print:hidden">
+              <select
+                aria-label="Export period"
+                value={exportPeriod}
+                onChange={(e) => setExportPeriod(e.target.value as TrainingExportPeriod)}
+                className="text-sm px-3 py-2 border border-theme-surface-border rounded-lg bg-theme-surface text-theme-text-primary"
+              >
+                {Object.values(TrainingExportPeriod).map((p) => (
+                  <option key={p} value={p}>
+                    {TRAINING_PERIOD_LABELS[p]}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => void handleExport('csv')}
+                disabled={exporting}
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                CSV
+              </button>
+              <button
+                onClick={() => void handleExport('pdf')}
+                disabled={exporting}
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                PDF
+              </button>
+              <button
+                onClick={() => window.open(`/training/print/member?id=${userId}&name=${encodeURIComponent(user.full_name || user.username)}`, '_blank')}
+                className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 px-3 py-2 border border-theme-surface-border rounded-lg hover:bg-theme-surface-hover transition-colors"
+              >
+                Print Record
+              </button>
+            </div>
           </div>
         </div>
 
@@ -325,6 +504,9 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
                       Status
                     </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-theme-text-muted uppercase tracking-wider">
+                      Files
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-theme-surface-border">
@@ -386,6 +568,15 @@ export const MemberTrainingHistoryPage: React.FC = () => {
                           )}
                         </div>
                       </td>
+                      <td className="px-6 py-4">
+                        <button
+                          onClick={() => setAttachmentRecord(training)}
+                          className="text-sm text-theme-text-muted hover:text-theme-text-primary inline-flex items-center gap-1.5 print:hidden"
+                        >
+                          <Paperclip className="w-4 h-4" />
+                          Files
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -401,6 +592,14 @@ export const MemberTrainingHistoryPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {attachmentRecord && (
+        <RecordAttachmentsModal
+          recordId={attachmentRecord.id}
+          courseName={attachmentRecord.course_name}
+          onClose={() => setAttachmentRecord(null)}
+        />
+      )}
     </div>
   );
 };

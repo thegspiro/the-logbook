@@ -623,9 +623,6 @@ class TrainingSession(Base):
     )  # Instructor must confirm completion
 
     # Approval Settings
-    approval_required = Column(
-        Boolean, default=True
-    )  # Require training officer approval
     approval_deadline_days = Column(
         Integer, default=7
     )  # Days to approve after event ends

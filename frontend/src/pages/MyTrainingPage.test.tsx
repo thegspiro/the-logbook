@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import MyTrainingPage from './MyTrainingPage';
 
@@ -7,12 +8,14 @@ import MyTrainingPage from './MyTrainingPage';
 const mockGetMyTraining = vi.fn();
 const mockGetConfig = vi.fn();
 const mockGetVisibility = vi.fn();
+const mockExportMyTraining = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingModuleConfigService: {
     getMyTraining: (...args: unknown[]) => mockGetMyTraining(...args) as unknown,
     getConfig: (...args: unknown[]) => mockGetConfig(...args) as unknown,
     getVisibility: (...args: unknown[]) => mockGetVisibility(...args) as unknown,
+    exportMyTraining: (...args: unknown[]) => mockExportMyTraining(...args) as unknown,
   },
 }));
 
@@ -22,6 +25,8 @@ vi.mock('../hooks/useTimezone', () => ({
 
 vi.mock('../utils/dateFormatting', () => ({
   formatDate: (date: string) => date || 'N/A',
+  getTodayLocalDate: () => '2026-05-24',
+  toLocalDateString: () => '2025-05-24',
 }));
 
 // Mock auth store
@@ -115,6 +120,7 @@ describe('MyTrainingPage', () => {
     mockGetMyTraining.mockResolvedValue(mockTrainingData);
     mockGetConfig.mockResolvedValue({});
     mockGetVisibility.mockResolvedValue(mockTrainingData.visibility);
+    mockExportMyTraining.mockResolvedValue(new Blob(['csv'], { type: 'text/csv' }));
   });
 
   it('renders the page heading', async () => {
@@ -148,5 +154,42 @@ describe('MyTrainingPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/Network error/)).toBeInTheDocument();
     });
+  });
+
+  it('hides the export button when allow_member_report_export is disabled', async () => {
+    renderWithRouter(<MyTrainingPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole('button', { name: /export csv/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('exports the member training record when enabled', async () => {
+    mockGetMyTraining.mockResolvedValue({
+      ...mockTrainingData,
+      visibility: { ...mockTrainingData.visibility, allow_member_report_export: true },
+    });
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal('URL', { ...URL, createObjectURL, revokeObjectURL });
+
+    const user = userEvent.setup();
+    renderWithRouter(<MyTrainingPage />);
+
+    const exportBtn = await screen.findByRole('button', { name: /export csv/i });
+    await user.click(exportBtn);
+
+    await waitFor(() => {
+      expect(mockExportMyTraining).toHaveBeenCalledWith(
+        'csv',
+        expect.any(String),
+        expect.any(String),
+      );
+    });
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+
+    vi.unstubAllGlobals();
   });
 });

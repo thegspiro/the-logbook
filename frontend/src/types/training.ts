@@ -71,7 +71,6 @@ export interface TrainingSession {
   // Auto-completion & approval settings
   auto_create_records?: boolean;
   require_completion_confirmation?: boolean;
-  approval_required?: boolean;
   approval_deadline_days?: number;
 
   // Finalization status
@@ -1888,7 +1887,7 @@ export interface TrainingRecordAttachment {
 // ==================== Report Export Types ====================
 
 export interface ReportExportRequest {
-  report_type: 'compliance' | 'individual' | 'department' | 'certification' | 'hours_summary' | 'state_report';
+  report_type: 'compliance' | 'individual' | 'department' | 'certification' | 'hours_summary' | 'state_report' | 'member_records';
   format: 'csv' | 'pdf';
   user_id?: string | undefined;
   start_date?: string | undefined;

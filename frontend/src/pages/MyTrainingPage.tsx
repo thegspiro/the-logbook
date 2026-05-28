@@ -24,9 +24,12 @@ import {
   Shield,
   Send,
   BarChart3,
+  Download,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { trainingModuleConfigService } from '../services/api';
-import { formatDate } from '../utils/dateFormatting';
+import { DateRangePicker } from '../components/ux/DateRangePicker';
+import { formatDate, getTodayLocalDate, toLocalDateString } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { SubmissionStatus } from '../constants/enums';
 import type { MyTrainingSummary, TrainingModuleConfig as TMConfig, RequirementDetail } from '../types/training';
@@ -318,6 +321,15 @@ const MyTrainingPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'settings'>('overview');
   const [isOfficer, setIsOfficer] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  // Training-history view defaults to the last 12 months; clearing the range
+  // shows (and exports) the member's entire history.
+  const [rangeStart, setRangeStart] = useState(() => {
+    const start = new Date();
+    start.setFullYear(start.getFullYear() - 1);
+    return toLocalDateString(start, tz);
+  });
+  const [rangeEnd, setRangeEnd] = useState(() => getTodayLocalDate(tz));
 
   useEffect(() => {
     void loadData();
@@ -353,7 +365,37 @@ const MyTrainingPage: React.FC = () => {
     setData(trainingData);
   };
 
+  const handleExport = async (format: 'csv' | 'pdf') => {
+    try {
+      setExporting(true);
+      const blob = await trainingModuleConfigService.exportMyTraining(
+        format,
+        rangeStart || undefined,
+        rangeEnd || undefined,
+      );
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `my_training_record.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to export training record'));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const v = data?.visibility;
+
+  const allRecords = data?.training_records ?? [];
+  const recordInRange = (completionDate?: string | null): boolean => {
+    if (!completionDate) return !rangeStart && !rangeEnd;
+    if (rangeStart && completionDate < rangeStart) return false;
+    if (rangeEnd && completionDate > rangeEnd) return false;
+    return true;
+  };
+  const filteredRecords = allRecords.filter((r) => recordInRange(r.completion_date));
 
   if (loading) {
     return (
@@ -432,6 +474,47 @@ const MyTrainingPage: React.FC = () => {
       {/* Overview Tab */}
       {activeTab === 'overview' && data && (
         <div className="space-y-6">
+          {/* Records range + export toolbar */}
+          {(v?.show_training_history || v?.allow_member_report_export) && (
+          <div className="bg-theme-surface border border-theme-surface-border rounded-lg p-4 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <DateRangePicker
+                label="Training records date range"
+                startDate={rangeStart}
+                endDate={rangeEnd}
+                onChange={(s, e) => {
+                  setRangeStart(s);
+                  setRangeEnd(e);
+                }}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Showing the last 12 months by default. Clear the dates to see and
+                export your entire history (e.g. for an audit or new employer).
+              </p>
+            </div>
+            {v?.allow_member_report_export && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => void handleExport('csv')}
+                  disabled={exporting}
+                  className="flex items-center space-x-2 rounded-lg border border-theme-surface-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text-secondary transition-colors hover:bg-theme-surface-hover disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Export CSV</span>
+                </button>
+                <button
+                  onClick={() => void handleExport('pdf')}
+                  disabled={exporting}
+                  className="flex items-center space-x-2 rounded-lg border border-theme-surface-border bg-theme-surface px-4 py-2 text-sm font-medium text-theme-text-secondary transition-colors hover:bg-theme-surface-hover disabled:opacity-50"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Export PDF</span>
+                </button>
+              </div>
+            )}
+          </div>
+          )}
+
           {/* Core Stats Row (always visible) */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <StatCard
@@ -662,36 +745,43 @@ const MyTrainingPage: React.FC = () => {
           )}
 
           {/* Training History */}
-          {v?.show_training_history && data.training_records && data.training_records.length > 0 && (
-            <Section title="Training History" icon={FileText} defaultOpen={false}>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary">
-                    <tr>
-                      <th scope="col" className="px-4 py-2">Course</th>
-                      <th scope="col" className="px-4 py-2">Type</th>
-                      <th scope="col" className="px-4 py-2">Date</th>
-                      <th scope="col" className="px-4 py-2">Hours</th>
-                      <th scope="col" className="px-4 py-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {data.training_records.map((r) => (
-                      <tr key={r.id} className="text-theme-text-secondary">
-                        <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
-                        <td className="px-4 py-2 whitespace-nowrap capitalize">{r.training_type.replace('_', ' ')}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">{r.hours_completed}</td>
-                        <td className="px-4 py-2">
-                          <span className={`text-xs px-2 py-1 rounded-sm ${getStatusColor(r.status)}`}>
-                            {r.status.replace('_', ' ')}
-                          </span>
-                        </td>
+          {v?.show_training_history && allRecords.length > 0 && (
+            <Section title="Training History" icon={FileText} defaultOpen>
+              {filteredRecords.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-theme-text-muted uppercase bg-theme-surface-secondary">
+                      <tr>
+                        <th scope="col" className="px-4 py-2">Course</th>
+                        <th scope="col" className="px-4 py-2">Type</th>
+                        <th scope="col" className="px-4 py-2">Date</th>
+                        <th scope="col" className="px-4 py-2">Hours</th>
+                        <th scope="col" className="px-4 py-2">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredRecords.map((r) => (
+                        <tr key={r.id} className="text-theme-text-secondary">
+                          <td className="px-4 py-2 whitespace-nowrap">{r.course_name}</td>
+                          <td className="px-4 py-2 whitespace-nowrap capitalize">{r.training_type.replace('_', ' ')}</td>
+                          <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.completion_date, tz)}</td>
+                          <td className="px-4 py-2 whitespace-nowrap">{r.hours_completed}</td>
+                          <td className="px-4 py-2">
+                            <span className={`text-xs px-2 py-1 rounded-sm ${getStatusColor(r.status)}`}>
+                              {r.status.replace('_', ' ')}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-theme-text-muted py-2">
+                  No training records in the selected date range. Adjust or clear the
+                  date range above to see more.
+                </p>
+              )}
             </Section>
           )}
 

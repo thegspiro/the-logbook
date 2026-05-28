@@ -9,7 +9,8 @@ GET  /my-training     - Member's aggregated training data (respects visibility c
 from datetime import date
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,7 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import get_current_user, require_permission
 from app.core.constants import TRAINING_OFFICER_ROLE_SLUGS
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.models.training import (
     ProgramEnrollment,
     RequirementProgress,
@@ -445,6 +447,71 @@ async def get_my_training_summary(
         ]
 
     return result
+
+
+@router.get("/my-training/export")
+async def export_my_training(
+    format: str = Query("csv", pattern=r"^(csv|pdf)$"),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Download the current member's own training history as CSV or PDF.
+
+    Gated by the organization's ``allow_member_report_export`` setting so that
+    officers control whether members may export their own records. Omitting
+    ``start_date`` returns the member's entire history (e.g. for an outside
+    audit or a prospective employer).
+    """
+    config_service = TrainingModuleConfigService(db)
+    config = await config_service.get_config(current_user.organization_id)
+    if not config.allow_member_report_export:
+        raise HTTPException(
+            status_code=403,
+            detail="Member training export is disabled for this organization.",
+        )
+
+    from app.services.training_enhancement_service import ReportExportService
+
+    export_service = ReportExportService(db)
+    user_id = str(current_user.id)
+
+    try:
+        if format == "pdf":
+            pdf_buf = await export_service.generate_individual_pdf(
+                user_id,
+                current_user.organization_id,
+                start_date=start_date,
+                end_date=end_date,
+            )
+            return StreamingResponse(
+                pdf_buf,
+                media_type="application/pdf",
+                headers={
+                    "Content-Disposition": (
+                        "attachment; filename=my_training_record.pdf"
+                    )
+                },
+            )
+
+        csv_content = await export_service.generate_individual_csv(
+            user_id,
+            current_user.organization_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": ("attachment; filename=my_training_record.csv")
+            },
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
 @router.get("/skill-names")

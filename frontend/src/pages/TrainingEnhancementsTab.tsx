@@ -32,6 +32,11 @@ import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import {
+  getTrainingPeriodWindow,
+  TRAINING_PERIOD_LABELS,
+  TrainingExportPeriod,
+} from '../utils/trainingPeriods';
+import {
   recertificationService,
   competencyService,
   instructorService,
@@ -962,12 +967,14 @@ const ReportsSection: React.FC = () => {
   const [forecasts, setForecasts] = useState<ComplianceForecast[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [memberRecordsPeriod, setMemberRecordsPeriod] =
+    useState<TrainingExportPeriod>(TrainingExportPeriod.YEAR);
 
   const handleExport = async (reportType: string) => {
     setExporting(true);
     try {
       const blob = await reportExportService.exportReport({
-        report_type: reportType as 'compliance' | 'department',
+        report_type: reportType as 'compliance' | 'hours_summary' | 'certification',
         format: 'csv',
       });
       const url = URL.createObjectURL(blob);
@@ -979,6 +986,30 @@ const ReportsSection: React.FC = () => {
       toast.success('Report downloaded');
     } catch {
       toast.error('Failed to generate report');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleMemberRecordsExport = async (format: 'csv' | 'pdf') => {
+    setExporting(true);
+    try {
+      const window = getTrainingPeriodWindow(memberRecordsPeriod, tz);
+      const blob = await reportExportService.exportReport({
+        report_type: 'member_records',
+        format,
+        start_date: window.start_date,
+        end_date: window.end_date,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `training_member_records_${memberRecordsPeriod}_${getTodayLocalDate(tz)}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Report downloaded');
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to generate report'));
     } finally {
       setExporting(false);
     }
@@ -1041,6 +1072,47 @@ const ReportsSection: React.FC = () => {
             All certifications with expiration status and renewal tracking
           </p>
         </button>
+      </div>
+
+      <div className="border-t border-theme-surface-border pt-6">
+        <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
+          <div>
+            <h4 className="text-sm font-medium text-theme-text-primary">Member Records (All Members)</h4>
+            <p className="text-xs text-theme-text-muted">
+              Every member&apos;s completed training records for the selected period
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              aria-label="Member records period"
+              value={memberRecordsPeriod}
+              onChange={(e) => setMemberRecordsPeriod(e.target.value as TrainingExportPeriod)}
+              className="text-sm px-3 py-2 border border-theme-surface-border rounded-lg bg-theme-surface text-theme-text-primary"
+            >
+              {Object.values(TrainingExportPeriod).map((p) => (
+                <option key={p} value={p}>
+                  {TRAINING_PERIOD_LABELS[p]}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => { void handleMemberRecordsExport('csv'); }}
+              disabled={exporting}
+              className="btn-secondary flex items-center space-x-1 px-3 py-2 text-sm rounded-lg disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>CSV</span>
+            </button>
+            <button
+              onClick={() => { void handleMemberRecordsExport('pdf'); }}
+              disabled={exporting}
+              className="btn-secondary flex items-center space-x-1 px-3 py-2 text-sm rounded-lg disabled:opacity-50"
+            >
+              <Download className="w-4 h-4" />
+              <span>PDF</span>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="border-t border-theme-surface-border pt-6">

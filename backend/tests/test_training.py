@@ -15,6 +15,8 @@ from pathlib import Path
 from uuid import uuid4
 from datetime import date, datetime
 
+from pydantic import ValidationError
+
 from app.models.training import (
     TrainingCategory,
     TrainingCourse,
@@ -557,14 +559,13 @@ class TestTrainingModelInstantiation:
             issues_certification=False,
             auto_create_records=True,
             require_completion_confirmation=False,
-            approval_required=True,
             approval_deadline_days=7,
             is_finalized=False,
         )
         assert session.course_name == "Hose Operations"
         assert session.training_type == TrainingType.SKILLS_PRACTICE
         assert session.credit_hours == 4.0
-        assert session.approval_required is True
+        assert session.require_completion_confirmation is False
 
     def test_create_training_approval(self):
         """Create TrainingApproval"""
@@ -677,17 +678,17 @@ class TestTrainingSchemas:
 
     def test_training_category_create_missing_name(self):
         """Should fail validation without name"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingCategoryCreate()
 
     def test_training_category_create_empty_name(self):
         """Should fail validation with empty name"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingCategoryCreate(name="")
 
     def test_training_category_create_invalid_color(self):
         """Should fail validation with invalid color format"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingCategoryCreate(name="Test", color="not-a-color")
 
     def test_training_category_create_valid_color_formats(self):
@@ -736,17 +737,17 @@ class TestTrainingSchemas:
 
     def test_training_course_create_missing_name(self):
         """Should fail without name"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingCourseCreate(training_type="certification")
 
     def test_training_course_create_missing_training_type(self):
         """Should fail without training_type"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingCourseCreate(name="Course")
 
     def test_training_course_create_negative_duration(self):
         """Should fail with negative duration_hours"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingCourseCreate(
                 name="Test",
                 training_type="certification",
@@ -755,7 +756,7 @@ class TestTrainingSchemas:
 
     def test_training_course_create_zero_max_participants(self):
         """Should fail with max_participants < 1"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingCourseCreate(
                 name="Test",
                 training_type="certification",
@@ -804,7 +805,7 @@ class TestTrainingSchemas:
 
     def test_training_record_create_missing_user_id(self):
         """Should fail without user_id"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingRecordCreate(
                 course_name="Test",
                 training_type="certification",
@@ -813,7 +814,7 @@ class TestTrainingSchemas:
 
     def test_training_record_create_negative_hours(self):
         """Should fail with negative hours_completed"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingRecordCreate(
                 user_id=uuid4(),
                 course_name="Test",
@@ -823,7 +824,7 @@ class TestTrainingSchemas:
 
     def test_training_record_create_score_out_of_range(self):
         """Should fail with score > 100"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingRecordCreate(
                 user_id=uuid4(),
                 course_name="Test",
@@ -968,7 +969,7 @@ class TestTrainingSchemas:
 
     def test_training_program_create_missing_name(self):
         """Should fail without name"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             TrainingProgramCreate()
 
     def test_program_enrollment_create_valid(self):
@@ -997,12 +998,12 @@ class TestTrainingSchemas:
 
     def test_program_enrollment_create_missing_user_id(self):
         """Should fail without user_id"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ProgramEnrollmentCreate(program_id=uuid4())
 
     def test_program_enrollment_create_missing_program_id(self):
         """Should fail without program_id"""
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             ProgramEnrollmentCreate(user_id=uuid4())
 
 

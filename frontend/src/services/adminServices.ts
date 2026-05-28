@@ -60,7 +60,6 @@ export interface TrainingSessionResponse {
   expiration_months?: number;
   auto_create_records: boolean;
   require_completion_confirmation: boolean;
-  approval_required: boolean;
   approval_deadline_days: number;
   is_finalized: boolean;
   finalized_at?: string;
@@ -103,7 +102,6 @@ export interface TrainingSessionCreate {
   expiration_months?: number | undefined;
   auto_create_records?: boolean | undefined;
   require_completion_confirmation?: boolean | undefined;
-  approval_required?: boolean | undefined;
   approval_deadline_days?: number | undefined;
 }
 
