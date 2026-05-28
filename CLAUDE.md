@@ -129,6 +129,9 @@ Strict mode is **on** (`"strict": true` in `frontend/tsconfig.json`) with additi
 - `noImplicitOverride: true`
 - `allowUnreachableCode: false`
 - `allowUnusedLabels: false`
+- `noUnusedLocals: true` / `noUnusedParameters: true` — the mechanism behind the "no unused imports" rule repeated throughout this doc
+- `noFallthroughCasesInSwitch: true`
+- `exactOptionalPropertyTypes: true` — **important gotcha.** Assigning `undefined` to an optional property is only legal if that property's type explicitly includes `| undefined`. This interacts directly with Pitfall #1: the `|| undefined` form-value coercion compiles only when the optional field is typed `field?: T | undefined` (or the payload type allows it). If you hit a TS error coercing a form value to `undefined`, widen the target type rather than casting.
 
 All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps to `./src/*`.
 
@@ -150,7 +153,7 @@ All frontend source files use `.ts` / `.tsx` exclusively. Path alias `@/*` maps 
 - **Test data:** Faker
 - **Run:** `npm run test:backend` or `cd backend && pytest`
 - Test files live in `backend/tests/`
-- **Config:** `asyncio_mode = auto` in `pytest.ini` — no need for `@pytest.mark.asyncio` on individual tests. Markers: `integration`, `unit`, `slow`, `docker`
+- **Config:** `asyncio_mode = auto` in `pytest.ini` — no need for `@pytest.mark.asyncio` on individual tests. `addopts` enables `--strict-markers` and `--strict-config` (an undefined marker fails the run, so register new markers in `pytest.ini` before using them) and `--timeout=30` (each test has a 30s timeout; mark genuinely long tests with `slow`). Registered markers: `asyncio`, `integration`, `unit`, `slow`, `onboarding`, `docker`
 - **Fixtures:** `conftest.py` provides `db_session` (auto-rolled-back transaction per test), `sample_org_data`, `sample_admin_data`, `sample_roles_data`, `sample_stations_data`
 
 ### Frontend Test Patterns
@@ -211,7 +214,7 @@ npm run dev              # Start both frontend + backend dev servers
 npm run test             # Run all tests (backend + frontend)
 npm run lint             # Lint everything
 npm run format           # Format everything
-npm run build            # Build both
+npm run build            # Build frontend (backend build is a no-op)
 npm run db:migrate       # Run Alembic migrations
 npm run db:seed          # Seed database
 npm run docker:up        # Start Docker Compose stack
@@ -474,7 +477,7 @@ Each module in `modules/*/services/api.ts` creates its own axios instance. These
 
 ### 8. Alembic Migrations: Seed Data and Ordering
 
-Seed data migrations that insert system-level records (default facility types, status codes, etc.) must handle the case where the target table has `nullable=True` on `organization_id`. If seed data is inserted before the column is made nullable, or if the migration file isn't registered in `SEED_DATA_FILES`, fresh installs will have missing seed data and crash when code queries for expected defaults.
+Seed data migrations that insert system-level records (default facility types, status codes, etc.) must handle the case where the target table has `nullable=True` on `organization_id`. If seed data is inserted before the column is made nullable, or if the migration file isn't registered in `SEED_DATA_FILES` (defined in `backend/main.py`), fresh installs will have missing seed data and crash when code queries for expected defaults.
 
 **Rule:** When adding seed/lookup data: (1) ensure the migration makes org_id nullable first, (2) register the seed migration in `SEED_DATA_FILES`, (3) add fallback logic in service code for when expected defaults are missing (auto-create or raise a clear error).
 
