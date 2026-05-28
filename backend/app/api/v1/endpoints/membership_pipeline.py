@@ -1099,9 +1099,9 @@ async def get_prospect_activity(
 # Prospect Document Endpoints
 # ============================================
 
-# Files are stored under a per-prospect subfolder of the uploads volume
-# (mounted at /app/uploads in docker-compose) so each individual's documents
-# are grouped together.
+# Files are stored under {org_id}/{prospect_id}/ within the uploads volume
+# (mounted at /app/uploads in docker-compose), mirroring the event-attachments
+# layout so storage is grouped per individual and walkable per organization.
 PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
 MAX_PROSPECT_DOCUMENT_SIZE = 50 * 1024 * 1024  # 50 MB — matches the frontend limit
 
@@ -1203,9 +1203,14 @@ async def add_prospect_document(
             ),
         )
 
-    # Random UUID filename with a MIME-derived extension (never the user-supplied
-    # name) avoids collisions and double-extension attacks (e.g. resume.pdf.exe).
-    prospect_dir = os.path.join(PROSPECT_DOCUMENT_DIR, str(prospect_id))
+    # Scope storage by org then prospect (mirrors event-attachments) so each
+    # individual's files are grouped and the whole org is walkable for
+    # accounting, export, or purge. Random UUID filename with a MIME-derived
+    # extension (never the user-supplied name) avoids collisions and
+    # double-extension attacks (e.g. resume.pdf.exe).
+    prospect_dir = os.path.join(
+        PROSPECT_DOCUMENT_DIR, str(current_user.organization_id), str(prospect_id)
+    )
     await asyncio.to_thread(os.makedirs, prospect_dir, exist_ok=True)
     stored_path = os.path.join(prospect_dir, f"{uuid_lib.uuid4().hex}{ext}")
 
