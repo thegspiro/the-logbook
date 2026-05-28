@@ -1103,7 +1103,7 @@ async def get_prospect_activity(
 # (mounted at /app/uploads in docker-compose) so each individual's documents
 # are grouped together.
 PROSPECT_DOCUMENT_DIR = "/app/uploads/prospect-documents"
-MAX_PROSPECT_DOCUMENT_SIZE = 10 * 1024 * 1024  # 10 MB — matches the frontend limit
+MAX_PROSPECT_DOCUMENT_SIZE = 50 * 1024 * 1024  # 50 MB — matches the frontend limit
 
 # Allowed document types mapped to their canonical extension. The MIME type is
 # validated via magic bytes (not the HTTP Content-Type header) to prevent
@@ -1184,7 +1184,7 @@ async def add_prospect_document(
     if len(content) > MAX_PROSPECT_DOCUMENT_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File too large. Maximum size is 10MB.",
+            detail="File too large. Maximum size is 50MB.",
         )
 
     # Validate the real content via magic bytes, not the client-supplied type.

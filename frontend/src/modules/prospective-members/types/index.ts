@@ -70,8 +70,8 @@ export const DEFAULT_INACTIVITY_CONFIG: InactivityConfig = {
 
 /** Allowed file upload constraints. */
 export const FILE_UPLOAD_LIMITS = {
-  maxSizeBytes: 10 * 1024 * 1024, // 10 MB
-  maxSizeLabel: '10 MB',
+  maxSizeBytes: 50 * 1024 * 1024, // 50 MB
+  maxSizeLabel: '50 MB',
   allowedMimeTypes: [
     'application/pdf',
     'image/jpeg',
