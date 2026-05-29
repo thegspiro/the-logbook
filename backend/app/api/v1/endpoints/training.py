@@ -51,6 +51,7 @@ from app.schemas.training import (
 )
 from app.services.training_compliance import (
     evaluate_member_requirement,
+    get_org_include_current_month,
     get_requirement_date_window,
 )
 from app.services.training_service import TrainingService
@@ -874,6 +875,7 @@ async def get_compliance_summary(
     """
     org_id = current_user.organization_id
     today = date.today()
+    org_include_current = await get_org_include_current_month(db, str(org_id))
 
     # Get user stats for hours and cert counts
     training_service = TrainingService(db)
@@ -957,7 +959,11 @@ async def get_compliance_summary(
 
     for req in requirements:
         status_val, _, _ = _evaluate_member_requirement(
-            req, member_records, today, waivers=waivers
+            req,
+            member_records,
+            today,
+            waivers=waivers,
+            org_include_current_month=org_include_current,
         )
         if status_val == "completed":
             requirements_met += 1
@@ -2031,6 +2037,7 @@ async def get_compliance_matrix(
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
     today = date.today()
+    org_include_current = await get_org_include_current_month(db, str(org_id))
     matrix = []
 
     for member in members:
@@ -2047,7 +2054,11 @@ async def get_compliance_matrix(
                     continue
 
             req_status, comp_date, exp_date = _evaluate_member_requirement(
-                req, member_records, today, waivers=member_waivers
+                req,
+                member_records,
+                today,
+                waivers=member_waivers,
+                org_include_current_month=org_include_current,
             )
 
             if req_status == TrainingStatus.COMPLETED.value:

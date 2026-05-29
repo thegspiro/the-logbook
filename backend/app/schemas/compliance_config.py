@@ -117,6 +117,13 @@ class ComplianceConfigBase(BaseModel):
     compliant_threshold: float = Field(100.0, ge=0, le=100)
     at_risk_threshold: float = Field(75.0, ge=0, le=100)
     grace_period_days: int = Field(0, ge=0, le=365)
+    include_current_month: bool = Field(
+        True,
+        description=(
+            "When false, compliance calculations stop at the end of the "
+            "previous month instead of counting the in-progress current month."
+        ),
+    )
     auto_report_frequency: str = Field(
         "none",
         description="none, monthly, quarterly, or yearly",
@@ -140,6 +147,7 @@ class ComplianceConfigUpdate(BaseModel):
     compliant_threshold: Optional[float] = Field(None, ge=0, le=100)
     at_risk_threshold: Optional[float] = Field(None, ge=0, le=100)
     grace_period_days: Optional[int] = Field(None, ge=0, le=365)
+    include_current_month: Optional[bool] = None
     auto_report_frequency: Optional[str] = None
     report_email_recipients: Optional[List[str]] = None
     report_day_of_month: Optional[int] = Field(None, ge=1, le=28)

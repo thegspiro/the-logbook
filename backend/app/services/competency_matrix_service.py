@@ -27,6 +27,11 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import User, UserStatus
+from app.services.training_compliance import get_org_include_current_month
+from app.services.training_period import (
+    effective_include_current_month,
+    resolve_as_of_date,
+)
 from app.services.training_waiver_service import (
     WaiverPeriod,
     adjust_required,
@@ -125,6 +130,9 @@ class CompetencyMatrixService:
 
         today = date.today()
         expiring_threshold = today + timedelta(days=90)
+        org_include_current = await get_org_include_current_month(
+            self.db, str(organization_id)
+        )
 
         # Counters
         current_count = 0
@@ -154,7 +162,12 @@ class CompetencyMatrixService:
             for req in requirements:
                 rid = str(req.id)
                 status_info = self._evaluate_requirement_status(
-                    req, user_records, today, expiring_threshold, waivers=member_waivers
+                    req,
+                    user_records,
+                    today,
+                    expiring_threshold,
+                    waivers=member_waivers,
+                    org_include_current_month=org_include_current,
                 )
                 statuses[rid] = status_info
 
@@ -239,12 +252,23 @@ class CompetencyMatrixService:
         today: date,
         expiring_threshold: date,
         waivers: Optional[List[WaiverPeriod]] = None,
+        org_include_current_month: bool = True,
     ) -> Dict:
         """Evaluate a single requirement for a single member using type-aware matching."""
         req_type = (
             requirement.requirement_type.value
             if hasattr(requirement.requirement_type, "value")
             else str(requirement.requirement_type)
+        )
+        # Resolve this requirement's effective evaluation date (per-requirement
+        # override inherits the org default). The cert "expiring soon" lookahead
+        # (expiring_threshold) intentionally stays on the real current date.
+        today = resolve_as_of_date(
+            today,
+            effective_include_current_month(
+                getattr(requirement, "include_current_month", None),
+                org_include_current_month,
+            ),
         )
         start_date, end_date = self._get_date_window(requirement, today)
         not_started = {

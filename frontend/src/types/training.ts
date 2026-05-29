@@ -425,6 +425,9 @@ export interface TrainingRequirement {
   period_start_day?: number;
   period_end_month?: number;
   period_end_day?: number;
+  // Evaluation period: null = inherit org default, true = count current month,
+  // false = stop at end of previous month
+  include_current_month?: boolean | null;
   category_ids?: string[];
   active: boolean;
   created_at: string;
@@ -466,6 +469,7 @@ export interface TrainingRequirementCreate {
   period_start_day?: number | undefined;
   period_end_month?: number | undefined;
   period_end_day?: number | undefined;
+  include_current_month?: boolean | null | undefined;
   category_ids?: string[] | undefined;
 }
 
@@ -503,6 +507,7 @@ export interface TrainingRequirementUpdate {
   period_start_day?: number | undefined;
   period_end_month?: number | undefined;
   period_end_day?: number | undefined;
+  include_current_month?: boolean | null | undefined;
   category_ids?: string[] | undefined;
   active?: boolean;
 }
@@ -2162,6 +2167,7 @@ export interface ComplianceConfigData {
   compliantThreshold: number;
   atRiskThreshold: number;
   gracePeriodDays: number;
+  includeCurrentMonth: boolean;
   autoReportFrequency: string;
   reportEmailRecipients?: string[];
   reportDayOfMonth?: number;
@@ -2178,6 +2184,7 @@ export interface ComplianceConfigUpdate {
   compliant_threshold?: number | undefined;
   at_risk_threshold?: number | undefined;
   grace_period_days?: number | undefined;
+  include_current_month?: boolean | undefined;
   auto_report_frequency?: string | undefined;
   report_email_recipients?: string[] | undefined;
   report_day_of_month?: number | undefined;

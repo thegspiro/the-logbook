@@ -82,6 +82,7 @@ export default function ComplianceRequirementsConfigPage() {
   const [compliantThreshold, setCompliantThreshold] = useState(100);
   const [atRiskThreshold, setAtRiskThreshold] = useState(75);
   const [gracePeriodDays, setGracePeriodDays] = useState(0);
+  const [includeCurrentMonth, setIncludeCurrentMonth] = useState(true);
   const [autoReportFrequency, setAutoReportFrequency] = useState('none');
   const [reportEmailRecipients, setReportEmailRecipients] = useState('');
   const [reportDayOfMonth, setReportDayOfMonth] = useState(1);
@@ -121,6 +122,7 @@ export default function ComplianceRequirementsConfigPage() {
         setCompliantThreshold(data.compliantThreshold);
         setAtRiskThreshold(data.atRiskThreshold);
         setGracePeriodDays(data.gracePeriodDays);
+        setIncludeCurrentMonth(data.includeCurrentMonth ?? true);
         setAutoReportFrequency(data.autoReportFrequency);
         setReportEmailRecipients(data.reportEmailRecipients?.join(', ') ?? '');
         setReportDayOfMonth(data.reportDayOfMonth ?? 1);
@@ -177,6 +179,7 @@ export default function ComplianceRequirementsConfigPage() {
         compliant_threshold: compliantThreshold,
         at_risk_threshold: atRiskThreshold,
         grace_period_days: gracePeriodDays,
+        include_current_month: includeCurrentMonth,
         auto_report_frequency: autoReportFrequency,
         report_email_recipients: recipientsList.length > 0 ? recipientsList : undefined,
         report_day_of_month: reportDayOfMonth,
@@ -496,6 +499,31 @@ export default function ComplianceRequirementsConfigPage() {
               />
               <p className="mt-1 text-xs text-theme-text-secondary">
                 Days after a requirement deadline before marking non-compliant
+              </p>
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelClass}>Evaluation Period</label>
+              <label className="mt-1 flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  className={`${checkboxClass} mt-0.5`}
+                  checked={includeCurrentMonth}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setIncludeCurrentMonth(e.target.checked)
+                  }
+                />
+                <span className="text-sm text-theme-text-primary">
+                  Count the current (in-progress) month in compliance
+                  calculations
+                </span>
+              </label>
+              <p className="mt-1 text-xs text-theme-text-secondary">
+                {includeCurrentMonth
+                  ? 'Dashboards include the current month, so members must complete this month’s training to show as compliant.'
+                  : 'Calculations stop at the end of last month. Members are measured against where they stood when this month began — useful when drills are held late in the month.'}{' '}
+                This is the department-wide default; individual requirements can
+                override it.
               </p>
             </div>
           </div>

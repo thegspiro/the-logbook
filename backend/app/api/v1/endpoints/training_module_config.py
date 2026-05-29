@@ -36,6 +36,7 @@ from app.schemas.training_module_config import (
     TrainingModuleConfigResponse,
     TrainingModuleConfigUpdate,
 )
+from app.services.training_compliance import get_org_include_current_month
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_user_waivers
@@ -224,6 +225,7 @@ async def get_my_training_summary(
     # handles all requirement types (hours, courses, certification,
     # shifts, calls, fallback) and rolling period windows.
     today = date.today()
+    org_include_current = await get_org_include_current_month(db, str(org_id))
     met_count = 0
     total_progress_pct = 0.0
     requirements_detail: list[dict[str, Any]] = []
@@ -234,6 +236,7 @@ async def get_my_training_summary(
             member_records,
             today,
             waivers=user_waivers,
+            org_include_current_month=org_include_current,
         )
         pct = detail["progress_percentage"]
         total_progress_pct += pct
