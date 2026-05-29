@@ -491,12 +491,15 @@ async def remove_blocked_country(
         rule.updated_by = str(current_user.id)
         await db.commit()
 
-        # Update GeoIP service
+        # Update GeoIP service (this worker) and notify the others.
         from app.core.geoip import get_geoip_service
+        from app.core.geoip_sync import publish_geoip_invalidation
 
         geoip = get_geoip_service()
         if geoip:
             geoip.remove_blocked_country(country_code.upper())
+
+        await publish_geoip_invalidation()
 
         await log_audit_event(
             db=db,

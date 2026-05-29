@@ -75,7 +75,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Add/edit members, assign positions, update member status',
       view: ['View member directory', 'See contact information', 'View member profiles'],
       manage: ['Add new members', 'Edit member information', 'Assign positions', 'Manage member status'],
-      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'membership_committee_chair', 'training_officer', 'captain', 'secretary', 'assistant_secretary'],
+      defaultManagePositions: ['it_manager', 'fire_chief', 'president', 'membership_coordinator', 'training_officer', 'captain', 'secretary', 'assistant_secretary'],
     },
   },
   {
@@ -352,7 +352,7 @@ export const MODULE_REGISTRY: ModuleDefinition[] = [
       manageDescription: 'Manage applicants, configure pipeline stages, and convert members',
       view: ['View applicant pipeline', 'See applicant progress', 'View pipeline statistics'],
       manage: ['Add/edit applicants', 'Advance or reject applicants', 'Configure pipeline stages', 'Convert applicants to members'],
-      defaultManagePositions: ['it_manager', 'president', 'fire_chief', 'membership_committee_chair'],
+      defaultManagePositions: ['it_manager', 'president', 'fire_chief', 'membership_coordinator'],
     },
   },
 

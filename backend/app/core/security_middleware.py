@@ -660,25 +660,46 @@ class SecurityAuditLogger:
 def get_client_ip(request: Request) -> str:
     """Get client IP address from request.
 
-    Only trusts the X-Forwarded-For header when the direct peer IP is in
-    the configured TRUSTED_PROXY_IPS list (SEC-16).  This prevents clients
-    from spoofing their IP to bypass rate limiting or geo-blocking.
+    Only trusts forwarded headers when the direct peer IP is in the configured
+    TRUSTED_PROXY_IPS list (SEC-16). This prevents clients from spoofing their
+    IP to bypass rate limiting or geo-blocking.
 
-    When TRUSTED_PROXY_IPS is empty (default), X-Forwarded-For is never
-    trusted — a secure-by-default stance.  Deployments behind a reverse
-    proxy (nginx, Docker, load balancer) MUST set TRUSTED_PROXY_IPS to
-    the proxy's IP(s) so that real client IPs are logged correctly.
+    When the peer is a trusted proxy, the real client is the **right-most**
+    X-Forwarded-For entry that is not itself a trusted proxy. This is critical:
+    nginx appends to XFF via ``$proxy_add_x_forwarded_for``, so a client-supplied
+    left-most value (e.g. a forged allowlisted or non-blocked IP) would be
+    spoofable. Walking from the right and skipping trusted proxies yields the
+    proxy-appended peer, which the client cannot forge.
+
+    When TRUSTED_PROXY_IPS is empty (default), forwarded headers are never
+    trusted — a secure-by-default stance. Deployments behind a reverse proxy
+    (nginx, Docker, load balancer) MUST set TRUSTED_PROXY_IPS to the proxy's
+    IP(s) so that real client IPs are resolved correctly.
     """
     from app.core.config import settings
 
     direct_ip = request.client.host if request.client else "unknown"
     trusted_proxies = settings.get_trusted_proxy_ips()
 
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for and trusted_proxies and direct_ip in trusted_proxies:
-        # Take the left-most IP (original client)
-        return forwarded_for.split(",")[0].strip()
+    # Forwarded headers are only trustworthy if the direct peer is a known proxy.
+    if not trusted_proxies or direct_ip not in trusted_proxies:
+        return direct_ip
 
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        hops = [h.strip() for h in forwarded_for.split(",") if h.strip()]
+        # The right-most entry is appended by our trusted proxy; the first hop
+        # from the right that is NOT a trusted proxy is the real client. Any
+        # client-forged values sit further left and are never reached.
+        for hop in reversed(hops):
+            if hop not in trusted_proxies:
+                return hop
+
+    # XFF absent or entirely trusted proxies — fall back to X-Real-IP (nginx
+    # sets it to $remote_addr, which clients cannot append to), then the peer.
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
     return direct_ip
 
 

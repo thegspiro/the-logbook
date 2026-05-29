@@ -12,12 +12,12 @@ Email pattern: admin.thelogbook+{username}@gmail.com
 import asyncio
 import os
 import sys
-from datetime import date, datetime, timezone
+from datetime import date
 
 # Add backend to path so we can import app modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -63,7 +63,7 @@ TEST_USERS = [
     ("banderson",   "Brian",     "Anderson",   "emt",             "Headquarters", "active",        "active",       ["emt", "member", "communications_officer"]),
     ("ltaylor",     "Lisa",      "Taylor",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "historian"]),
     ("jwhite",      "Jason",     "White",      "emt",             "Headquarters", "active",        "active",       ["emt", "member", "public_outreach"]),
-    ("nharris",     "Nicole",    "Harris",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "membership_committee_chair"]),
+    ("nharris",     "Nicole",    "Harris",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "membership_coordinator"]),
     ("tmartin",     "Thomas",    "Martin",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "fundraising_chair"]),
     ("rjackson",    "Rachel",    "Jackson",    "emt",             "Headquarters", "active",        "active",       ["emt", "member", "facilities_manager"]),
     ("dthomas",     "Daniel",    "Thomas",     "emt",             "Headquarters", "active",        "active",       ["emt", "member", "meeting_hall_coordinator"]),
@@ -114,27 +114,62 @@ TEST_USERS = [
 
 # Hire dates spread across years to give variety
 HIRE_DATES = [
-    date(2005, 3, 15), date(2007, 6, 1), date(2008, 1, 10), date(2010, 9, 20),
-    date(2011, 4, 5), date(2012, 7, 12), date(2013, 2, 28), date(2013, 11, 3),
-    date(2014, 5, 17), date(2014, 8, 22), date(2015, 1, 6), date(2015, 3, 30),
-    date(2015, 10, 14), date(2016, 2, 8), date(2016, 6, 25), date(2016, 9, 11),
-    date(2017, 1, 19), date(2017, 4, 7), date(2017, 7, 23), date(2017, 11, 30),
-    date(2018, 3, 5), date(2018, 6, 18), date(2019, 1, 14), date(2019, 4, 28),
-    date(2019, 8, 9), date(2019, 11, 22), date(2020, 2, 3), date(2020, 5, 16),
-    date(2020, 9, 1), date(2020, 12, 7), date(2000, 6, 1), date(2001, 3, 15),
-    date(2003, 8, 20), date(2004, 11, 10), date(2006, 2, 14), date(2009, 7, 4),
-    date(2010, 12, 1), date(2021, 1, 11), date(2021, 4, 25), date(2021, 8, 13),
-    date(2021, 11, 6), date(2022, 2, 18), date(2022, 5, 30), date(2022, 9, 15),
-    date(2023, 1, 7), date(2023, 4, 20), date(2023, 7, 8), date(2023, 10, 29),
-    date(2024, 1, 15), date(2024, 6, 3),
+    date(2005, 3, 15),
+    date(2007, 6, 1),
+    date(2008, 1, 10),
+    date(2010, 9, 20),
+    date(2011, 4, 5),
+    date(2012, 7, 12),
+    date(2013, 2, 28),
+    date(2013, 11, 3),
+    date(2014, 5, 17),
+    date(2014, 8, 22),
+    date(2015, 1, 6),
+    date(2015, 3, 30),
+    date(2015, 10, 14),
+    date(2016, 2, 8),
+    date(2016, 6, 25),
+    date(2016, 9, 11),
+    date(2017, 1, 19),
+    date(2017, 4, 7),
+    date(2017, 7, 23),
+    date(2017, 11, 30),
+    date(2018, 3, 5),
+    date(2018, 6, 18),
+    date(2019, 1, 14),
+    date(2019, 4, 28),
+    date(2019, 8, 9),
+    date(2019, 11, 22),
+    date(2020, 2, 3),
+    date(2020, 5, 16),
+    date(2020, 9, 1),
+    date(2020, 12, 7),
+    date(2000, 6, 1),
+    date(2001, 3, 15),
+    date(2003, 8, 20),
+    date(2004, 11, 10),
+    date(2006, 2, 14),
+    date(2009, 7, 4),
+    date(2010, 12, 1),
+    date(2021, 1, 11),
+    date(2021, 4, 25),
+    date(2021, 8, 13),
+    date(2021, 11, 6),
+    date(2022, 2, 18),
+    date(2022, 5, 30),
+    date(2022, 9, 15),
+    date(2023, 1, 7),
+    date(2023, 4, 20),
+    date(2023, 7, 8),
+    date(2023, 10, 29),
+    date(2024, 1, 15),
+    date(2024, 6, 3),
 ]
 
 
 async def get_or_create_org(session: AsyncSession) -> str:
     """Return the first organization's ID, or create a demo org."""
-    result = await session.execute(
-        text("SELECT id FROM organizations LIMIT 1")
-    )
+    result = await session.execute(text("SELECT id FROM organizations LIMIT 1"))
     row = result.first()
     if row:
         return row[0]
@@ -156,9 +191,7 @@ async def get_or_create_org(session: AsyncSession) -> str:
     return org_id
 
 
-async def get_or_create_positions(
-    session: AsyncSession, org_id: str
-) -> dict[str, str]:
+async def get_or_create_positions(session: AsyncSession, org_id: str) -> dict[str, str]:
     """Return a dict of slug -> position_id for the org. Create defaults if missing."""
     result = await session.execute(
         text("SELECT id, slug FROM positions WHERE organization_id = :oid"),
@@ -194,7 +227,7 @@ async def get_or_create_positions(
         ("Scheduling Officer", "scheduling_officer", 44),
         ("Meeting Hall Coordinator", "meeting_hall_coordinator", 43),
         # Committee chairs
-        ("Membership Committee Chair", "membership_committee_chair", 42),
+        ("Membership Coordinator", "membership_coordinator", 42),
         ("Fundraising Chair", "fundraising_chair", 41),
         # Community
         ("Public Outreach", "public_outreach", 38),
@@ -227,14 +260,19 @@ async def get_or_create_positions(
 async def seed_users(session: AsyncSession, org_id: str) -> None:
     """Insert 50 test users and assign their positions."""
     pos_map = await get_or_create_positions(session, org_id)
-    now = datetime.now(timezone.utc)
 
     created = 0
     skipped = 0
 
     for i, (
-        username, first, last, rank, station,
-        membership, status, position_slugs
+        username,
+        first,
+        last,
+        rank,
+        station,
+        membership,
+        status,
+        position_slugs,
     ) in enumerate(TEST_USERS):
         # Check if user already exists
         exists = await session.execute(
@@ -307,16 +345,14 @@ async def main() -> None:
     db_port = os.getenv("DB_PORT", "3306")
     db_name = os.getenv("DB_NAME", "intranet_db")
 
-    url = (
-        f"mysql+aiomysql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
-    )
+    url = f"mysql+aiomysql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
 
     engine = create_async_engine(url, echo=False)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     print("Seeding 50 test users...")
     print(f"  Shared password: {SHARED_PASSWORD}")
-    print(f"  Email pattern:   admin.thelogbook+<username>@gmail.com\n")
+    print("  Email pattern:   admin.thelogbook+<username>@gmail.com\n")
 
     async with async_session() as session:
         async with session.begin():

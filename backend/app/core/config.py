@@ -441,14 +441,55 @@ class Settings(BaseSettings):
     # ============================================
     # Microsoft / Azure AD
     AZURE_AD_ENABLED: bool = False
+    # Single-tenant: the directory (tenant) GUID. Used in the authority URL and
+    # enforced against the ID token's `tid` claim so only this org can sign in.
     AZURE_AD_TENANT_ID: str | None = None
     AZURE_AD_CLIENT_ID: str | None = None
     AZURE_AD_CLIENT_SECRET: str | None = None
+    # Absolute URL Azure redirects back to. Must exactly match a redirect URI
+    # registered on the app in the Azure portal, e.g.
+    # https://app.example.org/api/v1/auth/oauth/microsoft/callback
+    AZURE_AD_REDIRECT_URI: str | None = None
+    # Comma-separated allowed email domains (empty = any account in the tenant,
+    # still subject to an existing local user matching the email).
+    AZURE_AD_ALLOWED_DOMAINS: str = ""
 
     # Google
     GOOGLE_OAUTH_ENABLED: bool = False
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
+    # Absolute URL Google redirects back to after consent. Must exactly match an
+    # "Authorized redirect URI" in the Google Cloud console, e.g.
+    # https://app.example.org/api/v1/auth/oauth/google/callback
+    GOOGLE_REDIRECT_URI: str | None = None
+    # Comma-separated list of allowed Google email domains (e.g.
+    # "yourdept.org,county.gov"). Empty = allow any Google account (still
+    # subject to an existing local user matching the email).
+    GOOGLE_ALLOWED_DOMAINS: str = ""
+    # Relative SPA paths the OAuth callback redirects to. Success lands on a
+    # lightweight page that establishes the session; failure returns to login.
+    OAUTH_SUCCESS_REDIRECT: str = "/auth/callback"
+    OAUTH_FAILURE_REDIRECT: str = "/login"
+
+    def get_google_allowed_domains(self) -> set[str]:
+        """Allowed Google email domains as a lowercased set (empty = any)."""
+        if not self.GOOGLE_ALLOWED_DOMAINS:
+            return set()
+        return {
+            d.strip().lower()
+            for d in self.GOOGLE_ALLOWED_DOMAINS.split(",")
+            if d.strip()
+        }
+
+    def get_azure_ad_allowed_domains(self) -> set[str]:
+        """Allowed Azure AD email domains as a lowercased set (empty = any)."""
+        if not self.AZURE_AD_ALLOWED_DOMAINS:
+            return set()
+        return {
+            d.strip().lower()
+            for d in self.AZURE_AD_ALLOWED_DOMAINS.split(",")
+            if d.strip()
+        }
 
     # LDAP
     LDAP_ENABLED: bool = False

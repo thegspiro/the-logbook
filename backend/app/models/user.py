@@ -221,6 +221,12 @@ class User(Base):
         String(255)
     )  # Personal/home email for post-separation contact
     password_hash = Column(String(255))
+    # OAuth / external identity provider linkage. NULL for password-only users.
+    # oauth_provider records the IdP ("google"); oauth_subject is the provider's
+    # stable, immutable user id (Google's "sub" claim) used to re-match on later
+    # logins even if the email address changes.
+    oauth_provider = Column(String(50), nullable=True)
+    oauth_subject = Column(String(255), nullable=True, index=True)
     first_name = Column(String(100))
     middle_name = Column(String(100))
     last_name = Column(String(100))

@@ -1307,9 +1307,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             APPARATUS_MAINTENANCE.name,
         ],
     },
-    "membership_committee_chair": {
-        "name": "Membership Committee Chair",
-        "slug": "membership_committee_chair",
+    "membership_coordinator": {
+        "name": "Membership Coordinator",
+        "slug": "membership_coordinator",
         "description": "Manages member records, applications, and onboarding/offboarding",
         "is_system": True,
         "priority": 55,
@@ -1557,7 +1557,7 @@ def get_admin_position_slugs() -> list[str]:
         "vice_president",
         "secretary",
         "quartermaster",
-        "membership_committee_chair",
+        "membership_coordinator",
     ]
 
 

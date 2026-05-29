@@ -26,6 +26,7 @@ export const LoginPage: React.FC = () => {
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
+  const [oauthError, setOAuthError] = useState<string | null>(null);
   const [branding, setBranding] = useState<OrgBranding>({ name: null, logo: null });
   const [oauthConfig, setOAuthConfig] = useState<OAuthConfig>({
     googleEnabled: false,
@@ -90,6 +91,28 @@ export const LoginPage: React.FC = () => {
     void loadBranding();
     void loadOAuthConfig();
   }, [clearError]);
+
+  // Surface OAuth failures: the backend redirects to /login?error=<code> when
+  // a Google sign-in cannot be completed.
+  useEffect(() => {
+    const code = new URLSearchParams(location.search).get('error');
+    if (!code) return;
+    const messages: Record<string, string> = {
+      access_denied: 'Google sign-in was cancelled.',
+      invalid_state: 'Your sign-in session expired. Please try again.',
+      domain_not_allowed:
+        'That Google account is not from an allowed domain. Contact your administrator.',
+      no_account:
+        'No account matches that Google email. Contact your administrator for access.',
+      inactive: 'Your account is inactive. Please contact an administrator.',
+      account_conflict:
+        'That Google account is already linked to a different user.',
+      unverified_email: 'Your Google email address is not verified.',
+    };
+    setOAuthError(messages[code] || 'Sign-in with Google failed. Please try again.');
+    // Strip the error param so a refresh doesn't re-show it.
+    navigate('/login', { replace: true });
+  }, [location.search, navigate]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -192,7 +215,7 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
-          {error?.trim() && (
+          {(error?.trim() || oauthError) && (
             <div className="rounded-md bg-red-50 dark:bg-red-500/10 p-4" role="alert" aria-live="assertive">
               <div className="flex">
                 <div className="shrink-0">
@@ -202,7 +225,7 @@ export const LoginPage: React.FC = () => {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm font-medium text-red-800 dark:text-red-400">
-                    {error}
+                    {error?.trim() || oauthError}
                   </p>
                 </div>
               </div>

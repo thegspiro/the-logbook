@@ -670,14 +670,46 @@ class IPSecurityService:
         await db.commit()
         await db.refresh(rule)
 
-        # Update GeoIP service
+        # Update GeoIP service (this worker) and notify the others.
         geoip = get_geoip_service()
         if geoip:
             geoip.add_blocked_country(country_code)
 
+        from app.core.geoip_sync import publish_geoip_invalidation
+
+        await publish_geoip_invalidation()
+
         logger.info(f"Added blocked country: {country_code} by admin {admin_id}")
 
         return rule
+
+    async def sync_blocked_countries_to_geoip(self, db: AsyncSession) -> Set[str]:
+        """
+        Apply persisted CountryBlockRule rows to the running GeoIP service.
+
+        The GeoIP service seeds its in-memory blocked-country set from the
+        ``BLOCKED_COUNTRIES`` config at startup, but admins manage countries
+        dynamically through the API (CountryBlockRule). Without this sync those
+        DB changes are lost on restart — added countries stop being enforced and
+        config-default countries that were unblocked come back. Call this once
+        at startup (after the GeoIP service is initialized) so the DB is the
+        source of truth over the config defaults.
+
+        Returns the effective set of blocked country codes.
+        """
+        geoip = get_geoip_service()
+        if not geoip:
+            return set()
+
+        result = await db.execute(select(CountryBlockRule))
+        for rule in result.scalars().all():
+            if rule.is_blocked:
+                geoip.add_blocked_country(rule.country_code)
+            else:
+                # An explicit unblock rule overrides a config default.
+                geoip.remove_blocked_country(rule.country_code)
+
+        return geoip.get_blocked_countries()
 
 
 # Global service instance
