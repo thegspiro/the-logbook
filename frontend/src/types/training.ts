@@ -2162,6 +2162,7 @@ export interface ComplianceConfigData {
   compliantThreshold: number;
   atRiskThreshold: number;
   gracePeriodDays: number;
+  includeCurrentMonth: boolean;
   autoReportFrequency: string;
   reportEmailRecipients?: string[];
   reportDayOfMonth?: number;
@@ -2178,6 +2179,7 @@ export interface ComplianceConfigUpdate {
   compliant_threshold?: number | undefined;
   at_risk_threshold?: number | undefined;
   grace_period_days?: number | undefined;
+  include_current_month?: boolean | undefined;
   auto_report_frequency?: string | undefined;
   report_email_recipients?: string[] | undefined;
   report_day_of_month?: number | undefined;

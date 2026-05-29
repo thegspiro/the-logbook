@@ -22,6 +22,7 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import User, UserStatus
+from app.services.training_period import resolve_as_of_date
 from app.services.training_waiver_service import (
     adjust_required,
     fetch_org_waivers,
@@ -519,6 +520,22 @@ async def _load_compliance_config(
     return result.scalars().first()
 
 
+async def get_compliance_as_of_date(
+    db: AsyncSession,
+    org_id: str,
+    today: Optional[date] = None,
+) -> date:
+    """Resolve the effective evaluation date for an org's compliance calcs.
+
+    Honors the ``include_current_month`` compliance-config setting. When no
+    config exists the current month is included (preserves legacy behaviour).
+    """
+    today = today or date.today()
+    config = await _load_compliance_config(db, org_id)
+    include_current = True if config is None else bool(config.include_current_month)
+    return resolve_as_of_date(today, include_current)
+
+
 async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     """Compute organization-wide training compliance percentage.
 
@@ -600,7 +617,10 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     # Fetch waivers
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    today = date.today()
+    # Respect the org's evaluation-period setting (include current month or
+    # stop at the end of the previous month). Config is already loaded above.
+    include_current = True if config is None else bool(config.include_current_month)
+    today = resolve_as_of_date(date.today(), include_current)
     compliant_count = 0
 
     for member in members:

@@ -95,6 +95,19 @@ class ComplianceConfig(Base):
         comment="Days after deadline before marking non-compliant",
     )
 
+    # -- Evaluation period boundary --
+    include_current_month = Column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="1",
+        comment=(
+            "When false, compliance calculations evaluate as of the last day "
+            "of the previous month so the in-progress month does not yet "
+            "count against members (e.g. departments that drill end-of-month)."
+        ),
+    )
+
     # -- Report scheduling --
     auto_report_frequency = Column(
         String(20),

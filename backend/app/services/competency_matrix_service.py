@@ -27,6 +27,7 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import User, UserStatus
+from app.services.training_compliance import get_compliance_as_of_date
 from app.services.training_waiver_service import (
     WaiverPeriod,
     adjust_required,
@@ -123,7 +124,7 @@ class CompetencyMatrixService:
         # Batch-fetch all active waivers / leaves for the org
         waivers_by_user = await fetch_org_waivers(self.db, str(organization_id))
 
-        today = date.today()
+        today = await get_compliance_as_of_date(self.db, str(organization_id))
         expiring_threshold = today + timedelta(days=90)
 
         # Counters

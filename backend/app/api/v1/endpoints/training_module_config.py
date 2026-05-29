@@ -36,6 +36,7 @@ from app.schemas.training_module_config import (
     TrainingModuleConfigResponse,
     TrainingModuleConfigUpdate,
 )
+from app.services.training_compliance import get_compliance_as_of_date
 from app.services.training_module_config_service import TrainingModuleConfigService
 from app.services.training_service import TrainingService
 from app.services.training_waiver_service import fetch_user_waivers
@@ -223,7 +224,7 @@ async def get_my_training_summary(
     # Evaluate every applicable requirement using the shared helper which
     # handles all requirement types (hours, courses, certification,
     # shifts, calls, fallback) and rolling period windows.
-    today = date.today()
+    today = await get_compliance_as_of_date(db, str(org_id))
     met_count = 0
     total_progress_pct = 0.0
     requirements_detail: list[dict[str, Any]] = []

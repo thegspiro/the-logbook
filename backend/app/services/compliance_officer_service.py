@@ -33,7 +33,10 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import User, UserStatus
-from app.services.training_compliance import evaluate_member_requirement
+from app.services.training_compliance import (
+    evaluate_member_requirement,
+    get_compliance_as_of_date,
+)
 from app.services.training_waiver_service import fetch_org_waivers
 
 # ISO/FSRS training hour requirements per category (annual, per member)
@@ -662,7 +665,7 @@ class AnnualComplianceReportService:
         """
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
-        today = date.today()
+        today = await get_compliance_as_of_date(self.db, organization_id)
 
         # Get active members (exclude compliance-exempt)
         members_result = await self.db.execute(

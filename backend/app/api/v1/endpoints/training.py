@@ -51,6 +51,7 @@ from app.schemas.training import (
 )
 from app.services.training_compliance import (
     evaluate_member_requirement,
+    get_compliance_as_of_date,
     get_requirement_date_window,
 )
 from app.services.training_service import TrainingService
@@ -873,7 +874,7 @@ async def get_compliance_summary(
     or ``required_roles``) are counted.
     """
     org_id = current_user.organization_id
-    today = date.today()
+    today = await get_compliance_as_of_date(db, str(org_id))
 
     # Get user stats for hours and cert counts
     training_service = TrainingService(db)
@@ -2030,7 +2031,7 @@ async def get_compliance_matrix(
     # Batch-fetch all active waivers / leaves for the org
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    today = date.today()
+    today = await get_compliance_as_of_date(db, str(org_id))
     matrix = []
 
     for member in members:
