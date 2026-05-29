@@ -1,14 +1,14 @@
 """
-Unit tests for Google OAuth (DB-light).
+Unit tests for Google and Microsoft OAuth (DB-light).
 
 Covers the security-critical, network-independent logic:
 - is_configured() gating
-- build_authorization_url() params + single-domain `hd` hint
+- build_authorization_url() params (Google `hd` hint; Microsoft tenant scoping)
 - resolve_user() account-mapping policy (link-existing-only, domain allowlist,
-  verified-email requirement, active check, subject-conflict guard)
+  active check, subject/provider conflict guard)
 
-The token exchange and ID-token signature verification call out to Google and
-are intentionally not unit-tested here.
+The token exchange and ID-token signature verification call out to the provider
+and are intentionally not unit-tested here.
 """
 
 from types import SimpleNamespace
@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from app.core.config import settings
-from app.services.oauth_service import GoogleOAuthService
+from app.services.oauth_service import GoogleOAuthService, MicrosoftOAuthService
 
 
 @pytest.fixture(autouse=True)
