@@ -46,46 +46,42 @@ type ActiveSection =
   | 'attestations'
   | 'forecast';
 
-const ComplianceOfficerDashboard: React.FC = () => {
-  const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState<ActiveSection>('annual-report');
+interface ComplianceOfficerDashboardProps {
+  // Section is driven by the parent Training Admin Hub's tab bar so the two
+  // stay in sync with the ?tab= URL param. Falls back to the annual report
+  // when an unrecognized tab id is supplied.
+  activeTab?: string;
+}
 
-  const sections: Array<{ id: ActiveSection; label: string; icon: React.ElementType }> = [
-    { id: 'annual-report', label: 'Annual Report', icon: FileText },
-    { id: 'iso-readiness', label: 'ISO Readiness', icon: BarChart3 },
-    { id: 'record-completeness', label: 'Record Quality', icon: ClipboardCheck },
-    { id: 'attestations', label: 'Attestations', icon: Shield },
-    { id: 'forecast', label: 'Forecast', icon: TrendingUp },
-  ];
+const KNOWN_SECTIONS: ActiveSection[] = [
+  'annual-report',
+  'iso-readiness',
+  'record-completeness',
+  'attestations',
+  'forecast',
+];
+
+const ComplianceOfficerDashboard: React.FC<ComplianceOfficerDashboardProps> = ({
+  activeTab,
+}) => {
+  const navigate = useNavigate();
+  const activeSection: ActiveSection =
+    activeTab && (KNOWN_SECTIONS as string[]).includes(activeTab)
+      ? (activeTab as ActiveSection)
+      : 'annual-report';
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Section Tabs */}
-      <div className="flex flex-wrap items-center gap-2 mb-6">
-        {sections.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setActiveSection(id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeSection === id
-                ? 'bg-red-600 text-white'
-                : 'bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            {label}
-          </button>
-        ))}
-        <div className="ml-auto">
-          <button
-            onClick={() => navigate('/training/compliance-config')}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
-            title="Compliance Requirements Configuration"
-          >
-            <Settings className="w-4 h-4" />
-            Configure
-          </button>
-        </div>
+      {/* Configure action — section selection is handled by the admin hub tabs */}
+      <div className="flex justify-end mb-6">
+        <button
+          onClick={() => navigate('/training/compliance-config')}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-theme-input-bg text-theme-text-secondary hover:bg-theme-surface-hover transition-colors"
+          title="Compliance Requirements Configuration"
+        >
+          <Settings className="w-4 h-4" />
+          Configure
+        </button>
       </div>
 
       {/* Section Content */}

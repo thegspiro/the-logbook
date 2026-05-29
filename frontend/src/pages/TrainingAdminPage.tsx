@@ -268,7 +268,7 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
 
   // Compliance Officer sub-page
   if (page === "compliance") {
-    return <ComplianceOfficerDashboard />;
+    return <ComplianceOfficerDashboard activeTab={tab} />;
   }
 
   return null;

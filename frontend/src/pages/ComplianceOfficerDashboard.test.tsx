@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 
 const mockGetAnnualReport = vi.fn();
@@ -109,25 +108,21 @@ describe('ComplianceOfficerDashboard', () => {
     mockGetComplianceForecast.mockResolvedValue([]);
   });
 
-  it('renders section tab buttons', () => {
-    renderWithRouter(<ComplianceOfficerDashboard />);
+  it('renders the Configure action', () => {
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
 
-    expect(screen.getByText('Annual Report')).toBeInTheDocument();
-    expect(screen.getByText('ISO Readiness')).toBeInTheDocument();
-    expect(screen.getByText('Record Quality')).toBeInTheDocument();
-    expect(screen.getByText('Attestations')).toBeInTheDocument();
-    expect(screen.getByText('Forecast')).toBeInTheDocument();
+    expect(screen.getByText('Configure')).toBeInTheDocument();
   });
 
   it('shows loading state initially', () => {
     mockGetAnnualReport.mockReturnValue(new Promise(() => {}));
-    renderWithRouter(<ComplianceOfficerDashboard />);
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
 
     // The AnnualReportSection is rendered by default and shows a loading spinner
     expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
-  it('renders Annual Report section by default', async () => {
+  it('renders Annual Report section by default when no tab is provided', async () => {
     renderWithRouter(<ComplianceOfficerDashboard />);
 
     await waitFor(() => {
@@ -137,11 +132,16 @@ describe('ComplianceOfficerDashboard', () => {
     expect(mockGetAnnualReport).toHaveBeenCalledWith(new Date().getFullYear());
   });
 
-  it('can switch to ISO Readiness section', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<ComplianceOfficerDashboard />);
+  it('renders Annual Report section for an unrecognized tab', async () => {
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="bogus" />);
 
-    await user.click(screen.getByText('ISO Readiness'));
+    await waitFor(() => {
+      expect(screen.getByText(/Annual Compliance Report/)).toBeInTheDocument();
+    });
+  });
+
+  it('renders the ISO Readiness section when activeTab is iso-readiness', async () => {
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="iso-readiness" />);
 
     await waitFor(() => {
       expect(screen.getByText(/ISO\/FSRS Readiness Assessment/)).toBeInTheDocument();
@@ -150,11 +150,10 @@ describe('ComplianceOfficerDashboard', () => {
     expect(mockGetISOReadiness).toHaveBeenCalledWith();
   });
 
-  it('can switch to Record Quality section', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<ComplianceOfficerDashboard />);
-
-    await user.click(screen.getByText('Record Quality'));
+  it('renders the Record Quality section when activeTab is record-completeness', async () => {
+    renderWithRouter(
+      <ComplianceOfficerDashboard activeTab="record-completeness" />,
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/Training Record Quality/)).toBeInTheDocument();
@@ -163,11 +162,8 @@ describe('ComplianceOfficerDashboard', () => {
     expect(mockGetRecordCompleteness).toHaveBeenCalledWith();
   });
 
-  it('can switch to Attestations section', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<ComplianceOfficerDashboard />);
-
-    await user.click(screen.getByText('Attestations'));
+  it('renders the Attestations section when activeTab is attestations', async () => {
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="attestations" />);
 
     await waitFor(() => {
       expect(screen.getByText(/Compliance Attestations/)).toBeInTheDocument();
@@ -177,7 +173,7 @@ describe('ComplianceOfficerDashboard', () => {
   });
 
   it('displays admin hours and total contributed hours in annual report', async () => {
-    renderWithRouter(<ComplianceOfficerDashboard />);
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
 
     await waitFor(() => {
       expect(screen.getByText(/Annual Compliance Report/)).toBeInTheDocument();
@@ -188,7 +184,7 @@ describe('ComplianceOfficerDashboard', () => {
   });
 
   it('shows admin hours by category breakdown', async () => {
-    renderWithRouter(<ComplianceOfficerDashboard />);
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="annual-report" />);
 
     await waitFor(() => {
       expect(screen.getByText('Admin Hours by Category')).toBeInTheDocument();
@@ -198,11 +194,8 @@ describe('ComplianceOfficerDashboard', () => {
     expect(screen.getByText('Fundraising')).toBeInTheDocument();
   });
 
-  it('can switch to Forecast section', async () => {
-    const user = userEvent.setup();
-    renderWithRouter(<ComplianceOfficerDashboard />);
-
-    await user.click(screen.getByText('Forecast'));
+  it('renders the Forecast section when activeTab is forecast', async () => {
+    renderWithRouter(<ComplianceOfficerDashboard activeTab="forecast" />);
 
     await waitFor(() => {
       // With empty forecast data, the section shows an empty state message
