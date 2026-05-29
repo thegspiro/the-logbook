@@ -350,7 +350,7 @@ positions with permission toggles.]**
 
 > "**Specialist Positions:** Training Officer, Safety Officer, Quartermaster,
 > Scheduling Officer, Apparatus Officer, Facilities Manager, Communications
-> Officer, and Membership Committee Chair. Each has permissions scoped to their
+> Officer, and Membership Coordinator. Each has permissions scoped to their
 > area."
 
 ### CUSTOMIZING PERMISSIONS (14:00 – 15:00)

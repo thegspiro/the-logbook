@@ -463,7 +463,8 @@ Body: {
 
 **Options**:
 - Local (Username/Password)
-- OAuth 2.0 (Google, Microsoft)
+- OAuth 2.0 (Google, Microsoft) — **link-existing only** (see
+  "OAuth Sign-In Buttons" below); OAuth never creates new accounts
 - SAML (Enterprise SSO)
 - LDAP (Active Directory)
 
@@ -1188,4 +1189,41 @@ Fully built frontend pages for: Events, Inventory, Training, Documents, Scheduli
 
 ---
 
-**Last Updated**: February 12, 2026 (Added role/module config persistence, dashboard stats API, auth token handling, 16 system roles, orphaned role filtering, branding transfer mechanism)
+## OAuth Sign-In Buttons (2026-05-28)
+
+The login page can show "Sign in with Google" and "Sign in with Microsoft"
+buttons, but they appear **only** when both conditions hold:
+
+1. **Org auth provider is set to the matching provider** — the active org's
+   `settings["auth"]["provider"]` is `"google"` or `"microsoft"` (chosen on the
+   Authentication Choice onboarding page).
+2. **The server is fully configured for that provider** — the required env vars
+   are present, verified server-side by `GoogleOAuthService.is_configured()` /
+   `MicrosoftOAuthService.is_configured()` (client ID/secret **and** the redirect
+   URI).
+
+The login page reads this from `GET /api/v1/auth/oauth-config`, which returns
+`{ "googleEnabled": bool, "microsoftEnabled": bool }`. Each flag is `true` only
+when the provider is selected **and** configured, so a button can never be shown
+that would 404 on click (`backend/app/api/v1/endpoints/auth.py`,
+`frontend/src/pages/LoginPage.tsx`).
+
+### Operational notes
+
+- **Redirect URI must match the IdP console.** `GOOGLE_REDIRECT_URI` /
+  `AZURE_AD_REDIRECT_URI` must exactly match the authorized redirect URI
+  registered in the Google Cloud / Azure AD app registration, or the provider
+  rejects the callback. The provider is treated as "not configured" (button
+  hidden) if its redirect URI env var is unset.
+- **Link-existing only.** OAuth sign-in **never creates a new account**. It links
+  to an existing local user matched by the verified email; if no local account
+  matches, login fails with a `no_account` error ("No account matches that
+  Google email. Contact your administrator for access."). The user record gains
+  `oauth_provider` / `oauth_subject` columns (migration `20260528_0002`) so a
+  subject mismatch on a later login is also rejected.
+- Google sign-in can additionally be restricted by allowed email domain.
+
+---
+
+**Last Updated**: May 29, 2026 (Added OAuth sign-in button gating: provider selection + server configuration, link-existing-only policy, redirect-URI requirement)
+**Previously**: February 12, 2026 (role/module config persistence, dashboard stats API, auth token handling, 16 system roles, orphaned role filtering, branding transfer mechanism)

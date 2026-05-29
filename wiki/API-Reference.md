@@ -71,6 +71,8 @@ Response:
 | `/api/v1/minutes` | Meeting Minutes | Authenticated |
 | `/api/v1/documents` | Documents | Authenticated |
 | `/api/v1/pipelines` | Prospective Members | `prospective_members.manage` |
+| `/api/v1/prospective-members` | Prospective Members (pipelines, prospects, documents) | `prospective_members.manage` |
+| `/api/v1/audit-logs` | Audit Logs (admin read API) | `audit.view` |
 | `/api/v1/reports` | Reports | `reports.view` |
 
 ### Public Endpoints (No Auth Required)
@@ -180,6 +182,45 @@ PATCH  /api/v1/messages/{id}                             # Update message
 DELETE /api/v1/messages/{id}                             # Delete message
 POST   /api/v1/messages/{id}/read                        # Mark message as read
 POST   /api/v1/messages/{id}/clear                       # Admin clear persistent message
+```
+
+---
+
+## Audit Logs (Admin) *(2026-05-29)*
+
+Read-only admin API for browsing the audit trail. Permission: `audit.view`.
+Results are org-scoped by joining through users (`AuditLog.user_id` IN the
+caller's organization users); NULL-user system events are excluded.
+
+```
+GET    /api/v1/audit-logs                                # List (filters below; skip/limit)
+GET    /api/v1/audit-logs/stats                          # Summary counts (by severity, by category)
+GET    /api/v1/audit-logs/{log_id}                       # Get a single audit entry
+```
+
+Filters on the list endpoint: `event_type`, `event_category`,
+`severity` (`info` \| `warning` \| `critical`), `user_id`, `search` (username or
+event-type substring), `start_date`, `end_date`, `skip` (≥0), `limit` (1–500).
+
+## OAuth Sign-In *(2026-05-29)*
+
+```
+GET    /api/v1/auth/oauth-config                         # Enabled OAuth providers (for the login page)
+GET    /api/v1/auth/oauth/google                         # Initiate Google sign-in (404 if not configured)
+GET    /api/v1/auth/oauth/google/callback                # Google OAuth callback
+GET    /api/v1/auth/oauth/microsoft                      # Initiate Microsoft sign-in (404 if not configured)
+GET    /api/v1/auth/oauth/microsoft/callback             # Microsoft OAuth callback
+```
+
+See [Authentication > OAuth](Security-Authentication#oauth) for the
+link-existing-only policy, domain restriction, and callback error codes.
+
+## Prospective Member Documents *(2026-05-29)*
+
+```
+GET    /api/v1/prospective-members/prospects/{id}/documents                       # List documents
+POST   /api/v1/prospective-members/prospects/{id}/documents                       # Upload document (multipart, ≤50MB, magic-byte MIME)
+GET    /api/v1/prospective-members/prospects/{id}/documents/{document_id}/download # Download a stored document
 ```
 
 ---

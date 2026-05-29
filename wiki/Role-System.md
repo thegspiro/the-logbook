@@ -64,6 +64,14 @@ The following roles are automatically created for each organization:
    - Cannot modify most settings
    - Cannot be deleted
 
+> **Role rename (2026-05-29):** The system position **"Membership Committee
+> Chair"** was renamed to **"Membership Coordinator"** (slug
+> `membership_committee_chair` → `membership_coordinator`). The rename is applied
+> in place by migration `20260528_0001` via an `UPDATE` of the existing position
+> row, so the UUID-keyed `user_positions` assignments are preserved. The
+> permission set is unchanged — it still carries `prospective_members.manage`
+> (view/upload/delete of prospect documents).
+
 ## Permission Categories
 
 Permissions are organized into the following categories:

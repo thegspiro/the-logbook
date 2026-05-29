@@ -121,6 +121,17 @@ docker-compose up -d
 
 ## 📊 Latest Updates
 
+### May 2026 (May 1-28) — OAuth Sign-In, IP/GeoIP Hardening, Compliance Evaluation Period, Shift Follow-Up, Audit Log Admin & Training Exports
+
+- **OAuth sign-in**: "Sign in with Google" and "Sign in with Microsoft" (Azure AD, single-tenant) via OpenID Connect. **Link-existing-only** (never auto-creates accounts) and optionally domain-restricted. ID tokens cryptographically verified (Google issuer check; Microsoft RS256 + tenant `tid` lock). CSRF state in an httpOnly `oauth_state` cookie; each sign-in logs an `oauth_login` audit event. New `users.oauth_provider` / `users.oauth_subject` columns; SPA landing at `/auth/callback`
+- **IP security & GeoIP hardening**: `get_client_ip()` rewritten to trust forwarded headers only from `TRUSTED_PROXY_IPS` and read the right-most non-proxy hop (was left-most/spoofable). DB `CountryBlockRule` rows are now the source of truth for blocked countries, synced into the running GeoIP service at startup and on change (multi-worker via Redis `geoip:invalidate`). Unknown country = fail-open
+- **Compliance evaluation period**: org-wide `compliance_configs.include_current_month` plus per-requirement `training_requirements.include_current_month` override control whether the in-progress month counts, so members aren't flagged mid-month. Cert "expiring soon" lookahead still uses real today
+- **Scheduling follow-up tasks**: new `end_of_shift_summary` (per-member hours/calls summary email + in-app) and `trainee_report_escalation` (reminds trainees of unacknowledged reports; low-rating officer alerts). Richer shift reminders (crew roster, checklists, "Mark Arrival"), email on by default, and fixed check-in/report deep links
+- **Audit log admin API & page**: read API `GET /api/v1/audit-logs` (+ `/stats`, `/{log_id}`) gated by `audit.view`, org-scoped through users; admin page at `/admin/audit-log`. New `event_attendee_overwritten` audit event when a manager overwrites an RSVP
+- **Training exports & attachments**: member self-export of own records (CSV/PDF, gated by `allow_member_report_export`); officer `member_records`/`hours_summary`/`certification` export types (unknown type → 400); real training-record attachment upload/download (≤25MB, magic-byte MIME). `require_completion_confirmation` now gates finalize sign-off; dead `TrainingSession.approval_required` column dropped
+- **Prospective members**: prospect documents are now actually stored (multipart upload ≤50MB, magic-byte MIME) under org-scoped paths, with a download endpoint. System role "Membership Committee Chair" renamed to "Membership Coordinator" (in-place, assignments preserved)
+- **Dashboard & offline**: "Upcoming Events" count limited to the next 30 days; offline RSVP/training-submission queuing via IndexedDB. Hardened inventory notification retries (`attempt_count`/`last_attempt_at`); locked in training-config boolean server defaults
+
 ### March 2026 (Mar 28-31) — Shift Completion Pipeline, Analytics Dashboards, Elections Fixes, Code Quality & Frontend Consolidation
 
 - **Shift completion pipeline**: End-to-end shift finalization workflow with `POST /scheduling/shifts/{id}/finalize`. Snapshots call_count and total_hours, computes per-member call_count, auto-creates draft ShiftCompletionReports for enrolled trainees. Pre-finalization checklist validates equipment checks. Finalized shifts and shifts with reports protected from deletion. Auto-populate report data from shift records (hours, calls, call types) with audit trail in `data_sources` JSON

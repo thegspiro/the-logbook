@@ -23,7 +23,9 @@ The Training module tracks courses, certifications, training requirements, progr
 - **National Registry Standard Linkage** — *(2026-04-11)* Training categories can be linked to NREMT NCCR codes via the `registry_code` column, enabling automatic compliance tracking against national continued competency requirements
 - **Registry Generator Tool** — Standalone CLI tool (`scripts/generate_registry.py`) for generating registries from standards bodies, with `--list` flag to show available registries
 - **Source Tracking on Imports** — Imported requirements include `source`, `source_url`, and `last_updated` fields for traceability
-- **Training Record Attachments** — Upload certificates, transcripts, and completion letters to training records
+- **Training Record Attachments** — Upload certificates, transcripts, and completion letters to training records. *(2026-05-29)* Files are now really stored (the endpoint was previously a stub): multipart upload ≤25MB, MIME validated by magic bytes (PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX), stored under `/app/uploads/training_attachments/{org_id}/{uuid}{ext}` with metadata in the `TrainingRecord.attachments` JSON column; server file paths are never returned. Access is gated to the record owner or `training.manage`
+- **Member Self-Export** — *(2026-05-29)* Members can export their own training history as CSV or PDF via `GET /training/module-config/my-training/export`, gated by the org `allow_member_report_export` setting (403 when disabled). Omitting `start_date` returns the member's entire lifetime history
+- **Officer Member-Record Exports** — *(2026-05-29)* `POST /training/reports/export` (permission `training.manage`) gained `member_records` (bulk export of all active members), `hours_summary`, and `certification` CSV report types. Unknown report types now return 400 instead of silently falling through to a compliance report; bulk PDFs are merged with `pypdf` (empty result → placeholder page)
 - **Recertification Tracking** — *(2026-03-05)* Automated recertification reminders with configurable lead times. Scheduled Celery task sends tiered notifications before certification expiry
 - **Instructor Management** — *(2026-03-05)* Track instructor qualifications (instructor, evaluator, lead_instructor, mentor), availability, and assignment to training sessions with validation
 - **Effectiveness Scoring** — *(2026-03-05)* Training effectiveness measurement using Kirkpatrick model (reaction, learning, behavior, results)
@@ -248,6 +250,7 @@ GET    /api/v1/training/module-config/config               # Get module config
 PUT    /api/v1/training/module-config/config               # Update module config
 GET    /api/v1/training/module-config/visibility           # Get member visibility settings
 GET    /api/v1/training/module-config/my-training          # Get my training summary config
+GET    /api/v1/training/module-config/my-training/export   # Export my own training history (CSV/PDF; gated by allow_member_report_export) (2026-05-29)
 GET    /api/v1/training/module-config/skill-names          # Get active SkillEvaluation names for skill linkage
 ```
 
@@ -336,8 +339,9 @@ GET    /api/v1/training/reports/compliance-forecast         # Compliance forecas
 ### Training Record Attachments
 
 ```
-GET    /api/v1/training/records/{id}/attachments           # List attachments
-POST   /api/v1/training/records/{id}/attachments           # Upload attachment
+GET    /api/v1/training/records/{id}/attachments                       # List attachments (metadata only, no file paths)
+POST   /api/v1/training/records/{id}/attachments                       # Upload attachment (multipart, ≤25MB, magic-byte MIME) (2026-05-29)
+GET    /api/v1/training/records/{id}/attachments/{index}/download       # Download a stored attachment by index (2026-05-29)
 ```
 
 ### Compliance Officer
@@ -879,6 +883,61 @@ Each source page now includes a **Print** button that navigates to the correspon
 | Compliance matrix with 100+ members | Paginated across multiple printed pages with repeated column headers |
 | Browser blocks auto-print dialog | Page remains visible for manual Ctrl+P |
 | Print page for member on leave | Leave period shown with pro-rated requirement adjustments |
+
+---
+
+## Recent Changes (2026-05-29)
+
+### Session Finalize & Sign-Off
+
+- **`require_completion_confirmation` now gates finalize sign-off.** When
+  `false` (the default), finalizing a session **auto-approves and completes**
+  the training records immediately with no officer email. When `true`, records
+  are left pending and the training officers are notified for confirmation
+- **Finalize promotes the existing in-progress check-in record** instead of
+  creating a duplicate, so a member's check-in becomes their completed record
+- **Dead `TrainingSession.approval_required` column removed** (migration
+  `20260502_0004`). Any earlier docs implying finalize "always requires
+  approval" or referencing `approval_required` are stale — sign-off is governed
+  **solely** by `require_completion_confirmation`
+
+### Member & Officer Exports
+
+- **Member self-export** of own training history (CSV/PDF) via
+  `GET /training/module-config/my-training/export`, gated by the org
+  `allow_member_report_export` setting (403 when disabled); lifetime history when
+  `start_date` is omitted
+- **Officer exports** (`POST /training/reports/export`, `training.manage`) gained
+  `member_records` (bulk all active members), `hours_summary`, and
+  `certification` CSV types. Unknown `report_type` now returns 400 (no silent
+  compliance fallthrough). PDF export is available only for `individual`,
+  `member_records`, and `compliance`; bulk PDFs are merged with `pypdf` (empty →
+  placeholder page)
+- **Mislabeled officer reports fixed** so per-member exports reflect the correct
+  member's records
+
+### Real Attachment Storage
+
+- `POST /training/records/{id}/attachments` now stores the uploaded file
+  (≤25MB, magic-byte MIME PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX) under
+  `/app/uploads/training_attachments/{org_id}/{uuid}{ext}`, with metadata in the
+  `TrainingRecord.attachments` JSON column. `GET .../attachments/{index}/download`
+  streams a stored file. Access is the record owner or `training.manage`; server
+  file paths are never returned
+
+### Internal
+
+- **Skills-test scoring extracted** to a pure function
+  `skills_testing_service.calculate_test_result` for direct unit testing
+- **Compliance admin tabs wired up** on the Enhancements/compliance UI
+
+### Data Model Changes (2026-05-29)
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `compliance_configs` | `include_current_month` | Boolean (NOT NULL, server_default `1`) | `20260503_0001` | Org default: count the in-progress month toward compliance |
+| `training_requirements` | `include_current_month` | Boolean (nullable) | `20260503_0002` | Per-requirement override; `NULL` inherits the org default |
+| `training_sessions` | `approval_required` | — (dropped) | `20260502_0004` | Removed dead column; finalize is gated by `require_completion_confirmation` |
 
 ---
 

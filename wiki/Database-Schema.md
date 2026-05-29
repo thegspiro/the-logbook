@@ -257,4 +257,26 @@ The `organizations.settings` JSON column stores email platform configuration und
 
 ---
 
+## Recent Schema Changes (2026-05-29)
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `users` | `oauth_provider` | String(50) (nullable) | `20260528_0002` | IdP that owns this identity (`google` / `microsoft`); `NULL` for password-only accounts |
+| `users` | `oauth_subject` | String(255) (nullable, indexed) | `20260528_0002` | Provider's stable subject identifier (index `ix_users_oauth_subject`) |
+| `compliance_configs` | `include_current_month` | Boolean (NOT NULL, server_default `1`) | `20260503_0001` | Org default: whether the in-progress month counts toward compliance |
+| `training_requirements` | `include_current_month` | Boolean (nullable) | `20260503_0002` | Per-requirement override; `NULL` inherits the org default |
+| `inventory_notification_queue` | `attempt_count` | Integer (NOT NULL, server_default `0`) | `20260502_0002` | Delivery retry counter |
+| `inventory_notification_queue` | `last_attempt_at` | DateTime(tz, nullable) | `20260502_0002` | Timestamp of the last delivery attempt |
+
+### Column Modifications
+
+| Table | Change | Migration | Reason |
+|-------|--------|-----------|--------|
+| `training_module_configs` | Added `server_default` to the boolean toggle columns; backfilled NULLs to defaults | `20260502_0001` / `20260502_0003` | Ensure non-NULL booleans on fresh inserts and existing rows (config response also coerces NULL `manual_entry_*` booleans to defaults) |
+| `training_sessions` | Dropped dead `approval_required` column | `20260502_0004` | Unused — finalize sign-off is governed solely by `require_completion_confirmation` |
+
+---
+
 **See also:** [Backend Development](Development-Backend) | [API Reference](API-Reference)

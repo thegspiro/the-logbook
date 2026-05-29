@@ -13,24 +13,27 @@ The Training module tracks courses, certifications, training requirements, progr
 5. [Training Requirements](#training-requirements)
 6. [Officer Dashboard](#officer-dashboard)
 7. [Reviewing Submissions](#reviewing-submissions)
-8. [Compliance Matrix](#compliance-matrix)
-9. [Expiring Certifications](#expiring-certifications)
-10. [Waiver Management](#waiver-management)
-11. [Compliance Summary](#compliance-summary)
-12. [Shift Completion Reports](#shift-completion-reports)
-13. [Manual Shift Report Entry](#manual-shift-report-entry)
-14. [External Training Integrations](#external-training-integrations)
-15. [Historical Import](#historical-import)
-16. [Competency Matrix](#competency-matrix)
-17. [Recertification Tracking](#recertification-tracking)
-18. [Instructor Management](#instructor-management)
-19. [Training Effectiveness Scoring](#training-effectiveness-scoring)
-20. [Multi-Agency Training](#multi-agency-training)
-21. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
-22. [Compliance Officer Dashboard](#compliance-officer-dashboard)
-23. [Training Record Attachments](#training-record-attachments)
-24. [Troubleshooting](#troubleshooting)
-25. [Skills Testing](#skills-testing)
+8. [Finalizing a Training Session](#finalizing-a-training-session)
+9. [Compliance Matrix](#compliance-matrix)
+10. [Evaluation Period (Current vs. Prior Month)](#evaluation-period-current-vs-prior-month)
+11. [Expiring Certifications](#expiring-certifications)
+12. [Waiver Management](#waiver-management)
+13. [Compliance Summary](#compliance-summary)
+14. [Shift Completion Reports](#shift-completion-reports)
+15. [Manual Shift Report Entry](#manual-shift-report-entry)
+16. [Officer Training Record Exports](#officer-training-record-exports)
+17. [External Training Integrations](#external-training-integrations)
+18. [Historical Import](#historical-import)
+19. [Competency Matrix](#competency-matrix)
+20. [Recertification Tracking](#recertification-tracking)
+21. [Instructor Management](#instructor-management)
+22. [Training Effectiveness Scoring](#training-effectiveness-scoring)
+23. [Multi-Agency Training](#multi-agency-training)
+24. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
+25. [Compliance Officer Dashboard](#compliance-officer-dashboard)
+26. [Training Record Attachments](#training-record-attachments)
+27. [Troubleshooting](#troubleshooting)
+28. [Skills Testing](#skills-testing)
 
 ---
 
@@ -49,6 +52,23 @@ This page shows:
 > _[Screenshot of the My Training page showing stat cards at the top (total hours, courses completed, etc.), an active enrollment card with a progress bar, and a list of recent training records below]_
 
 > **Hint:** The visibility of sections on this page is controlled by your department's Training Module Configuration. Your officers may choose to show or hide certain sections for regular members.
+
+### Filtering and Exporting Your Own Records
+
+At the top of the **My Training** overview is a date-range toolbar that scopes your Training History list.
+
+1. Use the **Training records date range** picker to choose a start and end date. The range defaults to the **last 12 months**.
+2. The Training History list (and any export) updates to show only records completed within the selected range.
+3. To see and export your **entire** history — for example, for an external audit or a new employer — clear the dates. Omitting a start date exports your lifetime history.
+
+> **[SCREENSHOT NEEDED]:** _The My Training records toolbar showing the date-range picker (defaulted to the last 12 months) with the helper text about clearing the dates, alongside the Export CSV / Export PDF buttons._
+
+If your department has enabled member exports, two buttons appear beside the date range:
+
+1. Click **Export CSV** to download your records as a spreadsheet-friendly file.
+2. Click **Export PDF** to download a formatted document of your records for the selected period.
+
+> **Hint:** The Export CSV / Export PDF buttons only appear when your administrator has turned on **Allow Report Export** ("Members can download their own training data") in the Member Visibility Settings. If you do not see the buttons, your department has not enabled member self-export — ask an officer to export your records for you.
 
 ---
 
@@ -196,7 +216,26 @@ Navigate to **Training Admin > Review Submissions** to see training records pend
 > **Screenshot placeholder:**
 > _[Screenshot of the Review Submissions page showing a list of pending submissions with member name, course, date, and hours. Show one expanded submission with the approve/reject buttons and the attached certificate preview]_
 
-> **Hint:** Training sessions created from Events may go through a separate approval workflow where the session is finalized after the event and an approval token is emailed to the designated approver.
+> **Hint:** Self-reported submissions reviewed here are separate from finalizing a training session. Whether finalizing a session needs a second officer to confirm is governed by the **Require instructor confirmation** option (see "Finalizing a Training Session" below) — it is no longer always required.
+
+---
+
+## Finalizing a Training Session
+
+**Required Permission:** `training.manage`
+
+When you finalize a training session, what happens next depends on the **Require instructor confirmation** checkbox set when the session was created (Step 3 of **Training > Create Session**):
+
+- **Unchecked (default)** — Finalizing the session **immediately completes** every attendee's training record. No separate approval step and no confirmation email are sent.
+- **Checked** — The session stays **pending** after you finalize it. The records are not completed until an officer confirms via the approval notification that is emailed to the department's training officers.
+
+1. Open the training session and click **Finalize**.
+2. If **Require instructor confirmation** was off, the attendees' records are marked complete right away.
+3. If it was on, the session remains pending until an officer opens the emailed confirmation and approves it.
+
+> **[SCREENSHOT NEEDED]:** _The Create Training Session form (Step 3) showing the "Require instructor confirmation" checkbox with its helper text "Training records will be marked as 'pending' until instructor confirms completion."_
+
+> **Hint:** Leave **Require instructor confirmation** off for routine drills you want completed the moment you finalize them. Turn it on only when a second officer must sign off before records count.
 
 ---
 
@@ -234,6 +273,34 @@ A calendar month is only waived if the leave covers **15 or more days** of that 
 Members see a blue info banner on their My Training page showing the adjustment. Officers see the adjusted values reflected in the compliance and competency matrices, training reports, and requirement progress views.
 
 > For the full guide on creating and managing Leaves of Absence, see the [Training Waivers & Leaves of Absence](../../backend/app/docs/TRAINING_WAIVERS.md) documentation.
+
+---
+
+## Evaluation Period (Current vs. Prior Month)
+
+**Required Permission:** `training.manage`
+
+Departments that hold drills late in the month often saw members flagged non-compliant mid-month, before they had a chance to train. The **Evaluation Period** setting lets officers choose whether compliance calculations count the current, in-progress month or stop at the end of the previous month.
+
+### Setting the Department Default
+
+1. Navigate to **Training Admin > Compliance Requirements** and open the **Thresholds** tab.
+2. Find the **Evaluation Period** option.
+3. Leave **Count the current (in-progress) month in compliance calculations** checked to measure members against this month's training (the default), or uncheck it so calculations stop at the end of last month.
+
+> **[SCREENSHOT NEEDED]:** _The Compliance Requirements > Thresholds tab showing the "Evaluation Period" checkbox and its helper text describing each mode and noting that individual requirements can override it._
+
+### Per-Requirement Override
+
+Each training requirement can override the department default. When adding or editing a requirement (**Training Admin > Requirements**), use the **Evaluation Period** selector:
+
+- **Use department default** — Inherits the org-wide setting above.
+- **Count the current (in-progress) month** — Always includes this month for this requirement.
+- **Stop at the end of the previous month** — Excludes the in-progress month — useful for drills held late in the month so members aren't flagged early.
+
+> **[SCREENSHOT NEEDED]:** _The requirement add/edit form showing the "Evaluation Period" dropdown with the three options (use department default / count current month / stop at previous month)._
+
+> **Hint:** This setting only affects requirement compliance windows, proration, and overdue checks. Certifications that are **expiring soon** are always flagged using the real current date, regardless of the Evaluation Period setting.
 
 ---
 
@@ -598,6 +665,35 @@ Administrators can configure manual shift entry via the **ManualEntrySettingsPan
 
 ---
 
+## Officer Training Record Exports
+
+**Required Permission:** `training.manage`
+
+Officers can export training records for state reporting, annual reviews, or for an individual member, in both CSV and PDF formats.
+
+### Exporting a Single Member's Records
+
+1. Open the member's **Training History** page (from the member's profile or directory).
+2. Choose a period from the **Export period** dropdown — **This Month**, **This Quarter**, **This Year**, or **Lifetime**.
+3. Click **CSV** or **PDF** to download that member's records for the chosen period.
+
+> **[SCREENSHOT NEEDED]:** _The Member Training History page showing the export period dropdown next to the CSV and PDF download buttons._
+
+### Bulk and Reporting Exports (Reports Tab)
+
+Navigate to **Training Admin > Reports** for department-wide exports:
+
+1. **Member Records (All Members)** — Choose a period, then click **CSV** or **PDF**. The CSV combines every active member's completed records; the PDF merges per-member sections into one document.
+2. **Hours Summary** — A CSV of training hours broken down by member, category, and training type, suited to state and annual reporting.
+3. **Certification Report** — A CSV of all certifications with their valid / expiring-soon / expired status for renewal tracking.
+4. **Compliance Report** — Department-wide compliance status across all members and requirements.
+
+> **[SCREENSHOT NEEDED]:** _The Training Admin Reports tab showing the Compliance, Hours Summary, and Certification report cards above the "Member Records (All Members)" period selector with CSV / PDF buttons._
+
+> **Hint:** A bulk PDF for a period with no matching records still produces a valid (placeholder) PDF rather than failing — useful as proof that a quiet period was reviewed.
+
+---
+
 ## External Training Integrations
 
 **Required Permission:** `training.manage`
@@ -937,22 +1033,22 @@ The compliance forecast projects future compliance trends based on:
 
 ## Training Record Attachments
 
-Members and officers can attach supporting documents (certificates, transcripts, completion letters) to training records.
+Members and officers can attach supporting documents (certificates, transcripts, completion letters) to a training record and download them later.
 
-### Uploading Attachments
+### Uploading and Downloading Attachments
 
-1. Navigate to a training record detail view.
-2. Click **Add Attachment**.
-3. Upload the file (PDF, image, or document).
-4. The attachment is linked to the training record for verification purposes.
+1. On the **Member Training History** page, find the record and click its **Files** action to open the Attachments panel.
+2. Click **Upload** and choose the file. Allowed types are PDF, JPEG, PNG, GIF, WEBP, DOC, and DOCX, up to **25 MB** each.
+3. The uploaded file appears in the list. Click **Download** next to any attachment to retrieve it.
 
-> **Screenshot placeholder:**
-> _[Screenshot of a training record detail view showing the record information (course, date, hours, status) with an "Attachments" section below containing uploaded certificate thumbnails and an "Add Attachment" button]_
+> **[SCREENSHOT NEEDED]:** _The Attachments panel for a training record showing an uploaded certificate in the list with its Download link and the Upload button._
+
+> **Hint:** You can manage attachments on **your own** records. Officers with `training.manage` permission can manage attachments on any member's records.
 
 ### Edge Cases
 
-- Attachments are stored via the configured file storage backend (local, S3-compatible, or MinIO). If file storage is not configured, attachment uploads will fail with a clear error message.
-- Maximum file size is determined by the server configuration. Large files (>10MB) may time out on slower connections — the system displays a progress indicator during upload.
+- Files larger than 25 MB are rejected with "File too large. Maximum size is 25MB."
+- The file type is verified by inspecting the file's contents, not just its name — a file with a disallowed type is rejected even if it is renamed with an allowed extension.
 
 ---
 

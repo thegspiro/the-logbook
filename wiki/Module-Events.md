@@ -201,6 +201,25 @@ DELETE /api/v1/event-requests/email-templates/{id}         # Delete template
 
 ---
 
+## Recent Changes (2026-05-29)
+
+### Dashboard, Offline RSVP & Audit
+
+- **"Upcoming Events" dashboard count is now a rolling 30-day window**: the count
+  uses `start_datetime >= now AND start_datetime < now + 30 days` and excludes
+  cancelled events (previously counted every future non-cancelled event,
+  inflating the number with events years out). The card description reads
+  "Next 30 days"
+- **Offline RSVP queuing**: event RSVPs made while offline are queued in
+  IndexedDB and drained automatically when connectivity returns (shares the new
+  generic offline-queue infrastructure with training submissions). The nav shows
+  an "N pending sync" indicator
+- **`event_attendee_overwritten` audit event** (severity `warning`): logged when
+  a manager adds an attendee whose action overwrites an existing RSVP (a normal
+  add logs `event_attendee_added` at `info`)
+
+---
+
 ## Recent Changes (2026-03-22)
 
 ### Recurring Series, End Event, Admin Hours & Notifications

@@ -590,3 +590,37 @@ In addition to formal psychomotor evaluations, skills can be observed and scored
 4. **Video recording integration**: Should there be a hook to link a video recording of the test to the session record?
 5. **Inter-rater reliability**: Should the system support having two examiners independently score the same test and flag discrepancies?
 6. **Custom scoring formulas**: Beyond simple sum-of-points, do any departments need weighted scoring or category minimums (e.g., must score at least 50% in each section)?
+
+---
+
+## 13. Scoring Algorithm (Extracted & Unit-Tested) *(2026-04-30)*
+
+The pass/fail scoring logic was extracted verbatim out of the HTTP endpoint
+into a pure function so it can be unit-tested in isolation:
+
+```python
+calculate_test_result(test, template) -> tuple[float | None, str]
+```
+
+- **Location:** `backend/app/services/skills_testing_service.py`
+- **Returns:** `(overall_score, "pass" | "fail")`
+- **Pure:** reads only `test.section_results` and the `template` definition; takes
+  no DB session (model imports are `TYPE_CHECKING`-only).
+- **Caller:** `app/api/v1/endpoints/skills_testing.py` now imports and calls it
+  (`overall_score, test_result = calculate_test_result(test, template)`).
+- **Tests:** `backend/tests/test_skills_testing_scoring.py`.
+
+### Algorithm
+
+| Step | Rule |
+|------|------|
+| No section results | If `test.section_results` is empty → return `(None, "fail")` |
+| Overall score (point-based) | If any criterion of `type == "score"` with `max_score > 0` exists: `overall_score = round(sum(earned) / sum(max_score) × 100, 1)` |
+| Overall score (fallback) | Otherwise average the per-section `section_score` percentages; `None` if there are none |
+| Section matching | A section result matches a template section by `section_id == "section-{idx}"` **or** by `section_name` |
+| Criterion matching | A criterion result matches by `criterion_id == "criterion-{s}-{c}"` **or** by `criterion_label` |
+| Passing percentage | If `template.passing_percentage` is set and `overall_score` is not `None`, requires `overall_score >= passing_percentage` |
+| Critical criteria | If `template.require_all_critical`, every **required** non-`statement` criterion must have a matching result with `passed == True` |
+| Statement criteria | `type == "statement"` criteria are informational and **always pass** |
+| Missing required section | A required section with no matching result **fails** the critical check |
+| Final result | `"pass"` only when passing-percentage **AND** critical checks both hold; otherwise `"fail"` |
