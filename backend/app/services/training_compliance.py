@@ -22,7 +22,10 @@ from app.models.training import (
     TrainingStatus,
 )
 from app.models.user import User, UserStatus
-from app.services.training_period import resolve_as_of_date
+from app.services.training_period import (
+    effective_include_current_month,
+    resolve_as_of_date,
+)
 from app.services.training_waiver_service import (
     adjust_required,
     fetch_org_waivers,
@@ -137,11 +140,23 @@ def get_requirement_date_window(req, today: date):
         return date(yr, 1, 1), date(yr, 12, 31)
 
 
-def evaluate_member_requirement(req, member_records, today: date, waivers=None):
+def evaluate_member_requirement(
+    req,
+    member_records,
+    today: date,
+    waivers=None,
+    org_include_current_month: bool = True,
+):
     """
     Evaluate a single member's status for a single requirement.
 
     Returns (status, latest_completion_date, latest_expiry_date).
+
+    ``today`` is the real current date; the effective evaluation date is
+    resolved per requirement from its ``include_current_month`` override
+    (falling back to ``org_include_current_month``). When a requirement opts
+    to stop at the previous month, the in-progress month is excluded from the
+    window, proration, and overdue checks.
 
     When *waivers* is provided, required hours/shifts/calls are adjusted
     for waived months so members on leave are not penalised.
@@ -160,6 +175,16 @@ def evaluate_member_requirement(req, member_records, today: date, waivers=None):
     )
     freq = (
         req.frequency.value if hasattr(req.frequency, "value") else str(req.frequency)
+    )
+    # Resolve the effective evaluation date for this requirement (per-requirement
+    # override inherits the org default). Everything below — window, proration,
+    # and expiry/overdue checks — keys off this date.
+    today = resolve_as_of_date(
+        today,
+        effective_include_current_month(
+            getattr(req, "include_current_month", None),
+            org_include_current_month,
+        ),
     )
     start_date, end_date = get_requirement_date_window(req, today)
     _waivers = waivers or []
@@ -471,6 +496,7 @@ def _evaluate_member_compliance(
     compliant_threshold: float,
     at_risk_threshold: float,
     threshold_type: str,
+    org_include_current_month: bool = True,
 ) -> Tuple[str, float]:
     """Evaluate a member's compliance status against a set of requirements.
 
@@ -483,7 +509,11 @@ def _evaluate_member_compliance(
     completed_count = 0
     for req in member_reqs:
         req_status, _, _ = evaluate_member_requirement(
-            req, member_records, today, waivers=waivers
+            req,
+            member_records,
+            today,
+            waivers=waivers,
+            org_include_current_month=org_include_current_month,
         )
         if req_status == TrainingStatus.COMPLETED.value:
             completed_count += 1
@@ -520,20 +550,16 @@ async def _load_compliance_config(
     return result.scalars().first()
 
 
-async def get_compliance_as_of_date(
-    db: AsyncSession,
-    org_id: str,
-    today: Optional[date] = None,
-) -> date:
-    """Resolve the effective evaluation date for an org's compliance calcs.
+async def get_org_include_current_month(db: AsyncSession, org_id: str) -> bool:
+    """Return the org-wide "count the in-progress month" compliance default.
 
-    Honors the ``include_current_month`` compliance-config setting. When no
-    config exists the current month is included (preserves legacy behaviour).
+    Per-requirement overrides are applied inside ``evaluate_member_requirement``;
+    this is only the fallback used when a requirement does not set its own value.
+    When no compliance config exists the current month is included (preserves
+    legacy behaviour).
     """
-    today = today or date.today()
     config = await _load_compliance_config(db, org_id)
-    include_current = True if config is None else bool(config.include_current_month)
-    return resolve_as_of_date(today, include_current)
+    return True if config is None else bool(config.include_current_month)
 
 
 async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
@@ -617,10 +643,10 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
     # Fetch waivers
     waivers_by_user = await fetch_org_waivers(db, str(org_id))
 
-    # Respect the org's evaluation-period setting (include current month or
-    # stop at the end of the previous month). Config is already loaded above.
-    include_current = True if config is None else bool(config.include_current_month)
-    today = resolve_as_of_date(date.today(), include_current)
+    # Org-wide evaluation-period default; per-requirement overrides are applied
+    # inside the evaluator. Config is already loaded above.
+    org_include_current = True if config is None else bool(config.include_current_month)
+    today = date.today()
     compliant_count = 0
 
     for member in members:
@@ -655,6 +681,7 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
             member_compliant_threshold,
             member_at_risk_threshold,
             threshold_type,
+            org_include_current_month=org_include_current,
         )
         if status == "compliant":
             compliant_count += 1

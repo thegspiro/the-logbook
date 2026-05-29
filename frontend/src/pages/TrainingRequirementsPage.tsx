@@ -656,6 +656,12 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     period_start_day: requirement?.period_start_day || 1,
     period_end_month: requirement?.period_end_month || undefined as number | undefined,
     period_end_day: requirement?.period_end_day || undefined as number | undefined,
+    include_current_month_mode:
+      requirement?.include_current_month == null
+        ? 'inherit'
+        : requirement.include_current_month
+          ? 'include'
+          : 'exclude',
     category_ids: requirement?.category_ids || [] as string[],
   });
 
@@ -688,6 +694,10 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
         period_start_day: formData.due_date_type === 'calendar_period' ? formData.period_start_day : undefined,
         period_end_month: formData.due_date_type === 'calendar_period' ? formData.period_end_month : undefined,
         period_end_day: formData.due_date_type === 'calendar_period' ? formData.period_end_day : undefined,
+        include_current_month:
+          formData.include_current_month_mode === 'inherit'
+            ? null
+            : formData.include_current_month_mode === 'include',
         category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
       };
 
@@ -970,6 +980,29 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 />
               </div>
             )}
+
+            {/* Evaluation period boundary (per-requirement override) */}
+            <div>
+              <label htmlFor="req-include-current-month" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                Evaluation Period
+              </label>
+              <select
+                id="req-include-current-month"
+                value={formData.include_current_month_mode}
+                onChange={(e) => setFormData({ ...formData, include_current_month_mode: e.target.value })}
+                className="form-input"
+              >
+                <option value="inherit">Use department default</option>
+                <option value="include">Count the current (in-progress) month</option>
+                <option value="exclude">Stop at the end of the previous month</option>
+              </select>
+              <p className="mt-1 text-xs text-theme-text-muted">
+                Controls whether this requirement counts the in-progress month.
+                Choose &ldquo;stop at the end of the previous month&rdquo; for
+                drills held late in the month so members aren&rsquo;t flagged
+                early. Defaults to the department-wide compliance setting.
+              </p>
+            </div>
 
             {/* Frequency & Year only apply to calendar-period due dates */}
             {formData.due_date_type === 'calendar_period' && (

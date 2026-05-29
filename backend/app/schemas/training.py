@@ -269,6 +269,9 @@ class TrainingRequirementBase(BaseModel):
     period_start_day: int = Field(1, ge=1, le=31)  # Day period starts
     period_end_month: Optional[int] = Field(None, ge=1, le=12)  # Month period ends
     period_end_day: Optional[int] = Field(None, ge=1, le=31)  # Day period ends
+    # Evaluation period boundary override (None = inherit org compliance setting;
+    # True = count current month; False = stop at end of previous month)
+    include_current_month: Optional[bool] = None
     # Category requirements - training in these categories satisfies this requirement
     category_ids: Optional[List[str]] = None
 
@@ -331,6 +334,7 @@ class TrainingRequirementUpdate(BaseModel):
     period_start_day: Optional[int] = Field(None, ge=1, le=31)
     period_end_month: Optional[int] = Field(None, ge=1, le=12)
     period_end_day: Optional[int] = Field(None, ge=1, le=31)
+    include_current_month: Optional[bool] = None
     category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
 

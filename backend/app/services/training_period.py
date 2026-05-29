@@ -7,6 +7,21 @@ unit-tested without the database/ORM stack.
 from __future__ import annotations
 
 from datetime import date, timedelta
+from typing import Optional
+
+
+def effective_include_current_month(
+    requirement_value: Optional[bool],
+    org_default: bool,
+) -> bool:
+    """Resolve a requirement's effective include-current-month flag.
+
+    A per-requirement value of ``None`` means "inherit the organization-wide
+    compliance setting"; an explicit ``True``/``False`` overrides it.
+    """
+    if requirement_value is None:
+        return org_default
+    return bool(requirement_value)
 
 
 def resolve_as_of_date(today: date, include_current_month: bool) -> date:

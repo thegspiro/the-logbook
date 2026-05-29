@@ -521,7 +521,9 @@ export default function ComplianceRequirementsConfigPage() {
               <p className="mt-1 text-xs text-theme-text-secondary">
                 {includeCurrentMonth
                   ? 'Dashboards include the current month, so members must complete this month’s training to show as compliant.'
-                  : 'Calculations stop at the end of last month. Members are measured against where they stood when this month began — useful when drills are held late in the month.'}
+                  : 'Calculations stop at the end of last month. Members are measured against where they stood when this month began — useful when drills are held late in the month.'}{' '}
+                This is the department-wide default; individual requirements can
+                override it.
               </p>
             </div>
           </div>

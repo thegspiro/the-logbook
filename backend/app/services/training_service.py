@@ -331,6 +331,7 @@ class TrainingService:
         member_records,
         today: date,
         waivers=None,
+        org_include_current_month: bool = True,
     ) -> Dict:
         """Evaluate a member's progress on a single requirement (in-memory).
 
@@ -338,10 +339,18 @@ class TrainingService:
         Returns a dict with all fields needed by the ``/my-training``
         endpoint's detailed requirements breakdown.
 
+        ``today`` is the real current date; the effective evaluation date is
+        resolved per requirement from its ``include_current_month`` override
+        (falling back to ``org_include_current_month``).
+
         This handles every ``requirement_type``: hours, courses,
         certification, shifts, calls, and fallback.
         """
         from app.models.training import RequirementType
+        from app.services.training_period import (
+            effective_include_current_month,
+            resolve_as_of_date,
+        )
 
         req_type = (
             req.requirement_type.value
@@ -352,6 +361,13 @@ class TrainingService:
             req.frequency.value
             if hasattr(req.frequency, "value")
             else str(req.frequency)
+        )
+        today = resolve_as_of_date(
+            today,
+            effective_include_current_month(
+                getattr(req, "include_current_month", None),
+                org_include_current_month,
+            ),
         )
         start_date, end_date = TrainingService._get_date_window(req, today)
         _waivers = waivers or []

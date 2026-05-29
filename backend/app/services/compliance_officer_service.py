@@ -35,7 +35,7 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 from app.services.training_compliance import (
     evaluate_member_requirement,
-    get_compliance_as_of_date,
+    get_org_include_current_month,
 )
 from app.services.training_waiver_service import fetch_org_waivers
 
@@ -665,7 +665,10 @@ class AnnualComplianceReportService:
         """
         start_date = date(year, 1, 1)
         end_date = date(year, 12, 31)
-        today = await get_compliance_as_of_date(self.db, organization_id)
+        today = date.today()
+        org_include_current = await get_org_include_current_month(
+            self.db, organization_id
+        )
 
         # Get active members (exclude compliance-exempt)
         members_result = await self.db.execute(
@@ -745,7 +748,11 @@ class AnnualComplianceReportService:
             req_total = len(requirements)
             for req in requirements:
                 status, _, _ = evaluate_member_requirement(
-                    req, user_records, today, waivers=user_waivers
+                    req,
+                    user_records,
+                    today,
+                    waivers=user_waivers,
+                    org_include_current_month=org_include_current,
                 )
                 if status == "completed":
                     met_count += 1
@@ -807,7 +814,11 @@ class AnnualComplianceReportService:
                 user_records = records_by_user.get(member.id, [])
                 user_waivers = waivers_by_user.get(str(member.id), [])
                 status, _, _ = evaluate_member_requirement(
-                    req, user_records, today, waivers=user_waivers
+                    req,
+                    user_records,
+                    today,
+                    waivers=user_waivers,
+                    org_include_current_month=org_include_current,
                 )
                 if status == "completed":
                     req_compliant += 1

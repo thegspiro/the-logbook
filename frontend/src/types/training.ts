@@ -425,6 +425,9 @@ export interface TrainingRequirement {
   period_start_day?: number;
   period_end_month?: number;
   period_end_day?: number;
+  // Evaluation period: null = inherit org default, true = count current month,
+  // false = stop at end of previous month
+  include_current_month?: boolean | null;
   category_ids?: string[];
   active: boolean;
   created_at: string;
@@ -466,6 +469,7 @@ export interface TrainingRequirementCreate {
   period_start_day?: number | undefined;
   period_end_month?: number | undefined;
   period_end_day?: number | undefined;
+  include_current_month?: boolean | null | undefined;
   category_ids?: string[] | undefined;
 }
 
@@ -503,6 +507,7 @@ export interface TrainingRequirementUpdate {
   period_start_day?: number | undefined;
   period_end_month?: number | undefined;
   period_end_day?: number | undefined;
+  include_current_month?: boolean | null | undefined;
   category_ids?: string[] | undefined;
   active?: boolean;
 }

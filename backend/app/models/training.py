@@ -488,6 +488,12 @@ class TrainingRequirement(Base):
         Integer
     )  # Day the period ends (e.g., 31); NULL = last day of period_end_month
 
+    # Evaluation period boundary override.
+    #   NULL  -> inherit the organization's compliance setting
+    #   True  -> always count the in-progress current month for this requirement
+    #   False -> stop at the end of the previous month for this requirement
+    include_current_month = Column(Boolean, nullable=True)
+
     # Categories - which training categories count towards this requirement
     category_ids = Column(
         JSON
