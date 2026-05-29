@@ -7,6 +7,349 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### OAuth Sign-In (Google & Microsoft) and Compliance Evaluation Period (2026-05-29)
+
+#### Sign in with Google and Sign in with Microsoft — Link-Existing, Domain-Restricted SSO
+
+- **Two new OAuth login flows**: Members can sign in with an existing Google or Microsoft (Azure AD) account. Both are **link-existing-only** — they never auto-create users. A successful sign-in matches the verified IdP email to an existing, active, non-deleted user in the organization and binds the provider identity to that account on first use
+- **Backend routes** (`api/v1/endpoints/auth.py`): `GET /auth/oauth/google` and `GET /auth/oauth/microsoft` begin the flow (302 to the IdP consent screen, CSRF `state` stored in an httpOnly `oauth_state` cookie, `max_age=600`, `path=/api/v1/auth/`); `GET /auth/oauth/google/callback` and `GET /auth/oauth/microsoft/callback` validate `state`, exchange the code, cryptographically verify the ID token, resolve the user, set the auth cookies, and 302 to the SPA. A provider that is not fully configured returns **404** so its existence is never leaked
+- **ID-token verification**: Google ID tokens are verified for signature/audience via `google.oauth2.id_token.verify_oauth2_token` plus an issuer check (`accounts.google.com`). Microsoft tokens are decoded RS256 against the tenant JWKS with audience = `AZURE_AD_CLIENT_ID`, issuer = `{authority}/v2.0`, and an explicit `tid == AZURE_AD_TENANT_ID` check (**single-tenant lock**)
+- **Domain restriction (defense-in-depth)**: `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS` (comma-separated; empty = no restriction) are enforced server-side in `resolve_user()`. Google additionally passes an `hd` hint to its consent screen when exactly one domain is configured
+- **New services** (`services/oauth_service.py`): `GoogleOAuthService` and `MicrosoftOAuthService` (each with `is_configured()`, `build_authorization_url()`, `exchange_code_for_idinfo()`, `_verify_id_token()`, `resolve_user()`), plus a shared `_link_existing_user()` helper that scopes the lookup to the single organization and binds `oauth_provider`/`oauth_subject` on first link
+- **New user columns**: `users.oauth_provider` (`String(50)`, nullable) and `users.oauth_subject` (`String(255)`, nullable, indexed `ix_users_oauth_subject`). `oauth_subject` stores the IdP's stable `sub` so accounts re-match even if the email later changes. Migration `20260528_0002_add_oauth_fields_to_users`
+- **New SPA landing page**: `OAuthCallbackPage` at `/auth/callback` hydrates the session via `loadUser()` and routes to the dashboard, or shows a failure card. `LoginPage` now reads `?error=<code>` from a failed redirect and maps it to a friendly message. The Google/Microsoft buttons and the `/auth/oauth-config` gating (button renders only when the provider is enabled **and** fully configured) were already present
+- **Audit logging**: each successful OAuth sign-in logs an `oauth_login` event (category `authentication`) with the provider and email
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| User cancels at the IdP consent screen | Callback receives `error`; redirects to `/login?error=access_denied` |
+| Missing or mismatched CSRF `state` (cookie vs query) | `invalid_state` |
+| Token exchange fails (network/HTTP/non-200) | `token_exchange_failed`; no `id_token` in response → `missing_id_token` |
+| ID token signature/audience/expiry invalid | `invalid_id_token`; Google wrong issuer → `invalid_issuer` |
+| Microsoft token from a different tenant (`tid` mismatch) | `invalid_tenant` — single-tenant lock |
+| Google email missing or `email_verified=false` | `unverified_email` (Microsoft has no verified flag; falls back to `preferred_username` if it contains `@`, else `no_email`) |
+| Email domain not in the configured allowlist | `domain_not_allowed` |
+| No matching local user for the email | `no_account` (never auto-creates) |
+| Matched user is inactive (`is_active=false`) | `inactive` |
+| Stored `oauth_subject` differs from incoming `sub`, or account already linked to a different provider | `account_conflict` (identity-takeover guard) |
+| Provider not fully configured | `GET /auth/oauth/<provider>` returns 404; `/oauth-config` reports it disabled so the button never renders |
+| Unexpected exception in the callback | Logged server-side; generic `server_error`, internals never surfaced |
+| SPA callback page double-mounts (React StrictMode) | Guarded by `useRef` so `loadUser()` runs once |
+
+**Files Changed:**
+
+| Layer | Files |
+|-------|-------|
+| Backend routes | `api/v1/endpoints/auth.py` — provider routes, callbacks, shared OAuth helpers, `/oauth-config` gating |
+| Backend service | `services/oauth_service.py` — Google/Microsoft services + `_link_existing_user` |
+| Backend model | `models/user.py` — `oauth_provider`, `oauth_subject` |
+| Backend config | `core/config.py` — redirect-URI / allowed-domains / success-failure-redirect settings + domain helpers |
+| Migration | `alembic/versions/20260528_0002_add_oauth_fields_to_users.py` |
+| Frontend | `pages/OAuthCallbackPage.tsx` (new), `App.tsx` (route), `pages/LoginPage.tsx` (`?error=` mapping) |
+| Env examples | `.env.example`, `.env.example.full` |
+
+#### Compliance Evaluation Period — Org Default and Per-Requirement Override
+
+- **Org-level "Evaluation Period" toggle**: New `compliance_configs.include_current_month` (Boolean, NOT NULL, `server_default="1"`). When enabled (default), compliance counts the in-progress month; when disabled, evaluation stops at the **end of the prior month** so members aren't flagged non-compliant mid-month before they've had the chance to train. Migration `20260503_0001`
+- **Per-requirement override**: New `training_requirements.include_current_month` (Boolean, nullable). `NULL` inherits the org default; `true` always counts the current month; `false` always stops at prior month-end. Migration `20260503_0002`
+- **Pure resolution helpers** (`services/training_period.py`): `resolve_as_of_date(today, include_current_month)` returns `today` when including, else the last day of the previous month; `effective_include_current_month(requirement_value, org_default)` resolves the override. The resolved as-of date drives the requirement date window, waiver proration, and overdue checks, threaded through `training_compliance.py`, `TrainingService`, `CompetencyMatrixService`, `AnnualComplianceReportService`, and the compliance summary/matrix endpoints
+- **Deliberate exception**: certificate "expiring soon" lookahead always uses the real `date.today()` (not the resolved as-of date) so certs nearing expiry are still surfaced even when the current month is excluded
+- **Frontend**: an "Evaluation Period" checkbox on the Compliance Requirements **Thresholds** tab (org default) and an inherit / include / exclude `<select>` in the per-requirement modal
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Organization has no `compliance_configs` row | Current month is included (legacy behavior preserved) |
+| Requirement `include_current_month` is `NULL` | Inherits the org default |
+| Evaluation period excludes current month | As-of date = last day of prior month; windows, proration, and overdue all key off that date |
+| Certificate expiring within the lookahead window | Still surfaced — cert-expiry checks always use real `today` |
+
+**New Database Migrations:**
+
+| Migration | Description |
+|-----------|-------------|
+| `20260528_0002_add_oauth_fields_to_users` | Adds `oauth_provider`, `oauth_subject` + index `ix_users_oauth_subject` |
+| `20260503_0001_add_include_current_month_to_compliance_config` | Adds `compliance_configs.include_current_month` (NOT NULL, default true) |
+| `20260503_0002_add_include_current_month_to_training_requirements` | Adds `training_requirements.include_current_month` (nullable) |
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/auth/oauth/google` | Begin Google sign-in (302 to consent screen; 404 if not configured) |
+| `GET` | `/api/v1/auth/oauth/google/callback` | Complete Google sign-in |
+| `GET` | `/api/v1/auth/oauth/microsoft` | Begin Microsoft sign-in (302 to consent screen; 404 if not configured) |
+| `GET` | `/api/v1/auth/oauth/microsoft/callback` | Complete Microsoft sign-in |
+
+**New Frontend Routes:**
+
+| Route | Page | Description |
+|-------|------|-------------|
+| `/auth/callback` | `OAuthCallbackPage` | OAuth landing page; hydrates session via `loadUser()` then routes to dashboard or shows a failure card |
+
+---
+
+### Training — Record Exports, Attachments, Finalize Gating & Skills-Test Scoring (2026-05-24 — 2026-05-25)
+
+#### Member & Officer Training-Record Exports
+
+- **Member self-export**: New `GET /api/v1/training/module-config/my-training/export` lets a member export their own training history as CSV or PDF. Gated by the org `allow_member_report_export` flag (403 when disabled). Optional `start_date`/`end_date` query params; omitting `start_date` exports the full lifetime history
+- **Officer per-member & bulk exports**: `POST /api/v1/training/reports/export` (permission `training.manage`) gained a `member_records` report type for a combined export across all active members, plus `hours_summary` and `certification` CSV report types. `individual` exports require a `user_id` and are always org-scoped
+- **Date-range self-review UI**: `MyTrainingPage` adds CSV+PDF export buttons and a `DateRangePicker` (default last 12 months, clearable) that filters the visible history. `MemberTrainingHistoryPage` and the admin Reports tab (`TrainingEnhancementsTab`) add period selectors and member/bulk export buttons. New `utils/trainingPeriods.ts` provides month/quarter/year/lifetime period windows
+- **Report-type fallthrough guard**: Unknown CSV report types now raise an explicit 400 (`"Report type '…' is not supported for export."`) instead of silently returning the compliance report; PDF export is restricted to `individual`, `member_records`, and `compliance`. Bulk PDFs are merged with `pypdf`; an empty result still emits a valid single-page placeholder PDF
+- **Removed dead flag**: `TrainingSession.approval_required` — persisted and echoed but never read — was removed from the model, schemas, and frontend types. Migration `20260502_0004`. Session sign-off is governed solely by `require_completion_confirmation`
+
+#### Training-Record Attachments — Real Upload & Download
+
+- **Real attachment storage**: `POST /api/v1/training/records/{record_id}/attachments` now accepts a real multipart `file` upload (was a stub). Files are stored under `/app/uploads/training_attachments/{organization_id}/{uuid4().hex}{ext}` and metadata is appended to the `TrainingRecord.attachments` JSON column via `flag_modified()`
+- **Download endpoint**: New `GET /api/v1/training/records/{record_id}/attachments/{index}/download` streams the stored file with its original filename. The list endpoint now returns sanitized metadata only — server file paths are never exposed
+- **Access control**: A shared `_load_record_for_attachment` gate allows the record owner, or any holder of `training.manage` for other members' records; 404 if the record is not in the caller's org
+- **Validation**: max 25 MB; true MIME detected via `magic.from_buffer` (allowed: PDF, JPEG, PNG, GIF, WEBP, DOC, DOCX); server-generated filename prevents double-extension attacks; a commit failure deletes the orphaned file
+
+#### Finalize Gating, Check-In Promotion & Skills-Test Scoring
+
+- **`require_completion_confirmation` now actually gates finalize**: When the org flag is `false` (default), finalizing a training session immediately approves it and completes the records with no officer email round-trip; when `true`, the approval stays pending and training officers are notified
+- **No more duplicate check-in records on finalize**: `_finalize_training_records` now promotes the existing in-progress check-in record (matching `scheduled_date` OR `completion_date == event_date`, preferring the not-yet-completed one) instead of inserting a duplicate
+- **Skills-test scoring extracted & tested**: Pass/fail scoring moved verbatim into a pure `skills_testing_service.calculate_test_result(test, template)` and is now unit-tested. Scoring is point-based when score criteria exist, else the average of section-score percentages; passing requires `overall_score >= passing_percentage` and (if `require_all_critical`) all required non-statement criteria passed
+- **Compliance admin tabs wired**: `ComplianceOfficerDashboard` now takes its active tab from a prop (`TrainingAdminPage` passes the route segment), removing the duplicate internal tab bar
+- **NULL boolean coercion**: `manual_entry_enabled` and `manual_entry_require_apparatus` were added to `_BOOL_FIELD_DEFAULTS` so legacy config rows with NULL values no longer raise a 500 (which had blanked the Scheduling page)
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Member export requested but `allow_member_report_export` is off | 403 |
+| Export `start_date` omitted | No lower bound (lifetime); PDF period label reads "All time through {end_date}" |
+| Bulk PDF export with zero matching records | Valid single-page placeholder PDF ("No training records found for this period.") |
+| `certification` CSV record has no expiry / belongs to an inactive member | Status "No Expiration"; records for non-active members are skipped |
+| Unknown report type requested | Explicit 400 (no silent fallthrough to compliance report) |
+| Attachment over 25 MB or disallowed MIME (magic-byte detected) | 400 |
+| Attachment DB commit fails after file write | Orphaned file removed |
+| Attachment download index out of range / missing file on disk | 404 |
+| `require_completion_confirmation=false` | Records auto-complete on finalize; no token/notification |
+| Check-in created an in-progress record (NULL `completion_date`) | Promoted to completed, not duplicated |
+| Skills test has no `section_results` | Result is `(None, "fail")`; required section with no result also fails; statement criteria always pass |
+| Legacy `training_module_configs` row with NULL `manual_entry_*` | Coerced to defaults (false / true), preventing a 500 |
+
+**Files Changed:**
+
+| Layer | Files |
+|-------|-------|
+| Backend endpoints | `api/v1/endpoints/training_module_config.py` (member export), `training_enhancements.py` (report export, attachments) |
+| Backend services | `services/training_enhancement_service.py` (export generators), `services/skills_testing_service.py` (new), `services/training_session_service.py` (finalize gating, check-in promotion) |
+| Backend models | `models/training.py` — removed `TrainingSession.approval_required` |
+| Backend schemas | `schemas/training_enhancements.py`, `schemas/training_session.py`, `schemas/training_module_config.py` |
+| Migration | `alembic/versions/20260502_0004_drop_training_session_approval_required.py` |
+| Frontend | `pages/MyTrainingPage.tsx`, `pages/MemberTrainingHistoryPage.tsx`, `pages/TrainingEnhancementsTab.tsx`, `pages/ComplianceOfficerDashboard.tsx`, `pages/TrainingAdminPage.tsx`, `utils/trainingPeriods.ts` (new), `services/trainingServices.ts`, `types/training.ts` |
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/training/module-config/my-training/export` | Member self-export (CSV/PDF, optional date range) |
+| `GET` | `/api/v1/training/records/{record_id}/attachments/{index}/download` | Download a training-record attachment |
+
+**New Database Migrations:**
+
+| Migration | Description |
+|-----------|-------------|
+| `20260502_0004_drop_training_session_approval_required` | Drops the unused `training_sessions.approval_required` column |
+
+---
+
+### Prospective Member Documents, Membership Coordinator Role & IP-Security Hardening (2026-05-28)
+
+#### Prospective Member Document Storage
+
+- **Documents are now actually stored**: `POST /api/v1/prospective-members/prospects/{prospect_id}/documents` changed from metadata-only to a real multipart upload (`file`, `document_type`, optional `step_id`). A new `GET …/documents/{document_id}/download` streams the file, and delete now removes the file from disk
+- **Org-scoped storage path**: Files are written to `/app/uploads/prospect-documents/{organization_id}/{prospect_id}/{uuid4().hex}{ext}` (mirroring event attachments) so documents are walkable per organization for export/accounting/purge. The path-validation base directory was fixed from `/uploads/` to `/app/uploads` (the actual volume mount) — a latent bug that had been rejecting valid paths
+- **Larger limit & validation**: upload limit raised from 10 MB to **50 MB**; true MIME validated via magic bytes (PDF, Word, JPEG, PNG, GIF); the server-generated random filename prevents double-extension attacks; download is guarded against path traversal via a realpath check
+
+#### "Membership Committee Chair" → "Membership Coordinator"
+
+- **Role renamed**: The default system position `membership_committee_chair` was renamed to `membership_coordinator` (display name "Membership Coordinator"). Migration `20260528_0001` performs an in-place `UPDATE positions`; because `user_positions` links by UUID, all existing assignments are preserved and the rename takes effect immediately (permissions are derived live on every request)
+- **Permissions unchanged**: the role keeps `prospective_members.manage`. References were updated across `core/permissions.py`, the seed script, and the onboarding module registry / role-setup templates
+
+#### IP-Security & GeoIP Hardening
+
+- **Spoof-proof client IP**: `get_client_ip()` was rewritten. Forwarded headers are only trusted when the direct peer is listed in `TRUSTED_PROXY_IPS`; the real client is taken as the **right-most** `X-Forwarded-For` hop that is not a trusted proxy (nginx appends the real peer, so a client-forged left-most value is never reached), falling back to `X-Real-IP` then the direct peer. The previous left-most parse was spoofable
+- **DB country-block rules drive the running GeoIP service**: New `IPSecurityService.sync_blocked_countries_to_geoip()` overlays `CountryBlockRule` rows onto the in-memory GeoIP block set (an explicit unblock rule overrides a `BLOCKED_COUNTRIES` config default). It runs at startup and on every rule change, making the DB the source of truth that survives restarts
+- **Multi-worker sync**: New `core/geoip_sync.py` publishes a best-effort `geoip:invalidate` message on Redis after each block/unblock; every worker runs a `GeoIPInvalidationListener` that re-syncs its in-memory set from the DB, so all uvicorn workers converge within seconds. If Redis is unavailable the listener no-ops and propagation defers to the next restart
+- **Startup warning**: in production/staging, if `GEOIP_ENABLED` is set but `TRUSTED_PROXY_IPS` is empty, a warning is logged that geo-blocking/allowlisting is effectively disabled behind a proxy
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Prospect document empty / over 50 MB | 400 |
+| Prospect document MIME spoofed (magic bytes differ from claim) | Rejected; claimed vs detected logged |
+| Prospect document DB write fails after file write | On-disk file cleaned up (best-effort) |
+| Prospect document delete when file already missing | Deletion proceeds (DB row removed) |
+| Prospect document download path traversal attempt | Blocked via realpath check (403); missing file → 404 |
+| Role rename — existing assignments | Preserved (UUID-keyed `user_positions`); reversible downgrade |
+| `X-Forwarded-For` with a client-forged left-most entry | Ignored; right-most untrusted hop used |
+| No trusted proxies configured, or untrusted direct peer | Forwarded headers ignored entirely; direct peer used |
+| GeoIP service not running / MaxMind DB absent | `sync_blocked_countries_to_geoip` returns empty; geo-blocking is a documented no-op |
+| Country-block rule precedence | DB rules override config defaults; explicit unblock removes a config-default block |
+| Redis unavailable during a block change | Publish is best-effort (never raises); each worker re-syncs on next restart |
+| Unknown country for an IP | Fail-open (allowed) by design |
+
+**Files Changed:**
+
+| Layer | Files |
+|-------|-------|
+| Backend endpoints | `api/v1/endpoints/membership_pipeline.py` (upload/download), `api/v1/endpoints/ip_security.py` (publish invalidation) |
+| Backend services | `services/membership_pipeline_service.py`, `services/ip_security_service.py` (`sync_blocked_countries_to_geoip`) |
+| Backend core | `core/geoip_sync.py` (new), `core/security_middleware.py` (`get_client_ip`), `core/permissions.py` (role rename), `main.py` (startup sync + listener) |
+| Migration | `alembic/versions/20260528_0001_rename_membership_committee_chair_to_coordinator.py` |
+| Frontend | `modules/onboarding/config/moduleRegistry.ts`, `modules/onboarding/pages/RoleSetup.tsx` (role rename) |
+| Scripts / Env | `scripts/seed_test_users.py`, `.env.example.full` (IP-security block) |
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/prospective-members/prospects/{prospect_id}/documents` | Upload a prospect document (multipart, real storage) |
+| `GET` | `/api/v1/prospective-members/prospects/{prospect_id}/documents/{document_id}/download` | Download a prospect document |
+
+**New Database Migrations:**
+
+| Migration | Description |
+|-----------|-------------|
+| `20260528_0001_rename_membership_committee_chair_to_coordinator` | Renames the default position slug/name |
+
+---
+
+### Volunteer Home "Now" Redesign, Offline Queue, Audit Log Admin & Cross-Org Hardening (2026-05-01 — 2026-05-02)
+
+#### Audit Log Admin View
+
+- **Admin-facing audit log**: New read API (`api/v1/endpoints/audit_logs.py`, permission `audit.view`): `GET /api/v1/audit-logs` (filterable, paginated), `GET /api/v1/audit-logs/stats`, `GET /api/v1/audit-logs/{log_id}`. Filters: `event_type`, `event_category`, `severity` (`info|warning|critical`), `user_id`, `search` (username or event-type substring), `start_date`, `end_date`, `skip`, `limit` (1–500)
+- **Org isolation**: audit rows are global (single system-wide hash chain), so the org view is scoped by joining through `users` (`AuditLog.user_id IN (org users)`); system events with NULL `user_id` are deliberately excluded
+- **Admin page**: New `/admin/audit-log` page (`AuditLogPage`, lazy-loaded, gated `audit.view`) with stat cards, a filter bar, an expandable table showing `event_data`, and severity badges. Nav entries added to side and top navigation
+
+#### Offline Queue for Training Submissions & RSVPs
+
+- **Real offline queue**: New `utils/genericOfflineQueue.ts` (IndexedDB `logbook-offline-generic` / `pendingMutations`) queues training submissions and event RSVPs when offline, returning an optimistic placeholder so the UI doesn't break. A `useOfflineSyncEngine` hook (mounted once in `AppLayout`) drains the queue on the `online` event and on mount, with a re-entrancy guard and success / permanent-failure toasts
+- **Per-item retry cap**: items are dropped after `GENERIC_QUEUE_MAX_RETRIES` (5) so a permanently-rejected request can't block the queue. A `pendingSyncStore` aggregates the generic, equipment-check, and shift-report queue counts; nav shows an "Offline · N pending" / "N pending sync" pill (click to retry)
+
+#### Volunteer Home "Now" Redesign
+
+- **Dashboard reframed around "now"**: personalized greeting + today's date, pill chips for the next shift/event, expired/expiring certs, unread notifications and overdue action items, a 60-day cert-expiry banner that names the soonest cert and deep-links to My Training, and a large "Log Training" primary card
+- **Upcoming events limited to 30 days**: the dashboard "Upcoming Events" count now applies `start_datetime < now + 30 days` (card relabeled "Next 30 days"), still excluding cancelled events. A redundant unread-count fetch was removed (count is maintained by the notification poller)
+- **Polish**: new deterministic `Avatar` component (photo or initials, color hashed from name); certifications on My Training now sort expired-first then by soonest expiry; real `EmptyState` adopted across Action Items, Member Training History, Review Submissions, and Skills Testing records; a one-tap high-contrast toggle and footer trust signals were added
+
+#### Notification Retry Hardening & Cross-Org Validation
+
+- **Notification circuit breaker**: `inventory_notification_service` now tracks `attempt_count` / `last_attempt_at` per queued record and abandons delivery after 5 failed attempts (marks processed, logs at ERROR), so the scheduler stops retrying and spamming logs. New columns via migration `20260502_0002`
+- **Locked-in DB defaults**: every boolean column on `training_module_configs` (25) and the new inventory-queue columns gained explicit `server_default`s (migration `20260502_0003`) so NULLs can't reappear; the `coerce_null_booleans` validator becomes defensive-only
+- **Cross-org validation tightened**: event-request status updates validate `assigned_to`/`event_id` against the caller's org; manager-added meeting attendees and attendance waivers verify the target user/meeting belong to the org (fixing a NOT-NULL `MeetingAttendee.organization_id` 500 and preventing meeting enumeration); manager RSVP overwrites are now audit-logged as `event_attendee_overwritten` (warning)
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Training submission / RSVP made while offline | Queued in IndexedDB; optimistic placeholder returned; synced on reconnect |
+| Queued mutation permanently rejected | Dropped after 5 retries so it can't block the queue |
+| Queue count read fails | Treated as 0 (`.catch(() => 0)`); `navigator` guarded for non-browser |
+| Notification send fails repeatedly | Abandoned after 5 attempts, marked processed, logged at ERROR |
+| Dashboard upcoming-events 30-day boundary | `>= now` and `< now + 30 days`; cancelled events excluded |
+| Manager adds an attendee / waiver for a user outside the org | Rejected (404 / validation error) |
+| Manager RSVP overwrites an existing response | Logged as `event_attendee_overwritten` (warning) with `overwrote_existing_rsvp` |
+| Cert with no expiry date in My Training sort | Sorted last (after expired and expiring) |
+| Member avatar with no name | Initials fall back to `?`; deterministic color per member |
+
+**Files Changed:**
+
+| Layer | Files |
+|-------|-------|
+| Backend endpoints | `api/v1/endpoints/audit_logs.py` (new), `api/v1/api.py`, `dashboard.py`, `event_requests.py`, `events.py`, `meetings.py` |
+| Backend services | `services/inventory_notification_service.py`, `services/attendance_dashboard_service.py`, `services/meetings_service.py`, `services/event_service.py` |
+| Backend models | `models/inventory.py` (`attempt_count`, `last_attempt_at`), `models/training.py` (boolean `server_default`s) |
+| Migrations | `20260502_0002_add_attempt_tracking_to_inventory_notification_queue.py`, `20260502_0003_add_server_defaults_to_training_module_config_booleans.py` |
+| Frontend | `pages/AuditLogPage.tsx` (new), `pages/Dashboard.tsx`, `utils/genericOfflineQueue.ts` (new), `stores/pendingSyncStore.ts` (new), `hooks/useOfflineSyncEngine.ts` (new), `components/ux/Avatar.tsx` (new), `services/adminServices.ts`, `services/trainingServices.ts`, `services/eventServices.ts`, `components/TopNavigation.tsx`, `components/SideNavigation.tsx`, `modules/admin/routes.tsx` |
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/audit-logs` | List audit log entries (filterable, paginated; `audit.view`) |
+| `GET` | `/api/v1/audit-logs/stats` | Audit log totals by severity and category |
+| `GET` | `/api/v1/audit-logs/{log_id}` | Single audit log entry |
+
+**New Frontend Routes:**
+
+| Route | Page | Description |
+|-------|------|-------------|
+| `/admin/audit-log` | `AuditLogPage` | Admin audit-log viewer (gated `audit.view`) |
+
+**New Frontend Components:**
+
+| Component | Location | Description |
+|-----------|----------|-------------|
+| `AuditLogPage` | `pages/AuditLogPage.tsx` | Audit-log viewer with stats, filters, expandable rows |
+| `Avatar` | `components/ux/Avatar.tsx` | Photo-or-initials avatar with deterministic color |
+
+**New Database Migrations:**
+
+| Migration | Description |
+|-----------|-------------|
+| `20260502_0002_add_attempt_tracking_to_inventory_notification_queue` | Adds `attempt_count`, `last_attempt_at` |
+| `20260502_0003_add_server_defaults_to_training_module_config_booleans` | Backfills NULLs and sets `server_default` on 25 boolean columns |
+
+---
+
+### Shift Scheduling — End-of-Shift Summaries, Trainee Follow-Up, Deep-Link Fixes & Past-Shift Surfacing (2026-04-28 — 2026-05-02)
+
+#### End-of-Shift Summaries & Trainee Report Follow-Up
+
+- **New `end_of_shift_summary` scheduled task** (every 30 min): for shifts whose `end_time` falls in the last `lookback_hours` (default 4), sends each attending active member an in-app + email summary of their hours, calls responded to (with call types), and a link to their completion report if filed. Per-member dispatch is idempotent via `shift.activities["member_summaries_sent"]`. Gated by `org.settings["shift_reports"]["member_summary"]` (`enabled`, `lookback_hours`, `require_finalized`)
+- **Finalized gate**: by default the summary only runs for finalized shifts (because `duration_minutes` is computed at check-out); an opt-in `require_finalized=false` mode sends a clearly-labeled "Preliminary Shift Summary" with figures marked subject to change
+- **New `trainee_report_escalation` scheduled task** (daily 08:00): reminds trainees about approved-but-unacknowledged shift completion reports older than `acknowledgment_days` (default 7), with in-app-only alerts to the filing officer and training officers. Rate-limited to `max_reminders` (default 3) tracked in `review_history`
+- **Low-rating officer alert**: when a shift report is approved with `performance_rating <= low_rating_threshold` (default 2/5, configurable; 0 disables) or with non-empty areas-for-improvement, training officers (excluding the filing officer) get an in-app alert
+- **Richer shift reminders**: reminders now include the apparatus, full active-member crew roster (capped at 8 with "+N more"), start-of-shift checklists, and a "Mark Arrival" button; email is now sent **by default** (`send_email` defaults true, opt out per org)
+
+#### Deep-Link Fixes & Past-Shift Surfacing
+
+- **Deep links now point at routes that exist**: check-in links corrected to `/scheduling/checkin?shift=<id>` (dropping the unused `?user=`), and report links corrected from the non-existent `/scheduling/reports/<id>` to `/scheduling?tab=shift-reports&report=<id>` (which `ShiftReportsTab` auto-expands)
+- **Past shifts surfaced**: `GET /api/v1/scheduling/my-attendance-history` gained `start_date`/`end_date` params and now joins Shift to embed `shift_date`/start/end and orders by shift date. `MyShiftsTab` honors `?view=past`, synthesizes "completed" entries for walk-on attendance with no assignment, and the dashboard Standby-hours card deep-links to the past view
+- **Hardening**: roster/reminder queries now filter `User.is_active` so deactivated members get no reminders and don't appear in others' rosters; the Scheduling page no longer blanks when the training-module-config fetch fails (logs a warning and defaults)
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Shift not yet finalized | Skipped by the summary by default (would report 0 hours); `require_finalized=false` sends a labeled preliminary summary |
+| Summary already sent to a member | Skipped (idempotent via `activities["member_summaries_sent"]`) |
+| Trainee report already acknowledged, or within the window | Not escalated |
+| Escalation reminder cap reached (`max_reminders`) | No further reminders sent |
+| `low_rating_threshold = 0` | Low-rating trigger disabled; improvement-text trigger still fires |
+| Deactivated member | Excluded from reminders and from other members' rosters |
+| Walk-on attendance with no `ShiftAssignment` (past) | Surfaced as a synthetic `completed` entry |
+| Invalid `start_date`/`end_date` on attendance history | 400 ("Use YYYY-MM-DD") |
+| Training-module-config fetch fails on the Scheduling page | Warning logged; page still renders with defaults (no blank screen) |
+| Filing officer | Excluded from the self-alert and escalation officer-recipient set |
+
+**Files Changed:**
+
+| Layer | Files |
+|-------|-------|
+| Backend endpoints | `api/v1/endpoints/scheduling.py` (`my-attendance-history` date params) |
+| Backend services | `services/scheduled_tasks.py` (new summary + escalation tasks, richer reminders), `services/shift_completion_service.py` (low-rating alert) |
+| Migration | `alembic/versions/20260502_0001_backfill_training_config_null_booleans.py` |
+| Frontend | `pages/scheduling/MyShiftsTab.tsx`, `pages/scheduling/ShiftReportsTab.tsx`, `pages/Dashboard.tsx`, `pages/SchedulingPage.tsx`, `constants/enums.ts`, `modules/scheduling/services/api.ts` |
+
+**New Database Migrations:**
+
+| Migration | Description |
+|-----------|-------------|
+| `20260502_0001_backfill_training_config_null_booleans` | Backfills NULL booleans on `training_module_configs` |
+
+---
+
 ### Cloudflare Email Service Integration (2026-04-26)
 
 #### Cloudflare Email Service — New Email Platform Option
