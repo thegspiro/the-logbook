@@ -234,14 +234,18 @@ async def get_oauth_config(
         )
         provider = auth_settings.get("provider", "local")
 
-        from app.services.oauth_service import GoogleOAuthService
+        from app.services.oauth_service import (
+            GoogleOAuthService,
+            MicrosoftOAuthService,
+        )
 
         return {
-            # Only advertise Google when the org selected it AND the server is
-            # fully configured for it, so the button never 404s on click.
+            # Only advertise a provider when the org selected it AND the server
+            # is fully configured for it, so the button never 404s on click.
             "googleEnabled": provider == "google"
             and GoogleOAuthService.is_configured(),
-            "microsoftEnabled": provider == "microsoft",
+            "microsoftEnabled": provider == "microsoft"
+            and MicrosoftOAuthService.is_configured(),
         }
     except Exception:
         return {"googleEnabled": False, "microsoftEnabled": False}
@@ -266,6 +270,65 @@ def _cookies_secure() -> bool:
     return not any(str(origin).startswith("http://") for origin in origins)
 
 
+def _oauth_fail_redirect(reason: str) -> RedirectResponse:
+    """Redirect back to the login page with an error code, clearing state."""
+    sep = "&" if "?" in settings.OAUTH_FAILURE_REDIRECT else "?"
+    resp = RedirectResponse(
+        url=f"{settings.OAUTH_FAILURE_REDIRECT}{sep}error={reason}",
+        status_code=status.HTTP_302_FOUND,
+    )
+    resp.delete_cookie(_OAUTH_STATE_COOKIE, path=_OAUTH_STATE_PATH)
+    return resp
+
+
+def _start_oauth(authorization_url_for_state) -> RedirectResponse:
+    """Generate a CSRF state, build the IdP URL with it, and set the cookie."""
+    import secrets as _secrets
+
+    state = _secrets.token_urlsafe(32)
+    redirect = RedirectResponse(
+        url=authorization_url_for_state(state), status_code=status.HTTP_302_FOUND
+    )
+    redirect.set_cookie(
+        key=_OAUTH_STATE_COOKIE,
+        value=state,
+        max_age=600,
+        httponly=True,
+        secure=_cookies_secure(),
+        samesite="lax",
+        path=_OAUTH_STATE_PATH,
+    )
+    return redirect
+
+
+async def _finish_oauth_login(
+    db: AsyncSession, user: User, request: Request, provider: str
+) -> RedirectResponse:
+    """Issue session cookies, audit the login, and redirect into the SPA."""
+    service = AuthService(db)
+    access_token, refresh_token = await service.create_user_tokens(
+        user=user,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
+    await log_audit_event(
+        db=db,
+        event_type="oauth_login",
+        event_category="authentication",
+        severity="info",
+        event_data={"provider": provider, "email": user.email},
+        user_id=str(user.id),
+        username=user.username,
+        ip_address=request.client.host if request.client else None,
+    )
+    response = RedirectResponse(
+        url=settings.OAUTH_SUCCESS_REDIRECT, status_code=status.HTTP_302_FOUND
+    )
+    _set_auth_cookies(response, access_token, refresh_token)
+    response.delete_cookie(_OAUTH_STATE_COOKIE, path=_OAUTH_STATE_PATH)
+    return response
+
+
 @router.get("/oauth/google")
 async def oauth_google_initiate(db: AsyncSession = Depends(get_db)):
     """
@@ -279,24 +342,7 @@ async def oauth_google_initiate(db: AsyncSession = Depends(get_db)):
 
     if not GoogleOAuthService.is_configured():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-
-    import secrets as _secrets
-
-    state = _secrets.token_urlsafe(32)
-    redirect = RedirectResponse(
-        url=GoogleOAuthService.build_authorization_url(state),
-        status_code=status.HTTP_302_FOUND,
-    )
-    redirect.set_cookie(
-        key=_OAUTH_STATE_COOKIE,
-        value=state,
-        max_age=600,
-        httponly=True,
-        secure=_cookies_secure(),
-        samesite="lax",
-        path=_OAUTH_STATE_PATH,
-    )
-    return redirect
+    return _start_oauth(GoogleOAuthService.build_authorization_url)
 
 
 @router.get("/oauth/google/callback")
@@ -315,69 +361,90 @@ async def oauth_google_callback(
     """
     from app.services.oauth_service import GoogleOAuthError, GoogleOAuthService
 
-    def _fail(reason: str) -> RedirectResponse:
-        sep = "&" if "?" in settings.OAUTH_FAILURE_REDIRECT else "?"
-        resp = RedirectResponse(
-            url=f"{settings.OAUTH_FAILURE_REDIRECT}{sep}error={reason}",
-            status_code=status.HTTP_302_FOUND,
-        )
-        resp.delete_cookie(_OAUTH_STATE_COOKIE, path=_OAUTH_STATE_PATH)
-        return resp
-
     if not GoogleOAuthService.is_configured():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
-    # Google reported an error (e.g. user cancelled consent).
     if error:
         logger.info(f"Google OAuth returned error: {error}")
-        return _fail("access_denied")
+        return _oauth_fail_redirect("access_denied")
 
     # CSRF: the returned state must match the cookie we set at initiation.
     if not code or not state or not oauth_state_cookie or state != oauth_state_cookie:
-        return _fail("invalid_state")
+        return _oauth_fail_redirect("invalid_state")
 
     service = GoogleOAuthService(db)
     try:
         idinfo = await service.exchange_code_for_idinfo(code)
         user, reason = await service.resolve_user(idinfo)
     except GoogleOAuthError as exc:
-        return _fail(str(exc))
+        return _oauth_fail_redirect(str(exc))
     except Exception as exc:  # noqa: BLE001 - never surface internals to the UA
         logger.error(f"Unexpected error during Google OAuth callback: {exc}")
-        return _fail("server_error")
+        return _oauth_fail_redirect("server_error")
 
     if not user:
-        return _fail(reason or "login_failed")
+        return _oauth_fail_redirect(reason or "login_failed")
 
-    access_token, refresh_token = await auth_service_create_tokens(db, user, request)
+    return await _finish_oauth_login(db, user, request, "google")
 
-    await log_audit_event(
-        db=db,
-        event_type="oauth_login",
-        event_category="authentication",
-        severity="info",
-        event_data={"provider": "google", "email": user.email},
-        user_id=str(user.id),
-        username=user.username,
-        ip_address=request.client.host if request.client else None,
+
+@router.get("/oauth/microsoft")
+async def oauth_microsoft_initiate(db: AsyncSession = Depends(get_db)):
+    """
+    Begin the Microsoft (Azure AD) OAuth flow.
+
+    Sets a CSRF state cookie and redirects to the Microsoft consent screen.
+    Returns 404 when Microsoft login is not configured.
+    """
+    from app.services.oauth_service import MicrosoftOAuthService
+
+    if not MicrosoftOAuthService.is_configured():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    return _start_oauth(MicrosoftOAuthService.build_authorization_url)
+
+
+@router.get("/oauth/microsoft/callback")
+async def oauth_microsoft_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    oauth_state_cookie: str | None = Cookie(None, alias=_OAUTH_STATE_COOKIE),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Handle Microsoft's redirect back: verify state, exchange the code, map the
+    Azure AD identity to an existing local user, and establish the session.
+    """
+    from app.services.oauth_service import (
+        MicrosoftOAuthError,
+        MicrosoftOAuthService,
     )
 
-    response = RedirectResponse(
-        url=settings.OAUTH_SUCCESS_REDIRECT, status_code=status.HTTP_302_FOUND
-    )
-    _set_auth_cookies(response, access_token, refresh_token)
-    response.delete_cookie(_OAUTH_STATE_COOKIE, path=_OAUTH_STATE_PATH)
-    return response
+    if not MicrosoftOAuthService.is_configured():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
+    if error:
+        logger.info(f"Microsoft OAuth returned error: {error}")
+        return _oauth_fail_redirect("access_denied")
 
-async def auth_service_create_tokens(db: AsyncSession, user: User, request: Request):
-    """Issue access/refresh tokens for *user* (shared by OAuth callback)."""
-    service = AuthService(db)
-    return await service.create_user_tokens(
-        user=user,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-    )
+    if not code or not state or not oauth_state_cookie or state != oauth_state_cookie:
+        return _oauth_fail_redirect("invalid_state")
+
+    service = MicrosoftOAuthService(db)
+    try:
+        claims = await service.exchange_code_for_idinfo(code)
+        user, reason = await service.resolve_user(claims)
+    except MicrosoftOAuthError as exc:
+        return _oauth_fail_redirect(str(exc))
+    except Exception as exc:  # noqa: BLE001 - never surface internals to the UA
+        logger.error(f"Unexpected error during Microsoft OAuth callback: {exc}")
+        return _oauth_fail_redirect("server_error")
+
+    if not user:
+        return _oauth_fail_redirect(reason or "login_failed")
+
+    return await _finish_oauth_login(db, user, request, "microsoft")
 
 
 @router.post(

@@ -441,9 +441,18 @@ class Settings(BaseSettings):
     # ============================================
     # Microsoft / Azure AD
     AZURE_AD_ENABLED: bool = False
+    # Single-tenant: the directory (tenant) GUID. Used in the authority URL and
+    # enforced against the ID token's `tid` claim so only this org can sign in.
     AZURE_AD_TENANT_ID: str | None = None
     AZURE_AD_CLIENT_ID: str | None = None
     AZURE_AD_CLIENT_SECRET: str | None = None
+    # Absolute URL Azure redirects back to. Must exactly match a redirect URI
+    # registered on the app in the Azure portal, e.g.
+    # https://app.example.org/api/v1/auth/oauth/microsoft/callback
+    AZURE_AD_REDIRECT_URI: str | None = None
+    # Comma-separated allowed email domains (empty = any account in the tenant,
+    # still subject to an existing local user matching the email).
+    AZURE_AD_ALLOWED_DOMAINS: str = ""
 
     # Google
     GOOGLE_OAUTH_ENABLED: bool = False
@@ -469,6 +478,16 @@ class Settings(BaseSettings):
         return {
             d.strip().lower()
             for d in self.GOOGLE_ALLOWED_DOMAINS.split(",")
+            if d.strip()
+        }
+
+    def get_azure_ad_allowed_domains(self) -> set[str]:
+        """Allowed Azure AD email domains as a lowercased set (empty = any)."""
+        if not self.AZURE_AD_ALLOWED_DOMAINS:
+            return set()
+        return {
+            d.strip().lower()
+            for d in self.AZURE_AD_ALLOWED_DOMAINS.split(",")
             if d.strip()
         }
 
