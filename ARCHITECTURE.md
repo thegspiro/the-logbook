@@ -99,7 +99,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 
 | API Prefix | Endpoint File | Tags | Route Count |
 |------------|--------------|------|-------------|
-| `/api/v1/auth` | `auth.py` | auth | 13 |
+| `/api/v1/auth` | `auth.py` | auth | 17 |
 | `/api/v1/users` | `users.py` + `member_status.py` + `member_leaves.py` | users, member-status, member-leaves | ~28 |
 | `/api/v1/roles` | `roles.py` | roles | 13 |
 | `/api/v1/organization` | `organizations.py` | organization | 15 |
@@ -146,12 +146,20 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/integrations` | `integrations.py` | integrations | 5 |
 | `/api/v1/salesforce-sync` | `salesforce_sync.py` | salesforce-sync | 5 |
 | `/api/v1/scheduled` | `scheduled.py` | scheduled-tasks | 2 |
+| `/api/v1/audit-logs` | `audit_logs.py` | audit-logs | 3 |
 | `/api/v1/admin-hours` | `admin_hours.py` | admin-hours | 21 |
 | `/api/v1/grants` | `grants.py` | grants | ~42 |
 | `/api/v1/operational-ranks` | `operational_ranks.py` | operational-ranks | 7 |
 | `/api/v1/onboarding` | `onboarding.py` | onboarding | 25 |
 | `/api/v1/public-portal` | `public_portal_admin.py` | public-portal-admin | 13 |
-| **Total** | | | **~845+** |
+| **Total** | | | **~850+** |
+
+> **Recently updated routers (2026-05):**
+> - `auth.py` added 4 OAuth routes — `GET /oauth/google`, `GET /oauth/google/callback`, `GET /oauth/microsoft`, `GET /oauth/microsoft/callback` (Sign in with Google / Microsoft).
+> - `audit_logs.py` (new) — `GET /audit-logs`, `GET /audit-logs/stats`, `GET /audit-logs/{log_id}`, all gated by `audit.view`.
+> - Training routers (`training.py`, `training_module_config.py`, `training_enhancements.py`) gained per-member/period export and training-record attachment upload/download.
+> - `membership_pipeline.py` (`prospective-members`) gained prospect document upload + download.
+> - `scheduling.py` `my-attendance-history` now accepts date-range parameters.
 
 ### Key Cross-Module API Endpoints
 

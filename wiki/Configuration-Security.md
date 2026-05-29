@@ -53,7 +53,7 @@ The Logbook supports multiple authentication methods:
 | Method | Description | Configuration |
 |--------|-------------|---------------|
 | **Local** | Username/password with Argon2id hashing | Default, always available |
-| **OAuth 2.0** | Google, Microsoft, custom providers | Configure in Settings > Authentication |
+| **OAuth (Google / Microsoft)** | "Sign in with Google" and "Sign in with Microsoft" (Azure AD, single-tenant); link-existing-only, domain-restricted *(2026-05-29)* | `GOOGLE_*` / `AZURE_AD_*` env vars |
 | **SAML** | Enterprise SSO integration | SAML metadata configuration |
 | **LDAP** | Active Directory / LDAP authentication | Server URL, bind DN, search base |
 | **TOTP MFA** | Time-based one-time passwords (Google Authenticator, etc.) | Per-user opt-in or admin-enforced |
@@ -106,6 +106,43 @@ The application automatically sets these security headers in production:
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
 - `Content-Security-Policy: default-src 'self'`
 - `Referrer-Policy: strict-origin-when-cross-origin`
+
+---
+
+## Client IP Resolution & GeoIP *(2026-05-29)*
+
+### Spoof-Proof Client IP
+
+`get_client_ip()` in `core/security_middleware.py` was rewritten so forwarded
+headers can no longer be spoofed:
+
+- Forwarded headers (`X-Forwarded-For`, `X-Real-IP`) are **only trusted when the
+  direct peer is listed in `TRUSTED_PROXY_IPS`**. When the list is empty
+  (default), forwarded headers are ignored entirely and the socket peer address
+  is used
+- The real client is the **right-most** `X-Forwarded-For` hop that is not itself
+  a trusted proxy (previously the left-most, spoofable entry). If `X-Forwarded-For`
+  is absent or entirely trusted proxies, it falls back to `X-Real-IP`, then the
+  peer
+- **Startup warning:** in `production`/`staging`, the app warns if `GEOIP_ENABLED`
+  is true but `TRUSTED_PROXY_IPS` is empty
+
+> **Behind a reverse proxy (nginx, Docker, load balancer) you MUST set
+> `TRUSTED_PROXY_IPS`** to the proxy's address(es), or every client will appear
+> to come from the proxy's IP.
+
+### GeoIP Country Blocking
+
+- Database `CountryBlockRule` rows are the **source of truth** for blocked
+  countries and take precedence over the `BLOCKED_COUNTRIES` config default. An
+  explicit unblock rule overrides a config-level default block
+- `sync_blocked_countries_to_geoip()` reconciles DB rules into the running GeoIP
+  service at startup and on every rule change
+- **Multi-worker sync:** `core/geoip_sync.py` publishes a Redis `geoip:invalidate`
+  message on rule changes; each worker's `GeoIPInvalidationListener` re-syncs from
+  the DB. If Redis is down, the publish is a no-op and changes apply on the next
+  restart
+- **Fail-open:** if a request's country cannot be determined, it is allowed
 
 ---
 

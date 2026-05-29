@@ -25,11 +25,67 @@ The Compliance Requirements Configuration module allows organizations to define 
 | `compliant_threshold` | `100.0` | Percentage at or above which a member is compliant |
 | `at_risk_threshold` | `75.0` | Percentage below which a member is at-risk |
 | `grace_period_days` | `0` | Days after deadline before marking non-compliant |
+| `include_current_month` | `true` | Evaluation-period boundary. `true` counts the in-progress current month; `false` evaluates as of the **end of the previous month** so members are not flagged non-compliant mid-month before they have had a chance to train. See "Evaluation Period (`include_current_month`)" below |
 | `auto_report_frequency` | `NONE` | Automatic report scheduling: `MONTHLY`, `QUARTERLY`, `YEARLY`, `NONE` |
 | `report_email_recipients` | `[]` | JSON array of email addresses for report delivery |
 | `report_day_of_month` | `1` | Day of month for scheduled reports |
 | `notify_non_compliant_members` | `false` | Send notifications to non-compliant members |
 | `notify_days_before_deadline` | `[30, 14, 7]` | JSON array of days before deadline to send notifications |
+
+---
+
+## Evaluation Period (`include_current_month`) (2026-05-03)
+
+Departments run training on different cadences. A department that drills at the
+**end** of every month would, under a naive mid-month dashboard, see members
+flagged non-compliant simply because the in-progress month has not had its drill
+yet. The `include_current_month` control lets an org choose where the compliance
+evaluation window ends.
+
+### Org default vs per-requirement override
+
+| Setting | Location | Type | Meaning |
+|---------|----------|------|---------|
+| Org default | `compliance_configs.include_current_month` | `Boolean` NOT NULL, default `true` | Applies to every requirement that does not set its own value |
+| Per-requirement override | `training_requirements.include_current_month` | `Boolean` nullable | `NULL` inherits the org default; `true`/`false` explicitly overrides for that one requirement (migration `20260503_0002`) |
+
+### Resolved "as-of" date
+
+The two values are resolved by pure helpers in `app/services/training_period.py`:
+
+- `effective_include_current_month(requirement_value, org_default)` — returns the
+  requirement value when it is not `NULL`, otherwise the org default.
+- `resolve_as_of_date(today, include_current_month)`:
+  - `True` → `today` (the in-progress month counts).
+  - `False` → last day of the previous month, computed as
+    `today.replace(day=1) - timedelta(days=1)`.
+
+The resolved as-of date drives the requirement date window, waiver proration
+(active vs waived months), and overdue checks. It is threaded through
+`training_compliance.py` (`get_org_include_current_month`,
+`evaluate_member_requirement`, `_evaluate_member_compliance`),
+`TrainingService.evaluate_requirement_detail`, `CompetencyMatrixService`,
+`AnnualComplianceReportService`, and the `get_compliance_summary`,
+`get_compliance_matrix`, and `get_my_training_summary` endpoints.
+
+### Deliberate exception: certificate "expiring soon" lookahead
+
+The certificate "expiring soon" lookahead **always uses the real
+`date.today()`**, never the resolved as-of date. For example,
+`CompetencyMatrixService` computes `expiring_threshold = date.today() + 90 days`
+independently of `include_current_month`. Excluding the current month must not
+hide a certificate that is genuinely about to expire.
+
+### Legacy behavior
+
+An organization with no `compliance_configs` row has the current month
+**included** (`get_org_include_current_month` returns `True` when no config
+exists), preserving pre-2026-05 behavior.
+
+> **Note:** This is distinct from the rolling "Evaluation Period (Date Windows)"
+> concept documented in `training-compliance-calculations.md`, which governs how
+> far back a requirement's window reaches. `include_current_month` only moves the
+> *end* of that window between today and the end of last month.
 
 ---
 
@@ -108,6 +164,7 @@ Each report stores:
 | `compliant_threshold` | `Float` | Default: 100.0 |
 | `at_risk_threshold` | `Float` | Default: 75.0 |
 | `grace_period_days` | `Integer` | Default: 0 |
+| `include_current_month` | `Boolean` | NOT NULL, default `true`. When `false`, evaluation stops at the end of the previous month (migration `20260503_0001`) |
 | `auto_report_frequency` | `ReportFrequency` | MONTHLY, QUARTERLY, YEARLY, NONE |
 | `report_email_recipients` | `JSON` | Array of email addresses |
 | `report_day_of_month` | `Integer` | 1-28 |
@@ -158,7 +215,10 @@ Each report stores:
 | Report generation failure | Status set to `FAILED` with `error_message`; can be regenerated |
 | Grace period applied | Members remain compliant during grace period after deadline |
 | `notify_days_before_deadline` empty array | No pre-deadline notifications sent |
-| Organization has no compliance config | Compliance calculations use hardcoded defaults until config is created |
+| Organization has no compliance config | Compliance calculations use hardcoded defaults until config is created; the in-progress current month **is** included (legacy behavior preserved) |
+| `include_current_month = false` mid-month | Compliance evaluates as of the last day of the previous month; the in-progress month does not count against members |
+| Requirement `include_current_month = NULL` | Inherits the org-level `include_current_month` default |
+| Certificate expiring within 90 days while `include_current_month = false` | Still surfaces as "expiring soon" — the lookahead uses the real `date.today()`, not the resolved as-of date |
 
 ---
 
@@ -169,15 +229,20 @@ Each report stores:
 
 The `ComplianceRequirementsConfigPage` provides:
 - Organization-level threshold and notification settings
+- An **"Evaluation Period"** checkbox on the Thresholds tab that toggles the org
+  `include_current_month` default (2026-05-03)
 - Compliance profile management (create/edit/delete)
 - Report scheduling configuration
 - On-demand report generation
 - Stored report history
 
+The per-requirement override (`inherit` / `include` / `exclude`) is set in the
+`RequirementModal` on the `TrainingRequirementsPage`.
+
 Linked from the compliance officer dashboard navigation.
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-03-14
+**Document Version**: 1.1
+**Last Updated**: 2026-05-29
 **Maintainer**: Development Team

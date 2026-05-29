@@ -445,6 +445,84 @@ hour this quarter.
 **Source:** `_get_requirement_date_window()`
 (`backend/app/api/v1/endpoints/training.py`)
 
+### Including or Excluding the In-Progress Month (2026-05-03)
+
+Everything above describes how *wide* the date window is. This setting controls
+where the window **ends** — at today, or at the end of last month.
+
+Many departments hold their drills at the *end* of each month. For those
+departments, a dashboard that counts the in-progress current month makes members
+look behind for up to 30 days every month, before they have even had a chance to
+train. The `include_current_month` control fixes this by letting compliance be
+evaluated as of an earlier "as-of" date.
+
+| `include_current_month` | Resolved as-of date | Effect |
+|-------------------------|---------------------|--------|
+| `true` (default) | `today` | The in-progress current month counts toward windows, proration, and overdue checks |
+| `false` | Last day of the **previous** month (`today.replace(day=1) - 1 day`) | The in-progress month is excluded; members are evaluated as they stood when this month began |
+
+It is configured at two levels (see `COMPLIANCE_CONFIG.md` for the data model):
+
+- **Org default** — `compliance_configs.include_current_month` (default `true`).
+- **Per-requirement override** — `training_requirements.include_current_month`
+  (`NULL` inherits the org default; `true`/`false` overrides).
+
+The resolved as-of date replaces `today` wherever the date window, waiver
+proration (active vs. waived months), and overdue checks are computed. One
+deliberate exception: the certificate **"expiring soon" lookahead always uses
+the real `date.today()`** (e.g. `today + 90 days` in the compliance matrix), so
+excluding the current month never hides a certificate that is genuinely about to
+expire.
+
+> This is *distinct* from the rolling-window concept above. Rolling windows
+> change how far **back** the period reaches; `include_current_month` only moves
+> the **end** of the period between today and the end of last month.
+
+#### Example: Maria's End-of-Month Drill, Two Settings
+
+Riverside FD drills on the **last Saturday of every month**. Their monthly
+24-hours-per-year CE requirement is evaluated on **October 15, 2025**, before
+October's drill has happened.
+
+Maria trained 2 hours at the **September 27** drill (the prior month's last
+Saturday) and nothing yet in October.
+
+**`include_current_month = true`** (resolved as-of = **Oct 15, 2025**):
+```
+Window includes October. October target is due, October hours = 0.
+Maria shows a gap for the current month and is flagged at-risk,
+even though Riverside's October drill is still 11 days away.
+```
+
+**`include_current_month = false`** (resolved as-of = **Sep 30, 2025** —
+last day of the previous month):
+```
+Window stops at the end of September. October is not yet evaluated.
+Maria's September 27 drill (2 hours) counts; she is compliant for the
+period that has actually closed. October is reassessed on Nov 1.
+```
+
+Now contrast a member who **only** trains mid-current-month. Jake logged a
+3-hour session on **October 3, 2025** but had nothing in September.
+
+| Setting | As-of date | Does Jake's Oct 3 session count? |
+|---------|-----------|----------------------------------|
+| `true` | Oct 15, 2025 | **Yes** — the current month is in the window |
+| `false` | Sep 30, 2025 | **No** — Oct 3 is after the as-of date; it counts once the window includes October |
+
+So `include_current_month = false` protects members who train end-of-month from
+premature at-risk flags, at the cost of not yet crediting brand-new
+current-month training until the month closes.
+
+**Edge case:** an organization with **no** `compliance_configs` row is treated as
+`include_current_month = true` (the current month is included), preserving the
+pre-2026-05 behavior.
+
+**Source:** `resolve_as_of_date()` / `effective_include_current_month()`
+(`backend/app/services/training_period.py`),
+`get_org_include_current_month()`
+(`backend/app/services/training_compliance.py`)
+
 ---
 
 ## 4. Waiver Adjustments

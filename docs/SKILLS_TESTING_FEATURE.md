@@ -145,7 +145,9 @@ The primary examiner interaction during the test:
 
 When the test concludes:
 
-1. **Auto-calculate results**:
+1. **Auto-calculate results** (now performed by the pure
+   `skills_testing_service.calculate_test_result(test, template)` helper — see
+   §13):
    - Total points scored vs. total possible
    - Percentage score
    - Pass/Fail determination based on: (a) score meets passing threshold AND (b) no critical criteria triggered

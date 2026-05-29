@@ -492,6 +492,19 @@ All significant actions are logged for compliance:
 - Settings modifications
 - Login/logout events
 
+#### Reviewing the Audit Log
+
+Admins with the `audit.view` permission can read the audit trail directly. Navigate to **Administration > Audit Log** (listed in both the top and side navigation Admin sections, next to QR Code Analytics).
+
+1. Open **Administration > Audit Log**. The stats cards at the top show the total number of events, plus counts of **Critical**, **Warnings**, and **Info** entries.
+2. Use the filter bar to narrow the list: type in the **search** box (matches username or event type), or pick a **Severity**, **Category**, or date range. Click **Reset** to clear the filters.
+3. Click a row to **expand** it and see the full event details for that entry.
+4. Use the pagination controls at the bottom to page through older entries.
+
+> **[SCREENSHOT NEEDED]:** _Audit Log page showing the Total / Critical / Warnings / Info stats cards, the filter bar (search box, severity and category dropdowns, Reset button), and the table with one row expanded to reveal its event detail JSON_
+
+> **Note:** The audit log is scoped to your organization — events for your department's users only. System-level events (such as scheduled jobs that have no acting user) are deliberately excluded from this view.
+
 ### Rate Limiting
 
 The system applies rate limiting to sensitive endpoints with specific thresholds and lockout durations:
