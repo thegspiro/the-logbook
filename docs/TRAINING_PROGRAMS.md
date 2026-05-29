@@ -1354,11 +1354,18 @@ Each department can control exactly what training data individual members see on
 ### API Endpoints
 
 ```http
-GET    /api/v1/training/module-config/config       Get full config (officer)
-PUT    /api/v1/training/module-config/config       Update config (officer)
-GET    /api/v1/training/module-config/visibility   Get visibility flags (member)
-GET    /api/v1/training/module-config/my-training  Get member's training data
+GET    /api/v1/training/module-config/config             Get full config (officer)
+PUT    /api/v1/training/module-config/config             Update config (officer)
+GET    /api/v1/training/module-config/visibility         Get visibility flags (member)
+GET    /api/v1/training/module-config/my-training         Get member's training data
+GET    /api/v1/training/module-config/my-training/export  Member self-export (CSV/PDF)
 ```
+
+`GET /my-training/export` lets a member download **their own** training history
+as `csv` or `pdf`, with optional `start_date` / `end_date` (omitting `start_date`
+returns lifetime history). It is gated by the org's `allow_member_report_export`
+setting (the "Report Export" visibility toggle, **off** by default) — when off it
+returns **403**. (2026-04 — `app/api/v1/endpoints/training_module_config.py`)
 
 ---
 
@@ -1591,6 +1598,76 @@ The following features, previously listed as planned, are now available:
 | Quick duration buttons | Disabled until a start date is selected |
 | Recurrence past series end | Events beyond the series end date are not created |
 
+### Recently Implemented (May 2026)
+
+#### Member & Officer Training Exports
+
+- **Member self-export** — `GET /api/v1/training/module-config/my-training/export`
+  returns a member's **own** training history as `csv` or `pdf` with optional
+  `start_date`/`end_date` (no `start_date` = lifetime). Gated by the org
+  `allow_member_report_export` setting; **403** when disabled. The
+  `MyTrainingPage` adds export buttons and a `DateRangePicker` defaulting to the
+  last 12 months.
+- **Officer per-member & bulk exports** — `POST /api/v1/training/reports/export`
+  (`training.manage`) gained report types:
+  - `member_records` — bulk export of **all ACTIVE members'** records
+    (`MemberTrainingHistoryPage` per-member export + the
+    `TrainingEnhancementsTab` "Member Records (All Members)" export both use it),
+  - `hours_summary` (CSV) and `certification` (CSV).
+  - PDF is supported only for `individual`, `member_records`, and `compliance`.
+    Bulk PDFs are merged with **pypdf**; an empty result emits a valid
+    placeholder page ("No training records found for this period.").
+  - **Unknown report types now raise 400** — the previous silent fall-through to
+    a compliance report was removed.
+- **Period helper** — `frontend/src/utils/trainingPeriods.ts` provides
+  `month` / `quarter` / `year` / `lifetime` calendar-period-to-date windows.
+
+#### Real Training-Record Attachments
+
+Training records now support real file attachments (previously metadata-only):
+
+| Endpoint | Notes |
+|----------|-------|
+| `POST /api/v1/training/records/{id}/attachments` | Multipart upload, ≤ **25 MB**, magic-byte MIME detection (PDF/JPEG/PNG/GIF/WEBP/DOC/DOCX) |
+| `GET /api/v1/training/records/{id}/attachments` | Lists **sanitized metadata only** (no server file paths) |
+| `GET /api/v1/training/records/{id}/attachments/{index}/download` | Streams a stored attachment by index |
+
+- **Access:** the record owner manages their own attachments; everyone else
+  needs `training.manage`.
+- **Storage:** `/app/uploads/training_attachments/{org_id}/{uuid}{ext}` with a
+  server-generated UUID filename + MIME-derived extension (anti double-extension).
+  Metadata is stored in the `TrainingRecord.attachments` JSON column and saved
+  with `flag_modified` (CLAUDE.md pitfall #12).
+- `MemberTrainingHistoryPage` adds an attachments modal.
+
+#### Finalize Gated by `require_completion_confirmation`
+
+`finalize_training_session` now respects the session's
+`require_completion_confirmation` flag instead of always requiring approval:
+
+- **`false` (default)** — the session is auto-approved, training records are
+  completed immediately, and **no** officer email is sent.
+- **`true`** — the approval stays `PENDING` and training officers are notified to
+  confirm.
+
+`_finalize_training_records` now **promotes the existing in-progress check-in
+record** (matched by `course_name` and `scheduled_date == event_date` OR
+`completion_date == event_date`, preferring the record with a NULL
+`completion_date`) to `completed`, instead of creating a duplicate. The unused
+`TrainingSession.approval_required` column/schema/type was **removed**
+(migration `20260502_0004`); sign-off is governed solely by
+`require_completion_confirmation`.
+
+#### Config Robustness
+
+- New `training_requirements.include_current_month` (Boolean, nullable —
+  migration `20260503_0002`) per-requirement evaluation-period override; see
+  `COMPLIANCE_CONFIG.md` and `training-compliance-calculations.md`.
+- `training_module_configs` boolean columns gained DB `server_default`s
+  (migration `20260502_0003`), and `manual_entry_enabled` /
+  `manual_entry_require_apparatus` were added to the `_BOOL_FIELD_DEFAULTS`
+  coercion, so NULL legacy rows no longer 500 on the config response.
+
 ### Remaining Planned Features
 - **Skill Videos**: Embed training videos for skill requirements
 - **Digital Signatures**: Sign off on checklist items digitally
@@ -1607,4 +1684,4 @@ For questions or issues with the Training Programs module:
 
 ---
 
-*Last Updated: March 15, 2026*
+*Last Updated: May 29, 2026*
