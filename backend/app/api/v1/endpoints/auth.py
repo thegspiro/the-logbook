@@ -13,7 +13,7 @@ from fastapi import (
     Request,
     status,
 )
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
@@ -234,12 +234,150 @@ async def get_oauth_config(
         )
         provider = auth_settings.get("provider", "local")
 
+        from app.services.oauth_service import GoogleOAuthService
+
         return {
-            "googleEnabled": provider == "google",
+            # Only advertise Google when the org selected it AND the server is
+            # fully configured for it, so the button never 404s on click.
+            "googleEnabled": provider == "google"
+            and GoogleOAuthService.is_configured(),
             "microsoftEnabled": provider == "microsoft",
         }
     except Exception:
         return {"googleEnabled": False, "microsoftEnabled": False}
+
+
+# OAuth state cookie: a short-lived, httpOnly token compared against the `state`
+# query param on callback (CSRF protection for the authorization-code flow).
+# SameSite=Lax so it survives the top-level redirect back from Google.
+_OAUTH_STATE_COOKIE = "oauth_state"
+_OAUTH_STATE_PATH = "/api/v1/auth/"
+
+
+def _cookies_secure() -> bool:
+    """Mirror _set_auth_cookies' Secure-flag detection for the state cookie."""
+    if settings.COOKIE_SECURE is not None:
+        return settings.COOKIE_SECURE
+    origins = (
+        settings.ALLOWED_ORIGINS
+        if isinstance(settings.ALLOWED_ORIGINS, list)
+        else [settings.ALLOWED_ORIGINS]
+    )
+    return not any(str(origin).startswith("http://") for origin in origins)
+
+
+@router.get("/oauth/google")
+async def oauth_google_initiate(db: AsyncSession = Depends(get_db)):
+    """
+    Begin the Google OAuth flow.
+
+    Sets a CSRF state cookie and redirects the browser to Google's consent
+    screen. Returns 404 when Google login is not configured so the route does
+    not leak its existence.
+    """
+    from app.services.oauth_service import GoogleOAuthService
+
+    if not GoogleOAuthService.is_configured():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    import secrets as _secrets
+
+    state = _secrets.token_urlsafe(32)
+    redirect = RedirectResponse(
+        url=GoogleOAuthService.build_authorization_url(state),
+        status_code=status.HTTP_302_FOUND,
+    )
+    redirect.set_cookie(
+        key=_OAUTH_STATE_COOKIE,
+        value=state,
+        max_age=600,
+        httponly=True,
+        secure=_cookies_secure(),
+        samesite="lax",
+        path=_OAUTH_STATE_PATH,
+    )
+    return redirect
+
+
+@router.get("/oauth/google/callback")
+async def oauth_google_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    oauth_state_cookie: str | None = Cookie(None, alias=_OAUTH_STATE_COOKIE),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Handle Google's redirect back: verify state, exchange the code, map the
+    Google identity to an existing local user, and establish the session by
+    setting the standard auth cookies, then redirect into the SPA.
+    """
+    from app.services.oauth_service import GoogleOAuthError, GoogleOAuthService
+
+    def _fail(reason: str) -> RedirectResponse:
+        sep = "&" if "?" in settings.OAUTH_FAILURE_REDIRECT else "?"
+        resp = RedirectResponse(
+            url=f"{settings.OAUTH_FAILURE_REDIRECT}{sep}error={reason}",
+            status_code=status.HTTP_302_FOUND,
+        )
+        resp.delete_cookie(_OAUTH_STATE_COOKIE, path=_OAUTH_STATE_PATH)
+        return resp
+
+    if not GoogleOAuthService.is_configured():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+    # Google reported an error (e.g. user cancelled consent).
+    if error:
+        logger.info(f"Google OAuth returned error: {error}")
+        return _fail("access_denied")
+
+    # CSRF: the returned state must match the cookie we set at initiation.
+    if not code or not state or not oauth_state_cookie or state != oauth_state_cookie:
+        return _fail("invalid_state")
+
+    service = GoogleOAuthService(db)
+    try:
+        idinfo = await service.exchange_code_for_idinfo(code)
+        user, reason = await service.resolve_user(idinfo)
+    except GoogleOAuthError as exc:
+        return _fail(str(exc))
+    except Exception as exc:  # noqa: BLE001 - never surface internals to the UA
+        logger.error(f"Unexpected error during Google OAuth callback: {exc}")
+        return _fail("server_error")
+
+    if not user:
+        return _fail(reason or "login_failed")
+
+    access_token, refresh_token = await auth_service_create_tokens(db, user, request)
+
+    await log_audit_event(
+        db=db,
+        event_type="oauth_login",
+        event_category="authentication",
+        severity="info",
+        event_data={"provider": "google", "email": user.email},
+        user_id=str(user.id),
+        username=user.username,
+        ip_address=request.client.host if request.client else None,
+    )
+
+    response = RedirectResponse(
+        url=settings.OAUTH_SUCCESS_REDIRECT, status_code=status.HTTP_302_FOUND
+    )
+    _set_auth_cookies(response, access_token, refresh_token)
+    response.delete_cookie(_OAUTH_STATE_COOKIE, path=_OAUTH_STATE_PATH)
+    return response
+
+
+async def auth_service_create_tokens(db: AsyncSession, user: User, request: Request):
+    """Issue access/refresh tokens for *user* (shared by OAuth callback)."""
+    service = AuthService(db)
+    return await service.create_user_tokens(
+        user=user,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent"),
+    )
 
 
 @router.post(

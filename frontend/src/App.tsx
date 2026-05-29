@@ -70,6 +70,7 @@ const PageLoadingFallback = () => (
 // Critical pages - loaded immediately for fast initial navigation
 import Dashboard from './pages/Dashboard';
 import { LoginPage } from './pages/LoginPage';
+import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 
 // Auth pages - loaded immediately for password reset flow
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
@@ -166,6 +167,9 @@ function App() {
 
                 {/* Login Page */}
                 <Route path="/login" element={<LoginPage />} />
+
+                {/* OAuth (Google) redirect landing page */}
+                <Route path="/auth/callback" element={<OAuthCallbackPage />} />
 
                 {/* Password Reset Pages */}
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />

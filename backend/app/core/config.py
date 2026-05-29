@@ -449,6 +449,28 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_ENABLED: bool = False
     GOOGLE_CLIENT_ID: str | None = None
     GOOGLE_CLIENT_SECRET: str | None = None
+    # Absolute URL Google redirects back to after consent. Must exactly match an
+    # "Authorized redirect URI" in the Google Cloud console, e.g.
+    # https://app.example.org/api/v1/auth/oauth/google/callback
+    GOOGLE_REDIRECT_URI: str | None = None
+    # Comma-separated list of allowed Google email domains (e.g.
+    # "yourdept.org,county.gov"). Empty = allow any Google account (still
+    # subject to an existing local user matching the email).
+    GOOGLE_ALLOWED_DOMAINS: str = ""
+    # Relative SPA paths the OAuth callback redirects to. Success lands on a
+    # lightweight page that establishes the session; failure returns to login.
+    OAUTH_SUCCESS_REDIRECT: str = "/auth/callback"
+    OAUTH_FAILURE_REDIRECT: str = "/login"
+
+    def get_google_allowed_domains(self) -> set[str]:
+        """Allowed Google email domains as a lowercased set (empty = any)."""
+        if not self.GOOGLE_ALLOWED_DOMAINS:
+            return set()
+        return {
+            d.strip().lower()
+            for d in self.GOOGLE_ALLOWED_DOMAINS.split(",")
+            if d.strip()
+        }
 
     # LDAP
     LDAP_ENABLED: bool = False
