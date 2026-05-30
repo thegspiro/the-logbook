@@ -27,6 +27,56 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Multiple Reports** — Hours, coverage, call volume, availability analytics
 - **Manual Shift Report Page** — *(2026-04-11)* Standalone page at `/training/manual-shift-report` for departments without the scheduling module enabled. Officers manually enter shift date, start/end times, apparatus, crew, and trainee evaluations
 - **Shift Report Hardening** — *(2026-04-11)* 20+ security and data integrity fixes for production readiness including submit-all-drafts scope fix, enrollment ID whitelist validation, draft regression guard, and print button restoration
+- **End-of-Shift Member Summary** — *(2026-05-29)* New scheduled task emails (and in-app notifies) each attending active member a summary of their hours, calls, and a report link after their shift
+- **Trainee Report Follow-Up** — *(2026-05-29)* New daily escalation reminds trainees of approved-but-unacknowledged reports, plus low-rating officer alerts to training officers
+- **Richer Shift Reminders** — *(2026-05-29)* Pre-shift reminders now include apparatus, the active-member crew roster, and equipment checklists, with a "Mark Arrival" deep link; email is sent by default
+
+---
+
+## Recent Improvements (2026-05-29)
+
+### Scheduled Tasks: Summaries & Follow-Up
+
+- **`end_of_shift_summary`** (every 30 min): for each attending **active** member,
+  sends an in-app notification and email summarizing their hours, calls, and a
+  report link. Gated by `org.settings["shift_reports"]["member_summary"]`:
+  `enabled` (default `true`), `lookback_hours` (default `4`), and
+  `require_finalized` (default `true`). When `require_finalized=false`, the
+  summary is sent for not-yet-finalized shifts and labeled "Preliminary Shift
+  Summary"
+- **`trainee_report_escalation`** (daily 08:00): reminds trainees of
+  **approved-but-unacknowledged** reports older than `acknowledgment_days`
+  (default `7`). In-app alerts go to the filing officer plus training officers.
+  Rate-limited to `max_reminders` (default `3`), tracked in the report's
+  `review_history`. Gated by `org.settings["shift_reports"]["follow_up"]`
+  (`enabled`, default `true`)
+- **Low-rating officer alert**: when a report's `performance_rating` is at or
+  below `low_rating_threshold` (default `2` of 5; `0` disables) **or** it has
+  non-empty `areas_for_improvement`, training officers are alerted
+
+### Richer Shift Reminders
+
+- Pre-shift reminders now include the apparatus, the **active-member** crew
+  roster (member + position, capped at 8 with a "+N more" overflow), and the
+  equipment checklists, plus a **"Mark Arrival"** deep link
+- Email is now **sent by default** — `org.settings["shift_reminders"].send_email`
+  defaults to `true` (opt out per-org)
+
+### Deep-Link Fixes
+
+- Check-in deep links point to `/scheduling/checkin?shift=<id>` (the page is
+  mounted without a hyphen; the stale `?user=` param was dropped)
+- Shift-report deep links point to `/scheduling?tab=shift-reports&report=<id>`
+  (the previously emitted `/scheduling/reports/<id>` was not a real route). The
+  page reads `?report=<id>` and auto-expands that report
+
+### Attendance History & Past Shifts
+
+- `GET /scheduling/my-attendance-history` gained optional `start_date`/`end_date`
+  (YYYY-MM-DD) params and now joins `Shift` to embed `shift_date`, start, and end
+- **MyShiftsTab** honors `?view=past` and synthesizes "completed" entries for
+  walk-on attendance; the dashboard Standby card deep-links to the past view
+- Roster and reminder queries now filter on `User.is_active`
 
 ---
 
@@ -78,6 +128,7 @@ POST   /api/v1/scheduling/time-off-requests  # Request time off
 GET    /api/v1/scheduling/reports/*           # Scheduling reports
 GET    /api/v1/scheduling/apparatus          # List basic apparatus
 GET    /api/v1/scheduling/shifts/{id}/unavailable-members  # Unavailable user IDs for assignment filtering
+GET    /api/v1/scheduling/my-attendance-history            # My attendance history (optional start_date/end_date, embeds shift date/time) (2026-05-29)
 ```
 
 ---

@@ -99,7 +99,7 @@ All routes registered in `backend/app/api/v1/api.py`:
 
 | API Prefix | Endpoint File | Tags | Route Count |
 |------------|--------------|------|-------------|
-| `/api/v1/auth` | `auth.py` | auth | 13 |
+| `/api/v1/auth` | `auth.py` | auth | 17 |
 | `/api/v1/users` | `users.py` + `member_status.py` + `member_leaves.py` | users, member-status, member-leaves | ~28 |
 | `/api/v1/roles` | `roles.py` | roles | 13 |
 | `/api/v1/organization` | `organizations.py` | organization | 15 |
@@ -146,12 +146,20 @@ All routes registered in `backend/app/api/v1/api.py`:
 | `/api/v1/integrations` | `integrations.py` | integrations | 5 |
 | `/api/v1/salesforce-sync` | `salesforce_sync.py` | salesforce-sync | 5 |
 | `/api/v1/scheduled` | `scheduled.py` | scheduled-tasks | 2 |
+| `/api/v1/audit-logs` | `audit_logs.py` | audit-logs | 3 |
 | `/api/v1/admin-hours` | `admin_hours.py` | admin-hours | 21 |
 | `/api/v1/grants` | `grants.py` | grants | ~42 |
 | `/api/v1/operational-ranks` | `operational_ranks.py` | operational-ranks | 7 |
 | `/api/v1/onboarding` | `onboarding.py` | onboarding | 25 |
 | `/api/v1/public-portal` | `public_portal_admin.py` | public-portal-admin | 13 |
-| **Total** | | | **~845+** |
+| **Total** | | | **~850+** |
+
+> **Recently updated routers (2026-05):**
+> - `auth.py` added 4 OAuth routes — `GET /oauth/google`, `GET /oauth/google/callback`, `GET /oauth/microsoft`, `GET /oauth/microsoft/callback` (Sign in with Google / Microsoft).
+> - `audit_logs.py` (new) — `GET /audit-logs`, `GET /audit-logs/stats`, `GET /audit-logs/{log_id}`, all gated by `audit.view`.
+> - Training routers (`training.py`, `training_module_config.py`, `training_enhancements.py`) gained per-member/period export and training-record attachment upload/download.
+> - `membership_pipeline.py` (`prospective-members`) gained prospect document upload + download.
+> - `scheduling.py` `my-attendance-history` now accepts date-range parameters.
 
 ### Key Cross-Module API Endpoints
 
@@ -198,13 +206,14 @@ These endpoints bridge data across modules:
 
 | File | Models | Table(s) |
 |------|--------|----------|
-| `user.py` | Organization, User, Role, Session, MemberLeaveOfAbsence | organizations, users, roles, sessions, user_roles, member_leaves_of_absence |
+| `user.py` | Organization, User (+ `oauth_provider`, `oauth_subject`), Role, Session, MemberLeaveOfAbsence | organizations, users, roles, sessions, user_roles, member_leaves_of_absence |
 | `event.py` | Event, EventRSVP, EventExternalAttendee | events, event_attendees, event_external_attendees |
 | `event_request.py` | EventRequest, EventRequestActivity, EventRequestEmailTemplate | event_requests, event_request_activities, event_request_email_templates |
-| `training.py` | TrainingCategory (+ `registry_code`), TrainingCourse, TrainingRecord, TrainingRequirement, TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport (+ `credit_hours`), Shift, ShiftAttendance, ShiftCall, ShiftCompletionReport | training_categories, training_courses, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls, shift_completion_reports |
+| `training.py` | TrainingCategory (+ `registry_code`), TrainingCourse, TrainingRecord, TrainingRequirement (+ `include_current_month`), TrainingSession, TrainingApproval, TrainingProgram, ProgramPhase, ProgramRequirement, ProgramMilestone, ProgramEnrollment, RequirementProgress, SkillEvaluation, SkillCheckoff, ExternalTrainingProvider, ExternalCategoryMapping, ExternalUserMapping, ExternalTrainingSyncLog, ExternalTrainingImport (+ `credit_hours`), Shift, ShiftAttendance, ShiftCall, ShiftCompletionReport | training_categories, training_courses, training_records, training_requirements, training_sessions, training_approvals, training_programs, program_phases, program_requirements, program_milestones, program_enrollments, requirement_progress, skill_evaluations, skill_checkoffs, external_training_providers, external_category_mappings, external_user_mappings, external_training_sync_logs, external_training_imports, shifts, shift_attendance, shift_calls, shift_completion_reports |
 | `skills_testing.py` | SkillTemplate, SkillTest | skill_templates, skill_tests |
 | `election.py` | Election, Candidate, Vote, VotingToken | elections, candidates, ballots, voting_tokens |
-| `inventory.py` | InventoryCategory, InventoryItem, ItemAssignment, CheckOutRecord, MaintenanceRecord, StorageArea | inventory_categories, inventory_items, item_assignments, inventory_checkouts, maintenance_records, storage_areas |
+| `inventory.py` | InventoryCategory, InventoryItem, ItemAssignment, CheckOutRecord, MaintenanceRecord, StorageArea, InventoryNotificationQueue (+ `attempt_count`, `last_attempt_at`) | inventory_categories, inventory_items, item_assignments, inventory_checkouts, maintenance_records, storage_areas, inventory_notification_queue |
+| `compliance_config.py` | ComplianceConfig (+ `include_current_month`), ComplianceProfile, ComplianceReport | compliance_configs, compliance_profiles, compliance_reports |
 | `apparatus.py` | Apparatus, ApparatusType, ApparatusStatus, ApparatusCustomField, ApparatusPhoto, ApparatusDocument, ApparatusMaintenanceType, ApparatusMaintenance, ApparatusFuelLog, ApparatusOperator, ApparatusEquipment, ApparatusLocationHistory, ApparatusStatusHistory, ApparatusNFPACompliance, ApparatusReportConfig, EquipmentCheckTemplate, CheckTemplateCompartment, CheckTemplateItem, ShiftEquipmentCheck, ShiftEquipmentCheckItem | apparatus, apparatus_types, apparatus_statuses, apparatus_custom_fields, apparatus_photos, apparatus_documents, apparatus_maintenance_types, apparatus_maintenance, apparatus_fuel_logs, apparatus_operators, apparatus_equipment, apparatus_location_history, apparatus_status_history, apparatus_nfpa_compliance, apparatus_report_configs, equipment_check_templates, check_template_compartments, check_template_items, shift_equipment_checks, shift_equipment_check_items |
 | `facilities.py` | Facility, FacilityType, FacilityStatus, FacilityPhoto, FacilityDocument, FacilityMaintenanceType, FacilityMaintenance, FacilitySystem, FacilityInspection, FacilityUtilityAccount, FacilityUtilityReading, FacilityAccessKey, FacilityRoom, FacilityEmergencyContact, FacilityShutoffLocation, FacilityCapitalProject, FacilityInsurancePolicy, FacilityOccupant, FacilityComplianceChecklist, FacilityComplianceItem, FacilityCategory | facilities, facility_types, facility_statuses, facility_photos, facility_documents, facility_maintenance_types, facility_maintenance, facility_systems, facility_inspections, facility_utility_accounts, facility_utility_readings, facility_access_keys, facility_rooms, facility_emergency_contacts, facility_shutoff_locations, facility_capital_projects, facility_insurance_policies, facility_occupants, facility_compliance_checklists, facility_compliance_items, facility_categories |
 | `meeting.py` | Meeting, MeetingAttendee, MeetingActionItem | meetings, meeting_attendees, meeting_action_items |
@@ -226,6 +235,13 @@ These endpoints bridge data across modules:
 | `security_alert.py` | SecurityAlertRecord | security_alerts |
 | `ip_security.py` | IPException, BlockedAccessAttempt, CountryBlockRule, IPExceptionAuditLog | ip_exceptions, blocked_access_attempts, country_block_rules, ip_exception_audit_logs |
 | `grant.py` | GrantOpportunity, GrantApplication, GrantBudgetItem, GrantExpenditure, GrantComplianceTask, GrantNote, FundraisingCampaign, Donor, Donation, Pledge, FundraisingEvent | grant_opportunities, grant_applications, grant_budget_items, grant_expenditures, grant_compliance_tasks, grant_notes, fundraising_campaigns, donors, donations, pledges, fundraising_events |
+
+> **Recent model changes (2026-05):**
+> - `users` adds OAuth identity columns `oauth_provider` (`String(50)`, nullable) and `oauth_subject` (`String(255)`, nullable, indexed `ix_users_oauth_subject`).
+> - `compliance_configs.include_current_month` (Boolean, NOT NULL, server default `true`) and `training_requirements.include_current_month` (Boolean, nullable) control whether the in-progress month counts toward compliance; a NULL requirement value inherits the org-level config.
+> - `inventory_notification_queue` adds `attempt_count` (Integer, NOT NULL, default 0) and `last_attempt_at` (DateTime, nullable) for delivery retry tracking.
+> - The `TrainingSession.approval_required` column was **removed**.
+> - `training_module_configs` boolean columns now carry explicit `server_default`s.
 
 ### Key Foreign Key Relationships
 
@@ -347,6 +363,7 @@ All services in `backend/app/services/`:
 | Service File | Class | Primary Model(s) | Key Methods |
 |-------------|-------|-------------------|-------------|
 | `auth_service.py` | AuthService | User, Session | authenticate, register, refresh_token, change_password, forgot_password, reset_password |
+| `oauth_service.py` | GoogleOAuthService, MicrosoftOAuthService | User | is_configured, build_authorization_url, exchange_code_for_idinfo, resolve_user (link-existing-user / domain-restricted sign-in; Google + single-tenant Azure AD) |
 | `user_service.py` | UserService | User | get_users, create_user, update_user, delete_user, upload_photo, get_audit_history |
 | `role_service.py` | RoleService | Role | get_roles, create_role, update_role, delete_role, clone_role, assign_roles |
 | `organization_service.py` | OrganizationService | Organization | get_settings, update_settings, get_enabled_modules, update_modules |
@@ -367,7 +384,7 @@ All services in `backend/app/services/`:
 | `training_module_config_service.py` | TrainingModuleConfigService | — | get_config, update_config, get_visibility |
 | `external_training_service.py` | ExternalTrainingService | ExternalTrainingProvider, ExternalTrainingSyncLog | create_provider, test_connection, trigger_sync, import_records |
 | `shift_completion_service.py` | ShiftCompletionService | ShiftCompletionReport | create_report, update_report, review_report, acknowledge_report, get_reports_for_trainee, get_reports_by_officer, get_all_reports, get_reports_by_status, get_trainee_stats, get_officer_analytics |
-| `skills_testing_service.py` | SkillsTestingService | SkillTemplate, SkillTest | create_template, publish_template, create_test, complete_test, calculate_score |
+| `skills_testing_service.py` | SkillsTestingService | SkillTemplate, SkillTest | create_template, publish_template, create_test, complete_test, calculate_score; module-level `calculate_test_result()` (extracted, unit-tested scoring) |
 | `scheduling_service.py` | SchedulingService | Shift, ShiftAttendance, ShiftCall, ShiftTemplate, ShiftPattern, ShiftAssignment, ShiftSwapRequest, ShiftTimeOff | create_shift, manage_attendance, create_template, create_pattern, generate_shifts, manage_assignments, manage_swap_requests, manage_time_off, get_reports, finalize_shift |
 | `election_service.py` | ElectionService | Election, Candidate, Vote, VotingToken | create_election, open_election, close_election, cast_vote, get_results, verify_integrity, manage_proxy_voting |
 | `inventory_service.py` | InventoryService | InventoryItem, InventoryCategory, ItemAssignment, CheckOutRecord | create_item, assign_item, checkout, checkin, get_summary, import_csv, generate_labels |
@@ -419,6 +436,7 @@ All services in `backend/app/services/`:
 | `ip_security_service.py` | IPSecurityService | IP blocking and geofencing |
 | `security_monitoring.py` | SecurityMonitoringService | Intrusion detection, data exfiltration checks |
 | `template_service.py` | TemplateService | Jinja2 email template rendering |
+| `training_period.py` | (module functions) | Compliance evaluation-period helpers: `effective_include_current_month()` (per-requirement override resolving against org config), `resolve_as_of_date()` (as-of date for current vs prior month) |
 | `scheduled_tasks.py` | ScheduledTasksService | Background task execution |
 
 ---
@@ -477,6 +495,7 @@ All Response schemas use `ConfigDict(from_attributes=True, alias_generator=to_ca
 | `/login` | LoginPage | (root) |
 | `/forgot-password` | ForgotPasswordPage | (root) |
 | `/reset-password` | ResetPasswordPage | (root) |
+| `/auth/callback` | OAuthCallbackPage | (root) |
 | `/f/:slug` | PublicFormPage | forms |
 | `/ballot` | BallotVotingPage | elections |
 | `/display/:code` | LocationKioskPage | facilities |
@@ -690,6 +709,7 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | `/setup` | DepartmentSetupPage | `settings.manage` |
 | `/admin/errors` | ErrorMonitoringPage | `settings.manage` |
 | `/admin/analytics` | AnalyticsDashboardPage | `analytics.view` |
+| `/admin/audit-log` | AuditLogPage | `audit.view` |
 | `/admin/platform-analytics` | PlatformAnalyticsPage | `settings.manage` |
 | `/admin/public-portal` | PublicPortalAdmin | `settings.manage` |
 
@@ -1210,6 +1230,7 @@ All permissions follow dot notation: `resource.action`
 | `constants.py` | Application constants |
 | `encrypted_types.py` | SQLAlchemy encrypted column types (AES-256) |
 | `geoip.py` | GeoIP lookup for IP security |
+| `geoip_sync.py` | Cross-worker GeoIP invalidation: `publish_geoip_invalidation()` + `GeoIPInvalidationListener` (Redis pub/sub channel `geoip:invalidate`) so every worker re-syncs blocked-country rules |
 | `logging.py` | Loguru configuration |
 | `seed.py` | Database seeding (roles, permissions, demo data) |
 | `seed_training.py` | Training module seeding |
@@ -1264,6 +1285,8 @@ The `WebSocketManager` (`core/websocket_manager.py`) manages connections per org
 | `advance_membership_tiers` | Weekly | Checks and advances member tier progression |
 | `purge_inactive_prospects` | Weekly | Archives inactive prospective members past timeout |
 | `send_shift_reminders` | Every 30 min | Sends start-of-shift reminders within configurable lookahead window (default 2 hours). Includes equipment checklist info |
+| `end_of_shift_summary` | Every 30 min | Sends each member who attended a shift an end-of-shift summary (email + in-app) with hours, calls, and a link to their completion report |
+| `trainee_report_escalation` | Daily 08:00 | Escalates approved shift completion reports awaiting trainee acknowledgment beyond the configured window (default 7 days) |
 | `cleanup_old_notifications` | Daily | Purges read notifications older than configurable retention period |
 
 ### Admin API for Tasks

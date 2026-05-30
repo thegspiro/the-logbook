@@ -300,9 +300,16 @@ DELETE /api/v1/scheduling/time-off/{id}             # Cancel own request
 
 ```
 GET    /api/v1/scheduling/shifts/{id}/attendance    # Get shift attendance
+GET    /api/v1/scheduling/my-attendance-history     # Current member's attendance history
 PATCH  /api/v1/scheduling/attendance/{id}           # Update attendance record
 DELETE /api/v1/scheduling/attendance/{id}           # Delete attendance record
 ```
+
+`GET /my-attendance-history` accepts `limit` (1–200, default 50) plus optional
+`start_date` / `end_date` (`YYYY-MM-DD`) to page further back than `limit`. It
+joins `Shift` to `ShiftAttendance` so each row embeds `shift_date`,
+`shift_start_time`, and `shift_end_time`, ordered by `shift_date` descending.
+(2026-05)
 
 ### Calls
 
@@ -1268,4 +1275,77 @@ New utility modules:
 
 ---
 
-*Last Updated: April 9, 2026*
+## Member Summaries, Trainee Escalation & Richer Reminders (2026-05-02)
+
+### New Scheduled Tasks
+
+Two scheduled tasks were added in `backend/app/services/scheduled_tasks.py`
+(register them with whatever runs the existing scheduled tasks — see the
+recommended crontab at the top of that file):
+
+| Task | Cadence | Gate | Behavior |
+|------|---------|------|----------|
+| `end_of_shift_summary` | Every 30 min | `org.settings["shift_reports"]["member_summary"].enabled` (default `true`) | Sends each member who attended a shift that ended within `lookback_hours` (default 4) a personalized email **and** in-app summary (date, time range, apparatus, hours, calls, report link). When `require_finalized` (default `true`) is `false`, unfinalized shifts are still summarized and the message is labeled **"Preliminary Shift Summary"**. Idempotent per member via `shift.activities["member_summaries_sent"]` |
+| `trainee_report_escalation` | Daily 08:00 | `org.settings["shift_reports"]["follow_up"].enabled` (default `true`) | For each **approved** `ShiftCompletionReport` not acknowledged by the trainee within `acknowledgment_days` (default 7), sends an escalation reminder to the trainee and notifies the filing officer + training officers. Rate-limited to `max_reminders` (default 3) tracked via the report's `review_history` JSON |
+
+### Low-Rating Officer Alert
+
+`shift_completion_service.py` alerts **training officers** (excluding the filing
+officer, to avoid self-alerts) when an approved report has either:
+
+- `performance_rating <= low_rating_threshold` (default `2` on the 5-point
+  scale; set the threshold to `0` to disable this trigger entirely), **or**
+- non-empty `areas_for_improvement` text.
+
+The notification deep-links to `/scheduling?tab=shift-reports&report=<id>`.
+
+### Richer Shift Reminders
+
+`run_shift_reminders` now builds a structured message including the apparatus,
+an active-member crew roster (capped at 8, then `+N more`), assigned
+start-of-shift checklists, and a **Mark Arrival** button. Roster and reminder
+queries filter on `User.is_active`.
+
+> **Email default:** `shift_reminders.send_email` is read with a default of
+> `True` in the code, so reminder emails are sent unless an org explicitly sets
+> `send_email = false`. (The docstring comment in `scheduled_tasks.py` still
+> reads `default False` and is stale relative to the code.)
+
+### Deep-Link Corrections
+
+| Context | Old (broken) link | New link |
+|---------|-------------------|----------|
+| Shift check-in | `/scheduling/checkin?shift=<id>&user=<id>` | `/scheduling/checkin?shift=<id>` (dropped `?user=`) |
+| Shift report | `/scheduling/reports/<id>` (route never existed) | `/scheduling?tab=shift-reports&report=<id>` |
+
+### MyShiftsTab Past View
+
+`MyShiftsTab` honors `?view=past` to open directly on past shifts and
+synthesizes "completed" walk-on entries from `ShiftAttendance` rows that have no
+matching `ShiftAssignment` (e.g. deleted assignments / walk-ons). The dashboard
+**Standby** card deep-links to `/scheduling?tab=my-shifts&view=past`.
+
+### Org Settings Keys (summary)
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `shift_reminders.send_email` | `true` | Send reminder emails (code default) |
+| `shift_reminders.cc_emails` | `[]` | Extra CC recipients on reminder emails |
+| `shift_reports.member_summary.enabled` | `true` | Enable `end_of_shift_summary` |
+| `shift_reports.member_summary.lookback_hours` | `4` | Window of recently-ended shifts to summarize |
+| `shift_reports.member_summary.require_finalized` | `true` | When `false`, summarize unfinalized shifts as "Preliminary" |
+| `shift_reports.follow_up.enabled` | `true` | Enable `trainee_report_escalation` + low-rating alert |
+| `shift_reports.follow_up.acknowledgment_days` | `7` | Days before an unacknowledged approved report escalates |
+| `shift_reports.follow_up.max_reminders` | `3` | Cap on escalation reminders per report |
+| `shift_reports.follow_up.low_rating_threshold` | `2` | Rating at/below which the low-rating alert fires (`0` disables) |
+
+### Migration
+
+`20260502_0001` backfills NULL boolean columns in `training_config` so legacy
+rows no longer break boolean gating.
+
+**Source:** `scheduled_tasks.py`, `shift_completion_service.py`, `scheduling.py`.
+
+---
+
+*Last Updated: May 29, 2026*

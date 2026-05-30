@@ -20,6 +20,7 @@ The Compliance module provides organization-wide compliance tracking, reporting,
 - **ISO Readiness Scoring** — *(2026-03-05)* ISO 9001/14001/45001 readiness scoring based on attestation completion rates
 - **Attestation Workflows** — *(2026-03-05)* Configurable annual compliance sign-off workflows assigned to members with tracking and reminders
 - **NFPA 1401 Record Quality** — *(2026-03-05)* Training record quality analysis per NFPA 1401 standards (requires ≥10 records for meaningful scores)
+- **Configurable Evaluation Period** — *(2026-05-29)* Org-wide and per-requirement control over whether the in-progress (current) month counts toward compliance, so members aren't flagged non-compliant mid-month when drills happen late in the period
 
 ---
 
@@ -65,6 +66,43 @@ GET    /api/v1/training/reports/user/{id}    # Individual member report
 GET    /api/v1/training/requirements/progress/{id}    # Per-requirement progress
 POST   /api/v1/training/certifications/process-alerts/all-orgs  # Cert alert cron
 ```
+
+---
+
+## Recent Changes (2026-05-29)
+
+### Configurable Evaluation Period (Current vs. Prior Month)
+
+Departments run training on different cadences. A dashboard that always counts
+the in-progress month can flag members as non-compliant before they have had a
+chance to train that month. The evaluation period is now configurable:
+
+- **Org default:** `compliance_configs.include_current_month` (Boolean, default
+  `true`). `true` counts the in-progress month; `false` stops evaluation at the
+  end of the **previous** month
+- **Per-requirement override:** `training_requirements.include_current_month`
+  (nullable). `NULL` inherits the org default; `true`/`false` overrides it
+  explicitly
+- **Helper:** `resolve_as_of_date(today, include)` (in
+  `services/training_period.py`) returns `today` when included, otherwise the
+  last day of the previous month. This "as-of" date drives the requirement
+  window, waiver proration, and overdue checks
+- **Exception:** the certification **"expiring soon"** lookahead always uses the
+  real `today()`, never the resolved as-of date — upcoming expirations are not
+  shifted by the evaluation period
+
+### UI
+
+- **"Evaluation Period" checkbox** on the Compliance Requirements > Thresholds
+  tab sets the org default
+- A **per-requirement select** (inherit / include / exclude) overrides the
+  default for individual requirements
+
+### Member Self-Export Gating
+
+The org `allow_member_report_export` setting controls whether members may export
+their own training records (CSV/PDF). When disabled, the member export endpoint
+returns 403. See the [Training Module](Module-Training#member--officer-exports).
 
 ---
 

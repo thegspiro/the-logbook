@@ -62,6 +62,13 @@ The onboarding process consists of 10 steps:
   - **Authentik SSO** - Self-hosted authentication platform (for complete control)
   - **Local Passwords** - Secure password-based authentication with Argon2id hashing (no external services required)
 
+> **OAuth sign-in (2026-05-29):** "Sign in with Google" and "Sign in with
+> Microsoft" (Azure AD, single-tenant) are now fully implemented. They are
+> **link-existing-only** — the verified IdP email must match an active local
+> user; OAuth never auto-creates accounts. Configure via the `GOOGLE_*` /
+> `AZURE_AD_*` environment variables and optionally restrict by email domain.
+> See [Authentication > OAuth](Security-Authentication#oauth).
+
 #### Step 7: IT Team & Backup Access
 - Add IT team contact information
 - Configure backup access email and phone

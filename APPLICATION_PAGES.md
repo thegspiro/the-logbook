@@ -12,6 +12,7 @@ Complete reference of all pages in the application, organized by module.
 | `/login` | Login | User authentication |
 | `/forgot-password` | Forgot Password | Password reset request |
 | `/reset-password` | Reset Password | Password reset form |
+| `/auth/callback` | `OAuthCallbackPage` | OAuth sign-in landing page (handles Google/Microsoft redirect) |
 | `/f/:slug` | Public Form | Public form submission (token-based) |
 | `/ballot` | Ballot Voting | Public ballot voting (token-based) |
 | `/display/:code` | Location Kiosk Display | QR code display for tablets in rooms (display-code-based) |
@@ -50,6 +51,8 @@ Complete reference of all pages in the application, organized by module.
 | URL | Page | Permission |
 |-----|------|------------|
 | `/dashboard` | Main Dashboard | Authenticated |
+
+> *(2026-05-02)* The volunteer dashboard "Now" section has been redesigned. The dashboard "Upcoming Events" stat now counts only events in the **next 30 days** (card labeled "Next 30 days") rather than all future events. The top navigation shows an **offline / pending-sync pill** indicating queued training submissions and RSVPs that will sync when connectivity returns.
 
 ---
 
@@ -444,6 +447,7 @@ The Scheduling Settings page uses a tabbed sub-navigation:
 | `/setup` | Department Setup | `settings.manage` |
 | `/admin/errors` | Error Monitoring | `settings.manage` |
 | `/admin/analytics` | Analytics Dashboard | `analytics.view` |
+| `/admin/audit-log` | `AuditLogPage` | `audit.view` |
 | `/admin/public-portal` | Public Portal Admin | `settings.manage` |
 
 ---

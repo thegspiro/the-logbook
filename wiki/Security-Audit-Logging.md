@@ -35,6 +35,8 @@ Every significant action in the system is recorded in the audit log with:
 | **Shift Completion Reports** | Report created, updated, reviewed (approved/flagged/redacted), acknowledged by trainee, bulk submitted *(2026-04-07)* |
 | **Salesforce Sync** | Sync triggered, sync completed, webhook received, contact created/updated *(2026-04-11)* |
 | **Training Programs** | Program exported, program imported *(2026-04-11)* |
+| **Authentication (OAuth)** | `oauth_login` — successful sign-in via Google or Microsoft *(2026-05-29)* |
+| **Events** | `event_attendee_overwritten` (severity `warning`) — a manager overwrote an existing RSVP when adding an attendee *(2026-05-29)* |
 | **Security** | Alert generated, alert acknowledged, integrity check |
 
 ---
@@ -109,9 +111,31 @@ curl http://YOUR-IP:3001/api/v1/audit-log?action=login
 curl http://YOUR-IP:3001/api/v1/audit-log?start=2026-01-01&end=2026-02-01
 ```
 
+### Admin Read API *(2026-05-29)*
+
+A dedicated admin read API (permission `audit.view`) exposes the audit trail for
+browsing and filtering:
+
+```
+GET /api/v1/audit-logs            # filters: event_type, event_category,
+                                  #   severity (info|warning|critical), user_id,
+                                  #   search, start_date, end_date, skip, limit (1-500)
+GET /api/v1/audit-logs/stats      # counts by severity and category
+GET /api/v1/audit-logs/{log_id}   # single entry
+```
+
+Results are org-scoped by joining through users (only entries whose `user_id`
+belongs to the caller's organization); NULL-user system events are excluded.
+
 ### Via UI
 
-Navigate to **Settings > Audit Log** to browse, filter, and export audit entries.
+Navigate to the **Audit Log** admin page at `/admin/audit-log` *(2026-05-29)*
+(or **Settings > Audit Log**) to browse, filter, and export audit entries.
+
+> **Note on client IPs** *(2026-05-29)*: the IP recorded in audit/security
+> events comes from the spoof-proof `get_client_ip()` resolver. Behind a reverse
+> proxy you must set `TRUSTED_PROXY_IPS` or all entries will show the proxy's IP.
+> See [Security Configuration](Configuration-Security#client-ip-resolution--geoip-2026-05-29).
 
 ---
 

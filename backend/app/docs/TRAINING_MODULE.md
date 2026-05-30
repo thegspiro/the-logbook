@@ -127,6 +127,7 @@ Individual member training history.
 - `apparatus_id`: FK to apparatus used for this training (optional)
 - `rank_at_completion`: Member's rank at the time the record was created (auto-populated, VARCHAR 100)
 - `station_at_completion`: Member's station at the time the record was created (auto-populated, VARCHAR 100)
+- `attachments`: JSON array of attached document/certificate metadata (`file_name`, `file_path`, `file_type`, `file_size`, `uploaded_at`, `uploaded_by`). Files are stored on disk; see "Training-Record Attachments (2026-05)" under API Endpoints. Mutated via `flag_modified` (CLAUDE.md pitfall #12)
 
 ### TrainingRequirement
 Requirements that members must complete.
@@ -157,6 +158,7 @@ Requirements that members must complete.
 - `period_start_month`: Month when calendar period starts (1-12, default 1 for January)
 - `period_start_day`: Day when calendar period starts (1-31, default 1)
 - `category_ids`: Array of category UUIDs that can satisfy this requirement (JSONB)
+- `include_current_month`: Nullable Boolean (migration `20260503_0002`) — per-requirement override of the compliance evaluation period. `NULL` inherits the org-wide `compliance_configs.include_current_month` default; `true`/`false` explicitly include/exclude the in-progress current month. See `docs/COMPLIANCE_CONFIG.md` and `docs/training-compliance-calculations.md`
 
 **Due Date Calculation Examples:**
 
@@ -560,6 +562,46 @@ A record is flagged as a potential duplicate when another record exists with:
 
 The response includes `duplicate_warnings` listing each potential conflict.
 
+### Training-Record Attachments (2026-05)
+
+Training records support real document/certificate attachments (previously
+metadata-only). Implemented in
+`app/api/v1/endpoints/training_enhancements.py`.
+
+```
+POST   /api/v1/training/records/{id}/attachments                  # Upload (multipart)
+GET    /api/v1/training/records/{id}/attachments                  # List metadata (no file paths)
+GET    /api/v1/training/records/{id}/attachments/{index}/download # Stream by index
+```
+
+- **Limit:** ≤ 25 MB. **MIME** is detected from the file's magic bytes (not the
+  client `Content-Type`): PDF, JPEG, PNG, GIF, WEBP, DOC, DOCX.
+- **Storage:** `/app/uploads/training_attachments/{org_id}/{uuid}{ext}` —
+  server-generated UUID filename with a MIME-derived extension (defeats
+  double-extension attacks). Metadata is appended to `TrainingRecord.attachments`
+  (JSON) and persisted with `flag_modified`.
+- **Access control:** the record **owner** may manage their own attachments;
+  everyone else needs `training.manage`. List/download responses are sanitized
+  (file paths stripped; index + safe metadata only).
+
+### Reports & Exports (2026-04 / 2026-05)
+
+```
+GET    /api/v1/training/module-config/my-training/export   # Member self-export (CSV/PDF)
+POST   /api/v1/training/reports/export                      # Officer export (training.manage)
+```
+
+- **Member self-export** (`GET .../my-training/export`): `format=csv|pdf`,
+  optional `start_date`/`end_date` (no `start_date` = lifetime). Gated by the org
+  `allow_member_report_export` setting → **403** when disabled.
+- **Officer export** (`POST /reports/export`, `training.manage`): `report_type`
+  is one of `individual`, `member_records` (bulk, **all ACTIVE members**),
+  `compliance`, `hours_summary` (CSV), `certification` (CSV). PDF is available
+  only for `individual`, `member_records`, and `compliance`; bulk PDFs are merged
+  with **pypdf** and an empty result emits a valid placeholder page. **Unknown
+  `report_type` values now raise 400** (the prior silent fall-through to a
+  compliance report was removed).
+
 **Compliance Summary Response:**
 ```json
 {
@@ -843,6 +885,7 @@ GET    /api/v1/training/module-config/config               # Get module config
 PUT    /api/v1/training/module-config/config               # Update module config
 GET    /api/v1/training/module-config/visibility           # Get member visibility settings
 GET    /api/v1/training/module-config/my-training          # Get my training summary config
+GET    /api/v1/training/module-config/my-training/export   # Member self-export (CSV/PDF, 2026-04)
 GET    /api/v1/training/module-config/skill-names          # Get active SkillEvaluation names (2026-04-07)
 ```
 
@@ -868,6 +911,15 @@ GET    /api/v1/training/module-config/skill-names          # Get active SkillEva
 | `shift_review_default_tasks` | JSON | Default tasks list |
 | `report_review_required` | Boolean | Whether reports need reviewer approval |
 | `report_review_role` | String | Role required for review (default: training_officer) |
+| `allow_member_report_export` | Boolean | Gates the member self-export endpoint (default `False`; **403** when off) |
+| `manual_entry_enabled` | Boolean | Whether members may manually enter training (default `False`) |
+| `manual_entry_require_apparatus` | Boolean | Require apparatus on manual entries (default `True`) |
+
+> **Boolean column robustness (2026-05):** all `training_module_configs` boolean
+> columns gained DB-level `server_default`s (migration `20260502_0003`), and
+> `manual_entry_enabled` / `manual_entry_require_apparatus` were added to the
+> `_BOOL_FIELD_DEFAULTS` coercion in `app/schemas/training_module_config.py`, so
+> legacy rows with NULL booleans no longer 500 when the config is read.
 
 ## Database Migrations
 
@@ -933,6 +985,18 @@ Adds to `training_requirements`:
 - `20260404_0300_add_apparatus_type_skills_tasks.py` — Adds `apparatus_type_skills` and `apparatus_type_tasks` JSON columns
 - `20260404_0400_add_equipment_check_composite_indexes.py` — Adds composite indexes for query performance
 - `20260404_0500_add_requirement_progress_started_at.py` — Adds `started_at` DateTime column to `requirement_progress`
+
+### Training Config & Evaluation Period (2026-05)
+
+**Files:**
+- `20260502_0001_backfill_training_config_null_booleans.py` — Backfills NULL boolean columns in `training_module_configs` so legacy rows have concrete values
+- `20260502_0003_add_server_defaults_to_training_module_config_booleans.py` — Adds DB-level `server_default`s to every `training_module_configs` boolean flag
+- `20260502_0004_drop_training_session_approval_required.py` — **Drops** the unused `approval_required` column from `training_sessions`. Finalize/sign-off is governed solely by `require_completion_confirmation` (false → auto-approve + complete records + no email; true → pending + notify officers)
+- `20260503_0001_add_include_current_month_to_compliance_config.py` — Adds `include_current_month` (Bool NOT NULL, default `true`) to `compliance_configs`
+- `20260503_0002_add_include_current_month_to_training_requirements.py` — Adds nullable `include_current_month` override to `training_requirements` (NULL inherits the org default)
+
+See `docs/ALEMBIC_MIGRATIONS.md` for the full revision chain (these branch off
+`20260411_0200`).
 
 ## Registry Data Files
 
@@ -1370,4 +1434,4 @@ Using SQLAlchemy ORM:
 
 ---
 
-*Last Updated: February 23, 2026*
+*Last Updated: May 29, 2026*

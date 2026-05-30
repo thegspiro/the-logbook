@@ -190,6 +190,34 @@ Program."]**
 > "Having the cert document attached is a best practice — it's your proof of
 > completion for audits and compliance checks."
 
+**[SCREEN: On the member's training history, click the "Files" action on a
+record to open the Attachments panel]**
+
+> "On any existing record, the **Files** action opens its attachments. You can
+> upload a certificate, transcript, or completion letter — PDF, image, or Word
+> doc, up to 25 megabytes — and download it again later. Members can manage
+> files on their own records; as a training officer you can manage them on
+> anyone's."
+
+**[SCREENSHOT NEEDED]:** _The Attachments panel for a training record showing an uploaded certificate with a Download link and an Upload button._
+
+### FINALIZING A TRAINING SESSION (9:00 – 9:30)
+
+**[SCREEN: Show the Create Training Session form, Step 3, highlighting the
+"Require instructor confirmation" checkbox]**
+
+> "When you create a training session, Step 3 has a **Require instructor
+> confirmation** box. This now controls what finalizing the session does. Leave
+> it unchecked — the default — and finalizing immediately completes every
+> attendee's record, no extra approval, no confirmation email. Check it, and the
+> session stays pending after you finalize until an officer confirms it from the
+> emailed notification."
+
+**[SCREENSHOT NEEDED]:** _The Create Training Session form Step 3 with the "Require instructor confirmation" checkbox and its 'records marked pending until instructor confirms' helper text._
+
+> "Use the default for routine drills you want closed out the moment you
+> finalize. Turn it on only when a second officer must sign off."
+
 ### BULK RECORDING AFTER A CLASS (9:30 – 11:00)
 
 **[SCREEN: Navigate to Training Admin (TrainingAdminPage)]**
@@ -333,6 +361,21 @@ a member's perspective]**
 > for all members — and department-specific requirements — like monthly
 > apparatus familiarization for Engineers. Configure both here."
 
+**[SCREEN: On the Thresholds tab, highlight the "Evaluation Period" checkbox]**
+
+> "One setting on the Thresholds tab worth knowing: the **Evaluation Period**.
+> If your drills land late in the month, leaving the current month in the
+> calculation makes members look non-compliant before they've even had the
+> class. Uncheck **Count the current in-progress month** and compliance stops at
+> the end of last month, so members are measured against where they stood when
+> the month began. It's a department-wide default, and any single requirement
+> can override it from its own Evaluation Period dropdown."
+
+**[SCREENSHOT NEEDED]:** _The Compliance Requirements Thresholds tab with the "Evaluation Period" checkbox and its helper text._
+
+> "One thing this never touches: certifications that are expiring soon are
+> always flagged against the real calendar date, no matter how you set this."
+
 ### GENERATING COMPLIANCE REPORTS (18:00 – 19:00)
 
 > "When it's time for an annual report, a state inspection, or an insurance
@@ -344,6 +387,26 @@ a member's perspective]**
 > requirement. Export it as PDF for inspectors or as CSV for your records."
 
 **[SCREEN: Generate and show the report, then demonstrate the export]**
+
+> "The Reports tab has more than the compliance report. **Member Records (All
+> Members)** lets you pick a period — month, quarter, year, or lifetime — and
+> export every member's completed records: CSV gives you one combined
+> spreadsheet, PDF merges a section per member into a single document. There's
+> also a **Hours Summary** CSV — hours by member, category, and type, which is
+> exactly what most states want — and a **Certification** CSV listing every
+> cert as valid, expiring soon, or expired."
+
+**[SCREEN: Show the Member Records period selector with CSV and PDF buttons,
+then the Hours Summary and Certification report cards]**
+
+**[SCREENSHOT NEEDED]:** _The Training Reports tab showing the Compliance, Hours Summary, and Certification cards above the "Member Records (All Members)" period selector with CSV / PDF buttons._
+
+> "And if you need just one person's training — say a member is moving to
+> another department and wants their history — open their training history page,
+> pick a period, and export their records as CSV or PDF right there."
+
+**[SCREEN: On a member's training history, show the export period dropdown with
+the CSV and PDF buttons]**
 
 > "Having this at your fingertips replaces hours of digging through filing
 > cabinets and spreadsheets. When the state inspector shows up, you hand them

@@ -512,6 +512,18 @@ The `useProspectiveMembersStore` manages all module state:
 | `POST` | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage` | Create election package |
 | `PATCH` | `/api/v1/prospective-members/applicants/{id}/election-package` | `manage` | Update election package |
 
+### Prospect Document Endpoints (2026-05)
+
+These endpoints now persist real files (previously metadata-only). The router
+prefix is `/prospective-members`, so the full paths are as shown.
+
+| Method | Path | Permission | Description |
+|--------|------|------------|-------------|
+| `GET` | `/api/v1/prospective-members/prospects/{prospect_id}/documents` | `members.view` \| `prospective_members.view` \| `prospective_members.manage` | List a prospect's documents (sanitized metadata) |
+| `POST` | `/api/v1/prospective-members/prospects/{prospect_id}/documents` | `members.manage` \| `prospective_members.manage` | Upload a document (multipart: `file`, `document_type`, optional `step_id`) |
+| `GET` | `/api/v1/prospective-members/prospects/{prospect_id}/documents/{document_id}/download` | `members.view` \| `prospective_members.view` \| `prospective_members.manage` | Download the stored file (`FileResponse`, path-traversal guarded) |
+| `DELETE` | `/api/v1/prospective-members/prospects/{prospect_id}/documents/{document_id}` | `members.manage` \| `prospective_members.manage` | Delete the document record **and** remove the file from disk |
+
 ### Election Package Endpoints (Cross-Module)
 
 | Method | Path | Permission | Description |
@@ -670,7 +682,32 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 
 ---
 
-## Recent Changes (March 2026)
+## Recent Changes (March–May 2026)
+
+### May 2026 — Real Prospect Document Storage
+
+Document upload was metadata-only and is now backed by real file storage
+(`backend/app/api/v1/endpoints/membership_pipeline.py`,
+`backend/app/services/membership_pipeline_service.py`):
+
+- **Real upload/download/delete**: `POST .../prospects/{id}/documents` (multipart)
+  persists the file; `GET .../documents/{document_id}/download` streams it via
+  `FileResponse`; delete removes both the DB record and the file from disk. See
+  the "Prospect Document Endpoints" table above for paths and permissions.
+- **Size limit raised to 50 MB** (was 10 MB), matching the frontend limit.
+- **Magic-byte MIME validation**: the file's real content type is detected with
+  `python-magic` (not the client `Content-Type` header). Allowed: PDF, Word
+  (`.doc`/`.docx`), JPEG, PNG, GIF.
+- **Anti double-extension storage**: stored under an org- then prospect-scoped
+  path `/app/uploads/prospect-documents/{org_id}/{prospect_id}/{uuid}{ext}`,
+  using a random UUID filename with a MIME-derived extension (never the
+  user-supplied name) to defeat attacks like `resume.pdf.exe`.
+- **Path-traversal guard on download**: the stored path is resolved with
+  `os.path.realpath` and must reside under the uploads base directory or the
+  request is rejected with 403.
+- **Permissions**: upload/delete require `members.manage` or
+  `prospective_members.manage`; list/download additionally accept the `.view`
+  variants.
 
 ### March 15, 2026
 - **Pipeline overview report with configurable stage grouping**: New `PipelineOverviewRenderer` report shows prospect counts per pipeline stage. Configurable stage groups (via `ReportStageGroupsEditor`) allow combining multiple stages into labeled groups (e.g., "Early Stages" = Application + Interview). New `report_stage_groups` column on pipeline steps with Alembic migration
@@ -717,6 +754,6 @@ See [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#prospective-members-module-issues)
 
 ---
 
-**Document Version**: 1.5
-**Last Updated**: 2026-03-15
+**Document Version**: 1.6
+**Last Updated**: 2026-05-29
 **Maintainer**: Development Team

@@ -154,6 +154,45 @@ These variables are baked into the frontend at build time via Vite.
 | `JWT_ACCESS_TOKEN_EXPIRE` | Access token lifetime (hours) | `8` |
 | `JWT_REFRESH_TOKEN_EXPIRE` | Refresh token lifetime (days) | `7` |
 | `RATE_LIMIT_PER_MINUTE` | API rate limit | `60` |
+| `IP_LOGGING_ENABLED` | Log client IPs for security monitoring | `true` |
+| `TRUSTED_PROXY_IPS` | Comma-separated proxy IPs whose forwarded headers are trusted. **Critical when running behind a reverse proxy** *(2026-05-29)* | `""` |
+| `GEOIP_ENABLED` | Enable GeoIP country-based access control | `false` |
+| `GEOIP_DATABASE_PATH` | Path to the MaxMind GeoLite2 country database | — |
+| `BLOCKED_COUNTRIES` | Comma-separated ISO country codes to block (config default; DB `CountryBlockRule` rows override) *(2026-05-29)* | `""` |
+
+> **`TRUSTED_PROXY_IPS` is security-critical** *(2026-05-29)*: forwarded
+> `X-Forwarded-For` / `X-Real-IP` headers are only trusted when the direct peer
+> is in this list. If left empty behind a proxy, all clients appear to share the
+> proxy's IP. See [Security Configuration](Configuration-Security#client-ip-resolution--geoip-2026-05-29).
+
+---
+
+## OAuth Sign-In
+
+*(2026-05-29)* "Sign in with Google" and "Sign in with Microsoft" (Azure AD,
+single-tenant). Each provider is fully disabled until its `*_ENABLED` flag is
+`true` and all of its required fields are set — otherwise the
+`/api/v1/auth/oauth/{provider}` routes return `404`. See
+[Authentication > OAuth](Security-Authentication#oauth).
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GOOGLE_OAUTH_ENABLED` | Enable "Sign in with Google" | `false` |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | — |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | — |
+| `GOOGLE_REDIRECT_URI` | Callback URL (`.../api/v1/auth/oauth/google/callback`) | — |
+| `GOOGLE_ALLOWED_DOMAINS` | Comma-separated email domain allowlist (empty = no restriction) | `""` |
+| `AZURE_AD_ENABLED` | Enable "Sign in with Microsoft" (Azure AD) | `false` |
+| `AZURE_AD_TENANT_ID` | Azure AD tenant GUID (single-tenant lock) | — |
+| `AZURE_AD_CLIENT_ID` | Azure AD application (client) ID | — |
+| `AZURE_AD_CLIENT_SECRET` | Azure AD client secret | — |
+| `AZURE_AD_REDIRECT_URI` | Callback URL (`.../api/v1/auth/oauth/microsoft/callback`) | — |
+| `AZURE_AD_ALLOWED_DOMAINS` | Comma-separated email domain allowlist (empty = no restriction) | `""` |
+| `OAUTH_SUCCESS_REDIRECT` | SPA landing page after successful sign-in | `/auth/callback` |
+| `OAUTH_FAILURE_REDIRECT` | Redirect (with `?error=<code>`) on sign-in failure | `/login` |
+
+> **Link-existing-only:** OAuth never creates accounts. The verified IdP email
+> must match an existing, active local user.
 
 ---
 

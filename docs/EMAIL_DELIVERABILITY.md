@@ -249,3 +249,27 @@ deliverability without requiring DNS or SMTP configuration changes:
 | Batch > 50 recipients (Gmail) | Rate-limited with 1-second delays between sub-batches |
 | Email client without CSS support | Inline styles ensure basic formatting is preserved |
 | SMTP connection timeout mid-batch | Automatic reconnection and retry for remaining recipients |
+
+## 9. Inventory Notification Circuit Breaker (2026-05-02)
+
+The inventory notification scheduled task queues per-member emails in the
+`inventory_notification_queue` table and retries unprocessed records on each
+run. Previously, a chronically failing SMTP destination (bad credentials, a
+permanently-rejecting recipient) would cause the same records to be retried
+forever, generating repeated failures every scheduled run.
+
+A circuit breaker now bounds these retries
+(`backend/app/services/inventory_notification_service.py`):
+
+| Mechanism | Behavior |
+|-----------|----------|
+| `attempt_count` column | Incremented on every queued record each time its batch email send fails (migration `20260502_0002`) |
+| `last_attempt_at` column | Set to the time of the most recent failed delivery attempt |
+| Retry cap (`_MAX_DELIVERY_ATTEMPTS = 5`) | After 5 failed attempts the record is **abandoned**: marked `processed = True` (with `processed_at`) so the next scheduled run no longer picks it up |
+| Abandon log | An `ERROR` is logged: `Inventory notification for user <id> abandoned after N failed delivery attempts; check SMTP credentials` |
+| Pre-abandon log | Each non-final failure logs a `WARNING`: `Email send failed for user <id> (attempt N/5); will retry on next run` |
+
+Successful sends mark all the member's records `processed` immediately. The
+abandon path deliberately marks records processed (rather than deleting them)
+so the failure is auditable and the scheduler stops looping. The `ERROR` log
+line is the operator's signal to check SMTP credentials / deliverability.

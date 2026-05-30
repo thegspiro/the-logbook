@@ -245,7 +245,10 @@ The pipeline offers two views:
 2. **Complete Steps** - Each pipeline stage has steps (action items, checkboxes, notes). Mark steps as completed as the prospect progresses.
 3. **Advance** - Move the prospect to the next stage when all required steps are complete. If the next stage is an automated email stage, the configured email is sent automatically.
 4. **Move Back** - If a prospect needs to return to a previous stage (e.g., missing documents discovered after advancing), click **Move Back** in the prospect's detail drawer. The previous stage's progress is reset to allow re-completion.
-5. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record.
+5. **Upload Documents** - Attach application documents, ID copies, or other requirements to the prospect's record. Uploaded files are now stored on the prospect's record and can be downloaded later. Each file may be up to **50 MB**; allowed types are PDF, Word (DOC/DOCX), JPEG, PNG, and GIF.
+
+> **[SCREENSHOT NEEDED]:** _The prospect detail drawer's documents area showing an uploaded file in the list with its download link._
+
 6. **Transfer to Member** - When the prospect is approved, click **Transfer to Membership** to convert them to a full member account. The membership type is pre-filled from the prospect's desired type.
 
 > **Screenshot needed:**

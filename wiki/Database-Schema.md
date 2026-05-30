@@ -10,7 +10,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `users` | Member profiles (name, email, rank, station, membership_number, status) |
+| `users` | Member profiles (name, email, rank, station, membership_number, status). `oauth_provider` (String(50), nullable) and `oauth_subject` (String(255), nullable, indexed `ix_users_oauth_subject`) bind an external IdP identity for OAuth sign-in *(2026-05-29)* |
 | `roles` | System roles and custom positions |
 | `user_roles` | Many-to-many: user ↔ role mapping |
 | `permissions` | Granular permission definitions |
@@ -40,7 +40,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `training_records` | Individual training completions (with `rank_at_completion`, `station_at_completion`) |
 | `training_categories` | Course categories with optional `registry_code` for NREMT NCCR linkage *(2026-04-11)* |
 | `training_courses` | Course definitions and categories |
-| `training_requirements` | Department training requirements (hours, shifts, calls, certs) |
+| `training_requirements` | Department training requirements (hours, shifts, calls, certs). `include_current_month` (Bool, nullable) is a per-requirement evaluation-period override — `NULL` inherits the org default, `true`/`false` explicit *(2026-05-29)* |
 | `training_programs` | Structured multi-phase training curricula |
 | `program_phases` | Phases within a training program |
 | `program_enrollments` | Member enrollments in training programs |
@@ -49,6 +49,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `shift_completion_reports` | Post-shift training reports with encrypted evaluation fields, review workflow (`draft`/`pending_review`/`approved`/`flagged`), trainee acknowledgment, skills observed, tasks performed, call type tracking, pipeline progress linkage, and audit trail (`data_sources`) *(updated 2026-03-28)* |
 | `training_module_configs` | Module configuration including trainee visibility settings (`show_*`), report form section toggles (`form_show_*`), per-apparatus-type skills/tasks mappings, rating scale customization, shift review defaults, and manual entry settings (`manual_entry_enabled`, `manual_entry_apparatus_types`) *(updated 2026-04-11)* |
 | `external_training_imports` | Individual import records with status and `credit_hours` for CE credit preservation *(updated 2026-04-11)* |
+| `compliance_configs` | Per-org compliance configuration. `include_current_month` (Bool, NOT NULL, default `true`) controls whether the in-progress month counts toward compliance windows *(2026-05-29)* |
 
 ### Membership
 
@@ -98,7 +99,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `maintenance_records` | Equipment maintenance history |
 | `equipment_requests` | Member equipment request/approval workflow |
 | `inventory_write_offs` | Write-off request/approval workflow |
-| `inventory_notification_queue` | Delayed notification consolidation queue |
+| `inventory_notification_queue` | Delayed notification consolidation queue. `attempt_count` (Integer, NOT NULL, default `0`) and `last_attempt_at` (DateTime(tz), nullable) track delivery retries *(2026-05-29)* |
 | `property_return_reminders` | Tracks reminder notices sent to departed members |
 | `storage_areas` | Hierarchical storage locations (linked to facility rooms) |
 | `variant_groups` | Groups related items by size/style *(2026-03-07)* |
@@ -253,6 +254,28 @@ The `organizations.settings` JSON column stores email platform configuration und
 |-------|-------|---------|-----------|
 | `shift_equipment_checks` | Composite | `(shift_id, template_id)` | `20260404_0400` |
 | `shift_equipment_check_items` | Composite | `(check_id, template_item_id)` | `20260404_0400` |
+
+---
+
+## Recent Schema Changes (2026-05-29)
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `users` | `oauth_provider` | String(50) (nullable) | `20260528_0002` | IdP that owns this identity (`google` / `microsoft`); `NULL` for password-only accounts |
+| `users` | `oauth_subject` | String(255) (nullable, indexed) | `20260528_0002` | Provider's stable subject identifier (index `ix_users_oauth_subject`) |
+| `compliance_configs` | `include_current_month` | Boolean (NOT NULL, server_default `1`) | `20260503_0001` | Org default: whether the in-progress month counts toward compliance |
+| `training_requirements` | `include_current_month` | Boolean (nullable) | `20260503_0002` | Per-requirement override; `NULL` inherits the org default |
+| `inventory_notification_queue` | `attempt_count` | Integer (NOT NULL, server_default `0`) | `20260502_0002` | Delivery retry counter |
+| `inventory_notification_queue` | `last_attempt_at` | DateTime(tz, nullable) | `20260502_0002` | Timestamp of the last delivery attempt |
+
+### Column Modifications
+
+| Table | Change | Migration | Reason |
+|-------|--------|-----------|--------|
+| `training_module_configs` | Added `server_default` to the boolean toggle columns; backfilled NULLs to defaults | `20260502_0001` / `20260502_0003` | Ensure non-NULL booleans on fresh inserts and existing rows (config response also coerces NULL `manual_entry_*` booleans to defaults) |
+| `training_sessions` | Dropped dead `approval_required` column | `20260502_0004` | Unused — finalize sign-off is governed solely by `require_completion_confirmation` |
 
 ---
 

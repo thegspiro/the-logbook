@@ -7,12 +7,13 @@ Welcome to The Logbook, a comprehensive department management platform built for
 ## Table of Contents
 
 1. [First Login](#first-login)
-2. [Changing Your Password](#changing-your-password)
-3. [Understanding the Interface](#understanding-the-interface)
-4. [Navigation Sidebar](#navigation-sidebar)
-5. [Your Dashboard](#your-dashboard)
-6. [Account Settings](#account-settings)
-7. [Getting Help](#getting-help)
+2. [Signing in with Google or Microsoft](#signing-in-with-google-or-microsoft)
+3. [Changing Your Password](#changing-your-password)
+4. [Understanding the Interface](#understanding-the-interface)
+5. [Navigation Sidebar](#navigation-sidebar)
+6. [Your Dashboard](#your-dashboard)
+7. [Account Settings](#account-settings)
+8. [Getting Help](#getting-help)
 
 ---
 
@@ -28,6 +29,22 @@ When your department administrator creates your account, you will receive a welc
 > _[Screenshot of the login page showing the username and password fields, the Sign In button, and the "Forgot Password?" link at the bottom]_
 
 > **Hint:** If you did not receive a welcome email, contact your department's IT Manager or the person who set up the system. They can resend your credentials or reset your password from the admin panel.
+
+---
+
+## Signing in with Google or Microsoft
+
+If your administrator has enabled single sign-on, the login page shows **Google** and/or **Microsoft** buttons under an "Or continue with" divider. These let you sign in with your existing work account instead of typing your Logbook password.
+
+1. On the login page, click **Google** or **Microsoft** under "Or continue with".
+2. Complete the sign-in on the provider's page (and approve access if prompted).
+3. You are returned to The Logbook and taken to your dashboard.
+
+> **[SCREENSHOT NEEDED]:** _Login page showing the username/password fields, the "Or continue with" divider, and the Google and Microsoft sign-in buttons below it_
+
+> **Hint:** Single sign-on links to an account that already exists. The email on your Google or Microsoft account must match a member account your administrator has already created — signing in this way will not create a new account.
+
+> **Troubleshooting:** If your account is not recognized you are returned to the login page with a message such as "No account matches that Google email. Contact your administrator for access." Other messages cover an account from a domain that is not allowed, an account already linked to a different user, or an unverified email address. In every case, contact your administrator.
 
 ---
 

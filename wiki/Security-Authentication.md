@@ -31,27 +31,96 @@ Username and password authentication with Argon2id password hashing.
 
 ---
 
-## OAuth 2.0
+## OAuth
 
-Connect external identity providers for single sign-on.
+Connect external identity providers for single sign-on. *(2026-05-29)* "Sign in
+with Google" and "Sign in with Microsoft" (Azure AD, single-tenant) are
+implemented via the OpenID Connect authorization-code flow in
+`services/oauth_service.py`.
+
+### How It Works
+
+1. The login page calls `GET /api/v1/auth/oauth-config` to discover which
+   providers are enabled, then the user clicks "Sign in with Google" or
+   "Sign in with Microsoft"
+2. `GET /api/v1/auth/oauth/{provider}` builds the provider consent URL and sets
+   a short-lived, httpOnly `oauth_state` cookie (CSRF protection — compared
+   against the `state` query param on callback). Returns `404` if the provider
+   is not configured
+3. The provider redirects back to `GET /api/v1/auth/oauth/{provider}/callback`,
+   which exchanges the code and **cryptographically verifies the ID token**:
+   - **Google** — verified via `google.oauth2.id_token` with the configured
+     `GOOGLE_CLIENT_ID` as audience; issuer must be `accounts.google.com`
+   - **Microsoft** — verified RS256 against the tenant JWKS, with
+     `audience=AZURE_AD_CLIENT_ID`, issuer `{authority}/v2.0`, and the token's
+     `tid` claim required to equal `AZURE_AD_TENANT_ID` (single-tenant lock —
+     only accounts in the configured directory can sign in)
+4. **Link-existing-only policy:** OAuth never auto-creates an account. The
+   verified IdP email must match an existing, **active** local user in the
+   organization. On first use the provider/subject is bound to that user
+   (`users.oauth_provider`, `users.oauth_subject`); later logins reject a
+   subject or provider mismatch (identity-takeover guard)
+5. On success the backend issues the normal session cookies, logs an
+   `oauth_login` audit event (category `authentication`), and redirects to the
+   SPA landing page `/auth/callback` (`OAUTH_SUCCESS_REDIRECT`). On failure it
+   redirects to `OAUTH_FAILURE_REDIRECT` (default `/login`) with an `error=`
+   query param
 
 ### Supported Providers
 
-- **Google Workspace** — Google OAuth 2.0
-- **Microsoft 365** — Azure AD OAuth 2.0
-- **Custom** — Any OAuth 2.0 compliant provider
+- **Google Workspace** — "Sign in with Google" (OpenID Connect)
+- **Microsoft 365 / Azure AD** — "Sign in with Microsoft" (single-tenant)
+
+### Domain Restriction
+
+Set `GOOGLE_ALLOWED_DOMAINS` / `AZURE_AD_ALLOWED_DOMAINS` (comma-separated) to
+restrict which email domains may sign in. Empty (default) means no domain
+restriction. Enforced server-side after token verification; when exactly one
+Google domain is configured, the consent screen is hinted via the `hd`
+parameter (the allowlist is still re-validated on the server).
 
 ### Configuration
 
-Navigate to **Settings > Authentication** or set in `.env`:
+Set the relevant variables in `.env` (see
+[Environment Variables](Configuration-Environment#oauth-sign-in)):
 
 ```bash
-OAUTH_GOOGLE_CLIENT_ID=your-client-id
-OAUTH_GOOGLE_CLIENT_SECRET=your-client-secret
-OAUTH_MICROSOFT_CLIENT_ID=your-client-id
-OAUTH_MICROSOFT_CLIENT_SECRET=your-client-secret
-OAUTH_MICROSOFT_TENANT_ID=your-tenant-id
+# Google
+GOOGLE_OAUTH_ENABLED=true
+GOOGLE_CLIENT_ID=your-client-id
+GOOGLE_CLIENT_SECRET=your-client-secret
+GOOGLE_REDIRECT_URI=https://your-domain.com/api/v1/auth/oauth/google/callback
+GOOGLE_ALLOWED_DOMAINS=yourdept.org
+
+# Microsoft (Azure AD, single-tenant)
+AZURE_AD_ENABLED=true
+AZURE_AD_TENANT_ID=your-tenant-guid
+AZURE_AD_CLIENT_ID=your-client-id
+AZURE_AD_CLIENT_SECRET=your-client-secret
+AZURE_AD_REDIRECT_URI=https://your-domain.com/api/v1/auth/oauth/microsoft/callback
+AZURE_AD_ALLOWED_DOMAINS=yourdept.org
 ```
+
+### Callback Error Codes *(2026-05-29)*
+
+The callback redirects to `OAUTH_FAILURE_REDIRECT?error=<code>` for these
+recoverable failures:
+
+| Code | Meaning |
+|------|---------|
+| `access_denied` | The provider returned an error (e.g. user cancelled consent) |
+| `invalid_state` | Missing/mismatched `state` vs. the `oauth_state` cookie (CSRF guard) |
+| `token_exchange_failed` | Authorization-code exchange with the provider failed |
+| `missing_id_token` | Provider response contained no ID token |
+| `invalid_id_token` | ID token failed cryptographic verification (signature/audience/expiry) |
+| `invalid_issuer` | ID token issuer is not the expected provider |
+| `invalid_tenant` | Microsoft `tid` claim does not match `AZURE_AD_TENANT_ID` |
+| `unverified_email` | IdP did not mark the email as verified |
+| `no_email` | No email present in the verified claims |
+| `domain_not_allowed` | Email domain not in the configured allowlist |
+| `no_account` | No matching active local user for the verified email |
+| `inactive` | Matched local user is not active |
+| `account_conflict` | Email already bound to a different IdP subject/provider |
 
 ---
 
@@ -127,8 +196,11 @@ POST   /api/v1/auth/forgot-password          # Request password reset
 POST   /api/v1/auth/reset-password           # Reset password with token
 POST   /api/v1/auth/mfa/setup               # Initialize MFA setup
 POST   /api/v1/auth/mfa/verify              # Verify MFA code
-GET    /api/v1/auth/oauth/{provider}         # Initiate OAuth flow
-GET    /api/v1/auth/oauth/{provider}/callback # OAuth callback
+GET    /api/v1/auth/oauth-config             # Which OAuth providers are enabled (for login page)
+GET    /api/v1/auth/oauth/google             # Initiate Google sign-in (404 if not configured)
+GET    /api/v1/auth/oauth/google/callback    # Google OAuth callback
+GET    /api/v1/auth/oauth/microsoft          # Initiate Microsoft sign-in (404 if not configured)
+GET    /api/v1/auth/oauth/microsoft/callback # Microsoft OAuth callback
 ```
 
 ---

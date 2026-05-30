@@ -16,11 +16,34 @@
 
 ## Current Head
 
+> **Note (2026-05-29):** The full "Full Revision Chain" table below is stale and
+> ends at `20260223_0300`; roughly 75 additional migrations exist on disk between
+> that revision and the current heads. The chain has also **branched** (see
+> "Active Branch" below) and currently has **two heads** with no merge migration.
+> The most recent migrations are catalogued in
+> "Recent Migrations (2026-05)" at the end of this document.
+
 | Field | Value |
 |-------|-------|
-| **Head revision** | `20260223_0300` |
-| **Head file** | `20260223_0300_add_inventory_write_off_requests.py` |
-| **Head down_revision** | `20260223_0200` |
+| **Head revision (branch A)** | `20260528_0002` (`20260528_0002_add_oauth_fields_to_users.py`) |
+| **Head revision (branch B)** | `20260503_0002` (`20260503_0002_add_include_current_month_to_training_requirements.py`) |
+| **Branch point** | `20260502_0004` (both heads descend from it) |
+
+### Active Branch (2026-05)
+
+`20260502_0004` (drop `training_sessions.approval_required`) has two children,
+so the chain forks:
+
+```
+20260502_0004
+├── 20260503_0001 ──► 20260503_0002   (include_current_month: org + per-requirement)
+└── 20260528_0001 ──► 20260528_0002   (rename membership role; oauth user fields)
+```
+
+There is no merge migration reconciling these two heads yet. A future migration
+should set `down_revision` to **both** heads (a tuple) to merge them, e.g.
+`down_revision = ("20260503_0002", "20260528_0002")`, before adding new linear
+migrations on top.
 
 **To add a new migration**, use the next available sequence for today's date. For
 example, if today is 2026-02-23, the next file would be:
@@ -191,3 +214,21 @@ def downgrade() -> None:
     # ... reverse of upgrade ...
     pass
 ```
+
+## Recent Migrations (2026-05)
+
+These migrations were added in May 2026. They sit far ahead of the stale "Full
+Revision Chain" table above (which ends at `20260223_0300`). The first four are
+a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
+"Active Branch" above).
+
+| Revision ID | Down Revision | Filename | Description |
+|-------------|---------------|----------|-------------|
+| `20260502_0001` | `20260411_0200` | `20260502_0001_backfill_training_config_null_booleans.py` | Backfill NULL boolean columns in `training_module_configs` |
+| `20260502_0002` | `20260502_0001` | `20260502_0002_add_attempt_tracking_to_inventory_notification_queue.py` | Add `attempt_count` / `last_attempt_at` to `inventory_notification_queue` (delivery circuit breaker) |
+| `20260502_0003` | `20260502_0002` | `20260502_0003_add_server_defaults_to_training_module_config_booleans.py` | Add DB-level `server_default` clauses to `training_module_configs` boolean flags |
+| `20260502_0004` | `20260502_0003` | `20260502_0004_drop_training_session_approval_required.py` | Drop unused `approval_required` column from `training_sessions` |
+| `20260503_0001` | `20260502_0004` | `20260503_0001_add_include_current_month_to_compliance_config.py` | Add `include_current_month` (Bool NOT NULL, default true) to `compliance_configs` |
+| `20260503_0002` | `20260503_0001` | `20260503_0002_add_include_current_month_to_training_requirements.py` | Add nullable `include_current_month` override to `training_requirements` (NULL inherits org default) — **head of branch B** |
+| `20260528_0001` | `20260502_0004` | `20260528_0001_rename_membership_committee_chair_to_coordinator.py` | Rename the "Membership Committee Chair" system position to "Membership Coordinator" (in-place rename, assignments preserved) |
+| `20260528_0002` | `20260528_0001` | `20260528_0002_add_oauth_fields_to_users.py` | Add nullable `oauth_provider` / `oauth_subject` to `users` + index `ix_users_oauth_subject` — **head of branch A** |
