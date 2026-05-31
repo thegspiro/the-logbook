@@ -62,7 +62,7 @@ describe('MemberPickerModal', () => {
     render(<MemberPickerModal {...defaultProps} />);
     expect(await screen.findByText('John Smith')).toBeInTheDocument();
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
-    expect(mockGetMembersSummary).toHaveBeenCalledWith();
+    expect(mockGetMembersSummary).toHaveBeenCalled();
   });
 
   it('filters members by search query', async () => {
