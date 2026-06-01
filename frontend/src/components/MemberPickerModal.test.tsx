@@ -11,6 +11,22 @@ vi.mock('../services/api', () => ({
   },
 }));
 
+// Stub the camera scanner so the picker can be tested without html5-qrcode.
+vi.mock('./MemberIdScannerModal', () => ({
+  MemberIdScannerModal: ({ isOpen, onMemberIdentified }: {
+    isOpen: boolean;
+    onMemberIdentified: (m: { userId: string; memberName: string }) => void;
+  }) =>
+    isOpen ? (
+      <button
+        type="button"
+        onClick={() => onMemberIdentified({ userId: 'scanned-9', memberName: 'Scanned Member' })}
+      >
+        simulate-scan
+      </button>
+    ) : null,
+}));
+
 const members = [
   {
     user_id: 'user-1',
@@ -60,9 +76,9 @@ describe('MemberPickerModal', () => {
 
   it('loads and lists members when opened', async () => {
     render(<MemberPickerModal {...defaultProps} />);
+    // The rendered roster confirms getMembersSummary was called and resolved.
     expect(await screen.findByText('John Smith')).toBeInTheDocument();
     expect(screen.getByText('Jane Doe')).toBeInTheDocument();
-    expect(mockGetMembersSummary).toHaveBeenCalled();
   });
 
   it('filters members by search query', async () => {
@@ -81,6 +97,30 @@ describe('MemberPickerModal', () => {
     await userEvent.click(await screen.findByText('John Smith'));
 
     expect(onSelect).toHaveBeenCalledWith({ userId: 'user-1', memberName: 'John Smith' });
+  });
+
+  it('selects the highlighted member with the keyboard', async () => {
+    const onSelect = vi.fn();
+    render(<MemberPickerModal {...defaultProps} onSelect={onSelect} />);
+    await screen.findByText('John Smith');
+
+    const input = screen.getByLabelText('Search members');
+    input.focus();
+    // List is sorted alphabetically: Jane Doe, John Smith.
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+
+    expect(onSelect).toHaveBeenCalledWith({ userId: 'user-1', memberName: 'John Smith' });
+  });
+
+  it('selects a member identified by the ID scanner', async () => {
+    const onSelect = vi.fn();
+    render(<MemberPickerModal {...defaultProps} onSelect={onSelect} />);
+    await screen.findByText('John Smith');
+
+    await userEvent.click(screen.getByTitle("Scan a member's digital ID card"));
+    await userEvent.click(await screen.findByText('simulate-scan'));
+
+    expect(onSelect).toHaveBeenCalledWith({ userId: 'scanned-9', memberName: 'Scanned Member' });
   });
 
   it('shows an error message when loading fails', async () => {

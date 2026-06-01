@@ -23,6 +23,8 @@ import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { MobileItemCard } from '../../../components/ux/MobileItemCard';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { Modal } from '../../../components/Modal';
+import { MemberPickerModal } from '../../../components/MemberPickerModal';
+import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import { ItemFormModal } from '../components/ItemFormModal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
@@ -199,6 +201,8 @@ const InventoryItemsPage: React.FC = () => {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState('');
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   /* ---- split items by availability ---- */
@@ -357,9 +361,8 @@ const InventoryItemsPage: React.FC = () => {
   const fabActions = useMemo(() => {
     const a = [];
     if (canManage) a.push({ id: 'add', label: 'Add Item', icon: <Plus className="w-5 h-5" />, onClick: openAdd, color: 'bg-emerald-600' });
-    if (canManage) a.push({ id: 'assign', label: 'Assign Items', icon: <UserPlus className="w-5 h-5" />, onClick: () => navigate('/inventory/admin/members'), color: 'bg-blue-600' });
+    if (canManage) a.push({ id: 'assign', label: 'Assign Items', icon: <UserPlus className="w-5 h-5" />, onClick: () => setMemberPickerOpen(true), color: 'bg-blue-600' });
     return a;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManage]);
 
   const hasMore = items.length < total;
@@ -392,6 +395,11 @@ const InventoryItemsPage: React.FC = () => {
           <button onClick={() => void exportCsv()} className="btn-secondary btn-md hidden sm:inline-flex items-center gap-2">
             <Download className="w-4 h-4" /> Export
           </button>
+          {canManage && (
+            <button onClick={() => setMemberPickerOpen(true)} className="btn-secondary btn-md hidden sm:inline-flex items-center gap-2">
+              <UserPlus className="w-4 h-4" /> Assign
+            </button>
+          )}
           {canManage && (
             <button onClick={openAdd} className="btn-info btn-md hidden sm:inline-flex items-center gap-2">
               <Plus className="w-4 h-4" /> Add Item
@@ -653,6 +661,22 @@ const InventoryItemsPage: React.FC = () => {
       {/* Item form modal */}
       <ItemFormModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSaved={onSaved}
         categories={categories} locations={locations} storageAreas={storageAreas} editItem={editItem} />
+
+      {/* Quick-assign: pick a member, then assign items to them */}
+      <MemberPickerModal
+        isOpen={memberPickerOpen}
+        onClose={() => setMemberPickerOpen(false)}
+        title="Assign Items — Select a Member"
+        onSelect={(member) => { setMemberPickerOpen(false); setAssignTarget(member); }}
+      />
+      <InventoryScanModal
+        isOpen={assignTarget !== null}
+        onClose={() => setAssignTarget(null)}
+        mode="checkout"
+        userId={assignTarget?.userId ?? ''}
+        memberName={assignTarget?.memberName ?? ''}
+        onComplete={() => { void loadItems(true); void loadSummary(); }}
+      />
 
       {/* Mobile FAB */}
       <FloatingActionButton actions={fabActions} />
