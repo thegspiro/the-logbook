@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
-import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
@@ -31,7 +30,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, UserStatus, AssignmentStatus } from '../../constants/enums';
+import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
@@ -46,11 +45,6 @@ interface ShiftDetailPanelProps {
   onRefresh?: () => void;
 }
 
-interface MemberOption {
-  id: string;
-  label: string;
-}
-
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   shift: initialShift,
   onClose,
@@ -61,7 +55,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
   const canAssign = checkPermission('scheduling.assign') || canManage;
-  const { apparatus: apparatusList, loadApparatus } = useSchedulingStore();
+  const {
+    apparatus: apparatusList,
+    loadApparatus,
+    members: memberOptions,
+    loadMembers,
+  } = useSchedulingStore();
 
   const [shift, setShift] = useState(initialShift);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -153,7 +152,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Assign state (admin) — position-first flow with member search
   const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
   const [memberSearch, setMemberSearch] = useState('');
-  const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
 
   // Bulk assignment state — maps position name to selected user_id
@@ -212,23 +210,18 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     return () => { cancelled = true; };
   }, [shift.id]);
 
-  // Load members for the assign dropdown and shift officer edit
+  // Load members for the assign dropdown and shift officer edit. The member
+  // roster comes from the shared store cache (loadMembers is idempotent), so
+  // opening the form on multiple shifts doesn't re-download the user list.
+  // Only the shift-scoped unavailable set is fetched here.
   useEffect(() => {
     if (!showAssignForm && !isEditing) return;
-    const loadMembers = async () => {
+    void loadMembers();
+    if (!showAssignForm) return;
+    const loadUnavailable = async () => {
       setPendingFlag('loadingMembers', true);
       try {
-        const [users, unavailable] = await Promise.all([
-          userService.getUsers(),
-          showAssignForm
-            ? schedulingService.getUnavailableMembers(shift.id)
-            : Promise.resolve([]),
-        ]);
-        const members = users.filter((m) => m.status === UserStatus.ACTIVE).map((m) => ({
-          id: String(m.id),
-          label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
-        }));
-        setMemberOptions(members);
+        const unavailable = await schedulingService.getUnavailableMembers(shift.id);
         setUnavailableIds(new Set(unavailable));
       } catch {
         // Non-critical — fallback to manual ID entry
@@ -236,8 +229,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         setPendingFlag('loadingMembers', false);
       }
     };
-    void loadMembers();
-  }, [showAssignForm, isEditing, shift.id, setPendingFlag]);
+    void loadUnavailable();
+  }, [showAssignForm, isEditing, shift.id, setPendingFlag, loadMembers]);
 
   // Load apparatus list when editing
   useEffect(() => {

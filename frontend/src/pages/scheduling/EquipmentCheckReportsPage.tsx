@@ -5,7 +5,7 @@
  * and Item Trend History. Includes CSV and PDF export support.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   BarChart3,
   ClipboardCheck,
@@ -350,14 +350,22 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
     }
   }, [startDate, endDate, searchTerm, page]);
 
+  // Reset to page 1 when filters change. Doing this during render (rather than
+  // in an effect) means the fetch effect below sees page=1 in the same pass, so
+  // a filter change while on a later page triggers one request, not two.
+  const prevFilters = useRef({ startDate, endDate, searchTerm });
+  if (
+    prevFilters.current.startDate !== startDate ||
+    prevFilters.current.endDate !== endDate ||
+    prevFilters.current.searchTerm !== searchTerm
+  ) {
+    prevFilters.current = { startDate, endDate, searchTerm };
+    setPage(1);
+  }
+
   useEffect(() => {
     void loadData();
   }, [loadData]);
-
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [startDate, endDate, searchTerm]);
 
   const handleExportCsv = () => {
     const url = schedulingService.getReportExportUrl({
