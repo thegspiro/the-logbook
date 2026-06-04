@@ -3514,15 +3514,17 @@ class SchedulingService:
         )
         all_users = user_result.scalars().all()
 
-        # Load position slugs for each user
+        # Load position slugs for all users in one query (avoids an N+1 over
+        # the active-member set on every compliance report request).
         user_position_slugs: Dict[str, List[str]] = {}
-        for user in all_users:
+        if all_users:
             pos_result = await self.db.execute(
-                select(Position.slug)
-                .join(user_positions, Position.id == user_positions.c.position_id)
-                .where(user_positions.c.user_id == user.id)
+                select(user_positions.c.user_id, Position.slug)
+                .join(Position, Position.id == user_positions.c.position_id)
+                .where(user_positions.c.user_id.in_([u.id for u in all_users]))
             )
-            user_position_slugs[user.id] = [row[0] for row in pos_result.all()]
+            for uid, slug in pos_result.all():
+                user_position_slugs.setdefault(uid, []).append(slug)
 
         # 3. For each requirement, compute compliance
         compliance_data = []
@@ -3608,15 +3610,15 @@ class SchedulingService:
             user_leave_months: Dict[str, int] = {}
             if is_rolling:
                 leave_svc = MemberLeaveService(self.db)
+                leaves_by_user = await leave_svc.get_active_leaves_for_users(
+                    str(organization_id),
+                    user_ids,
+                    period_start,
+                    period_end,
+                )
                 for uid in user_ids:
-                    leaves = await leave_svc.get_active_leaves_for_user(
-                        str(organization_id),
-                        uid,
-                        period_start,
-                        period_end,
-                    )
                     user_leave_months[uid] = MemberLeaveService.count_leave_months(
-                        leaves,
+                        leaves_by_user.get(uid, []),
                         period_start,
                         period_end,
                     )
