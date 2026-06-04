@@ -2072,8 +2072,8 @@ async def get_user_inventory(
     # Check if user is viewing their own inventory or has inventory.view permission
     if str(user_id) != str(current_user.id):
         # Check if user has inventory.view permission
-        has_permission = any(
-            "inventory.view" in (role.permissions or []) for role in current_user.roles
+        has_permission = _has_permission(
+            "inventory.view", _collect_user_permissions(current_user)
         )
         if not has_permission:
             raise HTTPException(
@@ -2453,8 +2453,8 @@ async def get_user_departure_clearance(
     **Authentication required**
     """
     if str(user_id) != str(current_user.id):
-        has_permission = any(
-            "inventory.view" in (role.permissions or []) for role in current_user.roles
+        has_permission = _has_permission(
+            "inventory.view", _collect_user_permissions(current_user)
         )
         if not has_permission:
             raise HTTPException(
@@ -2732,8 +2732,8 @@ async def list_equipment_requests(
         )
     )
 
-    can_manage = any(
-        "inventory.manage" in (role.permissions or []) for role in current_user.roles
+    can_manage = _has_permission(
+        "inventory.manage", _collect_user_permissions(current_user)
     )
     if mine_only or not can_manage:
         query = query.where(EquipmentRequest.requester_id == str(current_user.id))

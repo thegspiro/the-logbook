@@ -630,14 +630,6 @@ class InventoryService:
         result = await self.db.execute(query)
         items = list(result.scalars().all())
 
-        missing = [i for i in items if not i.barcode]
-        if missing:
-            for item in missing:
-                item.barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
-            await self.db.commit()
-            for item in missing:
-                await self.db.refresh(item)
-
         return items, total
 
     async def get_item_by_id(
@@ -3100,6 +3092,10 @@ class InventoryService:
         query = (
             select(WriteOffRequest)
             .where(WriteOffRequest.organization_id == organization_id)
+            .options(
+                selectinload(WriteOffRequest.requester),
+                selectinload(WriteOffRequest.reviewer),
+            )
             .order_by(WriteOffRequest.created_at.desc())
         )
         if status_filter:
@@ -3110,18 +3106,8 @@ class InventoryService:
 
         requests = []
         for wo in rows:
-            # Load requester name
-            requester_name = None
-            if wo.requested_by:
-                u = await self.db.execute(
-                    select(User).where(User.id == wo.requested_by)
-                )
-                requester_name = self._format_user_name(u.scalar_one_or_none()) or None
-
-            reviewer_name = None
-            if wo.reviewed_by:
-                u = await self.db.execute(select(User).where(User.id == wo.reviewed_by))
-                reviewer_name = self._format_user_name(u.scalar_one_or_none()) or None
+            requester_name = self._format_user_name(wo.requester) or None
+            reviewer_name = self._format_user_name(wo.reviewer) or None
 
             requests.append(
                 {
