@@ -412,6 +412,10 @@ class ItemIssuanceCreate(BaseModel):
     user_id: UUID
     quantity: int = Field(default=1, ge=1, description="Number of units to issue")
     issue_reason: Optional[str] = None
+    override_allowance: bool = Field(
+        default=False,
+        description="Bypass the member's per-category issuance allowance cap",
+    )
 
 
 class ItemIssuanceReturnRequest(BaseModel):
@@ -1013,6 +1017,21 @@ class EquipmentRequestReview(BaseModel):
     review_notes: Optional[str] = None
 
 
+class EquipmentRequestFulfill(BaseModel):
+    """Schema for fulfilling an approved equipment request.
+
+    ``item_id`` is optional when the request already references a specific
+    item; supply it to fulfill a generic (description-only) request with a
+    concrete item. ``override_allowance`` lets a quartermaster exceed the
+    member's per-category cap when issuing a pool item.
+    """
+
+    item_id: Optional[UUID] = None
+    quantity: Optional[int] = Field(default=None, ge=1)
+    expected_return_at: Optional[datetime] = None
+    override_allowance: bool = False
+
+
 class EquipmentRequestResponse(UTCResponseBase):
     """Schema for equipment request response"""
 
@@ -1032,6 +1051,10 @@ class EquipmentRequestResponse(UTCResponseBase):
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
+    fulfilled_by: Optional[UUID] = None
+    fulfilled_at: Optional[datetime] = None
+    fulfillment_type: Optional[str] = None
+    fulfillment_reference_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

@@ -5,6 +5,7 @@ import { renderWithRouter } from '../../../test/utils';
 
 const mockGetEquipmentRequests = vi.fn();
 const mockReviewEquipmentRequest = vi.fn();
+const mockFulfillEquipmentRequest = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -12,6 +13,7 @@ vi.mock('../../../services/api', () => ({
   inventoryService: {
     getEquipmentRequests: (...args: unknown[]) => mockGetEquipmentRequests(...args) as unknown,
     reviewEquipmentRequest: (...args: unknown[]) => mockReviewEquipmentRequest(...args) as unknown,
+    fulfillEquipmentRequest: (...args: unknown[]) => mockFulfillEquipmentRequest(...args) as unknown,
   },
 }));
 
@@ -176,5 +178,40 @@ describe('EquipmentRequestsPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/Qty: 3/)).toBeInTheDocument();
     });
+  });
+
+  it('shows Fulfill button for approved requests and fulfills with the request item', async () => {
+    const user = userEvent.setup();
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ status: 'approved', request_type: 'issuance', item_id: 'item-9', quantity: 2 })],
+    });
+    mockFulfillEquipmentRequest.mockResolvedValue({ id: 'req-1', status: 'fulfilled', fulfillment_type: 'issuance', fulfillment_reference_id: 'iss-1', message: 'ok' });
+    renderWithRouter(<EquipmentRequestsPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
+    });
+    await user.click(screen.getByText('Fulfill'));
+    // Modal pre-fills the request's item and quantity
+    await user.click(await screen.findByRole('button', { name: /Fulfill Request/ }));
+    await waitFor(() => {
+      expect(mockFulfillEquipmentRequest).toHaveBeenCalledWith('req-1', {
+        item_id: 'item-9',
+        quantity: 2,
+        expected_return_at: undefined,
+        override_allowance: false,
+      });
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith('Request fulfilled');
+  });
+
+  it('displays fulfillment details for fulfilled requests', async () => {
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ status: 'fulfilled', fulfillment_type: 'issuance', fulfilled_at: '2026-01-16T10:00:00Z' })],
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+    await waitFor(() => {
+      expect(screen.getByText(/Fulfilled via issuance/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Fulfill')).not.toBeInTheDocument();
   });
 });

@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ClipboardList, RefreshCw, Check, XCircle, Loader2, Filter } from 'lucide-react';
+import { ArrowLeft, ClipboardList, RefreshCw, Check, XCircle, Loader2, Filter, PackageCheck } from 'lucide-react';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
 import type { EquipmentRequestItem } from '../types';
@@ -25,6 +25,13 @@ const EquipmentRequestsPage: React.FC = () => {
   const [reviewModal, setReviewModal] = useState<{ open: boolean; request: EquipmentRequestItem | null }>({ open: false, request: null });
   const [reviewNotes, setReviewNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Fulfillment of an approved request
+  const [fulfillModal, setFulfillModal] = useState<{ open: boolean; request: EquipmentRequestItem | null }>({ open: false, request: null });
+  const [fulfillItemId, setFulfillItemId] = useState('');
+  const [fulfillQuantity, setFulfillQuantity] = useState('1');
+  const [fulfillReturnAt, setFulfillReturnAt] = useState('');
+  const [fulfillOverride, setFulfillOverride] = useState(false);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -56,6 +63,38 @@ const EquipmentRequestsPage: React.FC = () => {
       void loadRequests();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to review request'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openFulfill = (req: EquipmentRequestItem) => {
+    setFulfillItemId(req.item_id ?? '');
+    setFulfillQuantity(String(req.quantity || 1));
+    setFulfillReturnAt('');
+    setFulfillOverride(false);
+    setFulfillModal({ open: true, request: req });
+  };
+
+  const handleFulfill = async () => {
+    if (!fulfillModal.request) return;
+    if (!fulfillItemId.trim()) {
+      toast.error('An item is required to fulfill this request');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await inventoryService.fulfillEquipmentRequest(fulfillModal.request.id, {
+        item_id: fulfillItemId.trim() || undefined,
+        quantity: Number(fulfillQuantity) || undefined,
+        expected_return_at: fulfillReturnAt || undefined,
+        override_allowance: fulfillOverride,
+      });
+      toast.success('Request fulfilled');
+      setFulfillModal({ open: false, request: null });
+      void loadRequests();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to fulfill request'));
     } finally {
       setSubmitting(false);
     }
@@ -103,6 +142,7 @@ const EquipmentRequestsPage: React.FC = () => {
           >
             <option value="pending">Pending</option>
             <option value="approved">Approved</option>
+            <option value="fulfilled">Fulfilled</option>
             <option value="denied">Denied</option>
             <option value="">All</option>
           </select>
@@ -144,6 +184,12 @@ const EquipmentRequestsPage: React.FC = () => {
                     {req.review_notes && (
                       <p className="text-xs text-theme-text-muted mt-1 italic">Review: {req.review_notes}</p>
                     )}
+                    {req.status === 'fulfilled' && req.fulfillment_type && (
+                      <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                        Fulfilled via {req.fulfillment_type}
+                        {req.fulfilled_at ? ` on ${fmtDate(req.fulfilled_at)}` : ''}
+                      </p>
+                    )}
                   </div>
                   {req.status === 'pending' && (
                     <button
@@ -154,6 +200,15 @@ const EquipmentRequestsPage: React.FC = () => {
                       className="btn-info px-3 py-1.5 text-xs shrink-0"
                     >
                       Review
+                    </button>
+                  )}
+                  {req.status === 'approved' && (
+                    <button
+                      onClick={() => openFulfill(req)}
+                      className="btn-success px-3 py-1.5 text-xs shrink-0 inline-flex items-center gap-1"
+                    >
+                      <PackageCheck className="w-3.5 h-3.5" />
+                      Fulfill
                     </button>
                   )}
                 </div>
@@ -229,6 +284,97 @@ const EquipmentRequestsPage: React.FC = () => {
                 >
                   <Check className="w-4 h-4" />
                   Approve
+                </button>
+              </div>
+            </div>
+          )}
+        </Modal>
+
+        {/* Fulfill Modal */}
+        <Modal
+          isOpen={fulfillModal.open}
+          onClose={() => setFulfillModal({ open: false, request: null })}
+          title={`Fulfill: ${fulfillModal.request?.item_name ?? ''}`}
+          size="sm"
+        >
+          {fulfillModal.request && (
+            <div className="space-y-4">
+              <div className="text-sm text-theme-text-secondary">
+                <p>Requester: {fulfillModal.request.requester_name ?? 'Unknown'}</p>
+                <p>Type: {fulfillModal.request.request_type}</p>
+              </div>
+
+              <div>
+                <label htmlFor="fulfill-item" className="block text-sm font-medium text-theme-text-primary mb-1">
+                  Item ID {fulfillModal.request.item_id ? '' : '(required)'}
+                </label>
+                <input
+                  id="fulfill-item"
+                  type="text"
+                  value={fulfillItemId}
+                  onChange={(e) => setFulfillItemId(e.target.value)}
+                  className="form-input w-full"
+                  placeholder="Inventory item to issue/assign"
+                />
+                <p className="text-xs text-theme-text-muted mt-1">
+                  Pool items are issued; individual items are {fulfillModal.request.request_type === 'checkout' ? 'checked out' : 'assigned'}.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="fulfill-qty" className="block text-sm font-medium text-theme-text-primary mb-1">
+                    Quantity
+                  </label>
+                  <input
+                    id="fulfill-qty"
+                    type="number"
+                    min={1}
+                    value={fulfillQuantity}
+                    onChange={(e) => setFulfillQuantity(e.target.value)}
+                    className="form-input w-full"
+                  />
+                </div>
+                {fulfillModal.request.request_type === 'checkout' && (
+                  <div>
+                    <label htmlFor="fulfill-return" className="block text-sm font-medium text-theme-text-primary mb-1">
+                      Expected Return
+                    </label>
+                    <input
+                      id="fulfill-return"
+                      type="date"
+                      value={fulfillReturnAt}
+                      onChange={(e) => setFulfillReturnAt(e.target.value)}
+                      className="form-input w-full"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <label className="inline-flex items-center gap-2 text-sm text-theme-text-primary">
+                <input
+                  type="checkbox"
+                  checked={fulfillOverride}
+                  onChange={(e) => setFulfillOverride(e.target.checked)}
+                  className="form-checkbox"
+                />
+                Override issuance allowance limit
+              </label>
+
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3">
+                <button
+                  onClick={() => setFulfillModal({ open: false, request: null })}
+                  className="btn-secondary btn-md"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { void handleFulfill(); }}
+                  disabled={submitting || !fulfillItemId.trim()}
+                  className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <PackageCheck className="w-4 h-4" />}
+                  Fulfill Request
                 </button>
               </div>
             </div>

@@ -63,6 +63,7 @@ _ACTION_LABELS = {
     InventoryActionType.RETURNED: "Returned",
     InventoryActionType.CHECKED_OUT: "Checked Out",
     InventoryActionType.CHECKED_IN: "Checked In",
+    InventoryActionType.RETIRED: "Retired / Removed",
 }
 
 

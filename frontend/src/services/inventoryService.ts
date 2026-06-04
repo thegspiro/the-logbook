@@ -350,6 +350,11 @@ export const inventoryService = {
     return response.data;
   },
 
+  async fulfillEquipmentRequest(requestId: string, data?: { item_id?: string | undefined; quantity?: number | undefined; expected_return_at?: string | undefined; override_allowance?: boolean }): Promise<{ id: string; status: string; fulfillment_type: string | null; fulfillment_reference_id: string | null; message: string }> {
+    const response = await api.put<{ id: string; status: string; fulfillment_type: string | null; fulfillment_reference_id: string | null; message: string }>(`/inventory/requests/${requestId}/fulfill`, data ?? {});
+    return response.data;
+  },
+
   // Write-off requests
   async getWriteOffRequests(params?: { status?: string }): Promise<WriteOffRequestItem[]> {
     const response = await api.get<WriteOffRequestItem[]>('/inventory/write-offs', { params });

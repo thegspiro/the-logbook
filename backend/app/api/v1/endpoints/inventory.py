@@ -5,7 +5,7 @@ Endpoints for inventory management including categories, items, assignments,
 checkouts, maintenance, and reporting.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -72,6 +72,7 @@ from app.schemas.inventory import (
     EquipmentKitResponse,
     EquipmentKitUpdate,
     EquipmentRequestCreate,
+    EquipmentRequestFulfill,
     EquipmentRequestReview,
     InventoryCategoryCreate,
     InventoryCategoryResponse,
@@ -1355,6 +1356,7 @@ async def issue_from_pool(
         issued_by=current_user.id,
         quantity=issuance_data.quantity,
         reason=issuance_data.issue_reason,
+        override_allowance=issuance_data.override_allowance,
     )
 
     if error:
@@ -2737,6 +2739,10 @@ async def list_equipment_requests(
                 ),
                 "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
                 "review_notes": r.review_notes,
+                "fulfilled_by": r.fulfilled_by,
+                "fulfilled_at": r.fulfilled_at.isoformat() if r.fulfilled_at else None,
+                "fulfillment_type": r.fulfillment_type,
+                "fulfillment_reference_id": r.fulfillment_reference_id,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None,
             }
@@ -2784,7 +2790,7 @@ async def review_equipment_request(
 
     req.status = review_data.status
     req.reviewed_by = str(current_user.id)
-    req.reviewed_at = datetime.utcnow()
+    req.reviewed_at = datetime.now(timezone.utc)
     req.review_notes = review_data.review_notes
 
     await db.commit()
@@ -2807,6 +2813,60 @@ async def review_equipment_request(
         "id": req.id,
         "status": review_data.status,
         "message": f"Request {review_data.status}",
+    }
+
+
+@router.put("/requests/{request_id}/fulfill")
+async def fulfill_equipment_request(
+    request_id: UUID,
+    fulfill_data: EquipmentRequestFulfill,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Fulfill an approved equipment request by issuing, checking out, or
+    assigning the relevant item to the requester, then marking the request
+    fulfilled.
+
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    req, error = await service.fulfill_equipment_request(
+        request_id=request_id,
+        organization_id=current_user.organization_id,
+        fulfilled_by=current_user.id,
+        item_id=fulfill_data.item_id,
+        quantity=fulfill_data.quantity,
+        expected_return_at=fulfill_data.expected_return_at,
+        override_allowance=fulfill_data.override_allowance,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="equipment_request_fulfilled",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "request_id": str(request_id),
+            "fulfillment_type": req.fulfillment_type,
+            "fulfillment_reference_id": req.fulfillment_reference_id,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "id": req.id,
+        "status": "fulfilled",
+        "fulfillment_type": req.fulfillment_type,
+        "fulfillment_reference_id": req.fulfillment_reference_id,
+        "message": "Request fulfilled",
     }
 
 

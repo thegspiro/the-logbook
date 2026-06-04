@@ -1225,6 +1225,18 @@ class EquipmentRequest(Base):
     reviewed_at = Column(DateTime(timezone=True))
     review_notes = Column(Text)
 
+    # Fulfillment — set when an approved request is turned into an actual
+    # issuance/checkout/assignment, linking the request back to the record
+    # that satisfied it.
+    fulfilled_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    fulfilled_at = Column(DateTime(timezone=True))
+    # One of: "issuance", "checkout", "assignment"
+    fulfillment_type = Column(String(20))
+    # ID of the ItemIssuance / CheckOutRecord / ItemAssignment created
+    fulfillment_reference_id = Column(String(36))
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
@@ -1234,6 +1246,7 @@ class EquipmentRequest(Base):
     # Relationships
     requester = relationship("User", foreign_keys=[requester_id])
     reviewer = relationship("User", foreign_keys=[reviewed_by])
+    fulfiller = relationship("User", foreign_keys=[fulfilled_by])
     item = relationship("InventoryItem", foreign_keys=[item_id])
     category = relationship("InventoryCategory", foreign_keys=[category_id])
 
