@@ -7,6 +7,8 @@ const mockGetSummary = vi.fn();
 const mockGetLowStockItems = vi.fn();
 const mockGetReturnRequests = vi.fn();
 const mockGetEquipmentRequests = vi.fn();
+const mockGetMembersSummary = vi.fn();
+const mockCheckPermission = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -14,7 +16,13 @@ vi.mock('../../../services/api', () => ({
     getLowStockItems: (...args: unknown[]) => mockGetLowStockItems(...args) as unknown,
     getReturnRequests: (...args: unknown[]) => mockGetReturnRequests(...args) as unknown,
     getEquipmentRequests: (...args: unknown[]) => mockGetEquipmentRequests(...args) as unknown,
+    getMembersSummary: (...args: unknown[]) => mockGetMembersSummary(...args) as unknown,
   },
+}));
+
+vi.mock('../../../stores/authStore', () => ({
+  useAuthStore: (selector: (s: { checkPermission: (p: string) => boolean }) => unknown) =>
+    selector({ checkPermission: (...args: unknown[]) => mockCheckPermission(...args) as boolean }),
 }));
 
 import { InventoryAdminHub } from './InventoryAdminHub';
@@ -39,6 +47,8 @@ describe('InventoryAdminHub', () => {
     mockGetLowStockItems.mockResolvedValue(mockLowStockAlerts);
     mockGetReturnRequests.mockResolvedValue([]);
     mockGetEquipmentRequests.mockResolvedValue({ requests: [], total: 0 });
+    mockGetMembersSummary.mockResolvedValue({ members: [], total: 0 });
+    mockCheckPermission.mockReturnValue(true);
   });
 
   it('renders the page title and subtitle', async () => {
@@ -141,6 +151,28 @@ describe('InventoryAdminHub', () => {
       expect(screen.getByText('Items')).toBeInTheDocument();
     });
     expect(screen.queryByText('available')).not.toBeInTheDocument();
+  });
+
+  it('opens the member picker when "Assign to Member" is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('button', { name: /Assign to Member/ }));
+    await waitFor(() => {
+      expect(mockGetMembersSummary).toHaveBeenCalledWith();
+    });
+    expect(screen.getByLabelText('Search members')).toBeInTheDocument();
+  });
+
+  it('hides "Assign to Member" without inventory.manage permission', async () => {
+    mockCheckPermission.mockReturnValue(false);
+    renderWithRouter(<InventoryAdminHub />);
+    await waitFor(() => {
+      expect(screen.getByText('Items')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: /Assign to Member/ })).not.toBeInTheDocument();
   });
 
   it('shows badges on nav cards with counts', async () => {

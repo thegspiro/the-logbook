@@ -26,8 +26,12 @@ import {
   AlertTriangle,
   BoxSelect,
   Ruler,
+  UserPlus,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
+import { useAuthStore } from '../../../stores/authStore';
+import { MemberPickerModal } from '../../../components/MemberPickerModal';
+import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import type { InventorySummary, LowStockAlert, ReturnRequestItem } from '../types';
 interface NavCardProps {
   to: string;
@@ -107,11 +111,16 @@ const Section: React.FC<SectionProps> = ({ title, children }) => (
 );
 
 export const InventoryAdminHub: React.FC = () => {
+  const canManage = useAuthStore((s) => s.checkPermission)('inventory.manage');
   const [summary, setSummary] = useState<InventorySummary | null>(null);
   const [lowStockAlerts, setLowStockAlerts] = useState<LowStockAlert[]>([]);
   const [pendingReturns, setPendingReturns] = useState(0);
   const [pendingRequests, setPendingRequests] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Quick-assign flow: pick a member, then assign items to them via the scan modal.
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<{ userId: string; memberName: string } | null>(null);
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
@@ -152,13 +161,26 @@ export const InventoryAdminHub: React.FC = () => {
               <p className="text-sm text-theme-text-muted">Manage equipment, assignments, and compliance</p>
             </div>
           </div>
-          <button
-            onClick={() => { void loadSummary(); }}
-            className="btn-secondary btn-md shrink-0 self-start sm:self-auto"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">Refresh</span>
-          </button>
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+            {canManage && (
+              <button
+                onClick={() => setMemberPickerOpen(true)}
+                className="btn-info btn-md flex items-center gap-2"
+                title="Assign items to an individual member"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span className="hidden sm:inline">Assign to Member</span>
+                <span className="sm:hidden">Assign</span>
+              </button>
+            )}
+            <button
+              onClick={() => { void loadSummary(); }}
+              className="btn-secondary btn-md"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
         </div>
 
         {/* Quick stats bar */}
@@ -368,6 +390,25 @@ export const InventoryAdminHub: React.FC = () => {
           </Section>
         </div>
       </div>
+
+      {/* Quick-assign: pick a member, then assign items to them */}
+      <MemberPickerModal
+        isOpen={memberPickerOpen}
+        onClose={() => setMemberPickerOpen(false)}
+        title="Assign Items — Select a Member"
+        onSelect={(member) => {
+          setMemberPickerOpen(false);
+          setAssignTarget(member);
+        }}
+      />
+      <InventoryScanModal
+        isOpen={assignTarget !== null}
+        onClose={() => setAssignTarget(null)}
+        mode="checkout"
+        userId={assignTarget?.userId ?? ''}
+        memberName={assignTarget?.memberName ?? ''}
+        onComplete={() => { void loadSummary(); }}
+      />
     </div>
   );
 };
