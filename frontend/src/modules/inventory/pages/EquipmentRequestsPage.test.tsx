@@ -6,6 +6,7 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetEquipmentRequests = vi.fn();
 const mockReviewEquipmentRequest = vi.fn();
 const mockFulfillEquipmentRequest = vi.fn();
+const mockGetItems = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -14,6 +15,7 @@ vi.mock('../../../services/api', () => ({
     getEquipmentRequests: (...args: unknown[]) => mockGetEquipmentRequests(...args) as unknown,
     reviewEquipmentRequest: (...args: unknown[]) => mockReviewEquipmentRequest(...args) as unknown,
     fulfillEquipmentRequest: (...args: unknown[]) => mockFulfillEquipmentRequest(...args) as unknown,
+    getItems: (...args: unknown[]) => mockGetItems(...args) as unknown,
   },
 }));
 
@@ -43,6 +45,7 @@ describe('EquipmentRequestsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetEquipmentRequests.mockResolvedValue({ requests: [makeRequest()] });
+    mockGetItems.mockResolvedValue({ items: [{ id: 'item-9', name: 'Radio XTS 5000', tracking_type: 'individual' }], total: 1, skip: 0, limit: 500 });
   });
 
   it('renders page title and subtitle', async () => {

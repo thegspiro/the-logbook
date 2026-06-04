@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Users, RefreshCw, Search, ChevronDown, ChevronUp,
   Package, AlertTriangle, User, Loader2, ArrowUpDown,
-  ArrowDownToLine, ArrowUpFromLine, ScanLine,
+  ArrowDownToLine, ArrowUpFromLine, ScanLine, Ruler,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type {
@@ -23,6 +23,7 @@ import { VariantCapsules } from '../components/VariantCapsules';
 import type { InventoryItem } from '../types';
 import { ReturnItemsModal } from '../../../components/ReturnItemsModal';
 import { MemberIdScannerModal } from '../../../components/MemberIdScannerModal';
+import { SizePreferencesModal } from '../components/SizePreferencesModal';
 
 type SortOption = 'name' | 'total_items' | 'overdue' | 'assigned';
 
@@ -70,6 +71,9 @@ const InventoryMembersPage: React.FC = () => {
     userId: string;
     memberName: string;
   }>({ isOpen: false, userId: '', memberName: '' });
+
+  // Size-preferences modal (admin editing a specific member)
+  const [sizesTarget, setSizesTarget] = useState<{ userId: string; memberName: string } | null>(null);
 
   // Member ID scanner modal
   const [memberScannerOpen, setMemberScannerOpen] = useState(false);
@@ -305,6 +309,14 @@ const InventoryMembersPage: React.FC = () => {
                           <ArrowUpFromLine className="w-3.5 h-3.5" /> Return
                         </button>
                       )}
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm flex items-center justify-center gap-1 active:opacity-80"
+                        onClick={() => setSizesTarget({ userId: member.user_id, memberName: member.full_name || member.username })}
+                        title="Edit this member's sizes"
+                      >
+                        <Ruler className="w-3.5 h-3.5" /> Sizes
+                      </button>
                     </div>
                   )}
                 </button>
@@ -419,6 +431,13 @@ const InventoryMembersPage: React.FC = () => {
         isOpen={memberScannerOpen}
         onClose={() => setMemberScannerOpen(false)}
         onMemberIdentified={handleMemberScanned}
+      />
+
+      <SizePreferencesModal
+        isOpen={sizesTarget !== null}
+        onClose={() => setSizesTarget(null)}
+        userId={sizesTarget?.userId}
+        memberName={sizesTarget?.memberName}
       />
     </div>
   );

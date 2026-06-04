@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, ClipboardList, RefreshCw, Check, XCircle, Loader2, Filter, PackageCheck } from 'lucide-react';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
-import type { EquipmentRequestItem } from '../types';
+import type { EquipmentRequestItem, InventoryItem } from '../types';
 import { REQUEST_STATUS_BADGES } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -32,6 +32,7 @@ const EquipmentRequestsPage: React.FC = () => {
   const [fulfillQuantity, setFulfillQuantity] = useState('1');
   const [fulfillReturnAt, setFulfillReturnAt] = useState('');
   const [fulfillOverride, setFulfillOverride] = useState(false);
+  const [items, setItems] = useState<InventoryItem[]>([]);
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -74,6 +75,12 @@ const EquipmentRequestsPage: React.FC = () => {
     setFulfillReturnAt('');
     setFulfillOverride(false);
     setFulfillModal({ open: true, request: req });
+    if (items.length === 0) {
+      void inventoryService
+        .getItems({ active_only: true, limit: 500 })
+        .then((res) => setItems(res.items))
+        .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')));
+    }
   };
 
   const handleFulfill = async () => {
@@ -306,16 +313,24 @@ const EquipmentRequestsPage: React.FC = () => {
 
               <div>
                 <label htmlFor="fulfill-item" className="block text-sm font-medium text-theme-text-primary mb-1">
-                  Item ID {fulfillModal.request.item_id ? '' : '(required)'}
+                  Item to fulfill with
                 </label>
-                <input
+                <select
                   id="fulfill-item"
-                  type="text"
                   value={fulfillItemId}
                   onChange={(e) => setFulfillItemId(e.target.value)}
                   className="form-input w-full"
-                  placeholder="Inventory item to issue/assign"
-                />
+                >
+                  <option value="">Select an item…</option>
+                  {items.map((it) => {
+                    const tag = it.serial_number || it.asset_tag || it.barcode;
+                    return (
+                      <option key={it.id} value={it.id}>
+                        {it.name}{tag ? ` — ${tag}` : ''}{it.tracking_type === 'pool' ? ` (pool: ${it.quantity} on hand)` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
                 <p className="text-xs text-theme-text-muted mt-1">
                   Pool items are issued; individual items are {fulfillModal.request.request_type === 'checkout' ? 'checked out' : 'assigned'}.
                 </p>

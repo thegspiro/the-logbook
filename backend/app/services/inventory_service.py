@@ -36,6 +36,7 @@ from app.models.inventory import (
     ItemVariantGroup,
     MaintenanceRecord,
     MemberSizePreferences,
+    NFPAInspectionDetail,
     ReorderRequest,
     ReorderStatus,
     RequestStatus,
@@ -197,6 +198,45 @@ class InventoryService:
                     performed_by=performed_by,
                 )
 
+    async def _release_item_holders(self, item: "InventoryItem", organization_id) -> None:
+        """Close out a written-off item's outstanding records so it no longer
+        appears in any member's equipment list.
+
+        For individual items the active assignment is ended and the item is
+        unassigned. For pool items every open issuance is marked returned and
+        ``quantity_issued`` is reduced — but the units are NOT added back to
+        ``quantity`` because written-off stock is gone, not recovered.
+        """
+        now = datetime.now(timezone.utc)
+
+        if item.assigned_to_user_id:
+            asgn_result = await self.db.execute(
+                select(ItemAssignment)
+                .where(ItemAssignment.item_id == item.id)
+                .where(ItemAssignment.is_active == True)  # noqa: E712
+            )
+            for assignment in asgn_result.scalars().all():
+                assignment.is_active = False
+                assignment.returned_date = now
+                assignment.return_condition = ItemCondition.OUT_OF_SERVICE
+            item.assigned_to_user_id = None
+            item.assigned_date = None
+
+        if item.tracking_type == TrackingType.POOL:
+            iss_result = await self.db.execute(
+                select(ItemIssuance).where(
+                    ItemIssuance.item_id == item.id,
+                    ItemIssuance.organization_id == str(organization_id),
+                    ItemIssuance.is_returned == False,  # noqa: E712
+                )
+            )
+            for issuance in iss_result.scalars().all():
+                issuance.is_returned = True
+                issuance.returned_at = now
+                item.quantity_issued = max(
+                    0, (item.quantity_issued or 0) - issuance.quantity_issued
+                )
+
     # ------------------------------------------------------------------
     # Shared helpers
     # ------------------------------------------------------------------
@@ -355,6 +395,40 @@ class InventoryService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def delete_category(
+        self, category_id: UUID, organization_id: UUID
+    ) -> Tuple[bool, Optional[str]]:
+        """Soft-delete (deactivate) a category.
+
+        Blocked while active items still reference it, so deleting a category
+        can't orphan live inventory.
+        """
+        try:
+            category = await self.get_category_by_id(category_id, organization_id)
+            if not category:
+                return False, "Category not found"
+
+            count_result = await self.db.execute(
+                select(func.count(InventoryItem.id)).where(
+                    InventoryItem.category_id == str(category_id),
+                    InventoryItem.organization_id == str(organization_id),
+                    InventoryItem.active == True,  # noqa: E712
+                )
+            )
+            if count_result.scalar():
+                return (
+                    False,
+                    "Cannot delete: category still has active items. "
+                    "Reassign or retire them first.",
+                )
+
+            category.active = False
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            return False, str(e)
 
     # ============================================
     # Item Management
@@ -1439,6 +1513,20 @@ class InventoryService:
                 **safe_data,
             )
             self.db.add(maintenance)
+            await self.db.flush()  # assign maintenance.id for the NFPA detail FK
+
+            # Persist structured NFPA 1851 inspection results when supplied.
+            # This is filtered out of _MAINTENANCE_ALLOWED_FIELDS because it
+            # belongs in its own table, not on the maintenance record.
+            nfpa_inspection = maintenance_data.get("nfpa_inspection")
+            if nfpa_inspection:
+                self.db.add(
+                    NFPAInspectionDetail(
+                        maintenance_record_id=maintenance.id,
+                        organization_id=organization_id,
+                        **nfpa_inspection,
+                    )
+                )
 
             # If maintenance is completed, update item condition and schedule.
             # Lock the item row to prevent concurrent maintenance from
@@ -3100,10 +3188,13 @@ class InventoryService:
                 )
                 item = item_result.scalar_one_or_none()
                 if item and item.status != ItemStatus.RETIRED:
-                    # Notify holders before the item leaves their possession.
+                    # Notify holders before the item leaves their possession,
+                    # then close out their assignment/issuance records so the
+                    # written-off item disappears from their equipment list.
                     await self._queue_retirement_notifications(
                         item, organization_id, performed_by=reviewed_by
                     )
+                    await self._release_item_holders(item, organization_id)
                     if wo.reason in ("lost", "stolen"):
                         item.status = (
                             ItemStatus.LOST
@@ -4228,6 +4319,22 @@ class InventoryService:
             logger.error(f"Error updating variant group: {e}")
             return None, str(e)
 
+    async def delete_variant_group(
+        self, group_id: UUID, organization_id: UUID
+    ) -> Tuple[bool, Optional[str]]:
+        """Soft-delete (deactivate) a variant group."""
+        try:
+            group = await self.get_variant_group_by_id(group_id, organization_id)
+            if not group:
+                return False, "Variant group not found"
+            group.active = False
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deleting variant group: {e}")
+            return False, str(e)
+
     # ============================================
     # Equipment Kit Methods
     # ============================================
@@ -4321,6 +4428,22 @@ class InventoryService:
         except Exception as e:
             logger.error(f"Error updating equipment kit: {e}")
             return None, str(e)
+
+    async def delete_equipment_kit(
+        self, kit_id: UUID, organization_id: UUID
+    ) -> Tuple[bool, Optional[str]]:
+        """Soft-delete (deactivate) an equipment kit template."""
+        try:
+            kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
+            if not kit:
+                return False, "Equipment kit not found"
+            kit.active = False
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deleting equipment kit: {e}")
+            return False, str(e)
 
     async def issue_kit_to_member(
         self,

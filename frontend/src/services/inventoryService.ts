@@ -227,7 +227,7 @@ export const inventoryService = {
     return response.data;
   },
 
-  async createAllowance(data: { category_id: string; role_id?: string; max_quantity: number; period_type?: string }): Promise<IssuanceAllowance> {
+  async createAllowance(data: { category_id: string; role_id?: string | undefined; max_quantity: number; period_type?: string }): Promise<IssuanceAllowance> {
     const response = await api.post<IssuanceAllowance>('/inventory/allowances', data);
     return response.data;
   },

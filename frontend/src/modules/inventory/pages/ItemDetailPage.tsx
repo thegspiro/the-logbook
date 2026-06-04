@@ -28,6 +28,8 @@ import { ItemFormModal } from '../components/ItemFormModal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useAuthStore } from '../../../stores/authStore';
+import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
 import toast from 'react-hot-toast';
 
@@ -94,6 +96,10 @@ const Card: React.FC<CardProps> = ({ title, icon, children }) => (
 const ItemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const tz = useTimezone();
+  // This page is reachable by any viewer, so management actions are gated on
+  // permission here as defense-in-depth (the backend enforces them too).
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManage = checkPermission('inventory.manage');
 
   // Core state
   const [item, setItem] = useState<InventoryItem | null>(null);
@@ -121,8 +127,6 @@ const ItemDetailPage: React.FC = () => {
 
   // Assign modal
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [assignUserId, setAssignUserId] = useState('');
-  const [assigning, setAssigning] = useState(false);
 
   // NFPA compliance + exposure modals
   const [showNfpaModal, setShowNfpaModal] = useState(false);
@@ -200,19 +204,15 @@ const ItemDetailPage: React.FC = () => {
   useEffect(() => { void loadTabData(activeTab); }, [activeTab, loadTabData]);
 
   /* ---------- assign / unassign ----------------------------------- */
-  const handleAssign = async () => {
-    if (!id || !assignUserId.trim()) return;
-    setAssigning(true);
+  const handleAssign = async (userId: string) => {
+    if (!id || !userId) return;
+    setShowAssignModal(false);
     try {
-      await inventoryService.assignItem(id, assignUserId.trim());
+      await inventoryService.assignItem(id, userId);
       toast.success('Item assigned');
-      setShowAssignModal(false);
-      setAssignUserId('');
       void loadItem();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to assign item'));
-    } finally {
-      setAssigning(false);
     }
   };
 
@@ -304,12 +304,14 @@ const ItemDetailPage: React.FC = () => {
           >
             <Printer className="w-4 h-4" /> Print Barcode
           </Link>
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="btn-info btn-sm inline-flex items-center gap-1"
-          >
-            <Pencil className="w-4 h-4" /> Edit
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="btn-info btn-sm inline-flex items-center gap-1"
+            >
+              <Pencil className="w-4 h-4" /> Edit
+            </button>
+          )}
         </div>
       </div>
 
@@ -401,24 +403,28 @@ const ItemDetailPage: React.FC = () => {
                   }
                 />
                 <Field label="Assigned Date" value={formatDate(item.assigned_date, tz)} />
-                <div className="col-span-full mt-1">
-                  <button
-                    onClick={() => void handleUnassign()}
-                    className="btn-secondary btn-sm"
-                  >
-                    Unassign
-                  </button>
-                </div>
+                {canManage && (
+                  <div className="col-span-full mt-1">
+                    <button
+                      onClick={() => void handleUnassign()}
+                      className="btn-secondary btn-sm"
+                    >
+                      Unassign
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <div className="col-span-full">
                 <p className="text-sm text-theme-text-muted mb-2">Not currently assigned</p>
-                <button
-                  onClick={() => setShowAssignModal(true)}
-                  className="btn-info btn-sm"
-                >
-                  Assign Item
-                </button>
+                {canManage && (
+                  <button
+                    onClick={() => setShowAssignModal(true)}
+                    className="btn-info btn-sm"
+                  >
+                    Assign Item
+                  </button>
+                )}
               </div>
             )}
           </Card>
@@ -454,47 +460,26 @@ const ItemDetailPage: React.FC = () => {
             <>
               {activeTab === 'history' && <HistoryTab events={history} tz={tz} />}
               {activeTab === 'nfpa' && isNfpa && (
-                <NFPATab data={nfpa} tz={tz} onEdit={() => setShowNfpaModal(true)} />
+                <NFPATab data={nfpa} tz={tz} canManage={canManage} onEdit={() => setShowNfpaModal(true)} />
               )}
               {activeTab === 'inspections' && hasMaintenance && (
-                <InspectionsTab records={maintenance} tz={tz} itemId={id ?? ''} />
+                <InspectionsTab records={maintenance} tz={tz} itemId={id ?? ''} canManage={canManage} />
               )}
               {activeTab === 'exposures' && isNfpa && (
-                <ExposuresTab records={exposures} tz={tz} onAdd={() => setShowExposureModal(true)} />
+                <ExposuresTab records={exposures} tz={tz} canManage={canManage} onAdd={() => setShowExposureModal(true)} />
               )}
             </>
           )}
         </div>
       </div>
 
-      {/* Assign Modal */}
-      {showAssignModal && (
-        <Modal isOpen={showAssignModal} onClose={() => setShowAssignModal(false)} title="Assign Item">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-theme-text-primary mb-1">User ID</label>
-              <input
-                type="text"
-                value={assignUserId}
-                onChange={e => setAssignUserId(e.target.value)}
-                className="form-input w-full"
-                placeholder="Enter user ID"
-              />
-            </div>
-            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
-              <button onClick={() => setShowAssignModal(false)} className="btn-secondary btn-md">Cancel</button>
-              <button
-                onClick={() => void handleAssign()}
-                disabled={assigning || !assignUserId.trim()}
-                className="btn-info btn-md inline-flex items-center justify-center gap-1"
-              >
-                {assigning && <Loader2 className="w-4 h-4 animate-spin" />}
-                Assign
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* Assign Modal — pick a member rather than pasting a user ID */}
+      <MemberPickerModal
+        isOpen={showAssignModal}
+        onClose={() => setShowAssignModal(false)}
+        title="Assign Item — Select a Member"
+        onSelect={(member) => { void handleAssign(member.userId); }}
+      />
 
       {/* Edit Item Modal */}
       <ItemFormModal
@@ -570,24 +555,26 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
 
 /* ----- NFPA Tab --------------------------------------------------- */
 
-interface NFPATabProps { data: NFPACompliance | null; tz: string; onEdit: () => void }
-const NFPATab: React.FC<NFPATabProps> = ({ data, tz, onEdit }) => {
+interface NFPATabProps { data: NFPACompliance | null; tz: string; canManage: boolean; onEdit: () => void }
+const NFPATab: React.FC<NFPATabProps> = ({ data, tz, canManage, onEdit }) => {
   if (!data) {
     return (
       <div className="text-center py-8">
         <Shield className="w-8 h-8 mx-auto text-theme-text-muted mb-2" />
         <p className="text-sm text-theme-text-muted mb-3">No NFPA compliance data available.</p>
-        <button onClick={onEdit} className="btn-info btn-sm">+ Add NFPA Compliance</button>
+        {canManage && <button onClick={onEdit} className="btn-info btn-sm">+ Add NFPA Compliance</button>}
       </div>
     );
   }
   return (
     <div>
-      <div className="flex justify-end mb-3">
-        <button onClick={onEdit} className="btn-secondary btn-sm inline-flex items-center gap-1">
-          <Pencil className="w-3.5 h-3.5" /> Edit
-        </button>
-      </div>
+      {canManage && (
+        <div className="flex justify-end mb-3">
+          <button onClick={onEdit} className="btn-secondary btn-sm inline-flex items-center gap-1">
+            <Pencil className="w-3.5 h-3.5" /> Edit
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <Card title="Lifecycle" icon={<Calendar className="w-4 h-4" />}>
         <Field label="Manufacture Date" value={formatDate(data.manufacture_date, tz)} />
@@ -622,14 +609,17 @@ interface InspectionsTabProps {
   records: MaintenanceRecord[];
   tz: string;
   itemId: string;
+  canManage: boolean;
 }
-const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId }) => (
+const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, canManage }) => (
   <div>
     <div className="flex items-center justify-between mb-3">
       <h3 className="text-sm font-semibold text-theme-text-primary">Maintenance Records</h3>
-      <Link to={`/inventory/maintenance?item=${itemId}`} className="btn-info btn-sm">
-        + Add Record
-      </Link>
+      {canManage && (
+        <Link to={`/inventory/maintenance?item=${itemId}`} className="btn-info btn-sm">
+          + Add Record
+        </Link>
+      )}
     </div>
     {records.length === 0 ? (
       <p className="text-sm text-theme-text-muted py-4">No maintenance records found.</p>
@@ -662,12 +652,12 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId }) 
 
 /* ----- Exposures Tab ---------------------------------------------- */
 
-interface ExposuresTabProps { records: NFPAExposureRecord[]; tz: string; onAdd: () => void }
-const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz, onAdd }) => (
+interface ExposuresTabProps { records: NFPAExposureRecord[]; tz: string; canManage: boolean; onAdd: () => void }
+const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz, canManage, onAdd }) => (
   <div>
     <div className="flex items-center justify-between mb-3">
       <h3 className="text-sm font-semibold text-theme-text-primary">Exposure Log</h3>
-      <button onClick={onAdd} className="btn-info btn-sm">+ Add Exposure</button>
+      {canManage && <button onClick={onAdd} className="btn-info btn-sm">+ Add Exposure</button>}
     </div>
     {records.length === 0 ? (
       <p className="text-sm text-theme-text-muted py-4">No exposure records found.</p>

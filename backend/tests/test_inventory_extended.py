@@ -687,6 +687,20 @@ class TestNotificationRendering:
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
         assert svc._build_item_list_text([], "Test") == ""
 
+    def test_build_item_list_html_escapes_item_name(self):
+        """Member-supplied item names must be HTML-escaped (no injection)."""
+        svc = InventoryNotificationService.__new__(InventoryNotificationService)
+        items = [{
+            "item_name": "<script>alert(1)</script>Coat",
+            "item_serial_number": None,
+            "item_asset_tag": None,
+            "action_type": InventoryActionType.ISSUED,
+            "quantity": 1,
+        }]
+        html = svc._build_item_list_html(items, "Items")
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html
+
     def test_build_item_list_text_with_items(self):
         """Text rendering includes item names and action labels."""
         svc = InventoryNotificationService.__new__(InventoryNotificationService)

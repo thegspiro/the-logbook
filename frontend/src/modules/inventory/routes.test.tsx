@@ -52,6 +52,18 @@ vi.mock('./pages/EquipmentRequestsPage', () => ({
 vi.mock('./pages/WriteOffsPage', () => ({
   default: () => <div data-testid="write-offs-page">WriteOffs</div>,
 }));
+vi.mock('./pages/ReorderRequestsPage', () => ({
+  default: () => <div data-testid="reorder-page">Reorder</div>,
+}));
+vi.mock('./pages/EquipmentKitsPage', () => ({
+  default: () => <div data-testid="kits-page">Kits</div>,
+}));
+vi.mock('./pages/VariantGroupsPage', () => ({
+  default: () => <div data-testid="variant-groups-page">VariantGroups</div>,
+}));
+vi.mock('./pages/AllowancesPage', () => ({
+  default: () => <div data-testid="allowances-page">Allowances</div>,
+}));
 vi.mock('../../components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -135,5 +147,10 @@ describe('getInventoryRoutes', () => {
   it('renders barcode page at /inventory/print-labels', async () => {
     renderRoute('/inventory/print-labels');
     expect(await screen.findByTestId('barcode-page')).toBeInTheDocument();
+  });
+
+  it('renders AllowancesPage at /inventory/admin/allowances', async () => {
+    renderRoute('/inventory/admin/allowances');
+    expect(await screen.findByTestId('allowances-page')).toBeInTheDocument();
   });
 });

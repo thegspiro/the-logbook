@@ -96,12 +96,20 @@ TEMPLATE_VARIABLES: Dict[str, List[Dict[str, str]]] = {
         },
         {"name": "items_returned_html", "description": "HTML list of items returned"},
         {
+            "name": "items_removed_html",
+            "description": "HTML list of items retired/removed from the member",
+        },
+        {
             "name": "items_issued_text",
             "description": "Plain-text list of items issued/assigned",
         },
         {
             "name": "items_returned_text",
             "description": "Plain-text list of items returned",
+        },
+        {
+            "name": "items_removed_text",
+            "description": "Plain-text list of items retired/removed from the member",
         },
     ],
     "member_dropped": [
@@ -514,6 +522,11 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
                 "<h3>Items Returned</h3>"
                 "<ul><li>Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123</li></ul>"
             ),
+            "items_removed_html": (
+                "<h3>Items Removed from Your Inventory</h3>"
+                "<ul><li>Damaged Helmet \u2014 Serial #HLM-2019-0007 "
+                "<em>(Retired / Removed)</em></li></ul>"
+            ),
             "items_issued_text": (
                 "Items Issued:\n"
                 "- Turnout Coat (Size L) \u2014 Serial #TC-2024-0456\n"
@@ -522,6 +535,10 @@ SAMPLE_CONTEXT: Dict[str, Dict[str, str]] = {
             "items_returned_text": (
                 "Items Returned:\n"
                 "- Old Turnout Coat (Size L) \u2014 Serial #TC-2020-0123"
+            ),
+            "items_removed_text": (
+                "Items Removed from Your Inventory:\n"
+                "- Damaged Helmet \u2014 Serial #HLM-2019-0007 (Retired / Removed)"
             ),
         }
     ),
@@ -906,6 +923,8 @@ DEFAULT_INVENTORY_CHANGE_HTML = """<div class="container">
 
         {{items_returned_html}}
 
+        {{items_removed_html}}
+
         <div class="details">
             <p><strong>Important Reminder:</strong> All items listed above remain
             the property of <strong>{{organization_name}}</strong>. Members are
@@ -936,6 +955,8 @@ assigned to you as of {{change_date}}.
 {{items_issued_text}}
 
 {{items_returned_text}}
+
+{{items_removed_text}}
 
 IMPORTANT REMINDER: All items listed above remain the property of
 {{organization_name}}. Members are responsible for the care, maintenance,

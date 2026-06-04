@@ -10,6 +10,7 @@ integration test database (same as the rest of test_inventory*.py).
 """
 
 import uuid
+from datetime import date
 
 import pytest
 from sqlalchemy import select, text
@@ -20,7 +21,9 @@ from app.models.inventory import (
     InventoryActionType,
     InventoryNotificationQueue,
     IssuanceAllowance,
+    ItemAssignment,
     ItemIssuance,
+    NFPAInspectionDetail,
     RequestStatus,
     RequestType,
 )
@@ -312,3 +315,170 @@ class TestEquipmentRequestFulfillment:
         assert fulfilled is None
         assert err is not None
         assert "approved" in err.lower()
+
+
+# ── Write-Off Releases Holder Records ──────────────────────────────
+
+class TestWriteOffReleasesHolders:
+
+    @pytest.mark.asyncio
+    async def test_individual_item_is_unassigned_on_writeoff(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = await setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Helmet", "condition": "good", "status": "available"},
+            created_by=uuid.UUID(user_id),
+        )
+        await svc.assign_item_to_user(
+            item_id=uuid.UUID(item.id),
+            user_id=uuid.UUID(member_id),
+            organization_id=uuid.UUID(org_id),
+            assigned_by=uuid.UUID(user_id),
+        )
+
+        wo, err = await svc.create_write_off_request(
+            item_id=item.id,
+            organization_id=org_id,
+            requested_by=user_id,
+            reason="lost",
+            description="Lost it",
+        )
+        assert err is None
+        await svc.review_write_off(
+            write_off_id=wo["id"],
+            organization_id=org_id,
+            reviewed_by=user_id,
+            decision="approved",
+        )
+
+        refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
+        assert refreshed.assigned_to_user_id is None
+
+        result = await db_session.execute(
+            select(ItemAssignment).where(ItemAssignment.item_id == item.id)
+        )
+        assert all(not a.is_active for a in result.scalars().all())
+
+    @pytest.mark.asyncio
+    async def test_pool_issuances_closed_on_writeoff(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = await setup_org_and_user
+        svc = InventoryService(db_session)
+        _, item = await _make_pool_item(svc, org_id, user_id)
+
+        await svc.issue_from_pool(
+            item_id=uuid.UUID(item.id),
+            user_id=uuid.UUID(member_id),
+            organization_id=uuid.UUID(org_id),
+            issued_by=uuid.UUID(user_id),
+            quantity=3,
+        )
+
+        wo, err = await svc.create_write_off_request(
+            item_id=item.id,
+            organization_id=org_id,
+            requested_by=user_id,
+            reason="damaged_beyond_repair",
+            description="Crushed",
+        )
+        assert err is None
+        await svc.review_write_off(
+            write_off_id=wo["id"],
+            organization_id=org_id,
+            reviewed_by=user_id,
+            decision="approved",
+        )
+
+        refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
+        assert refreshed.quantity_issued == 0
+
+        result = await db_session.execute(
+            select(ItemIssuance).where(ItemIssuance.item_id == item.id)
+        )
+        assert all(i.is_returned for i in result.scalars().all())
+
+
+# ── NFPA Inspection Write Path ─────────────────────────────────────
+
+class TestNFPAInspectionWritePath:
+
+    @pytest.mark.asyncio
+    async def test_maintenance_create_persists_nfpa_inspection(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = await setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Turnout Coat", "condition": "good", "status": "available"},
+            created_by=uuid.UUID(user_id),
+        )
+
+        record, err = await svc.create_maintenance_record(
+            item_id=uuid.UUID(item.id),
+            organization_id=uuid.UUID(org_id),
+            created_by=uuid.UUID(user_id),
+            maintenance_data={
+                "maintenance_type": "inspection",
+                "is_completed": True,
+                "completed_date": date(2026, 1, 1),
+                "nfpa_inspection": {
+                    "inspection_level": "advanced",
+                    "thermal_damage": True,
+                    "seam_integrity": False,
+                    "recommendation": "repair",
+                },
+            },
+        )
+        assert err is None
+
+        result = await db_session.execute(
+            select(NFPAInspectionDetail).where(
+                NFPAInspectionDetail.maintenance_record_id == record.id
+            )
+        )
+        detail = result.scalar_one_or_none()
+        assert detail is not None
+        assert detail.seam_integrity is False
+        assert detail.recommendation is not None
+
+
+# ── Category Soft-Delete ───────────────────────────────────────────
+
+class TestCategoryDelete:
+
+    @pytest.mark.asyncio
+    async def test_delete_blocked_with_active_items(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = await setup_org_and_user
+        svc = InventoryService(db_session)
+        cat, item = await _make_pool_item(svc, org_id, user_id)
+
+        ok, err = await svc.delete_category(uuid.UUID(cat.id), uuid.UUID(org_id))
+        assert ok is False
+        assert err is not None and "active items" in err
+
+    @pytest.mark.asyncio
+    async def test_delete_succeeds_without_active_items(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = await setup_org_and_user
+        svc = InventoryService(db_session)
+        cat, _ = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "Empty Cat", "item_type": "equipment"},
+            created_by=uuid.UUID(user_id),
+        )
+
+        ok, err = await svc.delete_category(uuid.UUID(cat.id), uuid.UUID(org_id))
+        assert ok is True
+        assert err is None
+        refreshed = await svc.get_category_by_id(uuid.UUID(cat.id), uuid.UUID(org_id))
+        assert refreshed.active is False

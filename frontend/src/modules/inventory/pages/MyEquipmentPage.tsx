@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import {
   Package, AlertTriangle, Clock, CheckCircle, RefreshCw, Plus,
   ClipboardList, CalendarClock, Search, CornerDownLeft, Loader2,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Ruler,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import type {
@@ -26,6 +26,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { VariantCapsules } from '../components/VariantCapsules';
+import { SizePreferencesModal } from '../components/SizePreferencesModal';
 import toast from 'react-hot-toast';
 
 /* ---------- Collapsible section ---------- */
@@ -64,6 +65,7 @@ const MyEquipmentPage: React.FC = () => {
   const [equipRequests, setEquipRequests] = useState<EquipmentRequestItem[]>([]);
   const [returnRequests, setReturnRequests] = useState<ReturnRequestItem[]>([]);
   const [showRequests, setShowRequests] = useState(false);
+  const [showSizes, setShowSizes] = useState(false);
 
   /* ---------- Modals ---------- */
   const [requestModal, setRequestModal] = useState(false);
@@ -311,6 +313,13 @@ const MyEquipmentPage: React.FC = () => {
             className="btn-secondary btn-md inline-flex items-center gap-1.5"
           >
             <ClipboardList className="h-4 w-4" /> {showRequests ? 'Hide' : 'My'} Requests
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSizes(true)}
+            className="btn-secondary btn-md inline-flex items-center gap-1.5"
+          >
+            <Ruler className="h-4 w-4" /> My Sizes
           </button>
         </div>
 
@@ -609,6 +618,9 @@ const MyEquipmentPage: React.FC = () => {
             </div>
           </div>
         </Modal>
+
+        {/* My Sizes (self-service) */}
+        <SizePreferencesModal isOpen={showSizes} onClose={() => setShowSizes(false)} />
       </div>
     </div>
   );

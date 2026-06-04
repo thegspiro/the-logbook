@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, BoxSelect, Plus, Pencil, RefreshCw, Package,
-  Eye, EyeOff, GripVertical, Trash2, Ruler,
+  Eye, EyeOff, GripVertical, Trash2, Ruler, UserPlus,
 } from 'lucide-react';
+import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { inventoryService } from '../../../services/api';
 import type {
   EquipmentKit,
@@ -53,6 +54,7 @@ const EquipmentKitsPage: React.FC = () => {
   const [formData, setFormData] = useState<KitFormData>(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
   const [detailKit, setDetailKit] = useState<EquipmentKit | null>(null);
+  const [issueKit, setIssueKit] = useState<EquipmentKit | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [categories, setCategories] = useState<InventoryCategory[]>([]);
@@ -207,6 +209,18 @@ const EquipmentKitsPage: React.FC = () => {
     }
   };
 
+  const handleIssueKit = async (userId: string) => {
+    if (!issueKit) return;
+    const kit = issueKit;
+    setIssueKit(null);
+    try {
+      const res = await inventoryService.issueKitToMember(kit.id, userId);
+      toast.success(`Issued ${res.items_issued} item${res.items_issued !== 1 ? 's' : ''} from "${kit.name}"`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to issue kit'));
+    }
+  };
+
   const modalFooter = (
     <>
       <button
@@ -300,6 +314,15 @@ const EquipmentKitsPage: React.FC = () => {
                   </button>
                   {canManage && (
                     <>
+                      {kit.active && (
+                        <button
+                          onClick={() => setIssueKit(kit)}
+                          aria-label={`Issue ${kit.name} to a member`}
+                          className="p-1.5 rounded-md text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover transition-colors"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         onClick={() => void openEditModal(kit)}
                         aria-label={`Edit ${kit.name}`}
@@ -478,6 +501,14 @@ const EquipmentKitsPage: React.FC = () => {
           </div>
         )}
       </Modal>
+
+      {/* Issue kit — pick the member to issue every kit item to */}
+      <MemberPickerModal
+        isOpen={issueKit !== null}
+        onClose={() => setIssueKit(null)}
+        title={issueKit ? `Issue "${issueKit.name}" — Select a Member` : 'Issue Kit'}
+        onSelect={(member) => { void handleIssueKit(member.userId); }}
+      />
     </div>
   );
 };

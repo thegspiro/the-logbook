@@ -294,6 +294,41 @@ async def get_category(
     return category
 
 
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
+    category_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete (deactivate) an inventory category. Blocked while active items
+    still reference it.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.delete_category(
+        category_id=category_id,
+        organization_id=current_user.organization_id,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_category_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={"category_id": str(category_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 # ============================================
 # Item Endpoints
 # ============================================
@@ -3926,6 +3961,23 @@ async def create_allowance(
     db.add(allowance)
     await db.commit()
     await db.refresh(allowance)
+
+    await log_audit_event(
+        db=db,
+        event_type="issuance_allowance_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "allowance_id": allowance.id,
+            "category_id": str(data.category_id),
+            "role_id": str(data.role_id) if data.role_id else None,
+            "max_quantity": data.max_quantity,
+            "period_type": data.period_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return IssuanceAllowanceResponse.model_validate(allowance)
 
 
@@ -3955,6 +4007,20 @@ async def update_allowance(
 
     await db.commit()
     await db.refresh(allowance)
+
+    await log_audit_event(
+        db=db,
+        event_type="issuance_allowance_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "allowance_id": str(allowance_id),
+            "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return IssuanceAllowanceResponse.model_validate(allowance)
 
 
@@ -3977,6 +4043,16 @@ async def delete_allowance(
     await db.delete(allowance)
     await db.commit()
 
+    await log_audit_event(
+        db=db,
+        event_type="issuance_allowance_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={"allowance_id": str(allowance_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
 
 @router.get(
     "/allowances/check/{user_id}/{category_id}",
@@ -3989,12 +4065,11 @@ async def check_member_allowance(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """Check a member's remaining issuance allowance for a category."""
-    # Get user's role for role-specific allowances
-    user_result = await db.execute(select(User).where(User.id == str(user_id)))
-    user = user_result.scalar_one_or_none()
-    role_id = user.role_id if user else None
-
     service = InventoryService(db)
+    # Resolve the member's highest-priority position for role-specific allowances
+    role_id = await service._get_primary_role_id(
+        user_id, current_user.organization_id
+    )
     check = await service.check_allowance(
         user_id=user_id,
         category_id=category_id,
@@ -4591,6 +4666,36 @@ async def update_variant_group(
     return ItemVariantGroupResponse.model_validate(group)
 
 
+@router.delete("/variant-groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_variant_group(
+    group_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete (deactivate) a variant group.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.delete_variant_group(
+        group_id, current_user.organization_id
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+
+    await log_audit_event(
+        db=db,
+        event_type="variant_group_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={"resource_type": "variant_group", "resource_id": str(group_id)},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+
 # ============================================
 # Equipment Kit Endpoints
 # ============================================
@@ -4690,6 +4795,36 @@ async def update_equipment_kit(
     await db.commit()
     await db.refresh(kit)
     return EquipmentKitResponse.model_validate(kit)
+
+
+@router.delete("/kits/{kit_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_equipment_kit(
+    kit_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete (deactivate) an equipment kit template.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.delete_equipment_kit(
+        kit_id, current_user.organization_id
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+
+    await log_audit_event(
+        db=db,
+        event_type="equipment_kit_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={"resource_type": "equipment_kit", "resource_id": str(kit_id)},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
 
 
 @router.post("/kits/{kit_id}/issue/{user_id}")

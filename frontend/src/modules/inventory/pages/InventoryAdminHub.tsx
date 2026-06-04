@@ -27,6 +27,7 @@ import {
   BoxSelect,
   Ruler,
   UserPlus,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -310,6 +311,13 @@ export const InventoryAdminHub: React.FC = () => {
                 title="Variant Groups"
                 description="Group pool item variants by size, style, and color"
                 iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+              />
+              <NavCard
+                to="/inventory/admin/allowances"
+                icon={<SlidersHorizontal className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                title="Issuance Allowances"
+                description="Cap how many units per category a member can be issued"
+                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
               />
               <NavCard
                 to="/inventory/admin/maintenance"
