@@ -2660,6 +2660,9 @@ class ShiftAssignment(Base):
         Index("idx_shift_assign_shift", "shift_id"),
         Index("idx_shift_assign_user", "user_id"),
         Index("idx_shift_assign_org", "organization_id"),
+        # Active-assignment scans filter on (shift_id, assignment_status):
+        # open-shifts staffing checks, attendee counts, compliance reports.
+        Index("idx_shift_assign_shift_status", "shift_id", "assignment_status"),
     )
 
     def __repr__(self):

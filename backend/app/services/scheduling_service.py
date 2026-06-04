@@ -556,14 +556,8 @@ class SchedulingService:
         end_date: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
-        with_total: bool = True,
     ) -> Tuple[List[Shift], int]:
-        """Get shifts with date filtering and pagination.
-
-        Pass ``with_total=False`` for callers that only need the page of
-        rows (e.g. the open-shifts list) to skip the extra COUNT query;
-        the returned total then reflects only the rows in this page.
-        """
+        """Get shifts with date filtering and pagination"""
         query = select(Shift).where(Shift.organization_id == str(organization_id))
 
         if start_date:
@@ -571,10 +565,10 @@ class SchedulingService:
         if end_date:
             query = query.where(Shift.shift_date <= end_date)
 
-        if with_total:
-            count_query = select(func.count()).select_from(query.subquery())
-            total_result = await self.db.execute(count_query)
-            total = total_result.scalar()
+        # Count
+        count_query = select(func.count()).select_from(query.subquery())
+        total_result = await self.db.execute(count_query)
+        total = total_result.scalar()
 
         # Paginated results
         query = (
@@ -584,9 +578,6 @@ class SchedulingService:
         )
         result = await self.db.execute(query)
         shifts = result.scalars().all()
-
-        if not with_total:
-            total = len(shifts)
 
         return shifts, total
 
@@ -701,6 +692,41 @@ class SchedulingService:
             if has_open:
                 open_shifts.append(shift)
         return open_shifts
+
+    async def get_open_shifts(
+        self,
+        organization_id: UUID,
+        start_date: date,
+        end_date: date,
+        apparatus_id: Optional[str] = None,
+        exclude_user_id: Optional[str] = None,
+        max_candidates: int = 500,
+    ) -> List[Shift]:
+        """Return every shift in the window that still has an open position.
+
+        Date range, finalized status, and apparatus are filtered in SQL so we
+        never fetch rows we will discard, then the open-position check is
+        applied. Unlike fetching a fixed page and filtering it, this is exact
+        for the window — fully-staffed shifts can no longer push open ones out
+        of an arbitrary page. ``max_candidates`` only bounds pathological data.
+        """
+        query = (
+            select(Shift)
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.shift_date >= start_date)
+            .where(Shift.shift_date <= end_date)
+            .where(Shift.is_finalized.is_(False))
+        )
+        if apparatus_id:
+            query = query.where(Shift.apparatus_id == apparatus_id)
+        query = query.order_by(
+            Shift.shift_date.asc(), Shift.start_time.asc()
+        ).limit(max_candidates)
+        result = await self.db.execute(query)
+        candidates = list(result.scalars().all())
+        return await self.filter_shifts_with_open_positions(
+            organization_id, candidates, exclude_user_id=exclude_user_id
+        )
 
     async def get_shift_by_id(
         self, shift_id: UUID, organization_id: UUID

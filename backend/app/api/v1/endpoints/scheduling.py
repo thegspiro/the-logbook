@@ -241,27 +241,14 @@ async def get_open_shifts(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
 
-    shifts_list, _ = await service.get_shifts(
+    # Date window, finalized status, and apparatus are filtered in SQL; the
+    # result is every open shift in the window with shifts the current user is
+    # already on removed (computed in a single assignment scan).
+    shifts_list = await service.get_open_shifts(
         current_user.organization_id,
-        start_date=start,
-        end_date=end,
-        skip=0,
-        limit=50,
-        with_total=False,
-    )
-    # Optionally filter by apparatus_id
-    if apparatus_id:
-        shifts_list = [s for s in shifts_list if s.apparatus_id == apparatus_id]
-
-    # Finalized shifts are closed and cannot be signed up for.
-    shifts_list = [s for s in shifts_list if not s.is_finalized]
-
-    # Keep only shifts that still have an unfilled position, and (in the same
-    # assignment scan) drop any the current user is already assigned to so we
-    # never double-book them.
-    shifts_list = await service.filter_shifts_with_open_positions(
-        current_user.organization_id,
-        shifts_list,
+        start,
+        end,
+        apparatus_id=apparatus_id,
         exclude_user_id=str(current_user.id),
     )
 
