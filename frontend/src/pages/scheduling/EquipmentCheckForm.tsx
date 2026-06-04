@@ -587,10 +587,6 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   }, [previewMode, hasProgress]);
 
   // --------------------------------------------------------------------------
-  // Pass All — mark all items in a compartment as pass
-  // --------------------------------------------------------------------------
-
-  // --------------------------------------------------------------------------
   // Keyboard navigation — auto-advance to next item after marking pass/fail
   // --------------------------------------------------------------------------
 

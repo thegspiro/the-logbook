@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -250,6 +251,14 @@ async def get_open_shifts(
     # Optionally filter by apparatus_id
     if apparatus_id:
         shifts_list = [s for s in shifts_list if s.apparatus_id == apparatus_id]
+
+    # Finalized shifts are closed and cannot be signed up for.
+    shifts_list = [s for s in shifts_list if not s.is_finalized]
+
+    # Keep only shifts that still have at least one unfilled position.
+    shifts_list = await service.filter_shifts_with_open_positions(
+        current_user.organization_id, shifts_list
+    )
 
     # Exclude shifts the current user is already assigned to (prevent double-booking)
     if shifts_list:
@@ -1749,8 +1758,11 @@ async def list_apparatus_options(
                     )
                 )
             source = "apparatus"
-    except Exception:
-        pass
+    except Exception as exc:
+        # The full Apparatus module may not be installed for this org; fall
+        # through to BasicApparatus. Log so a genuine query failure (vs. the
+        # module simply being absent) is still diagnosable.
+        logger.debug(f"Apparatus module lookup failed, using fallback: {exc}")
 
     # 2. Fall back to BasicApparatus if no full module records
     if not options:

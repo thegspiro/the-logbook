@@ -14,8 +14,6 @@ import type {
 import type {
   ShiftCreate,
   ShiftUpdate,
-  AttendanceCreate,
-  AttendanceUpdate,
   AssignmentCreate,
   AssignmentUpdate,
   SwapRequestCreate,
@@ -50,6 +48,9 @@ import type {
   EligiblePositionsResponse,
   EvocWarning,
   SchedulingEligibilitySettings,
+  ShiftCallRecord,
+  ShiftCallCreate,
+  ShiftCallUpdate,
 } from '../types';
 import type {
   EquipmentCheckTemplate,
@@ -57,7 +58,6 @@ import type {
   ShiftCheckSummary,
   CheckTemplateCompartment,
   CheckTemplateItem,
-  CheckItemHistory,
   LastCheckItemResult,
   ComplianceReport,
   FailureLogResponse,
@@ -323,11 +323,6 @@ export const schedulingService = {
     return response.data;
   },
 
-  async addAttendance(shiftId: string, data: AttendanceCreate): Promise<ShiftAttendanceRecord> {
-    const response = await api.post<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/attendance`, data);
-    return response.data;
-  },
-
   async getWeekCalendar(weekStart?: string): Promise<ShiftRecord[]> {
     const params: Record<string, string> = {};
     if (weekStart) params.week_start = weekStart;
@@ -445,10 +440,6 @@ export const schedulingService = {
     const response = await api.get<SchedulingSwapRequest[]>('/scheduling/swap-requests', { params });
     return response.data;
   },
-  async getSwapRequest(requestId: string): Promise<SchedulingSwapRequest> {
-    const response = await api.get<SchedulingSwapRequest>(`/scheduling/swap-requests/${requestId}`);
-    return response.data;
-  },
   async createSwapRequest(data: SwapRequestCreate): Promise<SchedulingSwapRequest> {
     const response = await api.post<SchedulingSwapRequest>('/scheduling/swap-requests', data);
     return response.data;
@@ -464,10 +455,6 @@ export const schedulingService = {
   // Time Off
   async getTimeOffRequests(params?: TimeOffFilters): Promise<SchedulingTimeOffRequest[]> {
     const response = await api.get<SchedulingTimeOffRequest[]>('/scheduling/time-off', { params });
-    return response.data;
-  },
-  async getTimeOff(requestId: string): Promise<SchedulingTimeOffRequest> {
-    const response = await api.get<SchedulingTimeOffRequest>(`/scheduling/time-off/${requestId}`);
     return response.data;
   },
   async createTimeOff(data: TimeOffCreate): Promise<SchedulingTimeOffRequest> {
@@ -487,21 +474,10 @@ export const schedulingService = {
     const response = await api.get<ShiftAttendanceRecord[]>(`/scheduling/shifts/${shiftId}/attendance`);
     return response.data;
   },
-  async updateAttendance(attendanceId: string, data: AttendanceUpdate): Promise<ShiftAttendanceRecord> {
-    const response = await api.patch<ShiftAttendanceRecord>(`/scheduling/attendance/${attendanceId}`, data);
-    return response.data;
-  },
-  async deleteAttendance(attendanceId: string): Promise<void> {
-    await api.delete(`/scheduling/attendance/${attendanceId}`);
-  },
 
   // Templates
   async getTemplates(params?: { active_only?: boolean }): Promise<ShiftTemplateRecord[]> {
     const response = await api.get<ShiftTemplateRecord[]>('/scheduling/templates', { params });
-    return response.data;
-  },
-  async getTemplate(templateId: string): Promise<ShiftTemplateRecord> {
-    const response = await api.get<ShiftTemplateRecord>(`/scheduling/templates/${templateId}`);
     return response.data;
   },
   async createTemplate(data: ShiftTemplateCreate): Promise<ShiftTemplateRecord> {
@@ -519,10 +495,6 @@ export const schedulingService = {
   // Patterns
   async getPatterns(params?: { active_only?: boolean }): Promise<SchedulingShiftPattern[]> {
     const response = await api.get<SchedulingShiftPattern[]>('/scheduling/patterns', { params });
-    return response.data;
-  },
-  async getPattern(patternId: string): Promise<SchedulingShiftPattern> {
-    const response = await api.get<SchedulingShiftPattern>(`/scheduling/patterns/${patternId}`);
     return response.data;
   },
   async createPattern(data: ShiftPatternCreate): Promise<SchedulingShiftPattern> {
@@ -595,6 +567,23 @@ export const schedulingService = {
   async getOpenShifts(params?: { start_date?: string | undefined; end_date?: string; apparatus_id?: string }): Promise<ShiftRecord[]> {
     const response = await api.get<ShiftRecord[]>('/scheduling/shifts/open', { params });
     return response.data;
+  },
+
+  // --- Shift Calls / Runs ---
+  async getShiftCalls(shiftId: string): Promise<ShiftCallRecord[]> {
+    const response = await api.get<ShiftCallRecord[]>(`/scheduling/shifts/${shiftId}/calls`);
+    return response.data;
+  },
+  async createCall(shiftId: string, data: ShiftCallCreate): Promise<ShiftCallRecord> {
+    const response = await api.post<ShiftCallRecord>(`/scheduling/shifts/${shiftId}/calls`, data);
+    return response.data;
+  },
+  async updateCall(callId: string, data: ShiftCallUpdate): Promise<ShiftCallRecord> {
+    const response = await api.patch<ShiftCallRecord>(`/scheduling/calls/${callId}`, data);
+    return response.data;
+  },
+  async deleteCall(callId: string): Promise<void> {
+    await api.delete(`/scheduling/calls/${callId}`);
   },
 
   // --- Position Eligibility ---
@@ -698,13 +687,6 @@ export const schedulingService = {
     const response = await api.post<ShiftEquipmentCheckRecord>('/equipment-checks/checks', data);
     return response.data;
   },
-  async getShiftChecks(shiftId: string, checkTiming?: string): Promise<ShiftEquipmentCheckRecord[]> {
-    const response = await api.get<ShiftEquipmentCheckRecord[]>(
-      `/equipment-checks/shifts/${shiftId}/checks`,
-      { params: checkTiming ? { check_timing: checkTiming } : undefined },
-    );
-    return response.data;
-  },
   async getEquipmentCheck(checkId: string): Promise<ShiftEquipmentCheckRecord> {
     const response = await api.get<ShiftEquipmentCheckRecord>(`/equipment-checks/checks/${checkId}`);
     return response.data;
@@ -719,14 +701,6 @@ export const schedulingService = {
     );
     return { photoUrls: response.data.photo_urls ?? [], count: response.data.count };
   },
-  async getItemCheckHistory(itemId: string, limit?: number): Promise<CheckItemHistory[]> {
-    const response = await api.get<CheckItemHistory[]>(
-      `/equipment-checks/items/${itemId}/history`,
-      { params: limit ? { limit } : undefined },
-    );
-    return response.data;
-  },
-
   async getLastCheckResults(
     templateId: string,
     apparatusId?: string,

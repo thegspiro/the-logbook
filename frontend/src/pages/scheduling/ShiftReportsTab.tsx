@@ -16,7 +16,7 @@ import {
   BarChart3, TrendingUp, Users, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import StarRating from './StarRating';
+import StarRating from '../../modules/scheduling/components/StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
@@ -42,7 +42,7 @@ import {
   DEFAULT_CALL_TYPE_OPTIONS,
   DEFAULT_COMPETENCY_LABELS,
   REVIEW_STATUS_STYLES,
-} from '../../modules/scheduling/components/shiftReportConstants';
+} from '../../modules/scheduling/constants/shiftReportConstants';
 import { ReportContentDisplay } from '../../modules/scheduling/components/ReportContentDisplay';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { saveDraft, loadDraft, deleteDraft } from '../../utils/shiftReportDrafts';

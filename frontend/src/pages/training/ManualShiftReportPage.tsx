@@ -25,7 +25,7 @@ import { getTodayLocalDate } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import {
   DEFAULT_CALL_TYPE_OPTIONS,
-} from '../../modules/scheduling/components/shiftReportConstants';
+} from '../../modules/scheduling/constants/shiftReportConstants';
 import { StarRating } from '../../modules/scheduling/components/StarRating';
 import type {
   BatchShiftReportCreate,

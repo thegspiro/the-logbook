@@ -1,7 +1,7 @@
 import React from 'react';
 import { MessageSquare } from 'lucide-react';
 import { StarRating } from './StarRating';
-import { SKILL_SCORE_LABELS } from './shiftReportConstants';
+import { SKILL_SCORE_LABELS } from '../constants/shiftReportConstants';
 import type { ShiftCompletionReport } from '../../../types/training';
 
 interface ReportContentDisplayProps {
@@ -14,7 +14,7 @@ export const ReportContentDisplay: React.FC<ReportContentDisplayProps> = ({ repo
       {report.performance_rating != null && report.performance_rating > 0 && (
         <div>
           <p className="text-xs font-semibold text-theme-text-secondary uppercase tracking-wider mb-1">Performance Rating</p>
-          <StarRating value={report.performance_rating} onChange={() => {}} size="sm" />
+          <StarRating value={report.performance_rating} size="sm" />
         </div>
       )}
 
