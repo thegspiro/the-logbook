@@ -241,12 +241,13 @@ async def get_open_shifts(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
 
-    shifts_list, total = await service.get_shifts(
+    shifts_list, _ = await service.get_shifts(
         current_user.organization_id,
         start_date=start,
         end_date=end,
         skip=0,
         limit=50,
+        with_total=False,
     )
     # Optionally filter by apparatus_id
     if apparatus_id:
@@ -255,25 +256,14 @@ async def get_open_shifts(
     # Finalized shifts are closed and cannot be signed up for.
     shifts_list = [s for s in shifts_list if not s.is_finalized]
 
-    # Keep only shifts that still have at least one unfilled position.
+    # Keep only shifts that still have an unfilled position, and (in the same
+    # assignment scan) drop any the current user is already assigned to so we
+    # never double-book them.
     shifts_list = await service.filter_shifts_with_open_positions(
-        current_user.organization_id, shifts_list
+        current_user.organization_id,
+        shifts_list,
+        exclude_user_id=str(current_user.id),
     )
-
-    # Exclude shifts the current user is already assigned to (prevent double-booking)
-    if shifts_list:
-        _active_statuses = [
-            AssignmentStatus.ASSIGNED.value,
-            AssignmentStatus.CONFIRMED.value,
-        ]
-        my_assignment_result = await service.db.execute(
-            select(ShiftAssignment.shift_id)
-            .where(ShiftAssignment.user_id == str(current_user.id))
-            .where(ShiftAssignment.shift_id.in_([s.id for s in shifts_list]))
-            .where(ShiftAssignment.assignment_status.in_(_active_statuses))
-        )
-        my_assigned_shift_ids = {str(row[0]) for row in my_assignment_result.all()}
-        shifts_list = [s for s in shifts_list if str(s.id) not in my_assigned_shift_ids]
 
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 

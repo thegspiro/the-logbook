@@ -556,8 +556,14 @@ class SchedulingService:
         end_date: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
+        with_total: bool = True,
     ) -> Tuple[List[Shift], int]:
-        """Get shifts with date filtering and pagination"""
+        """Get shifts with date filtering and pagination.
+
+        Pass ``with_total=False`` for callers that only need the page of
+        rows (e.g. the open-shifts list) to skip the extra COUNT query;
+        the returned total then reflects only the rows in this page.
+        """
         query = select(Shift).where(Shift.organization_id == str(organization_id))
 
         if start_date:
@@ -565,10 +571,10 @@ class SchedulingService:
         if end_date:
             query = query.where(Shift.shift_date <= end_date)
 
-        # Count
-        count_query = select(func.count()).select_from(query.subquery())
-        total_result = await self.db.execute(count_query)
-        total = total_result.scalar()
+        if with_total:
+            count_query = select(func.count()).select_from(query.subquery())
+            total_result = await self.db.execute(count_query)
+            total = total_result.scalar()
 
         # Paginated results
         query = (
@@ -579,12 +585,16 @@ class SchedulingService:
         result = await self.db.execute(query)
         shifts = result.scalars().all()
 
+        if not with_total:
+            total = len(shifts)
+
         return shifts, total
 
     async def filter_shifts_with_open_positions(
         self,
         organization_id: UUID,
         shifts: List[Shift],
+        exclude_user_id: Optional[str] = None,
     ) -> List[Shift]:
         """Return only the shifts that still have at least one open position.
 
@@ -594,6 +604,10 @@ class SchedulingService:
         This mirrors the understaffing logic used by the compliance report so
         the open-shifts list and the staffing report agree on what counts as
         an unfilled position.
+
+        When ``exclude_user_id`` is given, shifts that user is already
+        actively assigned to are dropped — computed from the same assignment
+        scan so the caller does not need a second query.
         """
         if not shifts:
             return []
@@ -604,19 +618,46 @@ class SchedulingService:
             AssignmentStatus.CONFIRMED.value,
         ]
         assignments_result = await self.db.execute(
-            select(ShiftAssignment.shift_id, ShiftAssignment.position)
+            select(
+                ShiftAssignment.shift_id,
+                ShiftAssignment.user_id,
+                ShiftAssignment.position,
+            )
             .where(ShiftAssignment.shift_id.in_(shift_ids))
             .where(ShiftAssignment.organization_id == str(organization_id))
             .where(ShiftAssignment.assignment_status.in_(_active_statuses))
         )
         active_positions: Dict[str, List[str]] = {}
-        for shift_id, position in assignments_result.all():
+        user_assigned_shift_ids: set[str] = set()
+        for shift_id, user_id, position in assignments_result.all():
             pos = position.value if hasattr(position, "value") else str(position)
             active_positions.setdefault(str(shift_id), []).append(pos)
+            if exclude_user_id and str(user_id) == str(exclude_user_id):
+                user_assigned_shift_ids.add(str(shift_id))
 
-        # A shift may not carry its own min_staffing; fall back to the
-        # apparatus default headcount when the shift has no required positions.
-        apparatus_ids = list({s.apparatus_id for s in shifts if s.apparatus_id})
+        # Normalize each shift's required positions once, up front, so it is
+        # reused by both the apparatus-fallback decision and the open check.
+        required_by_shift: Dict[str, List[Dict[str, Any]]] = {
+            str(s.id): [
+                slot
+                for slot in self.normalize_positions(s.positions)
+                if slot.get("required", True)
+            ]
+            for s in shifts
+        }
+
+        # A shift may not carry its own min_staffing; fall back to the apparatus
+        # default headcount, but only query for shifts that actually need it
+        # (no required positions and no shift-level min_staffing of their own).
+        apparatus_ids = list(
+            {
+                s.apparatus_id
+                for s in shifts
+                if s.apparatus_id
+                and s.min_staffing is None
+                and not required_by_shift[str(s.id)]
+            }
+        )
         apparatus_min_staffing: Dict[str, int] = {}
         if apparatus_ids:
             app_result = await self.db.execute(
@@ -630,9 +671,10 @@ class SchedulingService:
 
         open_shifts: List[Shift] = []
         for shift in shifts:
+            if str(shift.id) in user_assigned_shift_ids:
+                continue
             active_pos = list(active_positions.get(str(shift.id), []))
-            slots = self.normalize_positions(shift.positions)
-            required_slots = [s for s in slots if s.get("required", True)]
+            required_slots = required_by_shift[str(shift.id)]
             if required_slots:
                 # Greedily match each required slot against a held position so
                 # duplicate slots (e.g. two firefighters) are each consumed once.
