@@ -50,8 +50,12 @@ const UNCACHEABLE_PREFIXES = [
   '/elections/',      // voter lists, ballots, election results
   '/minutes-records/', // meeting minutes with potentially sensitive discussions
   '/forms/',          // form submissions may contain PII
-  '/inventory/users/',     // user-specific inventory assignments (PII)
-  '/inventory/checkouts/', // user checkout history (PII)
+  '/inventory/users/',       // member-specific inventory, issuances & history (PII)
+  '/inventory/checkout/',    // GET active/overdue: who currently holds equipment (PII)
+  '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
+  '/inventory/members/',     // member size preferences — body measurements (PII)
+  '/inventory/my/',          // current user's own size preferences (PII)
+  '/inventory/charges',      // per-member cost-recovery / financial liability (PII)
   '/documents/',           // private organizational documents
   '/compliance/',          // compliance attestations, member compliance data (PII)
   '/integrations/',        // integration config may contain API keys, webhook URLs, secrets
