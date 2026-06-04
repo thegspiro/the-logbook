@@ -1487,6 +1487,8 @@ async def return_to_pool(
 async def get_item_issuances(
     item_id: UUID,
     active_only: bool = True,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -1501,6 +1503,8 @@ async def get_item_issuances(
         item_id=item_id,
         organization_id=current_user.organization_id,
         active_only=active_only,
+        skip=skip,
+        limit=limit,
     )
     return issuances
 

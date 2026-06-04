@@ -1211,8 +1211,10 @@ class InventoryService:
         item_id: UUID,
         organization_id: UUID,
         active_only: bool = True,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List["ItemIssuance"]:
-        """Get all issuance records for a pool item."""
+        """Get issuance records for a pool item with pagination."""
         query = (
             select(ItemIssuance)
             .where(ItemIssuance.item_id == str(item_id))
@@ -1221,7 +1223,7 @@ class InventoryService:
         )
         if active_only:
             query = query.where(ItemIssuance.is_returned == False)  # noqa: E712
-        query = query.order_by(ItemIssuance.issued_at.desc())
+        query = query.order_by(ItemIssuance.issued_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
