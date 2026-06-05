@@ -457,138 +457,87 @@ export const ReorderRequestsPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          <>
-            {/* Desktop Table */}
-            <div className="hidden md:block card-secondary rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
-                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Item</th>
-                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Qty</th>
-                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Vendor</th>
-                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Est. Cost</th>
-                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Status</th>
-                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Urgency</th>
-                    <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Requested</th>
-                    <th scope="col" className="text-right px-4 py-3 font-medium text-theme-text-muted">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map((req) => (
-                    <tr key={req.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-theme-text-primary">{req.item_name}</p>
-                        {req.requester_name && <p className="text-xs text-theme-text-muted">by {req.requester_name}</p>}
-                      </td>
-                      <td className="px-4 py-3 text-theme-text-primary">
-                        {req.quantity_requested}
-                        {req.quantity_received != null && (
-                          <span className="text-xs text-green-600 dark:text-green-400 ml-1">
-                            ({req.quantity_received} received)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-theme-text-muted">{req.vendor ?? '—'}</td>
-                      <td className="px-4 py-3 text-theme-text-primary">
-                        {req.estimated_unit_cost != null ? formatCurrency(Number(req.estimated_unit_cost) * req.quantity_requested) : '—'}
-                        {req.actual_unit_cost != null && (
-                          <span className="text-xs text-theme-text-muted block">
-                            Actual: {formatCurrency(Number(req.actual_unit_cost) * req.quantity_requested)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[req.status] ?? ''}`}>
-                          {STATUS_ICONS[req.status]}
-                          {req.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${URGENCY_COLORS[req.urgency] ?? ''}`}>
-                          {req.urgency}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-theme-text-muted">
-                        {fmtDate(req.created_at)}
-                        {req.purchase_order_number && (
-                          <span className="block text-theme-text-primary">PO: {req.purchase_order_number}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          {req.status !== 'received' && req.status !== 'cancelled' && (
-                            <button
-                              onClick={() => setStatusRequest(req)}
-                              className="px-2 py-1 text-xs rounded bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary"
-                            >
-                              Update Status
-                            </button>
-                          )}
-                          {req.status === 'pending' && (
-                            <button
-                              onClick={() => { setEditRequest(req); setShowCreate(true); }}
-                              className="px-2 py-1 text-xs rounded bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary"
-                            >
-                              Edit
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile Cards */}
-            <div className="md:hidden space-y-3">
-              {requests.map((req) => (
-                <div key={req.id} className="card-secondary rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
+          <div className="card-secondary rounded-lg overflow-hidden md:overflow-x-auto">
+            {/* Single responsive table: a table on >=md, stacked cards below. */}
+            <table className="w-full text-sm rwd-table">
+              <thead>
+                <tr className="border-b border-theme-surface-border bg-theme-surface-secondary">
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Item</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Qty</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Vendor</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Est. Cost</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Status</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Urgency</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-theme-text-muted">Requested</th>
+                  <th scope="col" className="text-right px-4 py-3 font-medium text-theme-text-muted">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((req) => (
+                  <tr key={req.id} className="border-b border-theme-surface-border hover:bg-theme-surface-hover">
+                    <td data-label="Item" className="px-4 py-3">
                       <p className="font-medium text-theme-text-primary">{req.item_name}</p>
-                      <p className="text-xs text-theme-text-muted">
-                        Qty: {req.quantity_requested} &middot; {req.vendor ?? 'No vendor'}
-                      </p>
-                    </div>
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[req.status] ?? ''}`}>
-                      {STATUS_ICONS[req.status]}
-                      {req.status}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${URGENCY_COLORS[req.urgency] ?? ''}`}>
-                      {req.urgency}
-                    </span>
-                    {req.estimated_unit_cost != null && (
-                      <span className="text-xs text-theme-text-muted">
-                        Est: {formatCurrency(Number(req.estimated_unit_cost) * req.quantity_requested)}
+                      {req.requester_name && <p className="text-xs text-theme-text-muted">by {req.requester_name}</p>}
+                    </td>
+                    <td data-label="Qty" className="px-4 py-3 text-theme-text-primary">
+                      {req.quantity_requested}
+                      {req.quantity_received != null && (
+                        <span className="text-xs text-green-600 dark:text-green-400 ml-1">
+                          ({req.quantity_received} received)
+                        </span>
+                      )}
+                    </td>
+                    <td data-label="Vendor" className="px-4 py-3 text-theme-text-muted">{req.vendor ?? '—'}</td>
+                    <td data-label="Est. Cost" className="px-4 py-3 text-theme-text-primary">
+                      {req.estimated_unit_cost != null ? formatCurrency(Number(req.estimated_unit_cost) * req.quantity_requested) : '—'}
+                      {req.actual_unit_cost != null && (
+                        <span className="text-xs text-theme-text-muted block">
+                          Actual: {formatCurrency(Number(req.actual_unit_cost) * req.quantity_requested)}
+                        </span>
+                      )}
+                    </td>
+                    <td data-label="Status" className="px-4 py-3">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[req.status] ?? ''}`}>
+                        {STATUS_ICONS[req.status]}
+                        {req.status}
                       </span>
-                    )}
-                    <span className="text-xs text-theme-text-muted ml-auto">{fmtDate(req.created_at)}</span>
-                  </div>
-                  <div className="flex gap-2 pt-2 border-t border-theme-surface-border">
-                    {req.status !== 'received' && req.status !== 'cancelled' && (
-                      <button
-                        onClick={() => setStatusRequest(req)}
-                        className="flex-1 btn-info btn-sm"
-                      >
-                        Update Status
-                      </button>
-                    )}
-                    {req.status === 'pending' && (
-                      <button
-                        onClick={() => { setEditRequest(req); setShowCreate(true); }}
-                        className="flex-1 btn-secondary btn-sm"
-                      >
-                        Edit
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
+                    </td>
+                    <td data-label="Urgency" className="px-4 py-3">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${URGENCY_COLORS[req.urgency] ?? ''}`}>
+                        {req.urgency}
+                      </span>
+                    </td>
+                    <td data-label="Requested" className="px-4 py-3 text-xs text-theme-text-muted">
+                      {fmtDate(req.created_at)}
+                      {req.purchase_order_number && (
+                        <span className="block text-theme-text-primary">PO: {req.purchase_order_number}</span>
+                      )}
+                    </td>
+                    <td data-label="" className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-1">
+                        {req.status !== 'received' && req.status !== 'cancelled' && (
+                          <button
+                            onClick={() => setStatusRequest(req)}
+                            className="px-2 py-1 text-xs rounded bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary"
+                          >
+                            Update Status
+                          </button>
+                        )}
+                        {req.status === 'pending' && (
+                          <button
+                            onClick={() => { setEditRequest(req); setShowCreate(true); }}
+                            className="px-2 py-1 text-xs rounded bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* Modals */}
