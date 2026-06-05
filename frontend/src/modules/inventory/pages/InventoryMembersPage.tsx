@@ -265,8 +265,21 @@ const InventoryMembersPage: React.FC = () => {
             const name = member.full_name || member.username;
             return (
               <div key={member.user_id} className="card-secondary overflow-hidden">
-                {/* Row */}
-                <button type="button" className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-theme-surface-hover transition-colors" onClick={() => { void handleExpand(member.user_id); }}>
+                {/* Row — a clickable region (not a <button>) so the nested
+                    profile link and action buttons remain valid HTML. */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isExpanded}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer hover:bg-theme-surface-hover transition-colors"
+                  onClick={() => { void handleExpand(member.user_id); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      void handleExpand(member.user_id);
+                    }
+                  }}
+                >
                   <div className="shrink-0 text-theme-text-muted">{isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}</div>
                   <User className="w-5 h-5 text-theme-text-muted shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -319,7 +332,7 @@ const InventoryMembersPage: React.FC = () => {
                       </button>
                     </div>
                   )}
-                </button>
+                </div>
 
                 {/* Expanded detail */}
                 {isExpanded && (
