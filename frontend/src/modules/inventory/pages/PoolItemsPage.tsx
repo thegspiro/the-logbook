@@ -18,6 +18,7 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { Pagination } from '../../../components/ux/Pagination';
+import { EmptyState } from '../../../components/ux/EmptyState';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import toast from 'react-hot-toast';
@@ -467,11 +468,11 @@ const PoolItemsPage: React.FC = () => {
           <Loader2 size={28} className="animate-spin text-theme-text-muted" />
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-theme-text-muted">
-          <Package size={40} className="mx-auto mb-3 opacity-40" />
-          <p className="text-lg font-medium">No pool items found</p>
-          <p className="text-sm mt-1">Adjust your filters or add pool-tracked items in the inventory admin.</p>
-        </div>
+        <EmptyState
+          icon={Package}
+          title="No pool items found"
+          description="Adjust your filters or add pool-tracked items in the inventory admin."
+        />
       ) : (() => {
         const paginatedItems = filtered.slice((page - 1) * pageSize, page * pageSize);
         return (

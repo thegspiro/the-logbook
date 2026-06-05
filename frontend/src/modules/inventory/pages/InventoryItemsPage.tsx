@@ -22,6 +22,7 @@ import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
 import { MobileItemCard } from '../../../components/ux/MobileItemCard';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
+import { EmptyState } from '../../../components/ux/EmptyState';
 import { Modal } from '../../../components/Modal';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
@@ -438,39 +439,39 @@ const InventoryItemsPage: React.FC = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
             <input type="text" aria-label="Search items..." placeholder="Search items..." className="form-input pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <select className="form-input" value={fCat} onChange={(e) => setFCat(e.target.value)}>
+          <select aria-label="Filter by category" className="form-input" value={fCat} onChange={(e) => setFCat(e.target.value)}>
             <option value="">All Categories</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select className="form-input" value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
+          <select aria-label="Filter by status" className="form-input" value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
             <option value="">All Statuses</option>
             {STATUS_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
-          <select className="form-input" value={fCond} onChange={(e) => setFCond(e.target.value)}>
+          <select aria-label="Filter by condition" className="form-input" value={fCond} onChange={(e) => setFCond(e.target.value)}>
             <option value="">All Conditions</option>
             {ITEM_CONDITION_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
           </select>
-          <select className="form-input" value={fType} onChange={(e) => setFType(e.target.value)}>
+          <select aria-label="Filter by type" className="form-input" value={fType} onChange={(e) => setFType(e.target.value)}>
             <option value="">All Types</option>
             {ITEM_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
-          <select className="form-input" value={fLoc} onChange={(e) => setFLoc(e.target.value)}>
+          <select aria-label="Filter by location" className="form-input" value={fLoc} onChange={(e) => setFLoc(e.target.value)}>
             <option value="">All Locations</option>
             {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-          <select className="form-input" value={fSize} onChange={(e) => setFSize(e.target.value)}>
+          <select aria-label="Filter by size" className="form-input" value={fSize} onChange={(e) => setFSize(e.target.value)}>
             <option value="">All Sizes</option>
             {STANDARD_SIZES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
-          <select className="form-input" value={fColor} onChange={(e) => setFColor(e.target.value)}>
+          <select aria-label="Filter by color" className="form-input" value={fColor} onChange={(e) => setFColor(e.target.value)}>
             <option value="">All Colors</option>
             {Array.from(new Set(items.map((i) => i.color).filter(Boolean))).sort().map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
-          <select className="form-input" value={fStyle} onChange={(e) => setFStyle(e.target.value)}>
+          <select aria-label="Filter by style" className="form-input" value={fStyle} onChange={(e) => setFStyle(e.target.value)}>
             <option value="">All Styles</option>
             {GARMENT_STYLES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
           </select>
@@ -516,14 +517,16 @@ const InventoryItemsPage: React.FC = () => {
 
       {/* Empty */}
       {!loading && items.length === 0 && (
-        <div className="text-center py-16">
-          <Package className="w-12 h-12 mx-auto text-theme-text-muted mb-4" />
-          <h3 className="text-lg font-medium text-theme-text-primary mb-1">No items found</h3>
-          <p className="text-sm text-theme-text-muted mb-4">
-            {search || fCat || fStatus || fCond || fType || fLoc ? 'Try adjusting your filters.' : 'Get started by adding your first inventory item.'}
-          </p>
-          {canManage && <button onClick={openAdd} className="btn-info btn-md inline-flex items-center gap-2"><Plus className="w-4 h-4" /> Add Item</button>}
-        </div>
+        <EmptyState
+          icon={Package}
+          title="No items found"
+          description={
+            search || fCat || fStatus || fCond || fType || fLoc
+              ? 'Try adjusting your filters.'
+              : 'Get started by adding your first inventory item.'
+          }
+          actions={canManage ? [{ label: 'Add Item', onClick: openAdd, icon: Plus }] : undefined}
+        />
       )}
 
       {/* Desktop tables — split by availability */}
