@@ -11,6 +11,7 @@ const mockGetCategories = vi.fn();
 const mockGetStorageAreas = vi.fn();
 const mockGetLocations = vi.fn();
 const mockCheckPermission = vi.fn();
+const mockRetireItem = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
@@ -19,7 +20,7 @@ vi.mock('../../../services/api', () => ({
     getSummaryByLocation: (...a: unknown[]) => mockGetSummaryByLocation(...a) as unknown,
     getCategories: (...a: unknown[]) => mockGetCategories(...a) as unknown,
     getStorageAreas: (...a: unknown[]) => mockGetStorageAreas(...a) as unknown,
-    retireItem: vi.fn(),
+    retireItem: (...a: unknown[]) => mockRetireItem(...a) as unknown,
     updateItem: vi.fn(),
     exportItemsCsv: vi.fn(),
   },
@@ -82,6 +83,7 @@ describe('InventoryItemsPage', () => {
     mockGetCategories.mockResolvedValue([]);
     mockGetStorageAreas.mockResolvedValue([]);
     mockGetLocations.mockResolvedValue([]);
+    mockRetireItem.mockResolvedValue({});
     mockCheckPermission.mockReturnValue(true);
   });
 
@@ -148,5 +150,25 @@ describe('InventoryItemsPage', () => {
     await screen.findAllByText('Cordless Drill');
 
     expect(screen.queryByRole('button', { name: /Add Item/ })).not.toBeInTheDocument();
+  });
+
+  it('opens the edit modal from a row action', async () => {
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('Cordless Drill');
+
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(await screen.findByText('item-form-modal')).toBeInTheDocument();
+  });
+
+  it('retires an item from a row action', async () => {
+    mockGetItems.mockResolvedValue({ items: [makeItem()], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<InventoryItemsPage />);
+    await screen.findAllByText('Cordless Drill');
+
+    await user.click(screen.getByRole('button', { name: 'Retire' }));
+    await waitFor(() => expect(mockRetireItem).toHaveBeenCalledWith('it-1'));
   });
 });
