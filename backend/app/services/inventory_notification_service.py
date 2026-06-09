@@ -63,6 +63,7 @@ _ACTION_LABELS = {
     InventoryActionType.RETURNED: "Returned",
     InventoryActionType.CHECKED_OUT: "Checked Out",
     InventoryActionType.CHECKED_IN: "Checked In",
+    InventoryActionType.RETIRED: "Retired / Removed",
 }
 
 
@@ -178,12 +179,21 @@ class InventoryNotificationService:
                     records_processed += len(member_records)
                     continue
 
-                # Build email content
+                # Build email content. Retirements get their own bucket so a
+                # member isn't told a written-off item was "returned".
                 issued_items = [
                     n for n in net_items if n["action_type"] in _OUTGOING_ACTIONS
                 ]
+                removed_items = [
+                    n
+                    for n in net_items
+                    if n["action_type"] == InventoryActionType.RETIRED
+                ]
                 returned_items = [
-                    n for n in net_items if n["action_type"] not in _OUTGOING_ACTIONS
+                    n
+                    for n in net_items
+                    if n["action_type"] not in _OUTGOING_ACTIONS
+                    and n["action_type"] != InventoryActionType.RETIRED
                 ]
 
                 items_issued_html = self._build_item_list_html(
@@ -192,11 +202,17 @@ class InventoryNotificationService:
                 items_returned_html = self._build_item_list_html(
                     returned_items, "Items Returned"
                 )
+                items_removed_html = self._build_item_list_html(
+                    removed_items, "Items Removed from Your Inventory"
+                )
                 items_issued_text = self._build_item_list_text(
                     issued_items, "Items Issued / Assigned"
                 )
                 items_returned_text = self._build_item_list_text(
                     returned_items, "Items Returned"
+                )
+                items_removed_text = self._build_item_list_text(
+                    removed_items, "Items Removed from Your Inventory"
                 )
 
                 context = {
@@ -205,8 +221,10 @@ class InventoryNotificationService:
                     "change_date": datetime.now(timezone.utc).strftime("%B %d, %Y"),
                     "items_issued_html": items_issued_html,
                     "items_returned_html": items_returned_html,
+                    "items_removed_html": items_removed_html,
                     "items_issued_text": items_issued_text,
                     "items_returned_text": items_returned_text,
+                    "items_removed_text": items_removed_text,
                 }
 
                 sent = await self._send_notification_email(user, org, context)
@@ -339,12 +357,22 @@ class InventoryNotificationService:
         if not items:
             return ""
 
+        import html as _html
+
         rows = ""
         for item in items:
             name, id_display, qty_str, label = self._format_item_parts(item)
-            rows += f"<li><strong>{name}</strong>{id_display}{qty_str} <em>({label})</em></li>\n"
+            # Escape member-supplied fields (item name + identifier) to prevent
+            # HTML injection in the rendered email. qty_str and label are
+            # derived from numeric/enum values and are safe.
+            safe_name = _html.escape(str(name))
+            safe_id = _html.escape(id_display)
+            rows += (
+                f"<li><strong>{safe_name}</strong>{safe_id}{qty_str} "
+                f"<em>({label})</em></li>\n"
+            )
 
-        return f"""<h3 style="margin-top: 20px;">{heading}</h3>
+        return f"""<h3 style="margin-top: 20px;">{_html.escape(heading)}</h3>
 <ul style="margin: 8px 0; padding-left: 20px;">
 {rows}</ul>"""
 
@@ -400,6 +428,7 @@ class InventoryNotificationService:
             _html_vars = {
                 "items_issued_html",
                 "items_returned_html",
+                "items_removed_html",
                 "organization_logo_img",
             }
 

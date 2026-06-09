@@ -13,8 +13,7 @@ Covers previously untested areas:
 
 import pytest
 import uuid
-from datetime import date, datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import MagicMock
 from io import BytesIO
 
 from sqlalchemy import text
@@ -26,20 +25,7 @@ pytestmark = [pytest.mark.integration]
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_notification_service import InventoryNotificationService
 from app.models.inventory import (
-    InventoryCategory,
-    InventoryItem,
-    ItemAssignment,
-    CheckOutRecord,
-    ItemIssuance,
-    MaintenanceRecord,
-    InventoryNotificationQueue,
-    DepartureClearance,
-    DepartureClearanceItem,
-    ItemType,
-    ItemCondition,
     ItemStatus,
-    TrackingType,
-    AssignmentType,
     ClearanceStatus,
     ClearanceLineDisposition,
     InventoryActionType,
@@ -701,6 +687,20 @@ class TestNotificationRendering:
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
         assert svc._build_item_list_text([], "Test") == ""
 
+    def test_build_item_list_html_escapes_item_name(self):
+        """Member-supplied item names must be HTML-escaped (no injection)."""
+        svc = InventoryNotificationService.__new__(InventoryNotificationService)
+        items = [{
+            "item_name": "<script>alert(1)</script>Coat",
+            "item_serial_number": None,
+            "item_asset_tag": None,
+            "action_type": InventoryActionType.ISSUED,
+            "quantity": 1,
+        }]
+        html = svc._build_item_list_html(items, "Items")
+        assert "<script>" not in html
+        assert "&lt;script&gt;" in html
+
     def test_build_item_list_text_with_items(self):
         """Text rendering includes item names and action labels."""
         svc = InventoryNotificationService.__new__(InventoryNotificationService)
@@ -715,6 +715,52 @@ class TestNotificationRendering:
         assert "Radio" in text
         assert "AT-100" in text
         assert "Checked Out" in text
+
+
+# ── Retirement Notification Tests ──────────────────────────────────
+
+class TestRetirementNotification:
+    """The RETIRED action type must be renderable so members are told when
+    an item is written off out of their possession."""
+
+    def _make_record(self, item_id, action_type, quantity=1, item_name="Item"):
+        mock = MagicMock()
+        mock.item_id = item_id
+        mock.item_name = item_name
+        mock.item_serial_number = None
+        mock.item_asset_tag = None
+        mock.action_type = action_type
+        mock.quantity = quantity
+        return mock
+
+    def test_retired_has_human_label(self):
+        """RETIRED must map to a friendly label (not the raw enum repr)."""
+        from app.services.inventory_notification_service import _ACTION_LABELS
+
+        assert InventoryActionType.RETIRED in _ACTION_LABELS
+        assert _ACTION_LABELS[InventoryActionType.RETIRED] == "Retired / Removed"
+
+    def test_retired_action_is_not_netted_away(self):
+        """RETIRED has no offsetting pair, so it always surfaces."""
+        svc = InventoryNotificationService.__new__(InventoryNotificationService)
+        records = [self._make_record("item-1", InventoryActionType.RETIRED)]
+        result = svc._net_actions(records)
+        assert len(result) == 1
+        assert result[0]["action_type"] == InventoryActionType.RETIRED
+
+    def test_retired_renders_with_label(self):
+        """The retirement line renders with its human label."""
+        svc = InventoryNotificationService.__new__(InventoryNotificationService)
+        items = [{
+            "item_name": "Old Helmet",
+            "item_serial_number": "SN-OLD",
+            "item_asset_tag": None,
+            "action_type": InventoryActionType.RETIRED,
+            "quantity": 1,
+        }]
+        html = svc._build_item_list_html(items, "Items Removed")
+        assert "Old Helmet" in html
+        assert "Retired / Removed" in html
 
 
 # ── Batch Return Edge Cases ────────────────────────────────────────

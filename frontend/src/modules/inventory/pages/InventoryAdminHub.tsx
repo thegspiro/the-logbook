@@ -27,12 +27,18 @@ import {
   BoxSelect,
   Ruler,
   UserPlus,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
-import type { InventorySummary, LowStockAlert, ReturnRequestItem } from '../types';
+import type {
+  InventorySummary,
+  LowStockAlert,
+  ReturnRequestItem,
+  EquipmentRequestItem,
+} from '../types';
 interface NavCardProps {
   to: string;
   icon: React.ReactNode;
@@ -129,13 +135,14 @@ export const InventoryAdminHub: React.FC = () => {
         inventoryService.getSummary(),
         inventoryService.getLowStockItems().catch(() => [] as LowStockAlert[]),
         inventoryService.getReturnRequests({ status: 'pending' }).catch(() => [] as ReturnRequestItem[]),
-        inventoryService.getEquipmentRequests({ status: 'pending' }).catch(() => ({ requests: [] as unknown[], total: 0 })),
+        inventoryService.getEquipmentRequests({ status: 'pending' }).catch(
+          () => ({ requests: [] as EquipmentRequestItem[], total: 0 }),
+        ),
       ]);
       setSummary(summaryData);
       setLowStockAlerts(lowStock);
       setPendingReturns(Array.isArray(returns) ? returns.length : 0);
-      const reqResult = requests as { requests: unknown[]; total: number };
-      setPendingRequests(reqResult.total ?? 0);
+      setPendingRequests(requests.total);
     } catch {
       // Non-critical — page still navigable
     } finally {
@@ -310,6 +317,13 @@ export const InventoryAdminHub: React.FC = () => {
                 title="Variant Groups"
                 description="Group pool item variants by size, style, and color"
                 iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
+              />
+              <NavCard
+                to="/inventory/admin/allowances"
+                icon={<SlidersHorizontal className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                title="Issuance Allowances"
+                description="Cap how many units per category a member can be issued"
+                iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
               />
               <NavCard
                 to="/inventory/admin/maintenance"

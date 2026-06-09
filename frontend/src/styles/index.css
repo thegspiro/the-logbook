@@ -473,6 +473,47 @@
     display: table-cell;
   }
 }
+
+/*
+ * Responsive reflow tables.
+ *
+ * A table tagged `.rwd-table` renders as a normal table on >=768px and
+ * collapses each row into a stacked card on mobile, so a single markup tree
+ * serves both layouts (no duplicate desktop-table + mobile-card DOM). Every
+ * <td> must carry a `data-label` providing the field name shown on mobile;
+ * cells with no data-label (e.g. selection checkboxes, row chevrons) are
+ * hidden in the stacked view.
+ */
+@media (max-width: 767px) {
+  .rwd-table thead {
+    display: none;
+  }
+  .rwd-table tbody tr {
+    display: block;
+    padding: 0.25rem 0;
+    border-bottom: 1px solid var(--color-theme-surface-border);
+  }
+  .rwd-table tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .rwd-table tbody td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.375rem 0.75rem;
+    text-align: right;
+  }
+  .rwd-table tbody td[data-label]::before {
+    content: attr(data-label);
+    font-weight: 600;
+    text-align: left;
+    color: var(--color-theme-text-muted);
+  }
+  .rwd-table tbody td:not([data-label]) {
+    display: none;
+  }
+}
 @utility modal-body {
   /* Mobile-safe modal body — accounts for on-screen keyboard */
   @apply max-h-[85vh] overflow-y-auto;

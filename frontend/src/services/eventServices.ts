@@ -724,6 +724,10 @@ export interface EquipmentRequestItem {
   reviewer_name?: string;
   reviewed_at?: string;
   review_notes?: string;
+  fulfilled_by?: string;
+  fulfilled_at?: string;
+  fulfillment_type?: string;
+  fulfillment_reference_id?: string;
   created_at: string;
   updated_at: string;
 }

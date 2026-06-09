@@ -4,16 +4,21 @@ Inventory Pydantic Schemas
 Request and response schemas for inventory-related endpoints.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app.schemas.base import UTCResponseBase
 
 _response_config = ConfigDict(from_attributes=True)
+
+# Length-bounded free-text input. Caps unbounded user-entered notes/descriptions/
+# reasons on request schemas to prevent oversized payloads (DB bloat / abuse).
+# Applied to request schemas only; response schemas mirror stored data unchanged.
+FreeText = Annotated[str, StringConstraints(max_length=2000)]
 
 # ============================================
 # Enum Literal Types
@@ -177,7 +182,7 @@ class InventoryCategoryBase(BaseModel):
     """Base inventory category schema"""
 
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     item_type: ItemTypeLiteral
     parent_category_id: Optional[UUID] = None
     requires_assignment: bool = False
@@ -196,7 +201,7 @@ class InventoryCategoryUpdate(BaseModel):
     """Schema for updating an inventory category"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     item_type: Optional[ItemTypeLiteral] = None
     parent_category_id: Optional[UUID] = None
     requires_assignment: Optional[bool] = None
@@ -233,7 +238,7 @@ class InventoryItemBase(BaseModel):
 
     category_id: Optional[UUID] = None
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     manufacturer: Optional[str] = Field(None, max_length=255)
     model_number: Optional[str] = Field(None, max_length=255)
     serial_number: Optional[str] = Field(None, max_length=255)
@@ -258,7 +263,7 @@ class InventoryItemBase(BaseModel):
     station: Optional[str] = Field(None, max_length=100)
     condition: ItemConditionLiteral = "good"
     status: ItemStatusLiteral = "available"
-    status_notes: Optional[str] = None
+    status_notes: Optional[FreeText] = None
     tracking_type: TrackingTypeLiteral = "individual"
     quantity: int = Field(default=1, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
@@ -266,7 +271,7 @@ class InventoryItemBase(BaseModel):
     inspection_interval_days: Optional[int] = Field(None, ge=0)
     min_rank_order: Optional[int] = None
     restricted_to_positions: Optional[List[str]] = None
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[str]] = None
     standard_size: Optional[StandardSizeLiteral] = None
@@ -283,7 +288,7 @@ class InventoryItemUpdate(BaseModel):
 
     category_id: Optional[UUID] = None
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     manufacturer: Optional[str] = Field(None, max_length=255)
     model_number: Optional[str] = Field(None, max_length=255)
     serial_number: Optional[str] = Field(None, max_length=255)
@@ -306,7 +311,7 @@ class InventoryItemUpdate(BaseModel):
     station: Optional[str] = Field(None, max_length=100)
     condition: Optional[ItemConditionLiteral] = None
     status: Optional[ItemStatusLiteral] = None
-    status_notes: Optional[str] = None
+    status_notes: Optional[FreeText] = None
     tracking_type: Optional[TrackingTypeLiteral] = None
     quantity: Optional[int] = Field(None, ge=0)
     unit_of_measure: Optional[str] = Field(None, max_length=50)
@@ -316,7 +321,7 @@ class InventoryItemUpdate(BaseModel):
     inspection_interval_days: Optional[int] = Field(None, ge=0)
     min_rank_order: Optional[int] = None
     restricted_to_positions: Optional[List[str]] = None
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
     custom_fields: Optional[Dict[str, Any]] = None
     attachments: Optional[List[str]] = None
     standard_size: Optional[StandardSizeLiteral] = None
@@ -363,7 +368,7 @@ class ItemAssignmentBase(BaseModel):
     """Base assignment schema"""
 
     assignment_type: AssignmentTypeLiteral = "permanent"
-    assignment_reason: Optional[str] = None
+    assignment_reason: Optional[FreeText] = None
     expected_return_date: Optional[datetime] = None
 
 
@@ -398,7 +403,7 @@ class UnassignItemRequest(BaseModel):
     """Schema for unassigning an item"""
 
     return_condition: Optional[ReturnConditionLiteral] = None
-    return_notes: Optional[str] = None
+    return_notes: Optional[FreeText] = None
 
 
 # ============================================
@@ -411,14 +416,18 @@ class ItemIssuanceCreate(BaseModel):
 
     user_id: UUID
     quantity: int = Field(default=1, ge=1, description="Number of units to issue")
-    issue_reason: Optional[str] = None
+    issue_reason: Optional[FreeText] = None
+    override_allowance: bool = Field(
+        default=False,
+        description="Bypass the member's per-category issuance allowance cap",
+    )
 
 
 class ItemIssuanceReturnRequest(BaseModel):
     """Schema for returning issued units back to the pool"""
 
     return_condition: Optional[ReturnConditionLiteral] = None
-    return_notes: Optional[str] = None
+    return_notes: Optional[FreeText] = None
     quantity_returned: Optional[int] = Field(
         None, ge=1, description="Partial return; defaults to full issuance quantity"
     )
@@ -462,7 +471,7 @@ class CheckOutRecordBase(BaseModel):
     """Base checkout record schema"""
 
     expected_return_at: Optional[datetime] = None
-    checkout_reason: Optional[str] = None
+    checkout_reason: Optional[FreeText] = None
 
 
 class CheckOutCreate(CheckOutRecordBase):
@@ -476,13 +485,27 @@ class CheckInRequest(BaseModel):
     """Schema for checking in an item"""
 
     return_condition: ReturnConditionLiteral
-    damage_notes: Optional[str] = None
+    damage_notes: Optional[FreeText] = None
 
 
 class CheckoutExtendRequest(BaseModel):
     """Schema for extending a checkout's return date"""
 
     expected_return_at: datetime
+
+    @field_validator("expected_return_at")
+    @classmethod
+    def _return_date_within_bounds(cls, v: datetime) -> datetime:
+        now = datetime.now(timezone.utc)
+        # All API datetimes are UTC; treat a naive value as UTC for comparison.
+        compare = v if v.tzinfo is not None else v.replace(tzinfo=timezone.utc)
+        if compare <= now:
+            raise ValueError("expected_return_at must be in the future")
+        if compare > now + timedelta(days=365):
+            raise ValueError(
+                "expected_return_at cannot be more than 1 year in the future"
+            )
+        return v
 
 
 class CheckOutRecordResponse(CheckOutRecordBase):
@@ -554,12 +577,12 @@ class MaintenanceRecordBase(BaseModel):
     cost: Optional[Decimal] = Field(None, ge=0)
     condition_before: Optional[ItemConditionLiteral] = None
     condition_after: Optional[ItemConditionLiteral] = None
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     parts_replaced: Optional[List[str]] = None
     parts_cost: Optional[Decimal] = Field(None, ge=0)
     labor_hours: Optional[float] = Field(None, ge=0)
     passed: Optional[bool] = None
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
     issues_found: Optional[List[str]] = None
     attachments: Optional[List[str]] = None
     is_completed: bool = False
@@ -585,12 +608,12 @@ class MaintenanceRecordUpdate(BaseModel):
     cost: Optional[Decimal] = Field(None, ge=0)
     condition_before: Optional[ItemConditionLiteral] = None
     condition_after: Optional[ItemConditionLiteral] = None
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     parts_replaced: Optional[List[str]] = None
     parts_cost: Optional[Decimal] = Field(None, ge=0)
     labor_hours: Optional[float] = Field(None, ge=0)
     passed: Optional[bool] = None
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
     issues_found: Optional[List[str]] = None
     attachments: Optional[List[str]] = None
     is_completed: Optional[bool] = None
@@ -725,7 +748,7 @@ class MembersInventoryListResponse(BaseModel):
 class ItemRetireRequest(BaseModel):
     """Schema for retiring an item"""
 
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
 
 
 class ItemsListResponse(BaseModel):
@@ -762,7 +785,7 @@ class DepartureClearanceCreate(BaseModel):
     user_id: UUID
     departure_type: Optional[DepartureTypeLiteral] = None
     return_deadline_days: int = Field(default=14, ge=1, le=90)
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
 
 
 class ClearanceLineItemResponse(UTCResponseBase):
@@ -839,7 +862,7 @@ class ResolveClearanceItemRequest(BaseModel):
         ..., description="One of: returned, returned_damaged, written_off, waived"
     )
     return_condition: Optional[ReturnConditionLiteral] = None
-    resolution_notes: Optional[str] = None
+    resolution_notes: Optional[FreeText] = None
 
 
 class CompleteClearanceRequest(BaseModel):
@@ -849,7 +872,7 @@ class CompleteClearanceRequest(BaseModel):
         default=False,
         description="If True, close with status 'closed_incomplete' even if items are outstanding",
     )
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
 
 
 # ============================================
@@ -889,7 +912,7 @@ class BatchCheckoutRequest(BaseModel):
 
     user_id: UUID
     items: List[BatchScanItem] = Field(..., min_length=1)
-    reason: Optional[str] = None
+    reason: Optional[FreeText] = None
 
 
 class BatchCheckoutResultItem(BaseModel):
@@ -923,7 +946,7 @@ class BatchReturnItem(BaseModel):
     return_condition: ReturnConditionLiteral = Field(
         default="good", description="Condition at return"
     )
-    damage_notes: Optional[str] = None
+    damage_notes: Optional[FreeText] = None
     quantity: int = Field(
         default=1, ge=1, description="Quantity returned (for pool items)"
     )
@@ -934,7 +957,7 @@ class BatchReturnRequest(BaseModel):
 
     user_id: UUID
     items: List[BatchReturnItem] = Field(..., min_length=1)
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
 
 
 class BatchReturnResultItem(BaseModel):
@@ -1003,14 +1026,29 @@ class EquipmentRequestCreate(BaseModel):
     quantity: int = Field(default=1, ge=1)
     request_type: RequestTypeLiteral = Field(default="checkout")
     priority: RequestPriorityLiteral = Field(default="normal")
-    reason: Optional[str] = None
+    reason: Optional[FreeText] = None
 
 
 class EquipmentRequestReview(BaseModel):
     """Schema for reviewing an equipment request"""
 
     status: ReviewStatusLiteral = Field(..., description="approved or denied")
-    review_notes: Optional[str] = None
+    review_notes: Optional[FreeText] = None
+
+
+class EquipmentRequestFulfill(BaseModel):
+    """Schema for fulfilling an approved equipment request.
+
+    ``item_id`` is optional when the request already references a specific
+    item; supply it to fulfill a generic (description-only) request with a
+    concrete item. ``override_allowance`` lets a quartermaster exceed the
+    member's per-category cap when issuing a pool item.
+    """
+
+    item_id: Optional[UUID] = None
+    quantity: Optional[int] = Field(default=None, ge=1)
+    expected_return_at: Optional[datetime] = None
+    override_allowance: bool = False
 
 
 class EquipmentRequestResponse(UTCResponseBase):
@@ -1032,6 +1070,10 @@ class EquipmentRequestResponse(UTCResponseBase):
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
+    fulfilled_by: Optional[UUID] = None
+    fulfilled_at: Optional[datetime] = None
+    fulfillment_type: Optional[str] = None
+    fulfillment_reference_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1048,7 +1090,7 @@ class StorageAreaCreate(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     label: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     storage_type: StorageTypeLiteral
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
@@ -1061,7 +1103,7 @@ class StorageAreaUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     label: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     storage_type: Optional[StorageTypeLiteral] = None
     parent_id: Optional[UUID] = None
     location_id: Optional[UUID] = None
@@ -1106,14 +1148,14 @@ class WriteOffRequestCreate(BaseModel):
 
     item_id: UUID
     reason: WriteOffReasonLiteral
-    description: str
+    description: FreeText
 
 
 class WriteOffReview(BaseModel):
     """Approve or deny a write-off request"""
 
     status: ReviewStatusLiteral
-    review_notes: Optional[str] = None
+    review_notes: Optional[FreeText] = None
 
 
 class WriteOffRequestResponse(UTCResponseBase):
@@ -1215,7 +1257,7 @@ class NFPAExposureRecordCreate(BaseModel):
     exposure_type: ExposureTypeLiteral
     exposure_date: date
     incident_number: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     decon_required: bool = False
     decon_completed: bool = False
     decon_completed_date: Optional[date] = None
@@ -1294,7 +1336,7 @@ class SizeVariantCreate(BaseModel):
     location_id: Optional[UUID] = None
     storage_area_id: Optional[UUID] = None
     station: Optional[str] = Field(None, max_length=100)
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
     create_variant_group: bool = Field(
         default=True,
         description="Automatically create a variant group and link all items to it.",
@@ -1319,7 +1361,7 @@ class BulkIssuanceTarget(BaseModel):
 
     user_id: UUID
     quantity: int = Field(default=1, ge=1)
-    issue_reason: Optional[str] = None
+    issue_reason: Optional[FreeText] = None
 
 
 class BulkIssuanceRequest(BaseModel):
@@ -1471,14 +1513,14 @@ class ReturnRequestCreate(BaseModel):
     checkout_id: Optional[UUID] = None
     quantity_returning: int = Field(default=1, ge=1)
     reported_condition: ReturnConditionLiteral = "good"
-    member_notes: Optional[str] = None
+    member_notes: Optional[FreeText] = None
 
 
 class ReturnRequestReview(BaseModel):
     """Quartermaster reviews a return request."""
 
     status: ReturnReviewStatusLiteral = Field(..., description="approved or denied")
-    review_notes: Optional[str] = None
+    review_notes: Optional[FreeText] = None
     override_condition: Optional[ReturnConditionLiteral] = Field(
         None, description="Override the condition reported by the member"
     )
@@ -1533,7 +1575,7 @@ class ReorderRequestCreate(BaseModel):
     estimated_unit_cost: Optional[Decimal] = Field(None, ge=0)
     expected_delivery_date: Optional[date] = None
     urgency: ReorderUrgencyLiteral = "normal"
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
 
 
 class ReorderRequestUpdate(BaseModel):
@@ -1550,7 +1592,7 @@ class ReorderRequestUpdate(BaseModel):
     expected_delivery_date: Optional[date] = None
     status: Optional[ReorderStatusLiteral] = None
     urgency: Optional[ReorderUrgencyLiteral] = None
-    notes: Optional[str] = None
+    notes: Optional[FreeText] = None
 
 
 class ReorderRequestResponse(UTCResponseBase):
@@ -1594,7 +1636,7 @@ class ItemVariantGroupCreate(BaseModel):
     """Schema for creating a variant group (groups pool items by product)"""
 
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
     base_price: Optional[Decimal] = Field(None, ge=0)
     base_replacement_cost: Optional[Decimal] = Field(None, ge=0)
@@ -1605,7 +1647,7 @@ class ItemVariantGroupUpdate(BaseModel):
     """Schema for updating a variant group"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     category_id: Optional[UUID] = None
     base_price: Optional[Decimal] = Field(None, ge=0)
     base_replacement_cost: Optional[Decimal] = Field(None, ge=0)
@@ -1658,7 +1700,7 @@ class EquipmentKitCreate(BaseModel):
     """Schema for creating an equipment kit template"""
 
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     restricted_to_roles: Optional[List[str]] = None
     min_rank_order: Optional[int] = None
     line_items: List[EquipmentKitItemCreate] = Field(
@@ -1670,7 +1712,7 @@ class EquipmentKitUpdate(BaseModel):
     """Schema for updating an equipment kit"""
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
+    description: Optional[FreeText] = None
     restricted_to_roles: Optional[List[str]] = None
     min_rank_order: Optional[int] = None
     active: Optional[bool] = None

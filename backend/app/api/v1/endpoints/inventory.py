@@ -5,7 +5,7 @@ Endpoints for inventory management including categories, items, assignments,
 checkouts, maintenance, and reporting.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -72,6 +72,7 @@ from app.schemas.inventory import (
     EquipmentKitResponse,
     EquipmentKitUpdate,
     EquipmentRequestCreate,
+    EquipmentRequestFulfill,
     EquipmentRequestReview,
     InventoryCategoryCreate,
     InventoryCategoryResponse,
@@ -291,6 +292,41 @@ async def get_category(
         )
 
     return category
+
+
+@router.delete("/categories/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_category(
+    category_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete (deactivate) an inventory category. Blocked while active items
+    still reference it.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.delete_category(
+        category_id=category_id,
+        organization_id=current_user.organization_id,
+    )
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_category_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={"category_id": str(category_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ============================================
@@ -1355,6 +1391,7 @@ async def issue_from_pool(
         issued_by=current_user.id,
         quantity=issuance_data.quantity,
         reason=issuance_data.issue_reason,
+        override_allowance=issuance_data.override_allowance,
     )
 
     if error:
@@ -1450,6 +1487,8 @@ async def return_to_pool(
 async def get_item_issuances(
     item_id: UUID,
     active_only: bool = True,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.view")),
 ):
@@ -1464,6 +1503,8 @@ async def get_item_issuances(
         item_id=item_id,
         organization_id=current_user.organization_id,
         active_only=active_only,
+        skip=skip,
+        limit=limit,
     )
     return issuances
 
@@ -2031,8 +2072,8 @@ async def get_user_inventory(
     # Check if user is viewing their own inventory or has inventory.view permission
     if str(user_id) != str(current_user.id):
         # Check if user has inventory.view permission
-        has_permission = any(
-            "inventory.view" in (role.permissions or []) for role in current_user.roles
+        has_permission = _has_permission(
+            "inventory.view", _collect_user_permissions(current_user)
         )
         if not has_permission:
             raise HTTPException(
@@ -2412,8 +2453,8 @@ async def get_user_departure_clearance(
     **Authentication required**
     """
     if str(user_id) != str(current_user.id):
-        has_permission = any(
-            "inventory.view" in (role.permissions or []) for role in current_user.roles
+        has_permission = _has_permission(
+            "inventory.view", _collect_user_permissions(current_user)
         )
         if not has_permission:
             raise HTTPException(
@@ -2691,8 +2732,8 @@ async def list_equipment_requests(
         )
     )
 
-    can_manage = any(
-        "inventory.manage" in (role.permissions or []) for role in current_user.roles
+    can_manage = _has_permission(
+        "inventory.manage", _collect_user_permissions(current_user)
     )
     if mine_only or not can_manage:
         query = query.where(EquipmentRequest.requester_id == str(current_user.id))
@@ -2737,6 +2778,10 @@ async def list_equipment_requests(
                 ),
                 "reviewed_at": r.reviewed_at.isoformat() if r.reviewed_at else None,
                 "review_notes": r.review_notes,
+                "fulfilled_by": r.fulfilled_by,
+                "fulfilled_at": r.fulfilled_at.isoformat() if r.fulfilled_at else None,
+                "fulfillment_type": r.fulfillment_type,
+                "fulfillment_reference_id": r.fulfillment_reference_id,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "updated_at": r.updated_at.isoformat() if r.updated_at else None,
             }
@@ -2784,7 +2829,7 @@ async def review_equipment_request(
 
     req.status = review_data.status
     req.reviewed_by = str(current_user.id)
-    req.reviewed_at = datetime.utcnow()
+    req.reviewed_at = datetime.now(timezone.utc)
     req.review_notes = review_data.review_notes
 
     await db.commit()
@@ -2807,6 +2852,60 @@ async def review_equipment_request(
         "id": req.id,
         "status": review_data.status,
         "message": f"Request {review_data.status}",
+    }
+
+
+@router.put("/requests/{request_id}/fulfill")
+async def fulfill_equipment_request(
+    request_id: UUID,
+    fulfill_data: EquipmentRequestFulfill,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Fulfill an approved equipment request by issuing, checking out, or
+    assigning the relevant item to the requester, then marking the request
+    fulfilled.
+
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    req, error = await service.fulfill_equipment_request(
+        request_id=request_id,
+        organization_id=current_user.organization_id,
+        fulfilled_by=current_user.id,
+        item_id=fulfill_data.item_id,
+        quantity=fulfill_data.quantity,
+        expected_return_at=fulfill_data.expected_return_at,
+        override_allowance=fulfill_data.override_allowance,
+    )
+
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error),
+        )
+
+    await log_audit_event(
+        db=db,
+        event_type="equipment_request_fulfilled",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "request_id": str(request_id),
+            "fulfillment_type": req.fulfillment_type,
+            "fulfillment_reference_id": req.fulfillment_reference_id,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {
+        "id": req.id,
+        "status": "fulfilled",
+        "fulfillment_type": req.fulfillment_type,
+        "fulfillment_reference_id": req.fulfillment_reference_id,
+        "message": "Request fulfilled",
     }
 
 
@@ -3866,6 +3965,23 @@ async def create_allowance(
     db.add(allowance)
     await db.commit()
     await db.refresh(allowance)
+
+    await log_audit_event(
+        db=db,
+        event_type="issuance_allowance_created",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "allowance_id": allowance.id,
+            "category_id": str(data.category_id),
+            "role_id": str(data.role_id) if data.role_id else None,
+            "max_quantity": data.max_quantity,
+            "period_type": data.period_type,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return IssuanceAllowanceResponse.model_validate(allowance)
 
 
@@ -3895,6 +4011,20 @@ async def update_allowance(
 
     await db.commit()
     await db.refresh(allowance)
+
+    await log_audit_event(
+        db=db,
+        event_type="issuance_allowance_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "allowance_id": str(allowance_id),
+            "fields_updated": list(data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return IssuanceAllowanceResponse.model_validate(allowance)
 
 
@@ -3917,6 +4047,16 @@ async def delete_allowance(
     await db.delete(allowance)
     await db.commit()
 
+    await log_audit_event(
+        db=db,
+        event_type="issuance_allowance_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={"allowance_id": str(allowance_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
 
 @router.get(
     "/allowances/check/{user_id}/{category_id}",
@@ -3929,12 +4069,11 @@ async def check_member_allowance(
     current_user: User = Depends(require_permission("inventory.view")),
 ):
     """Check a member's remaining issuance allowance for a category."""
-    # Get user's role for role-specific allowances
-    user_result = await db.execute(select(User).where(User.id == str(user_id)))
-    user = user_result.scalar_one_or_none()
-    role_id = user.role_id if user else None
-
     service = InventoryService(db)
+    # Resolve the member's highest-priority position for role-specific allowances
+    role_id = await service._get_primary_role_id(
+        user_id, current_user.organization_id
+    )
     check = await service.check_allowance(
         user_id=user_id,
         category_id=category_id,
@@ -4531,6 +4670,36 @@ async def update_variant_group(
     return ItemVariantGroupResponse.model_validate(group)
 
 
+@router.delete("/variant-groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_variant_group(
+    group_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete (deactivate) a variant group.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.delete_variant_group(
+        group_id, current_user.organization_id
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+
+    await log_audit_event(
+        db=db,
+        event_type="variant_group_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={"resource_type": "variant_group", "resource_id": str(group_id)},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+
 # ============================================
 # Equipment Kit Endpoints
 # ============================================
@@ -4630,6 +4799,36 @@ async def update_equipment_kit(
     await db.commit()
     await db.refresh(kit)
     return EquipmentKitResponse.model_validate(kit)
+
+
+@router.delete("/kits/{kit_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_equipment_kit(
+    kit_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete (deactivate) an equipment kit template.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    success, error = await service.delete_equipment_kit(
+        kit_id, current_user.organization_id
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=sanitize_error_message(error))
+
+    await log_audit_event(
+        db=db,
+        event_type="equipment_kit_deleted",
+        event_category="inventory",
+        severity="info",
+        event_data={"resource_type": "equipment_kit", "resource_id": str(kit_id)},
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
 
 
 @router.post("/kits/{kit_id}/issue/{user_id}")

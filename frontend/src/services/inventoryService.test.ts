@@ -604,6 +604,27 @@ describe('inventoryService', () => {
     });
   });
 
+  describe('fulfillEquipmentRequest', () => {
+    it('should PUT /inventory/requests/:id/fulfill with fulfillment data', async () => {
+      const data = { item_id: 'i9', quantity: 2, override_allowance: false };
+      const response = { id: 'r1', status: 'fulfilled', fulfillment_type: 'issuance', fulfillment_reference_id: 'iss-1', message: 'Request fulfilled' };
+      mockPut.mockResolvedValueOnce({ data: response });
+
+      const result = await inventoryService.fulfillEquipmentRequest('r1', data);
+
+      expect(mockPut).toHaveBeenCalledWith('/inventory/requests/r1/fulfill', data);
+      expect(result).toEqual(response);
+    });
+
+    it('should PUT an empty body when no data is provided', async () => {
+      mockPut.mockResolvedValueOnce({ data: { id: 'r1', status: 'fulfilled' } });
+
+      await inventoryService.fulfillEquipmentRequest('r1');
+
+      expect(mockPut).toHaveBeenCalledWith('/inventory/requests/r1/fulfill', {});
+    });
+  });
+
   // ── Write-Off Requests ──────────────────────────────────────────────
 
   describe('createWriteOffRequest', () => {

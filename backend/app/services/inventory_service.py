@@ -23,6 +23,7 @@ from app.models.inventory import (
     CheckOutRecord,
     EquipmentKit,
     EquipmentKitItem,
+    EquipmentRequest,
     InventoryActionType,
     InventoryCategory,
     InventoryItem,
@@ -35,8 +36,11 @@ from app.models.inventory import (
     ItemVariantGroup,
     MaintenanceRecord,
     MemberSizePreferences,
+    NFPAInspectionDetail,
     ReorderRequest,
     ReorderStatus,
+    RequestStatus,
+    RequestType,
     ReturnRequest,
     ReturnRequestStatus,
     ReturnRequestType,
@@ -156,6 +160,82 @@ class InventoryService:
         except Exception as e:
             # Notification queue failure must not break the primary operation
             logger.warning(f"Failed to queue inventory notification: {e}")
+
+    async def _queue_retirement_notifications(
+        self, item: "InventoryItem", organization_id, performed_by=None
+    ) -> None:
+        """Notify every member currently holding *item* that it has been
+        retired/written off out of their possession.
+
+        Covers both individual items (the assigned holder) and pool items
+        (everyone with an open issuance). Without this, a member's assigned
+        gear can vanish from inventory with no notice.
+        """
+        if item.assigned_to_user_id:
+            await self._queue_inventory_notification(
+                organization_id,
+                item.assigned_to_user_id,
+                InventoryActionType.RETIRED,
+                item,
+                performed_by=performed_by,
+            )
+
+        if item.tracking_type == TrackingType.POOL:
+            result = await self.db.execute(
+                select(ItemIssuance).where(
+                    ItemIssuance.item_id == item.id,
+                    ItemIssuance.organization_id == str(organization_id),
+                    ItemIssuance.is_returned == False,  # noqa: E712
+                )
+            )
+            for issuance in result.scalars().all():
+                await self._queue_inventory_notification(
+                    organization_id,
+                    issuance.user_id,
+                    InventoryActionType.RETIRED,
+                    item,
+                    quantity=issuance.quantity_issued,
+                    performed_by=performed_by,
+                )
+
+    async def _release_item_holders(self, item: "InventoryItem", organization_id) -> None:
+        """Close out a written-off item's outstanding records so it no longer
+        appears in any member's equipment list.
+
+        For individual items the active assignment is ended and the item is
+        unassigned. For pool items every open issuance is marked returned and
+        ``quantity_issued`` is reduced — but the units are NOT added back to
+        ``quantity`` because written-off stock is gone, not recovered.
+        """
+        now = datetime.now(timezone.utc)
+
+        if item.assigned_to_user_id:
+            asgn_result = await self.db.execute(
+                select(ItemAssignment)
+                .where(ItemAssignment.item_id == item.id)
+                .where(ItemAssignment.is_active == True)  # noqa: E712
+            )
+            for assignment in asgn_result.scalars().all():
+                assignment.is_active = False
+                assignment.returned_date = now
+                assignment.return_condition = ItemCondition.OUT_OF_SERVICE
+            item.assigned_to_user_id = None
+            item.assigned_date = None
+
+        if item.tracking_type == TrackingType.POOL:
+            iss_result = await self.db.execute(
+                select(ItemIssuance).where(
+                    ItemIssuance.item_id == item.id,
+                    ItemIssuance.organization_id == str(organization_id),
+                    ItemIssuance.is_returned == False,  # noqa: E712
+                )
+            )
+            for issuance in iss_result.scalars().all():
+                issuance.is_returned = True
+                issuance.returned_at = now
+                item.quantity_issued = max(
+                    0, (item.quantity_issued or 0) - issuance.quantity_issued
+                )
 
     # ------------------------------------------------------------------
     # Shared helpers
@@ -315,6 +395,40 @@ class InventoryService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def delete_category(
+        self, category_id: UUID, organization_id: UUID
+    ) -> Tuple[bool, Optional[str]]:
+        """Soft-delete (deactivate) a category.
+
+        Blocked while active items still reference it, so deleting a category
+        can't orphan live inventory.
+        """
+        try:
+            category = await self.get_category_by_id(category_id, organization_id)
+            if not category:
+                return False, "Category not found"
+
+            count_result = await self.db.execute(
+                select(func.count(InventoryItem.id)).where(
+                    InventoryItem.category_id == str(category_id),
+                    InventoryItem.organization_id == str(organization_id),
+                    InventoryItem.active == True,  # noqa: E712
+                )
+            )
+            if count_result.scalar():
+                return (
+                    False,
+                    "Cannot delete: category still has active items. "
+                    "Reassign or retire them first.",
+                )
+
+            category.active = False
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            return False, str(e)
 
     # ============================================
     # Item Management
@@ -515,14 +629,6 @@ class InventoryService:
         query = query.offset(skip).limit(limit)
         result = await self.db.execute(query)
         items = list(result.scalars().all())
-
-        missing = [i for i in items if not i.barcode]
-        if missing:
-            for item in missing:
-                item.barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
-            await self.db.commit()
-            for item in missing:
-                await self.db.refresh(item)
 
         return items, total
 
@@ -915,8 +1021,14 @@ class InventoryService:
         issued_by: UUID,
         quantity: int = 1,
         reason: Optional[str] = None,
+        override_allowance: bool = False,
     ) -> Tuple[Optional["ItemIssuance"], Optional[str]]:
-        """Issue units from a pool-tracked item to a member."""
+        """Issue units from a pool-tracked item to a member.
+
+        Enforces the member's per-category issuance allowance (e.g. "3 polos
+        per year") unless *override_allowance* is set, which lets a
+        quartermaster intentionally exceed the cap.
+        """
         try:
             # Lock the item row to prevent concurrent issuance race conditions
             lock_result = await self.db.execute(
@@ -943,6 +1055,13 @@ class InventoryService:
                     None,
                     f"Insufficient stock: {item.quantity} available, {quantity} requested",
                 )
+
+            if not override_allowance:
+                allowance_error = await self._enforce_issuance_allowance(
+                    user_id, item.category_id, organization_id, quantity
+                )
+                if allowance_error:
+                    return None, allowance_error
 
             # Decrement pool quantity, increment issued count
             item.quantity -= quantity
@@ -1084,8 +1203,10 @@ class InventoryService:
         item_id: UUID,
         organization_id: UUID,
         active_only: bool = True,
+        skip: int = 0,
+        limit: int = 200,
     ) -> List["ItemIssuance"]:
-        """Get all issuance records for a pool item."""
+        """Get issuance records for a pool item with pagination."""
         query = (
             select(ItemIssuance)
             .where(ItemIssuance.item_id == str(item_id))
@@ -1094,7 +1215,7 @@ class InventoryService:
         )
         if active_only:
             query = query.where(ItemIssuance.is_returned == False)  # noqa: E712
-        query = query.order_by(ItemIssuance.issued_at.desc())
+        query = query.order_by(ItemIssuance.issued_at.desc()).offset(skip).limit(limit)
 
         result = await self.db.execute(query)
         return result.scalars().all()
@@ -1386,6 +1507,20 @@ class InventoryService:
                 **safe_data,
             )
             self.db.add(maintenance)
+            await self.db.flush()  # assign maintenance.id for the NFPA detail FK
+
+            # Persist structured NFPA 1851 inspection results when supplied.
+            # This is filtered out of _MAINTENANCE_ALLOWED_FIELDS because it
+            # belongs in its own table, not on the maintenance record.
+            nfpa_inspection = maintenance_data.get("nfpa_inspection")
+            if nfpa_inspection:
+                self.db.add(
+                    NFPAInspectionDetail(
+                        maintenance_record_id=maintenance.id,
+                        organization_id=organization_id,
+                        **nfpa_inspection,
+                    )
+                )
 
             # If maintenance is completed, update item condition and schedule.
             # Lock the item row to prevent concurrent maintenance from
@@ -2957,6 +3092,10 @@ class InventoryService:
         query = (
             select(WriteOffRequest)
             .where(WriteOffRequest.organization_id == organization_id)
+            .options(
+                selectinload(WriteOffRequest.requester),
+                selectinload(WriteOffRequest.reviewer),
+            )
             .order_by(WriteOffRequest.created_at.desc())
         )
         if status_filter:
@@ -2967,18 +3106,8 @@ class InventoryService:
 
         requests = []
         for wo in rows:
-            # Load requester name
-            requester_name = None
-            if wo.requested_by:
-                u = await self.db.execute(
-                    select(User).where(User.id == wo.requested_by)
-                )
-                requester_name = self._format_user_name(u.scalar_one_or_none()) or None
-
-            reviewer_name = None
-            if wo.reviewed_by:
-                u = await self.db.execute(select(User).where(User.id == wo.reviewed_by))
-                reviewer_name = self._format_user_name(u.scalar_one_or_none()) or None
+            requester_name = self._format_user_name(wo.requester) or None
+            reviewer_name = self._format_user_name(wo.reviewer) or None
 
             requests.append(
                 {
@@ -3047,6 +3176,13 @@ class InventoryService:
                 )
                 item = item_result.scalar_one_or_none()
                 if item and item.status != ItemStatus.RETIRED:
+                    # Notify holders before the item leaves their possession,
+                    # then close out their assignment/issuance records so the
+                    # written-off item disappears from their equipment list.
+                    await self._queue_retirement_notifications(
+                        item, organization_id, performed_by=reviewed_by
+                    )
+                    await self._release_item_holders(item, organization_id)
                     if wo.reason in ("lost", "stolen"):
                         item.status = (
                             ItemStatus.LOST
@@ -3376,6 +3512,53 @@ class InventoryService:
             "remaining": remaining,
             "period_type": allowance.period_type,
         }
+
+    async def _get_primary_role_id(
+        self, user_id, organization_id
+    ) -> Optional[UUID]:
+        """Return the member's highest-priority position id, used to resolve
+        which issuance allowance applies. Positions carry a ``priority`` so a
+        member holding several roles is evaluated against their most senior
+        one, giving deterministic allowance lookups.
+        """
+        from app.models.user import Position, user_roles
+
+        result = await self.db.execute(
+            select(Position.id)
+            .join(user_roles, Position.id == user_roles.c.position_id)
+            .where(user_roles.c.user_id == str(user_id))
+            .where(Position.organization_id == str(organization_id))
+            .order_by(Position.priority.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        return UUID(row) if row else None
+
+    async def _enforce_issuance_allowance(
+        self, user_id, category_id, organization_id, quantity: int
+    ) -> Optional[str]:
+        """Return an error string if issuing *quantity* would exceed the
+        member's allowance for the item's category, else None.
+
+        A ``max_quantity`` of -1 from :meth:`check_allowance` means no cap is
+        configured for the category, so issuance is unrestricted.
+        """
+        if not category_id:
+            return None
+        role_id = await self._get_primary_role_id(user_id, organization_id)
+        info = await self.check_allowance(
+            user_id, category_id, organization_id, role_id
+        )
+        if info["max_quantity"] == -1:
+            return None
+        if quantity > info["remaining"]:
+            return (
+                f"Issuance exceeds allowance: member has {info['remaining']} of "
+                f"{info['max_quantity']} remaining for this category "
+                f"({info['period_type']}), but {quantity} requested. "
+                "An administrator can override this limit."
+            )
+        return None
 
     # ------------------------------------------------------------------
     # Bulk Issuance
@@ -4124,6 +4307,22 @@ class InventoryService:
             logger.error(f"Error updating variant group: {e}")
             return None, str(e)
 
+    async def delete_variant_group(
+        self, group_id: UUID, organization_id: UUID
+    ) -> Tuple[bool, Optional[str]]:
+        """Soft-delete (deactivate) a variant group."""
+        try:
+            group = await self.get_variant_group_by_id(group_id, organization_id)
+            if not group:
+                return False, "Variant group not found"
+            group.active = False
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deleting variant group: {e}")
+            return False, str(e)
+
     # ============================================
     # Equipment Kit Methods
     # ============================================
@@ -4218,6 +4417,22 @@ class InventoryService:
             logger.error(f"Error updating equipment kit: {e}")
             return None, str(e)
 
+    async def delete_equipment_kit(
+        self, kit_id: UUID, organization_id: UUID
+    ) -> Tuple[bool, Optional[str]]:
+        """Soft-delete (deactivate) an equipment kit template."""
+        try:
+            kit = await self.get_equipment_kit_by_id(kit_id, organization_id)
+            if not kit:
+                return False, "Equipment kit not found"
+            kit.active = False
+            await self.db.commit()
+            return True, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error deleting equipment kit: {e}")
+            return False, str(e)
+
     async def issue_kit_to_member(
         self,
         kit_id: UUID,
@@ -4269,6 +4484,118 @@ class InventoryService:
             return issuances, None
         except Exception as e:
             logger.error(f"Error issuing kit: {e}")
+            return None, str(e)
+
+    # ============================================
+    # Equipment Request Fulfillment
+    # ============================================
+
+    async def fulfill_equipment_request(
+        self,
+        request_id: UUID,
+        organization_id: UUID,
+        fulfilled_by: UUID,
+        item_id: Optional[UUID] = None,
+        quantity: Optional[int] = None,
+        expected_return_at: Optional[datetime] = None,
+        override_allowance: bool = False,
+    ) -> Tuple[Optional[EquipmentRequest], Optional[str]]:
+        """Turn an approved equipment request into a real issuance, checkout,
+        or assignment, then mark the request fulfilled and link it back to the
+        record that satisfied it.
+
+        Pool items are issued; individual items are checked out (for CHECKOUT
+        requests) or permanently assigned (otherwise). The created record's id
+        is stored on the request so the two are traceable to each other.
+        """
+        try:
+            result = await self.db.execute(
+                select(EquipmentRequest).where(
+                    EquipmentRequest.id == str(request_id),
+                    EquipmentRequest.organization_id == str(organization_id),
+                )
+            )
+            req = result.scalar_one_or_none()
+            if not req:
+                return None, "Request not found"
+
+            status_val = self._enum_value(req.status)
+            if status_val != RequestStatus.APPROVED.value:
+                return None, "Only approved requests can be fulfilled"
+
+            target_item_id = item_id or (
+                UUID(req.item_id) if req.item_id else None
+            )
+            if not target_item_id:
+                return (
+                    None,
+                    "An item must be selected to fulfill this request",
+                )
+
+            item = await self.get_item_by_id(target_item_id, organization_id)
+            if not item:
+                return None, "Selected item not found"
+
+            qty = quantity or req.quantity or 1
+            requester_id = UUID(req.requester_id)
+            request_type = self._enum_value(req.request_type)
+
+            fulfillment_type: str
+            reference_id: str
+
+            if item.tracking_type == TrackingType.POOL:
+                issuance, err = await self.issue_from_pool(
+                    item_id=target_item_id,
+                    user_id=requester_id,
+                    organization_id=organization_id,
+                    issued_by=fulfilled_by,
+                    quantity=qty,
+                    reason="Equipment request fulfillment",
+                    override_allowance=override_allowance,
+                )
+                if err:
+                    return None, err
+                fulfillment_type = "issuance"
+                reference_id = str(issuance.id)
+            elif request_type == RequestType.CHECKOUT.value:
+                checkout, err = await self.checkout_item(
+                    item_id=target_item_id,
+                    user_id=requester_id,
+                    organization_id=organization_id,
+                    checked_out_by=fulfilled_by,
+                    expected_return_at=expected_return_at,
+                    reason="Equipment request fulfillment",
+                )
+                if err:
+                    return None, err
+                fulfillment_type = "checkout"
+                reference_id = str(checkout.id)
+            else:
+                assignment, err = await self.assign_item_to_user(
+                    item_id=target_item_id,
+                    user_id=requester_id,
+                    organization_id=organization_id,
+                    assigned_by=fulfilled_by,
+                    reason="Equipment request fulfillment",
+                )
+                if err:
+                    return None, err
+                fulfillment_type = "assignment"
+                reference_id = str(assignment.id)
+
+            # The issue/checkout/assign call above committed its own
+            # transaction, so re-read the request before stamping fulfillment.
+            req.status = RequestStatus.FULFILLED
+            req.fulfilled_by = str(fulfilled_by)
+            req.fulfilled_at = datetime.now(timezone.utc)
+            req.fulfillment_type = fulfillment_type
+            req.fulfillment_reference_id = reference_id
+            await self.db.commit()
+            await self.db.refresh(req)
+            return req, None
+        except Exception as e:
+            await self.db.rollback()
+            logger.error(f"Error fulfilling equipment request: {e}")
             return None, str(e)
 
     # ============================================

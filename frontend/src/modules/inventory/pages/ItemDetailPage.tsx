@@ -28,7 +28,9 @@ import { ItemFormModal } from '../components/ItemFormModal';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import { useTimezone } from '../../../hooks/useTimezone';
-import { formatDate, formatCurrency as fmtCurrencyUtil } from '../../../utils/dateFormatting';
+import { useAuthStore } from '../../../stores/authStore';
+import { MemberPickerModal } from '../../../components/MemberPickerModal';
+import { formatDate, formatCurrency as fmtCurrencyUtil, getTodayLocalDate } from '../../../utils/dateFormatting';
 import toast from 'react-hot-toast';
 
 /* ------------------------------------------------------------------ */
@@ -94,6 +96,10 @@ const Card: React.FC<CardProps> = ({ title, icon, children }) => (
 const ItemDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const tz = useTimezone();
+  // This page is reachable by any viewer, so management actions are gated on
+  // permission here as defense-in-depth (the backend enforces them too).
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  const canManage = checkPermission('inventory.manage');
 
   // Core state
   const [item, setItem] = useState<InventoryItem | null>(null);
@@ -121,8 +127,10 @@ const ItemDetailPage: React.FC = () => {
 
   // Assign modal
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [assignUserId, setAssignUserId] = useState('');
-  const [assigning, setAssigning] = useState(false);
+
+  // NFPA compliance + exposure modals
+  const [showNfpaModal, setShowNfpaModal] = useState(false);
+  const [showExposureModal, setShowExposureModal] = useState(false);
 
   const itemType = category?.item_type ?? 'equipment';
   const isNfpa = category?.nfpa_tracking_enabled === true;
@@ -196,19 +204,15 @@ const ItemDetailPage: React.FC = () => {
   useEffect(() => { void loadTabData(activeTab); }, [activeTab, loadTabData]);
 
   /* ---------- assign / unassign ----------------------------------- */
-  const handleAssign = async () => {
-    if (!id || !assignUserId.trim()) return;
-    setAssigning(true);
+  const handleAssign = async (userId: string) => {
+    if (!id || !userId) return;
+    setShowAssignModal(false);
     try {
-      await inventoryService.assignItem(id, assignUserId.trim());
+      await inventoryService.assignItem(id, userId);
       toast.success('Item assigned');
-      setShowAssignModal(false);
-      setAssignUserId('');
       void loadItem();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to assign item'));
-    } finally {
-      setAssigning(false);
     }
   };
 
@@ -300,12 +304,14 @@ const ItemDetailPage: React.FC = () => {
           >
             <Printer className="w-4 h-4" /> Print Barcode
           </Link>
-          <button
-            onClick={() => setShowEditModal(true)}
-            className="btn-info btn-sm inline-flex items-center gap-1"
-          >
-            <Pencil className="w-4 h-4" /> Edit
-          </button>
+          {canManage && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="btn-info btn-sm inline-flex items-center gap-1"
+            >
+              <Pencil className="w-4 h-4" /> Edit
+            </button>
+          )}
         </div>
       </div>
 
@@ -397,24 +403,28 @@ const ItemDetailPage: React.FC = () => {
                   }
                 />
                 <Field label="Assigned Date" value={formatDate(item.assigned_date, tz)} />
-                <div className="col-span-full mt-1">
-                  <button
-                    onClick={() => void handleUnassign()}
-                    className="btn-secondary btn-sm"
-                  >
-                    Unassign
-                  </button>
-                </div>
+                {canManage && (
+                  <div className="col-span-full mt-1">
+                    <button
+                      onClick={() => void handleUnassign()}
+                      className="btn-secondary btn-sm"
+                    >
+                      Unassign
+                    </button>
+                  </div>
+                )}
               </>
             ) : (
               <div className="col-span-full">
                 <p className="text-sm text-theme-text-muted mb-2">Not currently assigned</p>
-                <button
-                  onClick={() => setShowAssignModal(true)}
-                  className="btn-info btn-sm"
-                >
-                  Assign Item
-                </button>
+                {canManage && (
+                  <button
+                    onClick={() => setShowAssignModal(true)}
+                    className="btn-info btn-sm"
+                  >
+                    Assign Item
+                  </button>
+                )}
               </div>
             )}
           </Card>
@@ -449,44 +459,27 @@ const ItemDetailPage: React.FC = () => {
           ) : (
             <>
               {activeTab === 'history' && <HistoryTab events={history} tz={tz} />}
-              {activeTab === 'nfpa' && isNfpa && <NFPATab data={nfpa} tz={tz} />}
-              {activeTab === 'inspections' && hasMaintenance && (
-                <InspectionsTab records={maintenance} tz={tz} itemId={id ?? ''} />
+              {activeTab === 'nfpa' && isNfpa && (
+                <NFPATab data={nfpa} tz={tz} canManage={canManage} onEdit={() => setShowNfpaModal(true)} />
               )}
-              {activeTab === 'exposures' && isNfpa && <ExposuresTab records={exposures} tz={tz} />}
+              {activeTab === 'inspections' && hasMaintenance && (
+                <InspectionsTab records={maintenance} tz={tz} itemId={id ?? ''} canManage={canManage} />
+              )}
+              {activeTab === 'exposures' && isNfpa && (
+                <ExposuresTab records={exposures} tz={tz} canManage={canManage} onAdd={() => setShowExposureModal(true)} />
+              )}
             </>
           )}
         </div>
       </div>
 
-      {/* Assign Modal */}
-      {showAssignModal && (
-        <Modal isOpen={showAssignModal} onClose={() => setShowAssignModal(false)} title="Assign Item">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-theme-text-primary mb-1">User ID</label>
-              <input
-                type="text"
-                value={assignUserId}
-                onChange={e => setAssignUserId(e.target.value)}
-                className="form-input w-full"
-                placeholder="Enter user ID"
-              />
-            </div>
-            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2">
-              <button onClick={() => setShowAssignModal(false)} className="btn-secondary btn-md">Cancel</button>
-              <button
-                onClick={() => void handleAssign()}
-                disabled={assigning || !assignUserId.trim()}
-                className="btn-info btn-md inline-flex items-center justify-center gap-1"
-              >
-                {assigning && <Loader2 className="w-4 h-4 animate-spin" />}
-                Assign
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {/* Assign Modal — pick a member rather than pasting a user ID */}
+      <MemberPickerModal
+        isOpen={showAssignModal}
+        onClose={() => setShowAssignModal(false)}
+        title="Assign Item — Select a Member"
+        onSelect={(member) => { void handleAssign(member.userId); }}
+      />
 
       {/* Edit Item Modal */}
       <ItemFormModal
@@ -498,6 +491,31 @@ const ItemDetailPage: React.FC = () => {
         storageAreas={storageAreas}
         editItem={item}
       />
+
+      {/* NFPA Compliance Modal */}
+      {showNfpaModal && (
+        <NFPAComplianceModal
+          itemId={id ?? ''}
+          existing={nfpa}
+          onClose={() => setShowNfpaModal(false)}
+          onSaved={() => {
+            setShowNfpaModal(false);
+            void loadTabData('nfpa');
+          }}
+        />
+      )}
+
+      {/* Exposure Log Modal */}
+      {showExposureModal && (
+        <ExposureModal
+          itemId={id ?? ''}
+          onClose={() => setShowExposureModal(false)}
+          onSaved={() => {
+            setShowExposureModal(false);
+            void loadTabData('exposures');
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -537,13 +555,27 @@ const HistoryTab: React.FC<HistoryTabProps> = ({ events, tz }) => {
 
 /* ----- NFPA Tab --------------------------------------------------- */
 
-interface NFPATabProps { data: NFPACompliance | null; tz: string }
-const NFPATab: React.FC<NFPATabProps> = ({ data, tz }) => {
+interface NFPATabProps { data: NFPACompliance | null; tz: string; canManage: boolean; onEdit: () => void }
+const NFPATab: React.FC<NFPATabProps> = ({ data, tz, canManage, onEdit }) => {
   if (!data) {
-    return <p className="text-sm text-theme-text-muted py-4">No NFPA compliance data available.</p>;
+    return (
+      <div className="text-center py-8">
+        <Shield className="w-8 h-8 mx-auto text-theme-text-muted mb-2" />
+        <p className="text-sm text-theme-text-muted mb-3">No NFPA compliance data available.</p>
+        {canManage && <button onClick={onEdit} className="btn-info btn-sm">+ Add NFPA Compliance</button>}
+      </div>
+    );
   }
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      {canManage && (
+        <div className="flex justify-end mb-3">
+          <button onClick={onEdit} className="btn-secondary btn-sm inline-flex items-center gap-1">
+            <Pencil className="w-3.5 h-3.5" /> Edit
+          </button>
+        </div>
+      )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       <Card title="Lifecycle" icon={<Calendar className="w-4 h-4" />}>
         <Field label="Manufacture Date" value={formatDate(data.manufacture_date, tz)} />
         <Field label="First In Service" value={formatDate(data.first_in_service_date, tz)} />
@@ -566,6 +598,7 @@ const NFPATab: React.FC<NFPATabProps> = ({ data, tz }) => {
           <Field label="Level" value={data.contamination_level} />
         </Card>
       )}
+      </div>
     </div>
   );
 };
@@ -576,14 +609,17 @@ interface InspectionsTabProps {
   records: MaintenanceRecord[];
   tz: string;
   itemId: string;
+  canManage: boolean;
 }
-const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId }) => (
+const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId, canManage }) => (
   <div>
     <div className="flex items-center justify-between mb-3">
       <h3 className="text-sm font-semibold text-theme-text-primary">Maintenance Records</h3>
-      <Link to={`/inventory/maintenance?item=${itemId}`} className="btn-info btn-sm">
-        + Add Record
-      </Link>
+      {canManage && (
+        <Link to={`/inventory/maintenance?item=${itemId}`} className="btn-info btn-sm">
+          + Add Record
+        </Link>
+      )}
     </div>
     {records.length === 0 ? (
       <p className="text-sm text-theme-text-muted py-4">No maintenance records found.</p>
@@ -616,10 +652,13 @@ const InspectionsTab: React.FC<InspectionsTabProps> = ({ records, tz, itemId }) 
 
 /* ----- Exposures Tab ---------------------------------------------- */
 
-interface ExposuresTabProps { records: NFPAExposureRecord[]; tz: string }
-const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz }) => (
+interface ExposuresTabProps { records: NFPAExposureRecord[]; tz: string; canManage: boolean; onAdd: () => void }
+const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz, canManage, onAdd }) => (
   <div>
-    <h3 className="text-sm font-semibold text-theme-text-primary mb-3">Exposure Log</h3>
+    <div className="flex items-center justify-between mb-3">
+      <h3 className="text-sm font-semibold text-theme-text-primary">Exposure Log</h3>
+      {canManage && <button onClick={onAdd} className="btn-info btn-sm">+ Add Exposure</button>}
+    </div>
     {records.length === 0 ? (
       <p className="text-sm text-theme-text-muted py-4">No exposure records found.</p>
     ) : (
@@ -654,5 +693,285 @@ const ExposuresTab: React.FC<ExposuresTabProps> = ({ records, tz }) => (
     )}
   </div>
 );
+
+/* ================================================================== */
+/*  NFPA / Exposure modals                                            */
+/* ================================================================== */
+
+const ENSEMBLE_ROLE_OPTIONS = ['coat', 'pants', 'helmet', 'gloves', 'boots', 'hood'];
+const CONTAMINATION_OPTIONS = ['none', 'light', 'moderate', 'heavy', 'gross'];
+const EXPOSURE_TYPE_OPTIONS = [
+  'structure_fire', 'vehicle_fire', 'wildland_fire', 'hazmat',
+  'bloodborne_pathogen', 'chemical', 'smoke', 'other',
+];
+
+const nfpaLabelClass = 'block text-xs font-medium text-theme-text-primary mb-1';
+const nfpaInputClass = 'form-input w-full';
+
+/** Trim an ISO date/datetime string down to the YYYY-MM-DD a date input expects. */
+function toDateInput(v?: string | null): string {
+  return v ? v.slice(0, 10) : '';
+}
+
+interface NFPAComplianceModalProps {
+  itemId: string;
+  existing: NFPACompliance | null;
+  onClose: () => void;
+  onSaved: () => void;
+}
+const NFPAComplianceModal: React.FC<NFPAComplianceModalProps> = ({ itemId, existing, onClose, onSaved }) => {
+  const [form, setForm] = useState({
+    manufacture_date: toDateInput(existing?.manufacture_date),
+    first_in_service_date: toDateInput(existing?.first_in_service_date),
+    expected_retirement_date: toDateInput(existing?.expected_retirement_date),
+    retirement_reason: existing?.retirement_reason ?? '',
+    ensemble_id: existing?.ensemble_id ?? '',
+    ensemble_role: existing?.ensemble_role ?? '',
+    cylinder_manufacture_date: toDateInput(existing?.cylinder_manufacture_date),
+    cylinder_expiration_date: toDateInput(existing?.cylinder_expiration_date),
+    hydrostatic_test_date: toDateInput(existing?.hydrostatic_test_date),
+    hydrostatic_test_due: toDateInput(existing?.hydrostatic_test_due),
+    flow_test_date: toDateInput(existing?.flow_test_date),
+    flow_test_due: toDateInput(existing?.flow_test_due),
+    contamination_level: existing?.contamination_level ?? '',
+  });
+  const [isRetiredByAge, setIsRetiredByAge] = useState(existing?.is_retired_by_age ?? false);
+  const [saving, setSaving] = useState(false);
+
+  const set = (key: keyof typeof form, value: string) =>
+    setForm(prev => ({ ...prev, [key]: value }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Coerce empty strings to undefined so optional fields are omitted (not
+      // sent as "" which the backend literal validators reject).
+      const payload: Partial<NFPACompliance> = {
+        manufacture_date: form.manufacture_date || undefined,
+        first_in_service_date: form.first_in_service_date || undefined,
+        expected_retirement_date: form.expected_retirement_date || undefined,
+        retirement_reason: form.retirement_reason.trim() || undefined,
+        ensemble_id: form.ensemble_id.trim() || undefined,
+        ensemble_role: form.ensemble_role || undefined,
+        cylinder_manufacture_date: form.cylinder_manufacture_date || undefined,
+        cylinder_expiration_date: form.cylinder_expiration_date || undefined,
+        hydrostatic_test_date: form.hydrostatic_test_date || undefined,
+        hydrostatic_test_due: form.hydrostatic_test_due || undefined,
+        flow_test_date: form.flow_test_date || undefined,
+        flow_test_due: form.flow_test_due || undefined,
+        contamination_level: form.contamination_level || undefined,
+      };
+      if (existing) {
+        await inventoryService.updateNFPACompliance(itemId, { ...payload, is_retired_by_age: isRetiredByAge });
+        toast.success('NFPA compliance updated');
+      } else {
+        await inventoryService.createNFPACompliance(itemId, payload);
+        toast.success('NFPA compliance added');
+      }
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save NFPA compliance'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title={existing ? 'Edit NFPA Compliance' : 'Add NFPA Compliance'} size="lg">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className={nfpaLabelClass}>Manufacture Date</label>
+            <input type="date" value={form.manufacture_date} onChange={e => set('manufacture_date', e.target.value)} className={nfpaInputClass} />
+          </div>
+          <div>
+            <label className={nfpaLabelClass}>First In Service</label>
+            <input type="date" value={form.first_in_service_date} onChange={e => set('first_in_service_date', e.target.value)} className={nfpaInputClass} />
+          </div>
+          <div>
+            <label className={nfpaLabelClass}>Expected Retirement</label>
+            <input type="date" value={form.expected_retirement_date} onChange={e => set('expected_retirement_date', e.target.value)} className={nfpaInputClass} />
+          </div>
+          <div>
+            <label className={nfpaLabelClass}>Retirement Reason</label>
+            <input type="text" value={form.retirement_reason} onChange={e => set('retirement_reason', e.target.value)} className={nfpaInputClass} maxLength={255} />
+          </div>
+          <div>
+            <label className={nfpaLabelClass}>Ensemble ID</label>
+            <input type="text" value={form.ensemble_id} onChange={e => set('ensemble_id', e.target.value)} className={nfpaInputClass} maxLength={36} />
+          </div>
+          <div>
+            <label className={nfpaLabelClass}>Ensemble Role</label>
+            <select value={form.ensemble_role} onChange={e => set('ensemble_role', e.target.value)} className={nfpaInputClass}>
+              <option value="">--</option>
+              {ENSEMBLE_ROLE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="border-t border-theme-surface-border pt-3">
+          <h4 className="text-xs font-semibold text-theme-text-muted mb-2 uppercase tracking-wide">SCBA / Cylinder</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={nfpaLabelClass}>Cylinder Mfg Date</label>
+              <input type="date" value={form.cylinder_manufacture_date} onChange={e => set('cylinder_manufacture_date', e.target.value)} className={nfpaInputClass} />
+            </div>
+            <div>
+              <label className={nfpaLabelClass}>Cylinder Expiration</label>
+              <input type="date" value={form.cylinder_expiration_date} onChange={e => set('cylinder_expiration_date', e.target.value)} className={nfpaInputClass} />
+            </div>
+            <div>
+              <label className={nfpaLabelClass}>Hydrostatic Test</label>
+              <input type="date" value={form.hydrostatic_test_date} onChange={e => set('hydrostatic_test_date', e.target.value)} className={nfpaInputClass} />
+            </div>
+            <div>
+              <label className={nfpaLabelClass}>Hydrostatic Due</label>
+              <input type="date" value={form.hydrostatic_test_due} onChange={e => set('hydrostatic_test_due', e.target.value)} className={nfpaInputClass} />
+            </div>
+            <div>
+              <label className={nfpaLabelClass}>Flow Test</label>
+              <input type="date" value={form.flow_test_date} onChange={e => set('flow_test_date', e.target.value)} className={nfpaInputClass} />
+            </div>
+            <div>
+              <label className={nfpaLabelClass}>Flow Test Due</label>
+              <input type="date" value={form.flow_test_due} onChange={e => set('flow_test_due', e.target.value)} className={nfpaInputClass} />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+          <div>
+            <label className={nfpaLabelClass}>Contamination Level</label>
+            <select value={form.contamination_level} onChange={e => set('contamination_level', e.target.value)} className={nfpaInputClass}>
+              <option value="">--</option>
+              {CONTAMINATION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          {existing && (
+            <label className="inline-flex items-center gap-2 text-sm text-theme-text-primary pb-2">
+              <input type="checkbox" checked={isRetiredByAge} onChange={e => setIsRetiredByAge(e.target.checked)} className="form-checkbox" />
+              Retired by age
+            </label>
+          )}
+        </div>
+
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
+          <button onClick={onClose} className="btn-secondary btn-md">Cancel</button>
+          <button onClick={() => void handleSave()} disabled={saving} className="btn-info btn-md inline-flex items-center justify-center gap-1">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            {existing ? 'Save Changes' : 'Add Compliance'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+interface ExposureModalProps {
+  itemId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}
+const ExposureModal: React.FC<ExposureModalProps> = ({ itemId, onClose, onSaved }) => {
+  const tz = useTimezone();
+  const [form, setForm] = useState({
+    exposure_type: 'structure_fire',
+    exposure_date: getTodayLocalDate(tz),
+    incident_number: '',
+    description: '',
+    decon_method: '',
+    decon_completed_date: '',
+  });
+  const [deconRequired, setDeconRequired] = useState(false);
+  const [deconCompleted, setDeconCompleted] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const set = (key: keyof typeof form, value: string) =>
+    setForm(prev => ({ ...prev, [key]: value }));
+
+  const handleSave = async () => {
+    if (!form.exposure_date) {
+      toast.error('Exposure date is required');
+      return;
+    }
+    setSaving(true);
+    try {
+      await inventoryService.createExposureRecord(itemId, {
+        exposure_type: form.exposure_type,
+        exposure_date: form.exposure_date,
+        incident_number: form.incident_number.trim() || undefined,
+        description: form.description.trim() || undefined,
+        decon_required: deconRequired,
+        decon_completed: deconCompleted,
+        decon_completed_date: form.decon_completed_date || undefined,
+        decon_method: form.decon_method.trim() || undefined,
+      });
+      toast.success('Exposure logged');
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to log exposure'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="Log Exposure" size="md">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className={nfpaLabelClass}>Exposure Type</label>
+            <select value={form.exposure_type} onChange={e => set('exposure_type', e.target.value)} className={nfpaInputClass}>
+              {EXPOSURE_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={nfpaLabelClass}>Exposure Date</label>
+            <input type="date" value={form.exposure_date} onChange={e => set('exposure_date', e.target.value)} className={nfpaInputClass} required />
+          </div>
+        </div>
+        <div>
+          <label className={nfpaLabelClass}>Incident Number</label>
+          <input type="text" value={form.incident_number} onChange={e => set('incident_number', e.target.value)} className={nfpaInputClass} maxLength={100} />
+        </div>
+        <div>
+          <label className={nfpaLabelClass}>Description</label>
+          <textarea value={form.description} onChange={e => set('description', e.target.value)} className={nfpaInputClass} rows={2} />
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <label className="inline-flex items-center gap-2 text-sm text-theme-text-primary">
+            <input type="checkbox" checked={deconRequired} onChange={e => setDeconRequired(e.target.checked)} className="form-checkbox" />
+            Decon required
+          </label>
+          {deconRequired && (
+            <label className="inline-flex items-center gap-2 text-sm text-theme-text-primary">
+              <input type="checkbox" checked={deconCompleted} onChange={e => setDeconCompleted(e.target.checked)} className="form-checkbox" />
+              Decon completed
+            </label>
+          )}
+        </div>
+        {deconRequired && deconCompleted && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className={nfpaLabelClass}>Decon Completed Date</label>
+              <input type="date" value={form.decon_completed_date} onChange={e => set('decon_completed_date', e.target.value)} className={nfpaInputClass} />
+            </div>
+            <div>
+              <label className={nfpaLabelClass}>Decon Method</label>
+              <input type="text" value={form.decon_method} onChange={e => set('decon_method', e.target.value)} className={nfpaInputClass} maxLength={255} />
+            </div>
+          </div>
+        )}
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
+          <button onClick={onClose} className="btn-secondary btn-md">Cancel</button>
+          <button onClick={() => void handleSave()} disabled={saving} className="btn-info btn-md inline-flex items-center justify-center gap-1">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Log Exposure
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
 
 export default ItemDetailPage;

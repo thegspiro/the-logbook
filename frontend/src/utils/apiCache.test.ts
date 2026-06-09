@@ -374,6 +374,32 @@ describe('apiCache', () => {
       expect(isCacheable('/training/courses')).toBe(true);
     });
 
+    it('returns false for member-PII inventory endpoints', () => {
+      // Per-member inventory, issuances, and history
+      expect(isCacheable('/inventory/users/123/inventory')).toBe(false);
+      expect(isCacheable('/inventory/users/123/issuances')).toBe(false);
+      expect(isCacheable('/inventory/users/123/issuance-history')).toBe(false);
+      // Member roster (names, membership numbers)
+      expect(isCacheable('/inventory/members-summary')).toBe(false);
+      // Size preferences — body measurements
+      expect(isCacheable('/inventory/members/123/size-preferences')).toBe(false);
+      expect(isCacheable('/inventory/my/size-preferences')).toBe(false);
+      // Per-member cost-recovery charges (financial)
+      expect(isCacheable('/inventory/charges')).toBe(false);
+    });
+
+    it('returns false for checkout possession endpoints (singular path)', () => {
+      // Guards against a prior plural-prefix typo that matched nothing
+      expect(isCacheable('/inventory/checkout/active')).toBe(false);
+      expect(isCacheable('/inventory/checkout/overdue')).toBe(false);
+    });
+
+    it('still caches the general inventory catalog', () => {
+      expect(isCacheable('/inventory/items')).toBe(true);
+      expect(isCacheable('/inventory/categories')).toBe(true);
+      expect(isCacheable('/inventory/summary')).toBe(true);
+    });
+
     it('returns true for /roles/ (non /roles/my/)', () => {
       expect(isCacheable('/roles/')).toBe(true);
       expect(isCacheable('/roles/list')).toBe(true);
