@@ -24,10 +24,6 @@ class StartupValidationError(Exception):
     """Raised when a critical startup validation fails"""
 
 
-class StartupValidationWarning(Exception):
-    """Raised when a non-critical startup validation fails"""
-
-
 async def validate_enum_consistency(db: AsyncSession) -> Tuple[bool, List[str]]:
     """
     Validate that database enum values match Python model definitions.
@@ -48,13 +44,15 @@ async def validate_enum_consistency(db: AsyncSession) -> Tuple[bool, List[str]]:
 
         async def get_enum_values(table: str, column: str) -> List[str]:
             """Query database for enum values"""
-            query = text("""
+            query = text(
+                """
                 SELECT COLUMN_TYPE
                 FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_SCHEMA = :schema
                 AND TABLE_NAME = :table
                 AND COLUMN_NAME = :column
-            """)
+            """
+            )
 
             result = await db.execute(
                 query, {"schema": settings.DB_NAME, "table": table, "column": column}
@@ -144,6 +142,13 @@ async def run_startup_validations(db: AsyncSession, strict: bool = False) -> Non
     all_valid = all_valid and enum_valid
     all_warnings.extend(enum_warnings)
 
+    # Enum case-convention check — every DB enum value must be lowercase
+    # (the project stores enums as lowercase; UPPERCASE values silently break
+    # the frontend/backend contract). See docs/ENUM_CONVENTIONS.md.
+    case_valid, case_violations = await validate_enum_case_convention(db)
+    all_valid = all_valid and case_valid
+    all_warnings.extend(case_violations)
+
     # Log results
     if all_valid:
         logger.info("✅ All startup validation checks passed")
@@ -177,12 +182,14 @@ async def validate_enum_case_convention(db: AsyncSession) -> Tuple[bool, List[st
         from app.core.config import settings
 
         # Get all enum columns from database
-        query = text("""
+        query = text(
+            """
             SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE
             FROM INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_SCHEMA = :schema
             AND DATA_TYPE = 'enum'
-        """)
+        """
+        )
 
         result = await db.execute(query, {"schema": settings.DB_NAME})
         results = result.fetchall()
