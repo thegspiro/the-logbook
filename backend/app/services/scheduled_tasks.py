@@ -959,6 +959,8 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
     from datetime import timedelta
     from datetime import timezone as dt_timezone
 
+    from sqlalchemy import func
+
     from app.core.config import settings
     from app.core.utils import generate_uuid
     from app.models.notification import NotificationChannel, NotificationLog
@@ -1004,19 +1006,77 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
             )
             shifts = list(shifts_result.scalars().all())
 
+            # Batch every per-shift lookup the loop below needs so post-shift
+            # validation issues a handful of queries per org instead of ~6 per
+            # shift (officer, attendance, assignments, reports, checks).
+            shift_ids = [str(s.id) for s in shifts]
+            officer_ids = {
+                str(s.shift_officer_id) for s in shifts if s.shift_officer_id
+            }
+            officer_map: dict[str, User] = {}
+            if officer_ids:
+                ores = await db.execute(
+                    select(User).where(
+                        User.id.in_(officer_ids),
+                        User.is_active == True,  # noqa: E712
+                    )
+                )
+                officer_map = {str(u.id): u for u in ores.scalars().all()}
+
+            att_count_map: dict[str, int] = {}
+            assigned_map: dict[str, list[str]] = {}
+            report_map: dict[tuple[str, str], set[str]] = {}
+            checks_done_map: dict[str, set[str]] = {}
+            if shift_ids:
+                ares = await db.execute(
+                    select(ShiftAttendance.shift_id, func.count(ShiftAttendance.id))
+                    .where(ShiftAttendance.shift_id.in_(shift_ids))
+                    .group_by(ShiftAttendance.shift_id)
+                )
+                for sid, cnt in ares.all():
+                    att_count_map[str(sid)] = cnt
+
+                asres = await db.execute(
+                    select(ShiftAssignment.shift_id, ShiftAssignment.user_id)
+                    .where(ShiftAssignment.shift_id.in_(shift_ids))
+                    .where(
+                        ShiftAssignment.assignment_status.notin_(
+                            ["declined", "cancelled"]
+                        )
+                    )
+                )
+                for sid, uid in asres.all():
+                    assigned_map.setdefault(str(sid), []).append(str(uid))
+
+                rres = await db.execute(
+                    select(
+                        ShiftCompletionReport.shift_id,
+                        ShiftCompletionReport.officer_id,
+                        ShiftCompletionReport.trainee_id,
+                    ).where(ShiftCompletionReport.shift_id.in_(shift_ids))
+                )
+                for sid, oid, tid in rres.all():
+                    report_map.setdefault((str(sid), str(oid)), set()).add(str(tid))
+
+                cres = await db.execute(
+                    select(
+                        ShiftEquipmentCheck.shift_id,
+                        ShiftEquipmentCheck.template_id,
+                    ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
+                )
+                for sid, tid in cres.all():
+                    checks_done_map.setdefault(str(sid), set()).add(tid)
+
+            # Many shifts share an apparatus; resolve end-of-shift templates
+            # once per apparatus rather than once per shift.
+            eos_template_cache: dict[str, list] = {}
+
             for shift in shifts:
                 activities = shift.activities or {}
                 if activities.get("validation_notification_sent"):
                     continue
 
-                # Find the shift officer
-                officer_result = await db.execute(
-                    select(User).where(
-                        User.id == shift.shift_officer_id,
-                        User.is_active == True,  # noqa: E712
-                    )
-                )
-                officer = officer_result.scalar_one_or_none()
+                officer = officer_map.get(str(shift.shift_officer_id))
                 if not officer:
                     shift.activities = {
                         **activities,
@@ -1025,55 +1085,33 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                     continue
 
                 # Count attendance
-                att_result = await db.execute(
-                    select(ShiftAttendance).where(
-                        ShiftAttendance.shift_id == str(shift.id)
-                    )
-                )
-                attendance_records = list(att_result.scalars().all())
-                att_count = len(attendance_records)
+                att_count = att_count_map.get(str(shift.id), 0)
 
                 # Check for outstanding end-of-shift checklists
                 pending_checklists: list[str] = []
                 if shift.apparatus_id:
-                    eos_templates = await resolve_check_templates(
-                        db,
-                        str(org.id),
-                        str(shift.apparatus_id),
-                        "end_of_shift",
-                    )
+                    aid = str(shift.apparatus_id)
+                    if aid not in eos_template_cache:
+                        eos_template_cache[aid] = await resolve_check_templates(
+                            db,
+                            str(org.id),
+                            aid,
+                            "end_of_shift",
+                        )
+                    eos_templates = eos_template_cache[aid]
 
                     if eos_templates:
-                        eos_tmpl_ids = [str(t.id) for t in eos_templates]
-                        done_result = await db.execute(
-                            select(ShiftEquipmentCheck.template_id)
-                            .where(ShiftEquipmentCheck.shift_id == str(shift.id))
-                            .where(ShiftEquipmentCheck.template_id.in_(eos_tmpl_ids))
-                        )
-                        done_ids = {r[0] for r in done_result.all()}
+                        done_ids = checks_done_map.get(str(shift.id), set())
                         pending_checklists = [
                             t.name for t in eos_templates if str(t.id) not in done_ids
                         ]
 
                 # Check if any trainees on the shift still need
                 # a completion report from this officer
-                assign_result = await db.execute(
-                    select(ShiftAssignment.user_id)
-                    .where(ShiftAssignment.shift_id == str(shift.id))
-                    .where(
-                        ShiftAssignment.assignment_status.notin_(
-                            ["declined", "cancelled"]
-                        )
-                    )
+                assigned_ids = assigned_map.get(str(shift.id), [])
+                reported_ids = report_map.get(
+                    (str(shift.id), str(shift.shift_officer_id)), set()
                 )
-                assigned_ids = [str(r[0]) for r in assign_result.all()]
-                report_result = await db.execute(
-                    select(ShiftCompletionReport.trainee_id).where(
-                        ShiftCompletionReport.shift_id == str(shift.id),
-                        ShiftCompletionReport.officer_id == str(shift.shift_officer_id),
-                    )
-                )
-                reported_ids = {str(r[0]) for r in report_result.all()}
                 missing_reports = len(
                     [
                         uid
@@ -1335,6 +1373,26 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
             )
             shifts = list(shifts_result.scalars().all())
 
+            # Resolve apparatus display names for every shift in one query.
+            app_name_map: dict[str, str] = {}
+            apparatus_ids = {str(s.apparatus_id) for s in shifts if s.apparatus_id}
+            if apparatus_ids:
+                app_rows = await db.execute(
+                    select(
+                        BasicApparatus.id,
+                        BasicApparatus.unit_number,
+                        BasicApparatus.name,
+                    ).where(BasicApparatus.id.in_(apparatus_ids))
+                )
+                for aid, unit_number, name in app_rows.all():
+                    app_name_map[str(aid)] = (
+                        f"{unit_number} — {name}" if unit_number else name
+                    )
+
+            # Shifts frequently share an apparatus; resolve each apparatus's
+            # start-of-shift templates once instead of once per shift.
+            sos_template_cache: dict[str, list] = {}
+
             for shift in shifts:
                 activities = shift.activities or {}
                 if activities.get("start_reminder_sent"):
@@ -1359,19 +1417,11 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     continue
 
                 # Resolve apparatus name
-                apparatus_name = None
-                if shift.apparatus_id:
-                    app_result = await db.execute(
-                        select(BasicApparatus.unit_number, BasicApparatus.name).where(
-                            BasicApparatus.id == str(shift.apparatus_id)
-                        )
-                    )
-                    row = app_result.one_or_none()
-                    if row:
-                        unit_number, name = row
-                        apparatus_name = (
-                            f"{unit_number} \u2014 {name}" if unit_number else name
-                        )
+                apparatus_name = (
+                    app_name_map.get(str(shift.apparatus_id))
+                    if shift.apparatus_id
+                    else None
+                )
 
                 # Resolve roster (member name + position).
                 # Exclude inactive users — a member who was assigned to
@@ -1409,13 +1459,15 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                 # Fetch equipment check templates for the apparatus
                 checklist_names: list[str] = []
                 if shift.apparatus_id and start_checklists_enabled:
-                    templates = await resolve_check_templates(
-                        db,
-                        str(org.id),
-                        str(shift.apparatus_id),
-                        "start_of_shift",
-                    )
-                    checklist_names = [t.name for t in templates]
+                    aid = str(shift.apparatus_id)
+                    if aid not in sos_template_cache:
+                        sos_template_cache[aid] = await resolve_check_templates(
+                            db,
+                            str(org.id),
+                            aid,
+                            "start_of_shift",
+                        )
+                    checklist_names = [t.name for t in sos_template_cache[aid]]
 
                 shift_date_str = (
                     shift.shift_date.strftime("%b %d, %Y")
@@ -1741,6 +1793,31 @@ async def run_end_of_shift_checklist_reminders(
         )
         shifts = list(shifts_result.scalars().all())
 
+        # Batch the per-shift submitted-checks and assignment lookups, and
+        # resolve end-of-shift templates once per apparatus.
+        shift_ids = [str(s.id) for s in shifts]
+        checks_done_map: dict[str, set[str]] = {}
+        assigned_map: dict[str, list[str]] = {}
+        if shift_ids:
+            cres = await db_session.execute(
+                select(
+                    ShiftEquipmentCheck.shift_id,
+                    ShiftEquipmentCheck.template_id,
+                ).where(ShiftEquipmentCheck.shift_id.in_(shift_ids))
+            )
+            for sid, tid in cres.all():
+                checks_done_map.setdefault(str(sid), set()).add(tid)
+            asres = await db_session.execute(
+                select(ShiftAssignment.shift_id, ShiftAssignment.user_id)
+                .where(ShiftAssignment.shift_id.in_(shift_ids))
+                .where(
+                    ShiftAssignment.assignment_status.notin_(["declined", "cancelled"])
+                )
+            )
+            for sid, uid in asres.all():
+                assigned_map.setdefault(str(sid), []).append(str(uid))
+        eos_template_cache: dict[str, list] = {}
+
         org_notifications = 0
 
         for shift in shifts:
@@ -1755,12 +1832,15 @@ async def run_end_of_shift_checklist_reminders(
                 }
                 continue
 
-            eos_templates = await resolve_check_templates(
-                db_session,
-                str(org.id),
-                str(shift.apparatus_id),
-                "end_of_shift",
-            )
+            aid = str(shift.apparatus_id)
+            if aid not in eos_template_cache:
+                eos_template_cache[aid] = await resolve_check_templates(
+                    db_session,
+                    str(org.id),
+                    aid,
+                    "end_of_shift",
+                )
+            eos_templates = eos_template_cache[aid]
 
             if not eos_templates:
                 shift.activities = {
@@ -1769,13 +1849,7 @@ async def run_end_of_shift_checklist_reminders(
                 }
                 continue
 
-            tmpl_ids = [str(t.id) for t in eos_templates]
-            done_result = await db_session.execute(
-                select(ShiftEquipmentCheck.template_id)
-                .where(ShiftEquipmentCheck.shift_id == str(shift.id))
-                .where(ShiftEquipmentCheck.template_id.in_(tmpl_ids))
-            )
-            done_ids = {r[0] for r in done_result.all()}
+            done_ids = checks_done_map.get(str(shift.id), set())
             pending = [t for t in eos_templates if str(t.id) not in done_ids]
 
             if not pending:
@@ -1806,15 +1880,7 @@ async def run_end_of_shift_checklist_reminders(
                 f"{checklist_list}."
             )
 
-            assign_result = await db_session.execute(
-                select(ShiftAssignment)
-                .where(ShiftAssignment.shift_id == str(shift.id))
-                .where(
-                    ShiftAssignment.assignment_status.notin_(["declined", "cancelled"])
-                )
-            )
-            assignments = list(assign_result.scalars().all())
-            member_ids = [str(a.user_id) for a in assignments if a.user_id]
+            member_ids = assigned_map.get(str(shift.id), [])
 
             shift_action_url = f"/scheduling?shift={shift.id}&tab=equipment-checks"
             shift_metadata = {
@@ -1945,24 +2011,32 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
             shifts_result = await db.execute(shifts_query)
             shifts = list(shifts_result.scalars().all())
 
+            # Resolve apparatus display names for every shift in one query.
+            app_name_map: dict[str, str] = {}
+            apparatus_ids = {str(s.apparatus_id) for s in shifts if s.apparatus_id}
+            if apparatus_ids:
+                app_rows = await db.execute(
+                    select(
+                        BasicApparatus.id,
+                        BasicApparatus.unit_number,
+                        BasicApparatus.name,
+                    ).where(BasicApparatus.id.in_(apparatus_ids))
+                )
+                for aid, unit_number, name in app_rows.all():
+                    app_name_map[str(aid)] = (
+                        f"{unit_number} — {name}" if unit_number else name
+                    )
+
             for shift in shifts:
                 activities = shift.activities or {}
                 already_sent = set(activities.get("member_summaries_sent") or [])
 
-                # Resolve apparatus once per shift
-                apparatus_name = None
-                if shift.apparatus_id:
-                    app_result = await db.execute(
-                        select(BasicApparatus.unit_number, BasicApparatus.name).where(
-                            BasicApparatus.id == str(shift.apparatus_id)
-                        )
-                    )
-                    row = app_result.one_or_none()
-                    if row:
-                        unit_number, name = row
-                        apparatus_name = (
-                            f"{unit_number} — {name}" if unit_number else name
-                        )
+                # Resolve apparatus name from the batch-loaded map
+                apparatus_name = (
+                    app_name_map.get(str(shift.apparatus_id))
+                    if shift.apparatus_id
+                    else None
+                )
 
                 # All attendance records for the shift
                 att_result = await db.execute(
@@ -3758,18 +3832,26 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
             )
             shifts = list(shifts_result.scalars().all())
 
-            for shift in shifts:
-                activities = shift.activities or {}
-
-                # Find members still checked in (no checkout time)
-                att_result = await db.execute(
+            # Batch-load the open (checked-in, not checked-out) attendance for
+            # every shift at once instead of querying per shift.
+            shift_ids = [str(s.id) for s in shifts]
+            open_att_map: dict[str, list[ShiftAttendance]] = {}
+            if shift_ids:
+                att_res = await db.execute(
                     select(ShiftAttendance).where(
-                        ShiftAttendance.shift_id == str(shift.id),
+                        ShiftAttendance.shift_id.in_(shift_ids),
                         ShiftAttendance.checked_in_at.isnot(None),
                         ShiftAttendance.checked_out_at.is_(None),
                     )
                 )
-                open_attendances = list(att_result.scalars().all())
+                for att in att_res.scalars().all():
+                    open_att_map.setdefault(str(att.shift_id), []).append(att)
+
+            for shift in shifts:
+                activities = shift.activities or {}
+
+                # Members still checked in (no checkout time)
+                open_attendances = open_att_map.get(str(shift.id), [])
 
                 if not open_attendances:
                     continue

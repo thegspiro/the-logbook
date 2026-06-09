@@ -401,17 +401,33 @@ class EquipmentCheckService:
         assignment = result.scalars().first()
         user_position = assignment.position if assignment else None
 
-        # Find applicable templates
+        return await self._checklists_for_shift(shift, organization_id, user_position)
+
+    async def _checklists_for_shift(
+        self,
+        shift: Shift,
+        organization_id: str,
+        user_position: Optional[str],
+        existing_checks: Optional[Dict[str, ShiftEquipmentCheck]] = None,
+    ) -> List[Dict[str, Any]]:
+        """Build checklist entries for an already-loaded shift.
+
+        Shared by ``get_checklists_for_shift`` (one shift) and
+        ``get_my_checklists`` (many shifts) so the latter does not re-fetch the
+        shift/assignment it already holds. Pass ``existing_checks`` (keyed by
+        template_id) to reuse a batch-loaded check map instead of querying the
+        checks per shift.
+        """
         templates = await self._resolve_templates(shift, organization_id, user_position)
 
-        # Get existing checks for this shift
-        result = await self.db.execute(
-            select(ShiftEquipmentCheck).where(
-                ShiftEquipmentCheck.shift_id == shift_id,
-                ShiftEquipmentCheck.organization_id == organization_id,
+        if existing_checks is None:
+            result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.shift_id == shift.id,
+                    ShiftEquipmentCheck.organization_id == organization_id,
+                )
             )
-        )
-        existing_checks = {c.template_id: c for c in result.scalars().all()}
+            existing_checks = {c.template_id: c for c in result.scalars().all()}
 
         checklists = []
         for tmpl in templates:
@@ -967,10 +983,28 @@ class EquipmentCheckService:
             for app_id, app_name in app_result.all():
                 apparatus_map[app_id] = app_name or ""
 
+        # Batch-load existing checks for all of the user's shifts at once, then
+        # resolve each shift from the already-loaded shift/assignment objects —
+        # avoids re-fetching the shift, assignment, and checks per shift.
+        shift_ids = [assignment.shift_id for assignment, _ in rows]
+        checks_by_shift: Dict[str, Dict[str, ShiftEquipmentCheck]] = {}
+        if shift_ids:
+            checks_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.shift_id.in_(shift_ids),
+                    ShiftEquipmentCheck.organization_id == organization_id,
+                )
+            )
+            for c in checks_result.scalars().all():
+                checks_by_shift.setdefault(str(c.shift_id), {})[c.template_id] = c
+
         checklists = []
         for assignment, shift in rows:
-            shift_checklists = await self.get_checklists_for_shift(
-                assignment.shift_id, user_id, organization_id
+            shift_checklists = await self._checklists_for_shift(
+                shift,
+                organization_id,
+                assignment.position,
+                existing_checks=checks_by_shift.get(str(assignment.shift_id), {}),
             )
             apparatus_name = apparatus_map.get(shift.apparatus_id or "", "")
             for cl in shift_checklists:
@@ -1655,17 +1689,8 @@ class EquipmentCheckService:
         )
         checks = checks_q.scalars().all()
 
-        # Build apparatus map
-        apparatus_ids = {c.apparatus_id for c in checks if c.apparatus_id}
-        apparatus_map: Dict[str, Any] = {}
-        if apparatus_ids:
-            app_q = await self.db.execute(
-                select(Apparatus).where(Apparatus.id.in_(list(apparatus_ids)))
-            )
-            for a in app_q.scalars().all():
-                apparatus_map[str(a.id)] = a
-
-        # Also get all org apparatus for deficiency status
+        # All org apparatus drive the per-apparatus deficiency stats below;
+        # this set already covers every apparatus referenced by the checks.
         all_app_q = await self.db.execute(
             select(Apparatus).where(
                 Apparatus.organization_id == organization_id,
@@ -1811,26 +1836,21 @@ class EquipmentCheckService:
         total_result = await self.db.execute(count_q)
         total = total_result.scalar() or 0
 
-        # Fetch page
+        # Fetch page, selecting the parent check alongside each item so the
+        # check rows touched by the join are reused instead of re-queried.
         items_q = (
-            base_q.order_by(ShiftEquipmentCheck.checked_at.desc())
+            base_q.add_columns(ShiftEquipmentCheck)
+            .order_by(ShiftEquipmentCheck.checked_at.desc())
             .limit(limit)
             .offset(offset)
         )
         items_result = await self.db.execute(items_q)
-        failed_items = items_result.scalars().all()
+        rows = items_result.all()
+        failed_items = [row[0] for row in rows]
 
-        # Resolve check + apparatus data
-        check_ids = {str(fi.check_id) for fi in failed_items}
         checks_map: Dict[str, ShiftEquipmentCheck] = {}
-        if check_ids:
-            cq = await self.db.execute(
-                select(ShiftEquipmentCheck).where(
-                    ShiftEquipmentCheck.id.in_(list(check_ids))
-                )
-            )
-            for c in cq.scalars().all():
-                checks_map[str(c.id)] = c
+        for _item, check in rows:
+            checks_map[str(check.id)] = check
 
         user_ids_set: set[str] = set()
         apparatus_ids_set: set[str] = set()
@@ -1907,9 +1927,10 @@ class EquipmentCheckService:
             tzinfo=timezone.utc
         )
 
-        # Get all check items for this template item
+        # Get all check items for this template item, selecting the parent
+        # check alongside each so we don't re-query the joined checks.
         q = await self.db.execute(
-            select(ShiftEquipmentCheckItem)
+            select(ShiftEquipmentCheckItem, ShiftEquipmentCheck)
             .join(
                 ShiftEquipmentCheck,
                 ShiftEquipmentCheck.id == ShiftEquipmentCheckItem.check_id,
@@ -1922,19 +1943,26 @@ class EquipmentCheckService:
             )
             .order_by(ShiftEquipmentCheck.checked_at.asc())
         )
-        items = q.scalars().all()
-
-        # Get check data for dates
-        check_ids = {str(i.check_id) for i in items}
+        rows = q.all()
+        items = [row[0] for row in rows]
         checks_map: Dict[str, ShiftEquipmentCheck] = {}
-        if check_ids:
-            cq = await self.db.execute(
-                select(ShiftEquipmentCheck).where(
-                    ShiftEquipmentCheck.id.in_(list(check_ids))
+        for _item, check in rows:
+            checks_map[str(check.id)] = check
+
+        # Resolve each check's shift date in one query (avoids a per-item
+        # Shift lookup when building the history records below).
+        shift_ids = {
+            str(c.shift_id) for c in checks_map.values() if c.shift_id
+        }
+        shift_date_map: Dict[str, date] = {}
+        if shift_ids:
+            sdq = await self.db.execute(
+                select(Shift.id, Shift.shift_date).where(
+                    Shift.id.in_(list(shift_ids))
                 )
             )
-            for c in cq.scalars().all():
-                checks_map[str(c.id)] = c
+            for sid, sdate in sdq.all():
+                shift_date_map[str(sid)] = sdate
 
         user_ids_set: set[str] = set()
         for c in checks_map.values():
@@ -1988,12 +2016,7 @@ class EquipmentCheckService:
             check = checks_map.get(str(item.check_id))
             shift_date_val = None
             if check and check.shift_id:
-                sq = await self.db.execute(
-                    select(Shift.shift_date).where(Shift.id == check.shift_id)
-                )
-                sd = sq.scalar_one_or_none()
-                if sd:
-                    shift_date_val = sd
+                shift_date_val = shift_date_map.get(str(check.shift_id))
             history.append(
                 {
                     "check_id": str(item.check_id),

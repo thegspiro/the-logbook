@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ClipboardCheck,
@@ -130,21 +130,14 @@ export const MyChecklistsPage: React.FC = () => {
   }, []);
 
   const fetchHistory = useCallback(
-    async (query?: string) => {
+    async () => {
       setHistoryLoading(true);
       try {
         const params: { start_date?: string; end_date?: string; limit?: number; offset?: number } = {
           limit: 50,
         };
         const records = await schedulingService.getMyChecklistHistory(params);
-        const filtered = query
-          ? records.filter(
-              (r) =>
-                (r.checkedByName ?? '').toLowerCase().includes(query.toLowerCase()) ||
-                (r.checkTiming ?? '').toLowerCase().includes(query.toLowerCase()),
-            )
-          : records;
-        setHistory(filtered);
+        setHistory(records);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load checklist history'));
       } finally {
@@ -158,11 +151,23 @@ export const MyChecklistsPage: React.FC = () => {
     void fetchActiveChecklists();
   }, [fetchActiveChecklists]);
 
+  // History is filtered client-side, so it is fetched once when the panel
+  // opens — not on every keystroke in the search box.
   useEffect(() => {
     if (showHistory) {
-      void fetchHistory(searchQuery || undefined);
+      void fetchHistory();
     }
-  }, [showHistory, fetchHistory, searchQuery]);
+  }, [showHistory, fetchHistory]);
+
+  const displayedHistory = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return history;
+    return history.filter(
+      (r) =>
+        (r.checkedByName ?? '').toLowerCase().includes(q) ||
+        (r.checkTiming ?? '').toLowerCase().includes(q),
+    );
+  }, [history, searchQuery]);
 
   // ------------------------------------------------------------------
   // Handlers
@@ -189,9 +194,9 @@ export const MyChecklistsPage: React.FC = () => {
     toast.success('Equipment check submitted successfully');
     void fetchActiveChecklists();
     if (showHistory) {
-      void fetchHistory(searchQuery || undefined);
+      void fetchHistory();
     }
-  }, [fetchActiveChecklists, fetchHistory, showHistory, searchQuery]);
+  }, [fetchActiveChecklists, fetchHistory, showHistory]);
 
   const handleBack = useCallback(() => {
     if (!window.confirm('Leave this check? Your progress is saved as a draft and will be restored when you return.')) return;
@@ -581,13 +586,13 @@ export const MyChecklistsPage: React.FC = () => {
                 <Loader2 className="h-5 w-5 animate-spin text-theme-text-muted" />
                 <span className="ml-2 text-sm text-theme-text-muted">Loading history...</span>
               </div>
-            ) : history.length === 0 ? (
+            ) : displayedHistory.length === 0 ? (
               <div className="rounded-lg border border-theme-surface-border bg-theme-surface p-6 text-center">
                 <p className="text-sm text-theme-text-muted">No check history found.</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {history.map((record) => (
+                {displayedHistory.map((record) => (
                   <button
                     key={record.id}
                     onClick={() => void handleViewCheckDetail(record.id)}

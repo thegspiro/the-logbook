@@ -581,6 +581,153 @@ class SchedulingService:
 
         return shifts, total
 
+    async def filter_shifts_with_open_positions(
+        self,
+        organization_id: UUID,
+        shifts: List[Shift],
+        exclude_user_id: Optional[str] = None,
+    ) -> List[Shift]:
+        """Return only the shifts that still have at least one open position.
+
+        A shift is "open" when its required named positions are not all
+        filled, or — when it defines no required positions — when the count
+        of active (assigned/confirmed) members is below its minimum staffing.
+        This mirrors the understaffing logic used by the compliance report so
+        the open-shifts list and the staffing report agree on what counts as
+        an unfilled position.
+
+        When ``exclude_user_id`` is given, shifts that user is already
+        actively assigned to are dropped — computed from the same assignment
+        scan so the caller does not need a second query.
+        """
+        if not shifts:
+            return []
+
+        shift_ids = [s.id for s in shifts]
+        _active_statuses = [
+            AssignmentStatus.ASSIGNED.value,
+            AssignmentStatus.CONFIRMED.value,
+        ]
+        assignments_result = await self.db.execute(
+            select(
+                ShiftAssignment.shift_id,
+                ShiftAssignment.user_id,
+                ShiftAssignment.position,
+            )
+            .where(ShiftAssignment.shift_id.in_(shift_ids))
+            .where(ShiftAssignment.organization_id == str(organization_id))
+            .where(ShiftAssignment.assignment_status.in_(_active_statuses))
+        )
+        active_positions: Dict[str, List[str]] = {}
+        user_assigned_shift_ids: set[str] = set()
+        for shift_id, user_id, position in assignments_result.all():
+            pos = position.value if hasattr(position, "value") else str(position)
+            active_positions.setdefault(str(shift_id), []).append(pos)
+            if exclude_user_id and str(user_id) == str(exclude_user_id):
+                user_assigned_shift_ids.add(str(shift_id))
+
+        # Normalize each shift's required positions once, up front, so it is
+        # reused by both the apparatus-fallback decision and the open check.
+        required_by_shift: Dict[str, List[Dict[str, Any]]] = {
+            str(s.id): [
+                slot
+                for slot in self.normalize_positions(s.positions)
+                if slot.get("required", True)
+            ]
+            for s in shifts
+        }
+
+        # A shift may not carry its own min_staffing; fall back to the apparatus
+        # default headcount, but only query for shifts that actually need it
+        # (no required positions and no shift-level min_staffing of their own).
+        apparatus_ids = list(
+            {
+                s.apparatus_id
+                for s in shifts
+                if s.apparatus_id
+                and s.min_staffing is None
+                and not required_by_shift[str(s.id)]
+            }
+        )
+        apparatus_min_staffing: Dict[str, int] = {}
+        if apparatus_ids:
+            app_result = await self.db.execute(
+                select(BasicApparatus.id, BasicApparatus.min_staffing)
+                .where(BasicApparatus.id.in_(apparatus_ids))
+                .where(BasicApparatus.organization_id == str(organization_id))
+            )
+            for row in app_result.all():
+                if row[1] is not None:
+                    apparatus_min_staffing[row[0]] = row[1]
+
+        open_shifts: List[Shift] = []
+        for shift in shifts:
+            if str(shift.id) in user_assigned_shift_ids:
+                continue
+            active_pos = list(active_positions.get(str(shift.id), []))
+            required_slots = required_by_shift[str(shift.id)]
+            if required_slots:
+                # Greedily match each required slot against a held position so
+                # duplicate slots (e.g. two firefighters) are each consumed once.
+                pos_pool = list(active_pos)
+                has_open = False
+                for slot in required_slots:
+                    slot_name = slot["position"].lower()
+                    matched = False
+                    for idx, ap in enumerate(pos_pool):
+                        if ap.lower() == slot_name:
+                            pos_pool.pop(idx)
+                            matched = True
+                            break
+                    if not matched:
+                        has_open = True
+                        break
+            else:
+                min_staff = shift.min_staffing
+                if min_staff is None and shift.apparatus_id:
+                    min_staff = apparatus_min_staffing.get(shift.apparatus_id)
+                if min_staff is None:
+                    min_staff = 1
+                has_open = len(active_pos) < min_staff
+            if has_open:
+                open_shifts.append(shift)
+        return open_shifts
+
+    async def get_open_shifts(
+        self,
+        organization_id: UUID,
+        start_date: date,
+        end_date: date,
+        apparatus_id: Optional[str] = None,
+        exclude_user_id: Optional[str] = None,
+        max_candidates: int = 500,
+    ) -> List[Shift]:
+        """Return every shift in the window that still has an open position.
+
+        Date range, finalized status, and apparatus are filtered in SQL so we
+        never fetch rows we will discard, then the open-position check is
+        applied. Unlike fetching a fixed page and filtering it, this is exact
+        for the window — fully-staffed shifts can no longer push open ones out
+        of an arbitrary page. ``max_candidates`` only bounds pathological data.
+        """
+        query = (
+            select(Shift)
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.shift_date >= start_date)
+            .where(Shift.shift_date <= end_date)
+            .where(Shift.is_finalized.is_(False))
+        )
+        if apparatus_id:
+            query = query.where(Shift.apparatus_id == apparatus_id)
+        query = query.order_by(
+            Shift.shift_date.asc(), Shift.start_time.asc()
+        ).limit(max_candidates)
+        result = await self.db.execute(query)
+        candidates = list(result.scalars().all())
+        return await self.filter_shifts_with_open_positions(
+            organization_id, candidates, exclude_user_id=exclude_user_id
+        )
+
     async def get_shift_by_id(
         self, shift_id: UUID, organization_id: UUID
     ) -> Optional[Shift]:
@@ -3367,15 +3514,17 @@ class SchedulingService:
         )
         all_users = user_result.scalars().all()
 
-        # Load position slugs for each user
+        # Load position slugs for all users in one query (avoids an N+1 over
+        # the active-member set on every compliance report request).
         user_position_slugs: Dict[str, List[str]] = {}
-        for user in all_users:
+        if all_users:
             pos_result = await self.db.execute(
-                select(Position.slug)
-                .join(user_positions, Position.id == user_positions.c.position_id)
-                .where(user_positions.c.user_id == user.id)
+                select(user_positions.c.user_id, Position.slug)
+                .join(Position, Position.id == user_positions.c.position_id)
+                .where(user_positions.c.user_id.in_([u.id for u in all_users]))
             )
-            user_position_slugs[user.id] = [row[0] for row in pos_result.all()]
+            for uid, slug in pos_result.all():
+                user_position_slugs.setdefault(uid, []).append(slug)
 
         # 3. For each requirement, compute compliance
         compliance_data = []
@@ -3461,15 +3610,15 @@ class SchedulingService:
             user_leave_months: Dict[str, int] = {}
             if is_rolling:
                 leave_svc = MemberLeaveService(self.db)
+                leaves_by_user = await leave_svc.get_active_leaves_for_users(
+                    str(organization_id),
+                    user_ids,
+                    period_start,
+                    period_end,
+                )
                 for uid in user_ids:
-                    leaves = await leave_svc.get_active_leaves_for_user(
-                        str(organization_id),
-                        uid,
-                        period_start,
-                        period_end,
-                    )
                     user_leave_months[uid] = MemberLeaveService.count_leave_months(
-                        leaves,
+                        leaves_by_user.get(uid, []),
                         period_start,
                         period_end,
                     )

@@ -8,7 +8,7 @@ rolling-period requirement calculations.
 """
 
 from datetime import date, datetime, timedelta, timezone
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -291,6 +291,39 @@ class MemberLeaveService:
             )
         )
         return list(result.scalars().all())
+
+    async def get_active_leaves_for_users(
+        self,
+        organization_id: str,
+        user_ids: List[str],
+        period_start: date,
+        period_end: date,
+    ) -> Dict[str, List[MemberLeaveOfAbsence]]:
+        """Batched form of ``get_active_leaves_for_user``.
+
+        Returns a dict mapping each user_id to their overlapping active leave
+        records, fetched in a single query so callers iterating over many
+        members (e.g. the shift compliance report) avoid an N+1.
+        Users with no leave are absent from the dict.
+        """
+        leaves_by_user: Dict[str, List[MemberLeaveOfAbsence]] = {}
+        if not user_ids:
+            return leaves_by_user
+        result = await self.db.execute(
+            select(MemberLeaveOfAbsence).where(
+                MemberLeaveOfAbsence.organization_id == organization_id,
+                MemberLeaveOfAbsence.user_id.in_(user_ids),
+                MemberLeaveOfAbsence.active == True,  # noqa: E712
+                MemberLeaveOfAbsence.start_date <= period_end,
+                or_(
+                    MemberLeaveOfAbsence.end_date >= period_start,
+                    MemberLeaveOfAbsence.end_date.is_(None),  # permanent leave
+                ),
+            )
+        )
+        for leave in result.scalars().all():
+            leaves_by_user.setdefault(leave.user_id, []).append(leave)
+        return leaves_by_user
 
     @staticmethod
     def count_leave_months(

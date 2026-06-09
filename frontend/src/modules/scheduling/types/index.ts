@@ -317,6 +317,40 @@ export interface ShiftSignupResponse {
   status: AssignmentStatus;
 }
 
+// ============================================================================
+// Shift Calls / Runs
+// ============================================================================
+
+export interface ShiftCallRecord {
+  id: string;
+  organization_id: string;
+  shift_id: string;
+  incident_number?: string | null;
+  incident_type: string;
+  dispatched_at?: string | null;
+  on_scene_at?: string | null;
+  cleared_at?: string | null;
+  cancelled_en_route: boolean;
+  medical_refusal: boolean;
+  responding_members?: string[] | null;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface ShiftCallCreate {
+  incident_type: string;
+  incident_number?: string | undefined;
+  dispatched_at?: string | undefined;
+  on_scene_at?: string | undefined;
+  cleared_at?: string | undefined;
+  cancelled_en_route?: boolean | undefined;
+  medical_refusal?: boolean | undefined;
+  responding_members?: string[] | undefined;
+  notes?: string | undefined;
+}
+
+export type ShiftCallUpdate = Partial<ShiftCallCreate>;
+
 // Re-export equipment check types
 export type {
   CheckTemplateItem,

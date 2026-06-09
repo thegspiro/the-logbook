@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -240,31 +241,16 @@ async def get_open_shifts(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
 
-    shifts_list, total = await service.get_shifts(
+    # Date window, finalized status, and apparatus are filtered in SQL; the
+    # result is every open shift in the window with shifts the current user is
+    # already on removed (computed in a single assignment scan).
+    shifts_list = await service.get_open_shifts(
         current_user.organization_id,
-        start_date=start,
-        end_date=end,
-        skip=0,
-        limit=50,
+        start,
+        end,
+        apparatus_id=apparatus_id,
+        exclude_user_id=str(current_user.id),
     )
-    # Optionally filter by apparatus_id
-    if apparatus_id:
-        shifts_list = [s for s in shifts_list if s.apparatus_id == apparatus_id]
-
-    # Exclude shifts the current user is already assigned to (prevent double-booking)
-    if shifts_list:
-        _active_statuses = [
-            AssignmentStatus.ASSIGNED.value,
-            AssignmentStatus.CONFIRMED.value,
-        ]
-        my_assignment_result = await service.db.execute(
-            select(ShiftAssignment.shift_id)
-            .where(ShiftAssignment.user_id == str(current_user.id))
-            .where(ShiftAssignment.shift_id.in_([s.id for s in shifts_list]))
-            .where(ShiftAssignment.assignment_status.in_(_active_statuses))
-        )
-        my_assigned_shift_ids = {str(row[0]) for row in my_assignment_result.all()}
-        shifts_list = [s for s in shifts_list if str(s.id) not in my_assigned_shift_ids]
 
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
@@ -1749,8 +1735,11 @@ async def list_apparatus_options(
                     )
                 )
             source = "apparatus"
-    except Exception:
-        pass
+    except Exception as exc:
+        # The full Apparatus module may not be installed for this org; fall
+        # through to BasicApparatus. Log so a genuine query failure (vs. the
+        # module simply being absent) is still diagnosable.
+        logger.debug(f"Apparatus module lookup failed, using fallback: {exc}")
 
     # 2. Fall back to BasicApparatus if no full module records
     if not options:

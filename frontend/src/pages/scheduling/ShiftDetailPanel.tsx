@@ -17,11 +17,10 @@ import { useNavigate } from 'react-router-dom';
 import {
   X, Users, Clock, MapPin, Truck, UserPlus, Check, XCircle,
   Loader2, ChevronDown, ChevronUp, Pencil, Trash2, Save, Palette, FileText,
-  ClipboardCheck, CheckCircle2, AlertTriangle, LogIn, LogOut, QrCode,
+  ClipboardCheck, CheckCircle2, AlertTriangle, LogIn, LogOut, QrCode, UserMinus,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
-import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
@@ -31,23 +30,19 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, formatDateCustom, localToUTC } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
-import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, UserStatus, AssignmentStatus } from '../../constants/enums';
+import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { PositionListEditor } from '../../modules/scheduling/components/PositionListEditor';
 import { BUILTIN_POSITIONS } from '../../modules/scheduling/types/shiftSettings';
 import TimeQuarterHour from '../../components/ux/TimeQuarterHour';
 import { AssignmentActions } from './AssignmentActions';
 import { PositionEditor } from './PositionEditor';
 import { CrewBoardSlot } from './CrewBoardSlot';
+import { ShiftCallsSection } from './ShiftCallsSection';
 
 interface ShiftDetailPanelProps {
   shift: ShiftRecord;
   onClose: () => void;
   onRefresh?: () => void;
-}
-
-interface MemberOption {
-  id: string;
-  label: string;
 }
 
 export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
@@ -60,7 +55,12 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
   const canAssign = checkPermission('scheduling.assign') || canManage;
-  const { apparatus: apparatusList, loadApparatus } = useSchedulingStore();
+  const {
+    apparatus: apparatusList,
+    loadApparatus,
+    members: memberOptions,
+    loadMembers,
+  } = useSchedulingStore();
 
   const [shift, setShift] = useState(initialShift);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -107,6 +107,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     deleting: false,
     finalizing: false,
     signingUp: false,
+    withdrawing: false,
     confirming: false,
     declining: false,
     removing: false,
@@ -151,7 +152,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Assign state (admin) — position-first flow with member search
   const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
   const [memberSearch, setMemberSearch] = useState('');
-  const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
 
   // Bulk assignment state — maps position name to selected user_id
@@ -210,23 +210,18 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     return () => { cancelled = true; };
   }, [shift.id]);
 
-  // Load members for the assign dropdown and shift officer edit
+  // Load members for the assign dropdown and shift officer edit. The member
+  // roster comes from the shared store cache (loadMembers is idempotent), so
+  // opening the form on multiple shifts doesn't re-download the user list.
+  // Only the shift-scoped unavailable set is fetched here.
   useEffect(() => {
     if (!showAssignForm && !isEditing) return;
-    const loadMembers = async () => {
+    void loadMembers();
+    if (!showAssignForm) return;
+    const loadUnavailable = async () => {
       setPendingFlag('loadingMembers', true);
       try {
-        const [users, unavailable] = await Promise.all([
-          userService.getUsers(),
-          showAssignForm
-            ? schedulingService.getUnavailableMembers(shift.id)
-            : Promise.resolve([]),
-        ]);
-        const members = users.filter((m) => m.status === UserStatus.ACTIVE).map((m) => ({
-          id: String(m.id),
-          label: `${m.first_name || ''} ${m.last_name || ''}`.trim() || String(m.email || m.id),
-        }));
-        setMemberOptions(members);
+        const unavailable = await schedulingService.getUnavailableMembers(shift.id);
         setUnavailableIds(new Set(unavailable));
       } catch {
         // Non-critical — fallback to manual ID entry
@@ -234,8 +229,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         setPendingFlag('loadingMembers', false);
       }
     };
-    void loadMembers();
-  }, [showAssignForm, isEditing, shift.id, setPendingFlag]);
+    void loadUnavailable();
+  }, [showAssignForm, isEditing, shift.id, setPendingFlag, loadMembers]);
 
   // Load apparatus list when editing
   useEffect(() => {
@@ -272,6 +267,21 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       toast.error(getErrorMessage(err, 'Failed to sign up for shift'));
     } finally {
       setPendingFlag('signingUp', false);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (pending.withdrawing) return;
+    setPendingFlag('withdrawing', true);
+    try {
+      await schedulingService.withdrawSignup(shift.id);
+      toast.success('Withdrawn from shift');
+      await refreshAssignments();
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to withdraw from shift'));
+    } finally {
+      setPendingFlag('withdrawing', false);
     }
   };
 
@@ -1278,9 +1288,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           {/* Sign Up confirmation for already-assigned members */}
           {isUserAssigned && (
             <div className="p-3 bg-green-500/5 border border-green-500/20 rounded-lg space-y-2">
-              <div className="flex items-center gap-2">
-                <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
-                <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                  <p className="text-sm text-green-700 dark:text-green-400">You are assigned to this shift</p>
+                </div>
+                {!isPast && !shift.is_finalized && (
+                  <button onClick={() => { void handleWithdraw(); }} disabled={pending.withdrawing}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 disabled:opacity-50 transition-colors"
+                    title="Withdraw from this shift" aria-label="Withdraw from this shift"
+                  >
+                    {pending.withdrawing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserMinus className="w-3.5 h-3.5" />}
+                    Withdraw
+                  </button>
+                )}
               </div>
 
               {/* Check-in / Check-out buttons */}
@@ -1344,6 +1365,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               )}
             </div>
           )}
+
+          {/* Calls / Runs logged during this shift */}
+          <div className="pt-1">
+            <ShiftCallsSection
+              shiftId={shift.id}
+              canManage={canManage && !shift.is_finalized}
+              tz={tz}
+              onChange={() => { void refreshAssignments(); onRefresh?.(); }}
+            />
+          </div>
 
           {/* QR Code for apparatus check-in (officers) */}
           {canAssign && shift.apparatus_id && (
