@@ -30,6 +30,9 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **End-of-Shift Member Summary** — *(2026-05-29)* New scheduled task emails (and in-app notifies) each attending active member a summary of their hours, calls, and a report link after their shift
 - **Trainee Report Follow-Up** — *(2026-05-29)* New daily escalation reminds trainees of approved-but-unacknowledged reports, plus low-rating officer alerts to training officers
 - **Richer Shift Reminders** — *(2026-05-29)* Pre-shift reminders now include apparatus, the active-member crew roster, and equipment checklists, with a "Mark Arrival" deep link; email is sent by default
+- **Shift Call / Run Logging** — *(2026-06-09)* Officers (`scheduling.manage`) log the calls a crew ran during a shift: incident type/number, dispatched/on-scene/cleared times, cancelled-en-route and medical-refusal flags, responding members, and notes. Read-only once the shift is finalized
+- **Staffing-Based Open Shifts** — *(2026-06-09)* The Open Shifts list now ranks by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`) instead of a fixed page, so fully-staffed shifts no longer push genuinely-open ones out of view (capped at 500 candidates per window)
+- **Scheduling Query Performance** — *(2026-06-09)* New composite index `idx_shift_assign_shift_status` on `shift_assignments(shift_id, assignment_status)`, plus batch-loading across the scheduled reminder/validation/auto-checkout tasks and the compliance report (eliminates N+1 officer/attendance/assignment/leave queries)
 
 ---
 

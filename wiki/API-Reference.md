@@ -165,6 +165,41 @@ POST   /api/v1/training/shift-reports/{report_id}/review               # Officer
 POST   /api/v1/scheduling/shifts/{id}/finalize                         # Finalize shift (snapshot data, create draft reports)
 ```
 
+## Shift Calls / Runs *(2026-06-09)*
+
+Log the calls/runs a crew responded to during a shift. Read: `scheduling.view`;
+write: `scheduling.manage`. Hidden once a shift is finalized.
+
+```
+GET    /api/v1/scheduling/shifts/{shift_id}/calls                       # List calls for a shift
+POST   /api/v1/scheduling/shifts/{shift_id}/calls                       # Log a call (incident_type required)
+GET    /api/v1/scheduling/calls/{call_id}                               # Get a call
+PATCH  /api/v1/scheduling/calls/{call_id}                               # Update a call
+DELETE /api/v1/scheduling/calls/{call_id}                               # Delete a call
+```
+
+> Open-shift results *(2026-06-09)*: `GET /api/v1/scheduling/open-shifts` now returns shifts by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`), capped at 500 candidates in the window, excluding shifts the caller already holds — fixing fully-staffed shifts pushing open ones off a fixed page.
+
+## Inventory — Allowances, Size Preferences & Fulfillment *(2026-06-09)*
+
+```
+GET    /api/v1/inventory/allowances/check/{user_id}/{category_id}       # Remaining issue allowance { max_quantity, issued_this_period, remaining, period_type }
+POST   /api/v1/inventory/allowances                                     # Create allowance (audit: issuance_allowance_created)
+PUT    /api/v1/inventory/allowances/{allowance_id}                      # Update allowance
+DELETE /api/v1/inventory/allowances/{allowance_id}                      # Delete allowance
+GET    /api/v1/inventory/my/size-preferences                           # Current user's sizes (404 if unset)
+PUT    /api/v1/inventory/my/size-preferences                           # Upsert own sizes
+GET    /api/v1/inventory/members/{user_id}/size-preferences            # Member sizes (inventory.view)
+PUT    /api/v1/inventory/members/{user_id}/size-preferences            # Upsert member sizes (inventory.manage)
+PUT    /api/v1/inventory/requests/{request_id}/fulfill                  # Fulfill approved request → issuance/checkout/assignment
+GET    /api/v1/inventory/items/{item_id}/issuances?skip=&limit=        # Paginated issuances (default 50, max 200)
+DELETE /api/v1/inventory/categories/{category_id}                      # Soft-delete category (blocked if active items)
+DELETE /api/v1/inventory/variant-groups/{group_id}                     # Soft-delete variant group
+DELETE /api/v1/inventory/kits/{kit_id}                                 # Soft-delete equipment kit
+```
+
+> Issuing a pool item enforces the per-category allowance unless `override_allowance=true`. Member-specific inventory endpoints (`/inventory/my/`, `/inventory/members/`, `/inventory/charges`, `/inventory/checkout/`, `/inventory/users/`, `/inventory/members-summary`) are excluded from client caching (PII).
+
 ## Election Results & Verification *(2026-03-29)*
 
 ```

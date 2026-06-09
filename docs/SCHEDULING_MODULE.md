@@ -22,6 +22,8 @@ The Scheduling module manages the full shift lifecycle for fire departments and 
 - **Auto-default shift officer** — When a member is assigned the "Officer" position, they are automatically set as the shift officer
 - **Scheduling reports** (member hours, coverage, call volume, availability)
 - **Training integration** via shift completion reports and observations
+- **Shift call/run logging** *(2026-06-09)* — Officers record the calls a crew ran during a shift (incident type/number, dispatched/on-scene/cleared times, cancelled-en-route and medical-refusal flags, responding members, notes). Read-only after the shift is finalized
+- **Staffing-based open shifts** *(2026-06-09)* — Open Shifts is computed from actual staffing (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`) instead of a fixed page, so fully-staffed shifts can't crowd open ones out of view (capped at 500 candidates per window). Backed by the composite index `idx_shift_assign_shift_status` on `shift_assignments(shift_id, assignment_status)`
 
 ---
 

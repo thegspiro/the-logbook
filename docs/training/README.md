@@ -11,9 +11,9 @@ Welcome to the training documentation for The Logbook. These guides are designed
 | 0 | [Getting Started](./00-getting-started.md) | First login, navigation, dashboard, account settings |
 | 1 | [Membership Management](./01-membership.md) | Member directory, profiles, prospective pipeline, status management, leave of absence, tiers |
 | 2 | [Training & Certification](./02-training.md) | Courses, programs, requirements, submissions, compliance, external integrations, manual shift reports, program export/import, NREMT linkage |
-| 3 | [Shifts & Scheduling](./03-scheduling.md) | Calendar, assignments, attendance, time-off, swaps, templates, platoon rotations, compliance, shift settings |
+| 3 | [Shifts & Scheduling](./03-scheduling.md) | Calendar, assignments, attendance, call/run logging, time-off, swaps, templates, platoon rotations, compliance, shift settings |
 | 4 | [Events & Meetings](./04-events-meetings.md) | Events, QR check-in, meetings, minutes, action items, elections, public outreach pipeline |
-| 5 | [Inventory Management](./05-inventory.md) | Items (individual & pool), variant groups, equipment kits, member size preferences, reorder requests, categories, assignments, checkout, batch operations, scanning, label printing, NFPA 1851 lifecycle, departure clearance |
+| 5 | [Inventory Management](./05-inventory.md) | Items (individual & pool), variant groups, equipment kits, member size preferences, issuance allowances, equipment request fulfillment, reorder requests, categories, assignments, checkout, batch operations, scanning, label printing, NFPA 1851 lifecycle, departure clearance |
 | 6 | [Apparatus & Facilities](./06-apparatus-facilities.md) | Vehicles, maintenance, fuel, NFPA compliance, facilities dashboard, facility detail (sidebar nav), rooms, systems, inspections, utilities, capital projects |
 | 7 | [Documents, Forms & Communications](./07-documents-forms.md) | File storage, form builder, notifications, messages, integrations |
 | 8 | [Administration & Reports](./08-admin-reports.md) | Settings, roles, modules, reports, analytics, public portal, security, first-time setup, Salesforce integration |

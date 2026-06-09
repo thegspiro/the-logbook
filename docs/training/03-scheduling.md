@@ -157,17 +157,29 @@ After a shift ends, the shift officer receives an automatic notification prompti
 
 ## Call Logging
 
-During a shift, officers can log calls responded to:
+During a shift, officers (with the `scheduling.manage` permission) can log every call or run the crew responded to. The **Calls / Runs** section lives on the shift detail panel.
 
-1. Open the shift detail panel.
-2. Navigate to the **Calls** section.
-3. Click **Add Call**.
-4. Enter the call type, time, and any notes.
+1. Open the shift from the calendar to bring up the shift detail panel.
+2. Scroll to the **Calls / Runs** section (a count badge shows how many calls are logged).
+3. Click **+ Log Call** to open the inline form.
+4. Fill in the call details:
+   - **Incident type** *(required)* — e.g., Structure Fire, EMS, MVA.
+   - **Incident number** *(optional)* — your CAD/run number.
+   - **Dispatched / On-scene / Cleared times** *(optional)* — entered in your local time and stored in UTC.
+   - **Cancelled en route** and **Refusal (medical)** — checkboxes for those outcomes.
+   - **Responding members** *(optional)* — the crew that responded, if tracked separately from the shift roster.
+   - **Notes** *(optional)*.
+5. Click **Save**. The call appears as a card showing the incident type/number, status badges (amber "Cancelled en route", blue "Refusal"), the dispatch→clear timeline, and notes. Use the pencil and trash icons to edit or delete a call.
 
 Calls logged against a shift contribute to **call-based training requirements** for enrolled members.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the call logging section showing a list of calls with type, time, and notes, and an "Add Call" button]_
+> **Note:** Once a shift is **finalized**, the Calls / Runs section becomes read-only — the **+ Log Call**, edit, and delete controls disappear. Log calls before finalizing the shift.
+
+> **Screenshot needed:**
+> _[Screenshot of the Calls / Runs section on the shift detail panel showing the "+ Log Call" button, the count badge, and two logged-call cards — one with an amber "Cancelled en route" badge and one with a blue "Refusal" badge, each showing the incident type, incident number, a dispatched→cleared time range, and edit/delete icons]_
+
+> **Screenshot needed:**
+> _[Screenshot of the inline Log Call form expanded, showing the two-column layout: incident type + incident number on top, dispatched + cleared datetime-local pickers in the middle, the "Cancelled en route" and "Refusal (medical)" checkboxes, a notes textarea, and Cancel/Save buttons]_
 
 ---
 
