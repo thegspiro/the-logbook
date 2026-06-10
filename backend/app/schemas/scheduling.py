@@ -6,7 +6,7 @@ Request and response schemas for scheduling/shift management endpoints.
 
 from datetime import date, datetime
 from enum import Enum as PyEnum
-from typing import Any, List, Optional
+from typing import Annotated, Any, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -213,29 +213,36 @@ class SchedulingSummary(BaseModel):
 class ShiftCallCreate(BaseModel):
     """Schema for creating a shift call"""
 
-    incident_number: Optional[str] = None
-    incident_type: str
+    # Length bounds mirror the String(100) DB columns (a clean 422 instead of
+    # a DB-level error) and cap the Text/JSON columns against oversized
+    # payloads. responding_members holds user-id strings.
+    incident_number: Optional[str] = Field(None, max_length=100)
+    incident_type: str = Field(min_length=1, max_length=100)
     dispatched_at: Optional[datetime] = None
     on_scene_at: Optional[datetime] = None
     cleared_at: Optional[datetime] = None
     cancelled_en_route: bool = False
     medical_refusal: bool = False
-    responding_members: Optional[List[str]] = None
-    notes: Optional[str] = None
+    responding_members: Optional[List[Annotated[str, Field(max_length=64)]]] = Field(
+        None, max_length=100
+    )
+    notes: Optional[str] = Field(None, max_length=2000)
 
 
 class ShiftCallUpdate(BaseModel):
     """Schema for updating a shift call"""
 
-    incident_number: Optional[str] = None
-    incident_type: Optional[str] = None
+    incident_number: Optional[str] = Field(None, max_length=100)
+    incident_type: Optional[str] = Field(None, min_length=1, max_length=100)
     dispatched_at: Optional[datetime] = None
     on_scene_at: Optional[datetime] = None
     cleared_at: Optional[datetime] = None
     cancelled_en_route: Optional[bool] = None
     medical_refusal: Optional[bool] = None
-    responding_members: Optional[List[str]] = None
-    notes: Optional[str] = None
+    responding_members: Optional[List[Annotated[str, Field(max_length=64)]]] = Field(
+        None, max_length=100
+    )
+    notes: Optional[str] = Field(None, max_length=2000)
 
 
 class ShiftCallResponse(UTCResponseBase):

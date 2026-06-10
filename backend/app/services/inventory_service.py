@@ -198,7 +198,9 @@ class InventoryService:
                     performed_by=performed_by,
                 )
 
-    async def _release_item_holders(self, item: "InventoryItem", organization_id) -> None:
+    async def _release_item_holders(
+        self, item: "InventoryItem", organization_id
+    ) -> None:
         """Close out a written-off item's outstanding records so it no longer
         appears in any member's equipment list.
 
@@ -3513,9 +3515,7 @@ class InventoryService:
             "period_type": allowance.period_type,
         }
 
-    async def _get_primary_role_id(
-        self, user_id, organization_id
-    ) -> Optional[UUID]:
+    async def _get_primary_role_id(self, user_id, organization_id) -> Optional[UUID]:
         """Return the member's highest-priority position id, used to resolve
         which issuance allowance applies. Positions carry a ``priority`` so a
         member holding several roles is evaluated against their most senior
@@ -4509,11 +4509,16 @@ class InventoryService:
         is stored on the request so the two are traceable to each other.
         """
         try:
+            # Row-lock the request so the APPROVED check is atomic with the
+            # fulfillment: without it, two concurrent fulfill calls can both
+            # pass the status check and each create an issuance/checkout.
             result = await self.db.execute(
-                select(EquipmentRequest).where(
+                select(EquipmentRequest)
+                .where(
                     EquipmentRequest.id == str(request_id),
                     EquipmentRequest.organization_id == str(organization_id),
                 )
+                .with_for_update()
             )
             req = result.scalar_one_or_none()
             if not req:
@@ -4523,9 +4528,7 @@ class InventoryService:
             if status_val != RequestStatus.APPROVED.value:
                 return None, "Only approved requests can be fulfilled"
 
-            target_item_id = item_id or (
-                UUID(req.item_id) if req.item_id else None
-            )
+            target_item_id = item_id or (UUID(req.item_id) if req.item_id else None)
             if not target_item_id:
                 return (
                     None,
