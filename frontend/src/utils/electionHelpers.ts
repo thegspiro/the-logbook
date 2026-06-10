@@ -18,7 +18,9 @@ export const getTimeRemaining = (endDate: string): string | null => {
   const now = new Date();
   const end = new Date(endDate);
   const diffMs = end.getTime() - now.getTime();
-  if (diffMs <= 0) return null;
+  // NaN (unparseable date) fails `<= 0` and would otherwise fall through
+  // and render as "NaNm remaining" in the UI.
+  if (Number.isNaN(diffMs) || diffMs <= 0) return null;
 
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffHours / 24);
