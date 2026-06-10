@@ -45,6 +45,13 @@ The apparatus list shows all vehicles with:
 
 > **Hint:** If your department has the full Apparatus module disabled, you will see a simplified **Apparatus Basic** view that provides a lightweight list of apparatus for shift scheduling purposes.
 
+### Printing Apparatus Labels
+
+Each apparatus row has a **Print label** action (printer icon). It opens the shared label print page for that unit, where you choose a label size — including any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print directly. The barcode encodes the apparatus **asset tag** (or unit number if no asset tag is set). Your printer choice is remembered for the **apparatus team's role**, so whoever prints apparatus labels gets the same printer on any computer, independent of the inventory or other modules' printers.
+
+> **Screenshot needed:**
+> _[Screenshot of the apparatus list with the per-row "Print label" printer icon highlighted, and the label print page open showing the size presets and a preview of an "Engine 5" barcode label]_
+
 ---
 
 ## Viewing Apparatus Details
@@ -161,6 +168,13 @@ The facilities dashboard shows:
 > _[Screenshot of the Facilities Dashboard showing four summary statistic cards at the top (Total Facilities: 3, Pending Maintenance: 2, Upcoming Inspections: 1, Overdue: 0), a recent activity feed in the left column, and a grid of facility cards on the right showing station names, types (Fire Station, Admin Building), addresses, and status badges (Operational in green)]_
 
 > **Hint:** If your department has the Facilities module disabled, you will see a simplified **Locations** page that provides basic location management for events and meetings.
+
+### Printing Facility Labels
+
+The Facilities header has a **Print Labels** button that prints a barcode label for every facility (stations are typically few). It opens the shared label print page, where you pick a label size and download a PDF or print. The barcode encodes the **facility number**. The chosen printer is remembered for the facilities role.
+
+> **Screenshot needed:**
+> _[Screenshot of the Facilities header showing the "Print Labels" button next to "Add Facility", and the label print page previewing a "Station 1" facility label]_
 
 ---
 
