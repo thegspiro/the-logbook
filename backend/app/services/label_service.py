@@ -40,11 +40,14 @@ def _short_id(value: str, length: int = 12) -> str:
 
 
 async def _build_inventory_specs(db, org_id, ids, extra_lines):
-    # Inventory owns barcode auto-assignment and the extra-line fields, so it
-    # builds its own specs (and persists any missing barcodes).
+    # Inventory owns the extra-line fields. Read-only here (no barcode writes):
+    # items get their sequential barcode at creation, and the inventory print
+    # page uses its own persisting endpoint.
     from app.services.inventory_service import InventoryService
 
-    return await InventoryService(db).build_label_specs(ids, org_id, extra_lines)
+    return await InventoryService(db).build_label_specs(
+        ids, org_id, extra_lines, persist=False
+    )
 
 
 async def _build_apparatus_specs(db, org_id, ids, extra_lines):
@@ -275,3 +278,22 @@ class LabelService:
             specs, label_format, custom_width, custom_height, auto_rotate
         )
         return pdf, auto_populated
+
+    async def preview(
+        self, organization_id, module: str, ids: List[str]
+    ) -> List[Dict[str, Any]]:
+        """Return label preview data (name, barcode value, subtitle) for the
+        on-screen preview — read-only, no side effects."""
+        entry = MODULE_LABELS.get(module)
+        if entry is None:
+            raise ValueError(f"Labels are not available for module: {module}")
+        _, builder = entry
+        specs, _ = await builder(self.db, str(organization_id), ids, None)
+        return [
+            {
+                "name": s.name,
+                "barcode_value": s.barcode_value,
+                "subtitle": s.asset_tag or s.serial_number or None,
+            }
+            for s in specs
+        ]

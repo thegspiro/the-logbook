@@ -20,10 +20,23 @@ const ApparatusDetailPage = lazyWithRetry(
 const ApparatusFormPage = lazyWithRetry(
   () => import('./pages/ApparatusFormPage'),
 );
+const ApparatusLabelPrintPage = lazyWithRetry(
+  () => import('./pages/ApparatusLabelPrintPage'),
+);
 
 export const getApparatusRoutes = () => {
   return (
     <React.Fragment>
+      <Route
+        path="/apparatus/print-labels"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredPermission="apparatus.view">
+              <ApparatusLabelPrintPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
       {/* Apparatus List */}
       <Route
         path="/apparatus"

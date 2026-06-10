@@ -25,10 +25,23 @@ const ApplicationStatusPage = lazyWithRetry(() =>
 const InterviewPage = lazyWithRetry(
   () => import('./pages/InterviewPage'),
 );
+const ProspectLabelPrintPage = lazyWithRetry(
+  () => import('./pages/ProspectLabelPrintPage'),
+);
 
 export const getProspectiveMembersRoutes = () => {
   return (
     <React.Fragment>
+      <Route
+        path="/prospective-members/print-labels"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredPermission="prospective_members.view">
+              <ProspectLabelPrintPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
       {/* Prospective Members Pipeline */}
       <Route
         path="/prospective-members"

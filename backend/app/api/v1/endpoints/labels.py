@@ -55,6 +55,28 @@ class LabelGenerateBody(BaseModel):
     extra_lines: Optional[List[str]] = None
 
 
+class LabelPreviewBody(BaseModel):
+    module: str = Field(min_length=1, max_length=50)
+    ids: List[str] = Field(min_length=1, max_length=2000)
+
+
+@router.post("/labels/preview")
+async def preview_labels(
+    data: LabelPreviewBody,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Read-only preview data (name, barcode value, subtitle) for *module*."""
+    _authorize_module(current_user, data.module)
+    try:
+        items = await LabelService(db).preview(
+            current_user.organization_id, data.module, data.ids
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    return {"items": items}
+
+
 @router.get("/label-preset/{module}")
 async def get_label_preset(
     module: str,

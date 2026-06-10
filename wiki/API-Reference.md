@@ -189,8 +189,12 @@ PUT    /api/v1/inventory/allowances/{allowance_id}                      # Update
 DELETE /api/v1/inventory/allowances/{allowance_id}                      # Delete allowance
 GET    /api/v1/inventory/my/size-preferences                           # Current user's sizes (404 if unset)
 PUT    /api/v1/inventory/my/size-preferences                           # Upsert own sizes
-GET    /api/v1/inventory/label-preset                                  # Label printer preset for the user's position+module { preset, custom_width, custom_height, position_id, module }
-PUT    /api/v1/inventory/label-preset                                  # Save label preset for the user's position (inventory module) { preset, custom_width?, custom_height? }
+GET    /api/v1/inventory/label-preset                                  # (inventory) Label printer preset { preset, custom_width, custom_height, position_id, module }
+PUT    /api/v1/inventory/label-preset                                  # (inventory) Save label preset { preset, custom_width?, custom_height? }
+GET    /api/v1/label-preset/{module}                                   # Generic: label preset for the user's position in {module}
+PUT    /api/v1/label-preset/{module}                                   # Generic: save label preset for {module}
+POST   /api/v1/labels/preview                                          # { module, ids } → { items: [{ name, barcode_value, subtitle }] } (read-only)
+POST   /api/v1/labels/generate                                         # { module, ids, label_format, ... } → label PDF. Modules: inventory, apparatus, prospective_members, facilities, membership
 GET    /api/v1/inventory/members/{user_id}/size-preferences            # Member sizes (inventory.view)
 PUT    /api/v1/inventory/members/{user_id}/size-preferences            # Upsert member sizes (inventory.manage)
 PUT    /api/v1/inventory/requests/{request_id}/fulfill                  # Fulfill approved request → issuance/checkout/assignment

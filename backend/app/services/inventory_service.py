@@ -2667,9 +2667,15 @@ class InventoryService:
         item_ids: List,
         organization_id,
         extra_lines: Optional[List[str]] = None,
+        persist: bool = True,
     ) -> Tuple[List[LabelSpec], int]:
-        """Fetch inventory items, persist any missing (sequential) barcode, and
-        map them to neutral ``LabelSpec`` objects for the shared renderer.
+        """Fetch inventory items and map them to neutral ``LabelSpec`` objects
+        for the shared renderer.
+
+        When ``persist`` (the print path), any item still missing a barcode is
+        assigned a canonical sequential one and committed, so the printed label
+        matches what is stored. When ``persist`` is False (preview / the generic
+        read-only path) nothing is written — a fallback identifier is shown.
 
         Returns (specs, auto_populated_count)."""
         items = []
@@ -2697,12 +2703,15 @@ class InventoryService:
         # Persist a canonical barcode for any straggler that still lacks one,
         # so the printed label matches what is stored on the item.
         auto_populated = 0
-        for item in items:
-            if not item.barcode:
-                item.barcode = await self._next_sequential_barcode(item.organization_id)
-                auto_populated += 1
-        if auto_populated > 0:
-            await self.db.commit()
+        if persist:
+            for item in items:
+                if not item.barcode:
+                    item.barcode = await self._next_sequential_barcode(
+                        item.organization_id
+                    )
+                    auto_populated += 1
+            if auto_populated > 0:
+                await self.db.commit()
 
         specs = [
             LabelSpec(

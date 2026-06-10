@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Cross-Module Barcode Label Printing (2026-06-10)
+
+- Barcode-label printing is now a **shared, module-neutral system** so any module can print labels with its own per-position remembered printer. Backend: `app/utils/label_renderer.py` (the `LabelSpec` + Avery-sheet/thermal renderer, extracted from inventory), `app/services/label_service.py` (per-module spec-builder registry + the per-position/per-module preset, moved off `InventoryService`), and generic endpoints `app/api/v1/endpoints/labels.py`: `POST /labels/generate`, `POST /labels/preview`, and `GET`/`PUT /label-preset/{module}` (each gated by the module's view permission)
+- **Wired for** inventory, **apparatus**, **prospective-members (outreach)**, **facilities**, and **membership**, each mapping its own records to a label (apparatus → unit/asset tag, prospect → applicant badge from the status token, facility → facility number, member → membership number). Frontend: a reusable `components/labels/LabelPrintPage.tsx` + `services/labelService.ts`, mounted by thin per-module routes at `/{module}/print-labels?ids=…` (apparatus, facilities, prospective-members, members). The existing inventory print page is unchanged
+- The label-printer preset remains **per-position and per-module** (`positions.settings["label_presets"][module]`); generation is read-only for the preview and the generic path (no barcode writes), while inventory's own print page keeps assigning sequential barcodes
+
 ### Inventory — Per-Position, Per-Module Label Printer Preference (2026-06-10)
 
 - The barcode label print page remembers the chosen **printer/size per position and per module**, so a role's printer choice follows whoever fills it (on any computer) and can differ by area of the app — the Quartermaster's *inventory* printer, the apparatus team's *apparatus* printer, the outreach team's printer, etc. Stored on the member's highest-priority position in a new nullable `positions.settings` JSON column, namespaced by module: `settings["label_presets"][module]`. Resolved via the existing primary-position lookup. Migration `20260610_0002`
