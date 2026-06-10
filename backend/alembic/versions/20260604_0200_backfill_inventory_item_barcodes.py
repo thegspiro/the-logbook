@@ -13,6 +13,7 @@ Revises: 20260604_0100
 Create Date: 2026-06-04 02:00:00.000000
 
 """
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -23,8 +24,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Derive a deterministic, per-row unique barcode from the item's UUID PK,
-    # matching the application's INV-<first 8 hex of dehyphenated uuid> format.
+    # Derive a deterministic, per-row barcode from the item's UUID PK. This is
+    # the single canonical scheme the application also uses at create time
+    # (InventoryService._barcode_for_item / _format_barcode): INV- + first 8
+    # uppercase hex of the dehyphenated row UUID.
     op.execute(
         """
         UPDATE inventory_items

@@ -76,16 +76,17 @@ def _sanitize_barcode_value(raw: str) -> str:
     return "".join(ch for ch in raw if ord(ch) < 128)
 
 
-# Canonical inventory barcode scheme: the literal "INV-" followed by 8
-# uppercase hex characters. Centralised here so item creation, variant
-# generation, and any backfill path all emit the same format (the backfill
-# migration 20260604_0200 uses the identical INV-XXXXXXXX shape).
+# Canonical inventory barcode scheme — a single rule used everywhere:
+#   INV-<first 8 uppercase hex characters of the item's own UUID>
+# Item creation, variant generation, and the label backfill all derive the
+# barcode from the row's UUID, identical to the one-time backfill migration
+# 20260604_0200 — so every barcode in the table follows the same derivation.
 BARCODE_PREFIX = "INV-"
 
 
-def _new_barcode() -> str:
-    """Generate a fresh barcode in the canonical ``INV-XXXXXXXX`` form."""
-    return f"{BARCODE_PREFIX}{_gen().replace('-', '').upper()[:8]}"
+def _format_barcode(token: str) -> str:
+    """Render the canonical ``INV-XXXXXXXX`` barcode from a UUID-like token."""
+    return f"{BARCODE_PREFIX}{token.replace('-', '').upper()[:8]}"
 
 
 # Supported extra-line field keys that can be requested on labels.
@@ -133,18 +134,17 @@ class InventoryService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _generate_unique_barcode(
-        self, organization_id, *, attempts: int = 5
-    ) -> str:
-        """Return a canonical ``INV-XXXXXXXX`` barcode unique within the org.
+    async def _barcode_for_item(self, item_id, organization_id) -> str:
+        """Canonical barcode for an item: ``INV-`` + first 8 hex of its UUID.
 
-        Barcodes are unique per organization (``uq_item_org_barcode``). The
-        8-hex space makes collisions astronomically unlikely, but we still
-        verify-and-regenerate so a create never fails on a duplicate; the DB
-        constraint remains the final backstop against a concurrent insert.
+        This is the single scheme shared with the backfill migration
+        (20260604_0200). Barcodes are unique per organization
+        (``uq_item_org_barcode``); on the rare first-8-hex collision within an
+        org we widen to a fresh 12-hex token rather than fail the create. The
+        DB constraint remains the final backstop against a concurrent insert.
         """
-        for _ in range(attempts):
-            candidate = _new_barcode()
+
+        async def _is_taken(candidate: str) -> bool:
             existing = await self.db.scalar(
                 select(InventoryItem.id)
                 .where(
@@ -153,9 +153,16 @@ class InventoryService:
                 )
                 .limit(1)
             )
-            if not existing:
-                return candidate
-        # Vanishingly unlikely; widen the token to all-but-guarantee uniqueness.
+            return existing is not None
+
+        candidate = _format_barcode(str(item_id))
+        if not await _is_taken(candidate):
+            return candidate
+        # Collision on the first 8 hex — widen to a fresh 12-hex token.
+        for _ in range(4):
+            widened = f"{BARCODE_PREFIX}{_gen().replace('-', '').upper()[:12]}"
+            if not await _is_taken(widened):
+                return widened
         return f"{BARCODE_PREFIX}{_gen().replace('-', '').upper()[:12]}"
 
     # ------------------------------------------------------------------
@@ -521,10 +528,14 @@ class InventoryService:
             if "purchase_price" in item_data and "current_value" not in item_data:
                 item_data["current_value"] = item_data["purchase_price"]
 
-            # Auto-generate a canonical INV-XXXXXXXX barcode if none was given.
+            # Auto-generate a canonical INV-XXXXXXXX barcode if none was given,
+            # derived from the item's own UUID (pre-generated here so the
+            # barcode and the row id always agree).
             if not item_data.get("barcode"):
-                item_data["barcode"] = await self._generate_unique_barcode(
-                    organization_id
+                new_id = item_data.get("id") or _gen()
+                item_data["id"] = new_id
+                item_data["barcode"] = await self._barcode_for_item(
+                    new_id, organization_id
                 )
 
             item = InventoryItem(
@@ -2751,7 +2762,9 @@ class InventoryService:
         auto_populated = 0
         for item in items:
             if not item.barcode:
-                item.barcode = await self._generate_unique_barcode(item.organization_id)
+                item.barcode = await self._barcode_for_item(
+                    item.id, item.organization_id
+                )
                 auto_populated += 1
         if auto_populated > 0:
             await self.db.commit()
@@ -3701,9 +3714,11 @@ class InventoryService:
                         garment_style = member
                         break
 
-            barcode = await self._generate_unique_barcode(organization_id)
+            variant_id = _gen()
+            barcode = await self._barcode_for_item(variant_id, organization_id)
 
             item = InventoryItem(
+                id=variant_id,
                 organization_id=str(organization_id),
                 name=item_name,
                 barcode=barcode,
