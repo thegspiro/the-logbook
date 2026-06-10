@@ -13,23 +13,25 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 5. [Variant Groups](#variant-groups)
 6. [Equipment Kits](#equipment-kits)
 7. [Member Size Preferences](#member-size-preferences)
-8. [Reorder Requests](#reorder-requests)
-9. [Item Detail Page](#item-detail-page)
-10. [Item Assignments](#item-assignments)
-11. [Checkout and Return](#checkout-and-return)
-12. [Batch Operations](#batch-operations)
-13. [Barcode and QR Scanning](#barcode-and-qr-scanning)
-14. [Label Printing](#label-printing)
-15. [Maintenance Tracking](#maintenance-tracking)
-16. [Low Stock Alerts](#low-stock-alerts)
-17. [Departure Clearance](#departure-clearance)
-18. [Members Inventory View (Admin)](#members-inventory-view-admin)
-19. [Inventory Admin Hub](#inventory-admin-hub)
-20. [Equipment Kits Admin Page](#equipment-kits-admin-page)
-21. [Variant Groups Admin Page](#variant-groups-admin-page)
-22. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
-23. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
-24. [Troubleshooting](#troubleshooting)
+8. [Issuance Allowances](#issuance-allowances)
+9. [Equipment Request Fulfillment](#equipment-request-fulfillment)
+10. [Reorder Requests](#reorder-requests)
+11. [Item Detail Page](#item-detail-page)
+12. [Item Assignments](#item-assignments)
+13. [Checkout and Return](#checkout-and-return)
+14. [Batch Operations](#batch-operations)
+15. [Barcode and QR Scanning](#barcode-and-qr-scanning)
+16. [Label Printing](#label-printing)
+17. [Maintenance Tracking](#maintenance-tracking)
+18. [Low Stock Alerts](#low-stock-alerts)
+19. [Departure Clearance](#departure-clearance)
+20. [Members Inventory View (Admin)](#members-inventory-view-admin)
+21. [Inventory Admin Hub](#inventory-admin-hub)
+22. [Equipment Kits Admin Page](#equipment-kits-admin-page)
+23. [Variant Groups Admin Page](#variant-groups-admin-page)
+24. [Realistic Example: Departure Clearance for a Retiring Member](#realistic-example-departure-clearance-for-a-retiring-member)
+25. [Realistic Example: NFPA 1851 PPE Lifecycle Tracking](#realistic-example-nfpa-1851-ppe-lifecycle-tracking)
+26. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -185,19 +187,24 @@ Equipment kits bundle multiple inventory items into a named package for streamli
 
 ## Member Size Preferences
 
-Members can record their preferred sizes for different garment categories, making equipment ordering and kit issuance faster and more accurate.
+Members can record their preferred uniform and PPE sizes, making equipment ordering and kit issuance faster and more accurate. Sizes are edited in the **Size Preferences** modal, which works in two modes:
+
+- **Self-service** — a member edits their own sizes from **My Equipment** (`/inventory/my/size-preferences`).
+- **Admin / quartermaster** — an admin edits any member's sizes from the **Members Inventory** page (`/inventory/members/{user_id}/size-preferences`, requires `inventory.manage`).
 
 ### Recording Size Preferences
 
-1. Navigate to your **Member Profile** or have an admin navigate to the member's profile.
-2. Open the **Size Preferences** section.
-3. Record sizes for applicable categories:
-   - Coat (e.g., L Regular)
-   - Pants (e.g., 34×32)
-   - Gloves (e.g., XL)
-   - Boots (e.g., 11 Wide)
-   - Helmet (e.g., Standard)
-4. Save.
+1. Open the **Size Preferences** modal (from My Equipment, or from a member's row on the Members Inventory page). The title reads "My Sizes" or "Sizes — {member name}".
+2. Fill in any of the nine fields (all optional):
+   - Shirt Size and Shirt Style
+   - Pant Waist and Pant Inseam
+   - Jacket Size
+   - Glove Size
+   - Boot Size and Boot Width
+   - Hat Size
+3. Click **Save Sizes**.
+
+> **Note:** If a member has never saved sizes, the form simply opens blank (the API returns a 404, which is expected — not an error). Fields left empty are not stored.
 
 ### How Size Preferences Are Used
 
@@ -205,8 +212,10 @@ Members can record their preferred sizes for different garment categories, makin
 - **Reorder requests**: Size preferences are included in reorder request details so quartermasters know what to order
 - **Reports**: Size distribution reports help with bulk ordering (e.g., "12 members need L coats, 8 need XL")
 
+> **Privacy note:** Size preferences are body-measurement data. The size-preference endpoints (`/inventory/my/`, `/inventory/members/`) are excluded from client-side caching and are gated by permission (`inventory.view` to read another member's, `inventory.manage` to edit).
+
 > **Screenshot needed:**
-> _[Screenshot of the Member Size Preferences panel showing dropdown selectors for Coat Size, Coat Style, Pants Size, Pants Style, Glove Size, Boot Size, and Helmet Size, with Save button]_
+> _[Screenshot of the Size Preferences modal titled "Sizes — Jane Doe" showing the two-column grid of fields: Shirt Size (dropdown) and Shirt Style (dropdown) on top, Pant Waist and Pant Inseam text inputs, Jacket Size and Glove Size dropdowns, Boot Size dropdown and Boot Width text input, Hat Size text input, and the "Save Sizes" button]_
 
 ---
 
@@ -257,6 +266,68 @@ All 16 items are linked under a single variant group and share the base descript
 | Empty colors list | Defaults to `['default']` — at least one variant per size/style |
 | Duplicate variant group name | System prevents creation; choose a unique base item name |
 | Changing variants after creation | Edit individual items normally; the variant group remains intact |
+
+---
+
+## Issuance Allowances
+
+**Required Permission:** `inventory.manage`
+
+An **issuance allowance** caps how many units of a category a member may receive in a period — for example, "3 job shirts per year per firefighter." Allowances are configured on the **Allowances** admin page (`/inventory/admin/allowances`).
+
+### Creating an Allowance
+
+1. Navigate to **Inventory Admin** and open **Issuance Allowances** (or go directly to `/inventory/admin/allowances`).
+2. Click **New Allowance**.
+3. Fill in the form:
+   - **Category** *(required)* — the inventory category the cap applies to. (This field is locked when editing.)
+   - **Applies To** *(optional)* — a specific role/position, or leave as **All members** to apply org-wide.
+   - **Max Quantity** *(required)* — a non-negative whole number of units allowed per period.
+   - **Period Type** — **Annual** (resets each calendar year), **Career** (lifetime total), or **One-time**.
+4. Click **Create**. Use the pencil and trash icons on each row to edit or delete an allowance.
+
+> **Screenshot needed:**
+> _[Screenshot of the Issuance Allowances admin page showing a list of allowance rows — each with category name, role scope ("All members" or a role), max quantity, and a period-type badge (Annual/Career/One-time) — plus a "New Allowance" button in the toolbar. One row shows an inactive badge.]_
+
+> **Screenshot needed:**
+> _[Screenshot of the New Allowance modal showing the Category dropdown, the "Applies To" role dropdown defaulting to "All members", the Max Quantity number input, the Period Type selector (Annual/Career/One-time), and Create/Cancel buttons]_
+
+### How Allowances Are Enforced
+
+When a quartermaster issues a **pool** item to a member, the system checks the member's remaining allowance for that category first. Only **pool-tracked** items in the category count toward the total.
+
+- The member's **highest-priority position** determines which allowance applies (a role-specific allowance wins over the org-wide default).
+- **Annual** allowances count issuances since January 1 of the current year; **Career** and **One-time** count all-time issuances.
+- A category with **no** configured allowance is **unlimited**.
+- If an issuance would exceed the cap, it is blocked with a message stating how many remain versus how many were requested. An admin can check **Override allowance** to issue anyway for a documented exception.
+
+> **Screenshot needed:**
+> _[Screenshot of the pool-item issue dialog showing an "allowance exceeded" warning (e.g., "Member has 1 of 3 remaining for this category (annual), but 2 requested") with an "Override allowance" checkbox available to administrators]_
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Category has no allowance | Unlimited — issuance is never blocked |
+| Member holds several positions | The highest-priority position selects the applicable allowance |
+| Allowance set to 0 | The member cannot receive that category without an override |
+| Admin override | `Override allowance` bypasses the cap; the issuance still records normally |
+
+---
+
+## Equipment Request Fulfillment
+
+**Required Permission:** `inventory.manage`
+
+Once an equipment request has been **approved**, a quartermaster can **fulfill** it — turning the request into an actual issuance, checkout, or assignment in one step. Open the request from **Equipment Requests** and click **Fulfill**.
+
+- The system routes fulfillment by the item's tracking type: a **pool** item becomes a pool issuance (allowance-checked unless overridden); an **individual** item becomes a checkout (for checkout requests) or an assignment.
+- The request then shows a terminal **Fulfilled** status, along with who fulfilled it, when, and a link to the created record.
+
+> **Note:** Fulfillment is **not** reversible by re-running it — each fulfill action creates a new issuance/checkout/assignment. Only requests in the **Approved** state can be fulfilled, which prevents accidentally fulfilling the same request twice.
+
+> **Screenshot needed:**
+> _[Screenshot of an approved Equipment Request row with a "Fulfill" action, and a fulfilled request showing the green "Fulfilled" badge with the fulfiller's name, timestamp, and a link to the resulting issuance/checkout/assignment]_
 
 ---
 

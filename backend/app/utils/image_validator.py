@@ -167,6 +167,10 @@ class ImageValidator:
 
             return mime_type
 
+        except ImageValidationError:
+            # Already a precise, client-safe rejection — don't mask it as a
+            # generic detection failure.
+            raise
         except Exception as e:
             raise ImageValidationError(f"Failed to detect file type: {str(e)}")
 
@@ -210,6 +214,10 @@ class ImageValidator:
             raise ImageValidationError(
                 "Potential decompression bomb detected. Image rejected."
             )
+        except ImageValidationError:
+            # A blocked-format rejection is intentional; surface it verbatim
+            # rather than relabeling it as a corrupted-image error.
+            raise
         except Exception as e:
             raise ImageValidationError(f"Invalid or corrupted image: {str(e)}")
 

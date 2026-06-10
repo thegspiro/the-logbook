@@ -89,15 +89,17 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `inventory_items` | Equipment items (individual or pool, with `tracking_type`) |
+| `inventory_items` | Equipment items (individual or pool, with `tracking_type`). Barcodes (`INV-XXXXXXXX`) are now assigned at creation time rather than lazily on first read *(2026-06-09)* |
 | `inventory_categories` | Item categories |
 | `item_assignments` | Member ↔ item assignments |
 | `item_issuances` | Pool item issue/return records |
+| `issuance_allowances` | Per-category issue caps by role and period (`max_quantity`, `period_type` annual/career/one_time; `role_id` NULL = all members). Unique `(organization_id, category_id, role_id)`. Surfaced via the Allowances admin page *(wired 2026-06-09; table since 20260304_0300)* |
 | `inventory_checkouts` | Checkout/return tracking with `expected_return_at` |
 | `departure_clearances` | Departure clearance records |
 | `clearance_line_items` | Individual items in a departure clearance |
 | `maintenance_records` | Equipment maintenance history |
-| `equipment_requests` | Member equipment request/approval workflow |
+| `nfpa_inspection_details` | Structured NFPA 1851 inspection results, one-to-one with a `maintenance_record` (assessment booleans, contamination level, SCBA fields, recommendation) |
+| `equipment_requests` | Member equipment request/approval workflow. Terminal `fulfilled` state added via `fulfilled_by` / `fulfilled_at` / `fulfillment_type` / `fulfillment_reference_id` *(2026-06-09)* |
 | `inventory_write_offs` | Write-off request/approval workflow |
 | `inventory_notification_queue` | Delayed notification consolidation queue. `attempt_count` (Integer, NOT NULL, default `0`) and `last_attempt_at` (DateTime(tz), nullable) track delivery retries *(2026-05-29)* |
 | `property_return_reminders` | Tracks reminder notices sent to departed members |
@@ -254,6 +256,32 @@ The `organizations.settings` JSON column stores email platform configuration und
 |-------|-------|---------|-----------|
 | `shift_equipment_checks` | Composite | `(shift_id, template_id)` | `20260404_0400` |
 | `shift_equipment_check_items` | Composite | `(check_id, template_item_id)` | `20260404_0400` |
+| `shift_assignments` | `idx_shift_assign_shift_status` | `(shift_id, assignment_status)` | `20260604_0001` |
+
+---
+
+## Recent Schema Changes (2026-06-09)
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `equipment_requests` | `fulfilled_by` | String(36), FK users (SET NULL, nullable) | `20260604_0100` | Quartermaster who fulfilled the approved request |
+| `equipment_requests` | `fulfilled_at` | DateTime(tz, nullable) | `20260604_0100` | When the request was fulfilled |
+| `equipment_requests` | `fulfillment_type` | String(20, nullable) | `20260604_0100` | `issuance` \| `checkout` \| `assignment` |
+| `equipment_requests` | `fulfillment_reference_id` | String(36, nullable) | `20260604_0100` | ID of the created `ItemIssuance` / `CheckOutRecord` / `ItemAssignment` |
+
+### New Indexes
+
+| Table | Index | Columns | Migration |
+|-------|-------|---------|-----------|
+| `shift_assignments` | `idx_shift_assign_shift_status` | `(shift_id, assignment_status)` | `20260604_0001` |
+
+### Data Backfills
+
+| Table | Change | Migration | Reason |
+|-------|--------|-----------|--------|
+| `inventory_items` | Backfill `INV-XXXXXXXX` barcodes for legacy rows | `20260604_0200` | Barcodes now assigned at creation; removes a write-on-read in the list endpoint |
 
 ---
 

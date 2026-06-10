@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory — Issuance Allowances, Member Size Preferences & Request Fulfillment (2026-06-09)
+
+#### Issuance Allowances — Per-Category Issue Limits
+
+- **New concept (now wired end-to-end)**: an **issuance allowance** caps how many units of a category a member may receive in a period (e.g., "3 job shirts per year per firefighter"). Configured on the new **Allowances** admin page at `/inventory/admin/allowances` (requires `inventory.manage`). The `issuance_allowances` table existed since `20260304_0300`; this change adds the admin UI, enforcement, and audit logging on top of it
+- **Table** `issuance_allowances`: `organization_id` (FK, indexed), `category_id` (FK to `inventory_categories`, indexed), `role_id` (FK to `positions`, **NULL = applies to all members**), `max_quantity` (Integer, non-negative), `period_type` (`annual` | `career` | `one_time`, default `annual`), `is_active`, `created_by`, timestamps. **Unique constraint** `(organization_id, category_id, role_id)` — one rule per org/category/role
+- **Enforcement** (`InventoryService.issue_from_pool`): before a pool issuance, `_enforce_issuance_allowance()` resolves the member's **highest-priority position** (`_get_primary_role_id`, ordered by `priority DESC`) and calls `check_allowance()`. Only **POOL-tracked** items in the category count toward the total. `annual` counts issuances since Jan 1 (UTC) of the current year; `career`/`one_time` count all-time. A category with no configured allowance is **unlimited** (`max_quantity = -1`)
+- **Admin override**: quartermasters can pass `override_allowance=true` on issue/fulfill to bypass the cap for documented exceptions
+- **Endpoints**: `POST/PUT/DELETE /inventory/allowances[/{id}]` (now audit-logged: `issuance_allowance_created` / `_updated` / `_deleted`); `GET /inventory/allowances/check/{user_id}/{category_id}` returns `{ max_quantity, issued_this_period, remaining, period_type }`
+
+#### Member Size Preferences — Uniform & PPE Sizing
+
+- **New `SizePreferencesModal` UI + endpoints** on top of the existing `member_size_preferences` table (one row per user, `user_id` unique+indexed: `shirt_size`, `shirt_style`, `pant_waist`, `pant_inseam`, `jacket_size`, `boot_size`, `boot_width`, `glove_size`, `hat_size`, plus a `custom_sizes` JSON column)
+- **Two modes** via `SizePreferencesModal`: self-service (member edits their own) and admin (quartermaster edits a specific member). Size/style options come from new `STANDARD_SIZES`, `SHOE_SIZES`, and `GARMENT_STYLES` constants
+- **Endpoints**: `GET/PUT /inventory/my/size-preferences` (self, login required) and `GET /inventory/members/{user_id}/size-preferences` (`inventory.view`) / `PUT` (`inventory.manage`). A member with no saved sizes returns **404** (expected — the form opens blank). Empty form fields are coerced to `undefined` so blanks are never stored
+
+#### Equipment Request Fulfillment
+
+- **`PUT /inventory/requests/{request_id}/fulfill`** (`inventory.manage`) turns an **approved** request into a real record. Routing by the item's tracking type: POOL → pool issuance (allowance-checked unless overridden); INDIVIDUAL + checkout request → checkout; INDIVIDUAL otherwise → assignment
+- **New `equipment_requests` columns** (migration `20260604_0100`): `fulfilled_by` (FK users, SET NULL, nullable), `fulfilled_at`, `fulfillment_type` (`issuance`|`checkout`|`assignment`), `fulfillment_reference_id` (the created record's id) — so the UI can trace request → fulfillment. The request lifecycle now has a terminal `fulfilled` state instead of dead-ending at `approved`
+- **Edge case**: fulfillment is **not idempotent** — each call creates a new issuance/checkout/assignment, so re-fulfilling an already-fulfilled request double-issues (guarded by the `APPROVED`-status check; admins should not re-run on a `FULFILLED` request)
+
+#### Other Inventory Changes
+
+- **Barcodes assigned at creation** (migration `20260604_0200`): previously `get_items` lazily generated a missing barcode and **committed it during a GET**, making a read path issue writes (and interacting badly with the stale-while-revalidate cache). Barcodes are now assigned at item-creation time; the migration backfills legacy rows missing one with the same `INV-XXXXXXXX` scheme (8 uppercase hex chars from the row UUID)
+- **NFPA 1851 inspection detail**: structured Ch. 6–8 results are now persisted to the existing `nfpa_inspection_details` table (one-to-one with a maintenance record) — `inspection_level`, the assessment booleans (`thermal_damage`, `moisture_barrier`, `seam_integrity`, `reflective_trim`, `closure_systems`, `liner_integrity`), `contamination_level`, SCBA fields (`facepiece_seal`, `regulator_function`, `low_air_alarm`, `cylinder_pressure`), and a `recommendation`. Written only when `nfpa_inspection` data is supplied to `update_maintenance_record()`
+- **Soft-delete** endpoints for taxonomy: `DELETE /inventory/categories/{id}` (blocked if the category still has active items), `DELETE /inventory/variant-groups/{id}`, `DELETE /inventory/kits/{id}` — all set `active = False` and audit-log
+- **Write-off cascade**: retiring/writing-off an item now notifies every current holder (assigned user + all open pool issuees) and closes their records (`OUT_OF_SERVICE`), without restoring written-off stock to `quantity`
+- **Pagination**: `GET /inventory/items/{id}/issuances` now accepts `skip`/`limit` (default 50, max 200)
+- **Cache safety (HIPAA/PII)**: `apiCache.ts` adds `/inventory/users/`, `/inventory/checkout/`, `/inventory/members-summary`, `/inventory/members/`, `/inventory/my/`, and `/inventory/charges` to `UNCACHEABLE_PREFIXES` (member rosters, size measurements, and cost-recovery data are never cached)
+- **Responsive tables**: a new `.rwd-table` CSS utility collapses inventory admin tables to stacked, labeled cards under 768px (single markup, no duplicate desktop/mobile renders)
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Category has no allowance configured | Unlimited (`max_quantity = -1`); issuance never blocked |
+| Member holds multiple positions | Highest-priority position (`priority DESC`) selects the applicable allowance |
+| Issuance would exceed allowance | Blocked with a message stating remaining vs. requested; admin may set `override_allowance=true` |
+| Member has no saved size preferences | `GET` returns 404; the modal opens blank (not an error) |
+| Deleting a category with active items | `400` — soft-delete refused to avoid orphaning inventory |
+| Re-fulfilling an already-`FULFILLED` request | Refused (status check); only `APPROVED` requests can be fulfilled |
+| Writing off an item held by members | All holders notified; their assignment/issuance records closed; stock not restored |
+
+**Files Changed:**
+
+| Layer | Files |
+|-------|-------|
+| Migrations | `20260604_0100_add_equipment_request_fulfillment_fields.py`, `20260604_0200_backfill_inventory_item_barcodes.py` |
+| Backend service | `services/inventory_service.py` — allowance enforcement, size-pref upsert, request fulfillment, write-off cascade, NFPA detail |
+| Backend endpoints | `api/v1/endpoints/inventory.py` — allowances CRUD audit, size-pref + fulfill + soft-delete routes, issuance pagination |
+| Backend models | `models/inventory.py` — `IssuanceAllowance`, `MemberSizePreferences`, `NFPAInspectionDetail`, `EquipmentRequest` fulfillment fields |
+| Frontend | `modules/inventory/pages/AllowancesPage.tsx` (new), `components/SizePreferencesModal.tsx` (new), `routes.tsx`, `types/index.ts` (size constants), `services/inventoryService.ts`, `services/eventServices.ts` |
+| Cross-cutting | `utils/apiCache.ts` (PII prefixes), `styles/index.css` (`.rwd-table`) |
+
+### Scheduling — Shift Call Logging, Exact Open-Shift Staffing & Query Batching (2026-06-09)
+
+#### Shift Call / Run Logging
+
+- **New `ShiftCallsSection`** on the shift detail panel lets officers (`scheduling.manage`) log the calls/runs a crew responded to during a shift. Each call captures `incident_type` (required), `incident_number`, `dispatched_at` / `on_scene_at` / `cleared_at` (UTC, shown in org timezone), `cancelled_en_route`, `medical_refusal`, an optional `responding_members` array, and `notes`
+- **Endpoints** (`/scheduling`): `GET`/`POST /shifts/{shift_id}/calls`, `GET`/`PATCH`/`DELETE /calls/{call_id}`. Frontend contracts: `ShiftCallRecord`, `ShiftCallCreate`, `ShiftCallUpdate`
+- **Edge cases**: the section is read-only once a shift is finalized (`canManage` is gated by `!shift.is_finalized`); optional fields are trimmed to `undefined` (never empty strings); deleting the call currently being edited closes the form
+
+#### Exact Open-Shift Staffing
+
+- **`GET /scheduling/open-shifts`** now delegates to `SchedulingService.get_open_shifts()` / `filter_shifts_with_open_positions()`, which determine "open" by **actual staffing** rather than a fixed page: a shift is open if a required named position is unfilled, or (when no named positions) the active assignment count is below `min_staffing` (falling back to the apparatus default). Only `ASSIGNED`/`CONFIRMED` assignments count; the window is capped at `max_candidates=500`
+- **Fix**: previously, fully-staffed shifts could fill a 50-row page and push genuinely-open shifts out of view. Shifts the requesting member is already actively assigned to are excluded in the same single assignment scan
+
+#### Performance — Composite Index & N+1 Elimination
+
+- **New composite index** `idx_shift_assign_shift_status` on `shift_assignments(shift_id, assignment_status)` (migration `20260604_0001`, which also **merges the two open Alembic heads** `20260528_0002` and `20260503_0002`). The ORM mirror lives in `models/training.py` `ShiftAssignment.__table_args__`
+- **Batched scheduled tasks** (`scheduled_tasks.py`): `run_post_shift_validation`, `run_shift_reminders`, `run_end_of_shift_checklist_reminders`, `run_end_of_shift_summary`, and `run_shift_auto_checkout` now batch-load officers, attendance, assignments, reports, equipment checks, and apparatus names once per batch (was ~6 queries per shift) and cache end-of-shift templates **per apparatus**
+- **New batch helpers**: `MemberLeaveService.get_active_leaves_for_users()` (one query for many users; `end_date IS NULL` = permanent leave) and `EquipmentCheckService._checklists_for_shift()` (reuses a pre-loaded check map). The training-compliance report batches per-user position-slug lookups into a single query
+- **`StarRating`** now renders read-only when `onChange` is omitted (adds `max`/`label` props); shift-report constants moved from `modules/scheduling/components/shiftReportConstants.ts` to `modules/scheduling/constants/shiftReportConstants.ts`
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| A shift's required positions are all filled by `ASSIGNED`/`CONFIRMED` members | Not shown in open shifts |
+| Shift has no named positions | "Open" when active count < `min_staffing` (apparatus default if unset) |
+| Many fully-staffed shifts in the window | Open shifts no longer pushed out of a fixed page (staffing-based, capped at 500 candidates) |
+| Apparatus module not installed | `list_apparatus_options()` falls back to `BasicApparatus`; genuine query failures are now logged |
+| Permanent leave (`end_date IS NULL`) | Treated as active for the whole rolling compliance window |
+| Logging calls on a finalized shift | Hidden — the calls section is read-only after finalization |
+
+**Files Changed:**
+
+| Layer | Files |
+|-------|-------|
+| Migration | `alembic/versions/20260604_0001_merge_heads_add_shift_assignment_status_index.py` |
+| Backend models | `models/training.py` — `ShiftAssignment` composite index |
+| Backend services | `services/scheduling_service.py`, `scheduled_tasks.py`, `equipment_check_service.py`, `member_leave_service.py` |
+| Backend endpoints | `api/v1/endpoints/scheduling.py` — open-shifts refactor, apparatus fallback logging |
+| Frontend | `pages/scheduling/ShiftCallsSection.tsx` (new), `ShiftDetailPanel.tsx`, `MyChecklistsPage.tsx`, `modules/scheduling/{types,services,constants,components}` |
+
+### Security & Test Hardening — SSRF and Image-Upload Validators (2026-06-09)
+
+- **Image-upload validator** (`utils/image_validator.py`): an intentional `ImageValidationError` (unsupported type, blocked format) was being caught by each method's broad `except Exception` and re-wrapped into a misleading "Failed to detect file type" / "Invalid or corrupted image" message that surfaced to the client. The precise rejection reason now propagates (e.g., "Unsupported image type: image/gif. Only PNG and JPEG are allowed."). Added 21 tests covering magic-byte detection, blocked formats, EXIF stripping, decompression-bomb defense, size/dimension limits, square enforcement, and the `validate_logo_image` 400 wrapper
+- **SSRF URL validator** (`utils/url_validator.py`): added 17 tests for the previously-untested `allow_known_only` allowlist (including lookalike-suffix rejection such as `evildiscord.com`) and private/reserved IP rejection across IPv4 and IPv6 families, split-horizon DNS, dev-only HTTP, DNS failures, and metadata-host blocking. Tightened pre-existing broad `pytest.raises(Exception)` assertions to specific types
+- **Files**: `backend/app/utils/image_validator.py`, `backend/tests/test_image_validator.py` (new), `backend/tests/test_integrations_security.py`
+
 ### OAuth Sign-In (Google & Microsoft) and Compliance Evaluation Period (2026-05-29)
 
 #### Sign in with Google and Sign in with Microsoft — Link-Existing, Domain-Restricted SSO

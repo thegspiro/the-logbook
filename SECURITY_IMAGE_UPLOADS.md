@@ -173,6 +173,8 @@ BLOCKED_FORMATS = {
 - **BMP**: Inefficient, no compression, large file sizes
 - **WEBP**: Less common, narrows attack surface
 
+> **Note (2026-06-09):** Intentional rejections now surface their precise reason. Previously, an `ImageValidationError` raised inside `_validate_mime_type` / `_open_and_validate_image` was caught by the same method's broad `except Exception` and re-wrapped into a misleading "Failed to detect file type" / "Invalid or corrupted image" message. A disallowed upload now returns the exact cause (e.g., `Unsupported image type: image/gif. Only PNG and JPEG are allowed.`). Behavior covered by `backend/tests/test_image_validator.py`.
+
 ---
 
 ### Layer 3: Database Storage
