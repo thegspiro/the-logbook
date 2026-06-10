@@ -129,12 +129,9 @@ async def get_pending_exceptions(
     Requires security.manage or settings.manage permission.
     """
     async with handle_service_errors("Failed to get pending exceptions"):
-        org_id = (
-            str(current_user.organization_id) if current_user.organization_id else None
-        )
         exceptions = await ip_security_service.get_pending_requests(
             db=db,
-            organization_id=org_id,
+            organization_id=str(current_user.organization_id),
             limit=limit,
             offset=offset,
         )

@@ -188,6 +188,40 @@ class TestRevokeExceptionOrgScoping:
             )
 
 
+class TestQueryOrgScoping:
+    """The admin list/query helpers must always filter by org."""
+
+    def _db_returning(self, rows):
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = rows
+        db.execute = AsyncMock(return_value=result)
+        return db
+
+    async def test_pending_requests_is_org_scoped(self, svc):
+        db = self._db_returning([])
+        await svc.get_pending_requests(db=db, organization_id="org-A")
+        sql = _executed_sql(db)
+        assert "organization_id" in sql
+        assert "org-A" in sql
+
+    async def test_pending_requests_requires_org(self, svc):
+        # organization_id is a required positional — omitting it is a TypeError,
+        # not a silent all-orgs query.
+        with pytest.raises(TypeError):
+            await svc.get_pending_requests(db=self._db_returning([]))
+
+    async def test_active_allowed_ips_is_org_scoped(self, svc):
+        db = self._db_returning(["203.0.113.7"])
+        out = await svc.get_all_active_allowed_ips(db=db, organization_id="org-A")
+        assert out == {"203.0.113.7"}
+        assert "organization_id" in _executed_sql(db)
+
+    async def test_active_allowed_ips_requires_org(self, svc):
+        with pytest.raises(TypeError):
+            await svc.get_all_active_allowed_ips(db=self._db_returning([]))
+
+
 class TestAuditLogOrgScoping:
     async def test_audit_log_query_is_org_scoped(self, svc):
         db = MagicMock()

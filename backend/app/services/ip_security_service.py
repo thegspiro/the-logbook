@@ -415,23 +415,27 @@ class IPSecurityService:
     async def get_pending_requests(
         self,
         db: AsyncSession,
-        organization_id: Optional[str] = None,
+        organization_id: str,
         limit: int = 50,
         offset: int = 0,
     ) -> List[IPException]:
         """
         Get all pending IP exception requests for IT admin review.
+
+        Always scoped to ``organization_id`` so an admin only ever sees
+        their own org's queue (org-scoping is a required contract, not an
+        optional filter).
         """
         query = (
             select(IPException)
-            .where(IPException.approval_status == IPExceptionApprovalStatus.PENDING)
+            .where(
+                IPException.approval_status == IPExceptionApprovalStatus.PENDING,
+                IPException.organization_id == str(organization_id),
+            )
             .order_by(IPException.requested_at.asc())  # Oldest first
+            .limit(limit)
+            .offset(offset)
         )
-
-        if organization_id:
-            query = query.where(IPException.organization_id == str(organization_id))
-
-        query = query.limit(limit).offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -499,12 +503,14 @@ class IPSecurityService:
     async def get_all_active_allowed_ips(
         self,
         db: AsyncSession,
-        organization_id: Optional[str] = None,
+        organization_id: str,
     ) -> Set[str]:
         """
-        Get all currently active allowed IPs across all users.
+        Get all currently active allowed IPs for an organization.
 
-        Used by IP blocking middleware to check allowlist.
+        Used by IP blocking middleware to check the allowlist. Always
+        scoped to ``organization_id`` so one org's allowlist can never
+        admit traffic on behalf of another.
         """
         now = datetime.now(timezone.utc)
 
@@ -512,12 +518,10 @@ class IPSecurityService:
             select(IPException.ip_address)
             .where(IPException.exception_type == IPExceptionType.ALLOWLIST)
             .where(IPException.approval_status == IPExceptionApprovalStatus.APPROVED)
+            .where(IPException.organization_id == str(organization_id))
             .where(IPException.valid_from <= now)
             .where(IPException.valid_until > now)
         )
-
-        if organization_id:
-            query = query.where(IPException.organization_id == str(organization_id))
 
         result = await db.execute(query)
         return set(result.scalars().all())
