@@ -91,7 +91,10 @@ class MembershipTierService:
             meeting_dates = [row[0] for row in meeting_date_result.all()]
             for md in meeting_dates:
                 for leave in leaves:
-                    if leave.start_date <= md <= leave.end_date:
+                    # end_date is None for permanent leave — treat as open-ended.
+                    if leave.start_date <= md and (
+                        leave.end_date is None or md <= leave.end_date
+                    ):
                         on_leave_count += 1
                         break
 
