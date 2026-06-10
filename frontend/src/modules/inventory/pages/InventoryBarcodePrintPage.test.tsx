@@ -46,6 +46,7 @@ const renderPage = (query: string) =>
 describe('InventoryBarcodePrintPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mockGetItem.mockResolvedValue(makeItem());
     mockGenerateLabels.mockResolvedValue({ blob: new Blob(['pdf']), autoPopulated: 0 });
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
@@ -120,5 +121,30 @@ describe('InventoryBarcodePrintPage', () => {
 
     expect(screen.getByText(/Enter a width of 0.5/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled();
+  });
+
+  it('remembers the selected Rollo preset across visits', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Rollo 4/ }));
+
+    // Persisted so the next visit defaults to the same printer.
+    expect(localStorage.getItem('inventory:labelPreset')).toBe('rollo_4x6');
+  });
+
+  it('defaults to the stored preset on a fresh visit', async () => {
+    localStorage.setItem('inventory:labelPreset', 'rollo_2x1');
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    // Without touching Settings, generating uses the remembered Rollo preset.
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    expect(mockGenerateLabels.mock.calls[0]?.[1]).toBe('rollo_2x1');
   });
 });

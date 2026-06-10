@@ -536,9 +536,11 @@ Labels include a Code128 barcode (with the required quiet-zone margins), the ite
 Both paths produce **actual-size** barcodes — the key to making them scannable is to avoid any scaling:
 
 1. Install your label printer's driver and load the label stock.
-2. Pick the matching preset, or choose **Custom size** and enter the label's real dimensions.
+2. Pick the matching preset, or choose **Custom size** and enter the label's real dimensions. **Your choice is remembered** — the next time you print, the page defaults to the printer/size you used last, so a Rollo (or any label printer) is ready without re-selecting it.
 3. Click **Print Test Label** (thermal presets) to download a single-label PDF and confirm alignment and orientation before printing the whole batch.
 4. When printing, select the label printer, set **Scale** to **100%** (disable "Fit to page" / "Shrink to fit"), set margins to **None**, and set the paper/media size to the label stock.
+
+> **Rollo and other roll-fed printers:** Two Rollo presets are built in — **Rollo 4" × 6"** (portrait shipping labels) and **Rollo / Thermal 2" × 1"** (small asset labels) — and any other Rollo roll works via **Custom size**. The **PDF** path is recommended: it generates each label at the exact size, pre-rotated for the printer's feed direction.
 
 > **Auto-rotate (roll-fed printers):** Rollo, Brother, and generic thermal printers feed labels narrow-edge first. For landscape labels, leave **Auto-rotate for roll-fed** on so the PDF content is pre-rotated and reads correctly. Dymo drivers rotate on their own, so their presets default to auto-rotate **off**.
 
