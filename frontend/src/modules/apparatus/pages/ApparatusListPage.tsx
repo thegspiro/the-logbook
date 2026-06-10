@@ -12,6 +12,7 @@ import {
   Search,
   Filter,
   Eye,
+  Printer,
   Edit,
   Archive,
   ChevronLeft,
@@ -424,6 +425,13 @@ export const ApparatusListPage: React.FC = () => {
                           </td>
                           <td className="px-3 sm:px-6 py-4 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end space-x-1 sm:space-x-2">
+                              <button
+                                onClick={() => navigate(`/apparatus/print-labels?ids=${apparatus.id}`)}
+                                className="hidden sm:inline-flex p-2 min-w-[44px] min-h-[44px] items-center justify-center text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded-sm transition-colors"
+                                title="Print label"
+                              >
+                                <Printer className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => navigate(`/apparatus/${apparatus.id}`)}
                                 className="p-2 min-w-[44px] min-h-[44px] inline-flex items-center justify-center text-blue-700 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-500/10 rounded-sm transition-colors"

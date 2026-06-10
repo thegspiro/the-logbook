@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Building2,
   Plus,
+  Printer,
   AlertTriangle,
   CheckCircle2,
   ClipboardCheck,
@@ -76,13 +77,24 @@ export default function FacilitiesDashboard() {
             Manage stations, buildings, maintenance, and inspections
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="btn-primary flex gap-2 items-center py-2.5"
-        >
-          <Plus className="w-4 h-4" />
-          Add Facility
-        </button>
+        <div className="flex items-center gap-2">
+          {facilities.length > 0 && (
+            <button
+              onClick={() => navigate(`/facilities/print-labels?ids=${facilities.map(f => f.id).join(',')}`)}
+              className="flex gap-2 items-center py-2.5 px-3 border border-theme-surface-border rounded-lg text-sm text-theme-text-primary hover:bg-theme-surface-secondary transition-colors"
+            >
+              <Printer className="w-4 h-4" />
+              Print Labels
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary flex gap-2 items-center py-2.5"
+          >
+            <Plus className="w-4 h-4" />
+            Add Facility
+          </button>
+        </div>
       </div>
 
       {/* Loading */}
