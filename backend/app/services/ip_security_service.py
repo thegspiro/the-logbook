@@ -172,6 +172,7 @@ class IPSecurityService:
         db: AsyncSession,
         exception_id: str,
         admin_id: str,
+        organization_id: str,
         approved_duration_days: Optional[int] = None,
         approval_notes: Optional[str] = None,
         admin_ip: Optional[str] = None,
@@ -182,6 +183,7 @@ class IPSecurityService:
         Args:
             exception_id: ID of the exception to approve
             admin_id: ID of the IT administrator approving
+            organization_id: Admin's org; scopes the lookup to prevent cross-org IDOR
             approved_duration_days: Actual approved duration (defaults to requested)
             approval_notes: Optional notes from the administrator
             admin_ip: IP address of the admin (for audit)
@@ -192,9 +194,12 @@ class IPSecurityService:
         Raises:
             ValueError: If exception not found or not pending
         """
-        # Get the exception
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
         result = await db.execute(
-            select(IPException).where(IPException.id == exception_id)
+            select(IPException).where(
+                IPException.id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
         )
         exception = result.scalar_one_or_none()
 
@@ -258,6 +263,7 @@ class IPSecurityService:
         db: AsyncSession,
         exception_id: str,
         admin_id: str,
+        organization_id: str,
         rejection_reason: str,
         admin_ip: Optional[str] = None,
     ) -> IPException:
@@ -267,6 +273,7 @@ class IPSecurityService:
         Args:
             exception_id: ID of the exception to reject
             admin_id: ID of the IT administrator rejecting
+            organization_id: Admin's org; scopes the lookup to prevent cross-org IDOR
             rejection_reason: Required reason for rejection
             admin_ip: IP address of the admin (for audit)
 
@@ -279,9 +286,12 @@ class IPSecurityService:
         if not rejection_reason:
             raise ValueError("Rejection reason is required")
 
-        # Get the exception
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
         result = await db.execute(
-            select(IPException).where(IPException.id == exception_id)
+            select(IPException).where(
+                IPException.id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
         )
         exception = result.scalar_one_or_none()
 
@@ -330,6 +340,7 @@ class IPSecurityService:
         db: AsyncSession,
         exception_id: str,
         admin_id: str,
+        organization_id: str,
         revoke_reason: str,
         admin_ip: Optional[str] = None,
     ) -> IPException:
@@ -341,6 +352,7 @@ class IPSecurityService:
         Args:
             exception_id: ID of the exception to revoke
             admin_id: ID of the IT administrator revoking
+            organization_id: Admin's org; scopes the lookup to prevent cross-org IDOR
             revoke_reason: Required reason for revocation
             admin_ip: IP address of the admin (for audit)
 
@@ -350,9 +362,12 @@ class IPSecurityService:
         if not revoke_reason:
             raise ValueError("Revoke reason is required")
 
-        # Get the exception
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
         result = await db.execute(
-            select(IPException).where(IPException.id == exception_id)
+            select(IPException).where(
+                IPException.id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
         )
         exception = result.scalar_one_or_none()
 
@@ -583,11 +598,24 @@ class IPSecurityService:
         self,
         db: AsyncSession,
         exception_id: str,
+        organization_id: str,
     ) -> List[IPExceptionAuditLog]:
-        """Get audit log for a specific exception."""
+        """
+        Get audit log for a specific exception.
+
+        Scoped to the caller's org (via the parent exception) so an admin
+        cannot read another organization's exception history by guessing IDs.
+        """
         result = await db.execute(
             select(IPExceptionAuditLog)
-            .where(IPExceptionAuditLog.exception_id == exception_id)
+            .join(
+                IPException,
+                IPException.id == IPExceptionAuditLog.exception_id,
+            )
+            .where(
+                IPExceptionAuditLog.exception_id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
             .order_by(IPExceptionAuditLog.performed_at.asc())
         )
         return list(result.scalars().all())

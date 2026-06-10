@@ -211,6 +211,7 @@ async def approve_exception(
             db=db,
             exception_id=exception_id,
             admin_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
             approved_duration_days=data.approved_duration_days,
             approval_notes=data.approval_notes or None,
             admin_ip=request.client.host if request.client else None,
@@ -258,6 +259,7 @@ async def reject_exception(
             db=db,
             exception_id=exception_id,
             admin_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
             rejection_reason=data.rejection_reason,
             admin_ip=request.client.host if request.client else None,
         )
@@ -303,6 +305,7 @@ async def revoke_exception(
             db=db,
             exception_id=exception_id,
             admin_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
             revoke_reason=data.revoke_reason,
             admin_ip=request.client.host if request.client else None,
         )
@@ -348,6 +351,7 @@ async def get_exception_audit_log(
         logs = await ip_security_service.get_exception_audit_log(
             db=db,
             exception_id=exception_id,
+            organization_id=str(current_user.organization_id),
         )
         return logs
 

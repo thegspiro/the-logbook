@@ -28,9 +28,11 @@ class _FakeRequest:
 
 
 def _set_trusted_proxies(monkeypatch, ips):
-    from app.core.config import settings
+    from app.core.config import Settings
 
-    monkeypatch.setattr(settings, "get_trusted_proxy_ips", lambda: set(ips))
+    # Patch on the class — a Pydantic v2 BaseSettings *instance* rejects
+    # setattr for a non-field (method) name, so monkeypatch the unbound method.
+    monkeypatch.setattr(Settings, "get_trusted_proxy_ips", lambda self: set(ips))
 
 
 # ---------------------------------------------------------------------------
