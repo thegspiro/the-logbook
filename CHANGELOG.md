@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Inventory — Per-Position Label Printer Preference (2026-06-10)
+### Inventory — Per-Position, Per-Module Label Printer Preference (2026-06-10)
 
-- The barcode label print page remembers the chosen **printer/size per position** so a role's printer choice follows whoever fills it, on any computer (different sections that use different printers each keep their own — Quartermaster keeps a Rollo, Training keeps a Dymo, etc.). Stored on the member's highest-priority position in a new nullable `positions.settings` JSON column (`label_preset`), resolved via the existing primary-position lookup. Migration `20260610_0002`
-- **Endpoints**: `GET /inventory/label-preset` (returns `{ preset, custom_width, custom_height, position_id }`, `preset` null when unset) and `PUT /inventory/label-preset` (`{ preset, custom_width?, custom_height? }`) — both `inventory.view`. The frontend loads the position preset on mount (overriding the local default), debounces saves, and keeps a `localStorage` copy as an instant/offline fallback. An org-wide setting was deliberately avoided so multi-section departments aren't forced onto one printer
+- The barcode label print page remembers the chosen **printer/size per position and per module**, so a role's printer choice follows whoever fills it (on any computer) and can differ by area of the app — the Quartermaster's *inventory* printer, the apparatus team's *apparatus* printer, the outreach team's printer, etc. Stored on the member's highest-priority position in a new nullable `positions.settings` JSON column, namespaced by module: `settings["label_presets"][module]`. Resolved via the existing primary-position lookup. Migration `20260610_0002`
+- **Endpoints**: `GET /inventory/label-preset` (returns `{ preset, custom_width, custom_height, position_id, module }`, `preset` null when unset) and `PUT /inventory/label-preset` (`{ preset, custom_width?, custom_height? }`) — both `inventory.view`, scoped to the `inventory` module. Saving one module's preset preserves the position's other modules' presets. The frontend loads the position preset on mount (overriding the local default), debounces saves, and keeps a `localStorage` copy as an instant/offline fallback. An org-wide setting was deliberately avoided so multi-section departments aren't forced onto one printer
 
 ### Inventory — Issuance Allowances, Member Size Preferences & Request Fulfillment (2026-06-09)
 

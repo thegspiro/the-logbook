@@ -5003,6 +5003,7 @@ async def get_label_preset(
     return await service.get_label_preset(
         user_id=UUID(current_user.id),
         organization_id=current_user.organization_id,
+        module="inventory",
     )
 
 
@@ -5027,6 +5028,7 @@ async def set_label_preset(
             preset=data.preset,
             custom_width=data.custom_width,
             custom_height=data.custom_height,
+            module="inventory",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
