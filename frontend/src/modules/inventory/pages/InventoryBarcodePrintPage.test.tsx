@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { InventoryItem } from '../types';
 
 const mockGetItem = vi.fn();
+const mockGenerateLabels = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
     getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
-    generateBarcodeLabels: vi.fn(),
+    generateBarcodeLabels: (...a: unknown[]) => mockGenerateLabels(...a) as unknown,
   },
 }));
 
@@ -45,6 +47,12 @@ describe('InventoryBarcodePrintPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetItem.mockResolvedValue(makeItem());
+    mockGenerateLabels.mockResolvedValue({ blob: new Blob(['pdf']), autoPopulated: 0 });
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    // The PDF download clicks a temporary <a download> — stub it so jsdom
+    // doesn't emit a "navigation not implemented" warning.
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   });
 
   it('errors when no item ids are provided', async () => {
@@ -71,5 +79,46 @@ describe('InventoryBarcodePrintPage', () => {
     renderPage('?ids=it-1');
     expect(await screen.findByText('boom')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to Inventory/ })).toBeInTheDocument();
+  });
+
+  it('generates a PDF at the entered custom label size', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Custom size/ }));
+
+    const width = screen.getByLabelText(/Width \(in\)/);
+    const height = screen.getByLabelText(/Height \(in\)/);
+    await user.clear(width);
+    await user.type(width, '1.5');
+    await user.clear(height);
+    await user.type(height, '0.5');
+
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    const args = mockGenerateLabels.mock.calls[0];
+    expect(args?.[0]).toEqual(['it-1']); // item ids
+    expect(args?.[1]).toBe('custom'); // backend format key
+    expect(args?.[2]).toBe(1.5); // custom width
+    expect(args?.[3]).toBe(0.5); // custom height
+  });
+
+  it('disables the PDF button when custom dimensions are out of range', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Custom size/ }));
+
+    const width = screen.getByLabelText(/Width \(in\)/);
+    await user.clear(width);
+    await user.type(width, '99'); // exceeds the 8" max
+
+    expect(screen.getByText(/Enter a width of 0.5/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled();
   });
 });

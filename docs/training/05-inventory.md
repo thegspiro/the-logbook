@@ -514,22 +514,36 @@ Generate barcode labels for inventory items to attach to equipment.
 
 **Required Permission:** `inventory.manage`
 
-1. Select one or more items from the inventory list.
-2. Click **Print Labels**.
-3. Choose the label format:
-   - **Letter (8.5×11)** — Standard letter sheet with 2×5 grid of labels
-   - **Dymo 30252** (1.125×3.5″) — Dymo address labels
-   - **Dymo 30256** (2.3125×4″) — Dymo shipping labels
-   - **Dymo 30334** (1.25×2.25″) — Dymo multi-purpose labels
-   - **Rollo 4×6** (4×6″) — Rollo shipping-label printers
-   - **Custom** — Specify your own width and height in inches
-4. Click **Generate** to download the PDF.
-5. Print the PDF on your label printer.
+1. Select one or more items from the inventory list (or open a single item and use **Print Labels**) to reach the barcode print page.
+2. Click **Settings** and choose a **Label Size**:
+   - **Dymo 30252 / 30256 / 30334 / 30336** — the four common Dymo label stocks
+   - **Rollo 4×6** and **Rollo / Thermal 2×1** — roll-fed thermal printers
+   - **Thermal 1×1** — square asset tags
+   - **Letter Paper (Grid)** — Avery 5160, 30 labels per 8.5×11″ sheet
+   - **Custom size** — enter the exact **width** and **height** (in inches, 0.5–8″ wide × 0.5–11″ tall) for any other sticker printer or label stock
+3. Optionally set **Copies per item**, add **Additional Info on Label** (location / category / condition), and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below).
+4. Print one of two ways:
+   - **PDF** (recommended for sticker/thermal printers) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
+   - **Print Labels** — prints directly through the browser print dialog.
 
-Labels include a Code128 barcode, the item name, and the asset tag or serial number.
+Labels include a Code128 barcode (with the required quiet-zone margins), the item name, and the asset tag or serial number.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the label generation dialog showing item selection checkboxes, label size dropdown, and a preview of a generated barcode label]_
+> **Screenshot needed:**
+> _[Screenshot of the barcode print page Settings panel showing the Label Size grid with the eight presets plus a highlighted "Custom size" card, the Width/Height (in) inputs revealed below it, the Copies field, the Additional Info chips (Location/Category/Condition), and the PDF / Print Labels buttons]_
+
+### Connecting a Sticker / Label Printer
+
+Both paths produce **actual-size** barcodes — the key to making them scannable is to avoid any scaling:
+
+1. Install your label printer's driver and load the label stock.
+2. Pick the matching preset, or choose **Custom size** and enter the label's real dimensions.
+3. Click **Print Test Label** (thermal presets) to download a single-label PDF and confirm alignment and orientation before printing the whole batch.
+4. When printing, select the label printer, set **Scale** to **100%** (disable "Fit to page" / "Shrink to fit"), set margins to **None**, and set the paper/media size to the label stock.
+
+> **Auto-rotate (roll-fed printers):** Rollo, Brother, and generic thermal printers feed labels narrow-edge first. For landscape labels, leave **Auto-rotate for roll-fed** on so the PDF content is pre-rotated and reads correctly. Dymo drivers rotate on their own, so their presets default to auto-rotate **off**.
+
+> **Screenshot needed:**
+> _[Screenshot of the thermal-label settings showing the "Print Test Label" button, the "Auto-rotate for roll-fed" toggle, the feed-direction diagram (portrait vs landscape page), and the blue "Set scaling to 100%" guidance banner]_
 
 ---
 
