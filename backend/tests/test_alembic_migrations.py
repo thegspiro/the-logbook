@@ -17,16 +17,20 @@ VERSIONS_DIR = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 
 
 def _parse_migrations():
-    """Parse all migration files and extract revision metadata."""
+    """Parse all migration files and extract revision metadata.
+
+    ``down_revision`` may be ``None`` (base), a single revision string, or a
+    tuple/list of revisions (a merge migration that reconciles a fork). It is
+    parsed into ``down_revisions`` (a list of parents) so the chain checks
+    model the real DAG rather than assuming a single linear history.
+    """
     migrations = []
     revision_re = re.compile(
         r"^revision(?:\s*:\s*\w+)?\s*=\s*['\"](.+?)['\"]", re.MULTILINE
     )
+    # Capture the full right-hand side so tuple/list parents are handled.
     down_rev_re = re.compile(
-        r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*['\"](.+?)['\"]", re.MULTILINE
-    )
-    down_rev_none_re = re.compile(
-        r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*None", re.MULTILINE
+        r"^down_revision(?:\s*:[^=\n]+)?\s*=\s*(.+)$", re.MULTILINE
     )
 
     for path in sorted(VERSIONS_DIR.glob("*.py")):
@@ -34,19 +38,29 @@ def _parse_migrations():
             continue
         content = path.read_text(encoding="utf-8")
         rev_match = revision_re.search(content)
-        down_match = down_rev_re.search(content)
-        down_none = down_rev_none_re.search(content)
+        if not rev_match:
+            continue
 
-        if rev_match:
-            migrations.append(
-                {
-                    "file": path.name,
-                    "path": path,
-                    "revision": rev_match.group(1),
-                    "down_revision": down_match.group(1) if down_match else None,
-                    "is_base": down_none is not None and not down_match,
-                }
-            )
+        down_match = down_rev_re.search(content)
+        parents: list[str] = []
+        is_base = False
+        if down_match:
+            rhs = down_match.group(1).strip()
+            parents = re.findall(r"['\"]([^'\"]+)['\"]", rhs)
+            if not parents and rhs.startswith("None"):
+                is_base = True
+
+        migrations.append(
+            {
+                "file": path.name,
+                "path": path,
+                "revision": rev_match.group(1),
+                "down_revisions": parents,
+                # First parent, retained for the linear chronological walk.
+                "down_revision": parents[0] if parents else None,
+                "is_base": is_base,
+            }
+        )
     return migrations
 
 
@@ -71,23 +85,24 @@ class TestNoDuplicateRevisions:
             f"  - {d}" for d in duplicates
         )
 
-    def test_no_duplicate_down_revisions(self):
-        """Two migrations pointing to the same parent means a fork."""
-        seen = {}
-        forks = []
+    def test_forks_are_resolved_into_a_single_head(self):
+        """A parent with multiple children is a fork. Forks are valid only
+        when a downstream merge migration reconciles them — i.e. the DAG must
+        still collapse to exactly one head."""
+        children: dict = {}
         for m in MIGRATIONS:
-            down = m["down_revision"]
-            if down is None:
-                continue
-            if down in seen:
-                forks.append(
-                    f"down_revision '{down}' shared by " f"{seen[down]} and {m['file']}"
-                )
-            seen[down] = m["file"]
+            for parent in m["down_revisions"]:
+                children.setdefault(parent, []).append(m["file"])
+        forks = {p: kids for p, kids in children.items() if len(kids) > 1}
 
-        assert forks == [], (
-            "Forked migration chain detected (multiple children for one parent):\n"
-            + "\n".join(f"  - {f}" for f in forks)
+        all_parents = {p for m in MIGRATIONS for p in m["down_revisions"]}
+        heads = [m for m in MIGRATIONS if m["revision"] not in all_parents]
+
+        assert len(heads) == 1, (
+            "Unresolved fork in the migration chain — every fork must be "
+            "reconciled by a merge migration into a single head.\n"
+            f"Forks: {forks}\n"
+            f"Heads: {[h['file'] for h in heads]}"
         )
 
 
@@ -102,38 +117,42 @@ class TestMigrationChain:
         )
 
     def test_chain_is_complete(self):
-        """Every down_revision should point to an existing revision."""
+        """Every parent (incl. each parent of a merge) must exist."""
         all_revisions = {m["revision"] for m in MIGRATIONS}
         broken = []
         for m in MIGRATIONS:
-            down = m["down_revision"]
-            if down is not None and down not in all_revisions:
-                broken.append(
-                    f"{m['file']}: down_revision '{down}' "
-                    f"does not match any revision"
-                )
+            for down in m["down_revisions"]:
+                if down not in all_revisions:
+                    broken.append(
+                        f"{m['file']}: down_revision '{down}' "
+                        f"does not match any revision"
+                    )
 
         assert broken == [], "Broken migration chain links:\n" + "\n".join(
             f"  - {b}" for b in broken
         )
 
     def test_all_migrations_reachable_from_base(self):
-        """Walk from base to head and ensure every migration is visited."""
+        """Walk the DAG from base following every edge (merges have multiple
+        parents) and ensure every migration is visited."""
         rev_to_file = {m["revision"]: m["file"] for m in MIGRATIONS}
-        down_to_child = {}
+        children: dict = {}
         for m in MIGRATIONS:
-            if m["down_revision"] is not None:
-                down_to_child[m["down_revision"]] = m["revision"]
+            for parent in m["down_revisions"]:
+                children.setdefault(parent, []).append(m["revision"])
 
         bases = [m for m in MIGRATIONS if m["is_base"]]
         if not bases:
             pytest.skip("No base migration found")
 
         visited = set()
-        current = bases[0]["revision"]
-        while current:
+        stack = [bases[0]["revision"]]
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
             visited.add(current)
-            current = down_to_child.get(current)
+            stack.extend(children.get(current, []))
 
         unreachable = set(rev_to_file.keys()) - visited
         assert (
@@ -143,11 +162,10 @@ class TestMigrationChain:
         )
 
     def test_exactly_one_head(self):
-        """Only one migration should have no child pointing to it."""
-        all_down_revisions = {
-            m["down_revision"] for m in MIGRATIONS if m["down_revision"]
-        }
-        heads = [m for m in MIGRATIONS if m["revision"] not in all_down_revisions]
+        """Only one migration should have no child pointing to it (parents of
+        merge migrations are flattened so merges don't create phantom heads)."""
+        all_parents = {p for m in MIGRATIONS for p in m["down_revisions"]}
+        heads = [m for m in MIGRATIONS if m["revision"] not in all_parents]
         assert len(heads) == 1, (
             f"Expected exactly 1 head migration, found {len(heads)}: "
             f"{[h['file'] for h in heads]}"

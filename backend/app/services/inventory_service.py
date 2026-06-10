@@ -5,6 +5,7 @@ Business logic for inventory management including items, categories,
 assignments, checkouts, maintenance, and reporting.
 """
 
+import copy
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
@@ -17,7 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
-from app.core.utils import generate_uuid as _gen
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -48,7 +48,7 @@ from app.models.inventory import (
     WriteOffRequest,
     WriteOffStatus,
 )
-from app.models.user import User
+from app.models.user import Organization, User
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -76,17 +76,17 @@ def _sanitize_barcode_value(raw: str) -> str:
     return "".join(ch for ch in raw if ord(ch) < 128)
 
 
-# Canonical inventory barcode scheme — a single rule used everywhere:
-#   INV-<first 8 uppercase hex characters of the item's own UUID>
-# Item creation, variant generation, and the label backfill all derive the
-# barcode from the row's UUID, identical to the one-time backfill migration
-# 20260604_0200 — so every barcode in the table follows the same derivation.
-BARCODE_PREFIX = "INV-"
+# Inventory barcode scheme — a single rule used everywhere: a human-readable
+# sequential number per organization, ``<prefix><zero-padded number>`` with a
+# 6-digit minimum (e.g. INV-000001, INV-000002, ...). The prefix (default
+# "INV-") and the running counter live in organization.settings["barcode"].
+DEFAULT_BARCODE_PREFIX = "INV-"
+BARCODE_MIN_DIGITS = 6
 
 
-def _format_barcode(token: str) -> str:
-    """Render the canonical ``INV-XXXXXXXX`` barcode from a UUID-like token."""
-    return f"{BARCODE_PREFIX}{token.replace('-', '').upper()[:8]}"
+def _format_sequential_barcode(prefix: str, number: int) -> str:
+    """Render a sequential barcode, e.g. ``INV-000001``."""
+    return f"{prefix}{number:0{BARCODE_MIN_DIGITS}d}"
 
 
 # Supported extra-line field keys that can be requested on labels.
@@ -134,36 +134,56 @@ class InventoryService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _barcode_for_item(self, item_id, organization_id) -> str:
-        """Canonical barcode for an item: ``INV-`` + first 8 hex of its UUID.
+    async def _next_sequential_barcode(self, organization_id) -> str:
+        """Assign the next sequential barcode for the organization.
 
-        This is the single scheme shared with the backfill migration
-        (20260604_0200). Barcodes are unique per organization
-        (``uq_item_org_barcode``); on the rare first-8-hex collision within an
-        org we widen to a fresh 12-hex token rather than fail the create. The
-        DB constraint remains the final backstop against a concurrent insert.
+        Format: ``<prefix><zero-padded number>`` (default ``INV-000001``). The
+        prefix and running counter live in ``organization.settings["barcode"]``
+        (mirroring the membership-number scheme in OrganizationService).
+
+        The organization row is locked ``FOR UPDATE`` for the read-increment so
+        concurrent item creates in the same org get distinct numbers; the
+        per-org unique constraint on ``inventory_items.barcode`` is the final
+        backstop. Any number already taken (e.g. a manually-entered barcode) is
+        skipped.
         """
+        org_id = str(organization_id)
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == org_id).with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
 
-        async def _is_taken(candidate: str) -> bool:
-            existing = await self.db.scalar(
-                select(InventoryItem.id)
-                .where(
-                    InventoryItem.organization_id == str(organization_id),
-                    InventoryItem.barcode == candidate,
-                )
-                .limit(1)
+        settings = copy.deepcopy(org.settings or {})
+        barcode_cfg = settings.get("barcode") or {}
+        prefix = barcode_cfg.get("prefix", DEFAULT_BARCODE_PREFIX)
+        number = int(barcode_cfg.get("next_number", 1))
+
+        barcode = _format_sequential_barcode(prefix, number)
+        while await self._barcode_exists(org_id, barcode):
+            number += 1
+            barcode = _format_sequential_barcode(prefix, number)
+
+        barcode_cfg["prefix"] = prefix
+        barcode_cfg["next_number"] = number + 1
+        settings["barcode"] = barcode_cfg
+        # Reassign the whole dict so SQLAlchemy detects the nested change
+        # (Organization.settings is a MutableDict; see CLAUDE.md Pitfall #12).
+        org.settings = settings
+        await self.db.flush()
+        return barcode
+
+    async def _barcode_exists(self, org_id: str, barcode: str) -> bool:
+        """Whether a barcode is already used by an item in the organization."""
+        existing = await self.db.scalar(
+            select(InventoryItem.id)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.barcode == barcode,
             )
-            return existing is not None
-
-        candidate = _format_barcode(str(item_id))
-        if not await _is_taken(candidate):
-            return candidate
-        # Collision on the first 8 hex — widen to a fresh 12-hex token.
-        for _ in range(4):
-            widened = f"{BARCODE_PREFIX}{_gen().replace('-', '').upper()[:12]}"
-            if not await _is_taken(widened):
-                return widened
-        return f"{BARCODE_PREFIX}{_gen().replace('-', '').upper()[:12]}"
+            .limit(1)
+        )
+        return existing is not None
 
     # ------------------------------------------------------------------
     # Notification helper
@@ -528,14 +548,10 @@ class InventoryService:
             if "purchase_price" in item_data and "current_value" not in item_data:
                 item_data["current_value"] = item_data["purchase_price"]
 
-            # Auto-generate a canonical INV-XXXXXXXX barcode if none was given,
-            # derived from the item's own UUID (pre-generated here so the
-            # barcode and the row id always agree).
+            # Auto-assign the next sequential barcode if none was provided.
             if not item_data.get("barcode"):
-                new_id = item_data.get("id") or _gen()
-                item_data["id"] = new_id
-                item_data["barcode"] = await self._barcode_for_item(
-                    new_id, organization_id
+                item_data["barcode"] = await self._next_sequential_barcode(
+                    organization_id
                 )
 
             item = InventoryItem(
@@ -2762,9 +2778,7 @@ class InventoryService:
         auto_populated = 0
         for item in items:
             if not item.barcode:
-                item.barcode = await self._barcode_for_item(
-                    item.id, item.organization_id
-                )
+                item.barcode = await self._next_sequential_barcode(item.organization_id)
                 auto_populated += 1
         if auto_populated > 0:
             await self.db.commit()
@@ -3714,11 +3728,9 @@ class InventoryService:
                         garment_style = member
                         break
 
-            variant_id = _gen()
-            barcode = await self._barcode_for_item(variant_id, organization_id)
+            barcode = await self._next_sequential_barcode(organization_id)
 
             item = InventoryItem(
-                id=variant_id,
                 organization_id=str(organization_id),
                 name=item_name,
                 barcode=barcode,

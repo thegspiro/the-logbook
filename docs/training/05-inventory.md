@@ -1140,7 +1140,7 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 
 | Scenario | Behavior |
 |----------|----------|
-| Item created without a barcode | Auto-generated in the format `INV-XXXXXXXX` (first 8 hex chars of the item UUID, uppercased). |
+| Item created without a barcode | Auto-assigned the next per-organization sequential barcode (`<prefix><number>`, default `INV-000001`, `INV-000002`, …). |
 | Item created without `current_value` | Set equal to `purchase_price`. On updates, if `purchase_price` changes without an explicit `current_value`, the current value auto-syncs. Depreciated assets need explicit `current_value` entries to diverge. |
 | Item status set to `RETIRED` | Condition is automatically forced to `RETIRED` regardless of the submitted condition value. |
 | Concurrent updates to the same item | Row-level `SELECT FOR UPDATE` locks serialize assign, unassign, issue, and return operations. Long-running transactions can cause lock waits. |
@@ -1316,11 +1316,11 @@ The item detail page now **always shows** barcode and asset tag fields, displayi
 > **Screenshot needed:**
 > _[Screenshot of an item detail page sidebar showing the barcode field with a Code128 barcode image, the asset tag field showing "AT-2024-001", and below them a second item with barcode showing "--" and asset tag showing "--"]_
 
-### Barcode Backfill
+### Barcode Numbering
 
-Items created before the barcode auto-generation feature was added will **automatically receive a barcode** (in `INV-XXXXXXXX` format) the next time they are viewed or fetched via the API. No manual action or database migration is required.
+Every item is assigned a per-organization **sequential** barcode at creation time — `<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, and so on. The prefix and the running counter are stored on the organization, so the numbers continue in order across all items.
 
-> **Edge case:** The backfill happens lazily on fetch — if you export a CSV of all items, items that haven't been individually viewed yet may still show empty barcodes. Viewing the item detail page triggers the backfill.
+> **Note:** Barcodes are assigned when the item is created (not lazily on view). Items that pre-date this feature were given sequential barcodes by a one-time migration. The barcode is unique within your organization.
 
 ### Equipment Check Template Builder Fix
 
@@ -1376,13 +1376,13 @@ Item detail pages now always display the barcode and asset tag fields, even when
 > **Screenshot needed:**
 > _[Screenshot of an item detail page showing the barcode field with a generated barcode value (e.g., "INV-A3F82B9C") and the asset tag field showing "--" placeholder]_
 
-### Lazy Barcode Backfill
+### Barcode Numbering
 
-Items created before the barcode auto-generation feature was added receive barcodes automatically:
+Barcodes are assigned at item-creation time using a per-organization sequential number:
 
-- When an item detail page is loaded and the item has no barcode, the system generates one (format: INV-XXXXXXXX)
-- No database migration required — backfill happens lazily on first access
-- The barcode is persisted so subsequent loads don't regenerate it
+- Format: `<prefix><zero-padded number>` (default `INV-000001`, `INV-000002`, …)
+- The prefix and running counter are stored on the organization; concurrent creates get distinct numbers (the org row is locked during the increment)
+- Unique within the organization; a one-time migration assigned sequential barcodes to any pre-existing items
 
 ### Edge Cases
 

@@ -42,7 +42,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Issuance Allowances Admin Page** — *(2026-06-09)* Dedicated page (`/inventory/admin/allowances`) to configure per-category issue caps by role and period (`annual` / `career` / `one_time`). `role_id` NULL applies to all members; the most specific match (highest-priority position) wins. Enforced on pool issuance unless an admin sets `override_allowance`; all mutations are audit-logged. A category with no rule is unlimited
 - **Size Preferences Modal** — *(2026-06-09)* `SizePreferencesModal` lets members edit their own sizes (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). Nine fields (shirt size/style, pant waist/inseam, jacket, boot size/width, glove, hat) plus a `custom_sizes` JSON column; unset sizes return 404 and open the form blank
 - **Equipment Request Fulfillment** — *(2026-06-09)* `PUT /inventory/requests/{id}/fulfill` turns an approved request into a real issuance, checkout, or assignment (routed by tracking type) and records `fulfilled_by` / `fulfilled_at` / `fulfillment_type` / `fulfillment_reference_id`. Not idempotent — only `APPROVED` requests can be fulfilled
-- **Barcodes Assigned at Creation** — *(2026-06-09)* Item barcodes (`INV-XXXXXXXX`) are now generated when an item is created instead of lazily on first read; migration `20260604_0200` backfilled legacy rows. Removes a write-on-read that interacted poorly with the API cache
+- **Sequential Barcodes Assigned at Creation** — *(2026-06-10)* Item barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, …). The prefix and counter live in `organizations.settings["barcode"]`; the org row is locked `FOR UPDATE` for the read-increment so concurrent creates get distinct numbers. Assigned at item-creation time (no longer lazily on read); migration `20260610_0001` reassigned existing items and seeded each org's counter
 - **Taxonomy Soft-Delete** — *(2026-06-09)* `DELETE` endpoints for categories (blocked when active items reference them), variant groups, and equipment kits set `active = False` and audit-log rather than hard-deleting
 - **NFPA 1851 Inspection Detail** — *(2026-06-09)* Maintenance records can persist structured NFPA Ch. 6–8 inspection results (assessment booleans, contamination level, SCBA fields, recommendation) to `nfpa_inspection_details` when supplied
 
@@ -348,7 +348,7 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 - **Storage area item link fix**: Item links from storage areas navigate to `/inventory/items/{id}` instead of incorrectly routing to dashboard
 - **Storage area name resolution**: Item detail page resolves and displays the storage area name instead of raw ID
 - **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback when empty, instead of hiding fields entirely
-- **Barcode generation**: Barcodes (`INV-XXXXXXXX`) are assigned at item-creation time by a single canonical generator (shared by item creation, variant generation, and label backfill); legacy rows were backfilled by migration `20260604_0200` *(2026-06-09)*
+- **Barcode generation**: Barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`) assigned at item-creation time by `_next_sequential_barcode()` (shared by item creation, variant generation, and label backfill). The prefix/counter live in `organizations.settings["barcode"]`; migration `20260610_0001` reassigned existing items and seeded counters *(2026-06-10)*
 - **Admin items page improvements**: InventoryItemsPage readability and display bug fixes
 - **WebSocket double-accept fix**: Guard `client_state` check before `accept()` in `websocket_manager.py` to prevent `RuntimeError` when early auth accept causes second accept call
 - **Equipment check template builder fix**: Removed `useBlocker` from `useUnsavedChanges` hook (incompatible with BrowserRouter). `beforeunload` handler retained for browser close/refresh
@@ -358,7 +358,7 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 
 | Scenario | Behavior |
 |----------|----------|
-| Item created before barcode auto-generation | Backfilled with an `INV-XXXXXXXX` barcode by migration `20260604_0200` |
+| Item created before barcode auto-generation | Backfilled with a sequential `INV-000001`-style barcode by migration `20260610_0001` |
 | Storage area with no items | Shows empty state message in expandable panel |
 | Item with no barcode or asset tag | Fields display `--` placeholder (always visible) |
 | WebSocket connection already accepted | Guard prevents second `accept()` call |
@@ -426,7 +426,7 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 - **Storage area items display**: Storage areas page shows inventory items assigned to each area with expandable inline panels showing name, serial number, status, and condition
 - **Item links from storage areas**: Items in storage area panels link directly to `/inventory/items/{id}` (previously linked to dashboard)
 - **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback instead of hiding empty fields
-- **Barcode backfill**: Items created before barcode auto-generation were backfilled with `INV-XXXXXXXX` barcodes by migration `20260604_0200` (barcodes are now assigned at creation time)
+- **Barcode backfill**: Items created before barcode auto-generation were given sequential `INV-000001`-style barcodes by migration `20260610_0001` (barcodes are assigned at creation time)
 - **Storage area name resolution**: Item detail page displays resolved storage area name instead of raw ID
 
 ### Edge Cases

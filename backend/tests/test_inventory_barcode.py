@@ -1,79 +1,96 @@
 """
-Tests for the unified inventory barcode generation
-(app/services/inventory_service.py).
+Tests for inventory barcode generation (app/services/inventory_service.py).
 
-There is a single barcode scheme used everywhere — item creation, variant
-generation, the label backfill, and the one-time migration 20260604_0200:
-
-    INV-<first 8 uppercase hex of the item's own UUID>
-
-``_barcode_for_item`` derives that value and verifies uniqueness within the
-organization, widening to a fresh 12-hex token on the (rare) first-8
-collision. The DB session is mocked, so the suite needs no MySQL.
+Barcodes use one scheme everywhere: a per-organization sequential number,
+``<prefix><zero-padded number>`` (default ``INV-000001``). The prefix and
+counter live in ``organization.settings["barcode"]``; ``_next_sequential_barcode``
+locks the org row, formats the next number, skips any already-taken value, and
+advances the counter. The DB session is mocked, so the suite needs no MySQL.
 """
 
-import re
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from app.services.inventory_service import InventoryService, _format_barcode
-
-_CANONICAL = re.compile(r"^INV-[0-9A-F]{8}$")
-_WIDENED = re.compile(r"^INV-[0-9A-F]{12}$")
+from app.services.inventory_service import InventoryService, _format_sequential_barcode
 
 
-class TestFormatBarcode:
-    def test_derives_from_first_eight_hex_of_uuid(self):
-        token = "12345678-90ab-cdef-1234-567890abcdef"
-        assert _format_barcode(token) == "INV-12345678"
+class TestFormatSequentialBarcode:
+    def test_zero_pads_to_six_digits(self):
+        assert _format_sequential_barcode("INV-", 1) == "INV-000001"
+        assert _format_sequential_barcode("INV-", 42) == "INV-000042"
 
-    def test_is_uppercase(self):
-        assert _format_barcode("abcdef00-0000-0000-0000-000000000000") == "INV-ABCDEF00"
+    def test_grows_past_six_digits(self):
+        assert _format_sequential_barcode("INV-", 1234567) == "INV-1234567"
 
-    def test_matches_canonical_format_for_real_uuids(self):
-        assert all(_CANONICAL.match(_format_barcode(str(uuid4()))) for _ in range(20))
+    def test_honours_a_custom_prefix(self):
+        assert _format_sequential_barcode("FCFD-", 7) == "FCFD-000007"
 
 
-class TestBarcodeForItem:
-    def _service(self, *scalar_results):
+class TestNextSequentialBarcode:
+    def _service(self, org, *exists_results):
+        """Build a service whose first scalar() returns the org (FOR UPDATE)
+        and whose subsequent scalar() calls answer the existence checks."""
         db = MagicMock()
-        db.scalar = AsyncMock(side_effect=list(scalar_results))
+        db.scalar = AsyncMock(side_effect=[org, *exists_results])
+        db.flush = AsyncMock()
         return InventoryService(db), db
 
-    async def test_derives_barcode_from_the_items_own_uuid(self):
-        item_id = "deadbeef-0000-1111-2222-333344445555"
-        service, db = self._service(None)  # not taken
-        code = await service._barcode_for_item(item_id, uuid4())
-        # The canonical value is reproducible from the id — this is what makes
-        # app-created and migration-backfilled barcodes identical.
-        assert code == _format_barcode(item_id)
-        assert code == "INV-DEADBEEF"
-        assert db.scalar.await_count == 1
+    async def test_first_barcode_for_a_fresh_org(self):
+        org = SimpleNamespace(settings={})
+        service, db = self._service(org, None)  # number 1 is free
+        code = await service._next_sequential_barcode(uuid4())
+        assert code == "INV-000001"
+        # Counter advanced and persisted on the org settings.
+        assert org.settings["barcode"]["next_number"] == 2
+        assert org.settings["barcode"]["prefix"] == "INV-"
+        db.flush.assert_awaited()
 
-    async def test_widens_on_first_eight_collision(self):
-        # First-8 candidate is taken, the widened token is free.
-        service, db = self._service("existing-id", None)
-        code = await service._barcode_for_item(str(uuid4()), uuid4())
-        assert _WIDENED.match(code)
-        assert db.scalar.await_count == 2
+    async def test_continues_from_stored_counter(self):
+        org = SimpleNamespace(
+            settings={"barcode": {"prefix": "INV-", "next_number": 50}}
+        )
+        service, _ = self._service(org, None)
+        code = await service._next_sequential_barcode(uuid4())
+        assert code == "INV-000050"
+        assert org.settings["barcode"]["next_number"] == 51
 
-    async def test_widens_with_retry_until_free(self):
-        # Canonical taken, first widened taken, second widened free.
-        service, db = self._service("taken", "taken", None)
-        code = await service._barcode_for_item(str(uuid4()), uuid4())
-        assert _WIDENED.match(code)
-        assert db.scalar.await_count == 3
+    async def test_skips_a_number_already_in_use(self):
+        org = SimpleNamespace(settings={"barcode": {"next_number": 5}})
+        # 5 is taken, 6 is free.
+        service, db = self._service(org, "taken-item-id", None)
+        code = await service._next_sequential_barcode(uuid4())
+        assert code == "INV-000006"
+        assert org.settings["barcode"]["next_number"] == 7
 
-    async def test_query_is_scoped_to_the_organization(self):
+    async def test_honours_a_configured_custom_prefix(self):
+        org = SimpleNamespace(
+            settings={"barcode": {"prefix": "FCFD-", "next_number": 1}}
+        )
+        service, _ = self._service(org, None)
+        code = await service._next_sequential_barcode(uuid4())
+        assert code == "FCFD-000001"
+
+    async def test_locks_the_org_row_for_update(self):
         captured = []
+        org = SimpleNamespace(settings={})
 
-        async def capture(stmt, *a, **k):
+        async def scalar(stmt, *a, **k):
             captured.append(str(stmt))
-            return None
+            return org if len(captured) == 1 else None
 
         db = MagicMock()
-        db.scalar = AsyncMock(side_effect=capture)
+        db.scalar = AsyncMock(side_effect=scalar)
+        db.flush = AsyncMock()
         service = InventoryService(db)
-        await service._barcode_for_item(str(uuid4()), uuid4())
-        assert "organization_id" in captured[0]
-        assert "barcode" in captured[0]
+        await service._next_sequential_barcode(uuid4())
+        assert "FOR UPDATE" in captured[0].upper()
+
+    async def test_raises_when_org_missing(self):
+        service, _ = self._service(None)
+        try:
+            await service._next_sequential_barcode(uuid4())
+            raised = False
+        except ValueError:
+            raised = True
+        assert raised
