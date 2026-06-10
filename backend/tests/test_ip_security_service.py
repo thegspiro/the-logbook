@@ -7,6 +7,7 @@ org A cannot action or read another org's exception by guessing its ID
 (cross-org IDOR regression). DB mocked; no MySQL.
 """
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -220,6 +221,57 @@ class TestQueryOrgScoping:
     async def test_active_allowed_ips_requires_org(self, svc):
         with pytest.raises(TypeError):
             await svc.get_all_active_allowed_ips(db=self._db_returning([]))
+
+
+class TestGetExceptionById:
+    async def test_returns_exception_in_org(self, svc):
+        exc = _exception(organization_id="org-A")
+        db = _db(exc)
+        out = await svc.get_exception_by_id(
+            db=db, exception_id="exc-1", organization_id="org-A"
+        )
+        assert out is exc
+        sql = _executed_sql(db)
+        assert "organization_id" in sql
+        assert "org-A" in sql
+
+    async def test_returns_none_for_foreign_or_missing(self, svc):
+        out = await svc.get_exception_by_id(
+            db=_db(None), exception_id="exc-1", organization_id="org-B"
+        )
+        assert out is None
+
+
+class TestExpireOldExceptions:
+    async def test_marks_expired_and_counts(self, svc):
+        past = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        exc1 = _exception(id="e1", status=IPExceptionApprovalStatus.APPROVED)
+        exc2 = _exception(id="e2", status=IPExceptionApprovalStatus.APPROVED)
+        exc1.valid_until = past
+        exc2.valid_until = past
+
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [exc1, exc2]
+        db.execute = AsyncMock(return_value=result)
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+
+        count = await svc.expire_old_exceptions(db=db)
+        assert count == 2
+        assert exc1.approval_status == IPExceptionApprovalStatus.EXPIRED
+        assert exc2.approval_status == IPExceptionApprovalStatus.EXPIRED
+        db.commit.assert_awaited()
+
+    async def test_no_expired_returns_zero(self, svc):
+        db = MagicMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(return_value=result)
+        db.commit = AsyncMock()
+        count = await svc.expire_old_exceptions(db=db)
+        assert count == 0
 
 
 class TestAuditLogOrgScoping:

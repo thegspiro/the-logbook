@@ -598,6 +598,26 @@ class IPSecurityService:
 
         return audit_log
 
+    async def get_exception_by_id(
+        self,
+        db: AsyncSession,
+        exception_id: str,
+        organization_id: str,
+    ) -> Optional[IPException]:
+        """
+        Fetch a single exception scoped to the caller's org, or None.
+
+        Lets endpoints distinguish "no such exception in your org" (404)
+        from a valid exception that simply has no audit history yet.
+        """
+        result = await db.execute(
+            select(IPException).where(
+                IPException.id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def get_exception_audit_log(
         self,
         db: AsyncSession,

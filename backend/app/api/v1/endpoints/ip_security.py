@@ -345,6 +345,16 @@ async def get_exception_audit_log(
     Requires security.manage, settings.manage, or audit.view permission.
     """
     async with handle_service_errors("Failed to get exception audit log"):
+        # 404 if the exception doesn't exist in the caller's org, so the UI
+        # can tell "not yours / not found" apart from "no history yet" ([]).
+        ensure_found(
+            await ip_security_service.get_exception_by_id(
+                db=db,
+                exception_id=exception_id,
+                organization_id=str(current_user.organization_id),
+            ),
+            "IP exception",
+        )
         logs = await ip_security_service.get_exception_audit_log(
             db=db,
             exception_id=exception_id,
