@@ -135,6 +135,8 @@ from app.schemas.inventory import (
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
+from app.services.label_service import LabelService
+from app.utils import label_renderer
 
 router = APIRouter()
 
@@ -2255,7 +2257,7 @@ async def get_label_formats(
     **Requires permission: inventory.view**
     """
     formats = []
-    for key, fmt in InventoryService.LABEL_FORMATS.items():
+    for key, fmt in label_renderer.LABEL_FORMATS.items():
         entry = {
             "id": key,
             "description": fmt["description"],
@@ -4999,8 +5001,7 @@ async def get_label_preset(
     **Authentication required**
     **Requires permission: inventory.view**
     """
-    service = InventoryService(db)
-    return await service.get_label_preset(
+    return await LabelService(db).get_preset(
         user_id=UUID(current_user.id),
         organization_id=current_user.organization_id,
         module="inventory",
@@ -5020,15 +5021,14 @@ async def set_label_preset(
     **Authentication required**
     **Requires permission: inventory.view**
     """
-    service = InventoryService(db)
     try:
-        result = await service.set_label_preset(
+        result = await LabelService(db).set_preset(
             user_id=UUID(current_user.id),
             organization_id=current_user.organization_id,
+            module="inventory",
             preset=data.preset,
             custom_width=data.custom_width,
             custom_height=data.custom_height,
-            module="inventory",
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))

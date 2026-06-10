@@ -32,6 +32,7 @@ from app.api.v1.endpoints import (
     integrations,
     inventory,
     ip_security,
+    labels,
     locations,
     medical_screening,
     meetings,
@@ -95,6 +96,7 @@ api_router.include_router(
 )
 api_router.include_router(elections.router, prefix="/elections", tags=["elections"])
 api_router.include_router(inventory.router, prefix="/inventory", tags=["inventory"])
+api_router.include_router(labels.router, tags=["labels"])
 api_router.include_router(forms.router, prefix="/forms", tags=["forms"])
 api_router.include_router(
     training_submissions.router,
