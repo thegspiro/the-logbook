@@ -260,6 +260,16 @@ The `organizations.settings` JSON column stores email platform configuration und
 
 ---
 
+## Recent Schema Changes (2026-06-10)
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `positions` | `settings` | JSON (nullable) | `20260610_0002` | Per-position UI preferences; holds `label_preset` (the inventory label printer/size a role uses) |
+
+---
+
 ## Recent Schema Changes (2026-06-09)
 
 ### New Columns

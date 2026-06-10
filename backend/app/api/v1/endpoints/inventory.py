@@ -98,6 +98,7 @@ from app.schemas.inventory import (
     ItemVariantGroupResponse,
     ItemVariantGroupUpdate,
     LabelGenerateRequest,
+    LabelPresetUpdate,
     LocationInventorySummary,
     LowStockItem,
     MaintenanceRecordCreate,
@@ -4983,3 +4984,51 @@ async def upsert_my_size_preferences(
     await db.commit()
     await db.refresh(prefs)
     return MemberSizePreferencesResponse.model_validate(prefs)
+
+
+@router.get("/label-preset")
+async def get_label_preset(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get the inventory label-printer preset for the current user's
+    highest-priority position (so a role's printer choice follows whoever
+    fills it, on any computer). ``preset`` is null when none is saved.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    return await service.get_label_preset(
+        user_id=UUID(current_user.id),
+        organization_id=current_user.organization_id,
+    )
+
+
+@router.put("/label-preset")
+async def set_label_preset(
+    data: LabelPresetUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Save the inventory label-printer preset for the current user's
+    highest-priority position.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    service = InventoryService(db)
+    try:
+        result = await service.set_label_preset(
+            user_id=UUID(current_user.id),
+            organization_id=current_user.organization_id,
+            preset=data.preset,
+            custom_width=data.custom_width,
+            custom_height=data.custom_height,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    await db.commit()
+    return result

@@ -3585,6 +3585,76 @@ class InventoryService:
         row = result.scalar_one_or_none()
         return UUID(row) if row else None
 
+    # ------------------------------------------------------------------
+    # Per-position label-printer preference
+    # ------------------------------------------------------------------
+
+    def _is_valid_label_preset(self, preset: str) -> bool:
+        return preset == "custom" or preset in self.LABEL_FORMATS
+
+    async def get_label_preset(self, user_id, organization_id) -> Dict[str, Any]:
+        """Return the label-printer preference for the member's highest-priority
+        position (so a role's printer choice follows whoever fills it, on any
+        computer). ``preset`` is ``None`` when nothing has been saved yet."""
+        from app.models.user import Position
+
+        position_id = await self._get_primary_role_id(user_id, organization_id)
+        if position_id is None:
+            return {"preset": None, "position_id": None}
+
+        position = await self.db.scalar(
+            select(Position).where(Position.id == str(position_id))
+        )
+        pref = (position.settings or {}).get("label_preset") if position else None
+        if not pref:
+            return {"preset": None, "position_id": str(position_id)}
+        return {
+            "preset": pref.get("preset"),
+            "custom_width": pref.get("custom_width"),
+            "custom_height": pref.get("custom_height"),
+            "position_id": str(position_id),
+        }
+
+    async def set_label_preset(
+        self,
+        user_id,
+        organization_id,
+        preset: str,
+        custom_width: Optional[float] = None,
+        custom_height: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Persist the label-printer preference on the member's highest-priority
+        position. Raises ValueError on an unknown preset or no position."""
+        from app.models.user import Position
+
+        if not self._is_valid_label_preset(preset):
+            raise ValueError(f"Unknown label preset: {preset}")
+
+        position_id = await self._get_primary_role_id(user_id, organization_id)
+        if position_id is None:
+            raise ValueError("No position is available to store the preference on")
+
+        position = await self.db.scalar(
+            select(Position).where(
+                Position.id == str(position_id),
+                Position.organization_id == str(organization_id),
+            )
+        )
+        if position is None:
+            raise ValueError("Position not found")
+
+        # Deep-copy + reassign so SQLAlchemy detects the nested change
+        # (Position.settings is a plain JSON column; see CLAUDE.md Pitfall #12).
+        settings = copy.deepcopy(position.settings or {})
+        settings["label_preset"] = {
+            "preset": preset,
+            "custom_width": custom_width,
+            "custom_height": custom_height,
+        }
+        position.settings = settings
+        await self.db.flush()
+        return {**settings["label_preset"], "position_id": str(position_id)}
+
     async def _enforce_issuance_allowance(
         self, user_id, category_id, organization_id, quantity: int
     ) -> Optional[str]:

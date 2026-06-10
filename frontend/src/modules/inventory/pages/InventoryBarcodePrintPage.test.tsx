@@ -6,11 +6,15 @@ import type { InventoryItem } from '../types';
 
 const mockGetItem = vi.fn();
 const mockGenerateLabels = vi.fn();
+const mockGetLabelPreset = vi.fn();
+const mockSetLabelPreset = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
     getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
     generateBarcodeLabels: (...a: unknown[]) => mockGenerateLabels(...a) as unknown,
+    getLabelPreset: (...a: unknown[]) => mockGetLabelPreset(...a) as unknown,
+    setLabelPreset: (...a: unknown[]) => mockSetLabelPreset(...a) as unknown,
   },
 }));
 
@@ -49,6 +53,8 @@ describe('InventoryBarcodePrintPage', () => {
     localStorage.clear();
     mockGetItem.mockResolvedValue(makeItem());
     mockGenerateLabels.mockResolvedValue({ blob: new Blob(['pdf']), autoPopulated: 0 });
+    mockGetLabelPreset.mockResolvedValue({ preset: null });
+    mockSetLabelPreset.mockResolvedValue({ preset: null });
     globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
     globalThis.URL.revokeObjectURL = vi.fn();
     // The PDF download clicks a temporary <a download> — stub it so jsdom
@@ -146,5 +152,34 @@ describe('InventoryBarcodePrintPage', () => {
 
     await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
     expect(mockGenerateLabels.mock.calls[0]?.[1]).toBe('rollo_2x1');
+  });
+
+  it('applies the preset saved for the position over the local default', async () => {
+    // Local default is Dymo, but the position remembers Rollo 4x6.
+    localStorage.setItem('inventory:labelPreset', 'dymo_30252');
+    mockGetLabelPreset.mockResolvedValue({ preset: 'rollo_4x6' });
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+    await waitFor(() => expect(mockGetLabelPreset).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    expect(mockGenerateLabels.mock.calls[0]?.[1]).toBe('rollo_4x6');
+  });
+
+  it('saves a changed preset to the position', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Rollo 4/ }));
+
+    // The change is debounced (~500ms) then saved to the position.
+    await waitFor(
+      () => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6' }),
+      { timeout: 2000 },
+    );
   });
 });

@@ -236,5 +236,6 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260604_0100` | `20260528_0002` | `20260604_0100_add_equipment_request_fulfillment_fields.py` | Add `fulfilled_by` / `fulfilled_at` / `fulfillment_type` / `fulfillment_reference_id` to `equipment_requests` |
 | `20260604_0200` | `20260604_0100` | `20260604_0200_backfill_inventory_item_barcodes.py` | Backfill barcodes for legacy `inventory_items` (superseded by `20260610_0001`) |
 | `20260610_0001` | `(20260604_0001, 20260604_0200)` | `20260610_0001_sequential_inventory_barcodes.py` | **Merge** the two heads; switch inventory barcodes to per-org sequential numbers (`INV-000001` …), reassign existing items, and seed each org's counter in `organizations.settings["barcode"]` |
+| `20260610_0002` | `20260610_0001` | `20260610_0002_add_position_settings.py` | Add nullable `positions.settings` JSON column for per-position UI preferences (e.g. the inventory label printer a role uses) |
 
 > **Single head as of 2026-06-10:** `20260610_0001` merges the two heads that PRs #1062 (`20260604_0200`) and #1063 (`20260604_0001`) had left open (both descended from `20260528_0002`), so `alembic upgrade head` is unambiguous again. `tests/test_alembic_migrations.py` validates the single-head DAG (it now understands merge migrations).

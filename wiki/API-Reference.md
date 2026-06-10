@@ -189,6 +189,8 @@ PUT    /api/v1/inventory/allowances/{allowance_id}                      # Update
 DELETE /api/v1/inventory/allowances/{allowance_id}                      # Delete allowance
 GET    /api/v1/inventory/my/size-preferences                           # Current user's sizes (404 if unset)
 PUT    /api/v1/inventory/my/size-preferences                           # Upsert own sizes
+GET    /api/v1/inventory/label-preset                                  # Label printer preset for the user's position { preset, custom_width, custom_height, position_id }
+PUT    /api/v1/inventory/label-preset                                  # Save label preset for the user's position { preset, custom_width?, custom_height? }
 GET    /api/v1/inventory/members/{user_id}/size-preferences            # Member sizes (inventory.view)
 PUT    /api/v1/inventory/members/{user_id}/size-preferences            # Upsert member sizes (inventory.manage)
 PUT    /api/v1/inventory/requests/{request_id}/fulfill                  # Fulfill approved request → issuance/checkout/assignment

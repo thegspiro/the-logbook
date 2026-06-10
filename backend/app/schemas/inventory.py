@@ -1802,3 +1802,11 @@ class MemberSizePreferencesResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
+
+
+class LabelPresetUpdate(BaseModel):
+    """Request body for saving a position's inventory label-printer preset."""
+
+    preset: str = Field(min_length=1, max_length=50)
+    custom_width: Optional[float] = Field(None, ge=0.5, le=8)
+    custom_height: Optional[float] = Field(None, ge=0.5, le=11)
