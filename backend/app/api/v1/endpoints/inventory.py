@@ -2097,7 +2097,10 @@ async def get_user_inventory(
 @router.get("/lookup", response_model=ScanLookupListResponse)
 async def lookup_item_by_code(
     code: str = Query(
-        ..., min_length=1, description="Barcode, serial number, asset tag, or item name"
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Barcode, serial number, asset tag, or item name",
     ),
     limit: int = Query(20, ge=1, le=50, description="Maximum results to return"),
     db: AsyncSession = Depends(get_db),
@@ -4071,9 +4074,7 @@ async def check_member_allowance(
     """Check a member's remaining issuance allowance for a category."""
     service = InventoryService(db)
     # Resolve the member's highest-priority position for role-specific allowances
-    role_id = await service._get_primary_role_id(
-        user_id, current_user.organization_id
-    )
+    role_id = await service._get_primary_role_id(user_id, current_user.organization_id)
     check = await service.check_allowance(
         user_id=user_id,
         category_id=category_id,

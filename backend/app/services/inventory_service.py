@@ -76,6 +76,18 @@ def _sanitize_barcode_value(raw: str) -> str:
     return "".join(ch for ch in raw if ord(ch) < 128)
 
 
+# Canonical inventory barcode scheme: the literal "INV-" followed by 8
+# uppercase hex characters. Centralised here so item creation, variant
+# generation, and any backfill path all emit the same format (the backfill
+# migration 20260604_0200 uses the identical INV-XXXXXXXX shape).
+BARCODE_PREFIX = "INV-"
+
+
+def _new_barcode() -> str:
+    """Generate a fresh barcode in the canonical ``INV-XXXXXXXX`` form."""
+    return f"{BARCODE_PREFIX}{_gen().replace('-', '').upper()[:8]}"
+
+
 # Supported extra-line field keys that can be requested on labels.
 _EXTRA_LINE_FIELDS = {"location", "category", "condition", "custom"}
 
@@ -121,13 +133,30 @@ class InventoryService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _ensure_barcode(self, item: "InventoryItem") -> None:
-        """Lazily backfill a barcode for items created before auto-generation."""
-        if item.barcode:
-            return
-        item.barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
-        await self.db.commit()
-        await self.db.refresh(item)
+    async def _generate_unique_barcode(
+        self, organization_id, *, attempts: int = 5
+    ) -> str:
+        """Return a canonical ``INV-XXXXXXXX`` barcode unique within the org.
+
+        Barcodes are unique per organization (``uq_item_org_barcode``). The
+        8-hex space makes collisions astronomically unlikely, but we still
+        verify-and-regenerate so a create never fails on a duplicate; the DB
+        constraint remains the final backstop against a concurrent insert.
+        """
+        for _ in range(attempts):
+            candidate = _new_barcode()
+            existing = await self.db.scalar(
+                select(InventoryItem.id)
+                .where(
+                    InventoryItem.organization_id == str(organization_id),
+                    InventoryItem.barcode == candidate,
+                )
+                .limit(1)
+            )
+            if not existing:
+                return candidate
+        # Vanishingly unlikely; widen the token to all-but-guarantee uniqueness.
+        return f"{BARCODE_PREFIX}{_gen().replace('-', '').upper()[:12]}"
 
     # ------------------------------------------------------------------
     # Notification helper
@@ -492,11 +521,11 @@ class InventoryService:
             if "purchase_price" in item_data and "current_value" not in item_data:
                 item_data["current_value"] = item_data["purchase_price"]
 
-            # Auto-generate a barcode if none was provided.  Format: INV-XXXXXXXX
-            # (8 uppercase alphanumeric chars derived from the item's UUID).
+            # Auto-generate a canonical INV-XXXXXXXX barcode if none was given.
             if not item_data.get("barcode"):
-                raw_id = _gen().replace("-", "").upper()[:8]
-                item_data["barcode"] = f"INV-{raw_id}"
+                item_data["barcode"] = await self._generate_unique_barcode(
+                    organization_id
+                )
 
             item = InventoryItem(
                 organization_id=organization_id, created_by=created_by, **item_data
@@ -651,10 +680,7 @@ class InventoryService:
                 selectinload(InventoryItem.assignment_history),
             )
         )
-        item = result.scalar_one_or_none()
-        if item:
-            await self._ensure_barcode(item)
-        return item
+        return result.scalar_one_or_none()
 
     async def _get_item_locked(
         self, item_id: UUID, organization_id: UUID
@@ -2719,15 +2745,13 @@ class InventoryService:
         if not items:
             raise ValueError("No valid items found for label generation")
 
-        # Auto-populate the barcode field for items that don't have one yet,
-        # using the same fallback logic the label renderer uses.  This ensures
-        # the barcode printed on the label is stored on the item and visible
-        # when the user opens the edit form.
+        # Persist a canonical barcode for any straggler that still lacks one,
+        # so the printed label matches what is stored on the item (and stays
+        # consistent with create-time generation). Post-backfill this is rare.
         auto_populated = 0
         for item in items:
             if not item.barcode:
-                effective = item.asset_tag or item.serial_number or item.id[:12]
-                item.barcode = _sanitize_barcode_value(effective)
+                item.barcode = await self._generate_unique_barcode(item.organization_id)
                 auto_populated += 1
         if auto_populated > 0:
             await self.db.commit()
@@ -3677,7 +3701,7 @@ class InventoryService:
                         garment_style = member
                         break
 
-            barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
+            barcode = await self._generate_unique_barcode(organization_id)
 
             item = InventoryItem(
                 organization_id=str(organization_id),

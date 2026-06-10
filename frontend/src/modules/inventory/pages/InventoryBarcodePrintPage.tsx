@@ -461,14 +461,21 @@ const InventoryBarcodePrintPage: React.FC = () => {
     iframeDoc.close();
 
     let printed = false;
+    const removeFrame = () => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    };
+
     const triggerPrint = () => {
       if (printed) return;
       printed = true;
-      iframe.contentWindow?.focus();
-      iframe.contentWindow?.print();
-      setTimeout(() => {
-        if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-      }, 1000);
+      const win = iframe.contentWindow;
+      win?.focus();
+      // Remove the frame once the print dialog closes rather than on a fixed
+      // timer — a slow dialog could otherwise tear down the document mid-print.
+      // A long timeout backstops the case where afterprint never fires.
+      win?.addEventListener('afterprint', removeFrame, { once: true });
+      setTimeout(removeFrame, 60000);
+      win?.print();
     };
 
     iframe.onload = triggerPrint;

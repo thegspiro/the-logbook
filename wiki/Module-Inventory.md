@@ -348,7 +348,7 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 - **Storage area item link fix**: Item links from storage areas navigate to `/inventory/items/{id}` instead of incorrectly routing to dashboard
 - **Storage area name resolution**: Item detail page resolves and displays the storage area name instead of raw ID
 - **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback when empty, instead of hiding fields entirely
-- **Barcode backfill**: Items created before auto-generation lazily receive barcodes (`INV-XXXXXXXX` format) on first fetch via `inventory_service.py`. No migration needed
+- **Barcode generation**: Barcodes (`INV-XXXXXXXX`) are assigned at item-creation time by a single canonical generator (shared by item creation, variant generation, and label backfill); legacy rows were backfilled by migration `20260604_0200` *(2026-06-09)*
 - **Admin items page improvements**: InventoryItemsPage readability and display bug fixes
 - **WebSocket double-accept fix**: Guard `client_state` check before `accept()` in `websocket_manager.py` to prevent `RuntimeError` when early auth accept causes second accept call
 - **Equipment check template builder fix**: Removed `useBlocker` from `useUnsavedChanges` hook (incompatible with BrowserRouter). `beforeunload` handler retained for browser close/refresh
@@ -358,7 +358,7 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 
 | Scenario | Behavior |
 |----------|----------|
-| Item created before barcode auto-generation | Barcode lazily generated on first fetch (`INV-XXXXXXXX`) |
+| Item created before barcode auto-generation | Backfilled with an `INV-XXXXXXXX` barcode by migration `20260604_0200` |
 | Storage area with no items | Shows empty state message in expandable panel |
 | Item with no barcode or asset tag | Fields display `--` placeholder (always visible) |
 | WebSocket connection already accepted | Guard prevents second `accept()` call |
@@ -426,7 +426,7 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 - **Storage area items display**: Storage areas page shows inventory items assigned to each area with expandable inline panels showing name, serial number, status, and condition
 - **Item links from storage areas**: Items in storage area panels link directly to `/inventory/items/{id}` (previously linked to dashboard)
 - **Barcode and asset tag always visible**: Item detail page always shows barcode and asset tag fields with `--` fallback instead of hiding empty fields
-- **Lazy barcode backfill**: Items created before barcode auto-generation receive barcodes (INV-XXXXXXXX format) on first fetch — no migration needed
+- **Barcode backfill**: Items created before barcode auto-generation were backfilled with `INV-XXXXXXXX` barcodes by migration `20260604_0200` (barcodes are now assigned at creation time)
 - **Storage area name resolution**: Item detail page displays resolved storage area name instead of raw ID
 
 ### Edge Cases
