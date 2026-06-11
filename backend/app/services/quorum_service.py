@@ -5,6 +5,7 @@ Manages meeting quorum configuration, calculation, and enforcement.
 Quorum rules are set at the organization level and can be overridden per meeting.
 """
 
+import math
 from typing import Dict, Optional, Tuple
 from uuid import UUID
 
@@ -92,7 +93,14 @@ class QuorumService:
             description = f"{required} members required"
         else:  # percentage
             total_active = await self.get_active_member_count(organization_id)
-            required = max(1, int((q_threshold / 100.0) * total_active + 0.5))
+            # A percentage threshold is a floor that must be met or exceeded, so
+            # the required head-count rounds UP (ceil), never to nearest. Rounding
+            # to nearest would let a supermajority pass below its threshold — e.g.
+            # 67% of 9 members is 6.03, and 6/9 = 66.7% must NOT count as quorum.
+            # Multiply before dividing and subtract a tiny epsilon so exact values
+            # (e.g. 50% of 10 = 5.0) aren't pushed up by float overshoot.
+            raw_required = q_threshold * total_active / 100.0
+            required = max(1, math.ceil(raw_required - 1e-9))
             description = (
                 f"{q_threshold}% of {total_active} active members = {required} required"
             )
