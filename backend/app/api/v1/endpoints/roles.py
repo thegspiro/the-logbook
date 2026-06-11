@@ -21,6 +21,7 @@ from app.core.permissions import (
     get_admin_role_slugs,
     get_permission_details,
     get_permissions_by_category,
+    permission_matches,
 )
 from app.core.utils import ensure_found, handle_service_errors, safe_error_detail
 from app.models.user import User
@@ -527,13 +528,15 @@ async def check_admin_access(
         "members.manage",
     }
 
-    has_admin_permission = "*" in permissions or bool(
-        permissions.intersection(admin_permissions)
+    # Wildcard-aware: a role granting e.g. "users.*" must satisfy "users.view".
+    granted_admin_permissions = sorted(
+        p for p in admin_permissions if permission_matches(p, permissions)
     )
+    has_admin_permission = bool(granted_admin_permissions)
 
     return {
         "has_access": has_admin_role or has_admin_permission,
         "admin_roles": admin_role_slugs,
         "user_roles": [role.slug for role in roles],
-        "admin_permissions": sorted(list(permissions.intersection(admin_permissions))),
+        "admin_permissions": granted_admin_permissions,
     }

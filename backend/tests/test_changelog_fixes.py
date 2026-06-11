@@ -19,8 +19,7 @@ import os
 import pytest
 from collections import defaultdict
 
-from sqlalchemy import Index as SAIndex, inspect as sa_inspect
-from sqlalchemy.orm import RelationshipProperty
+from sqlalchemy import Index as SAIndex
 
 # ---------------------------------------------------------------------------
 # Import all models to register them with Base.metadata
@@ -131,7 +130,7 @@ class TestNoDuplicateIndexes:
                         )
 
         assert not duplicates, (
-            f"Duplicate index definitions found that will crash MySQL:\n"
+            "Duplicate index definitions found that will crash MySQL:\n"
             + "\n".join(duplicates)
         )
 
@@ -327,8 +326,8 @@ class TestDocumentsServiceAPI:
                             )
 
         assert not tuple_returns, (
-            f"Document service methods returning tuples "
-            f"(should return objects or raise exceptions):\n"
+            "Document service methods returning tuples "
+            "(should return objects or raise exceptions):\n"
             + "\n".join(tuple_returns)
         )
 
@@ -518,9 +517,9 @@ class TestFastPathInit:
         with open(main_path) as f:
             source = f.read()
 
-        assert 'stamp' in source and 'head' in source, (
-            "_fast_path_init should stamp alembic to 'head' after create_all()"
-        )
+        msg = "_fast_path_init should stamp alembic to 'head' after create_all()"
+        assert 'stamp' in source, msg
+        assert 'head' in source, msg
 
 
 # ===========================================================================
@@ -673,7 +672,7 @@ class TestFrontendErrorHandling:
                     violations.append(f"{rel_path}: {len(matches)} occurrences")
 
         assert not violations, (
-            f"Files using 'catch (err: any)' instead of 'catch (err: unknown)':\n"
+            "Files using 'catch (err: any)' instead of 'catch (err: unknown)':\n"
             + "\n".join(violations)
         )
 
@@ -746,16 +745,22 @@ class TestAlembicMigrationChain:
             # Extract revision and down_revision
             import re
             rev_match = re.search(r"^revision(?:\s*:\s*\w+)?\s*=\s*['\"]([^'\"]+)['\"]", content, re.MULTILINE)
-            down_match = re.search(r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*['\"]([^'\"]*)['\"]", content, re.MULTILINE)
-            down_none_match = re.search(r"^down_revision(?:\s*:\s*[\w\[\], |]+)?\s*=\s*None", content, re.MULTILINE)
+            # Capture the whole RHS so merge migrations with a tuple/list of
+            # parents (e.g. down_revision = ("a", "b")) parse correctly instead
+            # of being misread as roots.
+            down_match = re.search(r"^down_revision\s*(?::[^=]+)?=\s*(.+)$", content, re.MULTILINE)
 
             if rev_match:
                 revision = rev_match.group(1)
                 down_revision = None
                 if down_match:
-                    down_revision = down_match.group(1) or None
-                elif down_none_match:
-                    down_revision = None
+                    rhs = down_match.group(1).strip()
+                    if rhs.startswith(("(", "[")):
+                        # Merge migration: list of parent revisions
+                        down_revision = re.findall(r"['\"]([^'\"]+)['\"]", rhs)
+                    elif rhs.startswith(("'", '"')):
+                        single = re.match(r"['\"]([^'\"]+)['\"]", rhs)
+                        down_revision = single.group(1) if single else None
 
                 migrations[revision] = {
                     "filename": filename,
@@ -788,7 +793,7 @@ class TestAlembicMigrationChain:
             if len(files) > 1
         }
         assert not duplicates, (
-            f"Duplicate Alembic revision IDs (will crash backend startup):\n"
+            "Duplicate Alembic revision IDs (will crash backend startup):\n"
             + "\n".join(
                 f"  {rev}: {files}" for rev, files in duplicates.items()
             )
@@ -808,14 +813,19 @@ class TestAlembicMigrationChain:
 
         for revision, meta in migrations.items():
             down = meta["down_revision"]
-            if down is not None and down not in known_revisions:
-                broken.append(
-                    f"{meta['filename']}: revision='{revision}' has "
-                    f"down_revision='{down}' which does not exist"
-                )
+            if down is None:
+                continue
+            # Merge migrations have a list of parents; validate each one.
+            parents = down if isinstance(down, list) else [down]
+            for parent in parents:
+                if parent not in known_revisions:
+                    broken.append(
+                        f"{meta['filename']}: revision='{revision}' has "
+                        f"down_revision='{parent}' which does not exist"
+                    )
 
         assert not broken, (
-            f"Broken migration chain (orphaned down_revisions):\n"
+            "Broken migration chain (orphaned down_revisions):\n"
             + "\n".join(broken)
         )
 
@@ -887,7 +897,7 @@ class TestModelImports:
                 missing.append(model_name)
 
         assert not missing, (
-            f"Model files not imported in models/__init__.py "
-            f"(will be missing from Base.metadata.create_all()):\n"
+            "Model files not imported in models/__init__.py "
+            "(will be missing from Base.metadata.create_all()):\n"
             + "\n".join(missing)
         )

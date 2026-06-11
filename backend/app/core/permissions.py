@@ -14,6 +14,7 @@ Terminology
   (e.g., Active, Retired, Honorary, Administrative).
 """
 
+from collections.abc import Iterable
 from enum import Enum
 
 
@@ -549,6 +550,33 @@ ALL_PERMISSIONS: list[Permission] = [
 def get_all_permissions() -> list[str]:
     """Get list of all permission names"""
     return [p.name for p in ALL_PERMISSIONS]
+
+
+def permission_matches(required: str, granted: set[str]) -> bool:
+    """
+    Single source of truth for whether a granted permission set satisfies a
+    required permission. Used by the HTTP dependency layer, the role service,
+    and any admin-access checks so they cannot diverge.
+
+    Matching levels:
+    1. Global wildcard: ``"*"`` grants everything.
+    2. Exact match: ``"settings.edit"`` matches ``"settings.edit"``.
+    3. Module wildcard: ``"settings.*"`` matches any ``"settings.<action>"``.
+    """
+    if "*" in granted:
+        return True
+    if required in granted:
+        return True
+    if "." in required:
+        module = required.split(".")[0]
+        if f"{module}.*" in granted:
+            return True
+    return False
+
+
+def permission_matches_any(required: Iterable[str], granted: set[str]) -> bool:
+    """True if any one of the required permissions is satisfied (OR logic)."""
+    return any(permission_matches(p, granted) for p in required)
 
 
 def get_permissions_by_category() -> dict[str, list[Permission]]:

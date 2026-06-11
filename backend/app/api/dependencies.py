@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.permissions import get_rank_default_permissions
+from app.core.permissions import get_rank_default_permissions, permission_matches
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
 from app.utils.db_retry import is_transient_db_error
@@ -132,25 +132,10 @@ def _has_permission(required: str, user_permissions: set) -> bool:
     """
     Check if a single required permission is satisfied by the user's permissions.
 
-    Supports three levels of matching:
-    1. Global wildcard: ``"*"`` in user_permissions grants everything.
-    2. Module wildcard: ``"settings.*"`` in user_permissions matches any
-       ``"settings.<action>"`` requirement (e.g. ``"settings.manage_contact_visibility"``).
-    3. Exact match: ``"settings.edit"`` matches ``"settings.edit"``.
+    Thin wrapper over :func:`permission_matches` so the HTTP layer, the role
+    service, and admin-access checks share one matching implementation.
     """
-    if "*" in user_permissions:
-        return True
-
-    if required in user_permissions:
-        return True
-
-    # Module-level wildcard: "settings.*" covers "settings.manage_contact_visibility"
-    if "." in required:
-        module = required.split(".")[0]
-        if f"{module}.*" in user_permissions:
-            return True
-
-    return False
+    return permission_matches(required, user_permissions)
 
 
 class PermissionChecker:
