@@ -20,7 +20,6 @@ Covers:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4, UUID
-from datetime import datetime, timezone
 
 from app.services.inventory_service import InventoryService
 from app.models.inventory import (
@@ -49,7 +48,12 @@ def mock_db():
 @pytest.fixture
 def service(mock_db):
     """Create an InventoryService with a mocked db."""
-    return InventoryService(mock_db)
+    svc = InventoryService(mock_db)
+    # Sequential barcode assignment hits the DB (locks the org row, reads the
+    # per-org counter); it has its own dedicated tests in test_inventory_barcode.py.
+    # Stub it here so create_item tests don't exercise it through the generic mock.
+    svc._next_sequential_barcode = AsyncMock(return_value="INV-000001")
+    return svc
 
 
 @pytest.fixture
