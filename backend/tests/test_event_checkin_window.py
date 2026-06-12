@@ -92,36 +92,52 @@ class TestGetCheckInWindow:
 
 
 class TestValidateCheckInWindow:
-    def test_too_early(self):
-        ev = _event(CheckInWindowType.FLEXIBLE)  # window opens 18:30 UTC
+    def test_flexible_early_allows_with_notice(self):
+        # FLEXIBLE window opens 18:30 UTC; at 18:00 the member is early but
+        # is allowed in with an informational notice.
+        ev = _event(CheckInWindowType.FLEXIBLE)
         now = datetime(2026, 6, 1, 18, 0, tzinfo=tz.utc)
-        ok, msg = _svc()._validate_check_in_window(ev, now)
-        assert ok is False
-        assert "not available yet" in msg
-        assert "UTC" in msg
+        ok, err, notice = _svc()._validate_check_in_window(ev, now)
+        assert ok is True
+        assert err is None
+        assert "official check-in window" in notice
 
-    def test_too_late(self):
+    def test_strict_early_blocks(self):
+        # STRICT is a hard gate — no early check-in, no notice.
+        ev = _event(CheckInWindowType.STRICT)
+        now = datetime(2026, 6, 1, 18, 0, tzinfo=tz.utc)  # before 19:00 start
+        ok, err, notice = _svc()._validate_check_in_window(ev, now)
+        assert ok is False
+        assert "not available yet" in err
+        assert notice is None
+
+    def test_too_late_requires_organizer(self):
         ev = _event(CheckInWindowType.FLEXIBLE)
         now = datetime(2026, 6, 1, 21, 30, tzinfo=tz.utc)  # after 21:00 end
-        ok, msg = _svc()._validate_check_in_window(ev, now)
+        ok, err, notice = _svc()._validate_check_in_window(ev, now)
         assert ok is False
-        assert "no longer available" in msg
+        assert "closed" in err
+        assert "organizer" in err
+        assert notice is None
 
     def test_within_window(self):
         ev = _event(CheckInWindowType.FLEXIBLE)
         now = datetime(2026, 6, 1, 19, 30, tzinfo=tz.utc)
-        ok, msg = _svc()._validate_check_in_window(ev, now)
+        ok, err, notice = _svc()._validate_check_in_window(ev, now)
         assert ok is True
-        assert msg is None
+        assert err is None
+        assert notice is None
 
-    def test_early_message_localized(self):
+    def test_early_notice_localized(self):
         ev = _event(CheckInWindowType.FLEXIBLE)
         now = datetime(2026, 6, 1, 18, 0, tzinfo=tz.utc)
-        ok, msg = _svc()._validate_check_in_window(ev, now, tz_name="America/New_York")
-        assert ok is False
+        ok, err, notice = _svc()._validate_check_in_window(
+            ev, now, tz_name="America/New_York"
+        )
+        assert ok is True
         # 18:30 UTC == 2:30 PM EDT
-        assert "02:30 PM" in msg
-        assert "EDT" in msg
+        assert "02:30 PM" in notice
+        assert "EDT" in notice
 
 
 if __name__ == "__main__":  # pragma: no cover

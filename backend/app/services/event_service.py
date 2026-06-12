@@ -42,7 +42,6 @@ from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
 
-
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
 BULK_ADD_MAX_SIZE = 200
@@ -245,9 +244,7 @@ class EventService:
                 raw_status = row[3]
                 if raw_status is not None:
                     item["user_rsvp_status"] = (
-                        raw_status.value
-                        if hasattr(raw_status, "value")
-                        else raw_status
+                        raw_status.value if hasattr(raw_status, "value") else raw_status
                     )
             items.append(item)
 
@@ -1217,9 +1214,11 @@ class EventService:
         org = org_result.scalar_one_or_none()
         tz_name = org.timezone if org else None
 
-        # Validate check-in window
+        # Validate check-in window (manager path ignores the early notice)
         now = datetime.now(dt_timezone.utc)
-        is_valid, error_msg = self._validate_check_in_window(event, now, tz_name)
+        is_valid, error_msg, _notice = self._validate_check_in_window(
+            event, now, tz_name
+        )
         if not is_valid:
             return None, error_msg
 
@@ -1676,32 +1675,60 @@ class EventService:
 
     def _validate_check_in_window(
         self, event: Event, now: datetime, tz_name: Optional[str] = None
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        Validate if check-in is allowed based on event's check-in window settings
+        Validate whether check-in is allowed for the event's check-in window.
 
-        Returns: (is_valid, error_message)
+        Window-type policy:
+        - STRICT is a hard gate by design — no check-in before the window opens.
+        - FLEXIBLE / WINDOW allow an *early* check-in but return an informational
+          notice telling the member when the official window (set by the event
+          creator) begins.
+        - A check-in after the window has closed is never self-served; it
+          requires an event organizer to record it (via the manager override).
+
+        Returns: (is_allowed, error_message, notice). On a blocked attempt the
+        error is set and notice is None; on an allowed-but-early attempt the
+        error is None and notice carries the user-facing window message.
         """
         check_in_start, check_in_end = self._get_check_in_window(event)
+        window_type = event.check_in_window_type or CheckInWindowType.FLEXIBLE
+
+        def _local_time(dt: datetime) -> str:
+            """Format a UTC datetime as 'HH:MM AM/PM TZ' in the org's timezone."""
+            utc_dt = dt if dt.tzinfo else dt.replace(tzinfo=dt_timezone.utc)
+            if tz_name:
+                local = utc_dt.astimezone(ZoneInfo(tz_name))
+                return f"{local.strftime('%I:%M %p')} {local.strftime('%Z')}"
+            return f"{utc_dt.strftime('%I:%M %p')} UTC"
 
         if now < check_in_start:
-            # Always convert UTC to local time for user-facing messages
-            utc_start = check_in_start.replace(tzinfo=dt_timezone.utc)
-            if tz_name:
-                local_start = utc_start.astimezone(ZoneInfo(tz_name))
-                tz_label = local_start.strftime("%Z")
-            else:
-                local_start = utc_start
-                tz_label = "UTC"
+            opens_at = _local_time(check_in_start)
+            if window_type == CheckInWindowType.STRICT:
+                # Hard gate: strict events only permit check-in once open.
+                return (
+                    False,
+                    f"Check-in is not available yet. Opens at {opens_at}.",
+                    None,
+                )
+            # Flexible / window events: let the member check in early, but tell
+            # them when the official window the organizer configured starts.
             return (
-                False,
-                f"Check-in is not available yet. Opens at {local_start.strftime('%I:%M %p')} {tz_label}.",
+                True,
+                None,
+                f"You're a bit early. The official check-in window for this "
+                f"event opens at {opens_at}.",
             )
 
         if now > check_in_end:
-            return False, "Check-in is no longer available. The event has ended."
+            return (
+                False,
+                "Check-in has closed for this event. Ask an event organizer to "
+                "record a late check-in.",
+                None,
+            )
 
-        return True, None
+        return True, None, None
 
     async def self_check_in(
         self,
@@ -1709,7 +1736,7 @@ class EventService:
         user_id: UUID,
         organization_id: UUID,
         is_checkout: bool = False,
-    ) -> Tuple[Optional[EventRSVP], Optional[str]]:
+    ) -> Tuple[Optional[EventRSVP], Optional[str], Optional[str]]:
         """
         Allow a user to check themselves in or out via QR code
 
@@ -1719,7 +1746,9 @@ class EventService:
             organization_id: Organization ID
             is_checkout: True if this is a check-out request
 
-        Returns: (rsvp, error_message)
+        Returns: (rsvp, error_message, notice). ``notice`` is a non-blocking,
+        user-facing message (e.g. an early check-in succeeded but the official
+        window opens later); it is None unless such a case applies.
         """
         # Get event
         event_result = await self.db.execute(
@@ -1730,10 +1759,10 @@ class EventService:
         event = event_result.scalar_one_or_none()
 
         if not event:
-            return None, "Event not found"
+            return None, "Event not found", None
 
         if event.is_cancelled:
-            return None, "Event has been cancelled"
+            return None, "Event has been cancelled", None
 
         # Verify user belongs to organization
         user_result = await self.db.execute(
@@ -1744,7 +1773,7 @@ class EventService:
         user = user_result.scalar_one_or_none()
 
         if not user:
-            return None, "User not found in organization"
+            return None, "User not found in organization", None
 
         # Get organization timezone for user-facing messages
         org_result = await self.db.execute(
@@ -1755,10 +1784,12 @@ class EventService:
 
         now = datetime.now(dt_timezone.utc)
 
-        # Validate check-in window
-        is_valid, error_msg = self._validate_check_in_window(event, now, tz_name)
+        # Validate check-in window (may allow an early check-in with a notice)
+        is_valid, error_msg, notice = self._validate_check_in_window(
+            event, now, tz_name
+        )
         if not is_valid:
-            return None, error_msg
+            return None, error_msg, None
 
         # Get or create RSVP
         rsvp_result = await self.db.execute(
@@ -1770,7 +1801,7 @@ class EventService:
 
         if not rsvp:
             if is_checkout:
-                return None, "Cannot check out without checking in first"
+                return None, "Cannot check out without checking in first", None
 
             # Auto-create RSVP when checking in
             rsvp = EventRSVP(
@@ -1786,10 +1817,10 @@ class EventService:
         # Handle check-out
         if is_checkout:
             if not rsvp.checked_in:
-                return None, "You are not checked in to this event"
+                return None, "You are not checked in to this event", None
 
             if rsvp.checked_out_at:
-                return None, "You have already checked out of this event"
+                return None, "You have already checked out of this event", None
 
             rsvp.checked_out_at = now
 
@@ -1803,12 +1834,12 @@ class EventService:
             await self.db.commit()
             await self.db.refresh(rsvp)
 
-            return rsvp, None
+            return rsvp, None, None
 
         # Handle check-in
         if rsvp.checked_in:
             # Already checked in - return special message to prompt for checkout
-            return rsvp, "ALREADY_CHECKED_IN"
+            return rsvp, "ALREADY_CHECKED_IN", None
 
         rsvp.checked_in = True
         rsvp.checked_in_at = now
@@ -1819,7 +1850,7 @@ class EventService:
         # Auto-create TrainingRecord if this is a training event
         await self._auto_create_training_record(event, rsvp, user_id, organization_id)
 
-        return rsvp, None
+        return rsvp, None, notice
 
     async def _auto_create_training_record(
         self, event: Event, rsvp: EventRSVP, user_id: UUID, organization_id: UUID
