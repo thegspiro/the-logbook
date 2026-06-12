@@ -94,9 +94,10 @@ class TestGetEligiblePositions:
         # ems is dropped (not on the shift); driver+officer remain.
         assert out == ["driver", "officer"]
 
-    async def test_shift_with_no_positions_is_over_permissive(self):
-        # DOCUMENTS CURRENT BEHAVIOR: a non-open shift with no positions skips
-        # the intersection and returns the full eligible set rather than [].
+    async def test_shift_with_no_positions_means_any_position(self):
+        # Intended behavior (product decision): a non-open shift that defines
+        # no positions does not further restrict eligibility, so the member's
+        # full eligible set is returned rather than [].
         org = _org()
         shift = _shift([])  # no positions defined
         db = _db([_one(org), _one(shift), _one(["driver"]), _rows([])])
