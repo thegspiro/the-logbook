@@ -345,6 +345,13 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const handleCodeScanned = async (code: string) => {
     const trimmed = code.trim();
     if (!trimmed) return;
+    // Bound the lookup key — a malfunctioning scanner can emit a very long
+    // string; the backend caps this too, but fail fast on the client.
+    if (trimmed.length > 255) {
+      setLookupError('Scanned code is too long to look up.');
+      setTimeout(() => setLookupError(null), 3000);
+      return;
+    }
 
     // Don't add duplicates (check by item ID via lookup first)
     // Note: code-based dedup removed — addItemFromResult checks by itemId

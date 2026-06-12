@@ -107,6 +107,11 @@ class StrugglingMemberService:
 
             for progress in in_progress:
                 last_update = progress.updated_at or progress.created_at
+                # MySQL DATETIMEs can come back naive; normalise before
+                # comparing with the aware `now` (same guard as the
+                # deadline-warning path below).
+                if last_update and last_update.tzinfo is None:
+                    last_update = last_update.replace(tzinfo=timezone.utc)
                 if last_update and (now - last_update).days > 30:
                     issues.append(
                         {

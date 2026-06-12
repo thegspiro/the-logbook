@@ -12,6 +12,7 @@ Workflow:
   5. Archived members can be reactivated by leadership if they return
 """
 
+import html
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -185,11 +186,13 @@ async def check_and_auto_archive(
 
         if admin_emails:
             _logo = build_email_logo_html(org)
+            # Names are user-entered; escape them before HTML interpolation.
+            safe_name = html.escape(member.full_name or "")
             subject = f"Member Archived: {member.full_name} — {org_name}"
             html_body = (
                 f'<div style="font-family:Arial,sans-serif;max-width:600px;">'
                 f"{_logo}"
-                f"<p><strong>{member.full_name}</strong> has been automatically archived.</p>"
+                f"<p><strong>{safe_name}</strong> has been automatically archived.</p>"
                 f"<p>All department property has been returned. "
                 f"Previous status: {previous_status.replace('_', ' ').title()}.</p>"
                 f"<p>The member's profile remains accessible for legal requests or future reactivation.</p>"
@@ -273,7 +276,10 @@ async def reactivate_member(
         )
         if (conflict.scalar() or 0) == 0:
             member.membership_number = member.previous_membership_number
-        member.previous_membership_number = None
+            member.previous_membership_number = None
+        # When the old number is now held by someone else, keep
+        # previous_membership_number as the record of what it was — wiping it
+        # would permanently lose the member's history with nothing restored.
 
     await db.commit()
 

@@ -98,6 +98,7 @@ from app.schemas.inventory import (
     ItemVariantGroupResponse,
     ItemVariantGroupUpdate,
     LabelGenerateRequest,
+    LabelPresetUpdate,
     LocationInventorySummary,
     LowStockItem,
     MaintenanceRecordCreate,
@@ -134,6 +135,8 @@ from app.schemas.inventory import (
 )
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
+from app.services.label_service import LabelService
+from app.utils import label_renderer
 
 router = APIRouter()
 
@@ -2097,7 +2100,10 @@ async def get_user_inventory(
 @router.get("/lookup", response_model=ScanLookupListResponse)
 async def lookup_item_by_code(
     code: str = Query(
-        ..., min_length=1, description="Barcode, serial number, asset tag, or item name"
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Barcode, serial number, asset tag, or item name",
     ),
     limit: int = Query(20, ge=1, le=50, description="Maximum results to return"),
     db: AsyncSession = Depends(get_db),
@@ -2251,7 +2257,7 @@ async def get_label_formats(
     **Requires permission: inventory.view**
     """
     formats = []
-    for key, fmt in InventoryService.LABEL_FORMATS.items():
+    for key, fmt in label_renderer.LABEL_FORMATS.items():
         entry = {
             "id": key,
             "description": fmt["description"],
@@ -4071,9 +4077,7 @@ async def check_member_allowance(
     """Check a member's remaining issuance allowance for a category."""
     service = InventoryService(db)
     # Resolve the member's highest-priority position for role-specific allowances
-    role_id = await service._get_primary_role_id(
-        user_id, current_user.organization_id
-    )
+    role_id = await service._get_primary_role_id(user_id, current_user.organization_id)
     check = await service.check_allowance(
         user_id=user_id,
         category_id=category_id,
@@ -4982,3 +4986,51 @@ async def upsert_my_size_preferences(
     await db.commit()
     await db.refresh(prefs)
     return MemberSizePreferencesResponse.model_validate(prefs)
+
+
+@router.get("/label-preset")
+async def get_label_preset(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Get the inventory label-printer preset for the current user's
+    highest-priority position (so a role's printer choice follows whoever
+    fills it, on any computer). ``preset`` is null when none is saved.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    return await LabelService(db).get_preset(
+        user_id=UUID(current_user.id),
+        organization_id=current_user.organization_id,
+        module="inventory",
+    )
+
+
+@router.put("/label-preset")
+async def set_label_preset(
+    data: LabelPresetUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """
+    Save the inventory label-printer preset for the current user's
+    highest-priority position.
+
+    **Authentication required**
+    **Requires permission: inventory.view**
+    """
+    try:
+        result = await LabelService(db).set_preset(
+            user_id=UUID(current_user.id),
+            organization_id=current_user.organization_id,
+            module="inventory",
+            preset=data.preset,
+            custom_width=data.custom_width,
+            custom_height=data.custom_height,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    await db.commit()
+    return result

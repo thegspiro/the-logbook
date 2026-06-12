@@ -132,6 +132,11 @@ class ShiftEligibilityService:
         eligible.update(self.get_open_positions(org))
 
         # ----- Step 4: Intersect with shift positions if given -----
+        # A shift that defines positions narrows eligibility to those
+        # positions. A shift with NO positions defined is intentionally
+        # treated as "any position" — the member's full eligible set is
+        # returned rather than an empty list (product decision: an unscoped
+        # shift does not further restrict who may sign up).
         if shift:
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:

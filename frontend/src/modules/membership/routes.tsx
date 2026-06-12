@@ -37,12 +37,24 @@ const MemberAuditHistoryPage = lazyWithRetry(() => import("../../pages/MemberAud
 const MemberIdCardPage = lazyWithRetry(() => import("../../pages/MemberIdCardPage"));
 const MemberScanPage = lazyWithRetry(() => import("../../pages/MemberScanPage"));
 const WaiverManagementPage = lazyWithRetry(() => import("../../pages/WaiverManagementPage"));
+const MemberLabelPrintPage = lazyWithRetry(() => import("../../pages/MemberLabelPrintPage"));
 
 export const getMembershipRoutes = () => {
   return (
     <React.Fragment>
       {/* Member-facing */}
       <Route path="/members" element={<Suspense fallback={null}><Members /></Suspense>} />
+      <Route
+        path="/members/print-labels"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredPermission="members.view">
+              <MemberLabelPrintPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route path="/members/scan" element={<Suspense fallback={null}><MemberScanPage /></Suspense>} />
       <Route path="/members/scan" element={<Suspense fallback={null}><MemberScanPage /></Suspense>} />
       <Route path="/members/:userId" element={<Suspense fallback={null}><MemberProfilePage /></Suspense>} />
       <Route

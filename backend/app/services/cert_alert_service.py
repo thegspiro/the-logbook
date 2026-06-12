@@ -214,11 +214,15 @@ class CertAlertService:
         for record in expiring:
             days_until = (record.expiration_date - today).days
 
-            for tier_days, field_name, cc_officers in ALERT_TIERS:
-                if days_until > tier_days:
-                    continue
-
-                # Skip if already sent for this tier
+            # Tiers whose threshold this cert has already crossed. Fire only
+            # the MOST urgent (smallest days_before) so a cert added late jumps
+            # straight to the urgent tier (with its officer/compliance CC)
+            # instead of walking down from 90; the skipped, less-urgent tiers
+            # are suppressed below so they don't fire backwards on later runs.
+            applicable = [t for t in ALERT_TIERS if days_until <= t[0]]
+            target = min(applicable, key=lambda t: t[0]) if applicable else None
+            for tier_days, field_name, cc_officers in [target] if target else []:
+                # Skip if already alerted at this most-urgent tier
                 if getattr(record, field_name) is not None:
                     continue
 
@@ -336,13 +340,18 @@ class CertAlertService:
                         else:
                             errors += 1
 
-                    setattr(record, field_name, datetime.now(timezone.utc))
+                    # Mark the fired tier as sent, and suppress any earlier
+                    # (less-urgent) tiers that were skipped so they don't fire
+                    # backwards on subsequent daily runs.
+                    now = datetime.now(timezone.utc)
+                    for _td, _field, _cc in applicable:
+                        if getattr(record, _field) is None:
+                            setattr(record, _field, now)
 
                 except Exception as e:
                     logger.error(f"Failed to send cert alert: {e}")
                     errors += 1
 
-                # Only send the most urgent applicable tier per run
                 break
 
         # Process escalations for already-expired certifications

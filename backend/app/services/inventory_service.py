@@ -5,6 +5,7 @@ Business logic for inventory management including items, categories,
 assignments, checkouts, maintenance, and reporting.
 """
 
+import copy
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from io import BytesIO
@@ -17,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
-from app.core.utils import generate_uuid as _gen
+from app.utils.label_renderer import LabelSpec, render_labels
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -48,7 +49,7 @@ from app.models.inventory import (
     WriteOffRequest,
     WriteOffStatus,
 )
-from app.models.user import User
+from app.models.user import Organization, User
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -74,6 +75,19 @@ _MIN_BAR_WIDTH_INCH = 0.0075
 def _sanitize_barcode_value(raw: str) -> str:
     """Strip non-ASCII characters that Code128 cannot encode."""
     return "".join(ch for ch in raw if ord(ch) < 128)
+
+
+# Inventory barcode scheme — a single rule used everywhere: a human-readable
+# sequential number per organization, ``<prefix><zero-padded number>`` with a
+# 6-digit minimum (e.g. INV-000001, INV-000002, ...). The prefix (default
+# "INV-") and the running counter live in organization.settings["barcode"].
+DEFAULT_BARCODE_PREFIX = "INV-"
+BARCODE_MIN_DIGITS = 6
+
+
+def _format_sequential_barcode(prefix: str, number: int) -> str:
+    """Render a sequential barcode, e.g. ``INV-000001``."""
+    return f"{prefix}{number:0{BARCODE_MIN_DIGITS}d}"
 
 
 # Supported extra-line field keys that can be requested on labels.
@@ -121,13 +135,56 @@ class InventoryService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def _ensure_barcode(self, item: "InventoryItem") -> None:
-        """Lazily backfill a barcode for items created before auto-generation."""
-        if item.barcode:
-            return
-        item.barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
-        await self.db.commit()
-        await self.db.refresh(item)
+    async def _next_sequential_barcode(self, organization_id) -> str:
+        """Assign the next sequential barcode for the organization.
+
+        Format: ``<prefix><zero-padded number>`` (default ``INV-000001``). The
+        prefix and running counter live in ``organization.settings["barcode"]``
+        (mirroring the membership-number scheme in OrganizationService).
+
+        The organization row is locked ``FOR UPDATE`` for the read-increment so
+        concurrent item creates in the same org get distinct numbers; the
+        per-org unique constraint on ``inventory_items.barcode`` is the final
+        backstop. Any number already taken (e.g. a manually-entered barcode) is
+        skipped.
+        """
+        org_id = str(organization_id)
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == org_id).with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+
+        settings = copy.deepcopy(org.settings or {})
+        barcode_cfg = settings.get("barcode") or {}
+        prefix = barcode_cfg.get("prefix", DEFAULT_BARCODE_PREFIX)
+        number = int(barcode_cfg.get("next_number", 1))
+
+        barcode = _format_sequential_barcode(prefix, number)
+        while await self._barcode_exists(org_id, barcode):
+            number += 1
+            barcode = _format_sequential_barcode(prefix, number)
+
+        barcode_cfg["prefix"] = prefix
+        barcode_cfg["next_number"] = number + 1
+        settings["barcode"] = barcode_cfg
+        # Reassign the whole dict so SQLAlchemy detects the nested change
+        # (Organization.settings is a MutableDict; see CLAUDE.md Pitfall #12).
+        org.settings = settings
+        await self.db.flush()
+        return barcode
+
+    async def _barcode_exists(self, org_id: str, barcode: str) -> bool:
+        """Whether a barcode is already used by an item in the organization."""
+        existing = await self.db.scalar(
+            select(InventoryItem.id)
+            .where(
+                InventoryItem.organization_id == org_id,
+                InventoryItem.barcode == barcode,
+            )
+            .limit(1)
+        )
+        return existing is not None
 
     # ------------------------------------------------------------------
     # Notification helper
@@ -492,11 +549,11 @@ class InventoryService:
             if "purchase_price" in item_data and "current_value" not in item_data:
                 item_data["current_value"] = item_data["purchase_price"]
 
-            # Auto-generate a barcode if none was provided.  Format: INV-XXXXXXXX
-            # (8 uppercase alphanumeric chars derived from the item's UUID).
+            # Auto-assign the next sequential barcode if none was provided.
             if not item_data.get("barcode"):
-                raw_id = _gen().replace("-", "").upper()[:8]
-                item_data["barcode"] = f"INV-{raw_id}"
+                item_data["barcode"] = await self._next_sequential_barcode(
+                    organization_id
+                )
 
             item = InventoryItem(
                 organization_id=organization_id, created_by=created_by, **item_data
@@ -651,10 +708,7 @@ class InventoryService:
                 selectinload(InventoryItem.assignment_history),
             )
         )
-        item = result.scalar_one_or_none()
-        if item:
-            await self._ensure_barcode(item)
-        return item
+        return result.scalar_one_or_none()
 
     async def _get_item_locked(
         self, item_id: UUID, organization_id: UUID
@@ -2608,101 +2662,28 @@ class InventoryService:
     # Barcode Label Generation
     # ============================================
 
-    # Predefined label formats.
-    # `auto_rotate`:
-    #   False = Dymo printers whose driver handles rotation automatically.
-    #           The PDF page matches the label's visual orientation.
-    #   True  = Generic thermal / Rollo printers that feed narrow-edge-first
-    #           without driver rotation.  For landscape labels the PDF page
-    #           is created in portrait (narrow edge = page width) and content
-    #           is rotated 90° so the label reads correctly after printing.
-    LABEL_FORMATS: Dict[str, Dict[str, Any]] = {
-        "letter": {
-            "description": "Standard letter (8.5x11) - Avery 5160, 3x10 grid",
-            "type": "sheet",
-            "auto_rotate": False,
-        },
-        "dymo_30252": {
-            "description": "Dymo 30252 Address Label (1.125 x 3.5 in)",
-            "width": 3.5,
-            "height": 1.125,
-            "type": "thermal",
-            "auto_rotate": False,
-        },
-        "dymo_30256": {
-            "description": "Dymo 30256 Shipping Label (2.3125 x 4 in)",
-            "width": 4.0,
-            "height": 2.3125,
-            "type": "thermal",
-            "auto_rotate": False,
-        },
-        "dymo_30334": {
-            "description": "Dymo 30334 Multi-Purpose Label (2.25 x 1.25 in)",
-            "width": 2.25,
-            "height": 1.25,
-            "type": "thermal",
-            "auto_rotate": False,
-        },
-        "dymo_30336": {
-            "description": "Dymo 30336 Small Multipurpose Label (2.125 x 1 in)",
-            "width": 2.125,
-            "height": 1.0,
-            "type": "thermal",
-            "auto_rotate": False,
-        },
-        "rollo_4x6": {
-            "description": "Rollo 4x6 Shipping Label (4 x 6 in)",
-            "width": 4.0,
-            "height": 6.0,
-            "type": "thermal",
-            "auto_rotate": True,
-        },
-        "rollo_2x1": {
-            "description": "Rollo / Thermal 2x1 Label (2 x 1 in)",
-            "width": 2.0,
-            "height": 1.0,
-            "type": "thermal",
-            "auto_rotate": True,
-        },
-        "thermal_1x1": {
-            "description": "Thermal 1x1 Square Label (1 x 1 in)",
-            "width": 1.0,
-            "height": 1.0,
-            "type": "thermal",
-            "auto_rotate": True,
-        },
-    }
-
-    async def generate_barcode_labels(
+    async def build_label_specs(
         self,
-        item_ids: List[UUID],
-        organization_id: UUID,
-        label_format: str = "letter",
-        custom_width: Optional[float] = None,
-        custom_height: Optional[float] = None,
-        auto_rotate: Optional[bool] = None,
+        item_ids: List,
+        organization_id,
         extra_lines: Optional[List[str]] = None,
-    ) -> Tuple[BytesIO, int]:
-        """
-        Generate a PDF containing barcode labels for the given items.
+        persist: bool = True,
+    ) -> Tuple[List[LabelSpec], int]:
+        """Fetch inventory items and map them to neutral ``LabelSpec`` objects
+        for the shared renderer.
 
-        Supports multiple label formats (see LABEL_FORMATS for the full list).
-        Thermal formats produce one label per page, sized exactly to the label.
+        When ``persist`` (the print path), any item still missing a barcode is
+        assigned a canonical sequential one and committed, so the printed label
+        matches what is stored. When ``persist`` is False (preview / the generic
+        read-only path) nothing is written — a fallback identifier is shown.
 
-        `auto_rotate` controls whether landscape labels are rotated to match
-        roll-fed printer feed direction (narrow edge first).  When None, the
-        format's default is used (True for Rollo/generic, False for Dymo).
-
-        `extra_lines` is an optional list of field keys to print below the
-        identifier line (e.g. ``["location", "category"]``).
-
-        Returns a tuple of (pdf_buffer, auto_populated_count).
-        """
-
+        Returns (specs, auto_populated_count)."""
         items = []
         missing_ids = []
         for item_id in item_ids:
-            item = await self.get_item_by_id(item_id, organization_id)
+            item = await self.get_item_by_id(
+                UUID(str(item_id)), UUID(str(organization_id))
+            )
             if item:
                 items.append(item)
             else:
@@ -2719,291 +2700,55 @@ class InventoryService:
         if not items:
             raise ValueError("No valid items found for label generation")
 
-        # Auto-populate the barcode field for items that don't have one yet,
-        # using the same fallback logic the label renderer uses.  This ensures
-        # the barcode printed on the label is stored on the item and visible
-        # when the user opens the edit form.
+        # Persist a canonical barcode for any straggler that still lacks one,
+        # so the printed label matches what is stored on the item.
         auto_populated = 0
-        for item in items:
-            if not item.barcode:
-                effective = item.asset_tag or item.serial_number or item.id[:12]
-                item.barcode = _sanitize_barcode_value(effective)
-                auto_populated += 1
-        if auto_populated > 0:
-            await self.db.commit()
+        if persist:
+            for item in items:
+                if not item.barcode:
+                    item.barcode = await self._next_sequential_barcode(
+                        item.organization_id
+                    )
+                    auto_populated += 1
+            if auto_populated > 0:
+                await self.db.commit()
 
-        if label_format == "custom":
-            if not custom_width or not custom_height:
-                raise ValueError(
-                    "custom_width and custom_height are required for custom label format"
-                )
-            rotate = auto_rotate if auto_rotate is not None else True
-            pdf_buf = self._generate_thermal_labels(
-                items, custom_width, custom_height, rotate, extra_lines
+        specs = [
+            LabelSpec(
+                name=item.name,
+                barcode_value=(
+                    item.barcode or item.asset_tag or item.serial_number or item.id[:12]
+                ),
+                asset_tag=item.asset_tag,
+                serial_number=item.serial_number,
+                extra=_build_extra_lines(item, extra_lines) or None,
             )
-            return pdf_buf, auto_populated
+            for item in items
+        ]
+        return specs, auto_populated
 
-        fmt = self.LABEL_FORMATS.get(label_format)
-        if not fmt:
-            raise ValueError(
-                f"Unknown label format: {label_format}. Available: {', '.join(self.LABEL_FORMATS.keys())}, custom"
-            )
-
-        if fmt["type"] == "sheet":
-            pdf_buf = self._generate_sheet_labels(items, extra_lines)
-        else:
-            rotate = (
-                auto_rotate
-                if auto_rotate is not None
-                else fmt.get("auto_rotate", False)
-            )
-            pdf_buf = self._generate_thermal_labels(
-                items, fmt["width"], fmt["height"], rotate, extra_lines
-            )
-        return pdf_buf, auto_populated
-
-    @staticmethod
-    def _generate_sheet_labels(
-        items: list,
+    async def generate_barcode_labels(
+        self,
+        item_ids: List[UUID],
+        organization_id: UUID,
+        label_format: str = "letter",
+        custom_width: Optional[float] = None,
+        custom_height: Optional[float] = None,
+        auto_rotate: Optional[bool] = None,
         extra_lines: Optional[List[str]] = None,
-    ) -> BytesIO:
-        """Generate labels on standard letter-size sheets in an Avery 5160 layout (3x10 grid, 30/page)."""
-        from reportlab.graphics.barcode import code128
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.units import inch
-        from reportlab.pdfgen import canvas
+    ) -> Tuple[BytesIO, int]:
+        """Generate a PDF of barcode labels for the given inventory items.
 
-        buf = BytesIO()
-        c = canvas.Canvas(buf, pagesize=letter)
-        page_w, page_h = letter
-
-        # Avery 5160: 3 columns x 10 rows, each label 2.625" x 1"
-        cols = 3
-        rows = 10
-        label_w = 2.625 * inch
-        label_h = 1.0 * inch
-        margin_x = (page_w - cols * label_w) / 2
-        margin_y = 0.5 * inch
-        labels_per_page = cols * rows
-        padding = 0.06 * inch  # consistent inset on each side
-
-        for idx, item in enumerate(items):
-            if idx > 0 and idx % labels_per_page == 0:
-                c.showPage()
-
-            pos = idx % labels_per_page
-            col = pos % cols
-            row = pos // cols
-
-            x = margin_x + col * label_w
-            y = page_h - margin_y - (row + 1) * label_h
-
-            barcode_value = _sanitize_barcode_value(
-                item.barcode or item.asset_tag or item.serial_number or item.id[:12]
-            )
-
-            usable_w = label_w - 2 * padding
-            y_cursor = y + label_h - padding
-
-            # Item name
-            c.setFont("Helvetica-Bold", 7)
-            max_name_chars = int(usable_w / (7 * 0.5))
-            name = item.name[:max_name_chars] + (
-                "..." if len(item.name) > max_name_chars else ""
-            )
-            y_cursor -= 7
-            c.drawString(x + padding, y_cursor, name)
-
-            # Secondary identifiers
-            info_parts = []
-            if item.asset_tag and item.asset_tag != barcode_value:
-                info_parts.append(f"Asset: {item.asset_tag}")
-            if item.serial_number and item.serial_number != barcode_value:
-                info_parts.append(f"S/N: {item.serial_number}")
-            if info_parts:
-                c.setFont("Helvetica", 5.5)
-                y_cursor -= 5.5 + 2
-                c.drawString(x + padding, y_cursor, "  |  ".join(info_parts))
-
-            # Optional extra info lines (location, category, custom text)
-            extra = _build_extra_lines(item, extra_lines)
-            if extra:
-                c.setFont("Helvetica", 5)
-                y_cursor -= 5 + 1
-                max_extra = int(usable_w / (5 * 0.5))
-                line = extra[:max_extra]
-                c.drawString(x + padding, y_cursor, line)
-
-            # ISO/IEC 15417 quiet zone
-            quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
-            bar_height = 0.35 * inch
-            bar_width_unit = 0.008 * inch
-            barcode_obj = code128.Code128(
-                barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-            )
-            max_barcode_width = usable_w - 2 * quiet_zone
-            while (
-                barcode_obj.width > max_barcode_width
-                and bar_width_unit > _MIN_BAR_WIDTH_INCH * inch
-            ):
-                bar_width_unit -= 0.001 * inch
-                barcode_obj = code128.Code128(
-                    barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-                )
-            barcode_x = x + (label_w - barcode_obj.width) / 2
-            barcode_obj.drawOn(c, barcode_x, y + padding + 8)
-
-            c.setFont("Courier", 5.5)
-            c.drawCentredString(x + label_w / 2, y + padding + 1, barcode_value)
-
-        c.save()
-        buf.seek(0)
-        return buf
-
-    @staticmethod
-    def _generate_thermal_labels(
-        items: list,
-        width_in: float,
-        height_in: float,
-        auto_rotate: bool = False,
-        extra_lines: Optional[List[str]] = None,
-    ) -> BytesIO:
-        """
-        Generate labels sized for thermal printers (Dymo, Rollo, etc).
-        Each item gets its own page at the exact label dimensions.
-
-        When `auto_rotate` is True and the label is landscape (wider than
-        tall), the PDF page is created in portrait orientation — matching
-        how roll-fed printers physically feed labels (narrow edge first) —
-        and the content is rotated 90° clockwise so it reads correctly
-        after printing.  This prevents the common problem of landscape
-        content printing sideways on roll-fed printers whose drivers do
-        not auto-rotate.
-        """
-        from reportlab.graphics.barcode import code128
-        from reportlab.lib.units import inch
-        from reportlab.pdfgen import canvas
-
-        # Content dimensions (the logical label you design for)
-        content_w = width_in * inch
-        content_h = height_in * inch
-
-        is_landscape = width_in > height_in
-        # When auto-rotating a landscape label, the PDF page is portrait
-        # (height > width) so the narrow edge is the page width — matching
-        # roll-fed printer feed direction.
-        needs_rotation = auto_rotate and is_landscape
-        if needs_rotation:
-            page_size = (content_h, content_w)  # swapped to portrait
-        else:
-            page_size = (content_w, content_h)
-
-        buf = BytesIO()
-        c = canvas.Canvas(buf, pagesize=page_size)
-
-        padding = 0.08 * inch
-
-        for idx, item in enumerate(items):
-            if idx > 0:
-                c.showPage()
-
-            barcode_value = _sanitize_barcode_value(
-                item.barcode or item.asset_tag or item.serial_number or item.id[:12]
-            )
-
-            # When rotating, shift the canvas origin and rotate so all
-            # subsequent drawing commands use normal (content_w x content_h)
-            # coordinates while the PDF page is in portrait.
-            if needs_rotation:
-                c.saveState()
-                c.translate(content_h, 0)
-                c.rotate(90)
-
-            # ISO/IEC 15417 quiet zone for Code128
-            quiet_zone = 10 * _MIN_BAR_WIDTH_INCH * inch
-            min_bar = _MIN_BAR_WIDTH_INCH * inch
-
-            self_w = content_w - 2 * padding
-            self_h = content_h - 2 * padding
-
-            if is_landscape:
-                name_font_size = min(8, max(5, self_h / (0.2 * inch)))
-                info_font_size = max(4, name_font_size - 2)
-                barcode_text_size = max(4, info_font_size)
-                bar_height = min(0.4 * inch, self_h * 0.4)
-                bar_width_unit = 0.01 * inch
-            else:
-                name_font_size = min(10, max(6, self_w / (0.4 * inch)))
-                info_font_size = max(5, name_font_size - 2)
-                barcode_text_size = max(5, info_font_size)
-                bar_height = min(0.8 * inch, self_h * 0.3)
-                bar_width_unit = 0.012 * inch
-
-            # Use 90% of usable width for barcode area (consistent for both orientations)
-            max_barcode_width = self_w * 0.9 - 2 * quiet_zone
-
-            barcode_obj = code128.Code128(
-                barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-            )
-            while barcode_obj.width > max_barcode_width and bar_width_unit > min_bar:
-                bar_width_unit -= 0.001 * inch
-                barcode_obj = code128.Code128(
-                    barcode_value, barWidth=bar_width_unit, barHeight=bar_height
-                )
-
-            # -- Top section: name, identifiers, optional extra lines --
-            y_cursor = content_h - padding
-
-            c.setFont("Helvetica-Bold", name_font_size)
-            name_max_chars = int(self_w / (name_font_size * 0.5))
-            name = item.name[:name_max_chars] + (
-                "..." if len(item.name) > name_max_chars else ""
-            )
-            y_cursor -= name_font_size
-            if is_landscape:
-                c.drawString(padding, y_cursor, name)
-            else:
-                c.drawCentredString(content_w / 2, y_cursor, name)
-
-            info_parts = []
-            if item.asset_tag and item.asset_tag != barcode_value:
-                info_parts.append(f"Asset: {item.asset_tag}")
-            if item.serial_number and item.serial_number != barcode_value:
-                info_parts.append(f"S/N: {item.serial_number}")
-            if info_parts:
-                y_cursor -= info_font_size + 2
-                c.setFont("Helvetica", info_font_size)
-                if is_landscape:
-                    c.drawString(padding, y_cursor, " | ".join(info_parts))
-                else:
-                    c.drawCentredString(content_w / 2, y_cursor, " | ".join(info_parts))
-
-            # Optional extra info line (location, category, custom text)
-            extra = _build_extra_lines(item, extra_lines)
-            if extra:
-                extra_size = max(4, info_font_size - 1)
-                y_cursor -= extra_size + 1
-                max_extra = int(self_w / (extra_size * 0.5))
-                c.setFont("Helvetica", extra_size)
-                if is_landscape:
-                    c.drawString(padding, y_cursor, extra[:max_extra])
-                else:
-                    c.drawCentredString(content_w / 2, y_cursor, extra[:max_extra])
-
-            # -- Bottom section: barcode + barcode text value --
-            barcode_x = padding + (self_w - barcode_obj.width) / 2
-            barcode_y = padding + barcode_text_size + 4
-            barcode_obj.drawOn(c, barcode_x, barcode_y)
-
-            c.setFont("Courier", barcode_text_size)
-            c.drawCentredString(content_w / 2, padding + 1, barcode_value)
-
-            if needs_rotation:
-                c.restoreState()
-
-        c.save()
-        buf.seek(0)
-        return buf
+        Delegates rendering to the shared renderer (app.utils.label_renderer;
+        the cross-module system lives in app.services.label_service). Returns
+        (pdf_buffer, auto_populated_count)."""
+        specs, auto_populated = await self.build_label_specs(
+            item_ids, organization_id, extra_lines
+        )
+        pdf = render_labels(
+            specs, label_format, custom_width, custom_height, auto_rotate
+        )
+        return pdf, auto_populated
 
     # ------------------------------------------------------------------
     # Write-off requests
@@ -3677,7 +3422,7 @@ class InventoryService:
                         garment_style = member
                         break
 
-            barcode = f"INV-{_gen().replace('-', '').upper()[:8]}"
+            barcode = await self._next_sequential_barcode(organization_id)
 
             item = InventoryItem(
                 organization_id=str(organization_id),

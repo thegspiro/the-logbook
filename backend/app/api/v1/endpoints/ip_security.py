@@ -129,12 +129,9 @@ async def get_pending_exceptions(
     Requires security.manage or settings.manage permission.
     """
     async with handle_service_errors("Failed to get pending exceptions"):
-        org_id = (
-            str(current_user.organization_id) if current_user.organization_id else None
-        )
         exceptions = await ip_security_service.get_pending_requests(
             db=db,
-            organization_id=org_id,
+            organization_id=str(current_user.organization_id),
             limit=limit,
             offset=offset,
         )
@@ -211,6 +208,7 @@ async def approve_exception(
             db=db,
             exception_id=exception_id,
             admin_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
             approved_duration_days=data.approved_duration_days,
             approval_notes=data.approval_notes or None,
             admin_ip=request.client.host if request.client else None,
@@ -258,6 +256,7 @@ async def reject_exception(
             db=db,
             exception_id=exception_id,
             admin_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
             rejection_reason=data.rejection_reason,
             admin_ip=request.client.host if request.client else None,
         )
@@ -303,6 +302,7 @@ async def revoke_exception(
             db=db,
             exception_id=exception_id,
             admin_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
             revoke_reason=data.revoke_reason,
             admin_ip=request.client.host if request.client else None,
         )
@@ -345,9 +345,20 @@ async def get_exception_audit_log(
     Requires security.manage, settings.manage, or audit.view permission.
     """
     async with handle_service_errors("Failed to get exception audit log"):
+        # 404 if the exception doesn't exist in the caller's org, so the UI
+        # can tell "not yours / not found" apart from "no history yet" ([]).
+        ensure_found(
+            await ip_security_service.get_exception_by_id(
+                db=db,
+                exception_id=exception_id,
+                organization_id=str(current_user.organization_id),
+            ),
+            "IP exception",
+        )
         logs = await ip_security_service.get_exception_audit_log(
             db=db,
             exception_id=exception_id,
+            organization_id=str(current_user.organization_id),
         )
         return logs
 

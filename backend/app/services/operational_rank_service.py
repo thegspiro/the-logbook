@@ -87,7 +87,10 @@ class OperationalRankService:
                 rank_code=code,
                 display_name=label,
                 sort_order=order,
-                eligible_positions=positions,
+                # Copy: the three chief ranks share the _ALL_POSITIONS list
+                # object, so persisting the reference directly would alias them
+                # (and the module constant) to one mutable list.
+                eligible_positions=list(positions),
             )
             self.db.add(rank)
             ranks.append(rank)

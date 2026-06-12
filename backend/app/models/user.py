@@ -459,6 +459,10 @@ class Position(Base):
     is_system = Column(Boolean, default=False)  # System positions can't be deleted
     priority = Column(Integer, default=0)  # Higher priority = more powerful
 
+    # Per-position UI preferences (e.g. the inventory label printer/size this
+    # role uses). Nullable JSON; mutate via copy.deepcopy + reassign.
+    settings = Column(JSON, nullable=True)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

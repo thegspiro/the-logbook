@@ -1,14 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { InventoryItem } from '../types';
 
 const mockGetItem = vi.fn();
+const mockGenerateLabels = vi.fn();
+const mockGetLabelPreset = vi.fn();
+const mockSetLabelPreset = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
     getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
-    generateBarcodeLabels: vi.fn(),
+    generateBarcodeLabels: (...a: unknown[]) => mockGenerateLabels(...a) as unknown,
+    getLabelPreset: (...a: unknown[]) => mockGetLabelPreset(...a) as unknown,
+    setLabelPreset: (...a: unknown[]) => mockSetLabelPreset(...a) as unknown,
   },
 }));
 
@@ -44,7 +50,16 @@ const renderPage = (query: string) =>
 describe('InventoryBarcodePrintPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mockGetItem.mockResolvedValue(makeItem());
+    mockGenerateLabels.mockResolvedValue({ blob: new Blob(['pdf']), autoPopulated: 0 });
+    mockGetLabelPreset.mockResolvedValue({ preset: null });
+    mockSetLabelPreset.mockResolvedValue({ preset: null });
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:test');
+    globalThis.URL.revokeObjectURL = vi.fn();
+    // The PDF download clicks a temporary <a download> — stub it so jsdom
+    // doesn't emit a "navigation not implemented" warning.
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   });
 
   it('errors when no item ids are provided', async () => {
@@ -71,5 +86,100 @@ describe('InventoryBarcodePrintPage', () => {
     renderPage('?ids=it-1');
     expect(await screen.findByText('boom')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to Inventory/ })).toBeInTheDocument();
+  });
+
+  it('generates a PDF at the entered custom label size', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Custom size/ }));
+
+    const width = screen.getByLabelText(/Width \(in\)/);
+    const height = screen.getByLabelText(/Height \(in\)/);
+    await user.clear(width);
+    await user.type(width, '1.5');
+    await user.clear(height);
+    await user.type(height, '0.5');
+
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    const args = mockGenerateLabels.mock.calls[0];
+    expect(args?.[0]).toEqual(['it-1']); // item ids
+    expect(args?.[1]).toBe('custom'); // backend format key
+    expect(args?.[2]).toBe(1.5); // custom width
+    expect(args?.[3]).toBe(0.5); // custom height
+  });
+
+  it('disables the PDF button when custom dimensions are out of range', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Custom size/ }));
+
+    const width = screen.getByLabelText(/Width \(in\)/);
+    await user.clear(width);
+    await user.type(width, '99'); // exceeds the 8" max
+
+    expect(screen.getByText(/Enter a width of 0.5/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeDisabled();
+  });
+
+  it('remembers the selected Rollo preset across visits', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Rollo 4/ }));
+
+    // Persisted so the next visit defaults to the same printer.
+    expect(localStorage.getItem('inventory:labelPreset')).toBe('rollo_4x6');
+  });
+
+  it('defaults to the stored preset on a fresh visit', async () => {
+    localStorage.setItem('inventory:labelPreset', 'rollo_2x1');
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    // Without touching Settings, generating uses the remembered Rollo preset.
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    expect(mockGenerateLabels.mock.calls[0]?.[1]).toBe('rollo_2x1');
+  });
+
+  it('applies the preset saved for the position over the local default', async () => {
+    // Local default is Dymo, but the position remembers Rollo 4x6.
+    localStorage.setItem('inventory:labelPreset', 'dymo_30252');
+    mockGetLabelPreset.mockResolvedValue({ preset: 'rollo_4x6' });
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+    await waitFor(() => expect(mockGetLabelPreset).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('button', { name: 'PDF' }));
+    await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));
+    expect(mockGenerateLabels.mock.calls[0]?.[1]).toBe('rollo_4x6');
+  });
+
+  it('saves a changed preset to the position', async () => {
+    const user = userEvent.setup();
+    renderPage('?ids=it-1');
+    await screen.findAllByText('Thermal Camera');
+
+    await user.click(screen.getByRole('button', { name: /Settings/ }));
+    await user.click(screen.getByRole('button', { name: /Rollo 4/ }));
+
+    // The change is debounced (~500ms) then saved to the position.
+    await waitFor(
+      () => expect(mockSetLabelPreset).toHaveBeenCalledWith({ preset: 'rollo_4x6' }),
+      { timeout: 2000 },
+    );
   });
 });

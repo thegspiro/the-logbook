@@ -89,7 +89,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `inventory_items` | Equipment items (individual or pool, with `tracking_type`). Barcodes (`INV-XXXXXXXX`) are now assigned at creation time rather than lazily on first read *(2026-06-09)* |
+| `inventory_items` | Equipment items (individual or pool, with `tracking_type`). Barcodes are per-organization sequential numbers (`INV-000001` …) assigned at creation time; the prefix/counter live in `organizations.settings["barcode"]` *(2026-06-10)* |
 | `inventory_categories` | Item categories |
 | `item_assignments` | Member ↔ item assignments |
 | `item_issuances` | Pool item issue/return records |
@@ -260,6 +260,16 @@ The `organizations.settings` JSON column stores email platform configuration und
 
 ---
 
+## Recent Schema Changes (2026-06-10)
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `positions` | `settings` | JSON (nullable) | `20260610_0002` | Per-position UI preferences; holds `label_presets` keyed by module (the label printer/size a role uses in each module, e.g. inventory) |
+
+---
+
 ## Recent Schema Changes (2026-06-09)
 
 ### New Columns
@@ -281,7 +291,8 @@ The `organizations.settings` JSON column stores email platform configuration und
 
 | Table | Change | Migration | Reason |
 |-------|--------|-----------|--------|
-| `inventory_items` | Backfill `INV-XXXXXXXX` barcodes for legacy rows | `20260604_0200` | Barcodes now assigned at creation; removes a write-on-read in the list endpoint |
+| `inventory_items` | Backfill barcodes for legacy rows | `20260604_0200` | Removes a write-on-read in the list endpoint (superseded by `20260610_0001`) |
+| `inventory_items` / `organizations` | Reassign sequential `INV-000001` barcodes; seed per-org counter in `settings["barcode"]` | `20260610_0001` | Single sequential barcode scheme; also merges the two open heads |
 
 ---
 

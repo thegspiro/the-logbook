@@ -310,6 +310,35 @@ export const inventoryService = {
     return { blob: response.data, autoPopulated: isNaN(autoPopulated) ? 0 : autoPopulated };
   },
 
+  // Label-printer preset remembered per the user's highest-priority position
+  // (so a role's printer choice follows whoever fills it, on any computer).
+  async getLabelPreset(): Promise<{
+    preset: string | null;
+    custom_width?: number | null;
+    custom_height?: number | null;
+    position_id?: string | null;
+  }> {
+    const response = await api.get<{
+      preset: string | null;
+      custom_width?: number | null;
+      custom_height?: number | null;
+      position_id?: string | null;
+    }>('/inventory/label-preset');
+    return response.data;
+  },
+
+  async setLabelPreset(data: {
+    preset: string;
+    custom_width?: number;
+    custom_height?: number;
+  }): Promise<{ preset: string | null; position_id?: string | null }> {
+    const response = await api.put<{ preset: string | null; position_id?: string | null }>(
+      '/inventory/label-preset',
+      data,
+    );
+    return response.data;
+  },
+
   async updateCategory(categoryId: string, data: Partial<InventoryCategoryCreate>): Promise<InventoryCategory> {
     const response = await api.patch<InventoryCategory>(`/inventory/categories/${categoryId}`, data);
     return response.data;

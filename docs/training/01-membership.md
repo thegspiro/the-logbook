@@ -50,6 +50,13 @@ The directory shows all active members with their name, rank, status, and contac
 | **Dropped (Involuntary)** | Member removed from the department |
 | **Archived** | Fully processed departed member |
 
+### Printing Member Badges
+
+Select members in the directory (the row checkboxes), then click **Print Badges** on the selection bar to open the shared label print page for those members. Choose a label size — any sticker/thermal printer (Dymo, Rollo, or a custom size) — and download a PDF or print. The badge barcode encodes the member's **membership number**. The chosen printer is remembered for your role, separately from the inventory/apparatus printers.
+
+> **Screenshot needed:**
+> _[Screenshot of the Members directory with several rows checked and the "Print Badges" button highlighted on the selection bar, plus the label print page previewing a member badge with name and a membership-number barcode]_
+
 ---
 
 ## Member Profiles
@@ -275,6 +282,13 @@ Prospective members can indicate their preferred membership type when applying:
 
 > **Screenshot placeholder:**
 > _[Screenshot of a prospect detail drawer showing the prospect's info at the top, the current pipeline stage, step checklist with some items completed, and the "Transfer to Membership" button]_
+
+### Printing Applicant Badges
+
+Select applicants in the pipeline (the checkboxes), then click **Print Badges** on the selection bar — useful for sign-in/check-in at a recruitment or outreach event. It opens the shared label print page; pick a label size and download a PDF or print. The badge barcode encodes the applicant's **status token** (the same scannable code used for public application-status checks), so a scanned badge ties back to that applicant. The outreach team's printer choice is remembered for their role, separately from other modules.
+
+> **Screenshot needed:**
+> _[Screenshot of the Prospective Members pipeline with several applicants selected and the "Print Badges" button highlighted on the bulk-action bar, plus the label print page previewing an applicant badge]_
 
 ### Pipeline Stage Types
 

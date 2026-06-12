@@ -15,10 +15,14 @@
 
 import React, { Suspense } from 'react';
 import { Route } from 'react-router-dom';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const FacilitiesDashboard = lazyWithRetry(
   () => import('./pages/FacilitiesDashboard'),
+);
+const FacilityLabelPrintPage = lazyWithRetry(
+  () => import('./pages/FacilityLabelPrintPage'),
 );
 const FacilityDetailPage = lazyWithRetry(
   () => import('./pages/FacilityDetailPage'),
@@ -40,6 +44,16 @@ const LocationKioskPage = lazyWithRetry(
 /** Protected facilities routes (rendered inside AppLayout). */
 export const getFacilitiesRoutes = () => (
   <React.Fragment>
+    <Route
+      path="/facilities/print-labels"
+      element={
+        <Suspense fallback={null}>
+          <ProtectedRoute requiredPermission="facilities.view">
+            <FacilityLabelPrintPage />
+          </ProtectedRoute>
+        </Suspense>
+      }
+    />
     {/* Cross-facility list pages — must be before /:id to avoid route conflicts */}
     <Route
       path="/facilities/maintenance"

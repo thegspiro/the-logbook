@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
+  Printer,
   XCircle,
   Loader2,
   Settings,
@@ -649,6 +650,13 @@ export const ProspectiveMembersPage: React.FC = () => {
                     {selectedApplicants.size} selected
                   </label>
                   <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      onClick={() => navigate(`/prospective-members/print-labels?ids=${[...selectedApplicants].join(',')}`)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary rounded-lg transition-colors"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Print Badges
+                    </button>
                     <button
                       onClick={() => { void handleBulkAdvance(); }}
                       disabled={isBulkAdvancing}

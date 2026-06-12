@@ -14,7 +14,12 @@ from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
-from app.core.permissions import DEFAULT_ROLES, get_all_permissions
+from app.core.permissions import (
+    DEFAULT_ROLES,
+    get_all_permissions,
+    permission_matches,
+    permission_matches_any,
+)
 from app.models.user import Role, User, user_roles
 
 
@@ -644,9 +649,9 @@ class RoleManagementService:
         user_id: str,
         permission: str,
     ) -> bool:
-        """Check if a user has a specific permission."""
+        """Check if a user has a specific permission (wildcard-aware)."""
         permissions = await self.get_user_permissions(db, user_id)
-        return "*" in permissions or permission in permissions
+        return permission_matches(permission, permissions)
 
     async def user_has_any_permission(
         self,
@@ -654,11 +659,9 @@ class RoleManagementService:
         user_id: str,
         permissions: List[str],
     ) -> bool:
-        """Check if a user has any of the specified permissions."""
+        """Check if a user has any of the specified permissions (wildcard-aware)."""
         user_permissions = await self.get_user_permissions(db, user_id)
-        return "*" in user_permissions or bool(
-            user_permissions.intersection(permissions)
-        )
+        return permission_matches_any(permissions, user_permissions)
 
     # ============================================
     # Initialization

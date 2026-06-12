@@ -514,22 +514,38 @@ Generate barcode labels for inventory items to attach to equipment.
 
 **Required Permission:** `inventory.manage`
 
-1. Select one or more items from the inventory list.
-2. Click **Print Labels**.
-3. Choose the label format:
-   - **Letter (8.5×11)** — Standard letter sheet with 2×5 grid of labels
-   - **Dymo 30252** (1.125×3.5″) — Dymo address labels
-   - **Dymo 30256** (2.3125×4″) — Dymo shipping labels
-   - **Dymo 30334** (1.25×2.25″) — Dymo multi-purpose labels
-   - **Rollo 4×6** (4×6″) — Rollo shipping-label printers
-   - **Custom** — Specify your own width and height in inches
-4. Click **Generate** to download the PDF.
-5. Print the PDF on your label printer.
+1. Select one or more items from the inventory list (or open a single item and use **Print Labels**) to reach the barcode print page.
+2. Click **Settings** and choose a **Label Size**:
+   - **Dymo 30252 / 30256 / 30334 / 30336** — the four common Dymo label stocks
+   - **Rollo 4×6** and **Rollo / Thermal 2×1** — roll-fed thermal printers
+   - **Thermal 1×1** — square asset tags
+   - **Letter Paper (Grid)** — Avery 5160, 30 labels per 8.5×11″ sheet
+   - **Custom size** — enter the exact **width** and **height** (in inches, 0.5–8″ wide × 0.5–11″ tall) for any other sticker printer or label stock
+3. Optionally set **Copies per item**, add **Additional Info on Label** (location / category / condition), and—for thermal presets—the **Auto-rotate for roll-fed** toggle (see below).
+4. Print one of two ways:
+   - **PDF** (recommended for sticker/thermal printers) — downloads a PDF sized to the exact label; open it and print with your label printer selected.
+   - **Print Labels** — prints directly through the browser print dialog.
 
-Labels include a Code128 barcode, the item name, and the asset tag or serial number.
+Labels include a Code128 barcode (with the required quiet-zone margins), the item name, and the asset tag or serial number.
 
-> **Screenshot placeholder:**
-> _[Screenshot of the label generation dialog showing item selection checkboxes, label size dropdown, and a preview of a generated barcode label]_
+> **Screenshot needed:**
+> _[Screenshot of the barcode print page Settings panel showing the Label Size grid with the eight presets plus a highlighted "Custom size" card, the Width/Height (in) inputs revealed below it, the Copies field, the Additional Info chips (Location/Category/Condition), and the PDF / Print Labels buttons]_
+
+### Connecting a Sticker / Label Printer
+
+Both paths produce **actual-size** barcodes — the key to making them scannable is to avoid any scaling:
+
+1. Install your label printer's driver and load the label stock.
+2. Pick the matching preset, or choose **Custom size** and enter the label's real dimensions. **Your choice is remembered per position and per module** — it's saved to your highest-priority position (role) and scoped to the area of the app you're printing from, so whoever fills that role gets the same printer on any computer. Different teams that use different printers each keep their own (e.g., the Quartermaster keeps a Rollo for inventory, the apparatus team keeps a different printer, the outreach team another). The choice is also cached locally so it loads instantly.
+3. Click **Print Test Label** (thermal presets) to download a single-label PDF and confirm alignment and orientation before printing the whole batch.
+4. When printing, select the label printer, set **Scale** to **100%** (disable "Fit to page" / "Shrink to fit"), set margins to **None**, and set the paper/media size to the label stock.
+
+> **Rollo and other roll-fed printers:** Two Rollo presets are built in — **Rollo 4" × 6"** (portrait shipping labels) and **Rollo / Thermal 2" × 1"** (small asset labels) — and any other Rollo roll works via **Custom size**. The **PDF** path is recommended: it generates each label at the exact size, pre-rotated for the printer's feed direction.
+
+> **Auto-rotate (roll-fed printers):** Rollo, Brother, and generic thermal printers feed labels narrow-edge first. For landscape labels, leave **Auto-rotate for roll-fed** on so the PDF content is pre-rotated and reads correctly. Dymo drivers rotate on their own, so their presets default to auto-rotate **off**.
+
+> **Screenshot needed:**
+> _[Screenshot of the thermal-label settings showing the "Print Test Label" button, the "Auto-rotate for roll-fed" toggle, the feed-direction diagram (portrait vs landscape page), and the blue "Set scaling to 100%" guidance banner]_
 
 ---
 
@@ -1126,7 +1142,7 @@ These edge cases cover automatic behaviors during item creation, assignment, ret
 
 | Scenario | Behavior |
 |----------|----------|
-| Item created without a barcode | Auto-generated in the format `INV-XXXXXXXX` (first 8 hex chars of the item UUID, uppercased). |
+| Item created without a barcode | Auto-assigned the next per-organization sequential barcode (`<prefix><number>`, default `INV-000001`, `INV-000002`, …). |
 | Item created without `current_value` | Set equal to `purchase_price`. On updates, if `purchase_price` changes without an explicit `current_value`, the current value auto-syncs. Depreciated assets need explicit `current_value` entries to diverge. |
 | Item status set to `RETIRED` | Condition is automatically forced to `RETIRED` regardless of the submitted condition value. |
 | Concurrent updates to the same item | Row-level `SELECT FOR UPDATE` locks serialize assign, unassign, issue, and return operations. Long-running transactions can cause lock waits. |
@@ -1302,11 +1318,11 @@ The item detail page now **always shows** barcode and asset tag fields, displayi
 > **Screenshot needed:**
 > _[Screenshot of an item detail page sidebar showing the barcode field with a Code128 barcode image, the asset tag field showing "AT-2024-001", and below them a second item with barcode showing "--" and asset tag showing "--"]_
 
-### Barcode Backfill
+### Barcode Numbering
 
-Items created before the barcode auto-generation feature was added will **automatically receive a barcode** (in `INV-XXXXXXXX` format) the next time they are viewed or fetched via the API. No manual action or database migration is required.
+Every item is assigned a per-organization **sequential** barcode at creation time — `<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, and so on. The prefix and the running counter are stored on the organization, so the numbers continue in order across all items.
 
-> **Edge case:** The backfill happens lazily on fetch — if you export a CSV of all items, items that haven't been individually viewed yet may still show empty barcodes. Viewing the item detail page triggers the backfill.
+> **Note:** Barcodes are assigned when the item is created (not lazily on view). Items that pre-date this feature were given sequential barcodes by a one-time migration. The barcode is unique within your organization.
 
 ### Equipment Check Template Builder Fix
 
@@ -1362,13 +1378,13 @@ Item detail pages now always display the barcode and asset tag fields, even when
 > **Screenshot needed:**
 > _[Screenshot of an item detail page showing the barcode field with a generated barcode value (e.g., "INV-A3F82B9C") and the asset tag field showing "--" placeholder]_
 
-### Lazy Barcode Backfill
+### Barcode Numbering
 
-Items created before the barcode auto-generation feature was added receive barcodes automatically:
+Barcodes are assigned at item-creation time using a per-organization sequential number:
 
-- When an item detail page is loaded and the item has no barcode, the system generates one (format: INV-XXXXXXXX)
-- No database migration required — backfill happens lazily on first access
-- The barcode is persisted so subsequent loads don't regenerate it
+- Format: `<prefix><zero-padded number>` (default `INV-000001`, `INV-000002`, …)
+- The prefix and running counter are stored on the organization; concurrent creates get distinct numbers (the org row is locked during the increment)
+- Unique within the organization; a one-time migration assigned sequential barcodes to any pre-existing items
 
 ### Edge Cases
 

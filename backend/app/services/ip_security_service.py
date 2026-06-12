@@ -172,6 +172,7 @@ class IPSecurityService:
         db: AsyncSession,
         exception_id: str,
         admin_id: str,
+        organization_id: str,
         approved_duration_days: Optional[int] = None,
         approval_notes: Optional[str] = None,
         admin_ip: Optional[str] = None,
@@ -182,6 +183,7 @@ class IPSecurityService:
         Args:
             exception_id: ID of the exception to approve
             admin_id: ID of the IT administrator approving
+            organization_id: Admin's org; scopes the lookup to prevent cross-org IDOR
             approved_duration_days: Actual approved duration (defaults to requested)
             approval_notes: Optional notes from the administrator
             admin_ip: IP address of the admin (for audit)
@@ -192,9 +194,12 @@ class IPSecurityService:
         Raises:
             ValueError: If exception not found or not pending
         """
-        # Get the exception
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
         result = await db.execute(
-            select(IPException).where(IPException.id == exception_id)
+            select(IPException).where(
+                IPException.id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
         )
         exception = result.scalar_one_or_none()
 
@@ -258,6 +263,7 @@ class IPSecurityService:
         db: AsyncSession,
         exception_id: str,
         admin_id: str,
+        organization_id: str,
         rejection_reason: str,
         admin_ip: Optional[str] = None,
     ) -> IPException:
@@ -267,6 +273,7 @@ class IPSecurityService:
         Args:
             exception_id: ID of the exception to reject
             admin_id: ID of the IT administrator rejecting
+            organization_id: Admin's org; scopes the lookup to prevent cross-org IDOR
             rejection_reason: Required reason for rejection
             admin_ip: IP address of the admin (for audit)
 
@@ -279,9 +286,12 @@ class IPSecurityService:
         if not rejection_reason:
             raise ValueError("Rejection reason is required")
 
-        # Get the exception
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
         result = await db.execute(
-            select(IPException).where(IPException.id == exception_id)
+            select(IPException).where(
+                IPException.id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
         )
         exception = result.scalar_one_or_none()
 
@@ -330,6 +340,7 @@ class IPSecurityService:
         db: AsyncSession,
         exception_id: str,
         admin_id: str,
+        organization_id: str,
         revoke_reason: str,
         admin_ip: Optional[str] = None,
     ) -> IPException:
@@ -341,6 +352,7 @@ class IPSecurityService:
         Args:
             exception_id: ID of the exception to revoke
             admin_id: ID of the IT administrator revoking
+            organization_id: Admin's org; scopes the lookup to prevent cross-org IDOR
             revoke_reason: Required reason for revocation
             admin_ip: IP address of the admin (for audit)
 
@@ -350,9 +362,12 @@ class IPSecurityService:
         if not revoke_reason:
             raise ValueError("Revoke reason is required")
 
-        # Get the exception
+        # Get the exception (scoped to the admin's org to prevent cross-org IDOR)
         result = await db.execute(
-            select(IPException).where(IPException.id == exception_id)
+            select(IPException).where(
+                IPException.id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
         )
         exception = result.scalar_one_or_none()
 
@@ -400,23 +415,27 @@ class IPSecurityService:
     async def get_pending_requests(
         self,
         db: AsyncSession,
-        organization_id: Optional[str] = None,
+        organization_id: str,
         limit: int = 50,
         offset: int = 0,
     ) -> List[IPException]:
         """
         Get all pending IP exception requests for IT admin review.
+
+        Always scoped to ``organization_id`` so an admin only ever sees
+        their own org's queue (org-scoping is a required contract, not an
+        optional filter).
         """
         query = (
             select(IPException)
-            .where(IPException.approval_status == IPExceptionApprovalStatus.PENDING)
+            .where(
+                IPException.approval_status == IPExceptionApprovalStatus.PENDING,
+                IPException.organization_id == str(organization_id),
+            )
             .order_by(IPException.requested_at.asc())  # Oldest first
+            .limit(limit)
+            .offset(offset)
         )
-
-        if organization_id:
-            query = query.where(IPException.organization_id == str(organization_id))
-
-        query = query.limit(limit).offset(offset)
 
         result = await db.execute(query)
         return list(result.scalars().all())
@@ -484,12 +503,14 @@ class IPSecurityService:
     async def get_all_active_allowed_ips(
         self,
         db: AsyncSession,
-        organization_id: Optional[str] = None,
+        organization_id: str,
     ) -> Set[str]:
         """
-        Get all currently active allowed IPs across all users.
+        Get all currently active allowed IPs for an organization.
 
-        Used by IP blocking middleware to check allowlist.
+        Used by IP blocking middleware to check the allowlist. Always
+        scoped to ``organization_id`` so one org's allowlist can never
+        admit traffic on behalf of another.
         """
         now = datetime.now(timezone.utc)
 
@@ -497,12 +518,10 @@ class IPSecurityService:
             select(IPException.ip_address)
             .where(IPException.exception_type == IPExceptionType.ALLOWLIST)
             .where(IPException.approval_status == IPExceptionApprovalStatus.APPROVED)
+            .where(IPException.organization_id == str(organization_id))
             .where(IPException.valid_from <= now)
             .where(IPException.valid_until > now)
         )
-
-        if organization_id:
-            query = query.where(IPException.organization_id == str(organization_id))
 
         result = await db.execute(query)
         return set(result.scalars().all())
@@ -579,15 +598,48 @@ class IPSecurityService:
 
         return audit_log
 
+    async def get_exception_by_id(
+        self,
+        db: AsyncSession,
+        exception_id: str,
+        organization_id: str,
+    ) -> Optional[IPException]:
+        """
+        Fetch a single exception scoped to the caller's org, or None.
+
+        Lets endpoints distinguish "no such exception in your org" (404)
+        from a valid exception that simply has no audit history yet.
+        """
+        result = await db.execute(
+            select(IPException).where(
+                IPException.id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def get_exception_audit_log(
         self,
         db: AsyncSession,
         exception_id: str,
+        organization_id: str,
     ) -> List[IPExceptionAuditLog]:
-        """Get audit log for a specific exception."""
+        """
+        Get audit log for a specific exception.
+
+        Scoped to the caller's org (via the parent exception) so an admin
+        cannot read another organization's exception history by guessing IDs.
+        """
         result = await db.execute(
             select(IPExceptionAuditLog)
-            .where(IPExceptionAuditLog.exception_id == exception_id)
+            .join(
+                IPException,
+                IPException.id == IPExceptionAuditLog.exception_id,
+            )
+            .where(
+                IPExceptionAuditLog.exception_id == exception_id,
+                IPException.organization_id == str(organization_id),
+            )
             .order_by(IPExceptionAuditLog.performed_at.asc())
         )
         return list(result.scalars().all())

@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
-from app.services.membership_tier_service import MembershipTierService
 
 
 class AttendanceDashboardService:
@@ -37,7 +36,6 @@ class AttendanceDashboardService:
         - membership_tier, voting_eligible, voting_blocked_reason
         """
         org_id = str(organization_id)
-        MembershipTierService(self.db)
 
         # Load org for tier config
         org_result = await self.db.execute(
@@ -119,7 +117,12 @@ class AttendanceDashboardService:
             if member_leaves:
                 for md in meeting_dates:
                     for leave in member_leaves:
-                        if leave.start_date <= md <= leave.end_date:
+                        # end_date is None for a permanent/open-ended leave —
+                        # treat it as still active so it doesn't raise on the
+                        # `md <= None` comparison and crash the dashboard.
+                        if leave.start_date <= md and (
+                            leave.end_date is None or md <= leave.end_date
+                        ):
                             on_leave_count += 1
                             break
 
