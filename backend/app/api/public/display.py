@@ -10,7 +10,7 @@ event time, and the check-in URL. The actual check-in requires authentication
 on the scanning user's device.
 """
 
-from datetime import timedelta
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.schemas.event import QRCheckInData
 from app.schemas.location import LocationDisplayInfo
+from app.services.event_service import EventService
 from app.services.location_service import LocationService
 
 router = APIRouter(prefix="/public/v1/display", tags=["public-display"])
@@ -60,11 +61,16 @@ async def get_public_location_display(
         organization_id=location.organization_id,
     )
 
-    # Build event data for display — only non-sensitive fields
+    # Build event data for display — only non-sensitive fields. Report the
+    # authoritative check-in window (the same EventService logic the check-in
+    # endpoint enforces) rather than a hardcoded 1-hour guess, so the kiosk
+    # doesn't show a STRICT event as "ready" before its window actually opens.
+    now = datetime.now(timezone.utc)
+    event_service = EventService(db)
     current_events = []
     for event in events:
-        check_in_start = event.start_datetime - timedelta(hours=1)
-        check_in_end = event.actual_end_time or event.end_datetime
+        check_in_start, check_in_end = EventService._get_check_in_window(event)
+        is_valid, _error, _notice = event_service._validate_check_in_window(event, now)
 
         current_events.append(
             QRCheckInData(
@@ -79,7 +85,7 @@ async def get_public_location_display(
                 ),
                 check_in_start=check_in_start.isoformat(),
                 check_in_end=check_in_end.isoformat(),
-                is_valid=True,
+                is_valid=is_valid,
                 location=event.location,
                 location_id=str(event.location_id) if event.location_id else None,
                 location_name=location.name,
