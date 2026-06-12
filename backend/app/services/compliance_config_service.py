@@ -141,7 +141,7 @@ class ComplianceConfigService:
         result = await self.db.execute(
             select(TrainingRequirement)
             .where(TrainingRequirement.organization_id == organization_id)
-            .where(TrainingRequirement.is_active == True)  # noqa: E712
+            .where(TrainingRequirement.active == True)  # noqa: E712
             .order_by(TrainingRequirement.name)
         )
         requirements = result.scalars().all()
