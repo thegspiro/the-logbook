@@ -6,10 +6,9 @@ Covers config resolution, the member email-preference gate, and the tiered
 alert date logic (which tier fires, per-tier dedup, expired-cert escalation).
 The notification and email integrations are mocked. DB mocked; no MySQL.
 
-NOTE: test_late_added_cert_fires_least_urgent_tier_first pins a flagged
-behavior — for a never-alerted cert the loop fires the *least* urgent
-applicable tier first (90 before 7), which contradicts the module comment
-"only send the most urgent applicable tier per run". Pinned, not endorsed.
+A never-alerted cert already inside an urgent window jumps straight to the
+most urgent applicable tier and suppresses the skipped earlier tiers
+(test_late_added_cert_jumps_to_most_urgent_tier).
 """
 
 from datetime import date, datetime, timedelta, timezone
@@ -173,14 +172,55 @@ class TestTieredAlerts:
         out = await CertAlertService(self._db(record, member)).process_alerts("org-1")
         assert out["in_app_sent"] == 0
 
-    async def test_late_added_cert_fires_least_urgent_tier_first(self):
-        # FLAGGED behavior: a never-alerted cert 5 days out fires the 90-tier
-        # (no compliance CC), not the urgent 7-tier. Pinned, not endorsed.
+    async def test_normal_pipeline_fires_30_day_tier(self):
+        # Daily-tracked cert: 90/60 already sent, now 30 days out -> the
+        # 30-day tier (CCs training officers) is the most urgent applicable
+        # unsent tier and fires.
+        now = datetime.now(timezone.utc)
+        record = _record(30, alert_90_sent_at=now, alert_60_sent_at=now)
+        member = _member(email_enabled=False)
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(_org({"enabled": True})),  # config
+                _one(_org({"enabled": True})),  # process org
+                _scalars([record]),  # expiring
+                _one(member),  # member
+                _scalars([]),  # training officers (in-app)
+                _scalars([]),  # expired
+            ]
+        )
+        db.commit = AsyncMock()
+        out = await CertAlertService(db).process_alerts("org-1")
+        assert out["in_app_sent"] == 1
+        assert record.alert_30_sent_at is not None
+        assert record.alert_7_sent_at is None
+
+    async def test_late_added_cert_jumps_to_most_urgent_tier(self):
+        # A never-alerted cert 5 days out fires the 7-day tier (most urgent)
+        # and suppresses the skipped 90/60/30 tiers so they don't fire
+        # backwards on later runs. The 7-tier CCs officers, so the in-app
+        # officer lookups (training + compliance) execute.
         record = _record(5)
         member = _member(email_enabled=False)
-        await CertAlertService(self._db(record, member)).process_alerts("org-1")
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(_org({"enabled": True})),  # config
+                _one(_org({"enabled": True})),  # process org
+                _scalars([record]),  # expiring
+                _one(member),  # member
+                _scalars([]),  # training officers (in-app)
+                _scalars([]),  # compliance officers (in-app)
+                _scalars([]),  # expired
+            ]
+        )
+        db.commit = AsyncMock()
+        await CertAlertService(db).process_alerts("org-1")
+        assert record.alert_7_sent_at is not None
+        # Skipped earlier tiers are marked sent (suppressed).
         assert record.alert_90_sent_at is not None
-        assert record.alert_7_sent_at is None
+        assert record.alert_30_sent_at is not None
 
 
 class TestExpiredEscalation:
