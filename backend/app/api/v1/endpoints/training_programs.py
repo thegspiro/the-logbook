@@ -12,7 +12,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    get_current_user,
+    require_permission,
+)
+from app.core.permissions import permission_matches
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.user import User
@@ -788,19 +793,25 @@ async def update_requirement_progress(
     """
     service = TrainingProgramService(db)
 
-    # Determine if this is a verification update
-    verified_by = None
-    # You could add permission check here for training.manage to allow verification
-    # For now, we'll allow users to update their own progress
+    # Training officers (training.manage) may update and verify any member's
+    # progress; everyone else may only update their own. The service enforces
+    # the ownership rule given acting_user_id + can_manage.
+    perms = _collect_user_permissions(current_user)
+    can_manage = permission_matches("training.manage", perms)
+    verified_by = current_user.id if can_manage else None
 
     progress, error = await service.update_requirement_progress(
         progress_id=progress_id,
         organization_id=current_user.organization_id,
         updates=updates,
         verified_by=verified_by,
+        acting_user_id=current_user.id,
+        can_manage=can_manage,
     )
 
     if error:
+        if "not authorized" in error:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return progress
