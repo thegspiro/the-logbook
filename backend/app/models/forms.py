@@ -44,11 +44,11 @@ class FormStatus(str, enum.Enum):
 class FormCategory(str, enum.Enum):
     """Category of form"""
 
-    SAFETY = "Safety"
-    OPERATIONS = "Operations"
-    ADMINISTRATION = "Administration"
-    TRAINING = "Training"
-    OTHER = "Other"
+    SAFETY = "safety"
+    OPERATIONS = "operations"
+    ADMINISTRATION = "administration"
+    TRAINING = "training"
+    OTHER = "other"
 
 
 class FieldType(str, enum.Enum):

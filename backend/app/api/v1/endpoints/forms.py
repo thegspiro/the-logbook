@@ -74,7 +74,7 @@ async def list_forms(
     category_enum = None
     if category:
         try:
-            category_enum = FormCategory(category)
+            category_enum = FormCategory(category.lower())
         except ValueError:
             raise HTTPException(
                 status_code=400,
