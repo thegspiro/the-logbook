@@ -159,6 +159,21 @@ class TestSubresourceOrgScoping:
         assert "grant_applications" in sql  # scoped through the parent
         assert "organization_id" in sql
 
+    async def test_list_notes_rejects_foreign_application(self):
+        # get_application resolves nothing for this org -> reject, don't leak.
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(None))
+        with pytest.raises(ValueError, match="Application not found"):
+            await GrantService(db).list_notes("app-x", "org-A")
+
+    async def test_create_note_rejects_foreign_application(self):
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_one(None))
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        with pytest.raises(ValueError, match="Application not found"):
+            await GrantService(db).create_note("app-x", {"content": "x"}, "u1", "org-A")
+
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

@@ -705,7 +705,14 @@ class GrantService:
     # Grant Notes
     # ------------------------------------------------------------------
 
-    async def list_notes(self, application_id: str) -> List[GrantNote]:
+    async def list_notes(
+        self, application_id: str, organization_id: str
+    ) -> List[GrantNote]:
+        # Scope through the parent application so notes from another org's
+        # application can't be read by guessing its id.
+        app = await self.get_application(application_id, organization_id)
+        if not app:
+            raise ValueError("Application not found")
         result = await self.db.execute(
             select(GrantNote)
             .where(GrantNote.application_id == application_id)
@@ -718,7 +725,13 @@ class GrantService:
         application_id: str,
         data: Dict[str, Any],
         user_id: str,
+        organization_id: str,
     ) -> GrantNote:
+        # Verify the application belongs to the caller's org before attaching
+        # a note, otherwise a note can be written onto another org's grant.
+        app = await self.get_application(application_id, organization_id)
+        if not app:
+            raise ValueError("Application not found")
         note = GrantNote(
             application_id=application_id,
             created_by=user_id,
