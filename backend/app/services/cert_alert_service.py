@@ -128,10 +128,24 @@ class CertAlertService:
         return [u.email for u in officers if u.email]
 
     def _member_has_email_enabled(self, member: User) -> bool:
-        """Check if a member has email notifications enabled."""
+        """Check if a member wants training-related email reminders.
+
+        Honors the master email switch (email_notifications/email) AND the
+        training_reminders category preference — certification expiration
+        alerts are training reminders, so a member who turns that category
+        off should stop receiving them. This mirrors how event reminders
+        honor the event_reminders preference; previously training_reminders
+        was settable in the profile but never consulted, so disabling it had
+        no effect. In-app notifications are still created regardless so
+        opted-out members can see alerts in their inbox.
+        """
         prefs = getattr(member, "notification_preferences", None)
         if prefs and isinstance(prefs, dict):
-            return prefs.get("email_notifications", True) and prefs.get("email", True)
+            return (
+                prefs.get("email_notifications", True)
+                and prefs.get("email", True)
+                and prefs.get("training_reminders", True)
+            )
         return True  # Default to enabled
 
     async def _log_in_app_notification(
