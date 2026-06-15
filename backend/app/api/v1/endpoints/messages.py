@@ -311,7 +311,9 @@ async def mark_as_read(
 ):
     """Mark a message as read by the current user"""
     service = MessagingService(db)
-    success, error = await service.mark_as_read(message_id, current_user.id)
+    success, error = await service.mark_as_read(
+        message_id, current_user.id, current_user.organization_id
+    )
     if not success:
         raise HTTPException(status_code=400, detail=error)
     return {"status": "ok"}
@@ -325,7 +327,9 @@ async def acknowledge_message(
 ):
     """Acknowledge a message (for messages requiring acknowledgment)"""
     service = MessagingService(db)
-    success, error = await service.acknowledge_message(message_id, current_user.id)
+    success, error = await service.acknowledge_message(
+        message_id, current_user.id, current_user.organization_id
+    )
     if not success:
         raise HTTPException(status_code=400, detail=error)
     return {"status": "ok"}
