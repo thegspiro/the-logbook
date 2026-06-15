@@ -11,6 +11,8 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.services.grant_service import GrantService
 
 
@@ -115,7 +117,48 @@ class TestUpdateBudgetItemSpent:
         await GrantService(db)._update_budget_item_spent("b1")
 
 
-if __name__ == "__main__":  # pragma: no cover
-    import pytest
+class TestSubresourceOrgScoping:
+    """Budget items, expenditures, and compliance tasks are sub-resources of a
+    grant application. The fundraising.manage permission is not org-specific,
+    so their update/delete-by-id methods must scope to the caller's org via the
+    parent application — otherwise a manager in org A can mutate org B's
+    financial records by guessing a UUID (cross-org IDOR)."""
 
+    @pytest.mark.parametrize(
+        "make_call",
+        [
+            lambda s: s.update_budget_item("x", {"amount_budgeted": 1}, "org-A"),
+            lambda s: s.delete_budget_item("x", "org-A"),
+            lambda s: s.update_expenditure("x", {"amount": 1}, "org-A"),
+            lambda s: s.delete_expenditure("x", "org-A"),
+            lambda s: s.update_compliance_task("x", {"title": "t"}, "u1", "org-A"),
+            lambda s: s.delete_compliance_task("x", "org-A"),
+        ],
+    )
+    async def test_mutator_query_joins_application_and_filters_org(self, make_call):
+        from sqlalchemy.dialects import mysql
+
+        captured = []
+
+        async def cap(stmt, *a, **k):
+            captured.append(stmt)
+            result = MagicMock()
+            # No row matches once the org filter is applied → safe no-op.
+            result.scalar_one_or_none.return_value = None
+            return result
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=cap)
+        db.flush = AsyncMock()
+        db.delete = AsyncMock()
+
+        out = await make_call(GrantService(db))
+        assert out is None or out is False
+
+        sql = str(captured[0].compile(dialect=mysql.dialect())).lower()
+        assert "grant_applications" in sql  # scoped through the parent
+        assert "organization_id" in sql
+
+
+if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

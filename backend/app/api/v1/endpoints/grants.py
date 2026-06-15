@@ -555,6 +555,7 @@ async def update_budget_item(
         item = await service.update_budget_item(
             item_id=str(item_id),
             data=data.model_dump(exclude_unset=True),
+            organization_id=str(current_user.organization_id),
         )
         if not item:
             raise HTTPException(
@@ -591,7 +592,10 @@ async def delete_budget_item(
     """
     try:
         service = GrantService(db)
-        deleted = await service.delete_budget_item(item_id=str(item_id))
+        deleted = await service.delete_budget_item(
+            item_id=str(item_id),
+            organization_id=str(current_user.organization_id),
+        )
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -709,6 +713,7 @@ async def update_expenditure(
         expenditure = await service.update_expenditure(
             expenditure_id=str(expenditure_id),
             data=data.model_dump(exclude_unset=True),
+            organization_id=str(current_user.organization_id),
         )
         if not expenditure:
             raise HTTPException(
@@ -747,6 +752,7 @@ async def delete_expenditure(
         service = GrantService(db)
         deleted = await service.delete_expenditure(
             expenditure_id=str(expenditure_id),
+            organization_id=str(current_user.organization_id),
         )
         if not deleted:
             raise HTTPException(
@@ -871,6 +877,7 @@ async def update_compliance_task(
             task_id=str(task_id),
             data=data.model_dump(exclude_unset=True),
             user_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
         )
         if not task:
             raise HTTPException(
@@ -907,7 +914,10 @@ async def delete_compliance_task(
     """
     try:
         service = GrantService(db)
-        deleted = await service.delete_compliance_task(task_id=str(task_id))
+        deleted = await service.delete_compliance_task(
+            task_id=str(task_id),
+            organization_id=str(current_user.organization_id),
+        )
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
