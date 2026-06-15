@@ -867,6 +867,35 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(waitlisted_rsvp)
 
+        # Tell the promoted member they're off the waitlist. Without this the
+        # status flips silently and they have no way to know a spot opened up,
+        # so they may miss an event they're now confirmed for. Non-fatal: a
+        # failed notification must not undo the promotion.
+        try:
+            notifications_service = NotificationsService(self.db)
+            await notifications_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "channel": NotificationChannel.IN_APP,
+                    "category": "event_waitlist_promotion",
+                    "recipient_id": str(waitlisted_rsvp.user_id),
+                    "subject": f"You're off the waitlist: {event.title}",
+                    "message": (
+                        f'A spot opened up for "{event.title}" and you have '
+                        f"been moved off the waitlist — you are now confirmed "
+                        f"as going."
+                    ),
+                    "action_url": f"/events/{event.id}",
+                },
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to notify waitlist promotion for user %s event %s: %s",
+                waitlisted_rsvp.user_id,
+                event.id,
+                e,
+            )
+
         return waitlisted_rsvp
 
     async def rsvp_to_series(

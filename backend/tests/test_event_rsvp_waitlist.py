@@ -39,6 +39,7 @@ def _db(side_effect):
 def _event(**kw):
     return SimpleNamespace(
         id="e1",
+        title=kw.get("title", "Test Event"),
         organization_id="org-1",
         is_cancelled=kw.get("is_cancelled", False),
         requires_rsvp=kw.get("requires_rsvp", True),
@@ -123,7 +124,7 @@ class TestPromoteFromWaitlist:
     async def test_promotes_earliest_waitlisted(self):
         ev = _event(max_attendees=5)
         waitlisted = SimpleNamespace(
-            id="r1", status=RSVPStatus.WAITLISTED, updated_at=None
+            id="r1", user_id="u9", status=RSVPStatus.WAITLISTED, updated_at=None
         )
         db = _db([_one(ev), _scalar(3), _one(waitlisted)])
         out = await EventService(db).promote_from_waitlist("e1", "org-1")
@@ -131,6 +132,24 @@ class TestPromoteFromWaitlist:
         assert waitlisted.status == RSVPStatus.GOING
         assert waitlisted.updated_at is not None
         db.commit.assert_awaited()
+
+    async def test_promotion_notifies_member(self):
+        from app.models.notification import NotificationLog
+
+        ev = _event(max_attendees=5)
+        waitlisted = SimpleNamespace(
+            id="r1", user_id="u9", status=RSVPStatus.WAITLISTED, updated_at=None
+        )
+        db = _db([_one(ev), _scalar(3), _one(waitlisted)])
+        await EventService(db).promote_from_waitlist("e1", "org-1")
+
+        # A waitlist-promotion NotificationLog is created for the promoted
+        # member so the silent status flip is surfaced to them.
+        added = [c.args[0] for c in db.add.call_args_list if c.args]
+        notifs = [n for n in added if isinstance(n, NotificationLog)]
+        assert len(notifs) == 1
+        assert notifs[0].recipient_id == "u9"
+        assert notifs[0].category == "event_waitlist_promotion"
 
 
 if __name__ == "__main__":  # pragma: no cover
