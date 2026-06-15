@@ -1691,7 +1691,12 @@ class ElectionService:
                         result.is_winner = True
 
         elif election.victory_condition == "majority":
-            required_votes = (total_votes / 2) + 1
+            # Strictly more than half. Use integer math: floor(n/2)+1 is the
+            # smallest vote count exceeding half. The previous (n/2)+1 float
+            # form over-required by a full vote for odd totals — e.g. with 3
+            # votes it demanded 2.5 (→3), so a candidate with 2 of 3 (a clear
+            # 66% majority) was wrongly denied the win.
+            required_votes = total_votes // 2 + 1
             for result in results:
                 if result.vote_count >= required_votes:
                     result.is_winner = True
