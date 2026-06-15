@@ -32,7 +32,10 @@ const UNCACHEABLE_PREFIXES = [
   '/auth/',           // credentials, session tokens, password ops
   '/users/',          // profiles, contact info, emergency contacts, audit history
   '/security/',       // alerts, audit log integrity, monitoring
+  '/audit-logs',      // org audit trail: who did what, when, from where
   '/ip-security/',    // IP exceptions, blocked attempts, country rules
+  '/medical-screening/', // member medical screening records & compliance (PHI)
+  '/message-history',  // sent-message log: recipient emails, subjects (PII)
   '/roles/my/',       // current user's permissions (security-sensitive)
   '/notifications/my/', // user-specific notification state
   '/training/waivers',  // medical/health waivers (PHI)

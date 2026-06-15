@@ -300,6 +300,24 @@ describe('apiCache', () => {
       expect(isCacheable('/security/alerts')).toBe(false);
     });
 
+    it('returns false for /audit-logs endpoints (org audit trail)', () => {
+      expect(isCacheable('/audit-logs')).toBe(false);
+      expect(isCacheable('/audit-logs?skip=0&limit=50')).toBe(false);
+      expect(isCacheable('/audit-logs/123')).toBe(false);
+      expect(isCacheable('/audit-logs/stats')).toBe(false);
+    });
+
+    it('returns false for /medical-screening/ endpoints (PHI)', () => {
+      expect(isCacheable('/medical-screening/records')).toBe(false);
+      expect(isCacheable('/medical-screening/compliance/u1')).toBe(false);
+      expect(isCacheable('/medical-screening/expiring')).toBe(false);
+    });
+
+    it('returns false for /message-history endpoints (recipient PII)', () => {
+      expect(isCacheable('/message-history')).toBe(false);
+      expect(isCacheable('/message-history?page=1')).toBe(false);
+    });
+
     it('returns false for /roles/my/ endpoints', () => {
       expect(isCacheable('/roles/my/permissions')).toBe(false);
     });
