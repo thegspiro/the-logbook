@@ -243,12 +243,9 @@ class NotificationPreferences(BaseModel):
     """Notification preferences schema"""
 
     email: bool = True
-    sms: bool = False
-    push: bool = False
     email_notifications: bool = True
     event_reminders: bool = True
     training_reminders: bool = True
-    announcement_notifications: bool = True
 
     model_config = _response_config
 

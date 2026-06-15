@@ -261,12 +261,9 @@ describe('userService', () => {
     it('should GET /users/:id/with-roles and return notification preferences', async () => {
       const prefs = {
         email: true,
-        sms: true,
-        push: false,
         email_notifications: true,
         event_reminders: true,
         training_reminders: false,
-        announcement_notifications: true,
       };
       mockGet.mockResolvedValue({ data: { notification_preferences: prefs } });
 
@@ -283,12 +280,9 @@ describe('userService', () => {
 
       expect(result).toEqual({
         email: true,
-        sms: false,
-        push: false,
         email_notifications: true,
         event_reminders: true,
         training_reminders: true,
-        announcement_notifications: true,
       });
     });
 
@@ -299,12 +293,9 @@ describe('userService', () => {
 
       expect(result).toEqual({
         email: true,
-        sms: false,
-        push: false,
         email_notifications: true,
         event_reminders: true,
         training_reminders: true,
-        announcement_notifications: true,
       });
     });
   });
@@ -314,7 +305,7 @@ describe('userService', () => {
     it('should PATCH notification preferences to /users/:id/contact-info', async () => {
       mockPatch.mockResolvedValue({ data: undefined });
 
-      const prefs = { email: false, sms: true };
+      const prefs = { email: false, training_reminders: true };
       await userService.updateNotificationPreferences('u1', prefs);
 
       expect(mockPatch).toHaveBeenCalledWith('/users/u1/contact-info', {

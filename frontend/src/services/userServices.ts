@@ -150,12 +150,9 @@ export const userService = {
     const response = await api.get<{ notification_preferences: import('../types/user').NotificationPreferences }>(`/users/${userId}/with-roles`);
     return response.data.notification_preferences || {
       email: true,
-      sms: false,
-      push: false,
       email_notifications: true,
       event_reminders: true,
       training_reminders: true,
-      announcement_notifications: true,
     };
   },
 

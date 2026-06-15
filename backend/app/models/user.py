@@ -267,7 +267,8 @@ class User(Base):
     emergency_contacts = Column(JSON, default=list)
 
     # Notification Preferences (stored as JSON object)
-    # Format: {"email": true, "sms": false, "push": true, "digest": "daily", ...}
+    # Format: {"email": true, "email_notifications": true,
+    #          "event_reminders": true, "training_reminders": true}
     notification_preferences = Column(JSON, default=dict)
 
     # Department Membership (one per member, no permissions – purely classification)
