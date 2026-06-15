@@ -29,6 +29,7 @@ import {
   Bell,
   FormInput,
   Mail,
+  Megaphone,
   Plug,
   MapPin,
   Rocket,
@@ -301,6 +302,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
     ...(isModuleOn("notifications")
       ? [{ label: "Notifications", path: "/notifications?tab=inbox", icon: Bell } as NavItem]
       : []),
+    { label: "Messages", path: "/messages", icon: Megaphone },
 
     // ── Personal settings (always visible) ──
     { label: "My Account", path: "/account", icon: UserCog },
@@ -423,6 +425,12 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 path: "/communications/email-templates",
                 icon: Mail,
                 permission: "settings.manage",
+              },
+              {
+                label: "Messages",
+                path: "/communications/messages",
+                icon: Megaphone,
+                permission: "notifications.manage",
               },
               ...(isModuleOn("forms")
                 ? [{ label: "Forms", path: "/forms", icon: FormInput, permission: "forms.view" }]
