@@ -232,6 +232,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "mark_overdue_dues": {
+        "description": "Mark fully-unpaid member dues past their due date as overdue (nothing else sets this status)",
+        "frequency": "daily",
+        "recommended_time": "06:00",
+        "cron": "0 6 * * *",
+    },
 }
 
 
@@ -4009,6 +4015,39 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     }
 
 
+async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
+    """Mark fully-unpaid dues past their due date as OVERDUE.
+
+    Nothing else transitions a dues record into the OVERDUE state, so without
+    this the dues summary always reports zero overdue, a status="overdue"
+    filter returns nothing, and members past their due date are never flagged.
+    Runs daily. Only PENDING (fully unpaid) records are moved — a partially
+    paid record keeps its PARTIAL status so the payment information is not lost,
+    and its balance still shows in the amount-based outstanding total.
+    """
+    from datetime import timezone as dt_timezone
+
+    from sqlalchemy import update as sa_update
+
+    from app.models.finance import DuesStatus, MemberDues
+
+    now = datetime.now(dt_timezone.utc)
+    result = await db.execute(
+        sa_update(MemberDues)
+        .where(
+            MemberDues.status == DuesStatus.PENDING,
+            MemberDues.due_date < now,
+            MemberDues.amount_paid < MemberDues.amount_due,
+        )
+        .values(status=DuesStatus.OVERDUE)
+    )
+    await db.commit()
+    count = result.rowcount or 0
+    if count:
+        logger.info("Marked %d dues record(s) overdue", count)
+    return {"task": "mark_overdue_dues", "marked_overdue": count}
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -4035,8 +4074,8 @@ TASK_RUNNERS = {
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
     "external_training_auto_sync": run_external_training_auto_sync,
+    "mark_overdue_dues": run_mark_overdue_dues,
 }
-
 
 # Interval (in seconds) at which each task auto-runs in the in-process
 # scheduler (main.py's _scheduled_task_loop), derived from the cron cadences
@@ -4070,6 +4109,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "series_end_reminders": 86400,
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
+    "mark_overdue_dues": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
