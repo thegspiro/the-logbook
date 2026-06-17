@@ -2206,6 +2206,11 @@ class EventService:
         duration = end_datetime - start_datetime
         occurrences = []
         current = start_datetime
+        # Anchor day-of-month for monthly/annual patterns: each step clamps to
+        # the target month's length using this original day, so a series never
+        # drifts down permanently after a short month (e.g. the 31st must not
+        # become the 28th from March onward once February clamps it).
+        anchor_day = start_datetime.day
 
         while current <= recurrence_end_date:
             occurrences.append((current, current + duration))
@@ -2217,19 +2222,19 @@ class EventService:
             elif pattern == RecurrencePattern.BIWEEKLY.value:
                 current += timedelta(weeks=2)
             elif pattern == RecurrencePattern.MONTHLY.value:
-                # Move to same day next month
+                # Move to the anchor day of next month, clamped to that month's
+                # length. Using anchor_day (the original day) rather than the
+                # possibly-clamped current.day keeps a 31st-of-month series on
+                # the 31st in long months instead of pinning it to 28 forever.
                 m = current.month + 1
                 y = current.year
                 if m > 12:
                     m = 1
                     y += 1
-                try:
-                    current = current.replace(year=y, month=m)
-                except ValueError:
-                    last_day = calendar.monthrange(y, m)[1]
-                    current = current.replace(
-                        year=y, month=m, day=min(current.day, last_day)
-                    )
+                last_day = calendar.monthrange(y, m)[1]
+                current = current.replace(
+                    year=y, month=m, day=min(anchor_day, last_day)
+                )
             elif (
                 pattern == RecurrencePattern.MONTHLY_WEEKDAY.value
                 and weekday is not None
@@ -2258,12 +2263,12 @@ class EventService:
                     break
                 current = candidate
             elif pattern == RecurrencePattern.ANNUALLY.value:
-                # Same date next year
-                try:
-                    current = current.replace(year=current.year + 1)
-                except ValueError:
-                    # Feb 29 in a non-leap year → Feb 28
-                    current = current.replace(year=current.year + 1, day=28)
+                # Same month/day next year, anchored to the original day so a
+                # Feb 29 series returns to the 29th in later leap years instead
+                # of being pinned to Feb 28 after the first non-leap year.
+                y = current.year + 1
+                last_day = calendar.monthrange(y, current.month)[1]
+                current = current.replace(year=y, day=min(anchor_day, last_day))
             elif (
                 pattern == RecurrencePattern.ANNUALLY_WEEKDAY.value
                 and weekday is not None

@@ -71,14 +71,18 @@ class TestRecurrenceCadences:
             datetime(2026, 6, 29).date(),
         ]
 
-    def test_monthly_clamps_end_of_month(self):
-        # Jan 31 -> Feb (clamped to 28) -> Mar 28...
+    def test_monthly_anchors_to_original_day(self):
+        # A 31st-of-month series clamps only for short months and returns to the
+        # 31st afterward — it must NOT drift down to the 28th permanently once
+        # February clamps it (the previous behaviour, now fixed).
         start = datetime(2026, 1, 31, 9, 0)
-        out = _gen(start, start, "monthly", datetime(2026, 3, 31, 9, 0))
+        out = _gen(start, start, "monthly", datetime(2026, 5, 31, 9, 0))
         assert [s.date() for s, _ in out] == [
             datetime(2026, 1, 31).date(),
             datetime(2026, 2, 28).date(),
-            datetime(2026, 3, 28).date(),
+            datetime(2026, 3, 31).date(),  # back to 31, not stuck at 28
+            datetime(2026, 4, 30).date(),
+            datetime(2026, 5, 31).date(),
         ]
 
     def test_monthly_weekday(self):
@@ -98,12 +102,17 @@ class TestRecurrenceCadences:
             datetime(2026, 8, 3).date(),
         ]
 
-    def test_annually_leap_day_fallback(self):
+    def test_annually_leap_day_returns_to_29(self):
+        # A Feb 29 series falls back to Feb 28 in non-leap years but returns to
+        # Feb 29 the next leap year, rather than being pinned to 28 forever.
         start = datetime(2024, 2, 29, 9, 0)  # leap day
-        out = _gen(start, start, "annually", datetime(2025, 3, 1, 9, 0))
+        out = _gen(start, start, "annually", datetime(2028, 3, 1, 9, 0))
         assert [s.date() for s, _ in out] == [
             datetime(2024, 2, 29).date(),
-            datetime(2025, 2, 28).date(),  # 2025 not a leap year
+            datetime(2025, 2, 28).date(),
+            datetime(2026, 2, 28).date(),
+            datetime(2027, 2, 28).date(),
+            datetime(2028, 2, 29).date(),  # leap year again -> back to 29
         ]
 
     def test_custom_weekdays(self):
