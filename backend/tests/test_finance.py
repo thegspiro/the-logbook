@@ -9,33 +9,16 @@ import pytest
 
 pytestmark = [pytest.mark.integration]
 
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import (
-    ApprovalChain,
-    ApprovalChainStep,
     ApprovalEntityType,
-    ApprovalStepRecord,
     ApprovalStepStatus,
     ApprovalStepType,
     ApproverType,
-    Budget,
-    BudgetCategory,
-    CheckRequest,
-    CheckRequestStatus,
-    DuesSchedule,
-    DuesStatus,
-    ExpenseLineItem,
-    ExpenseReport,
-    ExpenseReportStatus,
-    FiscalYear,
     FiscalYearStatus,
-    MemberDues,
-    PurchaseRequest,
     PurchaseRequestStatus,
 )
 from app.services.finance_service import FinanceService
@@ -522,6 +505,121 @@ class TestApprovalChainService:
         denied = await service.deny_step(records[0].id, user_id, "Budget exceeded")
         assert denied.status == ApprovalStepStatus.DENIED
         assert denied.notes == "Budget exceeded"
+
+    async def test_denial_does_not_release_other_prs_encumbrance(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """Denying a mid-chain PR must not touch the budget's encumbrance.
+
+        Budget is encumbered only at finalize-approval (all steps non-pending).
+        A denial requires a PENDING step, so it can only happen before any
+        encumbrance for that PR exists. The old code released anyway, which
+        subtracted from the budget's shared amount_encumbered and corrupted a
+        DIFFERENT, already-approved PR's encumbrance on the same budget.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+
+        fy = await service.create_fiscal_year(
+            org_id=org_id,
+            created_by=user_id,
+            name="FY-Encumber",
+            start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
+        )
+        cat = await service.create_budget_category(org_id=org_id, name="Gear")
+        budget = await service.create_budget(
+            org_id=org_id,
+            created_by=user_id,
+            fiscal_year_id=fy.id,
+            category_id=cat.id,
+            amount_budgeted=100000.00,
+        )
+
+        # PR-A: fully approve through a single-step chain → encumbers $5000.
+        pr_a = await service.create_purchase_request(
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            budget_id=budget.id,
+            title="Approved gear",
+            estimated_amount=5000.00,
+        )
+        one_step = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Single step",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "Approve",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+            ],
+        )
+        a_records = await service.create_approval_records(
+            one_step,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            pr_a.id,
+            5000.00,
+            user_id,
+        )
+        await service.approve_step(a_records[0].id, user_id)
+
+        budget_after_a = await service.get_budget(budget.id, org_id)
+        assert float(budget_after_a.amount_encumbered) == 5000.00
+
+        # PR-B: approve step 1 of a two-step chain (not finalized → never
+        # encumbered), then deny step 2.
+        pr_b = await service.create_purchase_request(
+            org_id=org_id,
+            requested_by=user_id,
+            fiscal_year_id=fy.id,
+            budget_id=budget.id,
+            title="Denied gear",
+            estimated_amount=3000.00,
+        )
+        two_step = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Two step",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=False,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "First",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+                {
+                    "step_order": 2,
+                    "name": "Second",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+            ],
+        )
+        b_records = await service.create_approval_records(
+            two_step,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            pr_b.id,
+            3000.00,
+            user_id,
+        )
+        await service.approve_step(b_records[0].id, user_id)
+        await service.deny_step(b_records[1].id, user_id, "Not needed")
+
+        # PR-A's $5000 encumbrance must be untouched by PR-B's denial.
+        budget_final = await service.get_budget(budget.id, org_id)
+        assert float(budget_final.amount_encumbered) == 5000.00
 
 
 # ============================================

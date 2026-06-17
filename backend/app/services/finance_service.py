@@ -798,11 +798,12 @@ class FinanceService:
                 entity.status = PurchaseRequestStatus.DENIED
                 entity.approved_by = denier_id
                 entity.denial_reason = reason
-                # Release any encumbrance
-                if entity.budget_id:
-                    await self._release_encumbrance(
-                        entity.budget_id, float(entity.estimated_amount)
-                    )
+                # No encumbrance to release here: budget is encumbered only in
+                # _finalize_approval, which runs once every step is non-pending.
+                # A denial requires a PENDING step, so it can only occur before
+                # approval — i.e. before any encumbrance exists. Releasing one
+                # anyway subtracted from the budget's shared amount_encumbered
+                # and silently corrupted other PRs' encumbrances on that budget.
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
             result = await self.db.execute(
                 select(ExpenseReport).where(ExpenseReport.id == entity_id)
