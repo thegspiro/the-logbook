@@ -172,12 +172,19 @@ async def list_documents(
                 detail="Not authorized to view this folder",
             )
 
+    # Restrict the listing to folders the caller may access (None = leadership,
+    # no restriction) so a folder-less listing can't surface documents from
+    # restricted/owner-only folders.
+    accessible = await service.accessible_folder_ids(
+        current_user.organization_id, current_user
+    )
     documents, total = await service.get_documents(
         current_user.organization_id,
         folder_id=folder_uuid,
         search=search,
         skip=pagination.skip,
         limit=pagination.limit,
+        accessible_folder_ids=accessible,
     )
 
     return {

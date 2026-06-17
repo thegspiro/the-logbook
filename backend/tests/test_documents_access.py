@@ -28,9 +28,9 @@ def _user(uid="u1", roles=None):
     return SimpleNamespace(id=uid, roles=role_objs)
 
 
-def _folder(visibility, owner_user_id=None, allowed_roles=None):
+def _folder(visibility, owner_user_id=None, allowed_roles=None, fid="f1"):
     return SimpleNamespace(
-        id="f1",
+        id=fid,
         visibility=visibility,
         owner_user_id=owner_user_id,
         allowed_roles=allowed_roles,
@@ -150,6 +150,37 @@ class TestCanAccessDocument:
         doc = SimpleNamespace(folder_id="gone")
         user = _user(roles=[([], "ff")])
         assert await svc.can_access_document(doc, "org-1", user) is True
+
+
+class TestAccessibleFolderIds:
+    """A folder-less document listing must be restricted to folders the caller
+    can access, or it leaks documents from restricted/owner-only folders."""
+
+    async def test_leadership_has_no_restriction(self):
+        svc = _svc()
+        chief = _user(roles=[(["documents.manage"], "chief")])
+        assert await svc.accessible_folder_ids("org-1", chief) is None
+
+    async def test_non_leadership_filtered_to_accessible(self):
+        svc = _svc()
+        folders = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
+            _folder(FolderVisibility.LEADERSHIP, fid="f-lead"),
+            _folder(FolderVisibility.OWNER, owner_user_id="u1", fid="f-mine"),
+            _folder(FolderVisibility.OWNER, owner_user_id="u2", fid="f-theirs"),
+            _folder(
+                FolderVisibility.ORGANIZATION, allowed_roles=["officer"], fid="f-off"
+            ),
+        ]
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = folders
+        svc.db.execute = AsyncMock(return_value=result)
+
+        member = _user(uid="u1", roles=[([], "ff")])
+        ids = await svc.accessible_folder_ids("org-1", member)
+        # Open org folder + own owner folder only; not leadership, others', or
+        # the officer-restricted folder.
+        assert ids == {"f-org", "f-mine"}
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -193,6 +193,26 @@ class DocumentsService:
             return True
         return self.can_access_folder(folder, user)
 
+    async def accessible_folder_ids(
+        self, organization_id: UUID, user: User
+    ) -> Optional[Set[str]]:
+        """Ids of folders the user may access, or None when they may access all
+        (leadership). Used to keep a document listing consistent with the folder
+        access rules even when no folder filter is supplied — otherwise listing
+        documents without a folder returned every org document, including those
+        in restricted/owner-only folders.
+        """
+        user_perms = _get_user_permissions(user)
+        if _is_leadership(user_perms):
+            return None
+        result = await self.db.execute(
+            select(DocumentFolder).where(
+                DocumentFolder.organization_id == str(organization_id)
+            )
+        )
+        folders = result.scalars().all()
+        return {f.id for f in folders if self.can_access_folder(f, user)}
+
     async def update_folder(
         self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Optional[DocumentFolder]:
@@ -245,12 +265,25 @@ class DocumentsService:
         status: Optional[DocumentStatus] = None,
         skip: int = 0,
         limit: int = 100,
+        accessible_folder_ids: Optional[Set[str]] = None,
     ) -> Tuple[List[Document], int]:
-        """Get documents with filtering and pagination"""
+        """Get documents with filtering and pagination.
+
+        When *accessible_folder_ids* is provided (non-leadership callers), the
+        result is restricted to documents in those folders (or with no folder),
+        so an unfiltered listing can't leak documents from restricted folders.
+        Pass None to impose no folder restriction (leadership).
+        """
         query = select(Document).where(Document.organization_id == str(organization_id))
 
         if folder_id:
             query = query.where(Document.folder_id == str(folder_id))
+
+        if accessible_folder_ids is not None:
+            query = query.where(
+                Document.folder_id.in_(accessible_folder_ids)
+                | Document.folder_id.is_(None)
+            )
 
         if status:
             query = query.where(Document.status == status)
