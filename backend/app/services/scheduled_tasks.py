@@ -250,6 +250,12 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "expire_ip_exceptions": {
+        "description": "Mark approved IP allowlist/blocklist exceptions past their valid_until as expired (nothing else recomputes the stored status)",
+        "frequency": "daily",
+        "recommended_time": "00:30",
+        "cron": "30 0 * * *",
+    },
 }
 
 
@@ -4122,6 +4128,21 @@ async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "admin_hours_auto_close", "closed": closed}
 
 
+async def run_expire_ip_exceptions(db: AsyncSession) -> Dict[str, Any]:
+    """Mark approved IP exceptions past their valid_until as EXPIRED.
+
+    IPSecurityService.expire_old_exceptions is documented to run on a daily
+    cron but had no caller, so expired allowlist/blocklist exceptions kept an
+    APPROVED status indefinitely — admin views and any query filtering on
+    approval_status without a live valid_until check would still treat them as
+    active. Runs daily.
+    """
+    from app.services.ip_security_service import ip_security_service
+
+    expired = await ip_security_service.expire_old_exceptions(db)
+    return {"task": "expire_ip_exceptions", "expired": expired}
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -4151,6 +4172,7 @@ TASK_RUNNERS = {
     "mark_overdue_dues": run_mark_overdue_dues,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
+    "expire_ip_exceptions": run_expire_ip_exceptions,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -4188,6 +4210,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "mark_overdue_dues": 86400,
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,
+    "expire_ip_exceptions": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
