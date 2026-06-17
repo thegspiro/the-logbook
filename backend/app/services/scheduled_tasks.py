@@ -256,6 +256,12 @@ SCHEDULE = {
         "recommended_time": "00:30",
         "cron": "30 0 * * *",
     },
+    "membership_inactivity_warnings": {
+        "description": "Log inactivity warnings and auto-mark stale prospects inactive once they exceed their pipeline/step inactivity timeout (skips pipelines configured 'never')",
+        "frequency": "daily",
+        "recommended_time": "06:30",
+        "cron": "30 6 * * *",
+    },
 }
 
 
@@ -387,6 +393,28 @@ async def run_membership_tier_advance(db: AsyncSession) -> Dict[str, Any]:
         return result.get("advanced", 0)
 
     return await _for_each_org(db, "membership_tier_advance", _process)
+
+
+async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]:
+    """Process prospect inactivity warnings and auto-mark stale prospects inactive.
+
+    check_inactivity only flags prospects whose pipeline/step has an inactivity
+    timeout configured (preset 'never' is skipped), so orgs that never opted in
+    are untouched. The underlying method is documented to run on a schedule but
+    had no caller, so without this runner stale prospects were only transitioned
+    when an admin manually hit the endpoint.
+    """
+    from app.services.membership_pipeline_service import MembershipPipelineService
+
+    async def _process(db_session, org):
+        service = MembershipPipelineService(db_session)
+        result = await service.process_inactivity_warnings(
+            organization_id=str(org.id),
+            processed_by=None,
+        )
+        return result.get("warnings_sent", 0) + result.get("marked_inactive", 0)
+
+    return await _for_each_org(db, "membership_inactivity_warnings", _process)
 
 
 async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
@@ -4173,6 +4201,7 @@ TASK_RUNNERS = {
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
+    "membership_inactivity_warnings": run_membership_inactivity_warnings,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -4211,6 +4240,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "mark_overdue_maintenance": 86400,
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,
+    "membership_inactivity_warnings": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
