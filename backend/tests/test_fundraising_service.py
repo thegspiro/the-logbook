@@ -172,6 +172,42 @@ class TestCreateDonation:
         svc._update_donor_stats.assert_not_awaited()
 
 
+class TestUpdateDonationReassignment:
+    """Editing a donation onto a different campaign/donor must recompute both
+    the old and new parent, or the previous one is left overstated."""
+
+    async def test_reassigning_campaign_recomputes_old_and_new(self):
+        donation = SimpleNamespace(
+            id="dn1", organization_id="o", campaign_id="cOLD", donor_id=None
+        )
+        svc = FundraisingService(_db([_one(donation)]))
+        recomputed: list = []
+        svc._update_campaign_total = AsyncMock(
+            side_effect=lambda cid: recomputed.append(cid)
+        )
+        svc._update_donor_stats = AsyncMock()
+
+        out = await svc.update_donation("dn1", "o", {"campaign_id": "cNEW"})
+
+        assert out is donation
+        assert set(recomputed) == {"cOLD", "cNEW"}
+
+    async def test_reassigning_donor_recomputes_old_and_new(self):
+        donation = SimpleNamespace(
+            id="dn1", organization_id="o", campaign_id=None, donor_id="dOLD"
+        )
+        svc = FundraisingService(_db([_one(donation)]))
+        svc._update_campaign_total = AsyncMock()
+        recomputed: list = []
+        svc._update_donor_stats = AsyncMock(
+            side_effect=lambda did: recomputed.append(did)
+        )
+
+        await svc.update_donation("dn1", "o", {"donor_id": "dNEW"})
+
+        assert set(recomputed) == {"dOLD", "dNEW"}
+
+
 class TestCrudGuards:
     async def test_update_campaign_missing_returns_none(self):
         db = _db([_one(None)])
