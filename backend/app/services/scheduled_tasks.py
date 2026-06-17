@@ -3154,6 +3154,12 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         service = InventoryService(db_session)
+        # Refresh the stored is_overdue flag before alerting. Nothing else calls
+        # mark_overdue_checkouts, so without this the inventory dashboards and
+        # summary counts that filter on is_overdue undercount checkouts as they
+        # pass their expected return date. (The alert list below uses a live
+        # expected_return_at query and is unaffected.)
+        await service.mark_overdue_checkouts(org.id)
         overdue = await service.get_overdue_checkouts_for_alerts(org.id)
         if not overdue:
             return 0
