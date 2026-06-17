@@ -244,6 +244,12 @@ SCHEDULE = {
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
     },
+    "admin_hours_auto_close": {
+        "description": "Auto-close admin-hours sessions that exceeded their category's max-hours limit (caps a forgotten clock-in and flags it for review)",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
 }
 
 
@@ -4091,6 +4097,25 @@ async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "mark_overdue_maintenance", "marked_overdue": total}
 
 
+async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
+    """Auto-close admin-hours sessions that exceeded their category limit.
+
+    AdminHoursService.auto_close_stale_sessions caps a forgotten clock-in to the
+    category's max_hours_per_session and flags it for review, but it was only
+    reachable via a manual admin endpoint — nothing ran it on a schedule, so a
+    member who forgot to clock out accrued unbounded time until an admin
+    happened to trigger cleanup. Runs every 30 minutes.
+    """
+    from app.services.admin_hours_service import AdminHoursService
+
+    service = AdminHoursService(db)
+    closed = await service.auto_close_stale_sessions()
+    await db.commit()
+    if closed:
+        logger.info("Admin-hours auto-close: %d stale session(s)", closed)
+    return {"task": "admin_hours_auto_close", "closed": closed}
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -4119,6 +4144,7 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
+    "admin_hours_auto_close": run_admin_hours_auto_close,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -4155,6 +4181,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
     "mark_overdue_maintenance": 86400,
+    "admin_hours_auto_close": 1800,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
