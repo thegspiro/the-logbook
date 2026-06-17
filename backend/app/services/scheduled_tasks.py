@@ -238,6 +238,12 @@ SCHEDULE = {
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
     },
+    "mark_overdue_maintenance": {
+        "description": "Flag incomplete apparatus/facility maintenance past its due date as overdue (the stored flag is otherwise never recomputed over time)",
+        "frequency": "daily",
+        "recommended_time": "06:00",
+        "cron": "0 6 * * *",
+    },
 }
 
 
@@ -4048,6 +4054,43 @@ async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "mark_overdue_dues", "marked_overdue": count}
 
 
+async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
+    """Flag incomplete maintenance records past their due date as overdue.
+
+    is_overdue is stamped when an apparatus/facility maintenance record is
+    created or updated but is never recomputed as time passes, so a record
+    entered with a future due date stays is_overdue=False after the date passes
+    — understating the overdue count on the apparatus and facility dashboards
+    and in is_overdue-filtered lists. Runs daily, flipping only False -> True
+    (completion and rescheduling already recompute the flag on their own paths).
+    """
+    from datetime import date
+
+    from sqlalchemy import update as sa_update
+
+    from app.models.apparatus import ApparatusMaintenance
+    from app.models.facilities import FacilityMaintenance
+
+    today = date.today()
+    total = 0
+    for model in (ApparatusMaintenance, FacilityMaintenance):
+        result = await db.execute(
+            sa_update(model)
+            .where(
+                model.is_completed == False,  # noqa: E712
+                model.due_date.isnot(None),
+                model.due_date < today,
+                model.is_overdue == False,  # noqa: E712
+            )
+            .values(is_overdue=True)
+        )
+        total += result.rowcount or 0
+    await db.commit()
+    if total:
+        logger.info("Marked %d maintenance record(s) overdue", total)
+    return {"task": "mark_overdue_maintenance", "marked_overdue": total}
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -4075,6 +4118,7 @@ TASK_RUNNERS = {
     "shift_auto_checkout": run_shift_auto_checkout,
     "external_training_auto_sync": run_external_training_auto_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
+    "mark_overdue_maintenance": run_mark_overdue_maintenance,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -4110,6 +4154,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "rolling_recurrence_extend": 86400,
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
+    "mark_overdue_maintenance": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,
