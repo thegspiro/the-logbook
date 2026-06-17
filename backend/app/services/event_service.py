@@ -2531,19 +2531,24 @@ class EventService:
             is_mandatory = raw_mandatory in ("true", "yes", "1")
 
             try:
-                event = Event(
-                    organization_id=str(organization_id),
-                    created_by=str(created_by),
-                    title=title,
-                    event_type=EventType(event_type_value),
-                    start_datetime=start_dt,
-                    end_datetime=end_dt,
-                    location=location,
-                    description=description,
-                    is_mandatory=is_mandatory,
-                )
-                self.db.add(event)
-                await self.db.flush()
+                # Isolate each row in a savepoint so a single row that fails at
+                # flush (e.g. a DB constraint) rolls back only itself instead of
+                # poisoning the session and discarding every other row — the
+                # method's contract is partial success (imported_count plus
+                # per-row errors), and the final commit persists the good rows.
+                async with self.db.begin_nested():
+                    event = Event(
+                        organization_id=str(organization_id),
+                        created_by=str(created_by),
+                        title=title,
+                        event_type=EventType(event_type_value),
+                        start_datetime=start_dt,
+                        end_datetime=end_dt,
+                        location=location,
+                        description=description,
+                        is_mandatory=is_mandatory,
+                    )
+                    self.db.add(event)
                 imported_count += 1
             except Exception as exc:
                 errors.append({"row": idx, "error": str(exc)})

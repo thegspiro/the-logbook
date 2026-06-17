@@ -13,11 +13,22 @@ from unittest.mock import AsyncMock, MagicMock
 from app.services.event_service import EventService
 
 
+class _SavepointCM:
+    """Stand-in for db.begin_nested()'s async savepoint context manager."""
+
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, *exc):
+        return False  # don't suppress — a row error propagates to the caller
+
+
 def _db():
     db = MagicMock()
     db.add = MagicMock()
     db.flush = AsyncMock()
     db.commit = AsyncMock()
+    db.begin_nested = MagicMock(side_effect=lambda: _SavepointCM())
     return db
 
 
@@ -100,6 +111,29 @@ class TestImportSuccess:
         assert errors == []
         assert db.add.call_count == 2
         db.commit.assert_awaited()
+
+    async def test_row_db_failure_is_isolated_to_that_row(self):
+        # A row that fails inside its savepoint (e.g. a DB constraint at flush)
+        # must be recorded as a per-row error without aborting the rest of the
+        # import — the good rows still import and commit.
+        rows = [_row(title="A"), _row(title="B"), _row(title="C")]
+        db = _db()
+        calls = {"n": 0}
+
+        def add_side(_event):
+            calls["n"] += 1
+            if calls["n"] == 2:  # the second data row fails
+                raise RuntimeError("simulated db constraint")
+
+        db.add = MagicMock(side_effect=add_side)
+
+        count, errors = await EventService(db).import_events_from_csv(
+            rows, "org-1", "u1"
+        )
+        assert count == 2
+        assert len(errors) == 1
+        assert errors[0]["row"] == 3  # header=row 1, data rows start at 2
+        db.commit.assert_awaited()  # the two good rows are still committed
 
     async def test_is_mandatory_truthiness(self):
         db = _db()
