@@ -173,6 +173,30 @@ class TestDriverEligibility:
         out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")
         assert out["eligible"] is False
 
+    async def test_operator_query_gates_on_current_certification(self):
+        # Regression: an expired or non-certified ApparatusOperator must not
+        # qualify a driver. The operator lookup has to filter on is_certified
+        # and certification_expiration (nothing flips is_active off on expiry).
+        from sqlalchemy.dialects import mysql
+
+        required = _level(2)
+        captured = []
+
+        async def cap(statement, *a, **k):
+            captured.append(statement)
+            if len(captured) == 1:
+                return _one(_apparatus(required))
+            return _scalars([])
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=cap)
+        out = await EvocLevelService(db).check_driver_evoc_eligibility("u", "ap1", "o")
+        assert out["eligible"] is False
+
+        op_sql = str(captured[1].compile(dialect=mysql.dialect())).lower()
+        assert "is_certified" in op_sql
+        assert "certification_expiration" in op_sql
+
 
 class TestAutoAddOperators:
     async def test_missing_level_returns_empty(self):
