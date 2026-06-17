@@ -82,7 +82,15 @@ def _checkout(item):
     )
 
 
-def _db(member, org, officer, assignments, checkouts):
+def _issuance(item, quantity_issued=1):
+    return SimpleNamespace(
+        item=item,
+        quantity_issued=quantity_issued,
+        issued_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+    )
+
+
+def _db(member, org, officer, assignments, checkouts, issuances=None):
     db = MagicMock()
     db.execute = AsyncMock(
         side_effect=[
@@ -91,6 +99,7 @@ def _db(member, org, officer, assignments, checkouts):
             _one(officer),
             _scalars(assignments),
             _scalars(checkouts),
+            _scalars(issuances or []),
         ]
     )
     return db
@@ -161,6 +170,26 @@ class TestGenerateReport:
         assert "Helmet" in html
         assert "Radio" in html
         assert "$350.00" in html
+
+    async def test_includes_unreturned_pool_issuances(self):
+        # Pool-issued items are accountable property and must appear in the
+        # letter (count, value x quantity, and an "Issued" row label).
+        db = _db(
+            _member(),
+            _org(),
+            None,
+            [_assignment(_item("Helmet", 100.0))],
+            [],
+            issuances=[_issuance(_item("Dept T-Shirt", 20.0), quantity_issued=3)],
+        )
+        data, html = await PropertyReturnService(db).generate_report(
+            "u1", "org-1", "dropped_voluntary", "officer-1"
+        )
+        # Helmet (100) + 3 x T-Shirt (60) = 160.
+        assert data["item_count"] == 2
+        assert data["total_value"] == 160.0
+        assert "Dept T-Shirt (x3)" in html
+        assert "Issued" in html
 
     async def test_involuntary_adds_legal_notice(self):
         db = _db(_member(), _org(), None, [], [])
