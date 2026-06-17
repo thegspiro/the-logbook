@@ -334,6 +334,14 @@ async def get_document(
         await service.get_document_by_id(document_id, current_user.organization_id),
         "Document",
     )
+    # The list view hides documents in restricted folders (leadership-only,
+    # owner-only personal files, role-restricted); a direct by-id fetch must
+    # enforce the same boundary. Treat an inaccessible document as not found so
+    # its existence isn't revealed to someone guessing ids.
+    if not await service.can_access_document(
+        document, current_user.organization_id, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
     return document
 
 

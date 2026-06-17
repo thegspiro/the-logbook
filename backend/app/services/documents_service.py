@@ -175,6 +175,24 @@ class DocumentsService:
 
         return True
 
+    async def can_access_document(
+        self, document: Document, organization_id: UUID, user: User
+    ) -> bool:
+        """Whether a user may view a specific document.
+
+        Access is governed by the document's containing folder — the same
+        boundary the folder/document list enforces — so a direct by-id fetch
+        cannot bypass a leadership-only, owner-only (a member's personal files),
+        or role-restricted folder. Documents with no folder are organization
+        level and visible to anyone holding documents.view.
+        """
+        if not document.folder_id:
+            return True
+        folder = await self.get_folder_by_id(document.folder_id, organization_id)
+        if folder is None:
+            return True
+        return self.can_access_folder(folder, user)
+
     async def update_folder(
         self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Optional[DocumentFolder]:

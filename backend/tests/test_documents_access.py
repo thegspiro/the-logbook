@@ -9,7 +9,7 @@ collection helpers. Pure logic; no DB.
 """
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from app.models.document import FolderVisibility
 from app.services.documents_service import (
@@ -105,6 +105,51 @@ class TestCanAccessFolder:
         user = _user(roles=[([], "ff")])
         folder = _folder(None)
         assert _svc().can_access_folder(folder, user) is True
+
+
+class TestCanAccessDocument:
+    """A by-id document fetch must honour the containing folder's access rules,
+    otherwise a member can pull a leadership-only or another member's personal
+    (owner-only) document by guessing its id — bypassing the list view."""
+
+    async def test_no_folder_is_org_level_accessible(self):
+        doc = SimpleNamespace(folder_id=None)
+        user = _user(roles=[([], "ff")])
+        assert await _svc().can_access_document(doc, "org-1", user) is True
+
+    async def test_owner_only_folder_blocks_other_member(self):
+        svc = _svc()
+        svc.get_folder_by_id = AsyncMock(
+            return_value=_folder(FolderVisibility.OWNER, owner_user_id="u1")
+        )
+        doc = SimpleNamespace(folder_id="f1")
+        other = _user(uid="u2", roles=[([], "ff")])
+        assert await svc.can_access_document(doc, "org-1", other) is False
+
+    async def test_leadership_folder_blocks_non_leadership(self):
+        svc = _svc()
+        svc.get_folder_by_id = AsyncMock(
+            return_value=_folder(FolderVisibility.LEADERSHIP)
+        )
+        doc = SimpleNamespace(folder_id="f1")
+        user = _user(roles=[(["events.view"], "ff")])
+        assert await svc.can_access_document(doc, "org-1", user) is False
+
+    async def test_leadership_folder_allows_leadership(self):
+        svc = _svc()
+        svc.get_folder_by_id = AsyncMock(
+            return_value=_folder(FolderVisibility.LEADERSHIP)
+        )
+        doc = SimpleNamespace(folder_id="f1")
+        chief = _user(roles=[(["documents.manage"], "chief")])
+        assert await svc.can_access_document(doc, "org-1", chief) is True
+
+    async def test_missing_folder_falls_back_to_accessible(self):
+        svc = _svc()
+        svc.get_folder_by_id = AsyncMock(return_value=None)
+        doc = SimpleNamespace(folder_id="gone")
+        user = _user(roles=[([], "ff")])
+        assert await svc.can_access_document(doc, "org-1", user) is True
 
 
 if __name__ == "__main__":  # pragma: no cover
