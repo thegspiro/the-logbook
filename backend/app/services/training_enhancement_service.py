@@ -106,9 +106,17 @@ class RecertificationService:
 
     async def generate_renewal_tasks(self, organization_id: str) -> int:
         """
-        Scan for expiring certifications and auto-create renewal tasks.
-        Called by the daily cert alert scheduler.
-        Returns number of tasks created.
+        Scan for expiring certifications and create PENDING renewal tasks.
+
+        NOTE: despite the recertification design, this is currently only
+        triggered manually via POST /recertification/tasks/generate — it is NOT
+        wired into the scheduler, so renewal tasks are not auto-generated.
+        Completing the feature (scheduled generation plus the missing
+        COMPLETED/EXPIRED/LAPSED lifecycle transitions) is tracked separately;
+        scheduling generation alone would surface PENDING tasks that never
+        clear once a member renews.
+
+        Returns the number of tasks created.
         """
         today = date.today()
         tasks_created = 0
