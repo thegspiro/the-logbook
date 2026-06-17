@@ -6,9 +6,10 @@ certification levels and bridging training, apparatus operators, and
 shift scheduling.
 """
 
+from datetime import date
 from typing import List, Optional
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -173,13 +174,28 @@ class EvocLevelService:
 
         required_level = apparatus.required_evoc_level
 
+        # A driver only qualifies on a *current* certification: active,
+        # certified, and not past its expiration. Without the is_certified /
+        # expiration filters an expired EVOC certification still counted as
+        # valid (nothing flips is_active off on expiry), letting an
+        # out-of-cert member drive without a warning.
+        today = date.today()
+        current_cert = (
+            ApparatusOperator.is_active.is_(True),
+            ApparatusOperator.is_certified.is_(True),
+            or_(
+                ApparatusOperator.certification_expiration.is_(None),
+                ApparatusOperator.certification_expiration >= today,
+            ),
+        )
+
         operator_result = await self.db.execute(
             select(ApparatusOperator)
             .options(selectinload(ApparatusOperator.evoc_level))
             .where(
                 ApparatusOperator.user_id == user_id,
                 ApparatusOperator.organization_id == organization_id,
-                ApparatusOperator.is_active.is_(True),
+                *current_cert,
                 ApparatusOperator.evoc_level_id.isnot(None),
             )
         )
@@ -217,7 +233,7 @@ class EvocLevelService:
                 select(ApparatusOperator).where(
                     ApparatusOperator.user_id == user_id,
                     ApparatusOperator.organization_id == organization_id,
-                    ApparatusOperator.is_active.is_(True),
+                    *current_cert,
                     ApparatusOperator.evoc_level_id == required_level.id,
                 )
             )

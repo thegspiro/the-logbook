@@ -1152,6 +1152,10 @@ class RequirementProgress(Base):
         "ProgramEnrollment",
         back_populates="requirement_progress",
     )
+    # The TrainingRequirement this progress tracks (FK: requirement_id).
+    # update_requirement_progress() eager-loads this to compute the
+    # type-aware completion percentage, so the relationship must exist.
+    requirement = relationship("TrainingRequirement")
 
     __table_args__ = (
         Index(

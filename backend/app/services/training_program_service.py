@@ -817,9 +817,16 @@ class TrainingProgramService:
         organization_id: UUID,
         updates: RequirementProgressUpdate,
         verified_by: Optional[UUID] = None,
+        acting_user_id: Optional[UUID] = None,
+        can_manage: bool = False,
     ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
         """
         Update progress on a specific requirement
+
+        Authorization: when ``acting_user_id`` is supplied (a member-initiated
+        request), the member may only update progress on their own enrollment
+        unless ``can_manage`` is True (training officers). System callers omit
+        ``acting_user_id`` and are always permitted.
 
         Returns: (progress, error_message)
         """
@@ -843,6 +850,16 @@ class TrainingProgramService:
 
         if not progress:
             return None, "Requirement progress not found"
+
+        # Authorization: a member may only update their own progress; editing
+        # or verifying another member's requires training.manage. System
+        # callers (acting_user_id is None) bypass this check.
+        if (
+            acting_user_id is not None
+            and not can_manage
+            and str(progress.enrollment.user_id) != str(acting_user_id)
+        ):
+            return None, "You are not authorized to update this training progress"
 
         # Update status
         if updates.status:

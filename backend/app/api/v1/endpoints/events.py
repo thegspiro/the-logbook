@@ -54,13 +54,13 @@ from app.schemas.event import (
     FinalizeAttendanceResponse,
     ManagerAddAttendee,
     QRCheckInData,
-    RSVPToSeriesResponse,
     RecordActualTimes,
     RecurringEventCreate,
     RSVPCreate,
     RSVPHistoryResponse,
     RSVPOverride,
     RSVPResponse,
+    RSVPToSeriesResponse,
     SelfCheckInRequest,
     SendRemindersResponse,
     VisibleEventTypesResponse,
@@ -1528,7 +1528,9 @@ async def bulk_add_attendees(
 
     for user_id in data.user_ids:
         if str(user_id) not in valid_users:
-            errors.append({"user_id": str(user_id), "error": "User not found in organization"})
+            errors.append(
+                {"user_id": str(user_id), "error": "User not found in organization"}
+            )
             continue
 
         rsvp, error = await service.manager_add_attendee(
@@ -1758,7 +1760,9 @@ async def record_actual_times(
     return _build_event_response(event)
 
 
-@router.post("/{event_id}/finalize-attendance", response_model=FinalizeAttendanceResponse)
+@router.post(
+    "/{event_id}/finalize-attendance", response_model=FinalizeAttendanceResponse
+)
 async def finalize_attendance(
     event_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -1882,7 +1886,7 @@ async def self_check_in(
     service = EventService(db)
     is_checkout = check_in_data.is_checkout if check_in_data else False
 
-    rsvp, error = await service.self_check_in(
+    rsvp, error, notice = await service.self_check_in(
         event_id=event_id,
         user_id=current_user.id,
         organization_id=current_user.organization_id,
@@ -1916,7 +1920,17 @@ async def self_check_in(
         username=current_user.username,
     )
 
-    return _build_rsvp_response(rsvp, user=current_user)
+    response = _build_rsvp_response(rsvp, user=current_user)
+    if notice:
+        # Early check-in succeeded; return the response with a non-blocking
+        # notice telling the member when the official window opens.
+        from fastapi.responses import JSONResponse
+
+        content = response.model_dump(mode="json")
+        content["notice"] = notice
+        return JSONResponse(status_code=status.HTTP_200_OK, content=content)
+
+    return response
 
 
 @router.get("/{event_id}/check-in-monitoring", response_model=CheckInMonitoringStats)
@@ -2598,9 +2612,7 @@ async def check_in_external_attendee(
     attendee.checked_in = True
     attendee.checked_in_at = datetime.now(dt_timezone.utc)
     await db.commit()
-    return ExternalAttendeeCheckInResponse(
-        status="checked_in", attendee_id=attendee.id
-    )
+    return ExternalAttendeeCheckInResponse(status="checked_in", attendee_id=attendee.id)
 
 
 @router.delete(

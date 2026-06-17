@@ -403,11 +403,41 @@ class MessagingService:
     # Read / Acknowledge Tracking
     # ============================================
 
+    async def _visible_message_or_none(
+        self, message_id: str, user_id: str, organization_id: str
+    ) -> Optional[DepartmentMessage]:
+        """Return the message only if it is in the caller's org AND targeted to
+        them. Read/acknowledge records must not be created for messages a user
+        cannot see — otherwise a user could POST acks for another org's message
+        (polluting its stats) or fake an acknowledgment on a message that was
+        never aimed at them (acks are used as compliance evidence)."""
+        message = await self.get_message_by_id(message_id, organization_id)
+        if not message:
+            return None
+        user_result = await self.db.execute(
+            select(User).options(selectinload(User.roles)).where(User.id == user_id)
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            return None
+        role_names = [r.name for r in user.roles]
+        status = (
+            user.status.value if hasattr(user.status, "value") else str(user.status)
+        )
+        if not self._is_targeted(message, str(user_id), role_names, status):
+            return None
+        return message
+
     async def mark_as_read(
-        self, message_id: str, user_id: str
+        self, message_id: str, user_id: str, organization_id: str
     ) -> Tuple[bool, Optional[str]]:
         """Mark a message as read by the current user"""
         try:
+            if not await self._visible_message_or_none(
+                message_id, user_id, organization_id
+            ):
+                return False, "Message not found"
+
             existing = await self.db.execute(
                 select(DepartmentMessageRead).where(
                     DepartmentMessageRead.message_id == message_id,
@@ -431,10 +461,15 @@ class MessagingService:
             return False, str(e)
 
     async def acknowledge_message(
-        self, message_id: str, user_id: str
+        self, message_id: str, user_id: str, organization_id: str
     ) -> Tuple[bool, Optional[str]]:
         """Acknowledge a message (also marks as read)"""
         try:
+            if not await self._visible_message_or_none(
+                message_id, user_id, organization_id
+            ):
+                return False, "Message not found"
+
             existing = await self.db.execute(
                 select(DepartmentMessageRead).where(
                     DepartmentMessageRead.message_id == message_id,

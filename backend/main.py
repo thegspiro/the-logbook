@@ -14,13 +14,13 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, Request
-from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
+from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 
 from app.api.public.display import router as public_display_router
 from app.api.public.forms import router as public_forms_router
@@ -592,9 +592,7 @@ def _cleanup_duplicate_revisions(versions_dir):
                 try:
                     os.rename(filepath, restored)
                 except Exception as restore_err:
-                    logger.error(
-                        f"Failed to restore {filename}: {restore_err}"
-                    )
+                    logger.error(f"Failed to restore {filename}: {restore_err}")
         except (OSError, ValueError):
             continue
 
@@ -692,9 +690,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
                 # SEC: Validate table name against strict allowlist pattern
                 # to prevent SQL injection via crafted table names.
                 if not _TABLE_NAME_RE.match(tname):
-                    logger.warning(
-                        "Skipping table with suspicious name: %r", tname
-                    )
+                    logger.warning("Skipping table with suspicious name: %r", tname)
                     continue
                 conn.execute(text(f"DROP TABLE IF EXISTS `{tname}`"))
         conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
@@ -725,9 +721,7 @@ def _fast_path_init(engine, alembic_cfg, base_dir, head_revision=None):
     for migration_file in MIGRATION_ONLY_FILES:
         migration_path = os.path.join(versions_dir, migration_file)
         if os.path.exists(migration_path):
-            logger.info(
-                f"Creating migration-only tables from {migration_file}..."
-            )
+            logger.info(f"Creating migration-only tables from {migration_file}...")
             _run_migration_file(engine, migration_path)
 
     # 5. Insert seed data (apparatus types, statuses, maintenance types, facilities).
@@ -1366,9 +1360,7 @@ async def lifespan(app: FastAPI):
     if not settings.ENCRYPTION_KEY or any(
         p in settings.ENCRYPTION_KEY for p in _insecure
     ):
-        preflight_warnings.append(
-            "ENCRYPTION_KEY is not set or uses an insecure value"
-        )
+        preflight_warnings.append("ENCRYPTION_KEY is not set or uses an insecure value")
 
     if preflight_warnings and settings.ENVIRONMENT == "production":
         for warning in preflight_warnings:
@@ -1390,7 +1382,9 @@ async def lifespan(app: FastAPI):
         "Initializing services...",
         "Connecting to Redis, initializing GeoIP, and validating database in parallel.",
     )
-    logger.info(f"Starting parallel service initialization (worker PID {_worker_pid})...")
+    logger.info(
+        f"Starting parallel service initialization (worker PID {_worker_pid})..."
+    )
 
     import asyncio
 
@@ -1426,9 +1420,7 @@ async def lifespan(app: FastAPI):
                 # source of truth over the config defaults and survive restarts.
                 try:
                     from app.core.database import async_session_factory
-                    from app.services.ip_security_service import (
-                        ip_security_service,
-                    )
+                    from app.services.ip_security_service import ip_security_service
 
                     async with async_session_factory() as db:
                         blocked_countries = (
@@ -1442,10 +1434,14 @@ async def lifespan(app: FastAPI):
                 # Behind a reverse proxy, every request's peer is the proxy, so
                 # without TRUSTED_PROXY_IPS the middleware sees only the proxy's
                 # (private) IP and geo-blocking/allowlisting silently do nothing.
-                if settings.ENVIRONMENT in (
-                    "production",
-                    "staging",
-                ) and not settings.get_trusted_proxy_ips():
+                if (
+                    settings.ENVIRONMENT
+                    in (
+                        "production",
+                        "staging",
+                    )
+                    and not settings.get_trusted_proxy_ips()
+                ):
                     logger.warning(
                         "GEOIP_ENABLED is true but TRUSTED_PROXY_IPS is empty. "
                         "Behind a reverse proxy every request appears to originate "
@@ -1483,7 +1479,9 @@ async def lifespan(app: FastAPI):
         connect_redis(), initialize_geoip(), validate_database(), return_exceptions=True
     )
 
-    logger.info(f"✓ Parallel service initialization complete (worker PID {_worker_pid})")
+    logger.info(
+        f"✓ Parallel service initialization complete (worker PID {_worker_pid})"
+    )
 
     # Start WebSocket pub/sub listener (after Redis is connected)
     from app.core.websocket_manager import ws_manager
@@ -1525,7 +1523,9 @@ async def lifespan(app: FastAPI):
                         "- another worker is handling it"
                     )
                     return
-                logger.info(f"Starting background audit log verification (worker PID {_worker_pid})...")
+                logger.info(
+                    f"Starting background audit log verification (worker PID {_worker_pid})..."
+                )
                 from app.core.audit import audit_logger, verify_audit_log_integrity
                 from app.core.database import async_session_factory
 
@@ -1677,34 +1677,14 @@ async def lifespan(app: FastAPI):
         """Background loop that runs periodic tasks (shift reminders, event
         reminders, etc.) so they work out-of-the-box without external cron."""
         from app.core.database import async_session_factory
-        from app.services.scheduled_tasks import TASK_RUNNERS
+        from app.services.scheduled_tasks import TASK_INTERVALS_SECONDS, TASK_RUNNERS
 
-        # Tasks grouped by approximate interval (seconds).
-        # Each entry: (task_name, interval_seconds, last_run_timestamp)
+        # Built from TASK_INTERVALS_SECONDS (the single source of truth in
+        # scheduled_tasks.py) so the loop runs every registered task and can't
+        # silently drift out of sync with TASK_RUNNERS.
+        # Each entry: [task_name, interval_seconds, last_run_timestamp]
         task_schedule: list[list] = [
-            # Every 15 minutes
-            ["inventory_notifications", 900, 0.0],
-            # Every 30 minutes
-            ["event_reminders", 1800, 0.0],
-            ["post_event_validation", 1800, 0.0],
-            ["post_shift_validation", 1800, 0.0],
-            ["shift_reminders", 1800, 0.0],
-            # Daily tasks — run once per day, checked every 10 minutes
-            ["cert_expiration_alerts", 86400, 0.0],
-            ["action_item_reminders", 86400, 0.0],
-            ["inventory_low_stock_alerts", 86400, 0.0],
-            ["inventory_overdue_alerts", 86400, 0.0],
-            ["compliance_auto_reports", 86400, 0.0],
-            ["message_history_cleanup", 86400, 0.0],
-            ["series_end_reminders", 86400, 0.0],
-            ["rolling_recurrence_extend", 86400, 0.0],
-            # Weekly tasks
-            ["struggling_member_check", 604800, 0.0],
-            ["enrollment_deadline_warnings", 604800, 0.0],
-            ["nfpa_retirement_alerts", 604800, 0.0],
-            ["audit_log_archival", 604800, 0.0],
-            # Monthly tasks
-            ["membership_tier_advance", 2592000, 0.0],
+            [name, interval, 0.0] for name, interval in TASK_INTERVALS_SECONDS.items()
         ]
 
         check_interval = 60  # Wake up every 60 seconds to see what's due
@@ -1715,15 +1695,11 @@ async def lifespan(app: FastAPI):
             "scheduled_task_loop", ttl=claim_ttl
         ):
             logger.debug(
-                f"Scheduled task loop waiting for claim "
-                f"(worker PID {_worker_pid})"
+                f"Scheduled task loop waiting for claim " f"(worker PID {_worker_pid})"
             )
             await asyncio.sleep(check_interval)
 
-        logger.info(
-            f"Scheduled task runner started "
-            f"(worker PID {_worker_pid})"
-        )
+        logger.info(f"Scheduled task runner started " f"(worker PID {_worker_pid})")
 
         import time
 
@@ -1745,8 +1721,7 @@ async def lifespan(app: FastAPI):
                     async with async_session_factory() as db:
                         result = await runner(db)
                         log_msg = (
-                            f"Scheduled task '{task_name}' completed: "
-                            f"{result}"
+                            f"Scheduled task '{task_name}' completed: " f"{result}"
                         )
                         # Only log if something happened
                         total = (
@@ -1762,9 +1737,7 @@ async def lifespan(app: FastAPI):
                         if total > 0:
                             logger.info(log_msg)
                 except Exception as e:
-                    logger.error(
-                        f"Scheduled task '{task_name}' failed: {e}"
-                    )
+                    logger.error(f"Scheduled task '{task_name}' failed: {e}")
 
                 entry[2] = now
 
@@ -1802,12 +1775,8 @@ async def lifespan(app: FastAPI):
     # Release Redis claims so the next worker starts immediately.
     if cache_manager.is_connected and cache_manager.redis_client:
         try:
-            await cache_manager.redis_client.delete(
-                "startup_task:scheduled_email_loop"
-            )
-            await cache_manager.redis_client.delete(
-                "startup_task:scheduled_task_loop"
-            )
+            await cache_manager.redis_client.delete("startup_task:scheduled_email_loop")
+            await cache_manager.redis_client.delete("startup_task:scheduled_task_loop")
         except Exception:
             pass
     await ws_manager.stop_listener()

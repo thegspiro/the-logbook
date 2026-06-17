@@ -526,6 +526,31 @@ class IPSecurityService:
         result = await db.execute(query)
         return set(result.scalars().all())
 
+    async def get_all_active_allowed_ips_global(
+        self,
+        db: AsyncSession,
+    ) -> Set[str]:
+        """
+        Get all currently active approved allowlist IPs across ALL orgs.
+
+        Used by the pre-authentication geo-blocking middleware, which has no
+        organization context (it runs before the user is known). An approved
+        allowlist exception for any org admits that source IP past the country
+        block — the per-user/route authorization checks still apply downstream.
+        """
+        now = datetime.now(timezone.utc)
+
+        query = (
+            select(IPException.ip_address)
+            .where(IPException.exception_type == IPExceptionType.ALLOWLIST)
+            .where(IPException.approval_status == IPExceptionApprovalStatus.APPROVED)
+            .where(IPException.valid_from <= now)
+            .where(IPException.valid_until > now)
+        )
+
+        result = await db.execute(query)
+        return set(result.scalars().all())
+
     # ============================================
     # Maintenance: Expire Old Exceptions
     # ============================================

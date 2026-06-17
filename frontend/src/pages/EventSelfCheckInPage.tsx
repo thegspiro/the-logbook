@@ -30,6 +30,8 @@ const EventSelfCheckInPage: React.FC = () => {
   const [checkedIn, setCheckedIn] = useState(false);
   const [checkInData, setCheckInData] = useState<RSVP | null>(null);
   const [showCheckOutPrompt, setShowCheckOutPrompt] = useState(false);
+  // Non-blocking notice shown after an early check-in (window not yet open).
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!eventId) return;
@@ -61,6 +63,7 @@ const EventSelfCheckInPage: React.FC = () => {
 
       const rsvp = await eventService.selfCheckIn(eventId);
       setCheckInData(rsvp);
+      setNotice(rsvp.notice ?? null);
       setCheckedIn(true);
       setShowCheckOutPrompt(false);
     } catch (err: unknown) {
@@ -207,6 +210,12 @@ const EventSelfCheckInPage: React.FC = () => {
             <p className="text-xl text-theme-text-secondary mb-8">
               {isCheckOut ? "You've been checked out of:" : "You've been checked in to:"}
             </p>
+
+            {notice && !isCheckOut && (
+              <div className="alert-warning p-4 text-left mb-6" role="status">
+                <p className="text-sm font-medium">{notice}</p>
+              </div>
+            )}
 
             <div className="alert-info p-6 text-left mb-8">
               <h3 className="text-2xl font-semibold text-theme-alert-info-title mb-4">{qrData?.event_name}</h3>

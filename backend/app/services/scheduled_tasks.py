@@ -232,6 +232,18 @@ SCHEDULE = {
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
     },
+    "mark_overdue_dues": {
+        "description": "Mark fully-unpaid member dues past their due date as overdue (nothing else sets this status)",
+        "frequency": "daily",
+        "recommended_time": "06:00",
+        "cron": "0 6 * * *",
+    },
+    "mark_overdue_maintenance": {
+        "description": "Flag incomplete apparatus/facility maintenance past its due date as overdue (the stored flag is otherwise never recomputed over time)",
+        "frequency": "daily",
+        "recommended_time": "06:00",
+        "cron": "0 6 * * *",
+    },
 }
 
 
@@ -1485,7 +1497,9 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                     else ""
                 )
                 time_range = (
-                    f"{start_str} \u2013 {end_str}" if start_str and end_str else start_str
+                    f"{start_str} \u2013 {end_str}"
+                    if start_str and end_str
+                    else start_str
                 )
 
                 # Build structured in-app message
@@ -2100,10 +2114,10 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                 )
 
                 # Resolve member users in one query
-                user_ids = [str(att.user_id) for att in attendance_records if att.user_id]
-                user_rows = await db.execute(
-                    select(User).where(User.id.in_(user_ids))
-                )
+                user_ids = [
+                    str(att.user_id) for att in attendance_records if att.user_id
+                ]
+                user_rows = await db.execute(select(User).where(User.id.in_(user_ids)))
                 user_map = {str(u.id): u for u in user_rows.scalars().all()}
 
                 newly_sent: list[str] = []
@@ -2134,17 +2148,14 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     )
                     subject = f"{subject_prefix} — {shift_date_str}"
                     summary_lines = [
-                        f"Your shift on {shift_date_str} ({time_range}) "
-                        f"has ended.",
+                        f"Your shift on {shift_date_str} ({time_range}) " f"has ended.",
                         f"Hours recorded: {hours}",
                         f"Calls responded: {call_count}",
                     ]
                     if apparatus_name:
                         summary_lines.insert(1, f"Apparatus: {apparatus_name}")
                     if call_types:
-                        summary_lines.append(
-                            "Call types: " + ", ".join(call_types[:5])
-                        )
+                        summary_lines.append("Call types: " + ", ".join(call_types[:5]))
                     if is_preliminary:
                         summary_lines.append(
                             "These figures are preliminary — your hours "
@@ -2321,9 +2332,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                     + f"Hours recorded: {hours}\n"
                                     f"Calls responded: {call_count}\n"
                                     + (
-                                        "Call types: "
-                                        + ", ".join(call_types)
-                                        + "\n"
+                                        "Call types: " + ", ".join(call_types) + "\n"
                                         if call_types
                                         else ""
                                     )
@@ -2439,7 +2448,9 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                 select(ShiftCompletionReport)
                 .where(ShiftCompletionReport.organization_id == str(org.id))
                 .where(ShiftCompletionReport.review_status == "approved")
-                .where(ShiftCompletionReport.trainee_acknowledged == False)  # noqa: E712
+                .where(
+                    ShiftCompletionReport.trainee_acknowledged == False
+                )  # noqa: E712
                 .where(ShiftCompletionReport.created_at <= cutoff)
             )
             reports = list(rep_result.scalars().all())
@@ -2485,9 +2496,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     if report.shift_date
                     else "Unknown"
                 )
-                report_url = (
-                    f"/scheduling?tab=shift-reports&report={report.id}"
-                )
+                report_url = f"/scheduling?tab=shift-reports&report={report.id}"
                 full_url = f"{settings.FRONTEND_URL}{report_url}"
                 trainee_subject = (
                     f"Reminder: Acknowledge your shift report from {shift_date_str}"
@@ -2566,9 +2575,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
 
                 # Notify officer + training officers (in-app only, to avoid
                 # spamming them with one email per overdue report)
-                officer_subject = (
-                    f"Trainee report unacknowledged — {shift_date_str}"
-                )
+                officer_subject = f"Trainee report unacknowledged — {shift_date_str}"
                 officer_message = (
                     f"{trainee.full_name or trainee.email or 'Trainee'} "
                     f"has not acknowledged the shift report you filed for "
@@ -4014,6 +4021,76 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
     }
 
 
+async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
+    """Mark fully-unpaid dues past their due date as OVERDUE.
+
+    Nothing else transitions a dues record into the OVERDUE state, so without
+    this the dues summary always reports zero overdue, a status="overdue"
+    filter returns nothing, and members past their due date are never flagged.
+    Runs daily. Only PENDING (fully unpaid) records are moved — a partially
+    paid record keeps its PARTIAL status so the payment information is not lost,
+    and its balance still shows in the amount-based outstanding total.
+    """
+    from datetime import timezone as dt_timezone
+
+    from sqlalchemy import update as sa_update
+
+    from app.models.finance import DuesStatus, MemberDues
+
+    now = datetime.now(dt_timezone.utc)
+    result = await db.execute(
+        sa_update(MemberDues)
+        .where(
+            MemberDues.status == DuesStatus.PENDING,
+            MemberDues.due_date < now,
+            MemberDues.amount_paid < MemberDues.amount_due,
+        )
+        .values(status=DuesStatus.OVERDUE)
+    )
+    await db.commit()
+    count = result.rowcount or 0
+    if count:
+        logger.info("Marked %d dues record(s) overdue", count)
+    return {"task": "mark_overdue_dues", "marked_overdue": count}
+
+
+async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
+    """Flag incomplete maintenance records past their due date as overdue.
+
+    is_overdue is stamped when an apparatus/facility maintenance record is
+    created or updated but is never recomputed as time passes, so a record
+    entered with a future due date stays is_overdue=False after the date passes
+    — understating the overdue count on the apparatus and facility dashboards
+    and in is_overdue-filtered lists. Runs daily, flipping only False -> True
+    (completion and rescheduling already recompute the flag on their own paths).
+    """
+    from datetime import date
+
+    from sqlalchemy import update as sa_update
+
+    from app.models.apparatus import ApparatusMaintenance
+    from app.models.facilities import FacilityMaintenance
+
+    today = date.today()
+    total = 0
+    for model in (ApparatusMaintenance, FacilityMaintenance):
+        result = await db.execute(
+            sa_update(model)
+            .where(
+                model.is_completed == False,  # noqa: E712
+                model.due_date.isnot(None),
+                model.due_date < today,
+                model.is_overdue == False,  # noqa: E712
+            )
+            .values(is_overdue=True)
+        )
+        total += result.rowcount or 0
+    await db.commit()
+    if total:
+        logger.info("Marked %d maintenance record(s) overdue", total)
+    return {"task": "mark_overdue_maintenance", "marked_overdue": total}
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -4040,4 +4117,56 @@ TASK_RUNNERS = {
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
     "external_training_auto_sync": run_external_training_auto_sync,
+    "mark_overdue_dues": run_mark_overdue_dues,
+    "mark_overdue_maintenance": run_mark_overdue_maintenance,
+}
+
+# Interval (in seconds) at which each task auto-runs in the in-process
+# scheduler (main.py's _scheduled_task_loop), derived from the cron cadences
+# documented in SCHEDULE. This is the single source of truth for the loop —
+# main.py builds its schedule from this dict so the two can't drift apart.
+#
+# INVARIANT (regression-guarded by test_scheduled_task_coverage.py): every
+# TASK_RUNNERS key must appear here or in _MANUAL_ONLY_TASKS, otherwise the
+# task is silently never run in the default (cron-less) deployment — exactly
+# how end_of_shift_summary, shift_auto_checkout, trainee_report_escalation and
+# others were defined and documented but never actually fired.
+TASK_INTERVALS_SECONDS: Dict[str, int] = {
+    # Every 15 minutes
+    "inventory_notifications": 900,
+    "shift_auto_checkout": 900,
+    # Every 30 minutes
+    "event_reminders": 1800,
+    "post_event_validation": 1800,
+    "post_shift_validation": 1800,
+    "shift_reminders": 1800,
+    "end_of_shift_checklist_reminders": 1800,
+    "end_of_shift_summary": 1800,
+    "external_training_auto_sync": 1800,
+    # Daily (checked each loop tick; runs at most once per interval)
+    "cert_expiration_alerts": 86400,
+    "action_item_reminders": 86400,
+    "inventory_low_stock_alerts": 86400,
+    "inventory_overdue_alerts": 86400,
+    "compliance_auto_reports": 86400,
+    "message_history_cleanup": 86400,
+    "series_end_reminders": 86400,
+    "rolling_recurrence_extend": 86400,
+    "trainee_report_escalation": 86400,
+    "mark_overdue_dues": 86400,
+    "mark_overdue_maintenance": 86400,
+    # Weekly
+    "struggling_member_check": 604800,
+    "enrollment_deadline_warnings": 604800,
+    "nfpa_retirement_alerts": 604800,
+    "audit_log_archival": 604800,
+    # Monthly (approx — 30 days)
+    "membership_tier_advance": 2592000,
+}
+
+
+# Tasks intentionally excluded from the interval scheduler because a dedicated
+# loop or trigger already drives them.
+_MANUAL_ONLY_TASKS = {
+    "scheduled_emails",  # driven by main.py's _scheduled_email_loop (every minute)
 }

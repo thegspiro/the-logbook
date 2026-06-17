@@ -3420,9 +3420,15 @@ class MembershipPipelineService:
         if not prospect.pipeline or not prospect.pipeline.public_status_enabled:
             return None
 
-        # Rotate the token so the old one becomes invalid.
-        new_token = secrets.token_urlsafe(32)
-        prospect.status_token = new_token
+        # Keep the token stable — it is the credential embedded in the
+        # status link emailed to the prospect, so it must survive repeat
+        # views (refreshes, bookmarks, revisits). Rotating it on read made
+        # the emailed link single-use: the caller never receives the new
+        # token, so the next request 404'd. Refresh only the timestamp so
+        # the TTL slides forward on each check — the link expires after
+        # _STATUS_TOKEN_TTL_DAYS of inactivity rather than a fixed window
+        # from when the application was submitted (which a multi-week
+        # pipeline would routinely outlast).
         prospect.status_token_created_at = datetime.now(timezone.utc)
 
         # Collect IDs of steps marked as public_visible
@@ -3476,8 +3482,9 @@ class MembershipPipelineService:
             "applied_at": (
                 prospect.created_at.isoformat() if prospect.created_at else None
             ),
-            # Rotated token — caller should update their bookmark.
-            "status_token": new_token,
+            # Stable token (unchanged across views); included so the
+            # response shape stays consistent for any caller that stores it.
+            "status_token": prospect.status_token,
         }
 
     # =========================================================================

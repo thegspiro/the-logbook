@@ -176,6 +176,9 @@ export interface RSVP {
   override_duration_minutes?: number | undefined;
   user_name?: string | undefined;
   user_email?: string | undefined;
+  // Non-blocking message returned on an early self-check-in: tells the member
+  // when the official check-in window the event creator configured opens.
+  notice?: string | null | undefined;
 }
 
 export interface RSVPCreate {

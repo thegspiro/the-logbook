@@ -98,12 +98,9 @@ export const MemberProfilePage: React.FC = () => {
     mobile: "",
     notification_preferences: {
       email: true,
-      sms: false,
-      push: false,
       email_notifications: true,
       event_reminders: true,
       training_reminders: true,
-      announcement_notifications: true,
     },
   });
 
@@ -318,12 +315,9 @@ export const MemberProfilePage: React.FC = () => {
       mobile: user?.mobile || "",
       notification_preferences: user?.notification_preferences || {
         email: true,
-        sms: false,
-        push: false,
         email_notifications: true,
         event_reminders: true,
         training_reminders: true,
-        announcement_notifications: true,
       },
     });
     setIsEditing(true);
@@ -375,12 +369,9 @@ export const MemberProfilePage: React.FC = () => {
     setEditForm((prev) => {
       const currentPrefs = prev.notification_preferences ?? {
         email: true,
-        sms: false,
-        push: false,
         email_notifications: true,
         event_reminders: true,
         training_reminders: true,
-        announcement_notifications: true,
       };
       return {
         ...prev,

@@ -182,6 +182,27 @@ describe('EventSelfCheckInPage', () => {
       });
     });
 
+    it('should display the early-check-in notice when the API returns one', async () => {
+      vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
+      vi.mocked(eventService.selfCheckIn).mockResolvedValue({
+        ...mockRSVP,
+        notice: 'You\'re a bit early. The official check-in window for this event opens at 07:00 PM EDT.',
+      });
+
+      const user = userEvent.setup();
+      renderWithRouter(<EventSelfCheckInPage />);
+
+      await waitFor(async () => {
+        const checkInButton = screen.getByRole('button', { name: /check in to this event/i });
+        await user.click(checkInButton);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Successfully Checked In!')).toBeInTheDocument();
+        expect(screen.getByText(/official check-in window/i)).toBeInTheDocument();
+      });
+    });
+
     it('should display check-in timestamp after successful check-in', async () => {
       vi.mocked(eventService.getQRCheckInData).mockResolvedValue(mockQRCheckInData);
       vi.mocked(eventService.selfCheckIn).mockResolvedValue(mockRSVP);

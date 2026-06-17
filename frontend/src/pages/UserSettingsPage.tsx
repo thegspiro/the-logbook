@@ -50,7 +50,6 @@ export const UserSettingsPage: React.FC = () => {
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [eventReminders, setEventReminders] = useState(true);
   const [trainingReminders, setTrainingReminders] = useState(true);
-  const [announcementNotifications, setAnnouncementNotifications] = useState(true);
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [_loadingPreferences, setLoadingPreferences] = useState(false);
 
@@ -106,7 +105,6 @@ export const UserSettingsPage: React.FC = () => {
         setEmailNotifications(prefs.email_notifications ?? true);
         setEventReminders(prefs.event_reminders ?? true);
         setTrainingReminders(prefs.training_reminders ?? true);
-        setAnnouncementNotifications(prefs.announcement_notifications ?? true);
       } catch {
         // Use defaults if fetch fails
       } finally {
@@ -190,7 +188,6 @@ export const UserSettingsPage: React.FC = () => {
         email_notifications: emailNotifications,
         event_reminders: eventReminders,
         training_reminders: trainingReminders,
-        announcement_notifications: announcementNotifications,
       });
 
       toast.success('Preferences saved successfully!');
@@ -997,32 +994,6 @@ export const UserSettingsPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* Announcement Notifications Toggle */}
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <label htmlFor="announcementNotifications" className="text-sm font-medium text-theme-text-primary">
-                    Announcement Notifications
-                  </label>
-                  <p className="text-sm text-theme-text-secondary">
-                    Stay updated with department announcements
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setAnnouncementNotifications(!announcementNotifications)}
-                  className={`${
-                    announcementNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
-                  } relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-theme-bg`}
-                  role="switch"
-                  aria-checked={announcementNotifications}
-                >
-                  <span
-                    className={`${
-                      announcementNotifications ? 'translate-x-5' : 'translate-x-0'
-                    } toggle-knob-md`}
-                  />
-                </button>
-              </div>
             </div>
 
             <div className="pt-4">

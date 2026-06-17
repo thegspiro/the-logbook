@@ -96,12 +96,9 @@ describe("UserSettingsPage", () => {
     );
     vi.mocked(userService.getNotificationPreferences).mockResolvedValue({
       email: true,
-      sms: false,
-      push: true,
       email_notifications: true,
       event_reminders: true,
       training_reminders: true,
-      announcement_notifications: true,
     });
   });
 

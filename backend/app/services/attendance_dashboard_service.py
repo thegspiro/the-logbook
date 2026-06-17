@@ -67,7 +67,8 @@ class AttendanceDashboardService:
         meeting_result = await self.db.execute(meeting_query)
         meetings = list(meeting_result.scalars().all())
         total_meetings = len(meetings)
-        meeting_dates = [m.meeting_date for m in meetings]
+        all_meeting_ids = {m.id for m in meetings}
+        meeting_id_dates = [(m.id, m.meeting_date) for m in meetings]
 
         # Get all attendance records for the period
         meeting_ids = [m.id for m in meetings]
@@ -108,14 +109,18 @@ class AttendanceDashboardService:
         for member in members:
             uid = str(member.id)
             records = attendance_by_user.get(uid, [])
-            attended = sum(1 for r in records if r.present and not r.waiver_reason)
-            waived = sum(1 for r in records if r.waiver_reason)
 
-            # Count meetings that fall within an active leave of absence
+            # Work from meeting-id sets so a meeting that is both waived and
+            # inside a leave is excluded exactly once. Subtracting a waived
+            # count and an on-leave count separately double-excluded such
+            # meetings, shrinking the denominator and pushing the percentage
+            # above 100% — which then mis-decided voting eligibility below.
+            waived_ids = {r.meeting_id for r in records if r.waiver_reason}
+
+            on_leave_ids = set()
             member_leaves = leaves_by_user.get(uid, [])
-            on_leave_count = 0
             if member_leaves:
-                for md in meeting_dates:
+                for mid, md in meeting_id_dates:
                     for leave in member_leaves:
                         # end_date is None for a permanent/open-ended leave —
                         # treat it as still active so it doesn't raise on the
@@ -123,12 +128,24 @@ class AttendanceDashboardService:
                         if leave.start_date <= md and (
                             leave.end_date is None or md <= leave.end_date
                         ):
-                            on_leave_count += 1
+                            on_leave_ids.add(mid)
                             break
 
-            absent = total_meetings - attended - waived - on_leave_count
+            excluded_ids = waived_ids | on_leave_ids
+            eligible_ids = all_meeting_ids - excluded_ids
+            eligible_meetings = len(eligible_ids)
+            waived = len(waived_ids)
+            on_leave_count = len(on_leave_ids)
 
-            eligible_meetings = total_meetings - waived - on_leave_count
+            # Count attendance only within the eligible set so a member marked
+            # present at a meeting that fell during their leave cannot push the
+            # percentage over 100%.
+            attended_ids = {
+                r.meeting_id for r in records if r.present and not r.waiver_reason
+            }
+            attended = len(attended_ids & eligible_ids)
+            absent = eligible_meetings - attended
+
             pct = (
                 round((attended / eligible_meetings) * 100, 1)
                 if eligible_meetings > 0

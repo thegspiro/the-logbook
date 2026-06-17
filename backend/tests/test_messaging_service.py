@@ -116,6 +116,79 @@ class TestUnreadCount:
         assert await MessagingService(db).get_unread_count("org-1", "u1") == 0
 
 
+class TestReadAckVisibilityGate:
+    """mark_as_read / acknowledge_message must only record against a message
+    the user can actually see (in-org and targeted), or a user could pollute
+    another org's stats / fake a compliance acknowledgment by POSTing an id."""
+
+    def _user(self, roles=(), status="active"):
+        return SimpleNamespace(
+            roles=[SimpleNamespace(name=r) for r in roles],
+            status=SimpleNamespace(value=status),
+        )
+
+    async def test_mark_as_read_rejects_unknown_or_foreign_message(self):
+        db = MagicMock()
+        # get_message_by_id is org-scoped; a foreign/unknown id resolves to None.
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+        db.add = MagicMock()
+        ok, err = await MessagingService(db).mark_as_read("m1", "u1", "org-1")
+        assert ok is False
+        assert err == "Message not found"
+        db.add.assert_not_called()
+
+    async def test_mark_as_read_rejects_untargeted_message(self):
+        message = _msg("m1", "roles", roles=["chief"])
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(
+                    scalar_one_or_none=MagicMock(
+                        return_value=self._user(roles=("officer",))
+                    )
+                ),
+            ]
+        )
+        db.add = MagicMock()
+        ok, err = await MessagingService(db).mark_as_read("m1", "u1", "org-1")
+        assert ok is False
+        db.add.assert_not_called()
+
+    async def test_mark_as_read_records_visible_message(self):
+        message = _msg("m1", "all")
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
+            ]
+        )
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        ok, err = await MessagingService(db).mark_as_read("m1", "u1", "org-1")
+        assert ok is True
+        assert err is None
+        db.add.assert_called_once()
+
+    async def test_acknowledge_rejects_untargeted_message(self):
+        message = _msg("m1", "members", members=["someone-else"])
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
+            ]
+        )
+        db.add = MagicMock()
+        ok, _ = await MessagingService(db).acknowledge_message("m1", "u1", "org-1")
+        assert ok is False
+        db.add.assert_not_called()
+
+
 if __name__ == "__main__":  # pragma: no cover
     import pytest
 

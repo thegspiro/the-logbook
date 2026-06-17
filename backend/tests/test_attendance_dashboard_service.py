@@ -47,9 +47,13 @@ def _meeting(mid, d, mtype="business"):
     )
 
 
-def _att(uid, present=False, waiver_reason=None):
+def _att(uid, mid, present=False, waiver_reason=None):
     return SimpleNamespace(
-        id=f"att-{uid}", user_id=uid, present=present, waiver_reason=waiver_reason
+        id=f"att-{uid}-{mid}",
+        user_id=uid,
+        meeting_id=mid,
+        present=present,
+        waiver_reason=waiver_reason,
     )
 
 
@@ -72,7 +76,7 @@ def _dash_db(org, members, meetings, attendance, leaves):
 class TestDashboardMath:
     async def test_basic_percentage_and_counts(self):
         meetings = [_meeting("m1", date(2026, 1, 1)), _meeting("m2", date(2026, 2, 1))]
-        attendance = [_att("u1", present=True), _att("u1", present=False)]
+        attendance = [_att("u1", "m1", present=True), _att("u1", "m2", present=False)]
         db = _dash_db(_org(), [_member()], meetings, attendance, [])
         out = await AttendanceDashboardService(db).get_dashboard("org-1")
         row = out["members"][0]
@@ -85,8 +89,8 @@ class TestDashboardMath:
     async def test_waiver_excluded_from_denominator(self):
         meetings = [_meeting("m1", date(2026, 1, 1)), _meeting("m2", date(2026, 2, 1))]
         attendance = [
-            _att("u1", present=True),
-            _att("u1", waiver_reason="sick"),
+            _att("u1", "m1", present=True),
+            _att("u1", "m2", waiver_reason="sick"),
         ]
         db = _dash_db(_org(), [_member()], meetings, attendance, [])
         row = (await AttendanceDashboardService(db).get_dashboard("org-1"))["members"][
@@ -103,6 +107,44 @@ class TestDashboardMath:
         ]
         assert row["attendance_pct"] == 100.0
         assert row["total_meetings"] == 0
+
+    async def test_waived_and_on_leave_meeting_excluded_only_once(self):
+        # m1 is both waived AND inside the leave. Subtracting waived and
+        # on-leave separately removed it twice, shrinking the denominator and
+        # inflating the percentage (the old code returned 100.0 here, not 50.0).
+        meetings = [
+            _meeting("m1", date(2026, 6, 1)),
+            _meeting("m2", date(2026, 7, 1)),
+            _meeting("m3", date(2026, 8, 1)),
+        ]
+        attendance = [
+            _att("u1", "m1", waiver_reason="sick"),
+            _att("u1", "m2", present=True),
+        ]
+        leaves = [_leave("u1", date(2026, 6, 1), date(2026, 6, 30))]  # covers m1
+        db = _dash_db(_org(), [_member()], meetings, attendance, leaves)
+        row = (await AttendanceDashboardService(db).get_dashboard("org-1"))["members"][
+            0
+        ]
+        # excluded = {m1}; eligible = {m2, m3}; attended within eligible = {m2}.
+        assert row["eligible_meetings"] == 2
+        assert row["attendance_pct"] == 50.0
+
+    async def test_attendance_during_leave_cannot_exceed_100(self):
+        # Present at a meeting that fell during the leave must not count in the
+        # numerator while it is excluded from the denominator (old code: 200%).
+        meetings = [_meeting("m1", date(2026, 6, 1)), _meeting("m2", date(2026, 7, 1))]
+        attendance = [
+            _att("u1", "m1", present=True),
+            _att("u1", "m2", present=True),
+        ]
+        leaves = [_leave("u1", date(2026, 6, 1), date(2026, 6, 30))]  # covers m1
+        db = _dash_db(_org(), [_member()], meetings, attendance, leaves)
+        row = (await AttendanceDashboardService(db).get_dashboard("org-1"))["members"][
+            0
+        ]
+        assert row["eligible_meetings"] == 1
+        assert row["attendance_pct"] == 100.0
 
 
 class TestLeaveOfAbsence:
@@ -149,7 +191,10 @@ class TestVotingEligibility:
             }
         ]
         meetings = [_meeting("m1", date(2026, 1, 1)), _meeting("m2", date(2026, 2, 1))]
-        attendance = [_att("u1", present=True), _att("u1", present=False)]  # 50%
+        attendance = [
+            _att("u1", "m1", present=True),
+            _att("u1", "m2", present=False),
+        ]  # 50%
         db = _dash_db(_org(tiers), [_member()], meetings, attendance, [])
         row = (await AttendanceDashboardService(db).get_dashboard("org-1"))["members"][
             0
@@ -159,7 +204,7 @@ class TestVotingEligibility:
 
     async def test_summary_aggregates(self):
         meetings = [_meeting("m1", date(2026, 1, 1))]
-        attendance = [_att("u1", present=True)]
+        attendance = [_att("u1", "m1", present=True)]
         db = _dash_db(_org(), [_member()], meetings, attendance, [])
         out = await AttendanceDashboardService(db).get_dashboard("org-1")
         assert out["summary"]["total_members"] == 1

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from dateutil.relativedelta import relativedelta
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
@@ -49,28 +49,37 @@ class MembershipTierService:
             Meeting.meeting_date >= cutoff.date(),
         )
 
-        # Total meetings in the organization during the period
-        total_result = await self.db.execute(
-            select(func.count(Meeting.id)).where(
+        # All meetings in the look-back window as (id, date). Working from a set
+        # of meeting ids keeps each meeting counted once even when it is both
+        # waived and inside a leave period — subtracting a waived count and an
+        # on-leave count separately double-excluded such meetings and could push
+        # the percentage above 100%.
+        meetings_result = await self.db.execute(
+            select(Meeting.id, Meeting.meeting_date).where(
                 Meeting.organization_id == organization_id,
                 Meeting.meeting_date >= cutoff.date(),
             )
         )
-        total_meetings = total_result.scalar() or 0
+        meetings = meetings_result.all()
+        total_meetings = len(meetings)
         if total_meetings == 0:
             return 100.0  # No meetings held — don't penalise
 
-        # Count waived meetings for this user (excluded from denominator)
+        all_ids = {row[0] for row in meetings}
+
+        # Meetings this user has a waiver for (excluded from the denominator).
         waived_result = await self.db.execute(
-            select(func.count(MeetingAttendee.id)).where(
+            select(MeetingAttendee.meeting_id).where(
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.waiver_reason.isnot(None),
                 MeetingAttendee.meeting_id.in_(org_meetings_subq),
             )
         )
-        waived_count = waived_result.scalar() or 0
+        excluded_ids = {row[0] for row in waived_result.all()}
 
-        # Count meetings that fall within an active Leave of Absence
+        # Meetings inside an active Leave of Absence are also excluded. Adding to
+        # the same set means a meeting that is both waived and on-leave is
+        # removed exactly once.
         leave_result = await self.db.execute(
             select(MemberLeaveOfAbsence).where(
                 MemberLeaveOfAbsence.organization_id == organization_id,
@@ -79,41 +88,36 @@ class MembershipTierService:
             )
         )
         leaves = list(leave_result.scalars().all())
-        on_leave_count = 0
         if leaves:
-            # Fetch actual meeting dates for cross-reference
-            meeting_date_result = await self.db.execute(
-                select(Meeting.meeting_date).where(
-                    Meeting.organization_id == organization_id,
-                    Meeting.meeting_date >= cutoff.date(),
-                )
-            )
-            meeting_dates = [row[0] for row in meeting_date_result.all()]
-            for md in meeting_dates:
+            for mid, md in meetings:
                 for leave in leaves:
                     # end_date is None for permanent leave — treat as open-ended.
                     if leave.start_date <= md and (
                         leave.end_date is None or md <= leave.end_date
                     ):
-                        on_leave_count += 1
+                        excluded_ids.add(mid)
                         break
 
-        eligible_meetings = total_meetings - waived_count - on_leave_count
-        if eligible_meetings <= 0:
+        eligible_ids = all_ids - excluded_ids
+        if not eligible_ids:
             return 100.0  # All meetings waived/on-leave — don't penalise
 
-        # Meetings where this user was marked present (non-waived only)
+        # Count attendance only within the eligible set so the numerator can
+        # never exceed the denominator — e.g. a member marked present at a
+        # meeting that fell during their leave must not count toward the
+        # percentage.
         attended_result = await self.db.execute(
-            select(func.count(MeetingAttendee.id)).where(
+            select(MeetingAttendee.meeting_id).where(
                 MeetingAttendee.user_id == user_id,
                 MeetingAttendee.present.is_(True),
                 MeetingAttendee.waiver_reason.is_(None),
                 MeetingAttendee.meeting_id.in_(org_meetings_subq),
             )
         )
-        attended = attended_result.scalar() or 0
+        present_ids = {row[0] for row in attended_result.all()}
+        attended = len(present_ids & eligible_ids)
 
-        return round((attended / eligible_meetings) * 100, 1)
+        return round((attended / len(eligible_ids)) * 100, 1)
 
     # ------------------------------------------------------------------
     # Tier resolution helpers

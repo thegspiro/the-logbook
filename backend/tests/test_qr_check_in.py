@@ -20,19 +20,19 @@ Test Coverage:
 - Cross-organization access is prevented
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
-from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.event_service import EventService
 from app.models.event import Event, EventRSVP, EventType, RSVPStatus
 from app.models.user import User
-
+from app.services.event_service import EventService
 
 # ---- Factory helpers to reduce duplication ----
+
 
 def _make_org(org_id=None, timezone_val=None):
     """Create a mock organization with a timezone attribute."""
@@ -129,7 +129,7 @@ class TestQRCheckInTimeValidation:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "label, start_offset, end_offset, extra_kwargs",
+        ("label", "start_offset", "end_offset", "extra_kwargs"),
         [
             ("before window", timedelta(hours=2), timedelta(hours=3), {}),
             ("after scheduled end", timedelta(hours=-3), timedelta(hours=-1), {}),
@@ -218,7 +218,7 @@ class TestSelfCheckIn:
         mock_db = _mock_db_returning(event, user, org, None)
 
         service = EventService(mock_db)
-        rsvp, error = await service.self_check_in(event.id, user.id, org_id)
+        rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert error is None
         assert rsvp is not None
@@ -256,14 +256,16 @@ class TestSelfCheckIn:
         mock_db = _mock_db_returning(event, user, org, existing_rsvp)
 
         service = EventService(mock_db)
-        rsvp, error = await service.self_check_in(event.id, user.id, org_id)
+        rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert error == "ALREADY_CHECKED_IN"
         assert rsvp is not None
 
     @pytest.mark.asyncio
-    async def test_self_check_in_before_time_window(self):
-        """Test that check-in before time window returns an error"""
+    async def test_self_check_in_before_window_strict_blocks(self):
+        """A STRICT-window event is a hard gate: early check-in is rejected."""
+        from app.models.event import CheckInWindowType
+
         now = datetime.now(timezone.utc)
         org_id = uuid4()
         event = _make_event(
@@ -271,20 +273,49 @@ class TestSelfCheckIn:
             title="Future Event",
             start_datetime=now + timedelta(hours=2),
             end_datetime=now + timedelta(hours=3),
+            check_in_window_type=CheckInWindowType.STRICT,
         )
         user = _make_user(org_id=org_id)
         org = _make_org(org_id=org_id)
         mock_db = _mock_db_returning(event, user, org)
 
         service = EventService(mock_db)
-        rsvp, error = await service.self_check_in(event.id, user.id, org_id)
+        rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert "Check-in is not available yet" in error
         assert rsvp is None
+        assert notice is None
+
+    @pytest.mark.asyncio
+    async def test_self_check_in_before_window_flexible_allows_with_notice(self):
+        """A FLEXIBLE event allows an early check-in but returns a notice
+        telling the member when the official window opens."""
+        from app.models.event import CheckInWindowType
+
+        now = datetime.now(timezone.utc)
+        org_id = uuid4()
+        event = _make_event(
+            org_id=org_id,
+            title="Future Event",
+            start_datetime=now + timedelta(hours=2),
+            end_datetime=now + timedelta(hours=3),
+            check_in_window_type=CheckInWindowType.FLEXIBLE,
+        )
+        user = _make_user(org_id=org_id)
+        org = _make_org(org_id=org_id)
+        mock_db = _mock_db_returning(event, user, org, None)
+
+        service = EventService(mock_db)
+        rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
+
+        assert error is None
+        assert rsvp is not None
+        assert notice is not None
+        assert "official check-in window" in notice
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        "start_offset, end_offset, extra_kwargs",
+        ("start_offset", "end_offset", "extra_kwargs"),
         [
             (timedelta(hours=-3), timedelta(hours=-1), {}),
             (timedelta(hours=-2), timedelta(hours=2), {"actual_end_time": "USE_PAST"}),
@@ -310,9 +341,10 @@ class TestSelfCheckIn:
         mock_db = _mock_db_returning(event, user, org)
 
         service = EventService(mock_db)
-        rsvp, error = await service.self_check_in(event.id, user.id, org_id)
+        rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
-        assert error == "Check-in is no longer available. The event has ended."
+        assert "Check-in has closed for this event" in error
+        assert "organizer" in error
         assert rsvp is None
 
     @pytest.mark.asyncio
@@ -332,7 +364,7 @@ class TestSelfCheckIn:
         mock_db = _mock_db_returning(event)
 
         service = EventService(mock_db)
-        rsvp, error = await service.self_check_in(event.id, user.id, org_id)
+        rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert error == "Event has been cancelled"
         assert rsvp is None
@@ -350,7 +382,7 @@ class TestSelfCheckIn:
         mock_db = _mock_db_returning(event, None)
 
         service = EventService(mock_db)
-        rsvp, error = await service.self_check_in(event.id, uuid4(), org_id)
+        rsvp, error, notice = await service.self_check_in(event.id, uuid4(), org_id)
 
         assert error == "User not found in organization"
         assert rsvp is None
@@ -362,7 +394,7 @@ class TestSelfCheckIn:
         mock_db = _mock_db_returning(None)
 
         service = EventService(mock_db)
-        rsvp, error = await service.self_check_in(uuid4(), uuid4(), org_id)
+        rsvp, error, notice = await service.self_check_in(uuid4(), uuid4(), org_id)
 
         assert error is not None
         assert rsvp is None
@@ -408,6 +440,7 @@ class TestCheckInWindowConsistency:
         org_id = uuid4()
         # Event starts in 45 minutes with a 60-minute window
         from app.models.event import CheckInWindowType
+
         event = _make_event(
             org_id=org_id,
             start_datetime=now + timedelta(minutes=45),

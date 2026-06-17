@@ -172,12 +172,19 @@ async def list_documents(
                 detail="Not authorized to view this folder",
             )
 
+    # Restrict the listing to folders the caller may access (None = leadership,
+    # no restriction) so a folder-less listing can't surface documents from
+    # restricted/owner-only folders.
+    accessible = await service.accessible_folder_ids(
+        current_user.organization_id, current_user
+    )
     documents, total = await service.get_documents(
         current_user.organization_id,
         folder_id=folder_uuid,
         search=search,
         skip=pagination.skip,
         limit=pagination.limit,
+        accessible_folder_ids=accessible,
     )
 
     return {
@@ -334,6 +341,14 @@ async def get_document(
         await service.get_document_by_id(document_id, current_user.organization_id),
         "Document",
     )
+    # The list view hides documents in restricted folders (leadership-only,
+    # owner-only personal files, role-restricted); a direct by-id fetch must
+    # enforce the same boundary. Treat an inaccessible document as not found so
+    # its existence isn't revealed to someone guessing ids.
+    if not await service.can_access_document(
+        document, current_user.organization_id, current_user
+    ):
+        raise HTTPException(status_code=404, detail="Document not found")
     return document
 
 

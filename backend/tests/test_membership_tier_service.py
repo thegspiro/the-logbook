@@ -70,9 +70,6 @@ class TestResolveTier:
 
 
 class TestMeetingAttendancePct:
-    def _scalar(self, value):
-        return MagicMock(scalar=MagicMock(return_value=value))
-
     def _scalars(self, items):
         r = MagicMock()
         r.scalars.return_value.all.return_value = items
@@ -83,52 +80,101 @@ class TestMeetingAttendancePct:
 
     async def test_no_meetings_returns_100(self):
         db = MagicMock()
-        db.execute = AsyncMock(return_value=self._scalar(0))
+        db.execute = AsyncMock(return_value=self._rows([]))
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         assert pct == 100.0
 
     async def test_simple_percentage(self):
+        meetings = [
+            ("m1", date(2026, 1, 1)),
+            ("m2", date(2026, 2, 1)),
+            ("m3", date(2026, 3, 1)),
+            ("m4", date(2026, 4, 1)),
+        ]
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
-                self._scalar(4),  # total meetings
-                self._scalar(0),  # waived
+                self._rows(meetings),  # all meetings (id, date)
+                self._rows([]),  # waived meeting ids
                 self._scalars([]),  # no leaves
-                self._scalar(3),  # attended
+                self._rows([("m1",), ("m2",), ("m3",)]),  # present at 3
             ]
         )
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
         assert pct == 75.0
 
     async def test_permanent_leave_excludes_meetings_not_crashes(self):
-        # Regression: a permanent leave (end_date=None) previously raised
-        # TypeError (date <= None) and broke eligibility checks.
+        # A permanent leave (end_date=None) must be treated as open-ended.
         leave = SimpleNamespace(start_date=date(2026, 5, 1), end_date=None)
-        meeting_dates = [(date(2026, 6, 1),), (date(2026, 4, 1),)]
+        meetings = [("m_jun", date(2026, 6, 1)), ("m_apr", date(2026, 4, 1))]
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
-                self._scalar(2),  # total meetings
-                self._scalar(0),  # waived
+                self._rows(meetings),
+                self._rows([]),  # no waivers
                 self._scalars([leave]),
-                self._rows(meeting_dates),
-                self._scalar(1),  # attended the April meeting
+                self._rows([("m_apr",)]),  # present at the April meeting
             ]
         )
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
-        # The June meeting falls inside the open-ended leave: 1 eligible, 1 attended.
+        # June falls inside the open-ended leave: 1 eligible (April), 1 attended.
         assert pct == 100.0
 
     async def test_all_meetings_on_leave_returns_100(self):
         leave = SimpleNamespace(start_date=date(2026, 1, 1), end_date=None)
+        meetings = [("m1", date(2026, 2, 1)), ("m2", date(2026, 3, 1))]
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
-                self._scalar(2),
-                self._scalar(0),
+                self._rows(meetings),
+                self._rows([]),
                 self._scalars([leave]),
-                self._rows([(date(2026, 2, 1),), (date(2026, 3, 1),)]),
+                self._rows([]),
             ]
         )
         pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
+        assert pct == 100.0
+
+    async def test_waived_and_on_leave_meeting_excluded_only_once(self):
+        # Regression: m1 is BOTH waived and inside the leave. Subtracting the
+        # waived count and the on-leave count separately removed it twice,
+        # shrinking the denominator and inflating the percentage (the old code
+        # returned 100.0 here instead of 50.0).
+        meetings = [
+            ("m1", date(2026, 6, 1)),
+            ("m2", date(2026, 7, 1)),
+            ("m3", date(2026, 8, 1)),
+        ]
+        leave = SimpleNamespace(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                self._rows(meetings),
+                self._rows([("m1",)]),  # m1 waived
+                self._scalars([leave]),  # leave also covers m1 only
+                self._rows([("m2",)]),  # present at m2
+            ]
+        )
+        pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
+        # excluded = {m1}; eligible = {m2, m3}; attended within eligible = {m2}.
+        assert pct == 50.0
+
+    async def test_attendance_during_leave_cannot_exceed_100(self):
+        # Regression: a member present at a meeting that fell during their leave
+        # was counted in the numerator but not the denominator, so the old code
+        # could return 200.0. Attendance is now intersected with the eligible
+        # set, capping the result.
+        meetings = [("m1", date(2026, 6, 1)), ("m2", date(2026, 7, 1))]
+        leave = SimpleNamespace(start_date=date(2026, 6, 1), end_date=date(2026, 6, 30))
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                self._rows(meetings),
+                self._rows([]),  # no waivers
+                self._scalars([leave]),  # covers m1
+                self._rows([("m1",), ("m2",)]),  # present at both
+            ]
+        )
+        pct = await MembershipTierService(db).get_meeting_attendance_pct("u", "o")
+        # eligible = {m2}; m1 (during leave) does not count -> 1/1.
         assert pct == 100.0

@@ -4254,9 +4254,8 @@ class InventoryService:
         is stored on the request so the two are traceable to each other.
         """
         try:
-            # Row-lock the request so the APPROVED check is atomic with the
-            # fulfillment: without it, two concurrent fulfill calls can both
-            # pass the status check and each create an issuance/checkout.
+            # Read the request (row-locked) to validate it and pull the fields
+            # needed to build the fulfillment.
             result = await self.db.execute(
                 select(EquipmentRequest)
                 .where(
@@ -4273,15 +4272,41 @@ class InventoryService:
             if status_val != RequestStatus.APPROVED.value:
                 return None, "Only approved requests can be fulfilled"
 
+            # Atomically claim the request before creating any issuance. The
+            # issue/checkout/assign calls below each commit, which releases the
+            # row lock taken above; the FOR UPDATE lock alone therefore leaves a
+            # window in which a concurrent fulfill could pass the APPROVED check
+            # and double-issue. A single-statement APPROVED -> FULFILLED flip is
+            # the real guard: rowcount == 0 means another caller already claimed
+            # it (or it is no longer APPROVED), so this caller must stop.
+            claim = await self.db.execute(
+                update(EquipmentRequest)
+                .where(
+                    EquipmentRequest.id == str(request_id),
+                    EquipmentRequest.organization_id == str(organization_id),
+                    EquipmentRequest.status == RequestStatus.APPROVED,
+                )
+                .values(
+                    status=RequestStatus.FULFILLED,
+                    fulfilled_by=str(fulfilled_by),
+                    fulfilled_at=datetime.now(timezone.utc),
+                )
+            )
+            await self.db.commit()
+            if claim.rowcount == 0:
+                return None, "Only approved requests can be fulfilled"
+
+            # From here the request is claimed (FULFILLED). Any validation or
+            # issuance failure must release the claim back to APPROVED so the
+            # request can be fulfilled again.
             target_item_id = item_id or (UUID(req.item_id) if req.item_id else None)
             if not target_item_id:
-                return (
-                    None,
-                    "An item must be selected to fulfill this request",
-                )
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                return None, "An item must be selected to fulfill this request"
 
             item = await self.get_item_by_id(target_item_id, organization_id)
             if not item:
+                await self._revert_fulfillment_claim(request_id, organization_id)
                 return None, "Selected item not found"
 
             qty = quantity or req.quantity or 1
@@ -4290,61 +4315,98 @@ class InventoryService:
 
             fulfillment_type: str
             reference_id: str
+            try:
+                if item.tracking_type == TrackingType.POOL:
+                    issuance, err = await self.issue_from_pool(
+                        item_id=target_item_id,
+                        user_id=requester_id,
+                        organization_id=organization_id,
+                        issued_by=fulfilled_by,
+                        quantity=qty,
+                        reason="Equipment request fulfillment",
+                        override_allowance=override_allowance,
+                    )
+                    fulfillment_type = "issuance"
+                    reference_id = str(issuance.id) if issuance else ""
+                elif request_type == RequestType.CHECKOUT.value:
+                    checkout, err = await self.checkout_item(
+                        item_id=target_item_id,
+                        user_id=requester_id,
+                        organization_id=organization_id,
+                        checked_out_by=fulfilled_by,
+                        expected_return_at=expected_return_at,
+                        reason="Equipment request fulfillment",
+                    )
+                    fulfillment_type = "checkout"
+                    reference_id = str(checkout.id) if checkout else ""
+                else:
+                    assignment, err = await self.assign_item_to_user(
+                        item_id=target_item_id,
+                        user_id=requester_id,
+                        organization_id=organization_id,
+                        assigned_by=fulfilled_by,
+                        reason="Equipment request fulfillment",
+                    )
+                    fulfillment_type = "assignment"
+                    reference_id = str(assignment.id) if assignment else ""
+            except Exception:
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                raise
 
-            if item.tracking_type == TrackingType.POOL:
-                issuance, err = await self.issue_from_pool(
-                    item_id=target_item_id,
-                    user_id=requester_id,
-                    organization_id=organization_id,
-                    issued_by=fulfilled_by,
-                    quantity=qty,
-                    reason="Equipment request fulfillment",
-                    override_allowance=override_allowance,
-                )
-                if err:
-                    return None, err
-                fulfillment_type = "issuance"
-                reference_id = str(issuance.id)
-            elif request_type == RequestType.CHECKOUT.value:
-                checkout, err = await self.checkout_item(
-                    item_id=target_item_id,
-                    user_id=requester_id,
-                    organization_id=organization_id,
-                    checked_out_by=fulfilled_by,
-                    expected_return_at=expected_return_at,
-                    reason="Equipment request fulfillment",
-                )
-                if err:
-                    return None, err
-                fulfillment_type = "checkout"
-                reference_id = str(checkout.id)
-            else:
-                assignment, err = await self.assign_item_to_user(
-                    item_id=target_item_id,
-                    user_id=requester_id,
-                    organization_id=organization_id,
-                    assigned_by=fulfilled_by,
-                    reason="Equipment request fulfillment",
-                )
-                if err:
-                    return None, err
-                fulfillment_type = "assignment"
-                reference_id = str(assignment.id)
+            if err:
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                return None, err
 
-            # The issue/checkout/assign call above committed its own
-            # transaction, so re-read the request before stamping fulfillment.
-            req.status = RequestStatus.FULFILLED
-            req.fulfilled_by = str(fulfilled_by)
-            req.fulfilled_at = datetime.now(timezone.utc)
-            req.fulfillment_type = fulfillment_type
-            req.fulfillment_reference_id = reference_id
+            # Issuance succeeded — stamp the fulfillment linkage on the request
+            # that we already flipped to FULFILLED.
+            await self.db.execute(
+                update(EquipmentRequest)
+                .where(
+                    EquipmentRequest.id == str(request_id),
+                    EquipmentRequest.organization_id == str(organization_id),
+                )
+                .values(
+                    fulfillment_type=fulfillment_type,
+                    fulfillment_reference_id=reference_id,
+                )
+            )
             await self.db.commit()
-            await self.db.refresh(req)
-            return req, None
+
+            refreshed = await self.db.execute(
+                select(EquipmentRequest).where(
+                    EquipmentRequest.id == str(request_id),
+                    EquipmentRequest.organization_id == str(organization_id),
+                )
+            )
+            return refreshed.scalar_one_or_none(), None
         except Exception as e:
             await self.db.rollback()
             logger.error(f"Error fulfilling equipment request: {e}")
             return None, str(e)
+
+    async def _revert_fulfillment_claim(
+        self, request_id: UUID, organization_id: UUID
+    ) -> None:
+        """Release a FULFILLED claim back to APPROVED.
+
+        Called when the issuance/checkout/assignment that was supposed to
+        satisfy an atomically-claimed request fails, so the request does not
+        get stuck in FULFILLED with no fulfillment record behind it.
+        """
+        await self.db.execute(
+            update(EquipmentRequest)
+            .where(
+                EquipmentRequest.id == str(request_id),
+                EquipmentRequest.organization_id == str(organization_id),
+                EquipmentRequest.status == RequestStatus.FULFILLED,
+            )
+            .values(
+                status=RequestStatus.APPROVED,
+                fulfilled_by=None,
+                fulfilled_at=None,
+            )
+        )
+        await self.db.commit()
 
     # ============================================
     # Member Size Preferences Methods

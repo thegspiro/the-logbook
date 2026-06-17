@@ -426,10 +426,22 @@ class GrantService:
         return item
 
     async def update_budget_item(
-        self, item_id: str, data: Dict[str, Any]
+        self, item_id: str, data: Dict[str, Any], organization_id: str
     ) -> Optional[GrantBudgetItem]:
+        # Scope by org via the parent application: a budget item is only
+        # reachable if its application belongs to the caller's organization,
+        # otherwise this is a cross-org IDOR (fundraising.manage is not
+        # org-specific).
         result = await self.db.execute(
-            select(GrantBudgetItem).where(GrantBudgetItem.id == item_id)
+            select(GrantBudgetItem)
+            .join(
+                GrantApplication,
+                GrantBudgetItem.application_id == GrantApplication.id,
+            )
+            .where(
+                GrantBudgetItem.id == item_id,
+                GrantApplication.organization_id == organization_id,
+            )
         )
         item = result.scalar_one_or_none()
         if not item:
@@ -439,9 +451,17 @@ class GrantService:
         await self.db.flush()
         return item
 
-    async def delete_budget_item(self, item_id: str) -> bool:
+    async def delete_budget_item(self, item_id: str, organization_id: str) -> bool:
         result = await self.db.execute(
-            select(GrantBudgetItem).where(GrantBudgetItem.id == item_id)
+            select(GrantBudgetItem)
+            .join(
+                GrantApplication,
+                GrantBudgetItem.application_id == GrantApplication.id,
+            )
+            .where(
+                GrantBudgetItem.id == item_id,
+                GrantApplication.organization_id == organization_id,
+            )
         )
         item = result.scalar_one_or_none()
         if not item:
@@ -497,10 +517,18 @@ class GrantService:
         return expenditure
 
     async def update_expenditure(
-        self, expenditure_id: str, data: Dict[str, Any]
+        self, expenditure_id: str, data: Dict[str, Any], organization_id: str
     ) -> Optional[GrantExpenditure]:
         result = await self.db.execute(
-            select(GrantExpenditure).where(GrantExpenditure.id == expenditure_id)
+            select(GrantExpenditure)
+            .join(
+                GrantApplication,
+                GrantExpenditure.application_id == GrantApplication.id,
+            )
+            .where(
+                GrantExpenditure.id == expenditure_id,
+                GrantApplication.organization_id == organization_id,
+            )
         )
         expenditure = result.scalar_one_or_none()
         if not expenditure:
@@ -521,9 +549,19 @@ class GrantService:
 
         return expenditure
 
-    async def delete_expenditure(self, expenditure_id: str) -> bool:
+    async def delete_expenditure(
+        self, expenditure_id: str, organization_id: str
+    ) -> bool:
         result = await self.db.execute(
-            select(GrantExpenditure).where(GrantExpenditure.id == expenditure_id)
+            select(GrantExpenditure)
+            .join(
+                GrantApplication,
+                GrantExpenditure.application_id == GrantApplication.id,
+            )
+            .where(
+                GrantExpenditure.id == expenditure_id,
+                GrantApplication.organization_id == organization_id,
+            )
         )
         expenditure = result.scalar_one_or_none()
         if not expenditure:
@@ -598,9 +636,18 @@ class GrantService:
         task_id: str,
         data: Dict[str, Any],
         user_id: str,
+        organization_id: str,
     ) -> Optional[GrantComplianceTask]:
         result = await self.db.execute(
-            select(GrantComplianceTask).where(GrantComplianceTask.id == task_id)
+            select(GrantComplianceTask)
+            .join(
+                GrantApplication,
+                GrantComplianceTask.application_id == GrantApplication.id,
+            )
+            .where(
+                GrantComplianceTask.id == task_id,
+                GrantApplication.organization_id == organization_id,
+            )
         )
         task = result.scalar_one_or_none()
         if not task:
@@ -635,9 +682,17 @@ class GrantService:
         await self.db.flush()
         return task
 
-    async def delete_compliance_task(self, task_id: str) -> bool:
+    async def delete_compliance_task(self, task_id: str, organization_id: str) -> bool:
         result = await self.db.execute(
-            select(GrantComplianceTask).where(GrantComplianceTask.id == task_id)
+            select(GrantComplianceTask)
+            .join(
+                GrantApplication,
+                GrantComplianceTask.application_id == GrantApplication.id,
+            )
+            .where(
+                GrantComplianceTask.id == task_id,
+                GrantApplication.organization_id == organization_id,
+            )
         )
         task = result.scalar_one_or_none()
         if not task:
@@ -650,7 +705,14 @@ class GrantService:
     # Grant Notes
     # ------------------------------------------------------------------
 
-    async def list_notes(self, application_id: str) -> List[GrantNote]:
+    async def list_notes(
+        self, application_id: str, organization_id: str
+    ) -> List[GrantNote]:
+        # Scope through the parent application so notes from another org's
+        # application can't be read by guessing its id.
+        app = await self.get_application(application_id, organization_id)
+        if not app:
+            raise ValueError("Application not found")
         result = await self.db.execute(
             select(GrantNote)
             .where(GrantNote.application_id == application_id)
@@ -663,7 +725,13 @@ class GrantService:
         application_id: str,
         data: Dict[str, Any],
         user_id: str,
+        organization_id: str,
     ) -> GrantNote:
+        # Verify the application belongs to the caller's org before attaching
+        # a note, otherwise a note can be written onto another org's grant.
+        app = await self.get_application(application_id, organization_id)
+        if not app:
+            raise ValueError("Application not found")
         note = GrantNote(
             application_id=application_id,
             created_by=user_id,

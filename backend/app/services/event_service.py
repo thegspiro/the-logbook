@@ -42,7 +42,6 @@ from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
 
-
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
 BULK_ADD_MAX_SIZE = 200
@@ -245,9 +244,7 @@ class EventService:
                 raw_status = row[3]
                 if raw_status is not None:
                     item["user_rsvp_status"] = (
-                        raw_status.value
-                        if hasattr(raw_status, "value")
-                        else raw_status
+                        raw_status.value if hasattr(raw_status, "value") else raw_status
                     )
             items.append(item)
 
@@ -870,6 +867,35 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(waitlisted_rsvp)
 
+        # Tell the promoted member they're off the waitlist. Without this the
+        # status flips silently and they have no way to know a spot opened up,
+        # so they may miss an event they're now confirmed for. Non-fatal: a
+        # failed notification must not undo the promotion.
+        try:
+            notifications_service = NotificationsService(self.db)
+            await notifications_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "channel": NotificationChannel.IN_APP,
+                    "category": "event_waitlist_promotion",
+                    "recipient_id": str(waitlisted_rsvp.user_id),
+                    "subject": f"You're off the waitlist: {event.title}",
+                    "message": (
+                        f'A spot opened up for "{event.title}" and you have '
+                        f"been moved off the waitlist — you are now confirmed "
+                        f"as going."
+                    ),
+                    "action_url": f"/events/{event.id}",
+                },
+            )
+        except Exception as e:
+            logger.error(
+                "Failed to notify waitlist promotion for user %s event %s: %s",
+                waitlisted_rsvp.user_id,
+                event.id,
+                e,
+            )
+
         return waitlisted_rsvp
 
     async def rsvp_to_series(
@@ -1217,9 +1243,11 @@ class EventService:
         org = org_result.scalar_one_or_none()
         tz_name = org.timezone if org else None
 
-        # Validate check-in window
+        # Validate check-in window (manager path ignores the early notice)
         now = datetime.now(dt_timezone.utc)
-        is_valid, error_msg = self._validate_check_in_window(event, now, tz_name)
+        is_valid, error_msg, _notice = self._validate_check_in_window(
+            event, now, tz_name
+        )
         if not is_valid:
             return None, error_msg
 
@@ -1676,32 +1704,60 @@ class EventService:
 
     def _validate_check_in_window(
         self, event: Event, now: datetime, tz_name: Optional[str] = None
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
-        Validate if check-in is allowed based on event's check-in window settings
+        Validate whether check-in is allowed for the event's check-in window.
 
-        Returns: (is_valid, error_message)
+        Window-type policy:
+        - STRICT is a hard gate by design — no check-in before the window opens.
+        - FLEXIBLE / WINDOW allow an *early* check-in but return an informational
+          notice telling the member when the official window (set by the event
+          creator) begins.
+        - A check-in after the window has closed is never self-served; it
+          requires an event organizer to record it (via the manager override).
+
+        Returns: (is_allowed, error_message, notice). On a blocked attempt the
+        error is set and notice is None; on an allowed-but-early attempt the
+        error is None and notice carries the user-facing window message.
         """
         check_in_start, check_in_end = self._get_check_in_window(event)
+        window_type = event.check_in_window_type or CheckInWindowType.FLEXIBLE
+
+        def _local_time(dt: datetime) -> str:
+            """Format a UTC datetime as 'HH:MM AM/PM TZ' in the org's timezone."""
+            utc_dt = dt if dt.tzinfo else dt.replace(tzinfo=dt_timezone.utc)
+            if tz_name:
+                local = utc_dt.astimezone(ZoneInfo(tz_name))
+                return f"{local.strftime('%I:%M %p')} {local.strftime('%Z')}"
+            return f"{utc_dt.strftime('%I:%M %p')} UTC"
 
         if now < check_in_start:
-            # Always convert UTC to local time for user-facing messages
-            utc_start = check_in_start.replace(tzinfo=dt_timezone.utc)
-            if tz_name:
-                local_start = utc_start.astimezone(ZoneInfo(tz_name))
-                tz_label = local_start.strftime("%Z")
-            else:
-                local_start = utc_start
-                tz_label = "UTC"
+            opens_at = _local_time(check_in_start)
+            if window_type == CheckInWindowType.STRICT:
+                # Hard gate: strict events only permit check-in once open.
+                return (
+                    False,
+                    f"Check-in is not available yet. Opens at {opens_at}.",
+                    None,
+                )
+            # Flexible / window events: let the member check in early, but tell
+            # them when the official window the organizer configured starts.
             return (
-                False,
-                f"Check-in is not available yet. Opens at {local_start.strftime('%I:%M %p')} {tz_label}.",
+                True,
+                None,
+                f"You're a bit early. The official check-in window for this "
+                f"event opens at {opens_at}.",
             )
 
         if now > check_in_end:
-            return False, "Check-in is no longer available. The event has ended."
+            return (
+                False,
+                "Check-in has closed for this event. Ask an event organizer to "
+                "record a late check-in.",
+                None,
+            )
 
-        return True, None
+        return True, None, None
 
     async def self_check_in(
         self,
@@ -1709,7 +1765,7 @@ class EventService:
         user_id: UUID,
         organization_id: UUID,
         is_checkout: bool = False,
-    ) -> Tuple[Optional[EventRSVP], Optional[str]]:
+    ) -> Tuple[Optional[EventRSVP], Optional[str], Optional[str]]:
         """
         Allow a user to check themselves in or out via QR code
 
@@ -1719,7 +1775,9 @@ class EventService:
             organization_id: Organization ID
             is_checkout: True if this is a check-out request
 
-        Returns: (rsvp, error_message)
+        Returns: (rsvp, error_message, notice). ``notice`` is a non-blocking,
+        user-facing message (e.g. an early check-in succeeded but the official
+        window opens later); it is None unless such a case applies.
         """
         # Get event
         event_result = await self.db.execute(
@@ -1730,10 +1788,10 @@ class EventService:
         event = event_result.scalar_one_or_none()
 
         if not event:
-            return None, "Event not found"
+            return None, "Event not found", None
 
         if event.is_cancelled:
-            return None, "Event has been cancelled"
+            return None, "Event has been cancelled", None
 
         # Verify user belongs to organization
         user_result = await self.db.execute(
@@ -1744,7 +1802,7 @@ class EventService:
         user = user_result.scalar_one_or_none()
 
         if not user:
-            return None, "User not found in organization"
+            return None, "User not found in organization", None
 
         # Get organization timezone for user-facing messages
         org_result = await self.db.execute(
@@ -1755,10 +1813,12 @@ class EventService:
 
         now = datetime.now(dt_timezone.utc)
 
-        # Validate check-in window
-        is_valid, error_msg = self._validate_check_in_window(event, now, tz_name)
+        # Validate check-in window (may allow an early check-in with a notice)
+        is_valid, error_msg, notice = self._validate_check_in_window(
+            event, now, tz_name
+        )
         if not is_valid:
-            return None, error_msg
+            return None, error_msg, None
 
         # Get or create RSVP
         rsvp_result = await self.db.execute(
@@ -1770,7 +1830,7 @@ class EventService:
 
         if not rsvp:
             if is_checkout:
-                return None, "Cannot check out without checking in first"
+                return None, "Cannot check out without checking in first", None
 
             # Auto-create RSVP when checking in
             rsvp = EventRSVP(
@@ -1786,10 +1846,10 @@ class EventService:
         # Handle check-out
         if is_checkout:
             if not rsvp.checked_in:
-                return None, "You are not checked in to this event"
+                return None, "You are not checked in to this event", None
 
             if rsvp.checked_out_at:
-                return None, "You have already checked out of this event"
+                return None, "You have already checked out of this event", None
 
             rsvp.checked_out_at = now
 
@@ -1803,12 +1863,12 @@ class EventService:
             await self.db.commit()
             await self.db.refresh(rsvp)
 
-            return rsvp, None
+            return rsvp, None, None
 
         # Handle check-in
         if rsvp.checked_in:
             # Already checked in - return special message to prompt for checkout
-            return rsvp, "ALREADY_CHECKED_IN"
+            return rsvp, "ALREADY_CHECKED_IN", None
 
         rsvp.checked_in = True
         rsvp.checked_in_at = now
@@ -1819,7 +1879,7 @@ class EventService:
         # Auto-create TrainingRecord if this is a training event
         await self._auto_create_training_record(event, rsvp, user_id, organization_id)
 
-        return rsvp, None
+        return rsvp, None, notice
 
     async def _auto_create_training_record(
         self, event: Event, rsvp: EventRSVP, user_id: UUID, organization_id: UUID
@@ -2146,6 +2206,11 @@ class EventService:
         duration = end_datetime - start_datetime
         occurrences = []
         current = start_datetime
+        # Anchor day-of-month for monthly/annual patterns: each step clamps to
+        # the target month's length using this original day, so a series never
+        # drifts down permanently after a short month (e.g. the 31st must not
+        # become the 28th from March onward once February clamps it).
+        anchor_day = start_datetime.day
 
         while current <= recurrence_end_date:
             occurrences.append((current, current + duration))
@@ -2157,19 +2222,19 @@ class EventService:
             elif pattern == RecurrencePattern.BIWEEKLY.value:
                 current += timedelta(weeks=2)
             elif pattern == RecurrencePattern.MONTHLY.value:
-                # Move to same day next month
+                # Move to the anchor day of next month, clamped to that month's
+                # length. Using anchor_day (the original day) rather than the
+                # possibly-clamped current.day keeps a 31st-of-month series on
+                # the 31st in long months instead of pinning it to 28 forever.
                 m = current.month + 1
                 y = current.year
                 if m > 12:
                     m = 1
                     y += 1
-                try:
-                    current = current.replace(year=y, month=m)
-                except ValueError:
-                    last_day = calendar.monthrange(y, m)[1]
-                    current = current.replace(
-                        year=y, month=m, day=min(current.day, last_day)
-                    )
+                last_day = calendar.monthrange(y, m)[1]
+                current = current.replace(
+                    year=y, month=m, day=min(anchor_day, last_day)
+                )
             elif (
                 pattern == RecurrencePattern.MONTHLY_WEEKDAY.value
                 and weekday is not None
@@ -2198,12 +2263,12 @@ class EventService:
                     break
                 current = candidate
             elif pattern == RecurrencePattern.ANNUALLY.value:
-                # Same date next year
-                try:
-                    current = current.replace(year=current.year + 1)
-                except ValueError:
-                    # Feb 29 in a non-leap year → Feb 28
-                    current = current.replace(year=current.year + 1, day=28)
+                # Same month/day next year, anchored to the original day so a
+                # Feb 29 series returns to the 29th in later leap years instead
+                # of being pinned to Feb 28 after the first non-leap year.
+                y = current.year + 1
+                last_day = calendar.monthrange(y, current.month)[1]
+                current = current.replace(year=y, day=min(anchor_day, last_day))
             elif (
                 pattern == RecurrencePattern.ANNUALLY_WEEKDAY.value
                 and weekday is not None
@@ -2466,19 +2531,24 @@ class EventService:
             is_mandatory = raw_mandatory in ("true", "yes", "1")
 
             try:
-                event = Event(
-                    organization_id=str(organization_id),
-                    created_by=str(created_by),
-                    title=title,
-                    event_type=EventType(event_type_value),
-                    start_datetime=start_dt,
-                    end_datetime=end_dt,
-                    location=location,
-                    description=description,
-                    is_mandatory=is_mandatory,
-                )
-                self.db.add(event)
-                await self.db.flush()
+                # Isolate each row in a savepoint so a single row that fails at
+                # flush (e.g. a DB constraint) rolls back only itself instead of
+                # poisoning the session and discarding every other row — the
+                # method's contract is partial success (imported_count plus
+                # per-row errors), and the final commit persists the good rows.
+                async with self.db.begin_nested():
+                    event = Event(
+                        organization_id=str(organization_id),
+                        created_by=str(created_by),
+                        title=title,
+                        event_type=EventType(event_type_value),
+                        start_datetime=start_dt,
+                        end_datetime=end_dt,
+                        location=location,
+                        description=description,
+                        is_mandatory=is_mandatory,
+                    )
+                    self.db.add(event)
                 imported_count += 1
             except Exception as exc:
                 errors.append({"row": idx, "error": str(exc)})

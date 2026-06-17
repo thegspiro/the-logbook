@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -137,12 +137,19 @@ class FormBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    category: str = "Operations"
+    category: str = "operations"
     allow_multiple_submissions: bool = True
     require_authentication: bool = True
     notify_on_submission: bool = False
     notification_emails: Optional[List[str]] = None
     is_public: bool = False
+
+    @field_validator("category")
+    @classmethod
+    def _normalize_category(cls, v: str) -> str:
+        # FormCategory values are lowercase; tolerate legacy Title-case
+        # clients (e.g. "Operations") by normalizing at the boundary.
+        return v.lower() if isinstance(v, str) else v
 
 
 class FormCreate(FormBase):
@@ -171,6 +178,12 @@ class FormUpdate(BaseModel):
     notification_emails: Optional[List[str]] = None
     is_public: Optional[bool] = None
     integration_type: Optional[str] = None
+
+    @field_validator("category")
+    @classmethod
+    def _normalize_category(cls, v: Optional[str]) -> Optional[str]:
+        # Mirror FormBase: tolerate legacy Title-case category values.
+        return v.lower() if isinstance(v, str) else v
 
 
 class FormResponse(FormBase):

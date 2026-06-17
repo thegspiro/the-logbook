@@ -120,6 +120,28 @@ class TestMemberEmailEnabled:
         )
         assert self._svc()._member_has_email_enabled(m) is False
 
+    def test_training_reminders_off(self):
+        # Cert expiration alerts are training reminders; disabling that
+        # category must stop the email even with the master switch on.
+        m = SimpleNamespace(
+            notification_preferences={
+                "email_notifications": True,
+                "email": True,
+                "training_reminders": False,
+            }
+        )
+        assert self._svc()._member_has_email_enabled(m) is False
+
+    def test_training_reminders_on(self):
+        m = SimpleNamespace(
+            notification_preferences={
+                "email_notifications": True,
+                "email": True,
+                "training_reminders": True,
+            }
+        )
+        assert self._svc()._member_has_email_enabled(m) is True
+
 
 class TestProcessAlertsGuards:
     async def test_disabled_config_returns_zeros(self):

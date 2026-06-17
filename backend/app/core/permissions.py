@@ -176,6 +176,20 @@ COMPLIANCE_VIEW = Permission(
 COMPLIANCE_MANAGE = Permission(
     "compliance.manage", "Manage compliance records", PermissionCategory.COMPLIANCE
 )
+# Medical screening (fitness-for-duty / clearances — PHI). The medical
+# screening endpoints gate on these; they must be registered here to be
+# assignable to roles, otherwise the feature is unreachable except by a
+# global ("*") admin.
+MEDICAL_SCREENING_VIEW = Permission(
+    "medical_screening.view",
+    "View member medical screenings",
+    PermissionCategory.COMPLIANCE,
+)
+MEDICAL_SCREENING_MANAGE = Permission(
+    "medical_screening.manage",
+    "Manage member medical screenings",
+    PermissionCategory.COMPLIANCE,
+)
 
 # Scheduling
 SCHEDULING_VIEW = Permission(
@@ -464,6 +478,8 @@ ALL_PERMISSIONS: list[Permission] = [
     TRAINING_MANAGE,
     COMPLIANCE_VIEW,
     COMPLIANCE_MANAGE,
+    MEDICAL_SCREENING_VIEW,
+    MEDICAL_SCREENING_MANAGE,
     SCHEDULING_VIEW,
     SCHEDULING_MANAGE,
     SCHEDULING_ASSIGN,
