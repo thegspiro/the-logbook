@@ -36,8 +36,13 @@ class RecordingSession:
     def __init__(self, results):
         self._results = list(results)
         self.statements = []
+        self.added = []
         self.commit = AsyncMock()
         self.refresh = AsyncMock()
+        self.flush = AsyncMock()
+
+    def add(self, obj):
+        self.added.append(obj)
 
     async def execute(self, statement, *args, **kwargs):
         self.statements.append(statement)
@@ -184,6 +189,44 @@ class TestUpdateRequirementProgressAuth:
             updates=RequirementProgressUpdate(),
         )
         assert err is None
+
+
+class TestAddRequirementBackfill:
+    """Adding a requirement to a program must backfill progress rows for
+    in-progress enrollments, or the new requirement is never counted and a
+    member can be/stay marked complete without it."""
+
+    async def test_backfills_progress_for_active_enrollments(self):
+        from app.models.training import RequirementProgress
+        from app.schemas.training_program import ProgramRequirementCreate
+
+        program = SimpleNamespace(id=str(uuid4()), organization_id="org-1")
+        requirement = SimpleNamespace(id=str(uuid4()))
+        e1, e2 = str(uuid4()), str(uuid4())
+
+        db = RecordingSession(
+            [
+                _one(program),  # get_program_by_id
+                _one(requirement),  # TrainingRequirement lookup
+                _one(None),  # duplicate check
+                MagicMock(all=MagicMock(return_value=[(e1,), (e2,)])),  # enrollments
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc._recalculate_enrollment_progress = AsyncMock()
+
+        req_id = uuid4()
+        data = ProgramRequirementCreate(
+            program_id=uuid4(), requirement_id=req_id, is_required=True
+        )
+        result, error = await svc.add_requirement_to_program(data, uuid4())
+
+        assert error is None
+        progress_added = [o for o in db.added if isinstance(o, RequirementProgress)]
+        assert {p.enrollment_id for p in progress_added} == {e1, e2}
+        assert all(p.requirement_id == req_id for p in progress_added)
+        # Each affected enrollment is recomputed so the new requirement counts.
+        assert svc._recalculate_enrollment_progress.await_count == 2
 
 
 if __name__ == "__main__":  # pragma: no cover
