@@ -542,6 +542,105 @@ class TestPatternGeneration:
         assert len(assignments) == 2
 
     @pytest.mark.asyncio
+    async def test_platoon_rotation_assigns_per_platoon(self, db_session, setup_template):
+        """A multi-platoon 24/48 rotation should create one shift per day and
+        staff each day with only the on-duty platoon's members."""
+        org_id, user_id, user2_id, template = await setup_template
+        svc = SchedulingService(db_session)
+
+        start = date(2026, 1, 1)
+        pattern, _ = await svc.create_pattern(
+            uuid.UUID(org_id),
+            {
+                "name": "24/48 ABC",
+                "pattern_type": PatternType.PLATOON,
+                "template_id": template.id,
+                "start_date": start,
+                "days_on": 1,
+                "days_off": 2,
+                "rotation_days": 3,
+                # 3 platoons, evenly spaced offsets (0/1/2) → one on per day
+                "schedule_config": {"platoons": ["A", "B", "C"]},
+                "assigned_members": [
+                    {"user_id": user_id, "position": "officer", "platoon": "A"},
+                    {"user_id": user2_id, "position": "firefighter", "platoon": "B"},
+                ],
+            },
+            uuid.UUID(user_id),
+        )
+
+        # Generate the first full cycle (3 days)
+        shifts, err = await svc.generate_shifts_from_pattern(
+            uuid.UUID(pattern.id),
+            uuid.UUID(org_id),
+            start,
+            start + timedelta(days=2),
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        # One shift per day across the cycle
+        assert len(shifts) == 3
+        by_date = {s.shift_date: s for s in shifts}
+
+        # Day 0 → platoon A (user_id); day 1 → platoon B (user2_id);
+        # day 2 → platoon C (no members assigned).
+        day0 = await svc.get_shift_assignments(
+            uuid.UUID(by_date[start].id), uuid.UUID(org_id)
+        )
+        assert [a.user_id for a in day0] == [user_id]
+
+        day1 = await svc.get_shift_assignments(
+            uuid.UUID(by_date[start + timedelta(days=1)].id), uuid.UUID(org_id)
+        )
+        assert [a.user_id for a in day1] == [user2_id]
+
+        day2 = await svc.get_shift_assignments(
+            uuid.UUID(by_date[start + timedelta(days=2)].id), uuid.UUID(org_id)
+        )
+        assert day2 == []
+
+    @pytest.mark.asyncio
+    async def test_platoon_without_platoons_assigns_all(self, db_session, setup_template):
+        """A platoon pattern with no platoons configured keeps the original
+        behavior: every assigned member is placed on each on-day."""
+        org_id, user_id, user2_id, template = await setup_template
+        svc = SchedulingService(db_session)
+
+        start = date(2026, 1, 1)
+        pattern, _ = await svc.create_pattern(
+            uuid.UUID(org_id),
+            {
+                "name": "24/48 single platoon",
+                "pattern_type": PatternType.PLATOON,
+                "template_id": template.id,
+                "start_date": start,
+                "days_on": 1,
+                "days_off": 2,
+                "rotation_days": 3,
+                "assigned_members": [
+                    {"user_id": user_id, "position": "officer"},
+                    {"user_id": user2_id, "position": "firefighter"},
+                ],
+            },
+            uuid.UUID(user_id),
+        )
+
+        shifts, err = await svc.generate_shifts_from_pattern(
+            uuid.UUID(pattern.id),
+            uuid.UUID(org_id),
+            start,
+            start + timedelta(days=2),
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        # Single track at offset 0 → on-day only every 3rd day → 1 shift
+        assert len(shifts) == 1
+        assignments = await svc.get_shift_assignments(
+            uuid.UUID(shifts[0].id), uuid.UUID(org_id)
+        )
+        assert {a.user_id for a in assignments} == {user_id, user2_id}
+
+    @pytest.mark.asyncio
     async def test_generate_missing_template_returns_error(self, db_session, setup_org_and_users):
         org_id, user_id, _ = await setup_org_and_users
         svc = SchedulingService(db_session)

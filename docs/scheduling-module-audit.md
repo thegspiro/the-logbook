@@ -66,7 +66,16 @@ This document records a read-only review covering: security issues, incomplete s
 
 Most calculation logic (recurrence math, DST/timezone handling, inclusive overlap comparisons, compliance period bounds, hours aggregation) was spot-checked and is **correct**. Confirmed issues are concentrated in a few spots.
 
-### C1 — [NEEDS DESIGN INPUT] Multi-platoon rotation is not wired end-to-end
+### C1 — [IMPLEMENTED] Multi-platoon rotation now works end-to-end
+- **Status:** ✅ Implemented (backend generation + UI + tests).
+- **Model (grounded in fire-service standard):** A platoon pattern defines N platoons (A/B/C/D). Each platoon runs the **same base cycle offset by `i × cycle_length / num_platoons` days**, so exactly one platoon is on duty per day — matching how departments run 24/48, Kelly (9-day), 48/96, etc. Verified the offsets tile perfectly (24/48 → 0/1/2, Kelly → 0/3/6, 48/96 → 0/2/4: one platoon per day, full coverage).
+- **Backend:** `generate_shifts_from_pattern` now builds per-platoon "tracks", creates a shift for each day a platoon is on, and assigns only that platoon's members (`assigned_members[].platoon`). Optional `schedule_config.platoon_offsets` can override the even spacing. Member IDs are batch-validated against the org before assignment. Patterns with no platoons configured keep the original single-cycle behavior (backward compatible).
+- **Frontend:** New `PlatoonCrewEditor` in the pattern builder lets managers pick 2–4 platoons and assign each member (with a position) to one. Sent as `schedule_config.platoons` + `assigned_members` only once crews are assigned.
+- **Tests:** `test_platoon_rotation_assigns_per_platoon` (3-platoon 24/48 → one shift/day, correct platoon staffed each day) and `test_platoon_without_platoons_assigns_all` (backward-compat).
+
+<details><summary>Original finding (kept for history)</summary>
+
+Multi-platoon rotation was not wired end-to-end
 - **Where:** `services/scheduling_service.py` (`generate_shifts_from_pattern`, member loop ~1690); model `models/training.py:2582,2591`.
 - **Status:** ✅ Verified — deeper than first reported.
 - **Detail:** The model documents `assigned_members` as `[{"user_id","platoon","position"}]` and `schedule_config` as `{"platoons":["A","B","C"]}`, but on inspection the platoon dimension is **not implemented anywhere**:
@@ -74,7 +83,9 @@ Most calculation logic (recurrence math, DST/timezone handling, inclusive overla
   - The backend never reads `member["platoon"]` or `schedule_config["platoons"]`.
   - There is **no data model for per-platoon offset** within the rotation cycle, so there is nothing describing which platoon is on duty on a given date — i.e. nothing to filter members against.
   - As coded, *if* `assigned_members` were populated with mixed platoons, all of them would be assigned to every generated shift. In practice no members are auto-assigned via the UI at all.
-- **Why I did not "fix" it:** Owner confirmed platoon rotation is intended, but correctly implementing it is a **feature** (define how each platoon is offset within the cycle, add UI to assign members to platoons, then filter at generation), not a one-line bug fix. Inventing offset semantics blindly risks producing wrong rosters. **Open question for the owner — see end of doc.**
+- **Why I did not "fix" it initially:** correctly implementing it is a feature requiring a design decision on the offset model + a member-assignment UI. After researching the fire-service standard (see implementation note above), this was implemented.
+
+</details>
 
 ### C2 — [MEDIUM] Compliance auto-report never fires when `report_day_of_month` exceeds the month length
 - **Where:** `services/scheduled_tasks.py:3390` (`run_compliance_auto_reports`).
@@ -211,11 +222,10 @@ All confirmed findings were fixed on branch `claude/determined-lamport-8qa2mp`. 
 
 ---
 
-## Open item requiring your decision — C1 (platoon rotation)
+## C1 platoon rotation — IMPLEMENTED
 
-Multi-platoon rotation is **not implemented end-to-end** (frontend never sets `assigned_members`/`schedule_config.platoons`; backend never reads `member["platoon"]`; no per-platoon offset model exists). Implementing it properly is a feature, not a bug fix. To proceed I need to know the intended rotation model — e.g.:
-1. How is each platoon offset within the rotation cycle (fixed `cycleDays / numPlatoons` offset, or a per-member start offset)?
-2. Where should members be assigned to platoons in the UI (a new section in the pattern builder)?
-3. For day/night cycles, do platoons rotate through day→night→off, or is each platoon fixed to a slot?
+Resolved (see the C1 section above). Implemented using the fire-service standard: each platoon runs the same cycle offset by `i × cycle_length / num_platoons` days so one platoon is on per day; members are assigned to platoons in the new `PlatoonCrewEditor` and staffed onto their platoon's generated shifts. Backward compatible (patterns without platoons keep the single-cycle behavior).
 
-Once you specify the model, this can be implemented as a follow-up (generation filtering + UI + tests).
+**Notes / possible follow-ups:**
+- Editing platoon crews on an **existing** pattern: the editor is currently wired into the *create* flow. An equivalent edit flow on the pattern detail view could be added if you want to re-crew without recreating the pattern.
+- Day/night multi-platoon rotations (e.g. one platoon on days, another on nights the same date) work because day and night resolve to different start times. If two platoons ever resolve to the *same* start time on the same date, the duplicate guard keeps one shift (a misconfiguration edge).

@@ -1534,59 +1534,121 @@ class SchedulingService:
                         night_tmpl_times = (nh, nm, neh, nem)
                         night_tmpl_color = nt.color
 
-            # Determine which dates get a shift and what type they are.
-            # shift_type_map tracks the cycle entry ("on"/"day"/"night")
-            # for each date so we can pick the right template later.
-            shift_dates: list[date] = []
-            shift_type_map: dict[date, str] = {}
-            current = start_date
-            while current <= end_date:
-                should_create = False
-                entry_type = "on"
+            # ----------------------------------------------------------------
+            # Determine occurrences: which (date, shift type) combinations get
+            # a shift, and which members staff each one.
+            #
+            # Platoon patterns may define multiple platoons in
+            # schedule_config["platoons"] (e.g. ["A", "B", "C"]). Each platoon
+            # runs the SAME base cycle but offset by a different number of days
+            # so exactly one platoon is on duty per day — the standard
+            # fire-service A/B/C rotation (24/48, Kelly, 48/96, ...). Members
+            # are assigned to a platoon via assigned_members[].platoon, and
+            # only that platoon's members staff its on-days.
+            #
+            # When no platoons are configured (or for daily/weekly/custom
+            # patterns) a single track at offset 0 staffs every on-day with
+            # all assigned members — the original behavior.
+            # ----------------------------------------------------------------
+            assigned_members = pattern.assigned_members or []
 
+            # Drop any member IDs that don't belong to this org (stale entries
+            # from removed/transferred users) so generation never creates a
+            # cross-org or dangling assignment.
+            if assigned_members:
+                member_ids = {
+                    m.get("user_id") for m in assigned_members if m.get("user_id")
+                }
+                if member_ids:
+                    valid_result = await self.db.execute(
+                        select(User.id)
+                        .where(User.id.in_(member_ids))
+                        .where(User.organization_id == str(organization_id))
+                    )
+                    valid_ids = {row[0] for row in valid_result.all()}
+                    assigned_members = [
+                        m for m in assigned_members if m.get("user_id") in valid_ids
+                    ]
+
+            def _cycle_length() -> int:
+                if cycle_pattern_cfg and len(cycle_pattern_cfg) > 0:
+                    return len(cycle_pattern_cfg)
+                return (pattern.days_on or 1) + (pattern.days_off or 1)
+
+            def _occurrence(current: date, offset: int) -> tuple[bool, str]:
+                """Return (has_shift, entry_type) for a date.
+
+                ``offset`` shifts the platoon cycle by N days and only applies
+                to PLATOON patterns.
+                """
                 if pattern.pattern_type == PatternType.DAILY:
-                    should_create = True
-
-                elif pattern.pattern_type == PatternType.WEEKLY:
+                    return True, "on"
+                if pattern.pattern_type == PatternType.WEEKLY:
                     weekdays = config.get("weekdays", [])
                     # Frontend stores weekdays in JS convention
-                    # (0=Sun, 1=Mon, …, 6=Sat).
-                    # Python's date.weekday() returns 0=Mon, …, 6=Sun.
-                    # Convert Python weekday → JS weekday before comparing.
+                    # (0=Sun, …, 6=Sat); convert from Python's 0=Mon.
                     js_weekday = (current.weekday() + 1) % 7
-                    if js_weekday in weekdays:
-                        should_create = True
-
-                elif pattern.pattern_type == PatternType.PLATOON:
+                    return (js_weekday in weekdays), "on"
+                if pattern.pattern_type == PatternType.PLATOON:
+                    days_since = (current - pattern.start_date).days - offset
                     if cycle_pattern_cfg and len(cycle_pattern_cfg) > 0:
-                        # Advanced cycle: array of "on"/"off"/"day"/"night"
-                        cycle_length = len(cycle_pattern_cfg)
-                        days_since_start = (current - pattern.start_date).days
-                        position_in_cycle = days_since_start % cycle_length
-                        entry = cycle_pattern_cfg[position_in_cycle]
+                        entry = cycle_pattern_cfg[days_since % len(cycle_pattern_cfg)]
                         if isinstance(entry, str) and entry != "off":
-                            should_create = True
-                            entry_type = entry
-                    else:
-                        # Simple on/off cycle
-                        days_on = pattern.days_on or 1
-                        days_off = pattern.days_off or 1
-                        cycle_length = days_on + days_off
-                        days_since_start = (current - pattern.start_date).days
-                        position_in_cycle = days_since_start % cycle_length
-                        if position_in_cycle < days_on:
-                            should_create = True
-
-                elif pattern.pattern_type == PatternType.CUSTOM:
+                            return True, entry
+                        return False, "on"
+                    days_on = pattern.days_on or 1
+                    days_off = pattern.days_off or 1
+                    return ((days_since % (days_on + days_off)) < days_on), "on"
+                if pattern.pattern_type == PatternType.CUSTOM:
                     custom_dates = config.get("dates", [])
-                    if current.isoformat() in custom_dates:
-                        should_create = True
+                    return (current.isoformat() in custom_dates), "on"
+                return False, "on"
 
-                if should_create:
-                    shift_dates.append(current)
-                    shift_type_map[current] = entry_type
+            # Build the list of tracks: (offset_days, members for that track).
+            platoons_cfg = config.get("platoons") if isinstance(config, dict) else None
+            if not isinstance(platoons_cfg, list) or not platoons_cfg:
+                platoons_cfg = None
 
-                current += timedelta(days=1)
+            def _members_for(platoon_name: str) -> list:
+                return [
+                    m
+                    for m in assigned_members
+                    if (m.get("platoon") or None) == platoon_name
+                ]
+
+            tracks: list[tuple[int, list]] = []
+            if pattern.pattern_type == PatternType.PLATOON and platoons_cfg:
+                cycle_len = _cycle_length()
+                num_platoons = len(platoons_cfg)
+                raw_offsets = config.get("platoon_offsets")
+                offsets_cfg = raw_offsets if isinstance(raw_offsets, dict) else {}
+                for idx, platoon_name in enumerate(platoons_cfg):
+                    raw_offset = offsets_cfg.get(platoon_name)
+                    if isinstance(raw_offset, int):
+                        offset = raw_offset
+                    else:
+                        # Evenly space platoons across the cycle so exactly one
+                        # is on duty per day (offset_i = i * cycle / count).
+                        offset = round(idx * cycle_len / num_platoons)
+                    tracks.append((offset, _members_for(platoon_name)))
+            else:
+                tracks.append((0, assigned_members))
+
+            # occurrences[(date, entry_type)] -> ordered (user_id, position)
+            occurrences: dict[tuple[date, str], list[tuple[str, str]]] = {}
+            for offset, track_members in tracks:
+                current = start_date
+                while current <= end_date:
+                    has_shift, entry_type = _occurrence(current, offset)
+                    if has_shift:
+                        bucket = occurrences.setdefault((current, entry_type), [])
+                        for member in track_members:
+                            uid = member.get("user_id")
+                            if uid:
+                                bucket.append(
+                                    (uid, member.get("position", "firefighter"))
+                                )
+                    current += timedelta(days=1)
 
             # Helper: resolve template times and color for a given shift type
             def _resolve_times(stype: str) -> tuple:
@@ -1597,34 +1659,32 @@ class SchedulingService:
                     return (*day_tmpl_times, day_tmpl_color)
                 return (start_hour, start_minute, end_hour, end_minute, template.color)
 
-            # Duplicate guard: skip dates that already have a shift starting
-            # at the same time (allows multiple shifts per day, e.g. day + night)
-            if shift_dates:
+            # Duplicate guard: skip occurrences that already have a shift
+            # starting at the same time (allows multiple shifts per day, e.g.
+            # day + night). Tracks created within this run are added to the set
+            # too, so two tracks resolving to the same start time don't produce
+            # duplicate shifts.
+            if occurrences:
+                occ_dates = list({d for (d, _etype) in occurrences})
                 existing_result = await self.db.execute(
                     select(Shift.shift_date, Shift.start_time)
                     .where(Shift.organization_id == str(organization_id))
-                    .where(Shift.shift_date.in_(shift_dates))
+                    .where(Shift.shift_date.in_(occ_dates))
                 )
                 existing_shifts = {
                     (row[0], row[1].hour, row[1].minute)
                     for row in existing_result.all()
                 }
-                filtered_dates: list[date] = []
-                for d in shift_dates:
-                    sh, sm, _eh, _em, _c = _resolve_times(shift_type_map.get(d, "on"))
-                    # Convert local template time to UTC for comparison
-                    # with existing DB records (stored as UTC).
-                    local_dt = datetime(d.year, d.month, d.day, sh, sm, tzinfo=org_tz)
-                    utc_dt = local_dt.astimezone(timezone.utc)
-                    if (d, utc_dt.hour, utc_dt.minute) not in existing_shifts:
-                        filtered_dates.append(d)
-                shift_dates = filtered_dates
+            else:
+                existing_shifts = set()
 
-            # Create shifts for each date
+            # Create shifts for each occurrence (date order, day before night)
             created_shifts = []
-            for shift_date_val in shift_dates:
+            for (shift_date_val, entry_type), members in sorted(
+                occurrences.items(), key=lambda kv: (kv[0][0], kv[0][1])
+            ):
                 s_hour, s_minute, e_hour, e_minute, shift_color = _resolve_times(
-                    shift_type_map.get(shift_date_val, "on")
+                    entry_type
                 )
                 # Build datetimes in the org's local timezone, then
                 # convert to UTC for storage so the frontend's
@@ -1638,6 +1698,10 @@ class SchedulingService:
                     tzinfo=org_tz,
                 )
                 shift_start = shift_start_local.astimezone(timezone.utc)
+                start_key = (shift_date_val, shift_start.hour, shift_start.minute)
+                if start_key in existing_shifts:
+                    continue
+                existing_shifts.add(start_key)
                 shift_end_local = datetime(
                     shift_date_val.year,
                     shift_date_val.month,
@@ -1667,19 +1731,18 @@ class SchedulingService:
                 self.db.add(shift)
                 await self.db.flush()  # Get the shift ID without committing
 
-                # Auto-create assignments for assigned members (skip duplicates)
-                assigned_members = pattern.assigned_members or []
+                # Auto-create assignments for this occurrence's members
+                # (skip duplicate users on the same shift).
                 seen_users: set[str] = set()
-                for member in assigned_members:
-                    member_user_id = member.get("user_id")
-                    if not member_user_id or member_user_id in seen_users:
+                for member_user_id, position in members:
+                    if member_user_id in seen_users:
                         continue
                     seen_users.add(member_user_id)
                     assignment = ShiftAssignment(
                         organization_id=organization_id,
                         shift_id=shift.id,
                         user_id=member_user_id,
-                        position=member.get("position", "firefighter"),
+                        position=position,
                         assignment_status=AssignmentStatus.ASSIGNED,
                         assigned_by=created_by,
                     )

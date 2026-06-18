@@ -32,6 +32,9 @@ import { useTimezone } from "../../hooks/useTimezone";
 import { formatDateCustom } from "../../utils/dateFormatting";
 import { getErrorMessage } from "../../utils/errorHandling";
 import type { PresetPatternDef, CycleEntry } from "./shiftPatternPresets";
+import { PlatoonCrewEditor } from "./PlatoonCrewEditor";
+import type { PlatoonAssignment } from "./PlatoonCrewEditor";
+import { useSchedulingStore } from "../../modules/scheduling/store/schedulingStore";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
 const PresetPatterns = lazyWithRetry(() => import("./PresetPatterns"));
@@ -132,6 +135,13 @@ export const PatternsTab: React.FC = () => {
   });
   const [creating, setCreating] = useState(false);
 
+  // Platoon crews (platoon patterns only)
+  const { members, loadMembers } = useSchedulingStore();
+  const [platoons, setPlatoons] = useState<string[]>(["A", "B", "C"]);
+  const [crewAssignments, setCrewAssignments] = useState<PlatoonAssignment[]>(
+    [],
+  );
+
   // Generate form
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
   const [generateForm, setGenerateForm] = useState({
@@ -166,6 +176,10 @@ export const PatternsTab: React.FC = () => {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    void loadMembers();
+  }, [loadMembers]);
+
   // Escape key closes inline confirmations
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -198,6 +212,8 @@ export const PatternsTab: React.FC = () => {
     setCreationMode("preset");
     setSelectedPreset(null);
     setCustomCyclePattern(Array.from({ length: 7 }, () => "off" as const));
+    setPlatoons(["A", "B", "C"]);
+    setCrewAssignments([]);
     setCreateForm({
       name: "",
       description: "",
@@ -288,6 +304,17 @@ export const PatternsTab: React.FC = () => {
         }
       }
 
+      // Attach platoons + crew assignments for platoon rotations. Only send
+      // them once crews are assigned, so an unconfigured platoon pattern keeps
+      // the simpler single-cycle behavior.
+      const assignedMembers =
+        patternType === "platoon" && crewAssignments.length > 0
+          ? crewAssignments
+          : undefined;
+      if (assignedMembers) {
+        scheduleConfig.platoons = platoons;
+      }
+
       await schedulingService.createPattern({
         name: createForm.name,
         description: createForm.description || undefined,
@@ -301,6 +328,7 @@ export const PatternsTab: React.FC = () => {
         rotation_days: rotationDays,
         schedule_config:
           Object.keys(scheduleConfig).length > 0 ? scheduleConfig : undefined,
+        assigned_members: assignedMembers,
       });
       toast.success("Pattern created");
       resetCreateForm();
@@ -759,6 +787,20 @@ export const PatternsTab: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Platoons & crew assignment (platoon rotations only) */}
+                {((creationMode === "preset" && selectedPreset) ||
+                  creationMode === "custom" ||
+                  (creationMode === "manual" &&
+                    createForm.pattern_type === "platoon")) && (
+                  <PlatoonCrewEditor
+                    members={members}
+                    platoons={platoons}
+                    assignments={crewAssignments}
+                    onPlatoonsChange={setPlatoons}
+                    onAssignmentsChange={setCrewAssignments}
+                  />
+                )}
 
                 {/* Actions */}
                 <div className="flex items-center gap-2 justify-end pt-2">
