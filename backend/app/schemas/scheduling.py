@@ -327,14 +327,6 @@ class PatternType(str, PyEnum):
 # ============================================
 
 
-class TemplateCategory(str, PyEnum):
-    """Enum for shift template categories"""
-
-    STANDARD = "standard"
-    SPECIALTY = "specialty"
-    EVENT = "event"
-
-
 class ShiftTemplateCreate(BaseModel):
     """Schema for creating a shift template"""
 
@@ -465,13 +457,6 @@ class GenerateShiftsRequest(BaseModel):
     end_date: date
 
 
-class GenerateShiftsResponse(BaseModel):
-    """Schema for shift generation response"""
-
-    shifts_created: int
-    shifts: List[ShiftResponse]
-
-
 # ============================================
 # Shift Assignment Schemas
 # ============================================
@@ -592,14 +577,6 @@ class ShiftTimeOffCreate(BaseModel):
         return self
 
 
-class ShiftTimeOffUpdate(BaseModel):
-    """Schema for updating a time off request"""
-
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    reason: Optional[str] = None
-
-
 class ShiftTimeOffReview(BaseModel):
     """Schema for reviewing a time off request"""
 
@@ -625,51 +602,6 @@ class ShiftTimeOffResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
-
-
-# ============================================
-# Reporting Schemas
-# ============================================
-
-
-class MemberHoursReport(BaseModel):
-    """Schema for member hours report"""
-
-    user_id: UUID
-    email: str
-    first_name: str = ""
-    last_name: str = ""
-    shift_count: int
-    total_minutes: int
-    total_hours: float
-
-
-class ShiftCoverageReport(BaseModel):
-    """Schema for shift coverage report"""
-
-    date: str
-    total_shifts: int
-    total_assigned: int
-    total_confirmed: int
-    understaffed_shifts: int
-
-
-class CallVolumeReport(BaseModel):
-    """Schema for call volume report"""
-
-    period: str
-    total_calls: int
-    by_type: dict
-    avg_response_seconds: Optional[float] = None
-
-
-class MemberHoursListResponse(BaseModel):
-    """Schema for member hours list response"""
-
-    members: List[MemberHoursReport]
-    period_start: date
-    period_end: date
-    total_members: int
 
 
 # ============================================

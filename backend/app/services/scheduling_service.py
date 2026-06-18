@@ -739,6 +739,21 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    async def _user_in_org(self, user_id: UUID, organization_id: UUID) -> bool:
+        """Return True if user_id belongs to the given organization.
+
+        Used to reject caller-supplied user IDs (attendance, assignments)
+        that reference members of a different organization (cross-tenant write).
+        """
+        if not user_id:
+            return False
+        result = await self.db.execute(
+            select(User.id)
+            .where(User.id == str(user_id))
+            .where(User.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none() is not None
+
     async def get_active_shift_for_apparatus(
         self,
         apparatus_id: str,
@@ -948,6 +963,12 @@ class SchedulingService:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return None, "Shift not found"
+
+            att_user_id = attendance_data.get("user_id")
+            if att_user_id and not await self._user_in_org(
+                att_user_id, organization_id
+            ):
+                return None, "User not found"
 
             attendance = ShiftAttendance(shift_id=shift_id, **attendance_data)
 
@@ -1696,6 +1717,9 @@ class SchedulingService:
 
             user_id = assignment_data.get("user_id")
 
+            if user_id and not await self._user_in_org(user_id, organization_id):
+                return None, "User not found"
+
             # Prevent duplicate assignment to the same shift
             if user_id:
                 dup_result = await self.db.execute(
@@ -1945,19 +1969,20 @@ class SchedulingService:
             return False, str(e)
 
     async def confirm_assignment(
-        self, assignment_id: UUID, user_id: UUID, organization_id: Optional[UUID] = None
+        self, assignment_id: UUID, user_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
-        """Confirm a shift assignment (by the assigned user)"""
+        """Confirm a shift assignment (by the assigned user).
+
+        organization_id is required and always filtered so a confirmation can
+        never cross tenants even if the caller passes a foreign assignment id.
+        """
         try:
             query = (
                 select(ShiftAssignment)
                 .where(ShiftAssignment.id == str(assignment_id))
                 .where(ShiftAssignment.user_id == str(user_id))
+                .where(ShiftAssignment.organization_id == str(organization_id))
             )
-            if organization_id:
-                query = query.where(
-                    ShiftAssignment.organization_id == str(organization_id)
-                )
             result = await self.db.execute(query)
             assignment = result.scalar_one_or_none()
             if not assignment:
@@ -2384,8 +2409,50 @@ class SchedulingService:
     async def create_swap_request(
         self, organization_id: UUID, requesting_user_id: UUID, swap_data: Dict[str, Any]
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
-        """Create a new shift swap request"""
+        """Create a new shift swap request.
+
+        The caller-supplied shift/user IDs are untrusted, so each is validated
+        against the caller's organization before persisting. Without this a
+        member could reference shifts they are not on, or IDs from another
+        organization, and have them enter the swap review queue (IDOR).
+        """
         try:
+            offering_shift_id = swap_data.get("offering_shift_id")
+            requesting_shift_id = swap_data.get("requesting_shift_id")
+            target_user_id = swap_data.get("target_user_id")
+
+            # The offering shift must exist in the caller's org and the
+            # requester must actually hold an assignment on it.
+            offering_shift = await self.get_shift_by_id(
+                offering_shift_id, organization_id
+            )
+            if not offering_shift:
+                return None, "Offering shift not found"
+
+            own_assignment = await self.db.execute(
+                select(ShiftAssignment.id)
+                .where(ShiftAssignment.shift_id == str(offering_shift_id))
+                .where(ShiftAssignment.user_id == str(requesting_user_id))
+                .where(ShiftAssignment.organization_id == str(organization_id))
+            )
+            if own_assignment.scalar_one_or_none() is None:
+                return None, "You are not assigned to the offering shift"
+
+            # Optional targets must also be in the caller's org.
+            if requesting_shift_id and not await self.get_shift_by_id(
+                requesting_shift_id, organization_id
+            ):
+                return None, "Requested shift not found"
+
+            if target_user_id:
+                target_user = await self.db.execute(
+                    select(User.id)
+                    .where(User.id == str(target_user_id))
+                    .where(User.organization_id == str(organization_id))
+                )
+                if target_user.scalar_one_or_none() is None:
+                    return None, "Target user not found"
+
             swap_request = ShiftSwapRequest(
                 organization_id=organization_id,
                 requesting_user_id=requesting_user_id,
@@ -2507,7 +2574,31 @@ class SchedulingService:
                     req_assignment.user_id = swap_request.target_user_id
                     target_assign.user_id = swap_request.requesting_user_id
                 elif req_assignment and swap_request.requesting_shift_id:
-                    # Move requesting user to the new shift
+                    # Move requesting user to the new shift. Guard against an
+                    # existing active assignment on the target shift, which
+                    # would otherwise violate UniqueConstraint(shift_id,
+                    # user_id) and surface as a raw DB error.
+                    dup_result = await self.db.execute(
+                        select(ShiftAssignment.id)
+                        .where(
+                            ShiftAssignment.shift_id == swap_request.requesting_shift_id
+                        )
+                        .where(
+                            ShiftAssignment.user_id == swap_request.requesting_user_id
+                        )
+                        .where(ShiftAssignment.organization_id == str(organization_id))
+                        .where(
+                            ShiftAssignment.assignment_status.notin_(
+                                self.INACTIVE_ASSIGNMENT_STATUSES
+                            )
+                        )
+                    )
+                    if dup_result.scalar_one_or_none():
+                        await self.db.rollback()
+                        return (
+                            None,
+                            "Member is already assigned to the requested shift",
+                        )
                     req_assignment.shift_id = swap_request.requesting_shift_id
 
             await self.db.commit()

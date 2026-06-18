@@ -670,7 +670,9 @@ class TestAssignmentManagement:
             uuid.UUID(user_id),
         )
 
-        confirmed, err = await svc.confirm_assignment(uuid.UUID(assignment.id), uuid.UUID(user2_id))
+        confirmed, err = await svc.confirm_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(user2_id), uuid.UUID(org_id)
+        )
         assert err is None
         assert confirmed.assignment_status == AssignmentStatus.CONFIRMED
         assert confirmed.confirmed_at is not None
@@ -697,7 +699,9 @@ class TestAssignmentManagement:
         )
 
         # user_id (the officer) tries to confirm user2's assignment
-        result, err = await svc.confirm_assignment(uuid.UUID(assignment.id), uuid.UUID(user_id))
+        result, err = await svc.confirm_assignment(
+            uuid.UUID(assignment.id), uuid.UUID(user_id), uuid.UUID(org_id)
+        )
         assert result is None
         assert "not assigned to you" in err.lower() or "not found" in err.lower()
 

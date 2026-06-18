@@ -71,6 +71,10 @@ from app.services.shift_eligibility_service import ShiftEligibilityService
 
 router = APIRouter()
 
+# Maximum span for the open-shifts lookup window (about a year), so a caller
+# cannot request an arbitrarily wide date range.
+MAX_OPEN_SHIFTS_DAYS = 366
+
 
 def _safe_detail(prefix: str, error: str | None) -> str:
     """Build a sanitized error detail from a service-layer error string."""
@@ -239,6 +243,18 @@ async def get_open_shifts(
     except ValueError:
         raise HTTPException(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
+        )
+
+    # Bound the window so a caller cannot request an arbitrarily wide range
+    # (and so a reversed range is rejected rather than silently scanning).
+    if end < start:
+        raise HTTPException(
+            status_code=400, detail="end_date must not be before start_date."
+        )
+    if (end - start).days > MAX_OPEN_SHIFTS_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Date range must not exceed {MAX_OPEN_SHIFTS_DAYS} days.",
         )
 
     # Date window, finalized status, and apparatus are filtered in SQL; the

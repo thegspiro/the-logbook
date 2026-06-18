@@ -92,7 +92,7 @@ export interface SwapRequestReview {
 export interface TimeOffCreate {
   start_date: string;
   end_date: string;
-  reason?: string;
+  reason?: string | undefined;
 }
 
 export interface TimeOffReview {
@@ -259,40 +259,32 @@ export interface MemberHoursReport {
   total_members: number;
 }
 
+// The coverage and call-volume report endpoints return a bare array of
+// per-period entries (see backend get_shift_coverage_report /
+// get_call_volume_report), not a wrapper object.
 export interface CoverageReportEntry {
   date: string;
-  shifts_scheduled: number;
-  positions_filled: number;
-  positions_needed: number;
-  coverage_percentage: number;
-}
-
-export interface CoverageReport {
-  entries: CoverageReportEntry[];
-  period_start: string;
-  period_end: string;
-  average_coverage: number;
+  total_shifts: number;
+  total_assigned: number;
+  total_confirmed: number;
+  understaffed_shifts: number;
 }
 
 export interface CallVolumeReportEntry {
-  date: string;
-  call_count: number;
-  incident_types: Record<string, number>;
-}
-
-export interface CallVolumeReport {
-  entries: CallVolumeReportEntry[];
-  period_start: string;
-  period_end: string;
+  period: string;
   total_calls: number;
+  by_type: Record<string, number>;
+  avg_response_seconds?: number;
 }
 
 export interface AvailabilityRecord {
   user_id: string;
-  user_name: string;
-  date: string;
-  is_available: boolean;
-  reason?: string;
+  user_name?: string;
+  email?: string;
+  available_dates: string[];
+  unavailable_dates: string[];
+  total_shifts_assigned: number;
+  time_off_days: number;
 }
 
 // ============================================================================

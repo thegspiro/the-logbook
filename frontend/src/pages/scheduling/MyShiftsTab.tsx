@@ -162,7 +162,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       await schedulingService.createSwapRequest({
         offering_shift_id: swapAssignment.shift_id,
         requesting_shift_id: (swapForm.target_shift_id && swapForm.target_shift_id !== 'pick') ? swapForm.target_shift_id : undefined,
-        reason: swapForm.reason,
+        reason: swapForm.reason || undefined,
       });
       toast.success('Swap request submitted — check Requests tab for status');
       setShowSwapModal(false);
@@ -193,7 +193,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       await schedulingService.createTimeOff({
         start_date: timeOffForm.start_date,
         end_date: timeOffForm.end_date || timeOffForm.start_date,
-        reason: timeOffForm.reason,
+        reason: timeOffForm.reason || undefined,
       });
       toast.success('Time off request submitted — check Requests tab for status');
       setShowTimeOffModal(false);
@@ -267,13 +267,15 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const handleBulkConfirm = async () => {
     setBulkActioning(true);
     let count = 0;
+    let failed = 0;
     for (const id of selectedIds) {
       try {
         await schedulingService.confirmAssignment(id);
         count++;
-      } catch { /* individual failures handled silently */ }
+      } catch { failed++; }
     }
     if (count > 0) toast.success(`${count} shift${count > 1 ? 's' : ''} confirmed`);
+    if (failed > 0) toast.error(`${failed} shift${failed > 1 ? 's' : ''} could not be confirmed`);
     setSelectedIds(new Set());
     setBulkActioning(false);
     void loadData();
@@ -282,13 +284,15 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const handleBulkDecline = async () => {
     setBulkActioning(true);
     let count = 0;
+    let failed = 0;
     for (const id of selectedIds) {
       try {
         await schedulingService.updateAssignment(id, { assignment_status: 'declined' });
         count++;
-      } catch { /* individual failures handled silently */ }
+      } catch { failed++; }
     }
     if (count > 0) toast.success(`${count} shift${count > 1 ? 's' : ''} declined`);
+    if (failed > 0) toast.error(`${failed} shift${failed > 1 ? 's' : ''} could not be declined`);
     setSelectedIds(new Set());
     setBulkActioning(false);
     void loadData();

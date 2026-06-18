@@ -41,8 +41,8 @@ import type {
   CheckTemplateItemUpdate,
   ShiftEquipmentCheckCreate,
   StandaloneEquipmentCheckCreate,
-  CoverageReport,
-  CallVolumeReport,
+  CoverageReportEntry,
+  CallVolumeReportEntry,
   AvailabilityRecord,
   ShiftSignupResponse,
   EligiblePositionsResponse,
@@ -518,12 +518,12 @@ export const schedulingService = {
     const response = await api.get<MemberHoursReport>('/scheduling/reports/member-hours', { params });
     return response.data;
   },
-  async getCoverageReport(params?: ReportFilters): Promise<CoverageReport> {
-    const response = await api.get<CoverageReport>('/scheduling/reports/coverage', { params });
+  async getCoverageReport(params?: ReportFilters): Promise<CoverageReportEntry[]> {
+    const response = await api.get<CoverageReportEntry[]>('/scheduling/reports/coverage', { params });
     return response.data;
   },
-  async getCallVolumeReport(params?: ReportFilters): Promise<CallVolumeReport> {
-    const response = await api.get<CallVolumeReport>('/scheduling/reports/call-volume', { params });
+  async getCallVolumeReport(params?: ReportFilters): Promise<CallVolumeReportEntry[]> {
+    const response = await api.get<CallVolumeReportEntry[]>('/scheduling/reports/call-volume', { params });
     return response.data;
   },
   async getAvailability(params?: AvailabilityFilters): Promise<AvailabilityRecord[]> {

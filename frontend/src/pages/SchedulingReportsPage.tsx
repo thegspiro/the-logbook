@@ -26,54 +26,14 @@ import {
 } from 'lucide-react';
 import { schedulingService } from '../modules/scheduling/services/api';
 import type { RequirementComplianceSummary } from '../modules/scheduling/services/api';
+import type {
+  MemberHoursReport,
+  CoverageReportEntry,
+  CallVolumeReportEntry,
+  AvailabilityRecord,
+} from '../modules/scheduling/types';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
-
-// ============================================
-// Interfaces
-// ============================================
-
-interface MemberHoursRecord {
-  user_id: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  shift_count: number;
-  total_minutes: number;
-  total_hours: number;
-}
-
-interface MemberHoursReport {
-  members: MemberHoursRecord[];
-  period_start: string;
-  period_end: string;
-  total_members: number;
-}
-
-interface CoverageRecord {
-  date: string;
-  total_shifts: number;
-  total_assigned: number;
-  total_confirmed: number;
-  understaffed_shifts: number;
-}
-
-interface CallVolumeRecord {
-  period: string;
-  total_calls: number;
-  by_type: Record<string, number>;
-  avg_response_seconds?: number;
-}
-
-interface AvailabilityRecord {
-  user_id: string;
-  user_name?: string;
-  email?: string;
-  available_dates: string[];
-  unavailable_dates: string[];
-  total_shifts_assigned: number;
-  time_off_days: number;
-}
 
 type TabView = 'member-hours' | 'coverage' | 'call-volume' | 'availability' | 'compliance';
 
@@ -193,10 +153,10 @@ export const SchedulingReportsPage: React.FC = () => {
   const [memberHoursReport, setMemberHoursReport] = useState<MemberHoursReport | null>(null);
 
   // Coverage state
-  const [coverageData, setCoverageData] = useState<CoverageRecord[]>([]);
+  const [coverageData, setCoverageData] = useState<CoverageReportEntry[]>([]);
 
   // Call Volume state
-  const [callVolumeData, setCallVolumeData] = useState<CallVolumeRecord[]>([]);
+  const [callVolumeData, setCallVolumeData] = useState<CallVolumeReportEntry[]>([]);
   const [groupBy, setGroupBy] = useState('day');
 
   // Availability state
@@ -240,9 +200,7 @@ export const SchedulingReportsPage: React.FC = () => {
     setHasSearched(true);
     try {
       const data = await schedulingService.getCoverageReport({ start_date: startDate, end_date: endDate });
-      // Data might be an array or an object with entries
-      const records = Array.isArray(data) ? data : (data).entries || [];
-      setCoverageData(records as unknown as CoverageRecord[]);
+      setCoverageData(data);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load coverage report'));
     } finally {
@@ -256,8 +214,7 @@ export const SchedulingReportsPage: React.FC = () => {
     setHasSearched(true);
     try {
       const data = await schedulingService.getCallVolumeReport({ start_date: startDate, end_date: endDate, group_by: groupBy });
-      const records = Array.isArray(data) ? data : (data).entries || [];
-      setCallVolumeData(records as unknown as CallVolumeRecord[]);
+      setCallVolumeData(data);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load call volume report'));
     } finally {
@@ -271,7 +228,7 @@ export const SchedulingReportsPage: React.FC = () => {
     setHasSearched(true);
     try {
       const data = await schedulingService.getAvailability({ start_date: startDate, end_date: endDate });
-      setAvailabilityData(data as unknown as AvailabilityRecord[]);
+      setAvailabilityData(data);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load availability'));
     } finally {
