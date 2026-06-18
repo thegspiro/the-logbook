@@ -583,6 +583,39 @@ class TrainingProgramService:
         )
 
         self.db.add(program_requirement)
+        await self.db.flush()
+
+        # Backfill progress rows for in-progress enrollments. Enrollment creates
+        # a RequirementProgress row per requirement up front, and completion is
+        # the average over those rows — so a requirement added after members
+        # enrolled would never be counted, letting them be (or stay) marked
+        # complete without it. Give every non-terminal enrollment a NOT_STARTED
+        # row for the new requirement and recompute, so the new requirement
+        # actually counts toward completion.
+        enrollment_rows = await self.db.execute(
+            select(ProgramEnrollment.id).where(
+                ProgramEnrollment.program_id
+                == str(program_requirement_data.program_id),
+                ProgramEnrollment.status.in_(
+                    [EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD]
+                ),
+            )
+        )
+        affected_ids = [row[0] for row in enrollment_rows.all()]
+        for eid in affected_ids:
+            self.db.add(
+                RequirementProgress(
+                    enrollment_id=eid,
+                    requirement_id=program_requirement_data.requirement_id,
+                    status=RequirementProgressStatus.NOT_STARTED,
+                    progress_value=0.0,
+                    progress_percentage=0.0,
+                )
+            )
+        await self.db.flush()
+        for eid in affected_ids:
+            await self._recalculate_enrollment_progress(UUID(eid))
+
         await self.db.commit()
         await self.db.refresh(program_requirement)
 

@@ -576,7 +576,10 @@ async def approve_step(
     service = FinanceService(db)
     try:
         record = await service.approve_step(
-            step_record_id, str(current_user.id), data.notes
+            step_record_id,
+            str(current_user.id),
+            data.notes,
+            org_id=str(current_user.organization_id),
         )
         await log_audit_event(
             db=db,
@@ -607,7 +610,10 @@ async def deny_step(
     service = FinanceService(db)
     try:
         record = await service.deny_step(
-            step_record_id, str(current_user.id), data.notes
+            step_record_id,
+            str(current_user.id),
+            data.notes,
+            org_id=str(current_user.organization_id),
         )
         await log_audit_event(
             db=db,

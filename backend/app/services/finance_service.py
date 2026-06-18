@@ -516,12 +516,25 @@ class FinanceService:
         return None
 
     async def approve_step(
-        self, step_record_id: str, approver_id: str, notes: Optional[str] = None
+        self,
+        step_record_id: str,
+        approver_id: str,
+        notes: Optional[str] = None,
+        *,
+        org_id: str,
     ) -> ApprovalStepRecord:
+        # Scope the lookup to the caller's org via the owning chain. The endpoint
+        # only proves the caller holds finance.approve in their OWN org, so
+        # without this join a user could approve an approval step belonging to
+        # another organization's purchase request (cross-tenant IDOR).
         result = await self.db.execute(
             select(ApprovalStepRecord)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
             .options(selectinload(ApprovalStepRecord.step))
-            .where(ApprovalStepRecord.id == step_record_id)
+            .where(
+                ApprovalStepRecord.id == step_record_id,
+                ApprovalChain.organization_id == org_id,
+            )
         )
         record = result.scalar_one_or_none()
         if not record:
@@ -553,12 +566,23 @@ class FinanceService:
         return record
 
     async def deny_step(
-        self, step_record_id: str, denier_id: str, notes: Optional[str] = None
+        self,
+        step_record_id: str,
+        denier_id: str,
+        notes: Optional[str] = None,
+        *,
+        org_id: str,
     ) -> ApprovalStepRecord:
+        # Org-scoped via the owning chain — see approve_step for the IDOR this
+        # join closes.
         result = await self.db.execute(
             select(ApprovalStepRecord)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
             .options(selectinload(ApprovalStepRecord.step))
-            .where(ApprovalStepRecord.id == step_record_id)
+            .where(
+                ApprovalStepRecord.id == step_record_id,
+                ApprovalChain.organization_id == org_id,
+            )
         )
         record = result.scalar_one_or_none()
         if not record:
@@ -798,11 +822,12 @@ class FinanceService:
                 entity.status = PurchaseRequestStatus.DENIED
                 entity.approved_by = denier_id
                 entity.denial_reason = reason
-                # Release any encumbrance
-                if entity.budget_id:
-                    await self._release_encumbrance(
-                        entity.budget_id, float(entity.estimated_amount)
-                    )
+                # No encumbrance to release here: budget is encumbered only in
+                # _finalize_approval, which runs once every step is non-pending.
+                # A denial requires a PENDING step, so it can only occur before
+                # approval — i.e. before any encumbrance exists. Releasing one
+                # anyway subtracted from the budget's shared amount_encumbered
+                # and silently corrupted other PRs' encumbrances on that budget.
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
             result = await self.db.execute(
                 select(ExpenseReport).where(ExpenseReport.id == entity_id)

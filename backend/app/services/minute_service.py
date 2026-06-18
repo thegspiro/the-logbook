@@ -532,9 +532,15 @@ class MinuteService:
             update_data = {k: v for k, v in update_data.items() if k in allowed}
 
         if "status" in update_data:
-            update_data["status"] = MinutesActionItemStatus(update_data["status"])
-            if update_data["status"] == MinutesActionItemStatus.COMPLETED:
+            new_status = MinutesActionItemStatus(update_data["status"])
+            update_data["status"] = new_status
+            # Keep completed_at consistent with the status: stamp it when the
+            # item is completed, and clear it when the item is reopened so a
+            # previously-completed item doesn't keep a stale completion date.
+            if new_status == MinutesActionItemStatus.COMPLETED:
                 update_data["completed_at"] = datetime.now(timezone.utc)
+            else:
+                update_data["completed_at"] = None
 
         if "priority" in update_data:
             update_data["priority"] = ActionItemPriority(update_data["priority"])

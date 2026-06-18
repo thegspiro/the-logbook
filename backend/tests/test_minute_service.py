@@ -693,9 +693,7 @@ class TestRejectMinutes:
         mock_db.commit.assert_awaited()
 
     @pytest.mark.unit
-    async def test_reject_draft_minutes_raises(
-        self, service, mock_db, org_id, user_id
-    ):
+    async def test_reject_draft_minutes_raises(self, service, mock_db, org_id, user_id):
         """reject_minutes raises ValueError for draft minutes."""
         minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
         service.get_minutes = AsyncMock(return_value=minutes)
@@ -965,9 +963,7 @@ class TestAddActionItem:
         assert result is None
 
     @pytest.mark.unit
-    async def test_add_action_item_to_approved_minutes(
-        self, service, mock_db, org_id
-    ):
+    async def test_add_action_item_to_approved_minutes(self, service, mock_db, org_id):
         """add_action_item works even on approved minutes (no status restriction)."""
         minutes = _make_minutes(status=MinutesStatus.APPROVED.value)
         service.get_minutes = AsyncMock(return_value=minutes)
@@ -985,9 +981,7 @@ class TestAddActionItem:
 class TestUpdateActionItem:
 
     @pytest.mark.unit
-    async def test_update_action_item_on_draft_minutes(
-        self, service, mock_db, org_id
-    ):
+    async def test_update_action_item_on_draft_minutes(self, service, mock_db, org_id):
         """update_action_item allows all fields on draft minutes."""
         minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
         service.get_minutes = AsyncMock(return_value=minutes)
@@ -1003,9 +997,7 @@ class TestUpdateActionItem:
             assignee_name="New Person",
         )
 
-        result = await service.update_action_item(
-            item.id, minutes.id, org_id, data
-        )
+        result = await service.update_action_item(item.id, minutes.id, org_id, data)
 
         assert result is not None
         assert item.description == "Updated description"
@@ -1036,9 +1028,7 @@ class TestUpdateActionItem:
             completion_notes="Done",
         )
 
-        result = await service.update_action_item(
-            item.id, minutes.id, org_id, data
-        )
+        result = await service.update_action_item(item.id, minutes.id, org_id, data)
 
         assert result is not None
         # description should NOT be updated on approved minutes
@@ -1062,13 +1052,34 @@ class TestUpdateActionItem:
         mock_db.execute.return_value = mock_result
 
         data = ActionItemUpdate(status="completed")
-        updated = await service.update_action_item(
-            item.id, minutes.id, org_id, data
-        )
+        updated = await service.update_action_item(item.id, minutes.id, org_id, data)
 
         assert updated is not None
         assert item.status == MinutesActionItemStatus.COMPLETED
         assert item.completed_at is not None
+
+    @pytest.mark.unit
+    async def test_reopening_completed_item_clears_completed_at(
+        self, service, mock_db, org_id
+    ):
+        """Moving an item out of COMPLETED clears its stale completion date."""
+        minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        item = _make_action_item(
+            minutes_id=minutes.id,
+            status=MinutesActionItemStatus.COMPLETED,
+            completed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = item
+        mock_db.execute.return_value = mock_result
+
+        data = ActionItemUpdate(status="in_progress")
+        await service.update_action_item(item.id, minutes.id, org_id, data)
+
+        assert item.status == MinutesActionItemStatus.IN_PROGRESS
+        assert item.completed_at is None
 
     @pytest.mark.unit
     async def test_update_action_item_not_found(self, service, mock_db, org_id):
@@ -1088,9 +1099,7 @@ class TestUpdateActionItem:
         assert result is None
 
     @pytest.mark.unit
-    async def test_update_action_item_minutes_not_found(
-        self, service, mock_db, org_id
-    ):
+    async def test_update_action_item_minutes_not_found(self, service, mock_db, org_id):
         """update_action_item returns None when minutes not found."""
         service.get_minutes = AsyncMock(return_value=None)
 
@@ -1147,9 +1156,7 @@ class TestDeleteActionItem:
         assert result is False
 
     @pytest.mark.unit
-    async def test_delete_action_item_minutes_not_found(
-        self, service, mock_db, org_id
-    ):
+    async def test_delete_action_item_minutes_not_found(self, service, mock_db, org_id):
         """delete_action_item returns False when minutes not found."""
         service.get_minutes = AsyncMock(return_value=None)
 
@@ -1199,7 +1206,12 @@ class TestGetStats:
         pending_result.scalar.return_value = 2
 
         mock_db.execute = AsyncMock(
-            side_effect=[total_result, this_month_result, open_items_result, pending_result]
+            side_effect=[
+                total_result,
+                this_month_result,
+                open_items_result,
+                pending_result,
+            ]
         )
 
         result = await service.get_stats(org_id)
@@ -1215,9 +1227,7 @@ class TestGetStats:
         none_result = MagicMock()
         none_result.scalar.return_value = None
 
-        mock_db.execute = AsyncMock(
-            return_value=none_result
-        )
+        mock_db.execute = AsyncMock(return_value=none_result)
 
         result = await service.get_stats(org_id)
 
@@ -1257,7 +1267,9 @@ class TestCreateFromMeeting:
         mock_result.scalar_one_or_none.return_value = mock_meeting
         mock_db.execute.return_value = mock_result
 
-        with patch("app.services.minute_service.generate_uuid", return_value="gen-uuid"):
+        with patch(
+            "app.services.minute_service.generate_uuid", return_value="gen-uuid"
+        ):
             result = await service.create_from_meeting(meeting_id, org_id, user_id)
 
         assert result is not None
@@ -1326,11 +1338,11 @@ class TestCreateFromMeeting:
         user_result = MagicMock()
         user_result.scalar_one_or_none.return_value = mock_user
 
-        mock_db.execute = AsyncMock(
-            side_effect=[meeting_result, user_result]
-        )
+        mock_db.execute = AsyncMock(side_effect=[meeting_result, user_result])
 
-        with patch("app.services.minute_service.generate_uuid", return_value="gen-uuid"):
+        with patch(
+            "app.services.minute_service.generate_uuid", return_value="gen-uuid"
+        ):
             result = await service.create_from_meeting(meeting_id, org_id, user_id)
 
         assert result is not None
@@ -1363,8 +1375,12 @@ class TestCreateFromMeeting:
         mock_result.scalar_one_or_none.return_value = mock_meeting
         mock_db.execute.return_value = mock_result
 
-        with patch("app.services.minute_service.generate_uuid", return_value="gen-uuid"):
-            from_meeting = await service.create_from_meeting(meeting_id, org_id, user_id)
+        with patch(
+            "app.services.minute_service.generate_uuid", return_value="gen-uuid"
+        ):
+            from_meeting = await service.create_from_meeting(
+                meeting_id, org_id, user_id
+            )
 
         assert from_meeting is not None
         created = mock_db.add.call_args[0][0]

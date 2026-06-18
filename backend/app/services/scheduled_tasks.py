@@ -244,6 +244,24 @@ SCHEDULE = {
         "recommended_time": "06:00",
         "cron": "0 6 * * *",
     },
+    "admin_hours_auto_close": {
+        "description": "Auto-close admin-hours sessions that exceeded their category's max-hours limit (caps a forgotten clock-in and flags it for review)",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
+    "expire_ip_exceptions": {
+        "description": "Mark approved IP allowlist/blocklist exceptions past their valid_until as expired (nothing else recomputes the stored status)",
+        "frequency": "daily",
+        "recommended_time": "00:30",
+        "cron": "30 0 * * *",
+    },
+    "membership_inactivity_warnings": {
+        "description": "Log inactivity warnings and auto-mark stale prospects inactive once they exceed their pipeline/step inactivity timeout (skips pipelines configured 'never')",
+        "frequency": "daily",
+        "recommended_time": "06:30",
+        "cron": "30 6 * * *",
+    },
 }
 
 
@@ -375,6 +393,28 @@ async def run_membership_tier_advance(db: AsyncSession) -> Dict[str, Any]:
         return result.get("advanced", 0)
 
     return await _for_each_org(db, "membership_tier_advance", _process)
+
+
+async def run_membership_inactivity_warnings(db: AsyncSession) -> Dict[str, Any]:
+    """Process prospect inactivity warnings and auto-mark stale prospects inactive.
+
+    check_inactivity only flags prospects whose pipeline/step has an inactivity
+    timeout configured (preset 'never' is skipped), so orgs that never opted in
+    are untouched. The underlying method is documented to run on a schedule but
+    had no caller, so without this runner stale prospects were only transitioned
+    when an admin manually hit the endpoint.
+    """
+    from app.services.membership_pipeline_service import MembershipPipelineService
+
+    async def _process(db_session, org):
+        service = MembershipPipelineService(db_session)
+        result = await service.process_inactivity_warnings(
+            organization_id=str(org.id),
+            processed_by=None,
+        )
+        return result.get("warnings_sent", 0) + result.get("marked_inactive", 0)
+
+    return await _for_each_org(db, "membership_inactivity_warnings", _process)
 
 
 async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
@@ -3148,6 +3188,12 @@ async def run_inventory_overdue_alerts(db: AsyncSession) -> Dict[str, Any]:
 
     async def process(db_session: AsyncSession, org: Organization) -> int:
         service = InventoryService(db_session)
+        # Refresh the stored is_overdue flag before alerting. Nothing else calls
+        # mark_overdue_checkouts, so without this the inventory dashboards and
+        # summary counts that filter on is_overdue undercount checkouts as they
+        # pass their expected return date. (The alert list below uses a live
+        # expected_return_at query and is unaffected.)
+        await service.mark_overdue_checkouts(org.id)
         overdue = await service.get_overdue_checkouts_for_alerts(org.id)
         if not overdue:
             return 0
@@ -4091,6 +4137,40 @@ async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "mark_overdue_maintenance", "marked_overdue": total}
 
 
+async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
+    """Auto-close admin-hours sessions that exceeded their category limit.
+
+    AdminHoursService.auto_close_stale_sessions caps a forgotten clock-in to the
+    category's max_hours_per_session and flags it for review, but it was only
+    reachable via a manual admin endpoint — nothing ran it on a schedule, so a
+    member who forgot to clock out accrued unbounded time until an admin
+    happened to trigger cleanup. Runs every 30 minutes.
+    """
+    from app.services.admin_hours_service import AdminHoursService
+
+    service = AdminHoursService(db)
+    closed = await service.auto_close_stale_sessions()
+    await db.commit()
+    if closed:
+        logger.info("Admin-hours auto-close: %d stale session(s)", closed)
+    return {"task": "admin_hours_auto_close", "closed": closed}
+
+
+async def run_expire_ip_exceptions(db: AsyncSession) -> Dict[str, Any]:
+    """Mark approved IP exceptions past their valid_until as EXPIRED.
+
+    IPSecurityService.expire_old_exceptions is documented to run on a daily
+    cron but had no caller, so expired allowlist/blocklist exceptions kept an
+    APPROVED status indefinitely — admin views and any query filtering on
+    approval_status without a live valid_until check would still treat them as
+    active. Runs daily.
+    """
+    from app.services.ip_security_service import ip_security_service
+
+    expired = await ip_security_service.expire_old_exceptions(db)
+    return {"task": "expire_ip_exceptions", "expired": expired}
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -4119,6 +4199,9 @@ TASK_RUNNERS = {
     "external_training_auto_sync": run_external_training_auto_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
+    "admin_hours_auto_close": run_admin_hours_auto_close,
+    "expire_ip_exceptions": run_expire_ip_exceptions,
+    "membership_inactivity_warnings": run_membership_inactivity_warnings,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -4155,6 +4238,9 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "trainee_report_escalation": 86400,
     "mark_overdue_dues": 86400,
     "mark_overdue_maintenance": 86400,
+    "admin_hours_auto_close": 1800,
+    "expire_ip_exceptions": 86400,
+    "membership_inactivity_warnings": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

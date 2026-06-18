@@ -218,15 +218,22 @@ class FundraisingService:
         if not donation:
             return None
 
+        # Capture the prior campaign/donor before applying the update so a
+        # reassignment (donation moved to a different campaign or donor)
+        # recomputes the *old* parent too — otherwise the previous campaign's
+        # current_amount and donor's total_donated stay overstated.
+        old_campaign_id = donation.campaign_id
+        old_donor_id = donation.donor_id
+
         for key, value in data.items():
             setattr(donation, key, value)
         await self.db.flush()
 
-        # Recalculate aggregates
-        if donation.campaign_id:
-            await self._update_campaign_total(donation.campaign_id)
-        if donation.donor_id:
-            await self._update_donor_stats(donation.donor_id)
+        # Recalculate aggregates for both the old and new campaign/donor.
+        for cid in {old_campaign_id, donation.campaign_id} - {None}:
+            await self._update_campaign_total(cid)
+        for did in {old_donor_id, donation.donor_id} - {None}:
+            await self._update_donor_stats(did)
 
         return donation
 

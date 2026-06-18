@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.document import Document, DocumentFolder, DocumentStatus, DocumentType
-from app.models.inventory import CheckOutRecord, ItemAssignment
+from app.models.inventory import CheckOutRecord, ItemAssignment, ItemIssuance
 from app.models.user import Organization, User
 
 
@@ -104,6 +104,21 @@ class PropertyReturnService:
         )
         checkouts = checkout_result.scalars().all()
 
+        # Gather pool-issued items (units issued from a pool-tracked item, e.g.
+        # uniform pieces). Unreturned issuances are accountable property too —
+        # they block the member's auto-archival and appear in departure
+        # clearance — so the formal return letter must list them.
+        issuance_result = await self.db.execute(
+            select(ItemIssuance)
+            .where(
+                ItemIssuance.organization_id == organization_id,
+                ItemIssuance.user_id == user_id,
+                ItemIssuance.is_returned == False,  # noqa: E712
+            )
+            .options(selectinload(ItemIssuance.item))
+        )
+        issuances = issuance_result.scalars().all()
+
         # Build item list with values
         items: List[Dict[str, Any]] = []
         total_value = 0.0
@@ -147,6 +162,27 @@ class PropertyReturnService:
                     "assigned_date": (
                         c.checked_out_at.astimezone(org_tz).strftime("%m/%d/%Y")
                         if c.checked_out_at
+                        else "-"
+                    ),
+                }
+            )
+
+        for iss in issuances:
+            item = iss.item
+            qty = iss.quantity_issued or 1
+            value = float(item.current_value or item.purchase_price or 0) * qty
+            total_value += value
+            items.append(
+                {
+                    "name": f"{item.name} (x{qty})" if qty > 1 else item.name,
+                    "serial_number": "-",
+                    "asset_tag": item.asset_tag or "-",
+                    "condition": item.condition.value if item.condition else "unknown",
+                    "value": value,
+                    "type": "issued",
+                    "assigned_date": (
+                        iss.issued_at.astimezone(org_tz).strftime("%m/%d/%Y")
+                        if iss.issued_at
                         else "-"
                     ),
                 }
@@ -286,9 +322,11 @@ class PropertyReturnService:
         # Build the item rows
         item_rows = ""
         for idx, item in enumerate(data["items"], 1):
-            item_type_label = (
-                "Assigned" if item["type"] == "assigned" else "Checked Out"
-            )
+            item_type_label = {
+                "assigned": "Assigned",
+                "checked_out": "Checked Out",
+                "issued": "Issued",
+            }.get(item["type"], "Checked Out")
             item_rows += f"""
             <tr>
                 <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">{idx}</td>
