@@ -516,12 +516,25 @@ class FinanceService:
         return None
 
     async def approve_step(
-        self, step_record_id: str, approver_id: str, notes: Optional[str] = None
+        self,
+        step_record_id: str,
+        approver_id: str,
+        notes: Optional[str] = None,
+        *,
+        org_id: str,
     ) -> ApprovalStepRecord:
+        # Scope the lookup to the caller's org via the owning chain. The endpoint
+        # only proves the caller holds finance.approve in their OWN org, so
+        # without this join a user could approve an approval step belonging to
+        # another organization's purchase request (cross-tenant IDOR).
         result = await self.db.execute(
             select(ApprovalStepRecord)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
             .options(selectinload(ApprovalStepRecord.step))
-            .where(ApprovalStepRecord.id == step_record_id)
+            .where(
+                ApprovalStepRecord.id == step_record_id,
+                ApprovalChain.organization_id == org_id,
+            )
         )
         record = result.scalar_one_or_none()
         if not record:
@@ -553,12 +566,23 @@ class FinanceService:
         return record
 
     async def deny_step(
-        self, step_record_id: str, denier_id: str, notes: Optional[str] = None
+        self,
+        step_record_id: str,
+        denier_id: str,
+        notes: Optional[str] = None,
+        *,
+        org_id: str,
     ) -> ApprovalStepRecord:
+        # Org-scoped via the owning chain — see approve_step for the IDOR this
+        # join closes.
         result = await self.db.execute(
             select(ApprovalStepRecord)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
             .options(selectinload(ApprovalStepRecord.step))
-            .where(ApprovalStepRecord.id == step_record_id)
+            .where(
+                ApprovalStepRecord.id == step_record_id,
+                ApprovalChain.organization_id == org_id,
+            )
         )
         record = result.scalar_one_or_none()
         if not record:

@@ -374,7 +374,7 @@ class TestApprovalChainService:
         assert current is not None
         assert current.id == records[0].id
 
-        await service.approve_step(records[0].id, user_id, "Looks good")
+        await service.approve_step(records[0].id, user_id, "Looks good", org_id=org_id)
 
         # Check step 2 is now current
         current2 = await service.get_current_pending_step(
@@ -424,7 +424,7 @@ class TestApprovalChainService:
         )
 
         # Approve step 1 → notification step should auto-advance
-        await service.approve_step(records[0].id, user_id)
+        await service.approve_step(records[0].id, user_id, org_id=org_id)
 
         updated_records = await service.get_approval_records(
             ApprovalEntityType.PURCHASE_REQUEST, "test-notify-entity"
@@ -502,9 +502,60 @@ class TestApprovalChainService:
             user_id,
         )
 
-        denied = await service.deny_step(records[0].id, user_id, "Budget exceeded")
+        denied = await service.deny_step(
+            records[0].id, user_id, "Budget exceeded", org_id=org_id
+        )
         assert denied.status == ApprovalStepStatus.DENIED
         assert denied.notes == "Budget exceeded"
+
+    async def test_approve_step_is_org_scoped(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """A step record must not be approvable by a caller scoped to another org.
+
+        require_permission only proves the caller holds finance.approve in their
+        own org, so the service has to verify the step's owning chain belongs to
+        that org or it is a cross-tenant IDOR.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Org-scoped",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "Approve",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+            ],
+        )
+        records = await service.create_approval_records(
+            chain,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            "org-scope-entity",
+            1000.00,
+            user_id,
+        )
+
+        # A caller from a different org cannot see (or act on) the record.
+        with pytest.raises(ValueError, match="not found"):
+            await service.approve_step(records[0].id, user_id, org_id="some-other-org")
+        with pytest.raises(ValueError, match="not found"):
+            await service.deny_step(
+                records[0].id, user_id, "no", org_id="some-other-org"
+            )
+
+        # The owning org still works.
+        approved = await service.approve_step(records[0].id, user_id, org_id=org_id)
+        assert approved.status == ApprovalStepStatus.APPROVED
 
     async def test_denial_does_not_release_other_prs_encumbrance(
         self, db_session: AsyncSession, sample_org_data
@@ -569,7 +620,7 @@ class TestApprovalChainService:
             5000.00,
             user_id,
         )
-        await service.approve_step(a_records[0].id, user_id)
+        await service.approve_step(a_records[0].id, user_id, org_id=org_id)
 
         budget_after_a = await service.get_budget(budget.id, org_id)
         assert float(budget_after_a.amount_encumbered) == 5000.00
@@ -614,8 +665,8 @@ class TestApprovalChainService:
             3000.00,
             user_id,
         )
-        await service.approve_step(b_records[0].id, user_id)
-        await service.deny_step(b_records[1].id, user_id, "Not needed")
+        await service.approve_step(b_records[0].id, user_id, org_id=org_id)
+        await service.deny_step(b_records[1].id, user_id, "Not needed", org_id=org_id)
 
         # PR-A's $5000 encumbrance must be untouched by PR-B's denial.
         budget_final = await service.get_budget(budget.id, org_id)
