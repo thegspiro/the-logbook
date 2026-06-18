@@ -315,12 +315,15 @@ async def get_shift(
         attendance_records, member_call_counts
     )
 
+    platoon_roster = await service.get_platoon_roster_for_shift(shift)
+
     return {
         **d,
         "attendees": attendees,
         "attendee_count": len(attendees),
         "call_count": call_count,
         "total_hours": total_hours,
+        "platoon_roster": platoon_roster,
     }
 
 

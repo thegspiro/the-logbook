@@ -97,6 +97,7 @@ class ShiftResponse(UTCResponseBase):
     apparatus_id: Optional[str] = None
     apparatus_name: Optional[str] = None
     apparatus_unit_number: Optional[str] = None
+    platoon: Optional[str] = None
     positions: Optional[List[Any]] = None
     apparatus_positions: Optional[List[Any]] = None
     min_staffing: Optional[int] = None
@@ -174,10 +175,25 @@ class ShiftAttendanceResponse(UTCResponseBase):
 # ============================================
 
 
+class PlatoonRosterEntry(BaseModel):
+    """A platoon member's status for a specific shift."""
+
+    user_id: UUID
+    user_name: str
+    # "assigned" (on the shift), "on_leave" (approved time-off / leave that
+    # date), or "available" (in the platoon, not assigned, could fill in).
+    status: str
+
+    model_config = _response_config
+
+
 class ShiftDetailResponse(ShiftResponse):
     """Extended shift response with attendees"""
 
     attendees: List[ShiftAttendanceResponse] = []
+    # Full duty-platoon roster for the shift's platoon (when set), so officers
+    # can see who is on, who is on leave, and who could fill in / be held over.
+    platoon_roster: List[PlatoonRosterEntry] = []
 
     model_config = _response_config
 

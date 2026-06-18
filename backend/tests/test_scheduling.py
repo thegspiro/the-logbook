@@ -687,6 +687,11 @@ class TestPatternGeneration:
         assert len(shifts) == 3
         by_date = {s.shift_date: s for s in shifts}
 
+        # Each generated shift is tagged with its duty platoon.
+        assert by_date[start].platoon == "A"
+        assert by_date[start + timedelta(days=1)].platoon == "B"
+        assert by_date[start + timedelta(days=2)].platoon == "C"
+
         day0 = await svc.get_shift_assignments(
             uuid.UUID(by_date[start].id), uuid.UUID(org_id)
         )
@@ -696,6 +701,10 @@ class TestPatternGeneration:
             uuid.UUID(by_date[start + timedelta(days=1)].id), uuid.UUID(org_id)
         )
         assert [a.user_id for a in day1] == [user2_id]  # platoon B
+
+        # Roster for platoon A's shift: the A member shows as assigned.
+        roster = await svc.get_platoon_roster_for_shift(by_date[start])
+        assert {r["user_id"]: r["status"] for r in roster} == {user_id: "assigned"}
 
     @pytest.mark.asyncio
     async def test_platoon_skips_members_on_approved_time_off(
@@ -757,6 +766,62 @@ class TestPatternGeneration:
             uuid.UUID(by_date[start].id), uuid.UUID(org_id)
         )
         assert day0 == []
+
+    @pytest.mark.asyncio
+    async def test_platoon_roster_reports_member_status(self, db_session, setup_template):
+        """The platoon roster reports each member as assigned, available, or
+        on_leave for hold-over decisions."""
+        org_id, user_id, user2_id, template = await setup_template
+        svc = SchedulingService(db_session)
+
+        for uid in (user_id, user2_id):
+            await db_session.execute(
+                text("UPDATE users SET platoon = 'A' WHERE id = :id"), {"id": uid}
+            )
+        await db_session.flush()
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+                "platoon": "A",
+            },
+            uuid.UUID(user_id),
+        )
+        # user_id assigned; user2_id in the platoon but unassigned (available).
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        roster = await svc.get_platoon_roster_for_shift(shift)
+        assert {r["user_id"]: r["status"] for r in roster} == {
+            user_id: "assigned",
+            user2_id: "available",
+        }
+
+        # Put the available member on approved time-off → on_leave.
+        time_off, _ = await svc.create_time_off(
+            uuid.UUID(org_id),
+            uuid.UUID(user2_id),
+            {"start_date": today, "end_date": today},
+        )
+        await svc.review_time_off(
+            uuid.UUID(time_off.id),
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            TimeOffStatus.APPROVED,
+        )
+
+        roster2 = await svc.get_platoon_roster_for_shift(shift)
+        assert {r["user_id"]: r["status"] for r in roster2} == {
+            user_id: "assigned",
+            user2_id: "on_leave",
+        }
 
     @pytest.mark.asyncio
     async def test_generate_missing_template_returns_error(self, db_session, setup_org_and_users):

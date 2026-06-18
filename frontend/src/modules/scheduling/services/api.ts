@@ -91,6 +91,7 @@ export interface ShiftRecord {
   apparatus_name?: string;
   apparatus_unit_number?: string;
   apparatus_type?: string;
+  platoon?: string | null;
   positions?: PositionSlot[] | null;
   apparatus_positions?: PositionSlot[] | null;
   min_staffing?: number | null;
@@ -111,6 +112,13 @@ export interface ShiftRecord {
   updated_at: string;
   created_by?: string;
   attendees?: ShiftAttendanceRecord[];
+  platoon_roster?: PlatoonRosterEntry[];
+}
+
+export interface PlatoonRosterEntry {
+  user_id: string;
+  user_name: string;
+  status: 'assigned' | 'on_leave' | 'available';
 }
 
 export interface ShiftAttendanceRecord {

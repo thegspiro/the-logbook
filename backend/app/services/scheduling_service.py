@@ -1641,7 +1641,7 @@ class SchedulingService:
                     return explicit
                 return live_platoon_members.get(platoon_name, [])
 
-            tracks: list[tuple[int, list]] = []
+            tracks: list[tuple[int, Optional[str], list]] = []
             if pattern.pattern_type == PatternType.PLATOON and platoons_cfg:
                 cycle_len = _cycle_length()
                 num_platoons = len(platoons_cfg)
@@ -1655,9 +1655,9 @@ class SchedulingService:
                         # Evenly space platoons across the cycle so exactly one
                         # is on duty per day (offset_i = i * cycle / count).
                         offset = round(idx * cycle_len / num_platoons)
-                    tracks.append((offset, _members_for(platoon_name)))
+                    tracks.append((offset, platoon_name, _members_for(platoon_name)))
             else:
-                tracks.append((0, assigned_members))
+                tracks.append((0, None, assigned_members))
 
             # Members on approved time-off or active leave are skipped on those
             # dates, so the generated roster reflects who can actually work and
@@ -1665,7 +1665,7 @@ class SchedulingService:
             candidate_ids = list(
                 {
                     m.get("user_id")
-                    for _offset, track_members in tracks
+                    for _offset, _platoon, track_members in tracks
                     for m in track_members
                     if m.get("user_id")
                 }
@@ -1674,22 +1674,25 @@ class SchedulingService:
                 organization_id, candidate_ids, start_date, end_date
             )
 
-            # occurrences[(date, entry_type)] -> ordered (user_id, position)
-            occurrences: dict[tuple[date, str], list[tuple[str, str]]] = {}
-            for offset, track_members in tracks:
+            # occurrences[(date, entry_type)] -> {"platoon", "members"}
+            occurrences: dict[tuple[date, str], dict] = {}
+            for offset, platoon_name, track_members in tracks:
                 current = start_date
                 while current <= end_date:
                     has_shift, entry_type = _occurrence(current, offset)
                     if has_shift:
                         iso = current.isoformat()
-                        bucket = occurrences.setdefault((current, entry_type), [])
+                        occ = occurrences.setdefault(
+                            (current, entry_type),
+                            {"platoon": platoon_name, "members": []},
+                        )
                         for member in track_members:
                             uid = member.get("user_id")
                             if not uid:
                                 continue
                             if iso in unavailable_by_user.get(uid, ()):
                                 continue
-                            bucket.append(
+                            occ["members"].append(
                                 (uid, member.get("position", "firefighter"))
                             )
                     current += timedelta(days=1)
@@ -1724,9 +1727,11 @@ class SchedulingService:
 
             # Create shifts for each occurrence (date order, day before night)
             created_shifts = []
-            for (shift_date_val, entry_type), members in sorted(
+            for (shift_date_val, entry_type), occ in sorted(
                 occurrences.items(), key=lambda kv: (kv[0][0], kv[0][1])
             ):
+                members = occ["members"]
+                shift_platoon = occ["platoon"]
                 s_hour, s_minute, e_hour, e_minute, shift_color = _resolve_times(
                     entry_type
                 )
@@ -1765,6 +1770,7 @@ class SchedulingService:
                     start_time=shift_start,
                     end_time=shift_end,
                     apparatus_id=getattr(template, "apparatus_id", None),
+                    platoon=shift_platoon,
                     color=shift_color,
                     positions=self._resolve_template_positions(
                         getattr(template, "positions", None)
@@ -3006,6 +3012,73 @@ class SchedulingService:
                 d += timedelta(days=1)
 
         return user_unavailable
+
+    async def get_platoon_roster_for_shift(self, shift: Shift) -> List[Dict]:
+        """Return the duty-platoon roster for a shift.
+
+        For each active member of the shift's platoon, reports whether they are
+        ``assigned`` to this shift, ``on_leave`` (approved time-off / active
+        leave on the shift date), or ``available`` (in the platoon but not
+        assigned — a candidate to fill in or be held over). Returns an empty
+        list for shifts not tied to a platoon.
+        """
+        if not shift.platoon:
+            return []
+
+        org_id = shift.organization_id
+
+        # Active members of this platoon.
+        member_result = await self.db.execute(
+            select(User.id, User.first_name, User.last_name, User.email).where(
+                User.organization_id == str(org_id),
+                User.platoon == shift.platoon,
+                User.status == "active",
+            )
+        )
+        members = member_result.all()
+        if not members:
+            return []
+
+        member_ids = [str(m.id) for m in members]
+
+        # Who is actively assigned to this shift.
+        assigned_result = await self.db.execute(
+            select(ShiftAssignment.user_id).where(
+                ShiftAssignment.shift_id == str(shift.id),
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                ),
+            )
+        )
+        assigned_ids = {str(uid) for (uid,) in assigned_result.all()}
+
+        # Who is unavailable on the shift date.
+        unavailable = await self._get_unavailable_dates_by_user(
+            org_id, member_ids, shift.shift_date, shift.shift_date
+        )
+        iso = shift.shift_date.isoformat()
+
+        roster = []
+        for m in members:
+            uid = str(m.id)
+            if uid in assigned_ids:
+                status = "assigned"
+            elif iso in unavailable.get(uid, ()):
+                status = "on_leave"
+            else:
+                status = "available"
+            name = f"{m.first_name or ''} {m.last_name or ''}".strip()
+            roster.append(
+                {
+                    "user_id": uid,
+                    "user_name": name or m.email or uid,
+                    "status": status,
+                }
+            )
+        # Surface assigned first, then available, then on-leave; alpha within.
+        order = {"assigned": 0, "available": 1, "on_leave": 2}
+        roster.sort(key=lambda r: (order.get(r["status"], 3), r["user_name"]))
+        return roster
 
     async def cancel_member_assignments_in_range(
         self,
