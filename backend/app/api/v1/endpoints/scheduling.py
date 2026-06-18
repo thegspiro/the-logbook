@@ -33,6 +33,7 @@ from app.schemas.scheduling import (
     GenerateShiftsRequest,
     SchedulingEligibilitySettings,
     SchedulingEligibilitySettingsResponse,
+    SchedulingFeatureSettings,
     SchedulingSummary,
     ShiftAssignmentCreate,
     ShiftAssignmentResponse,
@@ -1978,4 +1979,40 @@ async def update_eligibility_settings(
             [],
         ),
         open_positions=result.get("open_positions", []),
+    )
+
+
+@router.get("/settings", response_model=SchedulingFeatureSettings)
+async def get_scheduling_feature_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Department-wide scheduling feature toggles. Readable by any member so
+    the UI can gate platoon features."""
+    service = ShiftEligibilityService(db)
+    org = await service._get_org(current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    return SchedulingFeatureSettings(
+        platoons_enabled=service.get_platoons_enabled(org),
+    )
+
+
+@router.put("/settings", response_model=SchedulingFeatureSettings)
+async def update_scheduling_feature_settings(
+    data: SchedulingFeatureSettings,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Update department-wide scheduling feature toggles."""
+    service = ShiftEligibilityService(db)
+    try:
+        result = await service.update_scheduling_settings(
+            organization_id=current_user.organization_id,
+            platoons_enabled=data.platoons_enabled,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    return SchedulingFeatureSettings(
+        platoons_enabled=bool(result.get("platoons_enabled", False)),
     )

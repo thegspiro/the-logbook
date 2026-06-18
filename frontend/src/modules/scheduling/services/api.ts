@@ -609,6 +609,16 @@ export const schedulingService = {
     return response.data;
   },
 
+  // --- Department feature toggles ---
+  async getFeatureSettings(): Promise<{ platoons_enabled: boolean }> {
+    const response = await api.get<{ platoons_enabled: boolean }>('/scheduling/settings');
+    return response.data;
+  },
+  async updateFeatureSettings(data: { platoons_enabled: boolean }): Promise<{ platoons_enabled: boolean }> {
+    const response = await api.put<{ platoons_enabled: boolean }>('/scheduling/settings', data);
+    return response.data;
+  },
+
   // --- Shift Compliance ---
   async getComplianceReport(params?: { reference_date?: string }): Promise<ShiftComplianceResponse> {
     const response = await api.get<ShiftComplianceResponse>('/scheduling/reports/compliance', { params });

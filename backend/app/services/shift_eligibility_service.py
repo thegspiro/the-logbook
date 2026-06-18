@@ -73,6 +73,11 @@ class ShiftEligibilityService:
         sched = self._get_scheduling_settings(org)
         return sched.get("open_positions", [])
 
+    def get_platoons_enabled(self, org: Organization) -> bool:
+        """Whether platoon scheduling features are enabled for the org."""
+        sched = self._get_scheduling_settings(org)
+        return bool(sched.get("platoons_enabled", False))
+
     # ------------------------------------------------------------------
     # Eligibility resolution
     # ------------------------------------------------------------------
@@ -216,6 +221,7 @@ class ShiftEligibilityService:
         organization_id: str,
         excluded_membership_types: Optional[List[str]] = None,
         open_positions: Optional[List[str]] = None,
+        platoons_enabled: Optional[bool] = None,
     ) -> dict:
         """Update scheduling eligibility settings on the organization."""
         org = await self._get_org(organization_id)
@@ -229,6 +235,8 @@ class ShiftEligibilityService:
             scheduling["excluded_membership_types"] = excluded_membership_types
         if open_positions is not None:
             scheduling["open_positions"] = open_positions
+        if platoons_enabled is not None:
+            scheduling["platoons_enabled"] = platoons_enabled
 
         settings["scheduling"] = scheduling
         org.settings = settings

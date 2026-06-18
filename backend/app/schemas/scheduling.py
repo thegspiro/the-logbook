@@ -657,6 +657,12 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
     open_positions: List[str]
 
 
+class SchedulingFeatureSettings(BaseModel):
+    """Department-wide scheduling feature toggles (readable by any member)."""
+
+    platoons_enabled: bool = False
+
+
 # ============================================
 # Basic Apparatus (Lightweight, for non-module departments)
 # ============================================

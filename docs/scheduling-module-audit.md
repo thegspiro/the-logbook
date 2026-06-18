@@ -252,6 +252,11 @@ So generated platoon rosters reflect the actual makeup and free up spots for fil
 - **Hold-over roster:** the shift detail endpoint now returns `platoon_roster` (`get_platoon_roster_for_shift`) — every active member of the shift's platoon labeled **On shift / On leave / Available**. The detail panel renders it so an officer can see at a glance who's covering, who's out on leave, and who's available to fill in or be held over.
 - **Tests:** roster status assertions in `test_platoon_pulls_live_member_platoon` and `test_platoon_roster_reports_member_status`.
 
+### Department toggle + card badge + one-click fill-in (implemented)
+- **Department toggle:** `org.settings["scheduling"]["platoons_enabled"]` (default off), exposed via member-readable `GET /scheduling/settings` and `PUT` (scheduling.manage). A switch in Scheduling Settings → General turns platoon scheduling on/off. When off, all platoon UI is hidden (the Platoons settings tab, the pattern-builder platoon selector + payload, the shift/MyShifts/card badges, and the roster). The scheduling store loads the flag (`platoonsEnabled`) via `loadInitialData`.
+- **Card badge:** shift cards show a compact platoon marker (gated by the toggle).
+- **One-click fill-in / hold-over:** each `Available` row in the shift-detail platoon roster has an **Assign** button that adds that member to the shift (defaults to firefighter, adjustable in the crew board), then refreshes the roster.
+
 Note (separate latent issue, not fixed here): the `MembersAdminPage` inline profile-edit modal appears unwired — it has no opener and never prefills from the selected user. Worth a follow-up, but platoon assignment is fully covered by the roster + per-member edit page + importer.
 
 **Notes / possible follow-ups:**

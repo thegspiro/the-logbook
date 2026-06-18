@@ -60,7 +60,10 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     loadApparatus,
     members: memberOptions,
     loadMembers,
+    platoonsEnabled,
+    loadSettings,
   } = useSchedulingStore();
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
 
   const [shift, setShift] = useState(initialShift);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -117,6 +120,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     assigning: false,
     loadingMembers: false,
     bulkAssigning: false,
+    assigningRoster: false,
   });
   const setPendingFlag = useCallback((key: keyof typeof pending, value: boolean) =>
     setPending(prev => ({ ...prev, [key]: value })), []);
@@ -255,7 +259,28 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     ]);
     setAssignments(assignData);
     setShift(shiftData);
+    setPlatoonRoster(shiftData.platoon_roster ?? []);
     setUnavailableIds(new Set(unavailable));
+  };
+
+  // One-click fill-in / hold-over: assign an available platoon member to the
+  // shift straight from the roster. Position defaults to firefighter and can
+  // be adjusted afterward in the crew board.
+  const handleAssignFromRoster = async (userId: string) => {
+    setPendingFlag('assigningRoster', true);
+    try {
+      await schedulingService.createAssignment(shift.id, {
+        user_id: userId,
+        position: 'firefighter',
+      });
+      toast.success('Member assigned to shift');
+      await refreshAssignments();
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to assign member'));
+    } finally {
+      setPendingFlag('assigningRoster', false);
+    }
   };
 
   const handleSignup = async (position?: string) => {
@@ -681,7 +706,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               <p className="text-xs sm:text-sm text-theme-text-secondary mt-1 truncate">
                 {formatDateCustom(shiftDate, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }, tz)}
               </p>
-              {shift.platoon && (
+              {platoonsEnabled && shift.platoon && (
                 <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20">
                   Platoon {shift.platoon}
                 </span>
@@ -1375,7 +1400,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           )}
 
           {/* Platoon roster: who's on, on leave, or available to fill in */}
-          {shift.platoon && platoonRoster.length > 0 && (
+          {platoonsEnabled && shift.platoon && platoonRoster.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-theme-text-primary mb-2">
                 Platoon {shift.platoon} Roster
@@ -1388,15 +1413,27 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       : entry.status === 'on_leave'
                         ? { label: 'On leave', cls: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20' }
                         : { label: 'Available', cls: 'bg-theme-surface-hover text-theme-text-muted border-theme-surface-border' };
+                  const canFillIn = entry.status === 'available' && canAssign && !shift.is_finalized;
                   return (
                     <div
                       key={entry.user_id}
                       className="flex items-center justify-between gap-2 rounded-lg border border-theme-surface-border px-3 py-1.5"
                     >
                       <span className="text-sm text-theme-text-primary truncate">{entry.user_name}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border shrink-0 ${badge.cls}`}>
-                        {badge.label}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${badge.cls}`}>
+                          {badge.label}
+                        </span>
+                        {canFillIn && (
+                          <button
+                            onClick={() => { void handleAssignFromRoster(entry.user_id); }}
+                            disabled={pending.assigningRoster}
+                            className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-50 transition-colors"
+                          >
+                            Assign
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

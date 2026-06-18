@@ -40,11 +40,17 @@ interface SchedulingState {
   summaryLoading: boolean;
   summaryError: string | null;
 
+  // Department feature toggle: whether platoon scheduling UI is shown.
+  platoonsEnabled: boolean;
+  settingsLoaded: boolean;
+
   // ─── Actions ────────────────────────────────────────────────────────────
   loadMembers: () => Promise<void>;
   loadTemplates: () => Promise<void>;
   loadApparatus: () => Promise<void>;
   loadSummary: () => Promise<void>;
+  loadSettings: () => Promise<void>;
+  setPlatoonsEnabled: (enabled: boolean) => void;
   loadInitialData: () => Promise<void>;
 }
 
@@ -65,7 +71,23 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   summaryLoading: false,
   summaryError: null,
 
+  platoonsEnabled: false,
+  settingsLoaded: false,
+
   // ─── Actions ────────────────────────────────────────────────────────────
+
+  loadSettings: async () => {
+    if (get().settingsLoaded) return;
+    try {
+      const settings = await schedulingService.getFeatureSettings();
+      set({ platoonsEnabled: settings.platoons_enabled, settingsLoaded: true });
+    } catch {
+      // Non-critical — default to platoons disabled on failure.
+      set({ settingsLoaded: true });
+    }
+  },
+
+  setPlatoonsEnabled: (enabled) => set({ platoonsEnabled: enabled }),
 
   loadMembers: async () => {
     if (get().membersLoaded || get().membersLoading) return;
@@ -137,6 +159,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     if (!state.templatesLoaded && !state.templatesLoading)
       promises.push(state.loadTemplates());
     if (!state.apparatusLoaded) promises.push(state.loadApparatus());
+    if (!state.settingsLoaded) promises.push(state.loadSettings());
     await Promise.all(promises);
   },
 }));

@@ -135,7 +135,7 @@ export const PatternsTab: React.FC = () => {
   const [creating, setCreating] = useState(false);
 
   // Platoons declared by a rotation pattern (membership lives on profiles)
-  const { members, loadMembers } = useSchedulingStore();
+  const { members, loadMembers, platoonsEnabled, loadSettings } = useSchedulingStore();
   const [platoons, setPlatoons] = useState<string[]>(["A", "B", "C"]);
 
   // Generate form
@@ -174,7 +174,8 @@ export const PatternsTab: React.FC = () => {
 
   useEffect(() => {
     void loadMembers();
-  }, [loadMembers]);
+    void loadSettings();
+  }, [loadMembers, loadSettings]);
 
   // Escape key closes inline confirmations
   useEffect(() => {
@@ -302,7 +303,7 @@ export const PatternsTab: React.FC = () => {
       // Declare the platoons a rotation covers. Generation pulls current
       // members by their profile platoon (User.platoon) — no per-pattern crew
       // snapshot is stored.
-      if (patternType === "platoon" && platoons.length > 0) {
+      if (platoonsEnabled && patternType === "platoon" && platoons.length > 0) {
         scheduleConfig.platoons = platoons;
       }
 
@@ -779,7 +780,8 @@ export const PatternsTab: React.FC = () => {
                 </div>
 
                 {/* Platoon declaration (platoon rotations only) */}
-                {((creationMode === "preset" && selectedPreset) ||
+                {platoonsEnabled &&
+                  ((creationMode === "preset" && selectedPreset) ||
                   creationMode === "custom" ||
                   (creationMode === "manual" &&
                     createForm.pattern_type === "platoon")) && (

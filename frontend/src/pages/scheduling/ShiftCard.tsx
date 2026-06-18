@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import type { ShiftRecord } from "../../modules/scheduling";
 import { normalizePositions } from "../../modules/scheduling/services/api";
+import { useSchedulingStore } from "../../modules/scheduling/store/schedulingStore";
 import { formatTime } from "../../utils/dateFormatting";
 import { colorCardStyle } from "../../utils/colorContrast";
 
@@ -131,6 +132,8 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
 }) => {
   const card = getShiftCardAppearance(shift, resolvedTheme);
   const v = VARIANT_STYLES[variant];
+  const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
+  const showPlatoon = platoonsEnabled && !!shift.platoon;
   const hoverRing = touchOnly
     ? "active:ring-2 active:ring-violet-500/50"
     : "hover:ring-2 hover:ring-violet-500/50";
@@ -159,6 +162,7 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
             ({shift.attendee_count}
             {getStaffingTarget(shift) != null && `/${getStaffingTarget(shift)}`})
           </span>
+          {showPlatoon && <span className="ml-1 font-semibold text-violet-700 dark:text-violet-300">{shift.platoon}</span>}
         </p>
       </button>
     );
@@ -208,6 +212,11 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
           <span className={`opacity-70 flex items-center ${iconGap} ${variant === "mobile" ? "text-xs" : ""}`}>
             <Truck className={v.iconSize} />{" "}
             {shift.apparatus_unit_number}
+          </span>
+        )}
+        {showPlatoon && (
+          <span className={`flex items-center rounded px-1 font-medium bg-violet-500/15 text-violet-700 dark:text-violet-300 ${variant === "mobile" ? "text-xs" : "text-[10px]"}`}>
+            {shift.platoon}
           </span>
         )}
       </div>

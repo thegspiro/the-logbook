@@ -21,6 +21,7 @@ import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dat
 import { getErrorMessage } from '../../utils/errorHandling';
 import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { useAuthStore } from '../../stores/authStore';
+import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -29,6 +30,9 @@ interface MyShiftsTabProps {
 export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const tz = useTimezone();
   const platoon = useAuthStore((s) => s.user?.platoon);
+  const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
+  const loadSettings = useSchedulingStore((s) => s.loadSettings);
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
   const [searchParams] = useSearchParams();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -328,7 +332,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
             Past ({past.length})
           </button>
           </div>
-          {platoon && (
+          {platoonsEnabled && platoon && (
             <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 whitespace-nowrap">
               Platoon {platoon}
             </span>

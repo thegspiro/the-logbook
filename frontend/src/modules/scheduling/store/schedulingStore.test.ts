@@ -11,6 +11,7 @@ vi.mock('../services/api', () => ({
     getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
     getBasicApparatus: (...args: unknown[]) => mockGetBasicApparatus(...args) as unknown,
     getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
+    getFeatureSettings: () => Promise.resolve({ platoons_enabled: false }),
   },
 }));
 
