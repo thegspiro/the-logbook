@@ -1659,6 +1659,21 @@ class SchedulingService:
             else:
                 tracks.append((0, assigned_members))
 
+            # Members on approved time-off or active leave are skipped on those
+            # dates, so the generated roster reflects who can actually work and
+            # the freed slot stays open for fill-in / hold-over.
+            candidate_ids = list(
+                {
+                    m.get("user_id")
+                    for _offset, track_members in tracks
+                    for m in track_members
+                    if m.get("user_id")
+                }
+            )
+            unavailable_by_user = await self._get_unavailable_dates_by_user(
+                organization_id, candidate_ids, start_date, end_date
+            )
+
             # occurrences[(date, entry_type)] -> ordered (user_id, position)
             occurrences: dict[tuple[date, str], list[tuple[str, str]]] = {}
             for offset, track_members in tracks:
@@ -1666,13 +1681,17 @@ class SchedulingService:
                 while current <= end_date:
                     has_shift, entry_type = _occurrence(current, offset)
                     if has_shift:
+                        iso = current.isoformat()
                         bucket = occurrences.setdefault((current, entry_type), [])
                         for member in track_members:
                             uid = member.get("user_id")
-                            if uid:
-                                bucket.append(
-                                    (uid, member.get("position", "firefighter"))
-                                )
+                            if not uid:
+                                continue
+                            if iso in unavailable_by_user.get(uid, ()):
+                                continue
+                            bucket.append(
+                                (uid, member.get("position", "firefighter"))
+                            )
                     current += timedelta(days=1)
 
             # Helper: resolve template times and color for a given shift type
@@ -2929,6 +2948,107 @@ class SchedulingService:
 
         return unavailable
 
+    async def _get_unavailable_dates_by_user(
+        self,
+        organization_id: UUID,
+        user_ids: List[str],
+        start_date: date,
+        end_date: date,
+    ) -> Dict[str, set]:
+        """Return ``{user_id: {iso_date, ...}}`` of dates each user cannot work
+        within the range, combining approved time-off and active leaves of
+        absence.
+
+        This is the single source of "who is unavailable when", used both by
+        the availability report and by shift generation so a member on leave or
+        approved time-off is never auto-assigned — keeping generated platoon
+        rosters representative of who can actually work.
+        """
+        user_unavailable: Dict[str, set] = {}
+        if not user_ids:
+            return user_unavailable
+
+        timeoff_result = await self.db.execute(
+            select(ShiftTimeOff).where(
+                ShiftTimeOff.organization_id == str(organization_id),
+                ShiftTimeOff.status == TimeOffStatus.APPROVED,
+                ShiftTimeOff.start_date <= end_date,
+                ShiftTimeOff.end_date >= start_date,
+                ShiftTimeOff.user_id.in_(user_ids),
+            )
+        )
+        for rec in timeoff_result.scalars().all():
+            bucket = user_unavailable.setdefault(str(rec.user_id), set())
+            d = max(rec.start_date, start_date)
+            end_d = min(rec.end_date, end_date)
+            while d <= end_d:
+                bucket.add(d.isoformat())
+                d += timedelta(days=1)
+
+        leave_result = await self.db.execute(
+            select(MemberLeaveOfAbsence).where(
+                MemberLeaveOfAbsence.organization_id == str(organization_id),
+                MemberLeaveOfAbsence.active == True,  # noqa: E712
+                MemberLeaveOfAbsence.start_date <= end_date,
+                or_(
+                    MemberLeaveOfAbsence.end_date >= start_date,
+                    MemberLeaveOfAbsence.end_date.is_(None),
+                ),
+                MemberLeaveOfAbsence.user_id.in_(user_ids),
+            )
+        )
+        for leave in leave_result.scalars().all():
+            bucket = user_unavailable.setdefault(str(leave.user_id), set())
+            d = max(leave.start_date, start_date)
+            end_d = min(leave.end_date, end_date) if leave.end_date else end_date
+            while d <= end_d:
+                bucket.add(d.isoformat())
+                d += timedelta(days=1)
+
+        return user_unavailable
+
+    async def cancel_member_assignments_in_range(
+        self,
+        organization_id: UUID,
+        user_id: str,
+        start_date: date,
+        end_date: Optional[date] = None,
+    ) -> int:
+        """Cancel a member's active shift assignments from ``start_date``
+        onward (through ``end_date`` if given), never touching shifts before
+        today so historical/attended shifts are preserved.
+
+        Called when a member is placed on leave so their generated shifts free
+        up as open spots for fill-in or hold-over. Commits when it changes
+        anything. Returns the number of assignments cancelled.
+        """
+        effective_start = max(start_date, date.today())
+        if end_date is not None and end_date < effective_start:
+            return 0
+
+        query = (
+            select(ShiftAssignment)
+            .join(Shift, ShiftAssignment.shift_id == Shift.id)
+            .where(ShiftAssignment.user_id == str(user_id))
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.shift_date >= effective_start)
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                )
+            )
+        )
+        if end_date is not None:
+            query = query.where(Shift.shift_date <= end_date)
+
+        result = await self.db.execute(query)
+        conflicting = result.scalars().all()
+        for assignment in conflicting:
+            assignment.assignment_status = AssignmentStatus.CANCELLED
+        if conflicting:
+            await self.db.commit()
+        return len(conflicting)
+
     async def get_availability_summary(
         self,
         organization_id: UUID,
@@ -2987,52 +3107,9 @@ class SchedulingService:
             str(row.user_id): row.cnt for row in assign_result.all()
         }
 
-        # Approved time-off per user
-        timeoff_result = await self.db.execute(
-            select(ShiftTimeOff).where(
-                ShiftTimeOff.organization_id == str(organization_id),
-                ShiftTimeOff.status == TimeOffStatus.APPROVED,
-                ShiftTimeOff.start_date <= end_date,
-                ShiftTimeOff.end_date >= start_date,
-                ShiftTimeOff.user_id.in_(user_ids),
-            )
+        user_unavailable = await self._get_unavailable_dates_by_user(
+            organization_id, user_ids, start_date, end_date
         )
-        timeoff_records = timeoff_result.scalars().all()
-
-        # Build per-user unavailable date sets
-        user_unavailable: Dict[str, set] = {}
-        for rec in timeoff_records:
-            uid = str(rec.user_id)
-            if uid not in user_unavailable:
-                user_unavailable[uid] = set()
-            d = max(rec.start_date, start_date)
-            end_d = min(rec.end_date, end_date)
-            while d <= end_d:
-                user_unavailable[uid].add(d.isoformat())
-                d += timedelta(days=1)
-
-        # Also include leave-of-absence dates
-        leave_result = await self.db.execute(
-            select(MemberLeaveOfAbsence).where(
-                MemberLeaveOfAbsence.organization_id == str(organization_id),
-                MemberLeaveOfAbsence.active == True,  # noqa: E712
-                MemberLeaveOfAbsence.start_date <= end_date,
-                or_(
-                    MemberLeaveOfAbsence.end_date >= start_date,
-                    MemberLeaveOfAbsence.end_date.is_(None),
-                ),
-                MemberLeaveOfAbsence.user_id.in_(user_ids),
-            )
-        )
-        for leave in leave_result.scalars().all():
-            uid = str(leave.user_id)
-            if uid not in user_unavailable:
-                user_unavailable[uid] = set()
-            d = max(leave.start_date, start_date)
-            end_d = min(leave.end_date, end_date) if leave.end_date else end_date
-            while d <= end_d:
-                user_unavailable[uid].add(d.isoformat())
-                d += timedelta(days=1)
 
         summaries = []
         for u in users:

@@ -240,6 +240,14 @@ Making platoons usable end-to-end:
 - **Bulk:** the CSV importer (`ImportMembers`) now recognizes a `platoon` column (added to the downloadable template).
 - **Pattern visibility:** the pattern detail view lists the declared platoons.
 
+### Leave/time-off connected to shifts (implemented)
+So generated platoon rosters reflect the actual makeup and free up spots for fill-in / hold-over:
+- **Generation excludes unavailable members:** `generate_shifts_from_pattern` now skips any member who has approved time-off or an active leave of absence on a given shift date (per-date check), leaving that position open. Driven by a new shared `_get_unavailable_dates_by_user` helper (also now used by the availability report — de-duplicated).
+- **Granting a leave clears existing shifts:** creating a leave of absence now cancels the member's active shift assignments from today through the leave (new `SchedulingService.cancel_member_assignments_in_range`, called from the leaves endpoint), mirroring what time-off approval already did. Past/attended shifts are preserved.
+- Open spots then surface through the existing coverage report and open-shift signup/assignment flows, so others can fill in or be held over.
+- **Test:** `test_platoon_skips_members_on_approved_time_off`.
+- Possible enhancement (not done): store the platoon on each generated `Shift` so the UI can show "Platoon A shift" and surface which expected members are on leave for hold-over decisions.
+
 Note (separate latent issue, not fixed here): the `MembersAdminPage` inline profile-edit modal appears unwired — it has no opener and never prefills from the selected user. Worth a follow-up, but platoon assignment is fully covered by the roster + per-member edit page + importer.
 
 **Notes / possible follow-ups:**

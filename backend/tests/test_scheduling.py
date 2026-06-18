@@ -698,6 +698,67 @@ class TestPatternGeneration:
         assert [a.user_id for a in day1] == [user2_id]  # platoon B
 
     @pytest.mark.asyncio
+    async def test_platoon_skips_members_on_approved_time_off(
+        self, db_session, setup_template
+    ):
+        """A platoon member with approved time-off on a shift date is left off
+        that shift, so the slot stays open for fill-in / hold-over."""
+        org_id, user_id, user2_id, template = await setup_template
+        svc = SchedulingService(db_session)
+
+        await db_session.execute(
+            text("UPDATE users SET platoon = 'A' WHERE id = :id"),
+            {"id": user_id},
+        )
+        await db_session.flush()
+
+        start = date(2026, 1, 1)
+        # Approve time-off for the platoon-A member on the first on-day.
+        time_off, _ = await svc.create_time_off(
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            {"start_date": start, "end_date": start},
+        )
+        await svc.review_time_off(
+            uuid.UUID(time_off.id),
+            uuid.UUID(org_id),
+            uuid.UUID(user_id),
+            TimeOffStatus.APPROVED,
+        )
+
+        pattern, _ = await svc.create_pattern(
+            uuid.UUID(org_id),
+            {
+                "name": "24/48 leave-aware",
+                "pattern_type": PatternType.PLATOON,
+                "template_id": template.id,
+                "start_date": start,
+                "days_on": 1,
+                "days_off": 2,
+                "rotation_days": 3,
+                "schedule_config": {"platoons": ["A", "B", "C"]},
+            },
+            uuid.UUID(user_id),
+        )
+
+        shifts, err = await svc.generate_shifts_from_pattern(
+            uuid.UUID(pattern.id),
+            uuid.UUID(org_id),
+            start,
+            start + timedelta(days=2),
+            uuid.UUID(user_id),
+        )
+        assert err is None
+        by_date = {s.shift_date: s for s in shifts}
+
+        # Day 0 is platoon A's on-day, but the only A member is on time-off →
+        # the shift exists with no assignment (open slot).
+        day0 = await svc.get_shift_assignments(
+            uuid.UUID(by_date[start].id), uuid.UUID(org_id)
+        )
+        assert day0 == []
+
+    @pytest.mark.asyncio
     async def test_generate_missing_template_returns_error(self, db_session, setup_org_and_users):
         org_id, user_id, _ = await setup_org_and_users
         svc = SchedulingService(db_session)
