@@ -1,0 +1,77 @@
+name: Functionality Review Loop
+
+# Recurring, hands-off functionality-review pass. Unlike an in-session timer,
+# a scheduled workflow runs on GitHub's infrastructure, so it survives the
+# ephemeral web-session container being reclaimed.
+#
+# IMPORTANT — two activation requirements:
+#   1. GitHub only fires `schedule` triggers from the repository's DEFAULT
+#      branch. This file must be merged to the default branch before the cron
+#      will run; on a feature branch it stays dormant (use the manual
+#      `workflow_dispatch` button to test it there).
+#   2. Add a repo secret with Claude credentials — either ANTHROPIC_API_KEY or
+#      CLAUDE_CODE_OAUTH_TOKEN (Settings → Secrets and variables → Actions).
+on:
+  schedule:
+    # Every 30 minutes. Note: scheduled runs can be delayed under GitHub load
+    # and are skipped automatically if a previous run is still in progress
+    # (see the concurrency block below).
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+# Never overlap passes — a new tick is skipped while one is still running, so
+# two agents can't push to the branch at once.
+concurrency:
+  group: functionality-review-loop
+  cancel-in-progress: false
+
+permissions:
+  contents: write       # commit + push fixes to the working branch
+  pull-requests: read   # read-only PR context; this loop never opens PRs
+
+jobs:
+  review-pass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30   # bound cost per tick
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/brave-brahmagupta-fv7n4s
+          fetch-depth: 0
+
+      - name: Run one functionality-review pass
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: "--model claude-opus-4-8"
+          prompt: |
+            Run ONE functionality-review pass on this repository, then stop.
+
+            Goal: trace one feature/module end-to-end (pick a DIFFERENT area
+            than recent commits touched) to find broken wiring, dead features,
+            authorization/IDOR gaps, calculation errors, or scheduled tasks that
+            are documented but never wired to the scheduler.
+
+            For the area you review, include all three explicit checks:
+            - Security: org-scoping / IDOR on every lookup, permission gating,
+              no existence leaks, PHI handling.
+            - Audit: security-sensitive mutations call log_audit_event(); any
+              system-driven state change leaves a trail.
+            - Documentation: comments explain WHY; any new scheduled task is
+              registered in its source-of-truth dicts (TASK_RUNNERS /
+              TASK_INTERVALS_SECONDS / SCHEDULE) and guarded by
+              tests/test_scheduled_task_coverage.py.
+
+            Fix clear bugs at the root cause and add a regression test. For
+            integrity- or product-sensitive judgment calls, do NOT change
+            behavior — instead write the finding into the commit message / a
+            FINDINGS note for the maintainer to decide.
+
+            Before committing, from backend/ run black, isort, flake8, and the
+            non-integration pytest suite on changed files and fix every error
+            (the project standard is zero lint errors and no newly failing
+            tests). Follow all rules in CLAUDE.md.
+
+            Commit with a descriptive message and push to the branch
+            claude/brave-brahmagupta-fv7n4s. Do NOT open a pull request. If you
+            find nothing worth changing this pass, make no commit.
