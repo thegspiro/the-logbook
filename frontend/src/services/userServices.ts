@@ -112,6 +112,7 @@ export const userService = {
     hire_date?: string | undefined;
     rank?: string | undefined;
     station?: string | undefined;
+    platoon?: string | undefined;
     address_street?: string | undefined;
     address_city?: string | undefined;
     address_state?: string | undefined;

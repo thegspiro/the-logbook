@@ -224,7 +224,16 @@ All confirmed findings were fixed on branch `claude/determined-lamport-8qa2mp`. 
 
 ## C1 platoon rotation — IMPLEMENTED
 
-Resolved (see the C1 section above). Implemented using the fire-service standard: each platoon runs the same cycle offset by `i × cycle_length / num_platoons` days so one platoon is on per day; members are assigned to platoons in the new `PlatoonCrewEditor` and staffed onto their platoon's generated shifts. Backward compatible (patterns without platoons keep the single-cycle behavior).
+Resolved (see the C1 section above). Implemented using the fire-service standard: each platoon runs the same cycle offset by `i × cycle_length / num_platoons` days so one platoon is on per day. Backward compatible (patterns without platoons keep the single-cycle behavior).
+
+### Platoon membership process (single source of truth)
+Platoon membership is a **person-level attribute** (`User.platoon`, like `rank`/`station`), not a per-pattern snapshot:
+- **Assign:** set a member's platoon on their profile — Add Member form and Member admin edit form (gated to leadership/secretary/membership-coordinator, same as rank/station). Migration `20260618_0100_add_user_platoon` adds the column.
+- **Declare:** the pattern builder's `PlatoonSelector` only declares how many platoons a rotation uses (2–4) and shows live member counts per platoon; it no longer stores crews on the pattern.
+- **Build shifts:** `generate_shifts_from_pattern` pulls **current** active members by `User.platoon` at generation time, so moving someone between platoons automatically flows into future shifts. Explicit per-pattern `assigned_members` (with a platoon) are still honored as an override for backward compatibility.
+- **Tests:** `test_platoon_pulls_live_member_platoon` covers the live-membership path.
+
+Possible follow-ups: bulk CSV import of platoon (`ImportMembers`), a platoon column/filter on the members admin list, and surfacing platoon assignments in the pattern detail view.
 
 **Notes / possible follow-ups:**
 - Editing platoon crews on an **existing** pattern: the editor is currently wired into the *create* flow. An equivalent edit flow on the pattern detail view could be added if you want to re-crew without recreating the pattern.

@@ -1609,12 +1609,37 @@ class SchedulingService:
             if not isinstance(platoons_cfg, list) or not platoons_cfg:
                 platoons_cfg = None
 
+            # Live platoon membership is the source of truth: members are
+            # assigned to a platoon on their profile (User.platoon), pulled
+            # fresh at generation time. Explicit per-pattern crews in
+            # assigned_members still override a platoon when present.
+            live_platoon_members: dict[str, list] = {}
+            if pattern.pattern_type == PatternType.PLATOON and platoons_cfg:
+                live_result = await self.db.execute(
+                    select(User.id, User.platoon).where(
+                        User.organization_id == str(organization_id),
+                        User.platoon.isnot(None),
+                        User.status == "active",
+                    )
+                )
+                for uid, platoon_name in live_result.all():
+                    live_platoon_members.setdefault(platoon_name, []).append(
+                        {
+                            "user_id": uid,
+                            "position": "firefighter",
+                            "platoon": platoon_name,
+                        }
+                    )
+
             def _members_for(platoon_name: str) -> list:
-                return [
+                explicit = [
                     m
                     for m in assigned_members
                     if (m.get("platoon") or None) == platoon_name
                 ]
+                if explicit:
+                    return explicit
+                return live_platoon_members.get(platoon_name, [])
 
             tracks: list[tuple[int, list]] = []
             if pattern.pattern_type == PatternType.PLATOON and platoons_cfg:

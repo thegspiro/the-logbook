@@ -20,6 +20,7 @@ import { UserStatus } from "../../../constants/enums";
 interface MemberOption {
   id: string;
   label: string;
+  platoon?: string | undefined;
 }
 
 interface SchedulingState {
@@ -78,6 +79,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
           label:
             `${m.first_name || ""} ${m.last_name || ""}`.trim() ||
             String(m.email || m.id),
+          platoon: m.platoon || undefined,
         }));
       set({ members, membersLoaded: true });
     } catch {

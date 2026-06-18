@@ -235,6 +235,7 @@ async def create_member(
         # Department info
         rank=user_data.rank,
         station=user_data.station,
+        platoon=user_data.platoon,
         # Address
         address_street=user_data.address_street,
         address_city=user_data.address_city,
@@ -953,8 +954,9 @@ async def update_user_profile(
                 detail="A member with this membership number already exists",
             )
 
-    # Rank, station, and membership number changes restricted to leadership / secretary / membership coordinator
-    restricted_fields = {"rank", "station", "membership_number"}
+    # Rank, station, platoon, and membership number changes restricted to
+    # leadership / secretary / membership coordinator
+    restricted_fields = {"rank", "station", "platoon", "membership_number"}
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
         perm_result = await db.execute(
@@ -968,7 +970,7 @@ async def update_user_profile(
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, or membership number",
+                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, platoon, or membership number",
             )
 
     # Handle emergency_contacts separately (needs serialization)
@@ -993,6 +995,7 @@ async def update_user_profile(
         "hire_date",
         "rank",
         "station",
+        "platoon",
         "address_street",
         "address_city",
         "address_state",

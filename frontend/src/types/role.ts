@@ -49,6 +49,7 @@ export interface UserWithRoles {
   date_of_birth?: string | undefined;
   rank?: string | undefined;
   station?: string | undefined;
+  platoon?: string | undefined;
   address_street?: string | undefined;
   address_city?: string | undefined;
   address_state?: string | undefined;

@@ -99,6 +99,7 @@ export interface MemberFormData {
   rank: string;
   role: string;
   station: string;
+  platoon: string;
 
   // Emergency Contact 1
   emergencyName1: string;

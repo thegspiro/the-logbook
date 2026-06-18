@@ -49,6 +49,7 @@ const AddMember: React.FC = () => {
     rank: '',
     role: '',
     station: '',
+    platoon: '',
     emergencyName1: '',
     emergencyRelationship1: '',
     emergencyPhone1: '',
@@ -211,6 +212,7 @@ const AddMember: React.FC = () => {
         ...(formData.joinDate ? { hire_date: formData.joinDate } : {}),
         ...(formData.rank ? { rank: formData.rank } : {}),
         ...(formData.station ? { station: formData.station } : {}),
+        ...(formData.platoon ? { platoon: formData.platoon } : {}),
         ...(formData.street ? { address_street: formData.street } : {}),
         ...(formData.city ? { address_city: formData.city } : {}),
         ...(formData.state ? { address_state: formData.state } : {}),
@@ -752,6 +754,23 @@ const AddMember: React.FC = () => {
                     <option key={s.id} value={s.name}>{s.name}</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-theme-text-primary mb-2">
+                  Platoon
+                </label>
+                <input
+                  type="text"
+                  value={formData.platoon}
+                  onChange={(e) => handleInputChange('platoon', e.target.value)}
+                  placeholder="e.g. A, B, C"
+                  maxLength={20}
+                  className="form-input"
+                />
+                <p className="text-xs text-theme-text-muted mt-1">
+                  Duty platoon for shift rotations
+                </p>
               </div>
             </div>
           </div>
