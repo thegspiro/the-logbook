@@ -132,6 +132,7 @@ export interface CSVMemberRow {
   rank?: string | undefined;
   role?: string | undefined;
   station?: string | undefined;
+  platoon?: string | undefined;
   emergencyName1: string;
   emergencyRelationship1: string;
   emergencyPhone1: string;

@@ -850,6 +850,7 @@ export const PatternsTab: React.FC = () => {
               pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
             const cyclePattern = config.cycle_pattern as string[] | undefined;
+            const patternPlatoons = config.platoons as string[] | undefined;
 
             return (
               <div
@@ -974,6 +975,24 @@ export const PatternsTab: React.FC = () => {
                             {pattern.rotation_days} days
                           </span>
                         </span>
+                      </div>
+                    )}
+
+                    {patternPlatoons && patternPlatoons.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-theme-text-secondary">
+                          Platoons (members assigned on their profile)
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {patternPlatoons.map((p) => (
+                            <span
+                              key={p}
+                              className="px-2 py-0.5 text-[11px] rounded-full bg-violet-500/10 text-theme-text-secondary border border-violet-500/20"
+                            >
+                              Platoon {p}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
 

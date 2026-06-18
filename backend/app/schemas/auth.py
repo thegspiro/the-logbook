@@ -133,6 +133,7 @@ class CurrentUser(BaseModel):
     roles: list[str] = []  # List of role/position names (backward-compatible alias)
     positions: list[str] = []  # List of position names (same as roles)
     rank: Optional[str] = None  # Operational rank, e.g. "captain", "firefighter"
+    platoon: Optional[str] = None  # Duty platoon / shift group, e.g. "A"
     membership_type: Optional[str] = None  # Membership tier, e.g. "active", "reserve"
     permissions: list[str] = []  # List of permission names (includes rank defaults)
     is_active: bool

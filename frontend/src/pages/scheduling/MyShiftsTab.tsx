@@ -20,6 +20,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { useAuthStore } from '../../stores/authStore';
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -27,6 +28,7 @@ interface MyShiftsTabProps {
 
 export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const tz = useTimezone();
+  const platoon = useAuthStore((s) => s.user?.platoon);
   const [searchParams] = useSearchParams();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -313,7 +315,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     <div className="space-y-6">
       {/* Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex bg-theme-input-bg rounded-lg p-1">
+        <div className="flex items-center gap-3">
+          <div className="flex bg-theme-input-bg rounded-lg p-1">
           <button onClick={() => setView('upcoming')}
             className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'upcoming' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
@@ -324,6 +327,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           >
             Past ({past.length})
           </button>
+          </div>
+          {platoon && (
+            <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 whitespace-nowrap">
+              Platoon {platoon}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <button onClick={() => { setTimeOffForm({ start_date: '', end_date: '', reason: '' }); setShowTimeOffModal(true); }}

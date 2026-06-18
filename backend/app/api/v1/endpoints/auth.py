@@ -168,6 +168,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         roles=position_names,
         positions=position_names,
         rank=user.rank,
+        platoon=user.platoon,
         membership_type=user.membership_type,
         permissions=list(all_permissions),
         is_active=user.is_active,

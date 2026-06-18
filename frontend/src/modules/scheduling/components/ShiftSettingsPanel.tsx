@@ -17,6 +17,7 @@ import {
   LayoutTemplate,
   Shield,
   FileBarChart,
+  Users,
 } from "lucide-react";
 import type { ShiftTemplateRecord } from "../services/api";
 import type { ShiftSettings } from "../types/shiftSettings";
@@ -34,10 +35,11 @@ import { PositionNamesCard } from "./PositionNamesCard";
 import { EquipmentCheckTemplateList } from "./EquipmentCheckTemplateList";
 import { EligibilitySettingsCard } from "./EligibilitySettingsCard";
 import { ShiftReportsSettingsPanel } from "./ShiftReportsSettingsPanel";
+import { PlatoonRosterPanel } from "./PlatoonRosterPanel";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type SettingsTab = "general" | "apparatus" | "notifications" | "equipment" | "eligibility" | "shift-reports";
+export type SettingsTab = "general" | "apparatus" | "platoons" | "notifications" | "equipment" | "eligibility" | "shift-reports";
 
 const SETTINGS_TABS: {
   id: SettingsTab;
@@ -46,6 +48,7 @@ const SETTINGS_TABS: {
 }[] = [
   { id: "general", label: "General", icon: LayoutTemplate },
   { id: "apparatus", label: "Apparatus", icon: Truck },
+  { id: "platoons", label: "Platoons", icon: Users },
   { id: "eligibility", label: "Eligibility", icon: Shield },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "equipment", label: "Equipment", icon: ClipboardCheck },
@@ -233,6 +236,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ─── Platoons Tab ─── */}
+      {activeTab === "platoons" && (
+        <div className="space-y-6">
+          <PlatoonRosterPanel />
         </div>
       )}
 

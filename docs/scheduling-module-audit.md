@@ -233,7 +233,14 @@ Platoon membership is a **person-level attribute** (`User.platoon`, like `rank`/
 - **Build shifts:** `generate_shifts_from_pattern` pulls **current** active members by `User.platoon` at generation time, so moving someone between platoons automatically flows into future shifts. Explicit per-pattern `assigned_members` (with a platoon) are still honored as an override for backward compatibility.
 - **Tests:** `test_platoon_pulls_live_member_platoon` covers the live-membership path.
 
-Possible follow-ups: bulk CSV import of platoon (`ImportMembers`), a platoon column/filter on the members admin list, and surfacing platoon assignments in the pattern detail view.
+### Visibility & assignment workflow (follow-ups — implemented)
+Making platoons usable end-to-end:
+- **Members see their platoon:** `User.platoon` is now returned by `/auth/me` (`CurrentUser` schema), and a "Platoon A" badge shows on the My Shifts tab.
+- **Managers assign in one place:** a new **Platoons** tab in Scheduling Settings (`PlatoonRosterPanel`) lists all active members with a platoon dropdown each, live per-platoon counts, search, and a single Save (persists via `updateUserProfile`, gated to `members.manage`). Platoon is also editable on the per-member forms (Add Member, Member admin edit).
+- **Bulk:** the CSV importer (`ImportMembers`) now recognizes a `platoon` column (added to the downloadable template).
+- **Pattern visibility:** the pattern detail view lists the declared platoons.
+
+Note (separate latent issue, not fixed here): the `MembersAdminPage` inline profile-edit modal appears unwired — it has no opener and never prefills from the selected user. Worth a follow-up, but platoon assignment is fully covered by the roster + per-member edit page + importer.
 
 **Notes / possible follow-ups:**
 - Editing platoon crews on an **existing** pattern: the editor is currently wired into the *create* flow. An equivalent edit flow on the pattern detail view could be added if you want to re-crew without recreating the pattern.
