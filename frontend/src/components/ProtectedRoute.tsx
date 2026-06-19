@@ -67,6 +67,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/account" state={{ forcePasswordChange: true }} replace />;
   }
 
+  // Force MFA enrollment when the organization requires it and the user has
+  // not set it up yet (the backend enforces this too).
+  if (user?.mfa_enrollment_required && !needsPasswordChange && location.pathname !== '/account') {
+    return <Navigate to="/account" state={{ forceMfaSetup: true }} replace />;
+  }
+
   // Check for required permission
   if (requiredPermission && !checkPermission(requiredPermission)) {
     return (

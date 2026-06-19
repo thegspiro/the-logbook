@@ -29,8 +29,16 @@ work, ambiguous changes) for owner review rather than auto-implementing.
   (`/auth/change-password|logout|me|refresh|session-settings`) until they change it.
 - **`GET /training/records` scoping (Area 3):** officers (`training.manage`) may
   list any member's records; other members are confined to their own.
-- **MFA (Area 1):** owner chose to implement the real TOTP challenge — tracked as
-  a dedicated build (see below), not a single review tick.
+- **MFA (Area 1): IMPLEMENTED.** TOTP-only, self-enroll + admin-can-require,
+  with recovery codes. Backend: `mfa_service` (TOTP + recovery codes), login
+  challenge (`mfa_token` → `/auth/mfa/login`), enrollment
+  (`setup`/`verify-setup`/`disable`/`status`), org policy
+  (`/auth/mfa/policy`) + server-side enforcement in `get_current_user`,
+  `/auth/me` surfaces `mfa_enrollment_required`. Frontend: login two-factor
+  step, Security-tab enrollment (`MfaSettingsCard`, QR + recovery codes),
+  admin org toggle (`MfaPolicyCard`), and a forced-setup redirect in
+  ProtectedRoute. Secret/recovery codes stored encrypted (existing model
+  fields); no migration needed.
 
 ## Findings log
 

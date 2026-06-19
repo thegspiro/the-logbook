@@ -47,6 +47,7 @@ export interface CurrentUser {
   is_active: boolean;
   email_verified: boolean;
   mfa_enabled: boolean;
+  mfa_enrollment_required?: boolean;
   password_expired: boolean;
   must_change_password: boolean;
 }

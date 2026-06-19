@@ -30,7 +30,11 @@ export const UserSettingsPage: React.FC = () => {
   const forcePasswordChange = (location.state as { forcePasswordChange?: boolean } | null)?.forcePasswordChange
     || user?.must_change_password
     || user?.password_expired;
-  const [activeTab, setActiveTab] = useState<TabType>(forcePasswordChange ? 'password' : 'account');
+  const forceMfaSetup = (location.state as { forceMfaSetup?: boolean } | null)?.forceMfaSetup
+    || user?.mfa_enrollment_required;
+  const [activeTab, setActiveTab] = useState<TabType>(
+    forcePasswordChange ? 'password' : forceMfaSetup ? 'security' : 'account',
+  );
 
   // Profile state
   const [_profile, setProfile] = useState<UserWithRoles | null>(null);
