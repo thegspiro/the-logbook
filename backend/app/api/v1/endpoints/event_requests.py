@@ -23,6 +23,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.event_request import (
     EventRequest,
@@ -399,7 +400,7 @@ async def submit_public_event_request(
         special_requests=data.special_requests,
         status=EventRequestStatus.SUBMITTED,
         assigned_to=default_assignee,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     db.add(event_request)
     await db.flush()

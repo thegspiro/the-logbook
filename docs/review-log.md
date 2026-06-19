@@ -126,3 +126,33 @@ Confirmed clean: most single-record endpoints org-scope correctly;
 `|| undefined` used on form values; no bare `toHaveBeenCalledWith()`; no
 TODO/FIXME stubs; `safe_error_detail()` in import error paths; rolling-period
 proration math (`adjust_required`/`count_waived_months`) verified correct.
+
+### Tick 4 — Area 4: Events module
+Module is well-built; the QR/self-check-in surface is authenticated,
+org-scoped, window-validated, and deduped. Findings:
+
+**Fixed this tick (verified, clearly-correct):**
+- **[LOW/MED] Public event-request stored `request.client.host`** (the proxy
+  IP behind nginx) → now uses `get_client_ip(request)` (XFF + trusted proxy
+  aware), so the abuse-tracking IP is meaningful. (`event_requests.py`.)
+- **[LOW] Recurrence generation** materialized the full series before the
+  >365 cap check → now breaks once it exceeds 365, preserving the rejection
+  but bounding memory. (`event_service.py` `_generate_recurrence_dates`.)
+- **[LOW] `_local_time`** called `ZoneInfo(tz_name)` on the org's stored tz
+  with no validation → a bad value 500'd the check-in window message; now
+  falls back to UTC formatting. (`event_service.py`.)
+
+**Needs owner decision (logged):**
+- **[HIGH] `POST /event-requests/public`** is unauthenticated and creates DB
+  rows + sends email with **no rate limit / CAPTCHA** (spam/email-amplification
+  risk). The `check_rate_limit` dependency exists but keys on
+  `request.client.host` (proxy IP behind nginx → a global limit), so the limit
+  value + keying is a policy call. Recommend wiring `Depends(check_rate_limit)`
+  (and/or the per-IP `check_ip_rate_limit` from `public_portal_security.py`)
+  with tuned limits.
+
+Confirmed clean: org-tenancy on all event/RSVP/check-in/attachment ops; public
+`/status/{token}` uses a 256-bit token and leaks no PII; attachment download
+path-traversal guard; RSVP capacity/waitlist row-locking; recurrence
+date/leap-year math; UTC-store/local-display; no banned date patterns; module
+axios uses the authenticated global client; no TODO/FIXME stubs.

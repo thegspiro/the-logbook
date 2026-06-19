@@ -1727,8 +1727,13 @@ class EventService:
             """Format a UTC datetime as 'HH:MM AM/PM TZ' in the org's timezone."""
             utc_dt = dt if dt.tzinfo else dt.replace(tzinfo=dt_timezone.utc)
             if tz_name:
-                local = utc_dt.astimezone(ZoneInfo(tz_name))
-                return f"{local.strftime('%I:%M %p')} {local.strftime('%Z')}"
+                try:
+                    local = utc_dt.astimezone(ZoneInfo(tz_name))
+                    return f"{local.strftime('%I:%M %p')} {local.strftime('%Z')}"
+                except Exception:
+                    # Misconfigured org timezone — fall back to UTC rather than
+                    # 500-ing the check-in window message.
+                    pass
             return f"{utc_dt.strftime('%I:%M %p')} UTC"
 
         if now < check_in_start:
@@ -2214,6 +2219,11 @@ class EventService:
 
         while current <= recurrence_end_date:
             occurrences.append((current, current + duration))
+
+            # Stop materializing once past the cap the caller enforces (>365),
+            # so a far-future end date can't build tens of thousands of tuples.
+            if len(occurrences) > 365:
+                break
 
             if pattern == RecurrencePattern.DAILY.value:
                 current += timedelta(days=1)
