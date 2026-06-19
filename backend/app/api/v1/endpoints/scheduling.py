@@ -1985,7 +1985,7 @@ async def update_eligibility_settings(
 @router.get("/settings", response_model=SchedulingFeatureSettings)
 async def get_scheduling_feature_settings(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(get_current_user),
 ):
     """Department-wide scheduling feature toggles. Readable by any member so
     the UI can gate platoon features."""
