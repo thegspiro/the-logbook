@@ -7,9 +7,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2 } from 'lucide-react';
+import { User, Lock, Bell, Eye, EyeOff, CheckCircle, Sun, Moon, Monitor, Contrast, Palette, AlertTriangle, Heart, Plus, Trash2, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { authService, userService } from '../services/api';
+import { MfaSettingsCard } from '../components/settings/MfaSettingsCard';
 import { useAuthStore } from '../stores/authStore';
 import { useTheme } from '../contexts/ThemeContext';
 import { validatePasswordStrength } from '../utils/passwordValidation';
@@ -19,7 +20,7 @@ import type { UserWithRoles } from '../types/role';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useRanks } from '../hooks/useRanks';
 
-type TabType = 'account' | 'password' | 'emergency' | 'appearance' | 'notifications';
+type TabType = 'account' | 'password' | 'security' | 'emergency' | 'appearance' | 'notifications';
 
 export const UserSettingsPage: React.FC = () => {
   const { user, loadUser } = useAuthStore();
@@ -280,6 +281,7 @@ export const UserSettingsPage: React.FC = () => {
   const tabs = [
     { id: 'account' as TabType, label: 'Account', icon: User },
     { id: 'password' as TabType, label: 'Password', icon: Lock },
+    { id: 'security' as TabType, label: 'Security', icon: ShieldCheck },
     { id: 'emergency' as TabType, label: 'Emergency Contacts', icon: Heart },
     { id: 'appearance' as TabType, label: 'Appearance', icon: Palette },
     { id: 'notifications' as TabType, label: 'Notifications', icon: Bell },
@@ -688,6 +690,19 @@ export const UserSettingsPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Security (MFA) Tab */}
+        {activeTab === 'security' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Two-Factor Authentication</h2>
+              <p className="text-sm text-theme-text-secondary mb-4">
+                Add a second step at sign-in using an authenticator app.
+              </p>
+              <MfaSettingsCard onChange={() => { void useAuthStore.getState().loadUser(); }} />
+            </div>
           </div>
         )}
 
