@@ -1686,6 +1686,12 @@ class SchedulingService:
                             (current, entry_type),
                             {"platoon": platoon_name, "members": []},
                         )
+                        # If two platoons collide on the same slot (only
+                        # possible with misconfigured platoon_offsets), don't
+                        # mislabel the shift with one platoon while staffing it
+                        # from both — leave it untagged.
+                        if occ["platoon"] != platoon_name:
+                            occ["platoon"] = None
                         for member in track_members:
                             uid = member.get("user_id")
                             if not uid:
