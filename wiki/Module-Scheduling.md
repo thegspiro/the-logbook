@@ -33,6 +33,50 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Shift Call / Run Logging** — *(2026-06-09)* Officers (`scheduling.manage`) log the calls a crew ran during a shift: incident type/number, dispatched/on-scene/cleared times, cancelled-en-route and medical-refusal flags, responding members, and notes. Read-only once the shift is finalized
 - **Staffing-Based Open Shifts** — *(2026-06-09)* The Open Shifts list now ranks by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`) instead of a fixed page, so fully-staffed shifts no longer push genuinely-open ones out of view (capped at 500 candidates per window)
 - **Scheduling Query Performance** — *(2026-06-09)* New composite index `idx_shift_assign_shift_status` on `shift_assignments(shift_id, assignment_status)`, plus batch-loading across the scheduled reminder/validation/auto-checkout tasks and the compliance report (eliminates N+1 officer/attendance/assignment/leave queries)
+- **Platoon Rotations (opt-in)** — *(2026-06-19)* Person-level platoon membership (A/B/C) drives multi-platoon rotation generation with leave-aware staffing and a hold-over roster. Off by default; toggled per department (see below)
+
+---
+
+## Platoon Rotations (2026-06-19)
+
+Departments that staff by **platoon** (rotating A/B/C crews) can build the
+schedule from platoon membership instead of assigning each shift by hand. The
+whole feature is **opt-in** and **off by default**.
+
+### Department Toggle
+
+Enabled per organization via `org.settings["scheduling"]["platoons_enabled"]`
+(default `false`). When off, no platoon fields, badges, or roster appear and
+generation ignores platoons — the module behaves exactly as before.
+
+### Person-Level Platoon Membership
+
+Platoon membership lives on the member: `User.platoon` (nullable, migration
+`20260618_0100`). A firefighter is "on A platoon" as a standing assignment, and
+the schedule is derived from it. Members see their platoon on their profile;
+managers set it from the member admin UI (one-click control + card badge).
+
+### Multi-Platoon Generation
+
+Each platoon runs the same cycle offset by `i × cycle_length / num_platoons`
+days, so the platoons tile to exactly one on-duty platoon per day:
+
+| Rotation | Cycle | Platoons | Offsets (days) |
+|----------|-------|----------|----------------|
+| 24/48 | 3 | 3 | 0, 1, 2 |
+| Kelly (9-day) | 9 | 3 | 0, 3, 6 |
+| 48/96 | 6 | 3 | 0, 2, 4 |
+
+### Leave Integration & Hold-Over Roster
+
+- Generated platoon shifts reflect the platoon's **actual makeup** — a member on
+  approved leave is omitted from the shifts they'd otherwise staff, and
+  approving leave **cancels** their conflicting generated shifts.
+- The **shift detail** view shows a **hold-over roster** of available members
+  (same org, not on leave, not already assigned) with a **one-click Assign** so
+  a supervisor can fill a gap or hold a member over.
+- The responsible platoon is stored on the shift (`Shift.platoon`, migration
+  `20260618_0200`).
 
 ---
 

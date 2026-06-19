@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two-Factor Authentication — TOTP (2026-06-19)
+
+- **App-based MFA (TOTP)** is now fully implemented end-to-end. Members enroll from **Settings → Security** (`MfaSettingsCard`): the backend issues a secret + `otpauth://` provisioning URI rendered as a QR code, the member confirms with a 6-digit code, and a one-time set of **recovery codes** is shown (displayed once, stored hashed). Secret and recovery codes are encrypted at rest (Fernet via `encrypt_data`/`decrypt_data`); no migration was needed (existing `mfa_secret`/`mfa_backup_codes` model fields)
+- **Login challenge**: when an account has MFA enabled, `POST /auth/login` no longer issues session cookies — it returns `{ mfa_required: true, mfa_token }` (a short-lived pending token). The client completes the second step at `POST /auth/mfa/login` with the `mfa_token` plus either a TOTP `code` or a `recovery_code`; only then are full session cookies issued. TOTP verification accepts the current step ±30 s for clock drift; a consumed recovery code is removed from the stored set
+- **Org-wide requirement (admin)**: a department can require MFA for everyone via **Settings → Authentication** (`MfaPolicyCard`, `GET`/`PUT /auth/mfa/policy`, stored in `org.settings`). Enforcement is **server-side** in `get_current_user` — an un-enrolled member is blocked from all but the enrollment/session paths until they set up MFA, and `/auth/me` surfaces `mfa_enrollment_required` so the frontend can force the setup flow (`ProtectedRoute` redirect). The org policy check is skipped for already-enrolled users to avoid a per-request query
+- **Backend**: new `app/services/mfa_service.py` (`generate_secret`, `provisioning_uri`, `verify_totp`, `generate_recovery_codes`, `normalize_recovery_code`), `create_mfa_pending_token` in `core/security.py`, MFA endpoints in `auth.py` (`/mfa/login`, `/mfa/setup`, `/mfa/verify-setup`, `/mfa/disable`, `/mfa/status`, `/mfa/policy`), and `MFALogin`/`MFAPolicy` schemas. **Frontend**: `authService` MFA methods, `authStore` MFA challenge state (`completeMfaLogin`/`cancelMfa`), and the two-factor step on `LoginPage`
+
+### Shift Scheduling — Platoon Rotations, Leave Integration & Hold-Over Roster (2026-06-19)
+
+- **Platoon membership is now a person-level attribute** (`User.platoon`, migration `20260618_0100`), matching how fire departments actually staff: each member belongs to a platoon (A/B/C, etc.) and the schedule is built from that membership rather than ad-hoc per-shift assignment. Members see their platoon on their profile/assignments; managers assign it from the member admin UI with a one-click control + card badge
+- **Multi-platoon rotation generation** follows the fire-service standard: every platoon runs the same cycle offset by `i × cycle_length / num_platoons` days (24/48 → offsets 0/1/2; Kelly 9-day → 0/3/6; 48/96 → 0/2/4), so the platoons tile to exactly one on-duty platoon per day. Verified the offset math tiles cleanly for the common presets
+- **Leave is connected to shift generation**: generated platoon shifts reflect the platoon's *actual* makeup — a member on approved leave is omitted from the shifts they'd otherwise staff, and approving leave cancels the member's conflicting generated shifts. The **shift detail** view shows a **hold-over roster** of available members (same org, not on leave, not already assigned) with a **one-click Assign** so a supervisor can fill a gap or hold a member over. The shift's platoon is stored on the row (`Shift.platoon`, migration `20260618_0200`)
+- **Department toggle (opt-in)**: the entire platoon system is **off by default** and enabled per-org via `org.settings["scheduling"]["platoons_enabled"]`. When off, the scheduling module behaves exactly as before (no platoon fields/roster surfaced)
+
+### Security & Tenancy Hardening (2026-06-19)
+
+- **Training IDOR / tenancy fixes**: `GET /training/submissions/{id}` now checks the org boundary first, then owner-or-`training.manage` (was leaking other members' submissions to any same-org member); waiver create, bulk record create, and historical-import confirm now validate every `user_id` against an org-scoped member set instead of trusting the client; `GET /training/records` confines non-officers to their own records
+- **Shift swap-request validation** tightened so a swap can only target valid, in-org shifts/members
+- **Public event-request abuse controls**: `POST /event-requests/public` now uses the real client IP (`get_client_ip`, XFF + trusted-proxy aware) for abuse tracking and is behind a **per-IP rate limit** (`check_ip_rate_limit`, 10/min)
+- **`must_change_password` is now enforced server-side**: `get_current_user` blocks a flagged user from all but the password-change/session paths until they change it (previously only the frontend honored the flag)
+- Assorted documentation and build fixes surfaced during the review loop (see `docs/review-log.md`)
+
 ### Cross-Module Barcode Label Printing (2026-06-10)
 
 - Barcode-label printing is now a **shared, module-neutral system** so any module can print labels with its own per-position remembered printer. Backend: `app/utils/label_renderer.py` (the `LabelSpec` + Avery-sheet/thermal renderer, extracted from inventory), `app/services/label_service.py` (per-module spec-builder registry + the per-position/per-module preset, moved off `InventoryService`), and generic endpoints `app/api/v1/endpoints/labels.py`: `POST /labels/generate`, `POST /labels/preview`, and `GET`/`PUT /label-preset/{module}` (each gated by the module's view permission)

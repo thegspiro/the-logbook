@@ -391,6 +391,8 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | TypeScript safeguards / `as any` | [TYPESCRIPT_SAFEGUARDS.md](./TYPESCRIPT_SAFEGUARDS.md) |
 | Async SQLAlchemy issues | [ASYNC_SQLALCHEMY_REVIEW.md](../ASYNC_SQLALCHEMY_REVIEW.md) |
 | Security questions | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md) |
+| Multi-factor authentication (MFA / TOTP) | [MFA.md](./MFA.md) |
+| Shift scheduling / platoon rotations | [SCHEDULING_MODULE.md](./SCHEDULING_MODULE.md) |
 
 ### By Error Message
 

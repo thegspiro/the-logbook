@@ -26,7 +26,7 @@ An open-source, modular intranet platform designed for fire departments, emergen
 | **User Management & Authentication** | Member profiles, roles, permissions, OAuth 2.0 / SAML / LDAP, MFA |
 | **Document Management** | 7 system folders (SOPs, Policies, Forms, Reports, Training Materials, Meeting Minutes, General), custom folders, grid/list views, document viewer |
 | **Communication Tools** | Announcements, messaging, notifications |
-| **Calendar & Scheduling** | Week/month views, shift templates (day, night, morning), staffing requirements |
+| **Calendar & Scheduling** | Week/month views, shift templates (day, night, morning), staffing requirements, optional platoon rotations (A/B/C) with leave-aware staffing and hold-over roster |
 | **Dashboard** | Organization stats, training progress widget, member overview |
 
 ## Modules
