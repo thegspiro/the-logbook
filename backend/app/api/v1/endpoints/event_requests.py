@@ -23,6 +23,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import require_permission
 from app.core.database import get_db
+from app.core.public_portal_security import check_ip_rate_limit
 from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.event_request import (
@@ -367,6 +368,16 @@ async def submit_public_event_request(
     No authentication required. Creates an event request that enters
     the review pipeline. Auto-assigns the default coordinator if configured.
     """
+    # Per-IP rate limit (uses the real client IP via X-Forwarded-For): this
+    # endpoint writes DB rows and sends email, so throttle abuse/amplification.
+    client_ip = get_client_ip(request)
+    allowed, _count, _limit = await check_ip_rate_limit(client_ip, limit=10)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
+        )
+
     result = await db.execute(
         select(Organization).where(
             Organization.id == organization_id, Organization.active.is_(True)

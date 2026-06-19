@@ -8,7 +8,7 @@ Permission aggregation combines **position permissions** (from the
 (from the ``OPERATIONAL_RANKS`` config keyed by ``User.rank``).
 """
 
-from fastapi import Cookie, Depends, Header, HTTPException, Query, status
+from fastapi import Cookie, Depends, Header, HTTPException, Query, Request, status
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -68,7 +68,19 @@ def _collect_user_permissions(user: User) -> set:
     return perms
 
 
+# Paths a user with must_change_password=True may still reach, so they can
+# read their state and complete the password change without being locked out.
+_MUST_CHANGE_PW_ALLOWED_SUFFIXES = (
+    "/auth/change-password",
+    "/auth/logout",
+    "/auth/me",
+    "/auth/refresh",
+    "/auth/session-settings",
+)
+
+
 async def get_current_user(
+    request: Request,
     authorization: str | None = Header(None),
     access_token: str | None = Cookie(None),
     db: AsyncSession = Depends(get_db),
@@ -124,6 +136,19 @@ async def get_current_user(
 
     if not user:
         raise credentials_exception
+
+    # Enforce a required password change server-side: a user flagged
+    # must_change_password may only reach the password-change/session paths
+    # until they change it (the frontend honors the same flag, but the API
+    # must not rely on that).
+    if getattr(user, "must_change_password", False):
+        path = request.url.path.rstrip("/")
+        if not any(path.endswith(s) for s in _MUST_CHANGE_PW_ALLOWED_SUFFIXES):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Password change required before continuing.",
+                headers={"X-Password-Change-Required": "true"},
+            )
 
     return user
 

@@ -15,7 +15,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -194,7 +199,11 @@ async def list_records(
     current_user: User = Depends(get_current_user),
 ):
     """
-    List training records
+    List training records.
+
+    Officers (training.manage) may list any member's records; other members
+    may only see their own — training records can include certifications and
+    scores that aren't roster-public.
 
     **Authentication required**
     """
@@ -202,7 +211,13 @@ async def list_records(
         TrainingRecord.organization_id == current_user.organization_id
     )
 
-    if user_id:
+    is_officer = _has_permission(
+        "training.manage", _collect_user_permissions(current_user)
+    )
+    if not is_officer:
+        # Non-officers are confined to their own records regardless of filter.
+        query = query.where(TrainingRecord.user_id == str(current_user.id))
+    elif user_id:
         query = query.where(TrainingRecord.user_id == str(user_id))
 
     if status:

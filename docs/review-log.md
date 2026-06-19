@@ -20,6 +20,18 @@ work, ambiguous changes) for owner review rather than auto-implementing.
 
 (After area 10, wrap back to 1.)
 
+## Owner decisions — implemented
+
+- **Public event-request rate limit (Area 4):** per-IP limiter (`check_ip_rate_limit`,
+  10/min) keyed on `get_client_ip()` added to `POST /event-requests/public`.
+- **`must_change_password` enforcement (Area 1):** `get_current_user` now blocks
+  a flagged user from all but the password-change/session paths
+  (`/auth/change-password|logout|me|refresh|session-settings`) until they change it.
+- **`GET /training/records` scoping (Area 3):** officers (`training.manage`) may
+  list any member's records; other members are confined to their own.
+- **MFA (Area 1):** owner chose to implement the real TOTP challenge — tracked as
+  a dedicated build (see below), not a single review tick.
+
 ## Findings log
 
 ### Tick 1 — Area 1: Core auth & security
