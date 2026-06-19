@@ -78,6 +78,18 @@ _MUST_CHANGE_PW_ALLOWED_SUFFIXES = (
     "/auth/session-settings",
 )
 
+# Paths an un-enrolled user may reach while their org requires MFA, so they can
+# complete enrollment without being locked out.
+_MFA_ENROLL_ALLOWED_SUFFIXES = (
+    "/auth/mfa/setup",
+    "/auth/mfa/verify-setup",
+    "/auth/mfa/status",
+    "/auth/me",
+    "/auth/logout",
+    "/auth/refresh",
+    "/auth/session-settings",
+)
+
 
 async def get_current_user(
     request: Request,
@@ -149,6 +161,25 @@ async def get_current_user(
                 detail="Password change required before continuing.",
                 headers={"X-Password-Change-Required": "true"},
             )
+
+    # Enforce an org-wide MFA requirement: an un-enrolled user in an org that
+    # requires MFA may only reach the enrollment/session paths until they set
+    # it up. The org lookup is skipped entirely for already-enrolled users.
+    if not getattr(user, "mfa_enabled", False):
+        org_row = await db.execute(
+            select(Organization.settings).where(
+                Organization.id == user.organization_id
+            )
+        )
+        org_settings = org_row.scalar_one_or_none() or {}
+        if (org_settings.get("security") or {}).get("mfa_required"):
+            path = request.url.path.rstrip("/")
+            if not any(path.endswith(s) for s in _MFA_ENROLL_ALLOWED_SUFFIXES):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="MFA enrollment required before continuing.",
+                    headers={"X-MFA-Enrollment-Required": "true"},
+                )
 
     return user
 

@@ -139,6 +139,7 @@ class CurrentUser(BaseModel):
     is_active: bool
     email_verified: bool
     mfa_enabled: bool
+    mfa_enrollment_required: bool = False  # Org requires MFA and user not enrolled
     password_expired: bool = False  # True when password age exceeds HIPAA max
     must_change_password: bool = (
         False  # True when admin requires password change on next login
@@ -200,3 +201,9 @@ class MFALogin(BaseModel):
     temp_token: str
     code: str | None = Field(None, min_length=6, max_length=6)
     recovery_code: str | None = Field(None, max_length=32)
+
+
+class MFAPolicy(BaseModel):
+    """Organization-wide MFA requirement policy."""
+
+    mfa_required: bool = False

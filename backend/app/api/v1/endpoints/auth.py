@@ -4,6 +4,8 @@ Authentication API Endpoints
 Endpoints for user authentication, registration, and session management.
 """
 
+import copy
+
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -20,7 +22,11 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_active_user, get_current_user
+from app.api.dependencies import (
+    get_current_active_user,
+    get_current_user,
+    require_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
@@ -37,6 +43,7 @@ from app.models.user import Organization, User
 from app.schemas.auth import (
     CurrentUser,
     MFALogin,
+    MFAPolicy,
     MFAVerify,
     PasswordChange,
     PasswordReset,
@@ -161,6 +168,13 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
     org = org_result.scalar_one_or_none()
     org_timezone = org.timezone if org else "America/New_York"
 
+    # Org requires MFA and this user hasn't enrolled yet → frontend should
+    # route them into setup (also enforced server-side in get_current_user).
+    mfa_required = bool(
+        ((org.settings or {}).get("security") or {}).get("mfa_required", False)
+    ) if org else False
+    mfa_enrollment_required = mfa_required and not bool(user.mfa_enabled)
+
     return CurrentUser(
         id=user.id,
         username=user.username,
@@ -179,6 +193,7 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         is_active=user.is_active,
         email_verified=user.email_verified,
         mfa_enabled=user.mfa_enabled,
+        mfa_enrollment_required=mfa_enrollment_required,
         password_expired=password_expired,
         must_change_password=bool(user.must_change_password),
     ).model_dump(mode="json")
@@ -735,8 +750,11 @@ async def mfa_verify_setup(
         db=db,
         event_type="mfa_enabled",
         event_category="security",
-        user_id=str(current_user.id),
-        organization_id=str(current_user.organization_id),
+        severity="INFO",
+        event_data={
+            "user_id": str(current_user.id),
+            "organization_id": str(current_user.organization_id),
+        },
     )
     # Recovery codes are shown exactly once.
     return {"recovery_codes": recovery_codes}
@@ -763,8 +781,11 @@ async def mfa_disable(
         db=db,
         event_type="mfa_disabled",
         event_category="security",
-        user_id=str(current_user.id),
-        organization_id=str(current_user.organization_id),
+        severity="INFO",
+        event_data={
+            "user_id": str(current_user.id),
+            "organization_id": str(current_user.organization_id),
+        },
     )
     return {"mfa_enabled": False}
 
@@ -778,6 +799,63 @@ async def mfa_status(
         "mfa_enabled": bool(current_user.mfa_enabled),
         "recovery_codes_remaining": len(current_user.mfa_backup_codes or []),
     }
+
+
+@router.get("/mfa/policy", response_model=MFAPolicy)
+async def get_mfa_policy(
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the org-wide MFA requirement policy."""
+    row = await db.execute(
+        select(Organization.settings).where(
+            Organization.id == current_user.organization_id
+        )
+    )
+    org_settings = row.scalar_one_or_none() or {}
+    required = bool((org_settings.get("security") or {}).get("mfa_required", False))
+    return MFAPolicy(mfa_required=required)
+
+
+@router.put("/mfa/policy", response_model=MFAPolicy)
+async def set_mfa_policy(
+    data: MFAPolicy,
+    current_user: User = Depends(
+        require_permission("settings.manage", "organization.update_settings")
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set the org-wide MFA requirement. When on, un-enrolled members are
+    forced into MFA setup before they can use the rest of the app."""
+    result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    org = result.scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    # Deep-copy the JSON column before mutating a nested key (Pitfall #12).
+    new_settings = copy.deepcopy(org.settings or {})
+    security = new_settings.get("security", {})
+    security["mfa_required"] = bool(data.mfa_required)
+    new_settings["security"] = security
+    org.settings = new_settings
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="mfa_policy_updated",
+        event_category="security",
+        severity="INFO",
+        event_data={
+            "user_id": str(current_user.id),
+            "organization_id": str(current_user.organization_id),
+            "mfa_required": bool(data.mfa_required),
+        },
+    )
+    return MFAPolicy(mfa_required=bool(data.mfa_required))
 
 
 @router.post("/refresh", response_model=dict, dependencies=[rate_limit_token_refresh()])
