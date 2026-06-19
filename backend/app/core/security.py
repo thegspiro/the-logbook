@@ -513,7 +513,12 @@ def create_refresh_token(data: dict[str, Any]) -> str:
 
 def decode_token(token: str) -> dict[str, Any]:
     """
-    Decode and validate a JWT token
+    Decode and validate a JWT token's signature and expiry.
+
+    NOTE: This only verifies the signature and `exp`. It does NOT check the
+    token type (access vs refresh) or whether a server-side session still
+    exists. For authentication/authorization, use
+    AuthService.get_user_from_token, which performs those checks.
 
     Args:
         token: JWT token string
