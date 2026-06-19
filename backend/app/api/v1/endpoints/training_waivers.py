@@ -82,6 +82,16 @@ async def create_training_waiver(
     if data.end_date and data.end_date < data.start_date:
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
+    # The target member must belong to the caller's org — otherwise a waiver
+    # could be attached to an arbitrary user id and skew that org's compliance.
+    member_result = await db.execute(
+        select(User)
+        .where(User.id == str(data.user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+    )
+    if member_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Member not found")
+
     # Validate waiver type
     try:
         waiver_type = TrainingWaiverType(data.waiver_type)

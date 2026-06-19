@@ -88,3 +88,41 @@ permission matching. No TODO/FIXME/stubs.
 - `VITE_WS_URL` / `VITE_ENABLE_PWA` are documented but never read in
   `frontend/src` (only declared in `vite-env.d.ts`). Confirm whether
   planned/used by tooling before removing from docs.
+
+### Tick 3 — Area 3: Training module
+**Fixed this tick (verified, clearly-correct):**
+- **[HIGH IDOR] `GET /training/submissions/{id}`** returned another member's
+  submission (potential PHI) to any same-org member — the access check only
+  404'd cross-org. Now: org boundary first, then owner-or-`training.manage`,
+  else 403. (`training_submissions.py`.)
+- **[HIGH] Waiver create** trusted `data.user_id` with no org check — now
+  validates the member belongs to the caller's org (404 otherwise).
+  (`training_waivers.py`.)
+- **[MED/HIGH] Bulk record create** fetched members unscoped and created
+  records for any user_id — now scopes the member query to the org and
+  rejects rows targeting non-members. (`training.py` create_records_bulk.)
+- **[MED/HIGH] Historical import confirm** wrote records straight from the
+  client `row.user_id` — now validates each against an org-scoped member set
+  and rejects outsiders. (`training.py` confirm_historical_import.)
+
+**Needs owner decision (logged):**
+- `GET /training/records` (list) is gated by auth only — any member can list
+  all org training records (others' certs/scores). Decide: require
+  `training.manage`, or restrict non-officers to their own records.
+- Per-user training endpoints missing from `UNCACHEABLE_PREFIXES`:
+  `/training/compliance-summary/{id}`, `/requirements/progress/{id}`,
+  `/category-hours/{id}`, plus org-wide `/compliance-matrix` /
+  `/expiring-certifications`. Decide which are PHI-sensitive enough to exclude.
+- BIANNUAL requirement frequency yields no date window
+  (`training_compliance.py:118`) → sums lifetime totals for hours/shift/call
+  requirements rather than the 2-year cycle. Confirm BIANNUAL is only used
+  with expiry-bearing certs, else add a 2-year window.
+- `TrainingProgramsPage.tsx:289` shows a hardcoded "0 enrolled" — no
+  `enrolled_count` exists; wiring it is a small backend+schema feature.
+- `ManualShiftReportPage.tsx:120` uses the banned `toISOString().split('T')[0]`
+  local-date pattern (UTC shift); switch to `getTodayLocalDate(tz)`.
+
+Confirmed clean: most single-record endpoints org-scope correctly;
+`|| undefined` used on form values; no bare `toHaveBeenCalledWith()`; no
+TODO/FIXME stubs; `safe_error_detail()` in import error paths; rolling-period
+proration math (`adjust_required`/`count_waived_months`) verified correct.
