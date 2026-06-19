@@ -192,7 +192,11 @@ class MFAVerify(BaseModel):
 
 
 class MFALogin(BaseModel):
-    """Schema for MFA login (second step)"""
+    """Schema for MFA login (second step).
+
+    Provide either a 6-digit authenticator ``code`` or a ``recovery_code``.
+    """
 
     temp_token: str
-    code: str = Field(..., min_length=6, max_length=6)
+    code: str | None = Field(None, min_length=6, max_length=6)
+    recovery_code: str | None = Field(None, max_length=32)

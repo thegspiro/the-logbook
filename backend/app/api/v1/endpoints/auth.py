@@ -25,7 +25,9 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.permissions import get_rank_default_permissions
+from app.core.security import create_mfa_pending_token, decode_token
 from app.core.security_middleware import (
+    get_client_ip,
     rate_limit_login,
     rate_limit_password_reset,
     rate_limit_register,
@@ -34,6 +36,8 @@ from app.core.security_middleware import (
 from app.models.user import Organization, User
 from app.schemas.auth import (
     CurrentUser,
+    MFALogin,
+    MFAVerify,
     PasswordChange,
     PasswordReset,
     PasswordResetRequest,
@@ -43,6 +47,7 @@ from app.schemas.auth import (
     ValidateResetToken,
 )
 from app.schemas.organization import AuthSettings
+from app.services import mfa_service
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
 
 router = APIRouter()
@@ -572,6 +577,16 @@ async def login(
             detail="Account is inactive. Please contact an administrator.",
         )
 
+    # If MFA is enabled, password alone is not enough: issue a short-lived
+    # challenge token and require the second factor before any session cookie.
+    if user.mfa_enabled:
+        return JSONResponse(
+            content={
+                "mfa_required": True,
+                "mfa_token": create_mfa_pending_token(str(user.id)),
+            }
+        )
+
     try:
         # Create tokens
         access_token, refresh_token = await auth_service.create_user_tokens(
@@ -605,6 +620,164 @@ async def login(
     response = JSONResponse(content=body)
     _set_auth_cookies(response, access_token, refresh_token)
     return response
+
+
+_MFA_ISSUER = "The Logbook"
+
+
+@router.post("/mfa/login", dependencies=[rate_limit_login()])
+async def mfa_login(
+    data: MFALogin,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
+    """Complete login by verifying the MFA second factor.
+
+    Consumes the short-lived ``mfa_token`` from the password step plus either
+    a TOTP ``code`` or a single-use ``recovery_code``, then issues the session.
+    """
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired challenge"
+    )
+    try:
+        payload = decode_token(data.temp_token)
+    except Exception:
+        raise invalid
+    if payload.get("type") != "mfa_pending" or not payload.get("sub"):
+        raise invalid
+
+    result = await db.execute(select(User).where(User.id == str(payload["sub"])))
+    user = result.scalar_one_or_none()
+    if not user or not user.mfa_enabled or not user.is_active:
+        raise invalid
+
+    verified = False
+    if data.code and mfa_service.verify_totp(user.mfa_secret, data.code):
+        verified = True
+    elif data.recovery_code:
+        target = mfa_service.normalize_recovery_code(data.recovery_code)
+        codes = user.mfa_backup_codes or []
+        remaining = [
+            c for c in codes if mfa_service.normalize_recovery_code(c) != target
+        ]
+        if len(remaining) != len(codes):
+            verified = True
+            user.mfa_backup_codes = remaining  # consume the used code
+            await db.commit()
+
+    if not verified:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid verification code"
+        )
+
+    access_token, refresh_token = await AuthService(db).create_user_tokens(
+        user=user,
+        ip_address=get_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+
+    body: dict = {
+        "token_type": "bearer",
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    }
+    try:
+        body["user"] = await _build_current_user_dict(user, db)
+    except Exception:
+        logger.debug("Could not include user data in mfa login response")
+
+    response = JSONResponse(content=body)
+    _set_auth_cookies(response, access_token, refresh_token)
+    return response
+
+
+@router.post("/mfa/setup")
+async def mfa_setup(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Begin TOTP enrollment: generate a secret and provisioning URI.
+
+    MFA is not enabled until the code is confirmed via /mfa/verify-setup.
+    """
+    if current_user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is already enabled")
+
+    secret = mfa_service.generate_secret()
+    current_user.mfa_secret = secret
+    await db.commit()
+
+    uri = mfa_service.provisioning_uri(
+        secret, account_name=current_user.email or current_user.username, issuer=_MFA_ISSUER
+    )
+    return {"secret": secret, "qr_code_url": uri}
+
+
+@router.post("/mfa/verify-setup", dependencies=[rate_limit_login()])
+async def mfa_verify_setup(
+    data: MFAVerify,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Confirm enrollment: verify a code, enable MFA, return recovery codes."""
+    if current_user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is already enabled")
+    if not current_user.mfa_secret:
+        raise HTTPException(status_code=400, detail="Start setup first")
+    if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    recovery_codes = mfa_service.generate_recovery_codes()
+    current_user.mfa_enabled = True
+    current_user.mfa_backup_codes = recovery_codes
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="mfa_enabled",
+        event_category="security",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    # Recovery codes are shown exactly once.
+    return {"recovery_codes": recovery_codes}
+
+
+@router.post("/mfa/disable", dependencies=[rate_limit_login()])
+async def mfa_disable(
+    data: MFAVerify,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Disable MFA after verifying a current authenticator code."""
+    if not current_user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is not enabled")
+    if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    current_user.mfa_enabled = False
+    current_user.mfa_secret = None
+    current_user.mfa_backup_codes = None
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="mfa_disabled",
+        event_category="security",
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    return {"mfa_enabled": False}
+
+
+@router.get("/mfa/status")
+async def mfa_status(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Return the current user's MFA enrollment status."""
+    return {
+        "mfa_enabled": bool(current_user.mfa_enabled),
+        "recovery_codes_remaining": len(current_user.mfa_backup_codes or []),
+    }
 
 
 @router.post("/refresh", response_model=dict, dependencies=[rate_limit_token_refresh()])
