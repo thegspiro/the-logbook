@@ -309,7 +309,7 @@ After starting the containers:
 
 For API access: `http://localhost:3001/docs`
 
-See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
+See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.com/thegspiro/the-logbook/wiki) for detailed instructions.
 
 ## Supported Platforms
 
@@ -334,7 +334,6 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 **[The Logbook Wiki](https://github.com/thegspiro/the-logbook/wiki)** — Comprehensive documentation including installation, configuration, troubleshooting, and development guides.
 
 ### Getting Started
-- [Quick Start Guide](QUICK_START_GITHUB.md) — Detailed first-run instructions
 - [Onboarding Guide](ONBOARDING.md) — First-time setup wizard
 - [Contributing Guide](CONTRIBUTING.md) — How to contribute
 
@@ -360,7 +359,6 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 - [Python Backend Guide](docs/backend/python-backend.md) — Backend development
 - [TypeScript Safeguards](docs/TYPESCRIPT_SAFEGUARDS.md) — Multi-layer build protection
 - [Testing Guide](TESTING.md) — Test suites for onboarding and event components
-- [Architecture Review](ARCHITECTURE_REVIEW_AND_IMPROVEMENT_PLAN.md) — Architecture decisions and improvement plan
 
 ### Security & Troubleshooting
 - [Security Guide](SECURITY.md) — Security policy and compliance
@@ -371,8 +369,8 @@ See [QUICK_START_GITHUB.md](QUICK_START_GITHUB.md) for detailed instructions.
 
 | Layer | Technologies |
 |-------|-------------|
-| **Backend** | Python 3.11+, FastAPI, SQLAlchemy (async), Alembic |
-| **Frontend** | React 18, TypeScript, Tailwind CSS |
+| **Backend** | Python 3.13, FastAPI, SQLAlchemy (async), Alembic |
+| **Frontend** | React 19, TypeScript, Tailwind CSS |
 | **Database** | MySQL 8.0+ |
 | **Cache** | Redis 7+ |
 | **Search** | Elasticsearch (optional) |

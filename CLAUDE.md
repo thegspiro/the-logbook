@@ -628,6 +628,7 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 |----------|---------|---------|
 | `VITE_API_URL` | `/api/v1` | API base URL |
 | `VITE_BACKEND_URL` | `http://localhost:3001` | Backend URL for Vite dev proxy |
+| `VITE_SESSION_KEY` | (random per session) | Onboarding session encryption key — set a 32+ char value in production |
 | `VITE_WS_URL` | `ws://localhost:3001` | WebSocket URL |
 | `VITE_ENABLE_PWA` | `true` | PWA support |
 

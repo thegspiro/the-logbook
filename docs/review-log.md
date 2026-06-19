@@ -58,3 +58,33 @@ rotation/replay, session invalidation on password change/reset, cookie
 attributes (Pitfall #6), pure-ASGI middleware (Pitfall #4), unbounded caches
 (Pitfall #9), IP-spoofing/XFF handling, global CSRF wiring, SQL injection,
 permission matching. No TODO/FIXME/stubs.
+
+### Tick 2 — Area 2: Documentation
+**Fixed this tick (verified, clearly-correct):**
+- `package.json` `dev:backend` ran `uvicorn app.main:app` but the app is at
+  `backend/main.py` → fixed to `main:app` (the primary `npm run dev` backend
+  was broken).
+- `package.json` `db:seed` pointed to a non-existent `scripts/seed_data.py`
+  (and `db:reset` chained it) → seeding actually runs via Alembic
+  `SEED_DATA_FILES` during `db:migrate`; `db:seed` is now an informational
+  echo and `db:reset` is rollback+migrate.
+- `README.md` tech stack: Python 3.11+→3.13, React 18→19.
+- `README.md` dead links removed/repointed (`QUICK_START_GITHUB.md`,
+  `ARCHITECTURE_REVIEW_AND_IMPROVEMENT_PLAN.md` don't exist).
+- `.env.example` DB name/user (`the_logbook`/`logbook_user`) aligned to the
+  canonical `intranet_db`/`intranet_user` used by config.py, docker-compose,
+  `.env.example.full`, and CLAUDE.md.
+- CLAUDE.md frontend env table: added `VITE_SESSION_KEY` (used in
+  `onboarding/utils/security.ts` but undocumented).
+
+**Needs owner confirmation:**
+- README's `openssl rand -hex 32` (32 chars) for `SECRET_KEY` is below the
+  documented 64-char recommendation (config.py hard-min is 32). Align guidance.
+- `.env.example` defaults `ENVIRONMENT=production`, but config.py makes
+  `SECURITY_ENFORCE_HTTPS=True` and `REDIS_PASSWORD` startup-blocking
+  requirements in production — neither is in `.env.example` or CLAUDE.md's
+  Required-Production table, so a by-the-book quick-start is blocked at
+  startup. Decide whether `.env.example` should default to `development`.
+- `VITE_WS_URL` / `VITE_ENABLE_PWA` are documented but never read in
+  `frontend/src` (only declared in `vite-env.d.ts`). Confirm whether
+  planned/used by tooling before removing from docs.
