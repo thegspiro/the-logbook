@@ -1226,6 +1226,91 @@ async def admin_reset_password(
     return {"message": f"Password has been reset for {target_username}"}
 
 
+@router.post(
+    "/{user_id}/reset-mfa",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(_rate_limit_admin_reset)],
+)
+async def admin_reset_mfa(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("users.create", "members.manage")),
+):
+    """
+    Reset (disable) a user's two-factor authentication (IT Lead / Admin only).
+
+    For members who have lost their authenticator device and exhausted their
+    recovery codes. Clears the MFA secret and recovery codes so the member can
+    re-enroll from their own Security settings. If the org requires MFA, the
+    member is forced back into enrollment on next login.
+
+    Admins cannot reset their own MFA here (they retain their recovery codes or
+    can disable it from their own Security settings).
+
+    Requires `users.create` or `members.manage` permission.
+
+    **Authentication required**
+    """
+    from app.models.user import Session as UserSession
+
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use your own Security settings to manage your MFA",
+        )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if not user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This user does not have MFA enabled",
+        )
+
+    target_username = user.username
+
+    user.mfa_enabled = False
+    user.mfa_secret = None
+    user.mfa_backup_codes = None
+
+    # Revoke active sessions so the reset takes effect immediately (and the org
+    # MFA requirement, if any, re-challenges enrollment on next login).
+    sessions_result = await db.execute(
+        select(UserSession).where(UserSession.user_id == str(user_id))
+    )
+    for session in sessions_result.scalars().all():
+        await db.delete(session)
+
+    await log_audit_event(
+        db=db,
+        event_type="admin_mfa_reset",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "target_username": target_username,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    await db.commit()
+
+    return {"message": f"MFA has been reset for {target_username}"}
+
+
 @router.get("/{user_id}/deletion-impact", response_model=DeletionImpactResponse)
 async def get_deletion_impact(
     user_id: UUID,

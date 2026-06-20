@@ -66,6 +66,7 @@ require MFA for the whole department from **Settings → Authentication**
 | `GET /auth/mfa/status` | session | `{ mfa_enabled, recovery_codes_remaining }` |
 | `GET /auth/mfa/policy` | `settings.manage` | Read org-wide MFA requirement |
 | `PUT /auth/mfa/policy` | `settings.manage` | Set org-wide MFA requirement |
+| `POST /users/{user_id}/reset-mfa` | `users.create` / `members.manage` | Admin: reset a member's MFA (lost device) |
 
 ## Implementation Notes
 
@@ -93,12 +94,18 @@ require MFA for the whole department from **Settings → Authentication**
 - `GET /auth/mfa/status` reports `recovery_codes_remaining`.
 - There is currently no in-app "regenerate codes" flow.
 
-### Known Limitation — No Admin MFA Reset
+### Admin MFA Reset
 
-There is currently **no admin self-service endpoint to reset a member's MFA**. A
-member who loses their authenticator can still recover *if* they have an unused
-recovery code (log in with it, then disable + re-enroll). If they have neither
-the device nor a recovery code, an administrator must clear the user's
-`mfa_enabled` / `mfa_secret` / `mfa_backup_codes` fields directly in the database
-before the member can re-enroll. A first-class admin "reset MFA for user"
-action is a candidate follow-up feature.
+An administrator with `users.create` or `members.manage` can reset a member's
+MFA for the lost-device case:
+
+- **UI:** Members admin page → the member's **Reset MFA** action (shown only for
+  members who currently have MFA enabled).
+- **API:** `POST /users/{user_id}/reset-mfa` (org-scoped, rate-limited 5/5 min,
+  audit-logged as `admin_mfa_reset`). It clears `mfa_enabled` / `mfa_secret` /
+  `mfa_backup_codes` and revokes the member's active sessions so the reset takes
+  effect immediately.
+
+After a reset the member re-enrolls from their own **Settings → Security**; if
+the org requires MFA, they are prompted to set it up again on next login. Admins
+cannot reset their own MFA via this endpoint (use your own Security settings).

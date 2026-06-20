@@ -39,6 +39,15 @@ work, ambiguous changes) for owner review rather than auto-implementing.
   admin org toggle (`MfaPolicyCard`), and a forced-setup redirect in
   ProtectedRoute. Secret/recovery codes stored encrypted (existing model
   fields); no migration needed.
+- **Admin MFA reset: IMPLEMENTED.** `POST /users/{user_id}/reset-mfa`
+  (`users.create`/`members.manage`, org-scoped, rate-limited, audit
+  `admin_mfa_reset`) + a **Reset MFA** action on the Members admin page, for the
+  lost-device case. Closes the "no admin reset" gap previously noted in
+  KNOWN_LIMITATIONS.
+- **Docs consolidation:** added `KNOWN_LIMITATIONS.md` (deferred decisions from
+  this log, made visible), `MFA.md`, and `PLATOON_SETUP.md`; registered the
+  `20260613`/`20260618` migrations in `ALEMBIC_MIGRATIONS.md`; added MFA +
+  person-level-platoon entries to `TROUBLESHOOTING.md`.
 
 ## Findings log
 

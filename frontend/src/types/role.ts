@@ -44,6 +44,7 @@ export interface UserWithRoles {
   personal_email?: string | undefined;
   photo_url?: string | undefined;
   status: UserStatus;
+  mfa_enabled?: boolean | undefined;
   membership_type?: string | undefined;
   hire_date?: string | undefined;
   date_of_birth?: string | undefined;

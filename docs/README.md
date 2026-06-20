@@ -393,6 +393,8 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Security questions | [SECURITY_IMAGE_UPLOADS.md](../SECURITY_IMAGE_UPLOADS.md) |
 | Multi-factor authentication (MFA / TOTP) | [MFA.md](./MFA.md) |
 | Shift scheduling / platoon rotations | [SCHEDULING_MODULE.md](./SCHEDULING_MODULE.md) |
+| Platoon scheduling — admin setup | [PLATOON_SETUP.md](./PLATOON_SETUP.md) |
+| Known limitations / open decisions | [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md) |
 
 ### By Error Message
 

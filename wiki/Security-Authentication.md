@@ -187,7 +187,8 @@ verification tolerates ±30 s of clock drift.
 
 Recovery codes are single-use and stored hashed; the MFA secret is encrypted at
 rest. A member who loses their authenticator and exhausts their recovery codes
-must have MFA reset by an administrator.
+can have MFA reset by an administrator (Members admin → **Reset MFA**, or
+`POST /users/{user_id}/reset-mfa`), then re-enroll from Settings → Security.
 
 ---
 
@@ -218,6 +219,7 @@ POST   /api/v1/auth/mfa/disable              # Disable MFA (verifies a code)
 GET    /api/v1/auth/mfa/status               # Enrollment status + recovery codes remaining
 GET    /api/v1/auth/mfa/policy               # Read org-wide MFA requirement (admin)
 PUT    /api/v1/auth/mfa/policy               # Set org-wide MFA requirement (admin)
+POST   /api/v1/users/{user_id}/reset-mfa     # Admin: reset a member's MFA (lost device)
 GET    /api/v1/auth/oauth-config             # Which OAuth providers are enabled (for login page)
 GET    /api/v1/auth/oauth/google             # Initiate Google sign-in (404 if not configured)
 GET    /api/v1/auth/oauth/google/callback    # Google OAuth callback

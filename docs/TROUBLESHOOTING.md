@@ -1162,16 +1162,16 @@ up an authenticator (enforced server-side in `get_current_user`).
 #### Symptom: Lost authenticator device and out of recovery codes
 
 **Cause**: TOTP secret lives only on the member's device; recovery codes are
-single-use. There is currently **no admin self-service "reset MFA" endpoint**
-and no in-app "regenerate recovery codes" flow.
+single-use. (There is no in-app "regenerate recovery codes" flow.)
 
 **Solutions**:
 1. If the member still has **any** unused recovery code, they can log in with it
    at the MFA challenge, then disable + re-enroll from Settings → Security
-2. Otherwise the user's MFA fields (`mfa_enabled`, `mfa_secret`,
-   `mfa_backup_codes`) must be cleared by an administrator with database access
-   so they can re-enroll. (A first-class admin reset endpoint is a known gap —
-   see [MFA.md](./MFA.md#recovery-codes).)
+2. Otherwise an administrator (`users.create` / `members.manage`) clicks
+   **Reset MFA** on the member's row in the Members admin page (or calls
+   `POST /users/{user_id}/reset-mfa`). This clears the member's MFA and signs
+   them out; they then re-enroll from Settings → Security. See
+   [MFA.md → Admin MFA Reset](./MFA.md#admin-mfa-reset).
 
 ---
 

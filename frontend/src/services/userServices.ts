@@ -145,6 +145,16 @@ export const userService = {
   },
 
   /**
+   * Reset (disable) a user's two-factor authentication (admin only).
+   * For members who lost their authenticator and recovery codes; lets them
+   * re-enroll from their own Security settings.
+   */
+  async adminResetMfa(userId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/users/${userId}/reset-mfa`);
+    return response.data;
+  },
+
+  /**
    * Get notification preferences for the current user
    */
   async getNotificationPreferences(userId: string): Promise<import('../types/user').NotificationPreferences> {
