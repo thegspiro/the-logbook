@@ -1128,6 +1128,53 @@ After **5 failed login attempts**, accounts are temporarily locked for **30 minu
 
 ---
 
+### Two-Factor Authentication (MFA)
+
+See [MFA.md](./MFA.md) for the full feature reference.
+
+#### Symptom: "Invalid verification code" when the code looks correct
+
+**Causes**:
+1. Device clock drift between the phone and the server
+2. Entering a code that just rolled over (codes change every 30 seconds)
+3. The authenticator was set up from a screenshot of an already-expired QR
+
+**Solutions**:
+1. Enable automatic/network time on the phone — TOTP depends on an accurate
+   clock. The server accepts the current 30-second step ±1, so larger drift
+   fails verification
+2. Wait for a fresh code and enter it promptly
+3. If it persistently fails, disable and re-enroll MFA (re-scan a fresh QR)
+
+#### Symptom: Forced into MFA setup and can't reach the rest of the app
+
+**Cause**: An administrator turned on the org-wide MFA requirement
+(`org.settings["security"]["mfa_required"]`). Members who have not enrolled are
+blocked from every endpoint except the enrollment/session paths until they set
+up an authenticator (enforced server-side in `get_current_user`).
+
+**Solutions**:
+1. Complete enrollment in **Settings → Security** (scan the QR, confirm a code,
+   save the recovery codes)
+2. An admin can lift the requirement under **Settings → Authentication** if it
+   was enabled in error
+
+#### Symptom: Lost authenticator device and out of recovery codes
+
+**Cause**: TOTP secret lives only on the member's device; recovery codes are
+single-use. There is currently **no admin self-service "reset MFA" endpoint**
+and no in-app "regenerate recovery codes" flow.
+
+**Solutions**:
+1. If the member still has **any** unused recovery code, they can log in with it
+   at the MFA challenge, then disable + re-enroll from Settings → Security
+2. Otherwise the user's MFA fields (`mfa_enabled`, `mfa_secret`,
+   `mfa_backup_codes`) must be cleared by an administrator with database access
+   so they can re-enroll. (A first-class admin reset endpoint is a known gap —
+   see [MFA.md](./MFA.md#recovery-codes).)
+
+---
+
 ### Security Configuration (Administrators)
 
 #### Production Environment Requirements
@@ -1432,6 +1479,35 @@ docker exec the-logbook-backend-1 alembic upgrade head
 - For weekly patterns, ensure `schedule_config` includes `{"weekdays": [0, 1, 2, 3, 4]}` (Mon-Fri)
 - For platoon patterns, set `rotation_days`, `days_on`, and `days_off`
 - Check that the date range in the generation request covers at least one matching day
+
+---
+
+#### Platoon Rotations (Person-Level): No Platoon Fields or Generated Shifts
+
+See [SCHEDULING_MODULE.md → Platoon Rotations](./SCHEDULING_MODULE.md#platoon-rotations-added-2026-06-19)
+for the full feature reference.
+
+**Symptoms**: Platoon badges, the hold-over roster, or platoon-based generation
+don't appear, or a generated rotation produces shifts with nobody on them
+
+**Causes**:
+1. The department toggle is off — platoons are **opt-in** and disabled by default
+   (`org.settings["scheduling"]["platoons_enabled"]` is false/absent)
+2. Members have no platoon assigned (`users.platoon` is NULL), so there is no one
+   to build the platoon's shifts from
+3. The intended crew is on approved leave for the generation window — members on
+   leave are intentionally omitted from the shifts they would otherwise staff
+4. The hold-over roster looks empty because every candidate is already assigned,
+   on leave, or in a different organization
+
+**Solutions**:
+1. Enable platoons in Scheduling settings (sets `platoons_enabled = true`)
+2. Assign each member a platoon from the member admin UI (the one-click control /
+   card badge), or via the member's `platoon` field
+3. Verify the affected members don't have overlapping approved leave for the
+   window — approving leave also **cancels** their conflicting generated shifts
+4. Confirm the roster filters: it lists same-org members who are not on leave and
+   not already assigned to that shift
 
 ---
 

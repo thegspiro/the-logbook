@@ -91,6 +91,14 @@ require MFA for the whole department from **Settings → Authentication**
 - Generated once at enrollment and shown a single time.
 - Each code is single-use — using one removes it from the stored set.
 - `GET /auth/mfa/status` reports `recovery_codes_remaining`.
-- There is currently no in-app "regenerate codes" flow; a member who exhausts
-  their codes and loses their authenticator must have MFA reset by an
-  administrator (disable + re-enroll).
+- There is currently no in-app "regenerate codes" flow.
+
+### Known Limitation — No Admin MFA Reset
+
+There is currently **no admin self-service endpoint to reset a member's MFA**. A
+member who loses their authenticator can still recover *if* they have an unused
+recovery code (log in with it, then disable + re-enroll). If they have neither
+the device nor a recovery code, an administrator must clear the user's
+`mfa_enabled` / `mfa_secret` / `mfa_backup_codes` fields directly in the database
+before the member can re-enroll. A first-class admin "reset MFA for user"
+action is a candidate follow-up feature.
