@@ -34,10 +34,19 @@ Platoon membership is a standing, person-level attribute (`users.platoon`) — a
 member is "on A platoon" until you change it, and the schedule is built from
 that.
 
-1. Open the member admin UI.
-2. Set each member's **platoon** (the one-click control / card badge).
-3. Leave a member's platoon blank if they aren't part of the rotation (e.g.
-   admin staff) — they simply won't be generated into platoon shifts.
+You have three ways to assign it:
+
+1. **Department Platoon Overview** (`/scheduling/platoons`, linked from
+   **Scheduling → Settings → Platoons → Department platoon overview**): see every
+   platoon and its members at a glance, select any number of members, and
+   **bulk-assign** them to a platoon (or clear it) in one step. Best for initial
+   setup and shuffling crews.
+2. **Settings → Platoons roster:** an inline list with a per-member dropdown —
+   handy for quick one-off edits.
+3. **Member admin UI:** set an individual member's platoon from their record.
+
+Leave a member's platoon blank if they aren't part of the rotation (e.g. admin
+staff) — they simply won't be generated into platoon shifts.
 
 > Members can see their own platoon on their profile / assignments view, so they
 > know which rotation they're on.

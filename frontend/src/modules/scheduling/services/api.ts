@@ -121,6 +121,24 @@ export interface PlatoonRosterEntry {
   status: 'assigned' | 'on_leave' | 'available';
 }
 
+export interface PlatoonMember {
+  user_id: string;
+  user_name: string;
+  rank?: string | null;
+}
+
+export interface PlatoonGroup {
+  // null = the "unassigned" bucket (members with no platoon).
+  platoon: string | null;
+  member_count: number;
+  members: PlatoonMember[];
+}
+
+export interface PlatoonOverview {
+  platoons_enabled: boolean;
+  groups: PlatoonGroup[];
+}
+
 export interface ShiftAttendanceRecord {
   id: string;
   shift_id: string;
@@ -616,6 +634,22 @@ export const schedulingService = {
   },
   async updateFeatureSettings(data: { platoons_enabled: boolean }): Promise<{ platoons_enabled: boolean }> {
     const response = await api.put<{ platoons_enabled: boolean }>('/scheduling/settings', data);
+    return response.data;
+  },
+
+  // --- Platoon management ---
+  async getPlatoonOverview(): Promise<PlatoonOverview> {
+    const response = await api.get<PlatoonOverview>('/scheduling/platoons/overview');
+    return response.data;
+  },
+  async bulkAssignPlatoon(
+    userIds: string[],
+    platoon: string | null,
+  ): Promise<{ updated: number; platoon: string | null }> {
+    const response = await api.post<{ updated: number; platoon: string | null }>(
+      '/scheduling/platoons/bulk-assign',
+      { user_ids: userIds, platoon },
+    );
     return response.data;
   },
 

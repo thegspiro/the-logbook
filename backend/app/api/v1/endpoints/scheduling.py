@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.training import (
@@ -31,6 +32,9 @@ from app.schemas.scheduling import (
     BasicApparatusUpdate,
     EligiblePositionsResponse,
     GenerateShiftsRequest,
+    PlatoonBulkAssign,
+    PlatoonBulkAssignResult,
+    PlatoonOverviewResponse,
     SchedulingEligibilitySettings,
     SchedulingEligibilitySettingsResponse,
     SchedulingFeatureSettings,
@@ -2015,4 +2019,57 @@ async def update_scheduling_feature_settings(
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     return SchedulingFeatureSettings(
         platoons_enabled=bool(result.get("platoons_enabled", False)),
+    )
+
+
+@router.get("/platoons/overview", response_model=PlatoonOverviewResponse)
+async def get_platoon_overview(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Department-wide platoon roster: every named platoon plus the unassigned
+    bucket, with each platoon's active members."""
+    service = ShiftEligibilityService(db)
+    org = await service._get_org(current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    groups = await service.get_platoon_overview(current_user.organization_id)
+    return PlatoonOverviewResponse(
+        platoons_enabled=service.get_platoons_enabled(org),
+        groups=groups,
+    )
+
+
+@router.post("/platoons/bulk-assign", response_model=PlatoonBulkAssignResult)
+async def bulk_assign_platoon(
+    data: PlatoonBulkAssign,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.manage")),
+):
+    """Assign a platoon to (or clear it from) many members at once.
+
+    Only members in the caller's organization are updated.
+    """
+    service = ShiftEligibilityService(db)
+    updated = await service.bulk_assign_platoon(
+        organization_id=current_user.organization_id,
+        user_ids=[str(uid) for uid in data.user_ids],
+        platoon=data.platoon,
+    )
+    await log_audit_event(
+        db=db,
+        event_type="platoon_bulk_assigned",
+        event_category="scheduling",
+        severity="INFO",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "platoon": (data.platoon or "").strip() or None,
+            "member_count": updated,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return PlatoonBulkAssignResult(
+        updated=updated,
+        platoon=(data.platoon or "").strip() or None,
     )

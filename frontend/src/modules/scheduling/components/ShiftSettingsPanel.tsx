@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from "react";
+import { Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
   Settings,
@@ -302,6 +303,14 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       {/* ─── Platoons Tab ─── */}
       {activeTab === "platoons" && (
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <Link
+              to="/scheduling/platoons"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover"
+            >
+              <Users className="w-4 h-4" /> Department platoon overview
+            </Link>
+          </div>
           <PlatoonRosterPanel />
         </div>
       )}

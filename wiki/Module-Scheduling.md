@@ -78,6 +78,16 @@ days, so the platoons tile to exactly one on-duty platoon per day:
 - The responsible platoon is stored on the shift (`Shift.platoon`, migration
   `20260618_0200`).
 
+### Department Platoon Overview & Bulk Assignment
+
+- A **Platoon Management** page (`/scheduling/platoons`, `scheduling.manage`,
+  linked from Settings → Platoons) lists every platoon and the unassigned bucket
+  with their active members, and lets a manager **bulk-assign** members to a
+  platoon (or clear it) in one request.
+- `GET /scheduling/platoons/overview` (`scheduling.view`) and
+  `POST /scheduling/platoons/bulk-assign` (`scheduling.manage`, org-scoped /
+  IDOR-safe, audit `platoon_bulk_assigned`).
+
 ---
 
 ## Recent Improvements (2026-05-29)

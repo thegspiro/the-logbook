@@ -538,6 +538,25 @@ so a supervisor can immediately fill an open slot. The platoon responsible for a
 generated shift is stored on the row (`Shift.platoon`, migration
 `20260618_0200`).
 
+### Department Platoon Overview & Bulk Assignment
+
+A dedicated **Platoon Management** page (`/scheduling/platoons`,
+`scheduling.manage`, linked from Scheduling Settings → Platoons) shows every
+platoon and the unassigned bucket with their active members at a glance, and
+lets a manager **bulk-assign** many members to a platoon (or clear it) in one
+operation:
+
+- `GET /scheduling/platoons/overview` (`scheduling.view`) → `{ platoons_enabled,
+  groups: [{ platoon, member_count, members: [{ user_id, user_name, rank }] }] }`
+  (named platoons sorted, then the `platoon: null` unassigned group).
+- `POST /scheduling/platoons/bulk-assign` (`scheduling.manage`) → body
+  `{ user_ids: [...], platoon: "A" | null }`; only members in the caller's org
+  are updated (IDOR-safe), audit-logged `platoon_bulk_assigned`. Returns
+  `{ updated, platoon }`.
+
+The inline per-member roster (Settings → Platoons) remains for quick single
+edits; the overview page is the roster-wide view + batch tool.
+
 ---
 
 ## Training Module Integration

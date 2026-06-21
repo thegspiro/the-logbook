@@ -187,6 +187,54 @@ class PlatoonRosterEntry(BaseModel):
     model_config = _response_config
 
 
+class PlatoonMember(BaseModel):
+    """A member shown in the department-wide platoon overview."""
+
+    user_id: UUID
+    user_name: str
+    rank: Optional[str] = None
+
+    model_config = _response_config
+
+
+class PlatoonGroup(BaseModel):
+    """A platoon (or the unassigned bucket) and its members.
+
+    ``platoon`` is ``None`` for members with no platoon assigned.
+    """
+
+    platoon: Optional[str] = None
+    member_count: int = 0
+    members: List[PlatoonMember] = []
+
+    model_config = _response_config
+
+
+class PlatoonOverviewResponse(BaseModel):
+    """Department-wide platoon roster: every platoon plus the unassigned bucket."""
+
+    platoons_enabled: bool = False
+    groups: List[PlatoonGroup] = []
+
+    model_config = _response_config
+
+
+class PlatoonBulkAssign(BaseModel):
+    """Assign a platoon (or clear it, with ``platoon=None``) for many members."""
+
+    user_ids: List[UUID] = Field(..., min_length=1, max_length=500)
+    platoon: Optional[str] = Field(None, max_length=20)
+
+
+class PlatoonBulkAssignResult(BaseModel):
+    """Result of a bulk platoon assignment."""
+
+    updated: int = 0
+    platoon: Optional[str] = None
+
+    model_config = _response_config
+
+
 class ShiftDetailResponse(ShiftResponse):
     """Extended shift response with attendees"""
 
