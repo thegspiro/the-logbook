@@ -15,6 +15,9 @@ import { getErrorMessage } from '../../utils/errorHandling';
 
 type Step = 'idle' | 'enrolling' | 'recovery';
 
+// Warn the member to generate fresh codes once they're running low.
+const LOW_RECOVERY_THRESHOLD = 3;
+
 const inputCls =
   'w-full px-3 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500';
 
@@ -31,6 +34,8 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [disableCode, setDisableCode] = useState('');
   const [showDisable, setShowDisable] = useState(false);
+  const [regenCode, setRegenCode] = useState('');
+  const [showRegen, setShowRegen] = useState(false);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -93,6 +98,24 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
       onChange?.();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Could not disable MFA — check your code'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const regenerate = async () => {
+    if (!regenCode.trim()) return;
+    setBusy(true);
+    try {
+      const res = await authService.regenerateRecoveryCodes(regenCode.trim());
+      setRecoveryCodes(res.recovery_codes);
+      setShowRegen(false);
+      setRegenCode('');
+      setStep('recovery');
+      toast.success('New recovery codes generated');
+      await loadStatus();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Could not regenerate codes — check your code'));
     } finally {
       setBusy(false);
     }
@@ -203,6 +226,16 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
         </span>
       </div>
 
+      {enabled && recoveryRemaining <= LOW_RECOVERY_THRESHOLD && (
+        <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3" role="status">
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            {recoveryRemaining === 0
+              ? "You have no recovery codes left. Generate a new set so you can still get in if you lose your authenticator."
+              : `You're running low on recovery codes (${recoveryRemaining} left). Generate a fresh set to be safe.`}
+          </p>
+        </div>
+      )}
+
       {!enabled && (
         <button
           onClick={() => { void startEnroll(); }}
@@ -213,13 +246,54 @@ export const MfaSettingsCard: React.FC<{ onChange?: () => void }> = ({ onChange 
         </button>
       )}
 
-      {enabled && !showDisable && (
-        <button
-          onClick={() => setShowDisable(true)}
-          className="px-4 py-2 text-sm border border-red-500/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-500/10"
-        >
-          Disable
-        </button>
+      {enabled && !showDisable && !showRegen && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setShowRegen(true)}
+            className="px-4 py-2 text-sm border border-theme-surface-border text-theme-text-secondary rounded-lg hover:bg-theme-surface-hover"
+          >
+            Regenerate recovery codes
+          </button>
+          <button
+            onClick={() => setShowDisable(true)}
+            className="px-4 py-2 text-sm border border-red-500/30 text-red-700 dark:text-red-400 rounded-lg hover:bg-red-500/10"
+          >
+            Disable
+          </button>
+        </div>
+      )}
+
+      {enabled && showRegen && (
+        <div className="space-y-2">
+          <label htmlFor="mfa-regen-code" className="block text-sm font-medium text-theme-text-secondary">
+            Enter a current authenticator code to generate new recovery codes
+          </label>
+          <p className="text-xs text-theme-text-muted">
+            This replaces your existing recovery codes — the old ones stop working.
+          </p>
+          <input
+            id="mfa-regen-code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={regenCode}
+            onChange={(e) => setRegenCode(e.target.value)}
+            placeholder="123456"
+            className={inputCls}
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={() => { void regenerate(); }}
+              disabled={busy || !regenCode.trim()}
+              className="px-4 py-2 text-sm bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+            >
+              {busy && <Loader2 className="w-4 h-4 animate-spin" />} Generate new codes
+            </button>
+            <button onClick={() => { setShowRegen(false); setRegenCode(''); }} className="px-4 py-2 text-sm text-theme-text-secondary hover:text-theme-text-primary">
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {enabled && showDisable && (

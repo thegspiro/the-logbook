@@ -51,6 +51,7 @@ from app.schemas.user import (
 )
 from app.services.organization_service import OrganizationService
 from app.services.user_service import UserService
+from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
 
@@ -1304,6 +1305,17 @@ async def admin_reset_mfa(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    await notify_security_event(
+        db,
+        user,
+        subject="Your two-factor authentication was reset",
+        message=(
+            "An administrator reset the two-factor authentication on your "
+            "account. You have been signed out. If your organization requires "
+            "MFA, you'll be asked to set it up again at your next login."
+        ),
     )
 
     await db.commit()

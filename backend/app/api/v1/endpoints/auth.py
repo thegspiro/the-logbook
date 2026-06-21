@@ -56,6 +56,7 @@ from app.schemas.auth import (
 from app.schemas.organization import AuthSettings
 from app.services import mfa_service
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
+from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
 
@@ -756,6 +757,15 @@ async def mfa_verify_setup(
             "organization_id": str(current_user.organization_id),
         },
     )
+    await notify_security_event(
+        db,
+        current_user,
+        subject="Two-factor authentication enabled",
+        message=(
+            "Two-factor authentication was just enabled on your account. "
+            "If this wasn't you, contact an administrator immediately."
+        ),
+    )
     # Recovery codes are shown exactly once.
     return {"recovery_codes": recovery_codes}
 
@@ -787,6 +797,15 @@ async def mfa_disable(
             "organization_id": str(current_user.organization_id),
         },
     )
+    await notify_security_event(
+        db,
+        current_user,
+        subject="Two-factor authentication disabled",
+        message=(
+            "Two-factor authentication was just disabled on your account. "
+            "If this wasn't you, contact an administrator immediately."
+        ),
+    )
     return {"mfa_enabled": False}
 
 
@@ -799,6 +818,51 @@ async def mfa_status(
         "mfa_enabled": bool(current_user.mfa_enabled),
         "recovery_codes_remaining": len(current_user.mfa_backup_codes or []),
     }
+
+
+@router.post("/mfa/recovery-codes", dependencies=[rate_limit_login()])
+async def mfa_regenerate_recovery_codes(
+    data: MFAVerify,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Regenerate the member's MFA recovery codes after verifying a code.
+
+    The new set replaces the old one (any previously issued codes stop
+    working) and is returned exactly once. Requires a current authenticator
+    code to confirm the member still controls the device.
+    """
+    if not current_user.mfa_enabled:
+        raise HTTPException(status_code=400, detail="MFA is not enabled")
+    if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
+        raise HTTPException(status_code=400, detail="Invalid verification code")
+
+    recovery_codes = mfa_service.generate_recovery_codes()
+    current_user.mfa_backup_codes = recovery_codes
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="mfa_recovery_codes_regenerated",
+        event_category="security",
+        severity="INFO",
+        event_data={
+            "user_id": str(current_user.id),
+            "organization_id": str(current_user.organization_id),
+        },
+    )
+    await notify_security_event(
+        db,
+        current_user,
+        subject="New two-factor recovery codes generated",
+        message=(
+            "A new set of two-factor recovery codes was generated for your "
+            "account; your previous codes no longer work. If this wasn't you, "
+            "contact an administrator immediately."
+        ),
+    )
+    # New recovery codes are shown exactly once.
+    return {"recovery_codes": recovery_codes}
 
 
 @router.get("/mfa/policy", response_model=MFAPolicy)

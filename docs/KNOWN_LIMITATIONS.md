@@ -15,7 +15,6 @@ here.
 
 | Item | Status | Detail |
 |------|--------|--------|
-| **No "regenerate recovery codes" flow** | Open decision | A member can't mint a fresh set of MFA recovery codes from the UI without disabling and re-enrolling. Admin reset exists ([MFA.md → Admin MFA Reset](./MFA.md#admin-mfa-reset)); self-service regeneration does not. |
 | **CSRF "no csrf cookie → allow" branch** | Open decision (MED) | The double-submit guard allows a request that carries *no* `csrf_token` cookie, which is broader than its docstring implies. `SameSite=Strict` is the real defense; decide whether to tighten the branch or correct the docstring. (`security_middleware.py`.) |
 | **`is_rate_limited` window write-before-check** | Verify (MED) | The sliding-window limiter records the request *before* the count comparison; confirm this matches intended semantics (off-by-one on the first over-limit request). (`security.py`.) |
 

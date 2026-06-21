@@ -64,6 +64,7 @@ require MFA for the whole department from **Settings → Authentication**
 | `POST /auth/mfa/verify-setup` | session | Confirm code, enable MFA, return one-time recovery codes |
 | `POST /auth/mfa/disable` | session | Verify a code and disable MFA |
 | `GET /auth/mfa/status` | session | `{ mfa_enabled, recovery_codes_remaining }` |
+| `POST /auth/mfa/recovery-codes` | session | Regenerate recovery codes (verifies a TOTP code), returns the new set once |
 | `GET /auth/mfa/policy` | `settings.manage` | Read org-wide MFA requirement |
 | `PUT /auth/mfa/policy` | `settings.manage` | Set org-wide MFA requirement |
 | `POST /users/{user_id}/reset-mfa` | `users.create` / `members.manage` | Admin: reset a member's MFA (lost device) |
@@ -80,8 +81,12 @@ require MFA for the whole department from **Settings → Authentication**
   `decrypt_data`). No migration was required.
 - **Schemas:** `MFASetup`, `MFAVerify`, `MFALogin`, `MFAPolicy` in
   `schemas/auth.py`.
-- **Audit:** `mfa_enabled` / `mfa_disabled` events logged via
+- **Audit:** `mfa_enabled` / `mfa_disabled` /
+  `mfa_recovery_codes_regenerated` / `admin_mfa_reset` events logged via
   `log_audit_event` (category `security`).
+- **Notifications:** `app/utils/security_notifications.py` sends the affected
+  member an in-app notification + best-effort email on each of those events
+  (fire-and-forget — never blocks the security action).
 - **Frontend:** `authService` MFA methods; `authStore` challenge state
   (`mfaRequired`, `mfaToken`, `completeMfaLogin`, `cancelMfa`); the two-factor
   step on `LoginPage`; `MfaSettingsCard` (enrollment) and `MfaPolicyCard`
@@ -92,7 +97,10 @@ require MFA for the whole department from **Settings → Authentication**
 - Generated once at enrollment and shown a single time.
 - Each code is single-use — using one removes it from the stored set.
 - `GET /auth/mfa/status` reports `recovery_codes_remaining`.
-- There is currently no in-app "regenerate codes" flow.
+- **Regenerate:** members can mint a fresh set from **Settings → Security**
+  (`POST /auth/mfa/recovery-codes`, requires a current TOTP code). The new set
+  replaces the old one (previous codes stop working) and is shown once. The
+  Security card warns when codes are running low (≤3) or exhausted.
 
 ### Admin MFA Reset
 

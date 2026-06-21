@@ -56,6 +56,18 @@ export const authService = {
     return response.data;
   },
 
+  /**
+   * Regenerate recovery codes (requires a current authenticator code).
+   * Returns a fresh one-time set; previous codes stop working.
+   */
+  async regenerateRecoveryCodes(code: string): Promise<{ recovery_codes: string[] }> {
+    const response = await api.post<{ recovery_codes: string[] }>(
+      '/auth/mfa/recovery-codes',
+      { code },
+    );
+    return response.data;
+  },
+
   /** Current user's MFA status. */
   async getMfaStatus(): Promise<{
     mfa_enabled: boolean;
