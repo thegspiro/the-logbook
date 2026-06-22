@@ -5,18 +5,21 @@ import { renderWithRouter } from '../../../test/utils';
 
 const mockGetOptions = vi.fn();
 const mockAnalyzeImpact = vi.fn();
+const mockCreateReorderFromPlan = vi.fn();
+const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   inventoryService: {
     getImpactPlannerOptions: (...a: unknown[]) => mockGetOptions(...a) as unknown,
     analyzeImpact: (...a: unknown[]) => mockAnalyzeImpact(...a) as unknown,
+    createReorderFromPlan: (...a: unknown[]) => mockCreateReorderFromPlan(...a) as unknown,
   },
 }));
 
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: vi.fn(),
+    success: (...a: unknown[]) => mockToastSuccess(...a) as unknown,
     error: (...a: unknown[]) => mockToastError(...a) as unknown,
   },
 }));
@@ -149,6 +152,45 @@ describe('ImpactPlannerPage', () => {
     expect(mockAnalyzeImpact).toHaveBeenCalledWith(
       expect.objectContaining({ size_field: 'jacket', stock_category_id: 'cat-jacket' }),
     );
+  });
+
+  it('creates reorder requests from the shortfall', async () => {
+    const user = userEvent.setup();
+    mockAnalyzeImpact.mockResolvedValue({
+      ...RESULT,
+      stock_checked: true,
+      total_to_purchase: 5,
+      size_breakdown: [
+        { size: 'M', total: 1, needing: 8, on_hand: 3, shortfall: 5 },
+      ],
+    });
+    mockCreateReorderFromPlan.mockResolvedValue({
+      created_count: 1,
+      total_quantity: 5,
+      skipped_unknown_size: 0,
+      reorder_requests: [{ id: 'r1', item_name: 'Jackets — M', size: 'M', quantity_requested: 5 }],
+    });
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[1] as HTMLSelectElement, 'jacket');
+    const withStock = screen.getAllByRole('combobox');
+    await user.selectOptions(withStock[2] as HTMLSelectElement, 'cat-jacket');
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+
+    await user.click(await screen.findByRole('button', { name: /Create reorder request/i }));
+
+    await waitFor(() => {
+      expect(mockCreateReorderFromPlan).toHaveBeenCalledWith(
+        expect.objectContaining({
+          size_field: 'jacket',
+          stock_category_id: 'cat-jacket',
+          urgency: 'normal',
+        }),
+      );
+    });
+    expect(await screen.findByText(/Created 1 reorder request/)).toBeInTheDocument();
   });
 
   it('shows an error toast when options fail to load', async () => {

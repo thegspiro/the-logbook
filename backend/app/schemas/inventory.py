@@ -1928,3 +1928,36 @@ class ImpactPlannerOptionsResponse(BaseModel):
     positions: List[ImpactPlannerPositionOption]
     categories: List[ImpactPlannerCategoryOption]
     size_fields: List[ImpactPlannerOption]
+
+
+class ImpactPlannerReorderRequest(ImpactPlannerRequest):
+    """Generate reorder requests from an impact plan's per-size shortfall.
+
+    Reuses the analysis filters and requires both ``size_field`` and
+    ``stock_category_id`` so a shortfall can be computed; one reorder is
+    created per size with a positive shortfall. The vendor/urgency/notes are
+    applied to every created reorder.
+    """
+
+    vendor: Optional[str] = Field(None, max_length=255)
+    urgency: ReorderUrgencyLiteral = "normal"
+    notes: Optional[FreeText] = None
+
+
+class ImpactPlannerReorderResultItem(BaseModel):
+    """A single reorder request created from the plan."""
+
+    id: UUID
+    item_name: str
+    size: str
+    quantity_requested: int
+
+
+class ImpactPlannerReorderResponse(BaseModel):
+    """Summary of reorder requests created from an impact plan."""
+
+    created_count: int
+    total_quantity: int
+    # Members whose size is unknown can't be reordered and are surfaced here.
+    skipped_unknown_size: int
+    reorder_requests: List[ImpactPlannerReorderResultItem]

@@ -392,6 +392,81 @@ class TestAnalyzeImpactStockAware:
 
 
 # ============================================
+# create_reorder_from_plan
+# ============================================
+
+class TestCreateReorderFromPlan:
+
+    @pytest.mark.asyncio
+    async def test_creates_one_reorder_per_size_with_shortfall(
+        self, service, mock_db
+    ):
+        org_id = str(uuid4())
+        cat_id = str(uuid4())
+        users = [
+            _user("u1", "Amy", "Adams"),
+            _user("u2", "Bob", "Baker"),
+            _user("u3", "Cy", "Clark"),
+            _user("u4", "Di", "Dunn"),
+        ]
+        # u1,u2 -> M ; u3 -> L ; u4 -> no size (Unknown)
+        prefs = [
+            _prefs("u1", shirt_size="M"),
+            _prefs("u2", shirt_size="M"),
+            _prefs("u3", shirt_size="L"),
+        ]
+        # 1 M on hand -> M shortfall 1 ; 0 L on hand -> L shortfall 1
+        stock_items = [_stock_item(standard_size="m", pool=True, quantity=1)]
+
+        # analyze_impact issues: users, prefs, stock. Then the reorder method
+        # fetches the category (db.scalar) and refreshes created rows.
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result(prefs),
+            _scalars_result(stock_items),
+        ]
+        mock_db.scalar = AsyncMock(return_value=SimpleNamespace(name="Jackets"))
+        mock_db.flush = AsyncMock()
+        mock_db.refresh = AsyncMock()
+
+        result = await service.create_reorder_from_plan(
+            organization_id=org_id,
+            filters={"size_field": "shirt", "stock_category_id": cat_id},
+            reorder_meta={"urgency": "high", "vendor": "Acme"},
+            requested_by="admin",
+        )
+
+        # M (shortfall 1) and L (shortfall 1); Unknown skipped
+        assert result["created_count"] == 2
+        assert result["total_quantity"] == 2
+        assert result["skipped_unknown_size"] == 1
+        names = {r["item_name"] for r in result["reorder_requests"]}
+        assert names == {"Jackets — M", "Jackets — L"}
+        # Reorder rows were added with the chosen vendor/urgency
+        added = [c.args[0] for c in mock_db.add.call_args_list]
+        assert all(r.vendor == "Acme" and r.urgency == "high" for r in added)
+        assert all(r.category_id == cat_id for r in added)
+
+    @pytest.mark.asyncio
+    async def test_requires_stock_category(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams")]
+        prefs = [_prefs("u1", shirt_size="M")]
+        # No stock_category_id -> stock_checked is False -> ValueError
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result(prefs),
+        ]
+        with pytest.raises(ValueError):
+            await service.create_reorder_from_plan(
+                organization_id=org_id,
+                filters={"size_field": "shirt"},
+                reorder_meta={},
+                requested_by="admin",
+            )
+
+
+# ============================================
 # get_impact_planner_options
 # ============================================
 

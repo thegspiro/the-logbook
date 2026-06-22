@@ -66,6 +66,9 @@ export type {
   ImpactPlannerMember,
   ImpactPlannerSizeBreakdown,
   ImpactPlannerResult,
+  ImpactPlannerReorderRequest,
+  ImpactPlannerReorderResultItem,
+  ImpactPlannerReorderResponse,
 } from '../../../services/eventServices';
 
 import type { InventoryCategory } from '../../../services/eventServices';

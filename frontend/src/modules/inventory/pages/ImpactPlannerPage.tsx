@@ -10,7 +10,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Target, RefreshCw, Users, ShoppingCart, CheckCircle2,
-  Ruler, Download, Loader2, Search,
+  Ruler, Download, Loader2, Search, Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
@@ -20,7 +20,15 @@ import type {
   ImpactPlannerRequest,
   ImpactPlannerResult,
   ImpactPlannerMember,
+  ImpactPlannerReorderResponse,
 } from '../types';
+
+const URGENCY_OPTIONS = [
+  { value: 'low', label: 'Low' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'high', label: 'High' },
+  { value: 'critical', label: 'Critical' },
+] as const;
 
 const labelClass = 'block text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2';
 const selectClass =
@@ -89,6 +97,13 @@ const ImpactPlannerPage: React.FC = () => {
   const [result, setResult] = useState<ImpactPlannerResult | null>(null);
   const [memberSearch, setMemberSearch] = useState('');
 
+  // The exact request behind the displayed result, so reorders are generated
+  // from what the user actually sees (not later edits to the filters).
+  const [lastRequest, setLastRequest] = useState<ImpactPlannerRequest | null>(null);
+  const [reorderUrgency, setReorderUrgency] = useState('normal');
+  const [creatingReorder, setCreatingReorder] = useState(false);
+  const [reorderDone, setReorderDone] = useState<ImpactPlannerReorderResponse | null>(null);
+
   // Filter selections
   const [statuses, setStatuses] = useState<string[]>(['active']);
   const [membershipTypes, setMembershipTypes] = useState<string[]>([]);
@@ -131,13 +146,34 @@ const ImpactPlannerPage: React.FC = () => {
         size_field: sizeField || undefined,
         stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
       };
+      setReorderDone(null);
       setResult(await inventoryService.analyzeImpact(request));
+      setLastRequest(request);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to analyze impact'));
     } finally {
       setAnalyzing(false);
     }
   }, [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, sizeField, stockCategoryId]);
+
+  const createReorders = useCallback(async () => {
+    if (!lastRequest) return;
+    setCreatingReorder(true);
+    try {
+      const res = await inventoryService.createReorderFromPlan({
+        ...lastRequest,
+        urgency: reorderUrgency,
+      });
+      setReorderDone(res);
+      toast.success(
+        `Created ${res.created_count} reorder request${res.created_count === 1 ? '' : 's'}`,
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to create reorder requests'));
+    } finally {
+      setCreatingReorder(false);
+    }
+  }, [lastRequest, reorderUrgency]);
 
   const filteredMembers = useMemo<ImpactPlannerMember[]>(() => {
     if (!result) return [];
@@ -397,6 +433,50 @@ const ImpactPlannerPage: React.FC = () => {
                       &ldquo;need&rdquo; excludes members who already hold an item in the selected category.
                       {result.stock_checked && ' On-hand stock is matched to needed sizes by label; members with no size on file can’t be matched.'}
                     </p>
+
+                    {/* One-click reorder: turn the shortfall into draft POs */}
+                    {result.stock_checked && (result.total_to_purchase ?? 0) > 0 && (
+                      <div className="mt-4 pt-4 border-t border-theme-surface-border">
+                        {reorderDone ? (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg bg-green-500/10 px-3 py-2">
+                            <span className="text-sm text-green-700 dark:text-green-400 flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              Created {reorderDone.created_count} reorder request{reorderDone.created_count === 1 ? '' : 's'}
+                              {reorderDone.skipped_unknown_size > 0 &&
+                                ` (${reorderDone.skipped_unknown_size} member${reorderDone.skipped_unknown_size === 1 ? '' : 's'} skipped — no size on file)`}
+                            </span>
+                            <Link to="/inventory/admin/reorder" className="btn-secondary btn-sm shrink-0">
+                              Review reorders
+                            </Link>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                            <div>
+                              <label className={labelClass}>Reorder urgency</label>
+                              <select
+                                value={reorderUrgency}
+                                onChange={(e) => setReorderUrgency(e.target.value)}
+                                className={selectClass}
+                              >
+                                {URGENCY_OPTIONS.map((u) => (
+                                  <option key={u.value} value={u.value}>{u.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <button
+                              onClick={() => { void createReorders(); }}
+                              disabled={creatingReorder}
+                              className="btn-primary btn-md justify-center"
+                            >
+                              {creatingReorder
+                                ? <Loader2 className="w-4 h-4 animate-spin" />
+                                : <Truck className="w-4 h-4" />}
+                              Create reorder request{(result.size_breakdown.filter((b) => (b.shortfall ?? 0) > 0).length) === 1 ? '' : 's'}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 

@@ -4788,6 +4788,96 @@ class InventoryService:
             "members": members,
         }
 
+    async def create_reorder_from_plan(
+        self,
+        organization_id,
+        filters: Dict[str, Any],
+        reorder_meta: Dict[str, Any],
+        requested_by: str,
+    ) -> Dict[str, Any]:
+        """Create reorder requests from an impact plan's per-size shortfall.
+
+        Re-runs the analysis server-side (so quantities can't be tampered with
+        or go stale) and creates one PENDING reorder per size with a positive
+        shortfall, all scoped to the plan's stock category. Sizes with unknown
+        member sizes can't be ordered and are reported back, not created.
+        """
+        org_id = str(organization_id)
+
+        analysis = await self.analyze_impact(
+            org_id, filters, include_contact=False
+        )
+        if not analysis["stock_checked"]:
+            raise ValueError(
+                "Select a size field and a stock category before "
+                "generating reorder requests."
+            )
+
+        stock_category_id = str(filters.get("stock_category_id"))
+        category = await self.db.scalar(
+            select(InventoryCategory)
+            .where(InventoryCategory.id == stock_category_id)
+            .where(InventoryCategory.organization_id == org_id)
+        )
+        base_name = category.name if category else "Item"
+        size_label = self._SIZE_FIELD_LABELS.get(filters.get("size_field"), "")
+
+        vendor = reorder_meta.get("vendor")
+        urgency = reorder_meta.get("urgency") or "normal"
+        extra_notes = reorder_meta.get("notes")
+
+        created: List[Tuple[ReorderRequest, str]] = []
+        total_qty = 0
+        skipped_unknown = 0
+
+        for entry in analysis["size_breakdown"]:
+            if entry["size"] == "Unknown":
+                skipped_unknown += entry.get("needing", 0)
+                continue
+            shortfall = entry.get("shortfall") or 0
+            if shortfall <= 0:
+                continue
+
+            note = (
+                f"Generated from impact plan ({size_label} {entry['size']}): "
+                f"{entry['needing']} needed, {entry.get('on_hand', 0)} on hand."
+            )
+            if extra_notes:
+                note = f"{note} {extra_notes}"
+
+            reorder = ReorderRequest(
+                organization_id=org_id,
+                category_id=stock_category_id,
+                item_name=f"{base_name} — {entry['size']}"[:255],
+                quantity_requested=shortfall,
+                vendor=vendor,
+                urgency=urgency,
+                notes=note,
+                requested_by=requested_by,
+            )
+            self.db.add(reorder)
+            created.append((reorder, entry["size"]))
+            total_qty += shortfall
+
+        await self.db.flush()
+        for reorder, _ in created:
+            await self.db.refresh(reorder)
+
+        return {
+            "created_count": len(created),
+            "total_quantity": total_qty,
+            "skipped_unknown_size": skipped_unknown,
+            "reorder_requests": [
+                {
+                    "id": reorder.id,
+                    "item_name": reorder.item_name,
+                    "size": size,
+                    "quantity_requested": reorder.quantity_requested,
+                }
+                for reorder, size in created
+            ],
+        }
+
     async def get_impact_planner_options(
         self, organization_id
     ) -> Dict[str, Any]:

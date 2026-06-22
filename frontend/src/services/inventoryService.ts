@@ -18,6 +18,7 @@ import type {
   EquipmentKit, EquipmentKitCreate,
   MemberSizePreferences, MemberSizePreferencesCreate,
   ImpactPlannerOptions, ImpactPlannerRequest, ImpactPlannerResult,
+  ImpactPlannerReorderRequest, ImpactPlannerReorderResponse,
 } from './eventServices';
 
 export const inventoryService = {
@@ -40,6 +41,11 @@ export const inventoryService = {
 
   async analyzeImpact(request: ImpactPlannerRequest): Promise<ImpactPlannerResult> {
     const response = await api.post<ImpactPlannerResult>('/inventory/impact-planner', request);
+    return response.data;
+  },
+
+  async createReorderFromPlan(request: ImpactPlannerReorderRequest): Promise<ImpactPlannerReorderResponse> {
+    const response = await api.post<ImpactPlannerReorderResponse>('/inventory/impact-planner/reorder', request);
     return response.data;
   },
 

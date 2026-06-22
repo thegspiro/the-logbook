@@ -1239,6 +1239,26 @@ export interface ImpactPlannerResult {
   members: ImpactPlannerMember[];
 }
 
+export interface ImpactPlannerReorderRequest extends ImpactPlannerRequest {
+  vendor?: string | undefined;
+  urgency?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface ImpactPlannerReorderResultItem {
+  id: string;
+  item_name: string;
+  size: string;
+  quantity_requested: number;
+}
+
+export interface ImpactPlannerReorderResponse {
+  created_count: number;
+  total_quantity: number;
+  skipped_unknown_size: number;
+  reorder_requests: ImpactPlannerReorderResultItem[];
+}
+
 export interface LabelFormat {
   id: string;
   description: string;

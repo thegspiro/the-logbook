@@ -75,6 +75,8 @@ from app.schemas.inventory import (
     EquipmentRequestFulfill,
     EquipmentRequestReview,
     ImpactPlannerOptionsResponse,
+    ImpactPlannerReorderRequest,
+    ImpactPlannerReorderResponse,
     ImpactPlannerRequest,
     ImpactPlannerResponse,
     InventoryCategoryCreate,
@@ -2132,6 +2134,70 @@ async def analyze_inventory_impact(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail(e),
         )
+
+
+@router.post(
+    "/impact-planner/reorder",
+    response_model=ImpactPlannerReorderResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reorder_from_impact_plan(
+    payload: ImpactPlannerReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create reorder requests from an impact plan's per-size shortfall.
+
+    Re-runs the analysis server-side and creates one pending reorder request
+    per size that has a shortfall, scoped to the plan's stock category. The
+    request must include a size field and a stock category.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    reorder_meta = {
+        "vendor": payload.vendor,
+        "urgency": payload.urgency,
+        "notes": payload.notes,
+    }
+    filters = payload.model_dump(exclude={"vendor", "urgency", "notes"})
+    try:
+        result = await service.create_reorder_from_plan(
+            organization_id=current_user.organization_id,
+            filters=filters,
+            reorder_meta=reorder_meta,
+            requested_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="reorder_requests_created_from_plan",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "created_count": result["created_count"],
+            "total_quantity": result["total_quantity"],
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    return result
 
 
 @router.get("/users/{user_id}/inventory", response_model=UserInventoryResponse)
