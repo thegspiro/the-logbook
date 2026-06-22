@@ -2200,6 +2200,52 @@ async def create_reorder_from_impact_plan(
     return result
 
 
+@router.post("/impact-planner/pdf")
+async def export_impact_plan_pdf(
+    payload: ImpactPlannerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Export the impact plan as a print-ready PDF for procurement.
+
+    Member contact details are included only when the caller may view
+    contact information.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    from fastapi.responses import StreamingResponse
+
+    user_permissions = _collect_user_permissions(current_user)
+    include_contact = _has_permission("users.view_contact", user_permissions)
+
+    service = InventoryService(db)
+    try:
+        pdf_buf = await service.generate_impact_plan_pdf(
+            organization_id=current_user.organization_id,
+            filters=payload.model_dump(),
+            include_contact=include_contact,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    headers = {
+        "Content-Disposition": "attachment; filename=impact-plan.pdf"
+    }
+    return StreamingResponse(
+        pdf_buf, media_type="application/pdf", headers=headers
+    )
+
+
 @router.get("/users/{user_id}/inventory", response_model=UserInventoryResponse)
 async def get_user_inventory(
     user_id: UUID,

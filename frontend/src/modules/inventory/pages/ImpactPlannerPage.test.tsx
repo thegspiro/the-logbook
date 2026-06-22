@@ -6,6 +6,7 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetOptions = vi.fn();
 const mockAnalyzeImpact = vi.fn();
 const mockCreateReorderFromPlan = vi.fn();
+const mockExportPlanPdf = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -14,6 +15,7 @@ vi.mock('../../../services/api', () => ({
     getImpactPlannerOptions: (...a: unknown[]) => mockGetOptions(...a) as unknown,
     analyzeImpact: (...a: unknown[]) => mockAnalyzeImpact(...a) as unknown,
     createReorderFromPlan: (...a: unknown[]) => mockCreateReorderFromPlan(...a) as unknown,
+    exportPlanPdf: (...a: unknown[]) => mockExportPlanPdf(...a) as unknown,
   },
 }));
 
@@ -249,6 +251,34 @@ describe('ImpactPlannerPage', () => {
     expect(mockAnalyzeImpact).toHaveBeenCalledWith(
       expect.objectContaining({ related_category_id: 'cat-jacket', replacement_aware: true }),
     );
+  });
+
+  it('downloads a PDF summary of the plan', async () => {
+    const user = userEvent.setup();
+    mockExportPlanPdf.mockResolvedValue(new Blob(['%PDF'], { type: 'application/pdf' }));
+    const createUrl = vi.fn(() => 'blob:plan');
+    const revokeUrl = vi.fn();
+    vi.stubGlobal('URL', { createObjectURL: createUrl, revokeObjectURL: revokeUrl });
+    // jsdom doesn't implement anchor click navigation; stub it.
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+    await screen.findByText('Amy Adams');
+
+    await user.click(screen.getByRole('button', { name: /^PDF$/i }));
+
+    await waitFor(() => {
+      expect(mockExportPlanPdf).toHaveBeenCalledWith(
+        expect.objectContaining({ statuses: ['active'] }),
+      );
+    });
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+    vi.unstubAllGlobals();
   });
 
   it('shows an error toast when options fail to load', async () => {

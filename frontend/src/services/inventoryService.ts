@@ -49,6 +49,13 @@ export const inventoryService = {
     return response.data;
   },
 
+  async exportPlanPdf(request: ImpactPlannerRequest): Promise<Blob> {
+    const response = await api.post<Blob>('/inventory/impact-planner/pdf', request, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
   async getSummary(): Promise<InventorySummary> {
     const response = await api.get<InventorySummary>('/inventory/summary');
     return response.data;

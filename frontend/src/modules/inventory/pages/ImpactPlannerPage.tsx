@@ -10,7 +10,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Target, RefreshCw, Users, ShoppingCart, CheckCircle2,
-  Ruler, Download, Loader2, Search, Truck,
+  Ruler, Download, Loader2, Search, Truck, FileText,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
@@ -193,6 +193,25 @@ const ImpactPlannerPage: React.FC = () => {
     if (!result?.size_field || !options) return null;
     return options.size_fields.find((s) => s.value === result.size_field)?.label ?? null;
   }, [result, options]);
+
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const exportPdf = useCallback(async () => {
+    if (!lastRequest) return;
+    setExportingPdf(true);
+    try {
+      const blob = await inventoryService.exportPlanPdf(lastRequest);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'impact-plan.pdf';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to generate PDF'));
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [lastRequest]);
 
   const exportCsv = useCallback(() => {
     if (!result) return;
@@ -534,7 +553,16 @@ const ImpactPlannerPage: React.FC = () => {
                       </div>
                       <button onClick={exportCsv} className="btn-secondary btn-sm" title="Export to CSV">
                         <Download className="w-4 h-4" />
-                        <span className="hidden sm:inline">Export</span>
+                        <span className="hidden sm:inline">CSV</span>
+                      </button>
+                      <button
+                        onClick={() => { void exportPdf(); }}
+                        disabled={exportingPdf}
+                        className="btn-secondary btn-sm"
+                        title="Download PDF summary"
+                      >
+                        {exportingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                        <span className="hidden sm:inline">PDF</span>
                       </button>
                     </div>
                   </div>

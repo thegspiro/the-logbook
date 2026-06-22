@@ -10,7 +10,7 @@ database session (no live DB required, mirroring test_inventory_service.py):
   - get_impact_planner_options shape
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -614,6 +614,84 @@ class TestCreateReorderFromPlan:
                 reorder_meta={},
                 requested_by="admin",
             )
+
+
+# ============================================
+# PDF rendering
+# ============================================
+
+class TestImpactPlanPdf:
+
+    def _data(self, **overrides):
+        data = {
+            "total_members": 2,
+            "members_needing_item": 1,
+            "members_with_related_item": 1,
+            "members_needing_replacement": 0,
+            "members_missing_sizes": 0,
+            "replacement_aware": False,
+            "size_field": None,
+            "stock_checked": False,
+            "total_to_purchase": None,
+            "cost_estimated": False,
+            "estimated_total_cost": None,
+            "size_breakdown": [],
+            "members": [
+                {
+                    "full_name": "Amy Adams", "membership_number": "001",
+                    "rank": "firefighter", "station": "S1", "needed_size": None,
+                    "has_related_item": False, "needs_replacement": False,
+                    "email": None, "phone": None,
+                },
+            ],
+        }
+        data.update(overrides)
+        return data
+
+    def test_minimal_plan_renders_pdf(self):
+        from app.utils.impact_plan_pdf import render_impact_plan_pdf
+
+        buf = render_impact_plan_pdf(
+            self._data(),
+            {"org_name": "Test FD", "generated_at": datetime(2026, 6, 22, 12, 0),
+             "parameters": [], "show_size": False, "show_existing": False,
+             "show_contact": False},
+        )
+        out = buf.getvalue()
+        assert out[:4] == b"%PDF"
+        assert len(out) > 800
+
+    def test_full_plan_renders_pdf(self):
+        from app.utils.impact_plan_pdf import render_impact_plan_pdf
+
+        data = self._data(
+            size_field="jacket",
+            stock_checked=True,
+            total_to_purchase=2,
+            cost_estimated=True,
+            estimated_total_cost=360.0,
+            replacement_aware=True,
+            members_needing_replacement=1,
+            size_breakdown=[
+                {"size": "M", "needing": 2, "on_hand": 0, "shortfall": 2,
+                 "unit_cost": 180.0, "estimated_cost": 360.0},
+                {"size": "Unknown", "needing": 1, "on_hand": 0, "shortfall": 1,
+                 "unit_cost": 180.0, "estimated_cost": 180.0},
+            ],
+            members=[
+                {"full_name": "Amy Adams", "membership_number": "001",
+                 "rank": "ff", "station": "S1", "needed_size": "M",
+                 "has_related_item": False, "needs_replacement": True,
+                 "email": "amy@x.org", "phone": "555"},
+            ],
+        )
+        buf = render_impact_plan_pdf(
+            data,
+            {"org_name": "Test FD", "generated_at": datetime(2026, 6, 22, 12, 0),
+             "parameters": ["Size: Jacket", "Replacement-aware"],
+             "show_size": True, "show_existing": True, "show_contact": True},
+        )
+        assert buf.getvalue()[:4] == b"%PDF"
 
 
 # ============================================

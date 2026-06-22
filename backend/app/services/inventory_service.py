@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
+from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels
 from app.models.inventory import (
     AssignmentType,
@@ -5008,6 +5009,61 @@ class InventoryService:
                 for reorder, size in created
             ],
         }
+
+    async def generate_impact_plan_pdf(
+        self,
+        organization_id,
+        filters: Dict[str, Any],
+        include_contact: bool = False,
+    ) -> BytesIO:
+        """Render the impact-plan analysis to a print-ready PDF.
+
+        Runs the analysis, resolves organization and category names for the
+        report header, then delegates layout to ``render_impact_plan_pdf``.
+        """
+        org_id = str(organization_id)
+        data = await self.analyze_impact(org_id, filters, include_contact)
+
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == org_id)
+        )
+        org_name = org.name if org else ""
+
+        async def _cat_name(cat_id) -> Optional[str]:
+            if not cat_id:
+                return None
+            cat = await self.db.scalar(
+                select(InventoryCategory)
+                .where(InventoryCategory.id == str(cat_id))
+                .where(InventoryCategory.organization_id == org_id)
+            )
+            return cat.name if cat else None
+
+        related_name = await _cat_name(filters.get("related_category_id"))
+        stock_name = await _cat_name(filters.get("stock_category_id"))
+
+        parameters: List[str] = []
+        size_field = filters.get("size_field")
+        if size_field:
+            parameters.append(
+                f"Size: {self._SIZE_FIELD_LABELS.get(size_field, size_field)}"
+            )
+        if related_name:
+            parameters.append(f"Existing item: {related_name}")
+            if filters.get("replacement_aware"):
+                parameters.append("Replacement-aware")
+        if stock_name:
+            parameters.append(f"Stock source: {stock_name}")
+
+        meta = {
+            "org_name": org_name,
+            "generated_at": datetime.now(timezone.utc),
+            "parameters": parameters,
+            "show_size": bool(size_field),
+            "show_existing": bool(filters.get("related_category_id")),
+            "show_contact": include_contact,
+        }
+        return render_impact_plan_pdf(data, meta)
 
     async def get_impact_planner_options(
         self, organization_id
