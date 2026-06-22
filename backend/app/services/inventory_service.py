@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
+from app.models.notification import NotificationLog
 from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels
 from app.models.inventory import (
@@ -5330,6 +5331,53 @@ class InventoryService:
         await self.db.delete(plan)
         await self.db.flush()
         return True
+
+    async def request_member_sizes(
+        self, organization_id, filters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Notify members who need the item but have no size on file.
+
+        Sends an in-app notification asking each such member to add their
+        equipment sizes (self-service), so the next run of the plan can size
+        and cost them. Requires a size field to know which size is missing.
+        """
+        org_id = str(organization_id)
+        size_field = filters.get("size_field")
+        if not size_field:
+            raise ValueError(
+                "Select a size field to identify members missing sizes."
+            )
+
+        analysis = await self.analyze_impact(org_id, filters)
+        size_label = self._SIZE_FIELD_LABELS.get(size_field, "equipment")
+        subject = "Equipment sizes needed"
+        message = (
+            f"Your {size_label.lower()} size isn't on file. Please add your "
+            "equipment sizes so the quartermaster can issue your gear."
+        )
+
+        notified: List[Dict[str, Any]] = []
+        for member in analysis["members"]:
+            if member["has_related_item"] or member["has_size_on_file"]:
+                continue
+            self.db.add(
+                NotificationLog(
+                    organization_id=org_id,
+                    recipient_id=str(member["user_id"]),
+                    channel="in_app",
+                    category="inventory",
+                    subject=subject,
+                    message=message,
+                    action_url="/inventory/my-equipment",
+                    delivered=True,
+                )
+            )
+            notified.append(
+                {"user_id": member["user_id"], "name": member.get("full_name")}
+            )
+
+        await self.db.flush()
+        return {"notified_count": len(notified), "members": notified}
 
     async def generate_impact_plan_pdf(
         self,

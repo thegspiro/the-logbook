@@ -11,7 +11,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Target, RefreshCw, Users, ShoppingCart, CheckCircle2,
   Ruler, Download, Loader2, Search, Truck, FileText, PackageCheck,
-  Trash2, Save,
+  Trash2, Save, Send,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
@@ -25,6 +25,7 @@ import type {
   ImpactPlannerMember,
   ImpactPlannerReorderResponse,
   ImpactPlannerIssueResponse,
+  ImpactPlannerRequestSizesResponse,
   ImpactPlan,
 } from '../types';
 
@@ -111,6 +112,8 @@ const ImpactPlannerPage: React.FC = () => {
   const [issueConfirmOpen, setIssueConfirmOpen] = useState(false);
   const [issuing, setIssuing] = useState(false);
   const [issueDone, setIssueDone] = useState<ImpactPlannerIssueResponse | null>(null);
+  const [requestingSizes, setRequestingSizes] = useState(false);
+  const [sizesRequested, setSizesRequested] = useState<ImpactPlannerRequestSizesResponse | null>(null);
 
   // Filter selections
   const [statuses, setStatuses] = useState<string[]>(['active']);
@@ -175,6 +178,7 @@ const ImpactPlannerPage: React.FC = () => {
       const request = buildRequest();
       setReorderDone(null);
       setIssueDone(null);
+      setSizesRequested(null);
       setResult(await inventoryService.analyzeImpact(request));
       setLastRequest(request);
     } catch (err: unknown) {
@@ -287,6 +291,22 @@ const ImpactPlannerPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to issue items'));
     } finally {
       setIssuing(false);
+    }
+  }, [lastRequest]);
+
+  const requestSizes = useCallback(async () => {
+    if (!lastRequest) return;
+    setRequestingSizes(true);
+    try {
+      const res = await inventoryService.requestMemberSizes(lastRequest);
+      setSizesRequested(res);
+      toast.success(
+        `Requested sizes from ${res.notified_count} member${res.notified_count === 1 ? '' : 's'}`,
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to request sizes'));
+    } finally {
+      setRequestingSizes(false);
     }
   }, [lastRequest]);
 
@@ -595,6 +615,31 @@ const ImpactPlannerPage: React.FC = () => {
                     iconBg="bg-amber-500/10"
                   />
                 </div>
+
+                {/* Request sizes from members with no size on file */}
+                {result.members_missing_sizes > 0 && (
+                  <div className="card-secondary p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <span className="text-sm text-theme-text-muted flex items-center gap-2">
+                      <Ruler className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                      {result.members_missing_sizes} member{result.members_missing_sizes === 1 ? '' : 's'} need the item but have no size on file.
+                    </span>
+                    {sizesRequested ? (
+                      <span className="text-sm text-green-700 dark:text-green-400 flex items-center gap-1.5 shrink-0">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Requested from {sizesRequested.notified_count}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { void requestSizes(); }}
+                        disabled={requestingSizes}
+                        className="btn-secondary btn-sm shrink-0"
+                      >
+                        {requestingSizes ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        Request sizes
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Size breakdown for purchasing */}
                 {result.size_breakdown.length > 0 && (

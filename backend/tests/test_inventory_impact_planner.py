@@ -747,6 +747,51 @@ class TestBulkIssueFromPlan:
 
 
 # ============================================
+# Request member sizes
+# ============================================
+
+class TestRequestMemberSizes:
+
+    @pytest.mark.asyncio
+    async def test_notifies_only_missing_size_members(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [
+            _user("u1", "Amy", "Adams"),   # has size -> not notified
+            _user("u2", "Bob", "Baker"),   # no size -> notified
+            _user("u3", "Cy", "Clark"),    # no size -> notified
+        ]
+        prefs = [_prefs("u1", shirt_size="M")]
+        # analyze: users, prefs (size_field set); no related/stock.
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result(prefs),
+        ]
+        mock_db.flush = AsyncMock()
+
+        result = await service.request_member_sizes(
+            organization_id=org_id,
+            filters={"size_field": "shirt"},
+        )
+
+        assert result["notified_count"] == 2
+        notified_ids = {m["user_id"] for m in result["members"]}
+        assert notified_ids == {"u2", "u3"}
+        # One NotificationLog added per notified member, in-app channel
+        added = [c.args[0] for c in mock_db.add.call_args_list]
+        assert len(added) == 2
+        assert all(n.channel == "in_app" for n in added)
+        assert all(n.recipient_id in {"u2", "u3"} for n in added)
+        assert all(n.action_url == "/inventory/my-equipment" for n in added)
+
+    @pytest.mark.asyncio
+    async def test_requires_size_field(self, service, mock_db):
+        with pytest.raises(ValueError):
+            await service.request_member_sizes(
+                organization_id=str(uuid4()), filters={}
+            )
+
+
+# ============================================
 # Allowance-aware planning
 # ============================================
 

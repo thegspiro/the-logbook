@@ -2029,6 +2029,20 @@ class ImpactPlannerIssueResponse(BaseModel):
     skipped: List[ImpactPlannerSkippedItem]
 
 
+class ImpactPlannerNotifiedMember(BaseModel):
+    """A member notified to submit their sizes."""
+
+    user_id: UUID
+    name: Optional[str] = None
+
+
+class ImpactPlannerRequestSizesResponse(BaseModel):
+    """Summary of a request-sizes run from an impact plan."""
+
+    notified_count: int
+    members: List[ImpactPlannerNotifiedMember]
+
+
 class ImpactPlannerReorderResultItem(BaseModel):
     """A single reorder request created from the plan."""
 

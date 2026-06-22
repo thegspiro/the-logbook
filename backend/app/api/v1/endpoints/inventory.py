@@ -80,6 +80,7 @@ from app.schemas.inventory import (
     ImpactPlannerIssueRequest,
     ImpactPlannerIssueResponse,
     ImpactPlannerOptionsResponse,
+    ImpactPlannerRequestSizesResponse,
     ImpactPlannerReorderRequest,
     ImpactPlannerReorderResponse,
     ImpactPlannerRequest,
@@ -2398,6 +2399,60 @@ async def bulk_issue_from_impact_plan(
             "bulk_issued_from_plan",
             {"issued_count": result["issued_count"]},
         )
+
+    return result
+
+
+@router.post(
+    "/impact-planner/request-sizes",
+    response_model=ImpactPlannerRequestSizesResponse,
+)
+async def request_member_sizes(
+    payload: ImpactPlannerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Ask members with no size on file to submit their equipment sizes.
+
+    Sends an in-app notification to each member who needs the item but has no
+    size on record, so the next plan run can size and cost them. Requires a
+    size field.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    try:
+        result = await service.request_member_sizes(
+            organization_id=current_user.organization_id,
+            filters=payload.model_dump(),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_size_request_sent",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "notification",
+            "notified_count": result["notified_count"],
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
 
     return result
 

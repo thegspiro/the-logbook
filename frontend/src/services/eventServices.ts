@@ -1285,6 +1285,16 @@ export interface ImpactPlanCreate {
   filters: ImpactPlannerRequest;
 }
 
+export interface ImpactPlannerNotifiedMember {
+  user_id: string;
+  name?: string;
+}
+
+export interface ImpactPlannerRequestSizesResponse {
+  notified_count: number;
+  members: ImpactPlannerNotifiedMember[];
+}
+
 export interface ImpactPlannerIssuedItem {
   user_id: string;
   name?: string;

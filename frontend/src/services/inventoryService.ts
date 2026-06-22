@@ -20,7 +20,7 @@ import type {
   ImpactPlannerOptions, ImpactPlannerRequest, ImpactPlannerResult,
   ImpactPlannerReorderRequest, ImpactPlannerReorderResponse,
   ImpactPlannerIssueRequest, ImpactPlannerIssueResponse,
-  ImpactPlan, ImpactPlanCreate,
+  ImpactPlan, ImpactPlanCreate, ImpactPlannerRequestSizesResponse,
 } from './eventServices';
 
 export const inventoryService = {
@@ -60,6 +60,11 @@ export const inventoryService = {
 
   async bulkIssueFromPlan(request: ImpactPlannerIssueRequest): Promise<ImpactPlannerIssueResponse> {
     const response = await api.post<ImpactPlannerIssueResponse>('/inventory/impact-planner/issue', request);
+    return response.data;
+  },
+
+  async requestMemberSizes(request: ImpactPlannerRequest): Promise<ImpactPlannerRequestSizesResponse> {
+    const response = await api.post<ImpactPlannerRequestSizesResponse>('/inventory/impact-planner/request-sizes', request);
     return response.data;
   },
 

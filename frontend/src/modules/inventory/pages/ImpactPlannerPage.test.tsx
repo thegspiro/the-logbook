@@ -11,6 +11,7 @@ const mockBulkIssueFromPlan = vi.fn();
 const mockGetImpactPlans = vi.fn();
 const mockCreateImpactPlan = vi.fn();
 const mockDeleteImpactPlan = vi.fn();
+const mockRequestMemberSizes = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -21,6 +22,7 @@ vi.mock('../../../services/api', () => ({
     createReorderFromPlan: (...a: unknown[]) => mockCreateReorderFromPlan(...a) as unknown,
     exportPlanPdf: (...a: unknown[]) => mockExportPlanPdf(...a) as unknown,
     bulkIssueFromPlan: (...a: unknown[]) => mockBulkIssueFromPlan(...a) as unknown,
+    requestMemberSizes: (...a: unknown[]) => mockRequestMemberSizes(...a) as unknown,
     getImpactPlans: (...a: unknown[]) => mockGetImpactPlans(...a) as unknown,
     createImpactPlan: (...a: unknown[]) => mockCreateImpactPlan(...a) as unknown,
     deleteImpactPlan: (...a: unknown[]) => mockDeleteImpactPlan(...a) as unknown,
@@ -420,6 +422,27 @@ describe('ImpactPlannerPage', () => {
     expect(mockAnalyzeImpact).toHaveBeenCalledWith(
       expect.objectContaining({ allowance_aware: true }),
     );
+  });
+
+  it('requests sizes from members with no size on file', async () => {
+    const user = userEvent.setup();
+    // RESULT already has members_missing_sizes: 1
+    mockRequestMemberSizes.mockResolvedValue({
+      notified_count: 1,
+      members: [{ user_id: 'u3', name: 'Cy Clark' }],
+    });
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+
+    await user.click(await screen.findByRole('button', { name: /Request sizes/i }));
+
+    await waitFor(() => {
+      expect(mockRequestMemberSizes).toHaveBeenCalledWith(
+        expect.objectContaining({ statuses: ['active'] }),
+      );
+    });
+    expect(await screen.findByText(/Requested from 1/)).toBeInTheDocument();
   });
 
   it('shows an error toast when options fail to load', async () => {
