@@ -565,8 +565,10 @@ class TestCreateReorderFromPlan:
             _prefs("u2", shirt_size="M"),
             _prefs("u3", shirt_size="L"),
         ]
-        # 1 M on hand -> M shortfall 1 ; 0 L on hand -> L shortfall 1
-        stock_items = [_stock_item(standard_size="m", pool=True, quantity=1)]
+        # 1 M on hand (priced $90) -> M shortfall 1 ; 0 L on hand -> L shortfall 1
+        stock_items = [
+            _stock_item(standard_size="m", pool=True, quantity=1, replacement_cost=90),
+        ]
 
         # analyze_impact issues: users, prefs, stock. Then the reorder method
         # fetches the category (db.scalar) and refreshes created rows.
@@ -593,9 +595,15 @@ class TestCreateReorderFromPlan:
         names = {r["item_name"] for r in result["reorder_requests"]}
         assert names == {"Jackets — M", "Jackets — L"}
         # Reorder rows were added with the chosen vendor/urgency
-        added = [c.args[0] for c in mock_db.add.call_args_list]
-        assert all(r.vendor == "Acme" and r.urgency == "high" for r in added)
-        assert all(r.category_id == cat_id for r in added)
+        added = {r.item_name: r for r in
+                 (c.args[0] for c in mock_db.add.call_args_list)}
+        assert all(r.vendor == "Acme" and r.urgency == "high"
+                   for r in added.values())
+        assert all(r.category_id == cat_id for r in added.values())
+        # The cost estimate flows onto the reorders: M from its own price,
+        # L from the category-average fallback (no L-specific price).
+        assert added["Jackets — M"].estimated_unit_cost == 90.0
+        assert added["Jackets — L"].estimated_unit_cost == 90.0
 
     @pytest.mark.asyncio
     async def test_requires_stock_category(self, service, mock_db):

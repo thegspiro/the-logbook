@@ -5015,6 +5015,9 @@ class InventoryService:
                 item_name=f"{base_name} — {entry['size']}"[:255],
                 quantity_requested=shortfall,
                 vendor=vendor,
+                # Carry the plan's per-size cost estimate onto the PO so the
+                # reorder is pre-priced when it lands in the reorder queue.
+                estimated_unit_cost=entry.get("unit_cost"),
                 urgency=urgency,
                 notes=note,
                 requested_by=requested_by,
