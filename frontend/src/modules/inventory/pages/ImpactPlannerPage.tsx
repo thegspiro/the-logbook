@@ -10,18 +10,20 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Target, RefreshCw, Users, ShoppingCart, CheckCircle2,
-  Ruler, Download, Loader2, Search, Truck, FileText,
+  Ruler, Download, Loader2, Search, Truck, FileText, PackageCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '../../../utils/currencyFormatting';
+import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
 import type {
   ImpactPlannerOptions,
   ImpactPlannerRequest,
   ImpactPlannerResult,
   ImpactPlannerMember,
   ImpactPlannerReorderResponse,
+  ImpactPlannerIssueResponse,
 } from '../types';
 
 const URGENCY_OPTIONS = [
@@ -104,6 +106,9 @@ const ImpactPlannerPage: React.FC = () => {
   const [reorderUrgency, setReorderUrgency] = useState('normal');
   const [creatingReorder, setCreatingReorder] = useState(false);
   const [reorderDone, setReorderDone] = useState<ImpactPlannerReorderResponse | null>(null);
+  const [issueConfirmOpen, setIssueConfirmOpen] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [issueDone, setIssueDone] = useState<ImpactPlannerIssueResponse | null>(null);
 
   // Filter selections
   const [statuses, setStatuses] = useState<string[]>(['active']);
@@ -150,6 +155,7 @@ const ImpactPlannerPage: React.FC = () => {
         stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
       };
       setReorderDone(null);
+      setIssueDone(null);
       setResult(await inventoryService.analyzeImpact(request));
       setLastRequest(request);
     } catch (err: unknown) {
@@ -193,6 +199,23 @@ const ImpactPlannerPage: React.FC = () => {
     if (!result?.size_field || !options) return null;
     return options.size_fields.find((s) => s.value === result.size_field)?.label ?? null;
   }, [result, options]);
+
+  const bulkIssue = useCallback(async () => {
+    if (!lastRequest) return;
+    setIssuing(true);
+    try {
+      const res = await inventoryService.bulkIssueFromPlan(lastRequest);
+      setIssueDone(res);
+      setIssueConfirmOpen(false);
+      toast.success(
+        `Issued to ${res.issued_count} member${res.issued_count === 1 ? '' : 's'}`,
+      );
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to issue items'));
+    } finally {
+      setIssuing(false);
+    }
+  }, [lastRequest]);
 
   const [exportingPdf, setExportingPdf] = useState(false);
   const exportPdf = useCallback(async () => {
@@ -481,6 +504,47 @@ const ImpactPlannerPage: React.FC = () => {
                       {result.stock_checked && ' On-hand stock is matched to needed sizes by label; members with no size on file can’t be matched.'}
                     </p>
 
+                    {/* Bulk issue: give out the stock you already have */}
+                    {result.stock_checked &&
+                      result.size_breakdown.some(
+                        (b) => (b.on_hand ?? 0) > 0 && b.needing > 0 && b.size !== 'Unknown',
+                      ) && (
+                      <div className="mt-4 pt-4 border-t border-theme-surface-border">
+                        {issueDone ? (
+                          <div className="rounded-lg bg-green-500/10 px-3 py-2 text-sm">
+                            <span className="text-green-700 dark:text-green-400 flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
+                              Issued to {issueDone.issued_count} member{issueDone.issued_count === 1 ? '' : 's'}
+                              {issueDone.skipped_count > 0 && `, ${issueDone.skipped_count} skipped`}
+                            </span>
+                            {issueDone.skipped_count > 0 && (
+                              <ul className="mt-1 ml-6 list-disc text-xs text-theme-text-muted">
+                                {issueDone.skipped.slice(0, 5).map((s) => (
+                                  <li key={s.user_id}>{s.name || s.user_id}: {s.reason}</li>
+                                ))}
+                                {issueDone.skipped.length > 5 && (
+                                  <li>…and {issueDone.skipped.length - 5} more</li>
+                                )}
+                              </ul>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <p className="text-xs text-theme-text-muted">
+                              Issue matching on-hand stock to members who need it now.
+                            </p>
+                            <button
+                              onClick={() => setIssueConfirmOpen(true)}
+                              className="btn-info btn-md justify-center shrink-0"
+                            >
+                              <PackageCheck className="w-4 h-4" />
+                              Issue on-hand stock
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* One-click reorder: turn the shortfall into draft POs */}
                     {result.stock_checked && (result.total_to_purchase ?? 0) > 0 && (
                       <div className="mt-4 pt-4 border-t border-theme-surface-border">
@@ -657,6 +721,17 @@ const ImpactPlannerPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={issueConfirmOpen}
+        onClose={() => setIssueConfirmOpen(false)}
+        onConfirm={() => { void bulkIssue(); }}
+        title="Issue on-hand stock"
+        message="This issues one matching-size item to each member who needs it and has stock available. Members with no size on file or no matching stock are skipped. Continue?"
+        confirmLabel="Issue items"
+        variant="warning"
+        loading={issuing}
+      />
     </div>
   );
 };

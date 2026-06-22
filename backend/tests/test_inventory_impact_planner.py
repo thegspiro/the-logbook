@@ -617,6 +617,80 @@ class TestCreateReorderFromPlan:
 
 
 # ============================================
+# bulk_issue_from_plan
+# ============================================
+
+class TestBulkIssueFromPlan:
+
+    @pytest.mark.asyncio
+    async def test_issues_to_needing_members_and_skips(self, service, mock_db):
+        org_id = str(uuid4())
+        cat_id = str(uuid4())
+        users = [
+            _user("u1", "Amy", "Adams"),   # M, will be issued
+            _user("u2", "Bob", "Baker"),   # already has -> not a target
+            _user("u3", "Cy", "Clark"),    # no size -> skipped
+            _user("u4", "Di", "Dunn"),     # L, no L stock -> skipped
+        ]
+        prefs = [
+            _prefs("u1", shirt_size="M"),
+            _prefs("u2", shirt_size="M"),
+            _prefs("u4", shirt_size="L"),
+        ]
+        assign_rows = [("u2", "Dept Polo M", "good", None, None)]
+        # analyze_impact: users, prefs, assign, issue
+        # bulk: pool items lookup (1 execute)
+        pool_items = [
+            _stock_item(standard_size="m", pool=True, quantity=5),
+        ]
+        for it in pool_items:
+            it.id = "item-m"
+            it.name = "Dept Polo M"
+        mock_db.execute.side_effect = [
+            _scalars_result(users),          # analyze: users
+            _scalars_result(prefs),          # analyze: size prefs
+            _rows_result(assign_rows),       # analyze: related assignments
+            _rows_result([]),                # analyze: related issuances
+            _scalars_result([]),             # analyze: stock+cost lookup
+            _scalars_result(pool_items),     # bulk: available pool items
+        ]
+        # issue_from_pool is exercised separately; stub it here.
+        service.issue_from_pool = AsyncMock(
+            return_value=(SimpleNamespace(id="iss-1"), None)
+        )
+
+        result = await service.bulk_issue_from_plan(
+            organization_id=org_id,
+            filters={
+                "related_category_id": cat_id,
+                "size_field": "shirt",
+                "stock_category_id": cat_id,
+            },
+            issued_by="admin",
+        )
+
+        assert result["issued_count"] == 1
+        assert result["issued"][0]["user_id"] == "u1"
+        assert result["issued"][0]["size"] == "M"
+        service.issue_from_pool.assert_awaited_once()
+
+        reasons = {s["user_id"]: s["reason"] for s in result["skipped"]}
+        # u2 already covered (not skipped, just not a target); u3 no size; u4 no stock
+        assert "u2" not in reasons
+        assert reasons["u3"] == "No size on file"
+        assert "No L stock" in reasons["u4"]
+
+    @pytest.mark.asyncio
+    async def test_requires_size_and_stock(self, service, mock_db):
+        with pytest.raises(ValueError):
+            await service.bulk_issue_from_plan(
+                organization_id=str(uuid4()),
+                filters={"size_field": "shirt"},  # missing stock_category_id
+                issued_by="admin",
+            )
+
+
+# ============================================
 # PDF rendering
 # ============================================
 

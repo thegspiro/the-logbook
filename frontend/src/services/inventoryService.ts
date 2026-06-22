@@ -19,6 +19,7 @@ import type {
   MemberSizePreferences, MemberSizePreferencesCreate,
   ImpactPlannerOptions, ImpactPlannerRequest, ImpactPlannerResult,
   ImpactPlannerReorderRequest, ImpactPlannerReorderResponse,
+  ImpactPlannerIssueRequest, ImpactPlannerIssueResponse,
 } from './eventServices';
 
 export const inventoryService = {
@@ -53,6 +54,11 @@ export const inventoryService = {
     const response = await api.post<Blob>('/inventory/impact-planner/pdf', request, {
       responseType: 'blob',
     });
+    return response.data;
+  },
+
+  async bulkIssueFromPlan(request: ImpactPlannerIssueRequest): Promise<ImpactPlannerIssueResponse> {
+    const response = await api.post<ImpactPlannerIssueResponse>('/inventory/impact-planner/issue', request);
     return response.data;
   },
 

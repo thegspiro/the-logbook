@@ -7,6 +7,7 @@ const mockGetOptions = vi.fn();
 const mockAnalyzeImpact = vi.fn();
 const mockCreateReorderFromPlan = vi.fn();
 const mockExportPlanPdf = vi.fn();
+const mockBulkIssueFromPlan = vi.fn();
 const mockToastSuccess = vi.fn();
 const mockToastError = vi.fn();
 
@@ -16,6 +17,7 @@ vi.mock('../../../services/api', () => ({
     analyzeImpact: (...a: unknown[]) => mockAnalyzeImpact(...a) as unknown,
     createReorderFromPlan: (...a: unknown[]) => mockCreateReorderFromPlan(...a) as unknown,
     exportPlanPdf: (...a: unknown[]) => mockExportPlanPdf(...a) as unknown,
+    bulkIssueFromPlan: (...a: unknown[]) => mockBulkIssueFromPlan(...a) as unknown,
   },
 }));
 
@@ -251,6 +253,44 @@ describe('ImpactPlannerPage', () => {
     expect(mockAnalyzeImpact).toHaveBeenCalledWith(
       expect.objectContaining({ related_category_id: 'cat-jacket', replacement_aware: true }),
     );
+  });
+
+  it('bulk-issues on-hand stock after confirmation', async () => {
+    const user = userEvent.setup();
+    mockAnalyzeImpact.mockResolvedValue({
+      ...RESULT,
+      stock_checked: true,
+      total_to_purchase: 1,
+      size_breakdown: [
+        { size: 'M', total: 3, needing: 3, on_hand: 2, shortfall: 1 },
+      ],
+    });
+    mockBulkIssueFromPlan.mockResolvedValue({
+      issued_count: 2,
+      skipped_count: 1,
+      issued: [],
+      skipped: [{ user_id: 'u9', name: 'No Size', reason: 'No size on file' }],
+    });
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[1] as HTMLSelectElement, 'jacket');
+    const withStock = screen.getAllByRole('combobox');
+    await user.selectOptions(withStock[2] as HTMLSelectElement, 'cat-jacket');
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+
+    await user.click(await screen.findByRole('button', { name: /Issue on-hand stock/i }));
+    // Confirm in the dialog
+    await user.click(await screen.findByRole('button', { name: /^Issue items$/i }));
+
+    await waitFor(() => {
+      expect(mockBulkIssueFromPlan).toHaveBeenCalledWith(
+        expect.objectContaining({ size_field: 'jacket', stock_category_id: 'cat-jacket' }),
+      );
+    });
+    expect(await screen.findByText(/Issued to 2 members/)).toBeInTheDocument();
+    expect(screen.getByText(/No size on file/)).toBeInTheDocument();
   });
 
   it('downloads a PDF summary of the plan', async () => {

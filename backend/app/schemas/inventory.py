@@ -1956,6 +1956,42 @@ class ImpactPlannerReorderRequest(ImpactPlannerRequest):
     notes: Optional[FreeText] = None
 
 
+class ImpactPlannerIssueRequest(ImpactPlannerRequest):
+    """Bulk-issue on-hand pool stock to the members a plan says need it.
+
+    Reuses the analysis filters; requires ``size_field`` and
+    ``stock_category_id`` so members can be matched to sized stock.
+    """
+
+    reason: Optional[FreeText] = None
+
+
+class ImpactPlannerIssuedItem(BaseModel):
+    """A member who was issued an item by the bulk action."""
+
+    user_id: UUID
+    name: Optional[str] = None
+    item_name: str
+    size: str
+
+
+class ImpactPlannerSkippedItem(BaseModel):
+    """A member who could not be issued, with the reason why."""
+
+    user_id: UUID
+    name: Optional[str] = None
+    reason: str
+
+
+class ImpactPlannerIssueResponse(BaseModel):
+    """Summary of a bulk issue run from an impact plan."""
+
+    issued_count: int
+    skipped_count: int
+    issued: List[ImpactPlannerIssuedItem]
+    skipped: List[ImpactPlannerSkippedItem]
+
+
 class ImpactPlannerReorderResultItem(BaseModel):
     """A single reorder request created from the plan."""
 

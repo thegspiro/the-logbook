@@ -4680,6 +4680,37 @@ class InventoryService:
         )
         return stock, unit_cost_by_size, avg_unit_cost
 
+    async def _get_available_pool_items_by_size(
+        self, organization_id: str, category_id: str
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Available pool items in a category, grouped by normalized size.
+
+        Returns ``{size_key: [{"item_id", "name", "remaining"}, ...]}`` for
+        pool-tracked items with unissued stock — the candidates a bulk issue
+        draws from. Only pool items are returned; individually-tracked items
+        are assigned through a different flow.
+        """
+        items = (
+            await self.db.execute(
+                select(InventoryItem)
+                .where(InventoryItem.organization_id == organization_id)
+                .where(InventoryItem.category_id == category_id)
+                .where(InventoryItem.status != ItemStatus.RETIRED)
+                .where(InventoryItem.tracking_type == TrackingType.POOL)
+            )
+        ).scalars().all()
+
+        by_size: Dict[str, List[Dict[str, Any]]] = {}
+        for item in items:
+            avail = (item.quantity or 0) - (item.quantity_issued or 0)
+            if avail <= 0:
+                continue
+            key = self._normalize_size_key(self._item_stock_size_value(item))
+            by_size.setdefault(key, []).append(
+                {"item_id": item.id, "name": item.name, "remaining": avail}
+            )
+        return by_size
+
     @staticmethod
     def _format_needed_size(
         prefs: Optional[MemberSizePreferences], size_field: Optional[str]
@@ -5008,6 +5039,93 @@ class InventoryService:
                 }
                 for reorder, size in created
             ],
+        }
+
+    async def bulk_issue_from_plan(
+        self,
+        organization_id,
+        filters: Dict[str, Any],
+        issued_by: str,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Issue on-hand pool stock to the members a plan says still need it.
+
+        Re-runs the analysis, then for each member who needs the item (and,
+        when replacement-aware, those whose gear is worn/expired) issues one
+        unit of a matching-size pool item from the stock category. Members are
+        skipped — with a reason — when they have no size on file, no matching
+        stock remains, or issuance is blocked (e.g. allowance). Stock is drawn
+        down across members so the same units aren't issued twice.
+        """
+        org_id = str(organization_id)
+        size_field = filters.get("size_field")
+        stock_category_id = filters.get("stock_category_id")
+        if not (size_field and stock_category_id):
+            raise ValueError(
+                "Select a size field and a stock category before bulk issuing."
+            )
+        stock_category_id = str(stock_category_id)
+
+        analysis = await self.analyze_impact(org_id, filters, include_contact=False)
+        pool_by_size = await self._get_available_pool_items_by_size(
+            org_id, stock_category_id
+        )
+
+        issued: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
+
+        for member in analysis["members"]:
+            if member["has_related_item"]:
+                continue  # already covered — not a target
+
+            name = member.get("full_name")
+            size = member.get("needed_size")
+            if not size:
+                skipped.append(
+                    {"user_id": member["user_id"], "name": name,
+                     "reason": "No size on file"}
+                )
+                continue
+
+            candidates = pool_by_size.get(self._normalize_size_key(size), [])
+            chosen = next((c for c in candidates if c["remaining"] > 0), None)
+            if chosen is None:
+                skipped.append(
+                    {"user_id": member["user_id"], "name": name,
+                     "reason": f"No {size} stock available"}
+                )
+                continue
+
+            issuance, error = await self.issue_from_pool(
+                item_id=chosen["item_id"],
+                user_id=member["user_id"],
+                organization_id=org_id,
+                issued_by=issued_by,
+                quantity=1,
+                reason=reason or "Bulk issue from impact plan",
+            )
+            if error:
+                skipped.append(
+                    {"user_id": member["user_id"], "name": name,
+                     "reason": error}
+                )
+                continue
+
+            chosen["remaining"] -= 1
+            issued.append(
+                {
+                    "user_id": member["user_id"],
+                    "name": name,
+                    "item_name": chosen["name"],
+                    "size": size,
+                }
+            )
+
+        return {
+            "issued_count": len(issued),
+            "skipped_count": len(skipped),
+            "issued": issued,
+            "skipped": skipped,
         }
 
     async def generate_impact_plan_pdf(

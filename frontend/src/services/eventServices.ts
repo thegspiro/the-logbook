@@ -1260,6 +1260,30 @@ export interface ImpactPlannerReorderResultItem {
   quantity_requested: number;
 }
 
+export interface ImpactPlannerIssueRequest extends ImpactPlannerRequest {
+  reason?: string | undefined;
+}
+
+export interface ImpactPlannerIssuedItem {
+  user_id: string;
+  name?: string;
+  item_name: string;
+  size: string;
+}
+
+export interface ImpactPlannerSkippedItem {
+  user_id: string;
+  name?: string;
+  reason: string;
+}
+
+export interface ImpactPlannerIssueResponse {
+  issued_count: number;
+  skipped_count: number;
+  issued: ImpactPlannerIssuedItem[];
+  skipped: ImpactPlannerSkippedItem[];
+}
+
 export interface ImpactPlannerReorderResponse {
   created_count: number;
   total_quantity: number;

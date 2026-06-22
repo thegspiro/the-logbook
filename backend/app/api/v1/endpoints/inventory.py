@@ -74,6 +74,8 @@ from app.schemas.inventory import (
     EquipmentRequestCreate,
     EquipmentRequestFulfill,
     EquipmentRequestReview,
+    ImpactPlannerIssueRequest,
+    ImpactPlannerIssueResponse,
     ImpactPlannerOptionsResponse,
     ImpactPlannerReorderRequest,
     ImpactPlannerReorderResponse,
@@ -2192,6 +2194,64 @@ async def create_reorder_from_impact_plan(
             "resource_type": "reorder_request",
             "created_count": result["created_count"],
             "total_quantity": result["total_quantity"],
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    return result
+
+
+@router.post(
+    "/impact-planner/issue", response_model=ImpactPlannerIssueResponse
+)
+async def bulk_issue_from_impact_plan(
+    payload: ImpactPlannerIssueRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Bulk-issue on-hand pool stock to the members a plan says still need it.
+
+    One unit of a matching-size pool item from the stock category is issued
+    to each targeted member; members with no size on file, no matching stock,
+    or a blocked issuance are skipped and reported. Requires a size field and
+    a stock category.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    filters = payload.model_dump(exclude={"reason"})
+    try:
+        result = await service.bulk_issue_from_plan(
+            organization_id=current_user.organization_id,
+            filters=filters,
+            issued_by=current_user.id,
+            reason=payload.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_bulk_issued_from_plan",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "item_issuance",
+            "issued_count": result["issued_count"],
+            "skipped_count": result["skipped_count"],
         },
         user_id=str(current_user.id),
         organization_id=str(current_user.organization_id),

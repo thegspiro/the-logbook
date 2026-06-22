@@ -69,6 +69,10 @@ export type {
   ImpactPlannerReorderRequest,
   ImpactPlannerReorderResultItem,
   ImpactPlannerReorderResponse,
+  ImpactPlannerIssueRequest,
+  ImpactPlannerIssuedItem,
+  ImpactPlannerSkippedItem,
+  ImpactPlannerIssueResponse,
 } from '../../../services/eventServices';
 
 import type { InventoryCategory } from '../../../services/eventServices';
