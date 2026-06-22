@@ -1264,6 +1264,23 @@ export interface ImpactPlannerIssueRequest extends ImpactPlannerRequest {
   reason?: string | undefined;
 }
 
+export interface ImpactPlan {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  filters: ImpactPlannerRequest;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImpactPlanCreate {
+  name: string;
+  description?: string | undefined;
+  filters: ImpactPlannerRequest;
+}
+
 export interface ImpactPlannerIssuedItem {
   user_id: string;
   name?: string;

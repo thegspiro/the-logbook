@@ -691,6 +691,71 @@ class TestBulkIssueFromPlan:
 
 
 # ============================================
+# Saved plans (CRUD)
+# ============================================
+
+class TestSavedPlans:
+
+    @pytest.mark.asyncio
+    async def test_create_plan(self, service, mock_db):
+        mock_db.flush = AsyncMock()
+        mock_db.refresh = AsyncMock()
+        plan = await service.create_impact_plan(
+            organization_id="org",
+            data={
+                "name": "Annual refresh",
+                "description": "Class A shirts",
+                "filters": {"size_field": "shirt", "statuses": ["active"]},
+            },
+            created_by="admin",
+        )
+        assert plan.name == "Annual refresh"
+        assert plan.organization_id == "org"
+        assert plan.created_by == "admin"
+        assert plan.filters == {"size_field": "shirt", "statuses": ["active"]}
+        mock_db.add.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_update_plan_not_found(self, service, mock_db):
+        mock_db.scalar = AsyncMock(return_value=None)
+        plan, error = await service.update_impact_plan(
+            "missing", "org", {"name": "x"}
+        )
+        assert plan is None
+        assert error == "Impact plan not found"
+
+    @pytest.mark.asyncio
+    async def test_update_plan_applies_changes(self, service, mock_db):
+        existing = SimpleNamespace(
+            id="p1", organization_id="org", name="Old",
+            description=None, filters={},
+        )
+        mock_db.scalar = AsyncMock(return_value=existing)
+        mock_db.flush = AsyncMock()
+        mock_db.refresh = AsyncMock()
+        plan, error = await service.update_impact_plan(
+            "p1", "org", {"name": "New", "filters": {"size_field": "boot"}}
+        )
+        assert error is None
+        assert plan.name == "New"
+        assert plan.filters == {"size_field": "boot"}
+
+    @pytest.mark.asyncio
+    async def test_delete_plan(self, service, mock_db):
+        existing = SimpleNamespace(id="p1", organization_id="org")
+        mock_db.scalar = AsyncMock(return_value=existing)
+        mock_db.delete = AsyncMock()
+        mock_db.flush = AsyncMock()
+        assert await service.delete_impact_plan("p1", "org") is True
+        mock_db.delete.assert_awaited_once_with(existing)
+
+    @pytest.mark.asyncio
+    async def test_delete_plan_not_found(self, service, mock_db):
+        mock_db.scalar = AsyncMock(return_value=None)
+        assert await service.delete_impact_plan("missing", "org") is False
+
+
+# ============================================
 # PDF rendering
 # ============================================
 

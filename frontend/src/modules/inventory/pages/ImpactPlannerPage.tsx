@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowLeft, Target, RefreshCw, Users, ShoppingCart, CheckCircle2,
   Ruler, Download, Loader2, Search, Truck, FileText, PackageCheck,
+  Trash2, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
@@ -24,6 +25,7 @@ import type {
   ImpactPlannerMember,
   ImpactPlannerReorderResponse,
   ImpactPlannerIssueResponse,
+  ImpactPlan,
 } from '../types';
 
 const URGENCY_OPTIONS = [
@@ -121,10 +123,22 @@ const ImpactPlannerPage: React.FC = () => {
   const [sizeField, setSizeField] = useState('');
   const [stockCategoryId, setStockCategoryId] = useState('');
 
+  // Saved plans
+  const [savedPlans, setSavedPlans] = useState<ImpactPlan[]>([]);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [planName, setPlanName] = useState('');
+  const [savingPlan, setSavingPlan] = useState(false);
+
   const loadOptions = useCallback(async () => {
     setOptionsLoading(true);
     try {
-      setOptions(await inventoryService.getImpactPlannerOptions());
+      const [opts, plans] = await Promise.all([
+        inventoryService.getImpactPlannerOptions(),
+        inventoryService.getImpactPlans().catch(() => [] as ImpactPlan[]),
+      ]);
+      setOptions(opts);
+      setSavedPlans(plans);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load planner options'));
     } finally {
@@ -140,20 +154,23 @@ const ImpactPlannerPage: React.FC = () => {
     setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
   };
 
+  // Assemble the current filter selections into a request payload.
+  const buildRequest = useCallback((): ImpactPlannerRequest => ({
+    statuses: statuses.length ? statuses : undefined,
+    membership_types: membershipTypes.length ? membershipTypes : undefined,
+    ranks: ranks.length ? ranks : undefined,
+    stations: stations.length ? stations : undefined,
+    position_ids: positionIds.length ? positionIds : undefined,
+    related_category_id: relatedCategoryId || undefined,
+    replacement_aware: relatedCategoryId ? replacementAware : undefined,
+    size_field: sizeField || undefined,
+    stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
+  }), [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, replacementAware, sizeField, stockCategoryId]);
+
   const runAnalysis = useCallback(async () => {
     setAnalyzing(true);
     try {
-      const request: ImpactPlannerRequest = {
-        statuses: statuses.length ? statuses : undefined,
-        membership_types: membershipTypes.length ? membershipTypes : undefined,
-        ranks: ranks.length ? ranks : undefined,
-        stations: stations.length ? stations : undefined,
-        position_ids: positionIds.length ? positionIds : undefined,
-        related_category_id: relatedCategoryId || undefined,
-        replacement_aware: relatedCategoryId ? replacementAware : undefined,
-        size_field: sizeField || undefined,
-        stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
-      };
+      const request = buildRequest();
       setReorderDone(null);
       setIssueDone(null);
       setResult(await inventoryService.analyzeImpact(request));
@@ -163,7 +180,60 @@ const ImpactPlannerPage: React.FC = () => {
     } finally {
       setAnalyzing(false);
     }
-  }, [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, replacementAware, sizeField, stockCategoryId]);
+  }, [buildRequest]);
+
+  const applyPlan = useCallback((plan: ImpactPlan) => {
+    const f = plan.filters || {};
+    setStatuses(f.statuses ?? []);
+    setMembershipTypes(f.membership_types ?? []);
+    setRanks(f.ranks ?? []);
+    setStations(f.stations ?? []);
+    setPositionIds(f.position_ids ?? []);
+    setRelatedCategoryId(f.related_category_id ?? '');
+    setReplacementAware(f.replacement_aware ?? false);
+    setSizeField(f.size_field ?? '');
+    setStockCategoryId(f.stock_category_id ?? '');
+  }, []);
+
+  const onSelectPlan = useCallback((id: string) => {
+    setSelectedPlanId(id);
+    const plan = savedPlans.find((p) => p.id === id);
+    if (plan) applyPlan(plan);
+  }, [savedPlans, applyPlan]);
+
+  const savePlan = useCallback(async () => {
+    const name = planName.trim();
+    if (!name) return;
+    setSavingPlan(true);
+    try {
+      const created = await inventoryService.createImpactPlan({
+        name, filters: buildRequest(),
+      });
+      setSavedPlans((prev) =>
+        [...prev, created].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setSelectedPlanId(created.id);
+      setShowSaveForm(false);
+      setPlanName('');
+      toast.success('Plan saved');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to save plan'));
+    } finally {
+      setSavingPlan(false);
+    }
+  }, [planName, buildRequest]);
+
+  const deletePlan = useCallback(async () => {
+    if (!selectedPlanId) return;
+    try {
+      await inventoryService.deleteImpactPlan(selectedPlanId);
+      setSavedPlans((prev) => prev.filter((p) => p.id !== selectedPlanId));
+      setSelectedPlanId('');
+      toast.success('Plan deleted');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to delete plan'));
+    }
+  }, [selectedPlanId]);
 
   const createReorders = useCallback(async () => {
     if (!lastRequest) return;
@@ -311,6 +381,65 @@ const ImpactPlannerPage: React.FC = () => {
               </div>
             ) : options ? (
               <>
+                {/* Saved plans */}
+                <div className="pb-4 mb-1 border-b border-theme-surface-border">
+                  <label className={labelClass}>Saved plans</label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedPlanId}
+                      onChange={(e) => onSelectPlan(e.target.value)}
+                      className={selectClass}
+                      aria-label="Saved plans"
+                    >
+                      <option value="">— New plan —</option>
+                      {savedPlans.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    {selectedPlanId && (
+                      <button
+                        onClick={() => { void deletePlan(); }}
+                        className="btn-secondary btn-sm shrink-0"
+                        title="Delete plan"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  {showSaveForm ? (
+                    <div className="flex items-center gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={planName}
+                        onChange={(e) => setPlanName(e.target.value)}
+                        placeholder="Plan name"
+                        className={selectClass}
+                      />
+                      <button
+                        onClick={() => { void savePlan(); }}
+                        disabled={savingPlan || !planName.trim()}
+                        className="btn-primary btn-sm shrink-0"
+                        aria-label="Save plan"
+                      >
+                        {savingPlan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      </button>
+                      <button
+                        onClick={() => { setShowSaveForm(false); setPlanName(''); }}
+                        className="btn-secondary btn-sm shrink-0"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setShowSaveForm(true)}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-2"
+                    >
+                      Save current filters as a plan
+                    </button>
+                  )}
+                </div>
+
                 <CheckGroup
                   label="Status"
                   options={options.statuses}
@@ -348,6 +477,7 @@ const ImpactPlannerPage: React.FC = () => {
                     value={relatedCategoryId}
                     onChange={(e) => setRelatedCategoryId(e.target.value)}
                     className={selectClass}
+                    aria-label="Related category"
                   >
                     <option value="">— Don't check existing items —</option>
                     {options.categories.map((c) => (
@@ -373,6 +503,7 @@ const ImpactPlannerPage: React.FC = () => {
                     value={sizeField}
                     onChange={(e) => setSizeField(e.target.value)}
                     className={selectClass}
+                    aria-label="Size needed"
                   >
                     <option value="">— No size breakdown —</option>
                     {options.size_fields.map((s) => (
@@ -388,6 +519,7 @@ const ImpactPlannerPage: React.FC = () => {
                       value={stockCategoryId}
                       onChange={(e) => setStockCategoryId(e.target.value)}
                       className={selectClass}
+                      aria-label="Stock source"
                     >
                       <option value="">— Don't subtract current stock —</option>
                       {options.categories.map((c) => (

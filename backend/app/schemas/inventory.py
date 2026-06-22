@@ -1942,6 +1942,37 @@ class ImpactPlannerOptionsResponse(BaseModel):
     size_fields: List[ImpactPlannerOption]
 
 
+class ImpactPlanCreate(BaseModel):
+    """Create a saved, named impact-planner scenario."""
+
+    name: str = Field(min_length=1, max_length=255)
+    description: Optional[FreeText] = None
+    filters: ImpactPlannerRequest
+
+
+class ImpactPlanUpdate(BaseModel):
+    """Update a saved impact-planner scenario."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[FreeText] = None
+    filters: Optional[ImpactPlannerRequest] = None
+
+
+class ImpactPlanResponse(UTCResponseBase):
+    """A saved impact-planner scenario."""
+
+    id: UUID
+    organization_id: UUID
+    name: str
+    description: Optional[str] = None
+    filters: Dict[str, Any]
+    created_by: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
 class ImpactPlannerReorderRequest(ImpactPlannerRequest):
     """Generate reorder requests from an impact plan's per-size shortfall.
 

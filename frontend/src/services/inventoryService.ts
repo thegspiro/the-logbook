@@ -20,6 +20,7 @@ import type {
   ImpactPlannerOptions, ImpactPlannerRequest, ImpactPlannerResult,
   ImpactPlannerReorderRequest, ImpactPlannerReorderResponse,
   ImpactPlannerIssueRequest, ImpactPlannerIssueResponse,
+  ImpactPlan, ImpactPlanCreate,
 } from './eventServices';
 
 export const inventoryService = {
@@ -60,6 +61,20 @@ export const inventoryService = {
   async bulkIssueFromPlan(request: ImpactPlannerIssueRequest): Promise<ImpactPlannerIssueResponse> {
     const response = await api.post<ImpactPlannerIssueResponse>('/inventory/impact-planner/issue', request);
     return response.data;
+  },
+
+  async getImpactPlans(): Promise<ImpactPlan[]> {
+    const response = await api.get<ImpactPlan[]>('/inventory/impact-planner/plans');
+    return response.data;
+  },
+
+  async createImpactPlan(data: ImpactPlanCreate): Promise<ImpactPlan> {
+    const response = await api.post<ImpactPlan>('/inventory/impact-planner/plans', data);
+    return response.data;
+  },
+
+  async deleteImpactPlan(planId: string): Promise<void> {
+    await api.delete(`/inventory/impact-planner/plans/${planId}`);
   },
 
   async getSummary(): Promise<InventorySummary> {

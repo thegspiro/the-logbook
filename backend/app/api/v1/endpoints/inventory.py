@@ -74,6 +74,9 @@ from app.schemas.inventory import (
     EquipmentRequestCreate,
     EquipmentRequestFulfill,
     EquipmentRequestReview,
+    ImpactPlanCreate,
+    ImpactPlanResponse,
+    ImpactPlanUpdate,
     ImpactPlannerIssueRequest,
     ImpactPlannerIssueResponse,
     ImpactPlannerOptionsResponse,
@@ -2091,6 +2094,112 @@ async def get_impact_planner_options(
     return await service.get_impact_planner_options(
         organization_id=current_user.organization_id,
     )
+
+
+@router.get(
+    "/impact-planner/plans", response_model=list[ImpactPlanResponse]
+)
+async def list_impact_plans(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List saved impact-planner scenarios.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.list_impact_plans(current_user.organization_id)
+
+
+@router.post(
+    "/impact-planner/plans",
+    response_model=ImpactPlanResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_impact_plan(
+    payload: ImpactPlanCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Save an impact-planner scenario (its filter set) for later re-use.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    data = {
+        "name": payload.name,
+        "description": payload.description,
+        "filters": payload.filters.model_dump(mode="json"),
+    }
+    plan = await service.create_impact_plan(
+        organization_id=current_user.organization_id,
+        data=data,
+        created_by=current_user.id,
+    )
+    await db.commit()
+    return plan
+
+
+@router.patch(
+    "/impact-planner/plans/{plan_id}", response_model=ImpactPlanResponse
+)
+async def update_impact_plan(
+    plan_id: UUID,
+    payload: ImpactPlanUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update a saved impact-planner scenario.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    data = payload.model_dump(exclude_unset=True)
+    if "filters" in data and data["filters"] is not None:
+        data["filters"] = payload.filters.model_dump(mode="json")
+    plan, error = await service.update_impact_plan(
+        plan_id=plan_id,
+        organization_id=current_user.organization_id,
+        data=data,
+    )
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=error
+        )
+    await db.commit()
+    return plan
+
+
+@router.delete(
+    "/impact-planner/plans/{plan_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_impact_plan(
+    plan_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete a saved impact-planner scenario.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    deleted = await service.delete_impact_plan(
+        plan_id, current_user.organization_id
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Impact plan not found"
+        )
+    await db.commit()
 
 
 @router.post("/impact-planner", response_model=ImpactPlannerResponse)

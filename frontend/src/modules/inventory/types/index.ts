@@ -73,6 +73,8 @@ export type {
   ImpactPlannerIssuedItem,
   ImpactPlannerSkippedItem,
   ImpactPlannerIssueResponse,
+  ImpactPlan,
+  ImpactPlanCreate,
 } from '../../../services/eventServices';
 
 import type { InventoryCategory } from '../../../services/eventServices';

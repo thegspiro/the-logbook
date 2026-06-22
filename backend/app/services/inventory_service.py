@@ -28,6 +28,7 @@ from app.models.inventory import (
     EquipmentRequest,
     InventoryActionType,
     InventoryCategory,
+    InventoryImpactPlan,
     InventoryItem,
     IssuanceAllowance,
     ItemAssignment,
@@ -5127,6 +5128,66 @@ class InventoryService:
             "issued": issued,
             "skipped": skipped,
         }
+
+    async def list_impact_plans(
+        self, organization_id
+    ) -> List[InventoryImpactPlan]:
+        """List the organization's saved impact-planner scenarios."""
+        rows = await self.db.execute(
+            select(InventoryImpactPlan)
+            .where(InventoryImpactPlan.organization_id == str(organization_id))
+            .order_by(InventoryImpactPlan.name)
+        )
+        return list(rows.scalars().all())
+
+    async def get_impact_plan(
+        self, plan_id, organization_id
+    ) -> Optional[InventoryImpactPlan]:
+        """Fetch a single saved plan scoped to the organization."""
+        return await self.db.scalar(
+            select(InventoryImpactPlan)
+            .where(InventoryImpactPlan.id == str(plan_id))
+            .where(InventoryImpactPlan.organization_id == str(organization_id))
+        )
+
+    async def create_impact_plan(
+        self, organization_id, data: Dict[str, Any], created_by: str
+    ) -> InventoryImpactPlan:
+        """Create a saved impact-planner scenario."""
+        plan = InventoryImpactPlan(
+            organization_id=str(organization_id),
+            name=data["name"],
+            description=data.get("description"),
+            filters=data.get("filters") or {},
+            created_by=created_by,
+        )
+        self.db.add(plan)
+        await self.db.flush()
+        await self.db.refresh(plan)
+        return plan
+
+    async def update_impact_plan(
+        self, plan_id, organization_id, data: Dict[str, Any]
+    ) -> Tuple[Optional[InventoryImpactPlan], Optional[str]]:
+        """Update a saved plan's name, description, or filters."""
+        plan = await self.get_impact_plan(plan_id, organization_id)
+        if not plan:
+            return None, "Impact plan not found"
+        for key in ("name", "description", "filters"):
+            if key in data and data[key] is not None:
+                setattr(plan, key, data[key])
+        await self.db.flush()
+        await self.db.refresh(plan)
+        return plan, None
+
+    async def delete_impact_plan(self, plan_id, organization_id) -> bool:
+        """Delete a saved plan; returns False when not found."""
+        plan = await self.get_impact_plan(plan_id, organization_id)
+        if not plan:
+            return False
+        await self.db.delete(plan)
+        await self.db.flush()
+        return True
 
     async def generate_impact_plan_pdf(
         self,
