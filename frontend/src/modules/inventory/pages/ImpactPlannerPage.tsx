@@ -112,6 +112,7 @@ const ImpactPlannerPage: React.FC = () => {
   const [stations, setStations] = useState<string[]>([]);
   const [positionIds, setPositionIds] = useState<string[]>([]);
   const [relatedCategoryId, setRelatedCategoryId] = useState('');
+  const [replacementAware, setReplacementAware] = useState(false);
   const [sizeField, setSizeField] = useState('');
   const [stockCategoryId, setStockCategoryId] = useState('');
 
@@ -144,6 +145,7 @@ const ImpactPlannerPage: React.FC = () => {
         stations: stations.length ? stations : undefined,
         position_ids: positionIds.length ? positionIds : undefined,
         related_category_id: relatedCategoryId || undefined,
+        replacement_aware: relatedCategoryId ? replacementAware : undefined,
         size_field: sizeField || undefined,
         stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
       };
@@ -155,7 +157,7 @@ const ImpactPlannerPage: React.FC = () => {
     } finally {
       setAnalyzing(false);
     }
-  }, [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, sizeField, stockCategoryId]);
+  }, [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, replacementAware, sizeField, stockCategoryId]);
 
   const createReorders = useCallback(async () => {
     if (!lastRequest) return;
@@ -196,7 +198,8 @@ const ImpactPlannerPage: React.FC = () => {
     if (!result) return;
     const headers = [
       'Name', 'Membership #', 'Rank', 'Station', 'Status',
-      'Needed Size', 'Already Has Item', 'Existing Items', 'Email', 'Phone',
+      'Needed Size', 'Already Has Item', 'Needs Replacement', 'Existing Items',
+      'Email', 'Phone',
     ];
     const rows = result.members.map((m) => [
       m.full_name || '',
@@ -206,6 +209,7 @@ const ImpactPlannerPage: React.FC = () => {
       m.status || '',
       m.needed_size || '',
       m.has_related_item ? 'Yes' : 'No',
+      m.needs_replacement ? 'Yes' : 'No',
       (m.related_item_names || []).join('; '),
       m.email || '',
       m.phone || '',
@@ -308,6 +312,17 @@ const ImpactPlannerPage: React.FC = () => {
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                  {relatedCategoryId && (
+                    <label className="flex items-start gap-2 mt-2 text-xs text-theme-text-secondary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={replacementAware}
+                        onChange={(e) => setReplacementAware(e.target.checked)}
+                        className="mt-0.5 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500/40"
+                      />
+                      <span>Count worn or expired items as needing replacement</span>
+                    </label>
+                  )}
                 </div>
 
                 <div>
@@ -496,9 +511,16 @@ const ImpactPlannerPage: React.FC = () => {
                 {/* Members table */}
                 <div className="card p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                    <h3 className="text-sm font-semibold text-theme-text-primary">
-                      Impacted Members ({filteredMembers.length})
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-theme-text-primary">
+                        Impacted Members ({filteredMembers.length})
+                      </h3>
+                      {result.replacement_aware && result.members_needing_replacement > 0 && (
+                        <span className="inline-flex items-center rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 text-xs font-medium">
+                          {result.members_needing_replacement} to replace
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <div className="relative">
                         <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted" />
@@ -566,6 +588,13 @@ const ImpactPlannerPage: React.FC = () => {
                                       title={m.related_item_names.join(', ')}
                                     >
                                       Has item
+                                    </span>
+                                  ) : m.needs_replacement ? (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2 py-0.5 text-xs font-medium"
+                                      title={m.related_item_names.join(', ')}
+                                    >
+                                      Replace
                                     </span>
                                   ) : (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 px-2 py-0.5 text-xs font-medium">

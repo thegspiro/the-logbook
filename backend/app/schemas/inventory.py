@@ -1847,6 +1847,9 @@ class ImpactPlannerRequest(BaseModel):
     # When set (with size_field), per-size demand is netted against the
     # available on-hand stock in this category to compute the quantity to buy.
     stock_category_id: Optional[UUID] = None
+    # When True (with related_category_id), members whose only held items are
+    # worn out or past NFPA retirement count as needing a replacement.
+    replacement_aware: bool = False
 
 
 class ImpactPlannerMember(BaseModel):
@@ -1865,6 +1868,7 @@ class ImpactPlannerMember(BaseModel):
     needed_size: Optional[str] = None
     has_size_on_file: bool = False
     has_related_item: bool = False
+    needs_replacement: bool = False
     related_item_names: List[str] = []
 
 
@@ -1892,7 +1896,9 @@ class ImpactPlannerResponse(BaseModel):
     total_members: int
     members_with_related_item: int
     members_needing_item: int
+    members_needing_replacement: int = 0
     members_missing_sizes: int
+    replacement_aware: bool = False
     size_field: Optional[str] = None
     size_breakdown: List[ImpactPlannerSizeBreakdown] = []
     stock_checked: bool = False

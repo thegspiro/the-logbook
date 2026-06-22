@@ -55,18 +55,20 @@ const RESULT = {
   ],
   stock_checked: false,
   cost_estimated: false,
+  members_needing_replacement: 0,
+  replacement_aware: false,
   members: [
     {
       user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
       rank: 'firefighter', station: 'Station 1', status: 'active',
       needed_size: 'M', has_size_on_file: true, has_related_item: false,
-      related_item_names: [], email: 'amy@x.org', phone: '555-1',
+      needs_replacement: false, related_item_names: [], email: 'amy@x.org', phone: '555-1',
     },
     {
       user_id: 'u2', full_name: 'Bob Baker', membership_number: '002',
       rank: 'firefighter', station: 'Station 1', status: 'active',
       needed_size: 'L', has_size_on_file: true, has_related_item: true,
-      related_item_names: ['Old Jacket'], email: 'bob@x.org', phone: '555-2',
+      needs_replacement: false, related_item_names: ['Old Jacket'], email: 'bob@x.org', phone: '555-2',
     },
   ],
 };
@@ -216,6 +218,37 @@ describe('ImpactPlannerPage', () => {
       );
     });
     expect(await screen.findByText(/Created 1 reorder request/)).toBeInTheDocument();
+  });
+
+  it('flags members needing replacement when replacement-aware', async () => {
+    const user = userEvent.setup();
+    mockAnalyzeImpact.mockResolvedValue({
+      ...RESULT,
+      replacement_aware: true,
+      members_needing_replacement: 1,
+      members: [
+        {
+          user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
+          rank: 'firefighter', station: 'Station 1', status: 'active',
+          needed_size: 'M', has_size_on_file: true, has_related_item: false,
+          needs_replacement: true, related_item_names: ['Worn Jacket'],
+        },
+      ],
+    });
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Quartermaster')).toBeInTheDocument();
+
+    // Selecting a related category reveals the replacement-aware checkbox.
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[0] as HTMLSelectElement, 'cat-jacket');
+    await user.click(screen.getByRole('checkbox', { name: /needing replacement/i }));
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+
+    expect(await screen.findByText('1 to replace')).toBeInTheDocument();
+    expect(screen.getByText('Replace')).toBeInTheDocument();
+    expect(mockAnalyzeImpact).toHaveBeenCalledWith(
+      expect.objectContaining({ related_category_id: 'cat-jacket', replacement_aware: true }),
+    );
   });
 
   it('shows an error toast when options fail to load', async () => {

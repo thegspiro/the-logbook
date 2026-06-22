@@ -10,6 +10,7 @@ database session (no live DB required, mirroring test_inventory_service.py):
   - get_impact_planner_options shape
 """
 
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
@@ -185,8 +186,9 @@ class TestAnalyzeImpact:
         ]
         # u1 -> M, u2 -> L, u3 -> no size on file
         prefs = [_prefs(u1, shirt_size="M"), _prefs(u2, shirt_size="L")]
-        # u2 already holds an item in the related category
-        assign_rows = [(u2, "Old Jacket")]
+        # u2 already holds a (serviceable) item in the related category.
+        # Rows: (user_id, name, condition, retirement_date, retired_by_age)
+        assign_rows = [(u2, "Old Jacket", "good", None, None)]
         issue_rows = []
 
         mock_db.execute.side_effect = [
@@ -460,6 +462,83 @@ class TestAnalyzeImpactStockAware:
         assert result["stock_checked"] is False
         assert result["total_to_purchase"] is None
         assert result["size_breakdown"][0].get("on_hand") is None
+
+
+# ============================================
+# Replacement-aware targeting
+# ============================================
+
+class TestReplacementAware:
+
+    @pytest.mark.asyncio
+    async def test_worn_and_expired_count_as_needing(self, service, mock_db):
+        org_id = str(uuid4())
+        cat_id = str(uuid4())
+        users = [
+            _user("u1", "Amy", "Adams"),   # worn item -> needs replacement
+            _user("u2", "Bob", "Baker"),   # good item -> covered
+            _user("u3", "Cy", "Clark"),    # expired item -> needs replacement
+            _user("u4", "Di", "Dunn"),     # holds nothing -> needs item
+        ]
+        past = date.today() - timedelta(days=1)
+        # (user_id, name, condition, retirement_date, retired_by_age)
+        assign_rows = [
+            ("u1", "Worn Coat", "damaged", None, None),
+            ("u2", "Good Coat", "good", None, None),
+            ("u3", "Aged Coat", "good", past, None),
+        ]
+        issue_rows = []
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _rows_result(assign_rows),
+            _rows_result(issue_rows),
+        ]
+
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={
+                "related_category_id": cat_id,
+                "replacement_aware": True,
+            },
+            include_contact=False,
+        )
+
+        assert result["replacement_aware"] is True
+        # only u2 holds a serviceable item
+        assert result["members_with_related_item"] == 1
+        assert result["members_needing_item"] == 3
+        # u1 (worn) + u3 (expired) hold something but need replacing
+        assert result["members_needing_replacement"] == 2
+
+        members = {m["user_id"]: m for m in result["members"]}
+        assert members["u1"]["needs_replacement"] is True
+        assert members["u1"]["has_related_item"] is False
+        assert members["u2"]["has_related_item"] is True
+        assert members["u2"]["needs_replacement"] is False
+        assert members["u3"]["needs_replacement"] is True
+        assert members["u4"]["needs_replacement"] is False
+
+    @pytest.mark.asyncio
+    async def test_disabled_treats_worn_as_covered(self, service, mock_db):
+        org_id = str(uuid4())
+        cat_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams")]
+        assign_rows = [("u1", "Worn Coat", "damaged", None, None)]
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _rows_result(assign_rows),
+            _rows_result([]),
+        ]
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={"related_category_id": cat_id},
+            include_contact=False,
+        )
+        # Default behaviour: holding anything counts as covered.
+        assert result["members_with_related_item"] == 1
+        assert result["members_needing_replacement"] == 0
+        assert result["members"][0]["has_related_item"] is True
+        assert result["members"][0]["needs_replacement"] is False
 
 
 # ============================================

@@ -38,6 +38,7 @@ from app.models.inventory import (
     MaintenanceRecord,
     MemberSizePreferences,
     NFPAInspectionDetail,
+    NFPAItemCompliance,
     ReorderRequest,
     ReorderStatus,
     RequestStatus,
@@ -4529,6 +4530,80 @@ class InventoryService:
                 return val
         return item.size
 
+    # Conditions that mark a held item as no longer serviceable — a member
+    # holding only these still needs a replacement.
+    _WORN_CONDITION_VALUES = {"poor", "damaged", "out_of_service"}
+
+    async def _get_related_holdings(
+        self,
+        organization_id: str,
+        related_category_id: Optional[str],
+        user_ids: List[str],
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Active items each member holds in the related category.
+
+        Returns ``{user_id: [{"name", "unserviceable"}, ...]}`` over both
+        permanent assignments and pool issuances. An item is *unserviceable*
+        when its condition is worn (poor/damaged/out-of-service) or it is past
+        its NFPA retirement (expected retirement date reached, or retired by
+        age).
+        """
+        holdings: Dict[str, List[Dict[str, Any]]] = {}
+        if not (related_category_id and user_ids):
+            return holdings
+
+        today = date.today()
+
+        def _record(uid, name, condition, ret_date, retired_by_age):
+            cond_val = (
+                condition.value if hasattr(condition, "value") else condition
+            )
+            worn = cond_val in self._WORN_CONDITION_VALUES
+            expired = bool(retired_by_age) or (
+                ret_date is not None and ret_date <= today
+            )
+            holdings.setdefault(uid, []).append(
+                {"name": name, "unserviceable": worn or expired}
+            )
+
+        for source_user, source_item in (
+            (ItemAssignment.user_id, ItemAssignment.item_id),
+            (ItemIssuance.user_id, ItemIssuance.item_id),
+        ):
+            is_assignment = source_user is ItemAssignment.user_id
+            active_clause = (
+                ItemAssignment.is_active == True  # noqa: E712
+                if is_assignment
+                else ItemIssuance.is_returned == False  # noqa: E712
+            )
+            org_clause = (
+                ItemAssignment.organization_id == organization_id
+                if is_assignment
+                else ItemIssuance.organization_id == organization_id
+            )
+            rows = await self.db.execute(
+                select(
+                    source_user,
+                    InventoryItem.name,
+                    InventoryItem.condition,
+                    NFPAItemCompliance.expected_retirement_date,
+                    NFPAItemCompliance.is_retired_by_age,
+                )
+                .join(InventoryItem, source_item == InventoryItem.id)
+                .outerjoin(
+                    NFPAItemCompliance,
+                    NFPAItemCompliance.item_id == InventoryItem.id,
+                )
+                .where(org_clause)
+                .where(active_clause)
+                .where(source_user.in_(user_ids))
+                .where(InventoryItem.category_id == related_category_id)
+            )
+            for uid, name, condition, ret_date, retired_by_age in rows.all():
+                _record(uid, name, condition, ret_date, retired_by_age)
+
+        return holdings
+
     @staticmethod
     def _item_unit_cost(item: InventoryItem) -> Optional[float]:
         """Best estimate of an item's unit cost for budgeting.
@@ -4661,6 +4736,7 @@ class InventoryService:
         related_category_id = filters.get("related_category_id")
         size_field = filters.get("size_field")
         stock_category_id = filters.get("stock_category_id")
+        replacement_aware = bool(filters.get("replacement_aware"))
 
         related_category_id = (
             str(related_category_id) if related_category_id else None
@@ -4709,46 +4785,39 @@ class InventoryService:
             size_map = {p.user_id: p for p in prefs_rows}
 
         # Members who already hold an active item in the related category —
-        # via permanent assignment or pool issuance. These members do not need
-        # the new issue, so they're excluded from purchase counts.
-        related_map: Dict[str, List[str]] = {}
-        if related_category_id and user_ids:
-            assign_rows = await self.db.execute(
-                select(ItemAssignment.user_id, InventoryItem.name)
-                .join(InventoryItem, ItemAssignment.item_id == InventoryItem.id)
-                .where(ItemAssignment.organization_id == org_id)
-                .where(ItemAssignment.is_active == True)  # noqa: E712
-                .where(ItemAssignment.user_id.in_(user_ids))
-                .where(InventoryItem.category_id == related_category_id)
-            )
-            for uid, name in assign_rows.all():
-                related_map.setdefault(uid, [])
-                if name and name not in related_map[uid]:
-                    related_map[uid].append(name)
-
-            issue_rows = await self.db.execute(
-                select(ItemIssuance.user_id, InventoryItem.name)
-                .join(InventoryItem, ItemIssuance.item_id == InventoryItem.id)
-                .where(ItemIssuance.organization_id == org_id)
-                .where(ItemIssuance.is_returned == False)  # noqa: E712
-                .where(ItemIssuance.user_id.in_(user_ids))
-                .where(InventoryItem.category_id == related_category_id)
-            )
-            for uid, name in issue_rows.all():
-                related_map.setdefault(uid, [])
-                if name and name not in related_map[uid]:
-                    related_map[uid].append(name)
+        # via permanent assignment or pool issuance. Each held item's condition
+        # and NFPA retirement are captured so that, when replacement_aware is
+        # set, worn-out or expired gear counts as "needs replacement" rather
+        # than excluding the member from the purchase counts.
+        related_map = await self._get_related_holdings(
+            org_id, related_category_id, user_ids
+        )
 
         members: List[Dict[str, Any]] = []
         size_buckets: Dict[str, Dict[str, int]] = {}
         with_related = 0
         missing_sizes = 0
+        needing_replacement = 0
 
         for u in users:
-            related_names = related_map.get(u.id, [])
-            has_related = bool(related_names)
+            holdings = related_map.get(u.id, [])
+            names = [h["name"] for h in holdings if h["name"]]
+            has_any = bool(holdings)
+            serviceable = sum(1 for h in holdings if not h["unserviceable"])
+
+            if replacement_aware:
+                # "Already covered" means they hold a serviceable item; a member
+                # whose only items are worn/expired still needs a replacement.
+                has_related = serviceable > 0
+                needs_replacement = has_any and serviceable == 0
+            else:
+                has_related = has_any
+                needs_replacement = False
+
             if has_related:
                 with_related += 1
+            if needs_replacement:
+                needing_replacement += 1
 
             needed_size = self._format_needed_size(size_map.get(u.id), size_field)
             has_size = needed_size is not None
@@ -4773,7 +4842,8 @@ class InventoryService:
                     "needed_size": needed_size,
                     "has_size_on_file": has_size,
                     "has_related_item": has_related,
-                    "related_item_names": related_names,
+                    "needs_replacement": needs_replacement,
+                    "related_item_names": names,
                 }
             )
 
@@ -4837,7 +4907,9 @@ class InventoryService:
             "total_members": total,
             "members_with_related_item": with_related,
             "members_needing_item": total - with_related,
+            "members_needing_replacement": needing_replacement,
             "members_missing_sizes": missing_sizes,
+            "replacement_aware": replacement_aware,
             "size_field": size_field,
             "size_breakdown": size_breakdown,
             "stock_checked": stock_checked,
