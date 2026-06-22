@@ -4471,6 +4471,97 @@ class InventoryService:
         "hat": "Hat",
     }
 
+    # Canonicalises common alpha-size spellings so member preferences and
+    # on-hand item sizes match even when entered differently (e.g. "3XL" vs
+    # "XXXL", "Medium" vs "M"). Keys/values are already lowercased/trimmed.
+    _SIZE_ALIASES = {
+        "2xs": "xxs",
+        "xxs": "xxs",
+        "xs": "xs",
+        "extra small": "xs",
+        "s": "s",
+        "sm": "s",
+        "small": "s",
+        "m": "m",
+        "med": "m",
+        "medium": "m",
+        "l": "l",
+        "lg": "l",
+        "large": "l",
+        "xl": "xl",
+        "1xl": "xl",
+        "extra large": "xl",
+        "xxl": "xxl",
+        "2xl": "xxl",
+        "xxxl": "xxxl",
+        "3xl": "xxxl",
+        "xxxxl": "xxxxl",
+        "4xl": "xxxxl",
+    }
+
+    @classmethod
+    def _normalize_size_key(cls, value: Optional[str]) -> str:
+        """Normalize a size string into a key for matching demand to stock.
+
+        Drops any parenthetical qualifier (e.g. boot width), collapses
+        whitespace, lowercases, then maps common alpha-size aliases to a
+        canonical form. Best-effort: matching is only as reliable as the
+        consistency of the entered sizes.
+        """
+        if not value:
+            return ""
+        base = value.split("(")[0]
+        key = " ".join(base.lower().split())
+        return cls._SIZE_ALIASES.get(key, key)
+
+    @classmethod
+    def _item_stock_size_value(cls, item: InventoryItem) -> Optional[str]:
+        """The size string to bucket an item's on-hand stock by.
+
+        Prefers the structured ``standard_size`` (skipping the ``custom``
+        sentinel, which signals the real value lives in free-text ``size``)
+        and falls back to the free-text ``size`` field.
+        """
+        ss = item.standard_size
+        if ss is not None:
+            val = ss.value if hasattr(ss, "value") else ss
+            if val and val != "custom":
+                return val
+        return item.size
+
+    async def _get_available_stock_by_size(
+        self, organization_id: str, category_id: str
+    ) -> Dict[str, int]:
+        """Count currently available units in a category, keyed by size.
+
+        Pool-tracked items contribute their unissued quantity
+        (``quantity - quantity_issued``); individually-tracked items each
+        contribute one unit when their status is ``available``. Retired items
+        are ignored. Keys are normalized via :meth:`_normalize_size_key`.
+        """
+        items = (
+            await self.db.execute(
+                select(InventoryItem)
+                .where(InventoryItem.organization_id == organization_id)
+                .where(InventoryItem.category_id == category_id)
+                .where(InventoryItem.status != ItemStatus.RETIRED)
+            )
+        ).scalars().all()
+
+        stock: Dict[str, int] = {}
+        for item in items:
+            if item.tracking_type == TrackingType.POOL:
+                avail = (item.quantity or 0) - (item.quantity_issued or 0)
+                if avail < 0:
+                    avail = 0
+            else:
+                avail = 1 if item.status == ItemStatus.AVAILABLE else 0
+            if avail <= 0:
+                continue
+            key = self._normalize_size_key(self._item_stock_size_value(item))
+            stock[key] = stock.get(key, 0) + avail
+        return stock
+
     @staticmethod
     def _format_needed_size(
         prefs: Optional[MemberSizePreferences], size_field: Optional[str]
@@ -4527,9 +4618,13 @@ class InventoryService:
         position_ids = filters.get("position_ids")
         related_category_id = filters.get("related_category_id")
         size_field = filters.get("size_field")
+        stock_category_id = filters.get("stock_category_id")
 
         related_category_id = (
             str(related_category_id) if related_category_id else None
+        )
+        stock_category_id = (
+            str(stock_category_id) if stock_category_id else None
         )
 
         query = (
@@ -4649,15 +4744,36 @@ class InventoryService:
                 if not has_related:
                     bucket["needing"] += 1
 
+        # Net per-size demand against currently available stock so the
+        # breakdown shows the real purchase quantity (need − on-hand).
+        # Members with no size on file ("Unknown") can't be matched to stock,
+        # so their full demand carries to the shortfall.
+        stock_checked = bool(stock_category_id and size_field)
+        stock_map: Dict[str, int] = {}
+        if stock_checked:
+            stock_map = await self._get_available_stock_by_size(
+                org_id, stock_category_id
+            )
+
         # Sort the breakdown so "Unknown" (members lacking a size) sorts last
         # and the rest are alphabetical for a stable, readable table.
-        size_breakdown = [
-            {"size": key, "total": vals["total"], "needing": vals["needing"]}
-            for key, vals in sorted(
-                size_buckets.items(),
-                key=lambda kv: (kv[0] == "Unknown", kv[0]),
-            )
-        ]
+        size_breakdown = []
+        total_to_purchase = 0
+        for key, vals in sorted(
+            size_buckets.items(), key=lambda kv: (kv[0] == "Unknown", kv[0])
+        ):
+            entry = {"size": key, "total": vals["total"], "needing": vals["needing"]}
+            if stock_checked:
+                on_hand = (
+                    0
+                    if key == "Unknown"
+                    else stock_map.get(self._normalize_size_key(key), 0)
+                )
+                shortfall = max(0, vals["needing"] - on_hand)
+                entry["on_hand"] = on_hand
+                entry["shortfall"] = shortfall
+                total_to_purchase += shortfall
+            size_breakdown.append(entry)
 
         total = len(members)
         return {
@@ -4667,6 +4783,8 @@ class InventoryService:
             "members_missing_sizes": missing_sizes,
             "size_field": size_field,
             "size_breakdown": size_breakdown,
+            "stock_checked": stock_checked,
+            "total_to_purchase": total_to_purchase if stock_checked else None,
             "members": members,
         }
 

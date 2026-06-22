@@ -50,6 +50,7 @@ const RESULT = {
     { size: 'M', total: 1, needing: 1 },
     { size: 'Unknown', total: 1, needing: 1 },
   ],
+  stock_checked: false,
   members: [
     {
       user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
@@ -120,6 +121,34 @@ describe('ImpactPlannerPage', () => {
       expect(screen.queryByText('Amy Adams')).not.toBeInTheDocument();
     });
     expect(screen.getByText('Bob Baker')).toBeInTheDocument();
+  });
+
+  it('shows on-hand and to-buy when netting against stock', async () => {
+    const user = userEvent.setup();
+    mockAnalyzeImpact.mockResolvedValue({
+      ...RESULT,
+      stock_checked: true,
+      total_to_purchase: 5,
+      size_breakdown: [
+        { size: 'M', total: 1, needing: 8, on_hand: 3, shortfall: 5 },
+      ],
+    });
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+
+    // Choose a size field so the stock-source select appears, then a category.
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[1] as HTMLSelectElement, 'jacket');
+    const withStock = screen.getAllByRole('combobox');
+    await user.selectOptions(withStock[2] as HTMLSelectElement, 'cat-jacket');
+
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+
+    expect(await screen.findByText('5 to buy')).toBeInTheDocument();
+    expect(screen.getByText(/3 on hand/)).toBeInTheDocument();
+    expect(mockAnalyzeImpact).toHaveBeenCalledWith(
+      expect.objectContaining({ size_field: 'jacket', stock_category_id: 'cat-jacket' }),
+    );
   });
 
   it('shows an error toast when options fail to load', async () => {

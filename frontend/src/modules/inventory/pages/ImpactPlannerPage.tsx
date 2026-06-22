@@ -97,6 +97,7 @@ const ImpactPlannerPage: React.FC = () => {
   const [positionIds, setPositionIds] = useState<string[]>([]);
   const [relatedCategoryId, setRelatedCategoryId] = useState('');
   const [sizeField, setSizeField] = useState('');
+  const [stockCategoryId, setStockCategoryId] = useState('');
 
   const loadOptions = useCallback(async () => {
     setOptionsLoading(true);
@@ -128,6 +129,7 @@ const ImpactPlannerPage: React.FC = () => {
         position_ids: positionIds.length ? positionIds : undefined,
         related_category_id: relatedCategoryId || undefined,
         size_field: sizeField || undefined,
+        stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
       };
       setResult(await inventoryService.analyzeImpact(request));
     } catch (err: unknown) {
@@ -135,7 +137,7 @@ const ImpactPlannerPage: React.FC = () => {
     } finally {
       setAnalyzing(false);
     }
-  }, [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, sizeField]);
+  }, [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, sizeField, stockCategoryId]);
 
   const filteredMembers = useMemo<ImpactPlannerMember[]>(() => {
     if (!result) return [];
@@ -285,6 +287,22 @@ const ImpactPlannerPage: React.FC = () => {
                   </select>
                 </div>
 
+                {sizeField && (
+                  <div>
+                    <label className={labelClass}>Net against on-hand stock</label>
+                    <select
+                      value={stockCategoryId}
+                      onChange={(e) => setStockCategoryId(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">— Don't subtract current stock —</option>
+                      {options.categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <button
                   onClick={() => { void runAnalysis(); }}
                   disabled={analyzing}
@@ -341,9 +359,17 @@ const ImpactPlannerPage: React.FC = () => {
                 {/* Size breakdown for purchasing */}
                 {result.size_breakdown.length > 0 && (
                   <div className="card p-4 sm:p-5">
-                    <h3 className="text-sm font-semibold text-theme-text-primary mb-3">
-                      Sizes to purchase{sizeFieldLabel ? ` — ${sizeFieldLabel}` : ''}
-                    </h3>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                      <h3 className="text-sm font-semibold text-theme-text-primary">
+                        Sizes to purchase{sizeFieldLabel ? ` — ${sizeFieldLabel}` : ''}
+                      </h3>
+                      {result.stock_checked && result.total_to_purchase != null && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 px-3 py-1 text-xs font-semibold">
+                          <ShoppingCart className="w-3.5 h-3.5" />
+                          {result.total_to_purchase} to buy
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {result.size_breakdown.map((b) => (
                         <div
@@ -351,15 +377,25 @@ const ImpactPlannerPage: React.FC = () => {
                           className="flex items-center gap-2 rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2"
                         >
                           <span className="text-sm font-semibold text-theme-text-primary">{b.size}</span>
-                          <span className="text-xs text-theme-text-muted">
-                            need <span className="font-semibold text-purple-600 dark:text-purple-400">{b.needing}</span>
-                            {b.total !== b.needing && ` of ${b.total}`}
-                          </span>
+                          {result.stock_checked ? (
+                            <span className="text-xs text-theme-text-muted">
+                              need {b.needing} &middot; {b.on_hand ?? 0} on hand &middot;{' '}
+                              <span className="font-semibold text-purple-600 dark:text-purple-400">
+                                buy {b.shortfall ?? b.needing}
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-xs text-theme-text-muted">
+                              need <span className="font-semibold text-purple-600 dark:text-purple-400">{b.needing}</span>
+                              {b.total !== b.needing && ` of ${b.total}`}
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
                     <p className="text-xs text-theme-text-muted mt-3">
                       &ldquo;need&rdquo; excludes members who already hold an item in the selected category.
+                      {result.stock_checked && ' On-hand stock is matched to needed sizes by label; members with no size on file can’t be matched.'}
                     </p>
                   </div>
                 )}

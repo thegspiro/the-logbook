@@ -1200,6 +1200,7 @@ export interface ImpactPlannerRequest {
   position_ids?: string[] | undefined;
   related_category_id?: string | undefined;
   size_field?: string | undefined;
+  stock_category_id?: string | undefined;
 }
 
 export interface ImpactPlannerMember {
@@ -1222,6 +1223,8 @@ export interface ImpactPlannerSizeBreakdown {
   size: string;
   total: number;
   needing: number;
+  on_hand?: number;
+  shortfall?: number;
 }
 
 export interface ImpactPlannerResult {
@@ -1231,6 +1234,8 @@ export interface ImpactPlannerResult {
   members_missing_sizes: number;
   size_field?: string;
   size_breakdown: ImpactPlannerSizeBreakdown[];
+  stock_checked: boolean;
+  total_to_purchase?: number;
   members: ImpactPlannerMember[];
 }
 

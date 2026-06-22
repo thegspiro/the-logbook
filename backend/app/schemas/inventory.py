@@ -1844,6 +1844,9 @@ class ImpactPlannerRequest(BaseModel):
     # When set, each member's needed size for this garment type is reported
     # and rolled up into a size breakdown for purchasing.
     size_field: Optional[SizeFieldLiteral] = None
+    # When set (with size_field), per-size demand is netted against the
+    # available on-hand stock in this category to compute the quantity to buy.
+    stock_category_id: Optional[UUID] = None
 
 
 class ImpactPlannerMember(BaseModel):
@@ -1866,11 +1869,17 @@ class ImpactPlannerMember(BaseModel):
 
 
 class ImpactPlannerSizeBreakdown(BaseModel):
-    """Per-size rollup used to plan a purchase quantity."""
+    """Per-size rollup used to plan a purchase quantity.
+
+    ``on_hand`` and ``shortfall`` are populated only when the request nets
+    demand against a stock category (``stock_category_id`` + ``size_field``).
+    """
 
     size: str
     total: int
     needing: int
+    on_hand: Optional[int] = None
+    shortfall: Optional[int] = None
 
 
 class ImpactPlannerResponse(BaseModel):
@@ -1882,6 +1891,8 @@ class ImpactPlannerResponse(BaseModel):
     members_missing_sizes: int
     size_field: Optional[str] = None
     size_breakdown: List[ImpactPlannerSizeBreakdown] = []
+    stock_checked: bool = False
+    total_to_purchase: Optional[int] = None
     members: List[ImpactPlannerMember]
 
 

@@ -16,6 +16,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.models.inventory import ItemStatus, TrackingType
 from app.services.inventory_service import InventoryService
 
 
@@ -65,6 +66,24 @@ def _user(uid, first, last, **kwargs):
         email=kwargs.get("email"),
         phone=kwargs.get("phone"),
         mobile=kwargs.get("mobile"),
+    )
+
+
+def _stock_item(
+    size=None,
+    standard_size=None,
+    pool=False,
+    quantity=0,
+    issued=0,
+    status=ItemStatus.AVAILABLE,
+):
+    return SimpleNamespace(
+        tracking_type=TrackingType.POOL if pool else TrackingType.INDIVIDUAL,
+        quantity=quantity,
+        quantity_issued=issued,
+        status=status,
+        standard_size=standard_size,
+        size=size,
     )
 
 
@@ -250,6 +269,126 @@ class TestAnalyzeImpact:
         assert result["size_breakdown"] == []
         assert result["members_missing_sizes"] == 0
         assert result["size_field"] is None
+
+
+# ============================================
+# Stock-aware shortfall
+# ============================================
+
+class TestNormalizeSizeKey:
+
+    def test_alias_canonicalisation(self):
+        assert InventoryService._normalize_size_key("3XL") == "xxxl"
+        assert InventoryService._normalize_size_key("XXXL") == "xxxl"
+        assert InventoryService._normalize_size_key("Medium") == "m"
+        assert InventoryService._normalize_size_key("M") == "m"
+
+    def test_drops_parenthetical_and_collapses_space(self):
+        assert InventoryService._normalize_size_key("10 (Wide)") == "10"
+        assert InventoryService._normalize_size_key("  34  x 32 ") == "34 x 32"
+
+    def test_empty(self):
+        assert InventoryService._normalize_size_key(None) == ""
+
+
+class TestItemStockSizeValue:
+
+    def test_prefers_standard_size_skips_custom(self):
+        # 'custom' sentinel falls through to the free-text size
+        assert (
+            InventoryService._item_stock_size_value(
+                _stock_item(size="34W", standard_size="custom")
+            )
+            == "34W"
+        )
+        assert (
+            InventoryService._item_stock_size_value(
+                _stock_item(size="ignored", standard_size="l")
+            )
+            == "l"
+        )
+        assert (
+            InventoryService._item_stock_size_value(_stock_item(size="M"))
+            == "M"
+        )
+
+
+class TestAvailableStockBySize:
+
+    @pytest.mark.asyncio
+    async def test_pool_and_individual_counts(self, service, mock_db):
+        items = [
+            # pool: 3 on hand, 1 issued -> 2 available "M"
+            _stock_item(standard_size="m", pool=True, quantity=3, issued=1),
+            # individual available "M" -> +1
+            _stock_item(size="M", status=ItemStatus.AVAILABLE),
+            # individual assigned -> not counted
+            _stock_item(size="M", status=ItemStatus.ASSIGNED),
+            # individual available "L"
+            _stock_item(standard_size="l", status=ItemStatus.AVAILABLE),
+        ]
+        mock_db.execute.side_effect = [_scalars_result(items)]
+        stock = await service._get_available_stock_by_size("org", "cat")
+        assert stock == {"m": 3, "l": 1}
+
+
+class TestAnalyzeImpactStockAware:
+
+    @pytest.mark.asyncio
+    async def test_shortfall_nets_demand_against_stock(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [
+            _user("u1", "Amy", "Adams"),
+            _user("u2", "Bob", "Baker"),
+            _user("u3", "Cy", "Clark"),
+        ]
+        prefs = [_prefs("u1", shirt_size="M"), _prefs("u2", shirt_size="M")]
+        # 2 "M" available on hand; "Unknown" (u3) cannot be matched
+        stock_items = [
+            _stock_item(standard_size="m", pool=True, quantity=2, issued=0),
+        ]
+        mock_db.execute.side_effect = [
+            _scalars_result(users),       # users
+            _scalars_result(prefs),       # size prefs
+            _scalars_result(stock_items),  # stock lookup
+        ]
+
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={
+                "size_field": "shirt",
+                "stock_category_id": str(uuid4()),
+            },
+            include_contact=False,
+        )
+
+        assert result["stock_checked"] is True
+        breakdown = {b["size"]: b for b in result["size_breakdown"]}
+        # 2 need M, 2 on hand -> buy 0
+        assert breakdown["M"]["on_hand"] == 2
+        assert breakdown["M"]["shortfall"] == 0
+        # 1 needs unknown size, 0 matchable on hand -> buy 1
+        assert breakdown["Unknown"]["on_hand"] == 0
+        assert breakdown["Unknown"]["shortfall"] == 1
+        assert result["total_to_purchase"] == 1
+
+    @pytest.mark.asyncio
+    async def test_no_stock_category_leaves_fields_unset(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams")]
+        prefs = [_prefs("u1", shirt_size="M")]
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result(prefs),
+        ]
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={"size_field": "shirt"},
+            include_contact=False,
+        )
+        assert result["stock_checked"] is False
+        assert result["total_to_purchase"] is None
+        assert result["size_breakdown"][0].get("on_hand") is None
 
 
 # ============================================
