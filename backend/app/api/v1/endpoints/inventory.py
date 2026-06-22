@@ -146,6 +146,7 @@ from app.schemas.inventory import (
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
 from app.services.label_service import LabelService
+from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
 
 router = APIRouter()
@@ -164,6 +165,30 @@ async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
         )
     except Exception:
         pass  # Never let WS publishing break an API response
+
+
+async def _planner_contact_visibility(db, organization_id) -> dict:
+    """Resolve member contact visibility from the organization's settings.
+
+    Mirrors the member-list endpoint so the impact planner honours the same
+    privacy toggles (enabled + per-field) rather than exposing contact info
+    on permission alone. Returns an empty dict (no contact) when disabled or
+    if settings can't be loaded.
+    """
+    try:
+        settings = await OrganizationService(db).get_organization_settings(
+            organization_id
+        )
+        vis = settings.contact_info_visibility
+        if not vis.enabled:
+            return {}
+        return {
+            "show_email": vis.show_email,
+            "show_phone": vis.show_phone,
+            "show_mobile": vis.show_mobile,
+        }
+    except Exception:
+        return {}
 
 
 # ============================================
@@ -2217,23 +2242,22 @@ async def analyze_inventory_impact(
     item (when a related category is chosen), and a per-size breakdown for
     purchase planning.
 
-    Member contact details are included only when the caller may view
-    contact information.
+    Member contact details honour the organization's contact-visibility
+    settings (the same toggles used by the member list).
 
     **Authentication required**
     **Requires permission: inventory.manage**
     """
-    # Gate contact fields on the same permission used elsewhere for member
-    # contact visibility — the planner names who to contact for an exchange.
-    user_permissions = _collect_user_permissions(current_user)
-    include_contact = _has_permission("users.view_contact", user_permissions)
+    contact_visibility = await _planner_contact_visibility(
+        db, current_user.organization_id
+    )
 
     service = InventoryService(db)
     try:
         return await service.analyze_impact(
             organization_id=current_user.organization_id,
             filters=payload.model_dump(),
-            include_contact=include_contact,
+            contact_visibility=contact_visibility,
         )
     except ValueError as e:
         raise HTTPException(
@@ -2366,6 +2390,15 @@ async def bulk_issue_from_impact_plan(
         organization_id=str(current_user.organization_id),
     )
 
+    # Notify live inventory views (member/items pages) that stock moved,
+    # matching the single pool-issue endpoint.
+    if result["issued_count"] > 0:
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "bulk_issued_from_plan",
+            {"issued_count": result["issued_count"]},
+        )
+
     return result
 
 
@@ -2378,23 +2411,24 @@ async def export_impact_plan_pdf(
     """
     Export the impact plan as a print-ready PDF for procurement.
 
-    Member contact details are included only when the caller may view
-    contact information.
+    Member contact details honour the organization's contact-visibility
+    settings (the same toggles used by the member list).
 
     **Authentication required**
     **Requires permission: inventory.manage**
     """
     from fastapi.responses import StreamingResponse
 
-    user_permissions = _collect_user_permissions(current_user)
-    include_contact = _has_permission("users.view_contact", user_permissions)
+    contact_visibility = await _planner_contact_visibility(
+        db, current_user.organization_id
+    )
 
     service = InventoryService(db)
     try:
         pdf_buf = await service.generate_impact_plan_pdf(
             organization_id=current_user.organization_id,
             filters=payload.model_dump(),
-            include_contact=include_contact,
+            contact_visibility=contact_visibility,
         )
     except ValueError as e:
         raise HTTPException(

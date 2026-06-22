@@ -4750,6 +4750,7 @@ class InventoryService:
         organization_id,
         filters: Dict[str, Any],
         include_contact: bool = False,
+        contact_visibility: Optional[Dict[str, bool]] = None,
     ) -> Dict[str, Any]:
         """Analyze how many members a prospective new issue would impact.
 
@@ -4758,8 +4759,20 @@ class InventoryService:
         whether they already hold a comparable item (when
         *related_category_id* is given). Returns the per-member list plus
         aggregate counts and a per-size breakdown for purchase planning.
+
+        Contact fields honour the organization's contact-visibility settings:
+        *contact_visibility* is a ``{"show_email", "show_phone",
+        "show_mobile"}`` dict (as resolved from org settings). When it is not
+        supplied, *include_contact* is used as a blanket on/off for all three
+        fields (kept for internal callers/tests).
         """
         org_id = str(organization_id)
+        if contact_visibility is None:
+            contact_visibility = {
+                "show_email": include_contact,
+                "show_phone": include_contact,
+                "show_mobile": include_contact,
+            }
 
         statuses = filters.get("statuses")
         membership_types = filters.get("membership_types")
@@ -4868,9 +4881,17 @@ class InventoryService:
                         u.status.value if hasattr(u.status, "value") else u.status
                     ),
                     "membership_type": u.membership_type,
-                    "email": u.email if include_contact else None,
+                    "email": (
+                        u.email if contact_visibility.get("show_email") else None
+                    ),
                     "phone": (
-                        (u.phone or u.mobile) if include_contact else None
+                        u.phone
+                        if contact_visibility.get("show_phone") and u.phone
+                        else (
+                            u.mobile
+                            if contact_visibility.get("show_mobile") and u.mobile
+                            else None
+                        )
                     ),
                     "needed_size": needed_size,
                     "has_size_on_file": has_size,
@@ -5196,15 +5217,19 @@ class InventoryService:
         self,
         organization_id,
         filters: Dict[str, Any],
-        include_contact: bool = False,
+        contact_visibility: Optional[Dict[str, bool]] = None,
     ) -> BytesIO:
         """Render the impact-plan analysis to a print-ready PDF.
 
         Runs the analysis, resolves organization and category names for the
         report header, then delegates layout to ``render_impact_plan_pdf``.
+        Contact columns honour *contact_visibility* (org settings).
         """
         org_id = str(organization_id)
-        data = await self.analyze_impact(org_id, filters, include_contact)
+        data = await self.analyze_impact(
+            org_id, filters, contact_visibility=contact_visibility
+        )
+        show_contact = bool(contact_visibility and any(contact_visibility.values()))
 
         org = await self.db.scalar(
             select(Organization).where(Organization.id == org_id)
@@ -5243,7 +5268,7 @@ class InventoryService:
             "parameters": parameters,
             "show_size": bool(size_field),
             "show_existing": bool(filters.get("related_category_id")),
-            "show_contact": include_contact,
+            "show_contact": show_contact,
         }
         return render_impact_plan_pdf(data, meta)
 

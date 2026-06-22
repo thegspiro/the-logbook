@@ -265,6 +265,54 @@ class TestAnalyzeImpact:
         assert result["members"][0]["phone"] == "555-9"
 
     @pytest.mark.asyncio
+    async def test_contact_visibility_per_field(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [
+            _user("u1", "Amy", "Adams", email="amy@x.org",
+                  phone="555-1", mobile="555-9"),
+        ]
+        # Email shown, phone hidden -> phone falls through to mobile (hidden too)
+        mock_db.execute.side_effect = [_scalars_result(users)]
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={},
+            contact_visibility={
+                "show_email": True, "show_phone": False, "show_mobile": False,
+            },
+        )
+        m = result["members"][0]
+        assert m["email"] == "amy@x.org"
+        assert m["phone"] is None
+
+    @pytest.mark.asyncio
+    async def test_contact_visibility_mobile_only(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams", phone="555-1", mobile="555-9")]
+        mock_db.execute.side_effect = [_scalars_result(users)]
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={},
+            contact_visibility={
+                "show_email": False, "show_phone": False, "show_mobile": True,
+            },
+        )
+        m = result["members"][0]
+        assert m["email"] is None
+        # phone column shows the mobile when only mobile is visible
+        assert m["phone"] == "555-9"
+
+    @pytest.mark.asyncio
+    async def test_contact_visibility_empty_hides_all(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams", phone="555-1", mobile="555-9")]
+        mock_db.execute.side_effect = [_scalars_result(users)]
+        result = await service.analyze_impact(
+            organization_id=org_id, filters={}, contact_visibility={},
+        )
+        m = result["members"][0]
+        assert m["email"] is None and m["phone"] is None
+
+    @pytest.mark.asyncio
     async def test_no_size_field_skips_breakdown(self, service, mock_db):
         org_id = str(uuid4())
         users = [_user("u1", "Amy", "Adams")]
