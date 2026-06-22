@@ -1810,3 +1810,110 @@ class LabelPresetUpdate(BaseModel):
     preset: str = Field(min_length=1, max_length=50)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
+
+
+# ============================================
+# Impact Planner
+# Helps the quartermaster size up a prospective new issue (e.g. a new
+# jacket for a subset of members): who fits the chosen category, the
+# sizes they need, and who already holds a comparable item.
+# ============================================
+
+# The member size field whose value drives the "size needed" report.
+# Mirrors the columns on MemberSizePreferences.
+SizeFieldLiteral = Literal["shirt", "pant", "jacket", "boot", "glove", "hat"]
+
+
+class ImpactPlannerRequest(BaseModel):
+    """Filter criteria describing the subset of members to plan an issue for.
+
+    All filters are ANDed together; each multi-value filter matches any of
+    its values (OR within the field). When ``statuses`` is omitted the
+    analysis is limited to active members, since planning a new issue almost
+    always targets the current active roster.
+    """
+
+    statuses: Optional[List[str]] = None
+    membership_types: Optional[List[str]] = None
+    ranks: Optional[List[str]] = None
+    stations: Optional[List[str]] = None
+    position_ids: Optional[List[UUID]] = None
+    # When set, each member is flagged with whether they already hold an
+    # active item in this category (assignment or pool issuance).
+    related_category_id: Optional[UUID] = None
+    # When set, each member's needed size for this garment type is reported
+    # and rolled up into a size breakdown for purchasing.
+    size_field: Optional[SizeFieldLiteral] = None
+
+
+class ImpactPlannerMember(BaseModel):
+    """A single member in the impact analysis result."""
+
+    user_id: UUID
+    full_name: Optional[str] = None
+    membership_number: Optional[str] = None
+    rank: Optional[str] = None
+    station: Optional[str] = None
+    status: Optional[str] = None
+    membership_type: Optional[str] = None
+    # Contact fields are populated only when the caller may view contact info.
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    needed_size: Optional[str] = None
+    has_size_on_file: bool = False
+    has_related_item: bool = False
+    related_item_names: List[str] = []
+
+
+class ImpactPlannerSizeBreakdown(BaseModel):
+    """Per-size rollup used to plan a purchase quantity."""
+
+    size: str
+    total: int
+    needing: int
+
+
+class ImpactPlannerResponse(BaseModel):
+    """Aggregated impact analysis for the selected member subset."""
+
+    total_members: int
+    members_with_related_item: int
+    members_needing_item: int
+    members_missing_sizes: int
+    size_field: Optional[str] = None
+    size_breakdown: List[ImpactPlannerSizeBreakdown] = []
+    members: List[ImpactPlannerMember]
+
+
+class ImpactPlannerOption(BaseModel):
+    """A selectable value/label pair for a planner filter dropdown."""
+
+    value: str
+    label: str
+
+
+class ImpactPlannerCategoryOption(BaseModel):
+    """An inventory category that can be used as the 'related item' filter."""
+
+    id: UUID
+    name: str
+    item_type: Optional[str] = None
+
+
+class ImpactPlannerPositionOption(BaseModel):
+    """A corporate position/role that can be used to filter members."""
+
+    id: UUID
+    name: str
+
+
+class ImpactPlannerOptionsResponse(BaseModel):
+    """Filter options for building an impact-planner query."""
+
+    statuses: List[ImpactPlannerOption]
+    membership_types: List[ImpactPlannerOption]
+    ranks: List[ImpactPlannerOption]
+    stations: List[str]
+    positions: List[ImpactPlannerPositionOption]
+    categories: List[ImpactPlannerCategoryOption]
+    size_fields: List[ImpactPlannerOption]

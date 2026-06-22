@@ -49,7 +49,14 @@ from app.models.inventory import (
     WriteOffRequest,
     WriteOffStatus,
 )
-from app.models.user import Organization, User
+from app.models.operational_rank import OperationalRank
+from app.models.user import (
+    MembershipType,
+    Organization,
+    Position,
+    User,
+    UserStatus,
+)
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -4448,3 +4455,327 @@ class InventoryService:
         except Exception as e:
             logger.error(f"Error upserting member size preferences: {e}")
             return None, str(e)
+
+    # ============================================
+    # Impact Planner
+    # ============================================
+
+    # Maps a requested size_field to the MemberSizePreferences attributes that
+    # compose the displayed/bucketed size value.
+    _SIZE_FIELD_LABELS = {
+        "shirt": "Shirt",
+        "pant": "Pants",
+        "jacket": "Jacket",
+        "boot": "Boots",
+        "glove": "Gloves",
+        "hat": "Hat",
+    }
+
+    @staticmethod
+    def _format_needed_size(
+        prefs: Optional[MemberSizePreferences], size_field: Optional[str]
+    ) -> Optional[str]:
+        """Render a member's stored size for *size_field* as a display string.
+
+        Returns ``None`` when no size is on file so callers can bucket those
+        members separately (they must be measured before purchasing).
+        """
+        if prefs is None or not size_field:
+            return None
+        if size_field == "shirt":
+            return prefs.shirt_size or None
+        if size_field == "jacket":
+            return prefs.jacket_size or None
+        if size_field == "glove":
+            return prefs.glove_size or None
+        if size_field == "hat":
+            return prefs.hat_size or None
+        if size_field == "boot":
+            if not prefs.boot_size:
+                return None
+            if prefs.boot_width:
+                return f"{prefs.boot_size} ({prefs.boot_width})"
+            return prefs.boot_size
+        if size_field == "pant":
+            waist = prefs.pant_waist
+            inseam = prefs.pant_inseam
+            if waist and inseam:
+                return f"{waist} x {inseam}"
+            return waist or inseam or None
+        return None
+
+    async def analyze_impact(
+        self,
+        organization_id,
+        filters: Dict[str, Any],
+        include_contact: bool = False,
+    ) -> Dict[str, Any]:
+        """Analyze how many members a prospective new issue would impact.
+
+        Filters the member roster by the supplied criteria, then annotates
+        each member with the size they need (when *size_field* is given) and
+        whether they already hold a comparable item (when
+        *related_category_id* is given). Returns the per-member list plus
+        aggregate counts and a per-size breakdown for purchase planning.
+        """
+        org_id = str(organization_id)
+
+        statuses = filters.get("statuses")
+        membership_types = filters.get("membership_types")
+        ranks = filters.get("ranks")
+        stations = filters.get("stations")
+        position_ids = filters.get("position_ids")
+        related_category_id = filters.get("related_category_id")
+        size_field = filters.get("size_field")
+
+        related_category_id = (
+            str(related_category_id) if related_category_id else None
+        )
+
+        query = (
+            select(User)
+            .where(User.organization_id == org_id)
+            .where(User.deleted_at.is_(None))
+        )
+
+        # Default to the active roster — planning a new issue targets members
+        # currently in service unless the caller explicitly broadens the scope.
+        if statuses:
+            query = query.where(User.status.in_(statuses))
+        else:
+            query = query.where(User.status == UserStatus.ACTIVE.value)
+
+        if membership_types:
+            query = query.where(User.membership_type.in_(membership_types))
+        if ranks:
+            query = query.where(User.rank.in_(ranks))
+        if stations:
+            query = query.where(User.station.in_(stations))
+        if position_ids:
+            pos_ids = [str(pid) for pid in position_ids]
+            query = query.where(User.positions.any(Position.id.in_(pos_ids)))
+
+        query = query.order_by(User.last_name, User.first_name)
+        users = (await self.db.execute(query)).scalars().all()
+        user_ids = [u.id for u in users]
+
+        # Size preferences for the matched members (one-to-one per member).
+        size_map: Dict[str, MemberSizePreferences] = {}
+        if size_field and user_ids:
+            prefs_rows = (
+                await self.db.execute(
+                    select(MemberSizePreferences).where(
+                        MemberSizePreferences.user_id.in_(user_ids)
+                    )
+                )
+            ).scalars().all()
+            size_map = {p.user_id: p for p in prefs_rows}
+
+        # Members who already hold an active item in the related category —
+        # via permanent assignment or pool issuance. These members do not need
+        # the new issue, so they're excluded from purchase counts.
+        related_map: Dict[str, List[str]] = {}
+        if related_category_id and user_ids:
+            assign_rows = await self.db.execute(
+                select(ItemAssignment.user_id, InventoryItem.name)
+                .join(InventoryItem, ItemAssignment.item_id == InventoryItem.id)
+                .where(ItemAssignment.organization_id == org_id)
+                .where(ItemAssignment.is_active == True)  # noqa: E712
+                .where(ItemAssignment.user_id.in_(user_ids))
+                .where(InventoryItem.category_id == related_category_id)
+            )
+            for uid, name in assign_rows.all():
+                related_map.setdefault(uid, [])
+                if name and name not in related_map[uid]:
+                    related_map[uid].append(name)
+
+            issue_rows = await self.db.execute(
+                select(ItemIssuance.user_id, InventoryItem.name)
+                .join(InventoryItem, ItemIssuance.item_id == InventoryItem.id)
+                .where(ItemIssuance.organization_id == org_id)
+                .where(ItemIssuance.is_returned == False)  # noqa: E712
+                .where(ItemIssuance.user_id.in_(user_ids))
+                .where(InventoryItem.category_id == related_category_id)
+            )
+            for uid, name in issue_rows.all():
+                related_map.setdefault(uid, [])
+                if name and name not in related_map[uid]:
+                    related_map[uid].append(name)
+
+        members: List[Dict[str, Any]] = []
+        size_buckets: Dict[str, Dict[str, int]] = {}
+        with_related = 0
+        missing_sizes = 0
+
+        for u in users:
+            related_names = related_map.get(u.id, [])
+            has_related = bool(related_names)
+            if has_related:
+                with_related += 1
+
+            needed_size = self._format_needed_size(size_map.get(u.id), size_field)
+            has_size = needed_size is not None
+            if size_field and not has_related and not has_size:
+                missing_sizes += 1
+
+            members.append(
+                {
+                    "user_id": u.id,
+                    "full_name": u.full_name or None,
+                    "membership_number": u.membership_number,
+                    "rank": u.rank,
+                    "station": u.station,
+                    "status": (
+                        u.status.value if hasattr(u.status, "value") else u.status
+                    ),
+                    "membership_type": u.membership_type,
+                    "email": u.email if include_contact else None,
+                    "phone": (
+                        (u.phone or u.mobile) if include_contact else None
+                    ),
+                    "needed_size": needed_size,
+                    "has_size_on_file": has_size,
+                    "has_related_item": has_related,
+                    "related_item_names": related_names,
+                }
+            )
+
+            if size_field:
+                bucket_key = needed_size or "Unknown"
+                bucket = size_buckets.setdefault(
+                    bucket_key, {"total": 0, "needing": 0}
+                )
+                bucket["total"] += 1
+                if not has_related:
+                    bucket["needing"] += 1
+
+        # Sort the breakdown so "Unknown" (members lacking a size) sorts last
+        # and the rest are alphabetical for a stable, readable table.
+        size_breakdown = [
+            {"size": key, "total": vals["total"], "needing": vals["needing"]}
+            for key, vals in sorted(
+                size_buckets.items(),
+                key=lambda kv: (kv[0] == "Unknown", kv[0]),
+            )
+        ]
+
+        total = len(members)
+        return {
+            "total_members": total,
+            "members_with_related_item": with_related,
+            "members_needing_item": total - with_related,
+            "members_missing_sizes": missing_sizes,
+            "size_field": size_field,
+            "size_breakdown": size_breakdown,
+            "members": members,
+        }
+
+    async def get_impact_planner_options(
+        self, organization_id
+    ) -> Dict[str, Any]:
+        """Return the selectable filter options for the impact planner.
+
+        Centralises the distinct ranks, stations, positions, and categories
+        that exist for the organization so the planner UI can populate its
+        filters from a single request.
+        """
+        org_id = str(organization_id)
+
+        def _humanize(value: str) -> str:
+            return value.replace("_", " ").title()
+
+        statuses = [
+            {"value": s.value, "label": _humanize(s.value)} for s in UserStatus
+        ]
+        membership_types = [
+            {"value": m.value, "label": _humanize(m.value)} for m in MembershipType
+        ]
+
+        # Ranks: prefer the org's configured operational ranks (code →
+        # display name); fall back to any free-text rank values still in use.
+        rank_rows = (
+            await self.db.execute(
+                select(OperationalRank)
+                .where(OperationalRank.organization_id == org_id)
+                .where(OperationalRank.is_active == True)  # noqa: E712
+                .order_by(OperationalRank.sort_order, OperationalRank.display_name)
+            )
+        ).scalars().all()
+        ranks = [
+            {"value": r.rank_code, "label": r.display_name or _humanize(r.rank_code)}
+            for r in rank_rows
+        ]
+        known_rank_codes = {r["value"] for r in ranks}
+        distinct_ranks = (
+            await self.db.execute(
+                select(User.rank)
+                .where(User.organization_id == org_id)
+                .where(User.deleted_at.is_(None))
+                .where(User.rank.isnot(None))
+                .distinct()
+            )
+        ).scalars().all()
+        for code in distinct_ranks:
+            if code and code not in known_rank_codes:
+                ranks.append({"value": code, "label": _humanize(code)})
+                known_rank_codes.add(code)
+
+        stations = [
+            s
+            for s in (
+                await self.db.execute(
+                    select(User.station)
+                    .where(User.organization_id == org_id)
+                    .where(User.deleted_at.is_(None))
+                    .where(User.station.isnot(None))
+                    .distinct()
+                    .order_by(User.station)
+                )
+            ).scalars().all()
+            if s
+        ]
+
+        position_rows = (
+            await self.db.execute(
+                select(Position)
+                .where(Position.organization_id == org_id)
+                .order_by(Position.name)
+            )
+        ).scalars().all()
+        positions = [{"id": p.id, "name": p.name} for p in position_rows]
+
+        category_rows = (
+            await self.db.execute(
+                select(InventoryCategory)
+                .where(InventoryCategory.organization_id == org_id)
+                .where(InventoryCategory.active == True)  # noqa: E712
+                .order_by(InventoryCategory.name)
+            )
+        ).scalars().all()
+        categories = [
+            {
+                "id": c.id,
+                "name": c.name,
+                "item_type": (
+                    c.item_type.value
+                    if hasattr(c.item_type, "value")
+                    else c.item_type
+                ),
+            }
+            for c in category_rows
+        ]
+
+        size_fields = [
+            {"value": key, "label": label}
+            for key, label in self._SIZE_FIELD_LABELS.items()
+        ]
+
+        return {
+            "statuses": statuses,
+            "membership_types": membership_types,
+            "ranks": ranks,
+            "stations": stations,
+            "positions": positions,
+            "categories": categories,
+            "size_fields": size_fields,
+        }

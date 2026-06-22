@@ -28,6 +28,7 @@ import {
   Ruler,
   UserPlus,
   SlidersHorizontal,
+  Target,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
 import { useAuthStore } from '../../../stores/authStore';
@@ -324,6 +325,13 @@ export const InventoryAdminHub: React.FC = () => {
                 title="Issuance Allowances"
                 description="Cap how many units per category a member can be issued"
                 iconBg="bg-blue-500/10 text-blue-600 dark:text-blue-400"
+              />
+              <NavCard
+                to="/inventory/admin/impact-planner"
+                icon={<Target className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+                title="Impact Planner"
+                description="Plan a new issue: who's impacted, sizes needed, who to contact"
+                iconBg="bg-purple-500/10 text-purple-600 dark:text-purple-400"
               />
               <NavCard
                 to="/inventory/admin/maintenance"

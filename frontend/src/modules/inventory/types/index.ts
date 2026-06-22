@@ -58,6 +58,14 @@ export type {
   EquipmentKitCreate,
   MemberSizePreferences,
   MemberSizePreferencesCreate,
+  ImpactPlannerOption,
+  ImpactPlannerCategoryOption,
+  ImpactPlannerPositionOption,
+  ImpactPlannerOptions,
+  ImpactPlannerRequest,
+  ImpactPlannerMember,
+  ImpactPlannerSizeBreakdown,
+  ImpactPlannerResult,
 } from '../../../services/eventServices';
 
 import type { InventoryCategory } from '../../../services/eventServices';

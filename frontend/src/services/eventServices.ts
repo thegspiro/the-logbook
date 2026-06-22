@@ -1164,6 +1164,76 @@ export interface MembersInventoryListResponse {
   total: number;
 }
 
+// Inventory Impact Planner
+
+export interface ImpactPlannerOption {
+  value: string;
+  label: string;
+}
+
+export interface ImpactPlannerCategoryOption {
+  id: string;
+  name: string;
+  item_type?: string;
+}
+
+export interface ImpactPlannerPositionOption {
+  id: string;
+  name: string;
+}
+
+export interface ImpactPlannerOptions {
+  statuses: ImpactPlannerOption[];
+  membership_types: ImpactPlannerOption[];
+  ranks: ImpactPlannerOption[];
+  stations: string[];
+  positions: ImpactPlannerPositionOption[];
+  categories: ImpactPlannerCategoryOption[];
+  size_fields: ImpactPlannerOption[];
+}
+
+export interface ImpactPlannerRequest {
+  statuses?: string[] | undefined;
+  membership_types?: string[] | undefined;
+  ranks?: string[] | undefined;
+  stations?: string[] | undefined;
+  position_ids?: string[] | undefined;
+  related_category_id?: string | undefined;
+  size_field?: string | undefined;
+}
+
+export interface ImpactPlannerMember {
+  user_id: string;
+  full_name?: string;
+  membership_number?: string;
+  rank?: string;
+  station?: string;
+  status?: string;
+  membership_type?: string;
+  email?: string;
+  phone?: string;
+  needed_size?: string;
+  has_size_on_file: boolean;
+  has_related_item: boolean;
+  related_item_names: string[];
+}
+
+export interface ImpactPlannerSizeBreakdown {
+  size: string;
+  total: number;
+  needing: number;
+}
+
+export interface ImpactPlannerResult {
+  total_members: number;
+  members_with_related_item: number;
+  members_needing_item: number;
+  members_missing_sizes: number;
+  size_field?: string;
+  size_breakdown: ImpactPlannerSizeBreakdown[];
+  members: ImpactPlannerMember[];
+}
+
 export interface LabelFormat {
   id: string;
   description: string;

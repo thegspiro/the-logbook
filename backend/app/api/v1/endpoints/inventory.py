@@ -74,6 +74,9 @@ from app.schemas.inventory import (
     EquipmentRequestCreate,
     EquipmentRequestFulfill,
     EquipmentRequestReview,
+    ImpactPlannerOptionsResponse,
+    ImpactPlannerRequest,
+    ImpactPlannerResponse,
     InventoryCategoryCreate,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
@@ -2056,6 +2059,79 @@ async def get_members_inventory_summary(
         search=search,
     )
     return MembersInventoryListResponse(members=members, total=len(members))
+
+
+# ============================================
+# Impact Planner Endpoints
+# ============================================
+
+
+@router.get(
+    "/impact-planner/options", response_model=ImpactPlannerOptionsResponse
+)
+async def get_impact_planner_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Get the filter options for the inventory impact planner.
+
+    Returns the distinct ranks, stations, positions, member statuses,
+    membership types, inventory categories, and garment size fields that can
+    be used to scope an impact analysis.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_impact_planner_options(
+        organization_id=current_user.organization_id,
+    )
+
+
+@router.post("/impact-planner", response_model=ImpactPlannerResponse)
+async def analyze_inventory_impact(
+    payload: ImpactPlannerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Analyze how many members a prospective new issue would impact.
+
+    Given a set of member filters (rank, station, status, membership type,
+    position) the planner returns the matching members, the size each needs
+    (when a size field is chosen), whether they already hold a comparable
+    item (when a related category is chosen), and a per-size breakdown for
+    purchase planning.
+
+    Member contact details are included only when the caller may view
+    contact information.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    # Gate contact fields on the same permission used elsewhere for member
+    # contact visibility — the planner names who to contact for an exchange.
+    user_permissions = _collect_user_permissions(current_user)
+    include_contact = _has_permission("users.view_contact", user_permissions)
+
+    service = InventoryService(db)
+    try:
+        return await service.analyze_impact(
+            organization_id=current_user.organization_id,
+            filters=payload.model_dump(),
+            include_contact=include_contact,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
 
 
 @router.get("/users/{user_id}/inventory", response_model=UserInventoryResponse)

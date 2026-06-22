@@ -17,6 +17,7 @@ import type {
   ItemVariantGroup, ItemVariantGroupCreate,
   EquipmentKit, EquipmentKitCreate,
   MemberSizePreferences, MemberSizePreferencesCreate,
+  ImpactPlannerOptions, ImpactPlannerRequest, ImpactPlannerResult,
 } from './eventServices';
 
 export const inventoryService = {
@@ -29,6 +30,16 @@ export const inventoryService = {
 
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
     const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
+    return response.data;
+  },
+
+  async getImpactPlannerOptions(): Promise<ImpactPlannerOptions> {
+    const response = await api.get<ImpactPlannerOptions>('/inventory/impact-planner/options');
+    return response.data;
+  },
+
+  async analyzeImpact(request: ImpactPlannerRequest): Promise<ImpactPlannerResult> {
+    const response = await api.post<ImpactPlannerResult>('/inventory/impact-planner', request);
     return response.data;
   },
 
