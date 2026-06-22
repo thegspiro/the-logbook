@@ -66,19 +66,21 @@ const RESULT = {
   stock_checked: false,
   cost_estimated: false,
   members_needing_replacement: 0,
+  members_over_allowance: 0,
   replacement_aware: false,
+  allowance_aware: false,
   members: [
     {
       user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
       rank: 'firefighter', station: 'Station 1', status: 'active',
       needed_size: 'M', has_size_on_file: true, has_related_item: false,
-      needs_replacement: false, related_item_names: [], email: 'amy@x.org', phone: '555-1',
+      needs_replacement: false, over_allowance: false, related_item_names: [], email: 'amy@x.org', phone: '555-1',
     },
     {
       user_id: 'u2', full_name: 'Bob Baker', membership_number: '002',
       rank: 'firefighter', station: 'Station 1', status: 'active',
       needed_size: 'L', has_size_on_file: true, has_related_item: true,
-      needs_replacement: false, related_item_names: ['Old Jacket'], email: 'bob@x.org', phone: '555-2',
+      needs_replacement: false, over_allowance: false, related_item_names: ['Old Jacket'], email: 'bob@x.org', phone: '555-2',
     },
   ],
 };
@@ -247,7 +249,7 @@ describe('ImpactPlannerPage', () => {
           user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
           rank: 'firefighter', station: 'Station 1', status: 'active',
           needed_size: 'M', has_size_on_file: true, has_related_item: false,
-          needs_replacement: true, related_item_names: ['Worn Jacket'],
+          needs_replacement: true, over_allowance: false, related_item_names: ['Worn Jacket'],
         },
       ],
     });
@@ -382,6 +384,42 @@ describe('ImpactPlannerPage', () => {
         expect.objectContaining({ size_field: 'boot', ranks: ['firefighter'] }),
       );
     });
+  });
+
+  it('flags members over their issuance allowance', async () => {
+    const user = userEvent.setup();
+    mockAnalyzeImpact.mockResolvedValue({
+      ...RESULT,
+      stock_checked: true,
+      allowance_aware: true,
+      members_over_allowance: 1,
+      size_breakdown: [{ size: 'M', total: 1, needing: 1, on_hand: 0, shortfall: 1 }],
+      members: [
+        {
+          user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
+          rank: 'firefighter', station: 'Station 1', status: 'active',
+          needed_size: 'M', has_size_on_file: true, has_related_item: false,
+          needs_replacement: false, over_allowance: true, related_item_names: [],
+        },
+      ],
+    });
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Size needed' }), 'jacket',
+    );
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Stock source' }), 'cat-jacket',
+    );
+    await user.click(screen.getByRole('checkbox', { name: /over their issuance allowance/i }));
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+
+    expect(await screen.findByText('1 over allowance')).toBeInTheDocument();
+    expect(screen.getByText('over allowance')).toBeInTheDocument();
+    expect(mockAnalyzeImpact).toHaveBeenCalledWith(
+      expect.objectContaining({ allowance_aware: true }),
+    );
   });
 
   it('shows an error toast when options fail to load', async () => {

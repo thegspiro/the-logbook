@@ -747,6 +747,98 @@ class TestBulkIssueFromPlan:
 
 
 # ============================================
+# Allowance-aware planning
+# ============================================
+
+class TestAllowanceAware:
+
+    @pytest.mark.asyncio
+    async def test_flags_members_at_or_over_cap(self, service, mock_db):
+        org_id = str(uuid4())
+        cat_id = str(uuid4())
+        users = [
+            _user("u1", "Amy", "Adams"),   # 3 issued, cap 3 -> over
+            _user("u2", "Bob", "Baker"),   # 1 issued, cap 3 -> ok
+        ]
+        # org-wide allowance: max 3 annual
+        allowance = SimpleNamespace(
+            id="a1", role_id=None, max_quantity=3, period_type="annual",
+        )
+        # No size_field -> no prefs/stock lookups. Calls: users(1),
+        # allowances(2), positions(3), item_ids(4), issued(5).
+        mock_db.execute.side_effect = [
+            _scalars_result(users),                  # users
+            _scalars_result([allowance]),            # allowances
+            _rows_result([]),                        # user_positions (none)
+            _rows_result([("item-1",)]),             # pool item ids
+            _rows_result([("u1", 3), ("u2", 1)]),    # issued per user
+        ]
+
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={
+                "stock_category_id": cat_id,
+                "allowance_aware": True,
+            },
+            include_contact=False,
+        )
+
+        assert result["allowance_aware"] is True
+        assert result["members_over_allowance"] == 1
+        members = {m["user_id"]: m for m in result["members"]}
+        assert members["u1"]["over_allowance"] is True
+        assert members["u2"]["over_allowance"] is False
+
+    @pytest.mark.asyncio
+    async def test_role_specific_allowance_wins(self, service, mock_db):
+        org_id = str(uuid4())
+        cat_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams")]
+        org_wide = SimpleNamespace(
+            id="a-org", role_id=None, max_quantity=5, period_type="career",
+        )
+        role_specific = SimpleNamespace(
+            id="a-role", role_id="pos-1", max_quantity=1, period_type="career",
+        )
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result([org_wide, role_specific]),
+            _rows_result([("u1", "pos-1")]),         # u1 holds position pos-1
+            _rows_result([("item-1",)]),
+            _rows_result([("u1", 1)]),               # 1 issued, role cap 1 -> over
+        ]
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={
+                "stock_category_id": cat_id,
+                "allowance_aware": True,
+            },
+            include_contact=False,
+        )
+        assert result["members"][0]["over_allowance"] is True
+
+    @pytest.mark.asyncio
+    async def test_no_allowance_defined_no_flags(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams")]
+        # allowances query returns empty -> helper returns early (no more calls)
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result([]),     # no allowances -> helper returns early
+        ]
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={
+                "stock_category_id": str(uuid4()),
+                "allowance_aware": True,
+            },
+            include_contact=False,
+        )
+        assert result["members_over_allowance"] == 0
+        assert result["members"][0]["over_allowance"] is False
+
+
+# ============================================
 # Saved plans (CRUD)
 # ============================================
 

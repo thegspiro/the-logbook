@@ -1850,6 +1850,9 @@ class ImpactPlannerRequest(BaseModel):
     # When True (with related_category_id), members whose only held items are
     # worn out or past NFPA retirement count as needing a replacement.
     replacement_aware: bool = False
+    # When True (with stock_category_id), members at/over their issuance
+    # allowance for that category are flagged before a bulk issue.
+    allowance_aware: bool = False
 
 
 class ImpactPlannerMember(BaseModel):
@@ -1869,6 +1872,7 @@ class ImpactPlannerMember(BaseModel):
     has_size_on_file: bool = False
     has_related_item: bool = False
     needs_replacement: bool = False
+    over_allowance: bool = False
     related_item_names: List[str] = []
 
 
@@ -1898,7 +1902,9 @@ class ImpactPlannerResponse(BaseModel):
     members_needing_item: int
     members_needing_replacement: int = 0
     members_missing_sizes: int
+    members_over_allowance: int = 0
     replacement_aware: bool = False
+    allowance_aware: bool = False
     size_field: Optional[str] = None
     size_breakdown: List[ImpactPlannerSizeBreakdown] = []
     stock_checked: bool = False

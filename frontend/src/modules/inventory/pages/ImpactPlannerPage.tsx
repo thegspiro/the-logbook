@@ -122,6 +122,7 @@ const ImpactPlannerPage: React.FC = () => {
   const [replacementAware, setReplacementAware] = useState(false);
   const [sizeField, setSizeField] = useState('');
   const [stockCategoryId, setStockCategoryId] = useState('');
+  const [allowanceAware, setAllowanceAware] = useState(false);
 
   // Saved plans
   const [savedPlans, setSavedPlans] = useState<ImpactPlan[]>([]);
@@ -165,7 +166,8 @@ const ImpactPlannerPage: React.FC = () => {
     replacement_aware: relatedCategoryId ? replacementAware : undefined,
     size_field: sizeField || undefined,
     stock_category_id: sizeField ? stockCategoryId || undefined : undefined,
-  }), [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, replacementAware, sizeField, stockCategoryId]);
+    allowance_aware: sizeField && stockCategoryId ? allowanceAware : undefined,
+  }), [statuses, membershipTypes, ranks, stations, positionIds, relatedCategoryId, replacementAware, sizeField, stockCategoryId, allowanceAware]);
 
   const runAnalysis = useCallback(async () => {
     setAnalyzing(true);
@@ -193,6 +195,7 @@ const ImpactPlannerPage: React.FC = () => {
     setReplacementAware(f.replacement_aware ?? false);
     setSizeField(f.size_field ?? '');
     setStockCategoryId(f.stock_category_id ?? '');
+    setAllowanceAware(f.allowance_aware ?? false);
   }, []);
 
   const onSelectPlan = useCallback((id: string) => {
@@ -526,6 +529,17 @@ const ImpactPlannerPage: React.FC = () => {
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
+                    {stockCategoryId && (
+                      <label className="flex items-start gap-2 mt-2 text-xs text-theme-text-secondary cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={allowanceAware}
+                          onChange={(e) => setAllowanceAware(e.target.checked)}
+                          className="mt-0.5 rounded border-theme-surface-border text-blue-600 focus:ring-blue-500/40"
+                        />
+                        <span>Warn when members are over their issuance allowance</span>
+                      </label>
+                    )}
                   </div>
                 )}
 
@@ -735,6 +749,11 @@ const ImpactPlannerPage: React.FC = () => {
                           {result.members_needing_replacement} to replace
                         </span>
                       )}
+                      {result.allowance_aware && result.members_over_allowance > 0 && (
+                        <span className="inline-flex items-center rounded-full bg-red-500/10 text-red-700 dark:text-red-400 px-2 py-0.5 text-xs font-medium">
+                          {result.members_over_allowance} over allowance
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="relative">
@@ -789,6 +808,11 @@ const ImpactPlannerPage: React.FC = () => {
                                 </Link>
                                 {m.membership_number && (
                                   <span className="block text-xs text-theme-text-muted">#{m.membership_number}</span>
+                                )}
+                                {m.over_allowance && (
+                                  <span className="inline-flex items-center rounded-full bg-red-500/10 text-red-700 dark:text-red-400 px-1.5 py-0.5 text-[10px] font-medium mt-0.5">
+                                    over allowance
+                                  </span>
                                 )}
                               </td>
                               <td className="py-2.5 px-3 text-theme-text-secondary">

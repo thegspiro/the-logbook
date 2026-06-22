@@ -59,6 +59,7 @@ from app.models.user import (
     Position,
     User,
     UserStatus,
+    user_positions,
 )
 
 # Valid status→condition combinations.  If a status is listed here,
@@ -4745,6 +4746,104 @@ class InventoryService:
             return waist or inseam or None
         return None
 
+    async def _get_over_allowance_uids(
+        self, organization_id: str, category_id: str, user_ids: List[str]
+    ) -> set:
+        """User IDs who are at/over their issuance allowance for a category.
+
+        Issuing one more unit would exceed the member's per-category cap. The
+        applicable allowance is the role-specific one matching any of the
+        member's positions, else the org-wide one. Computed in batch (a query
+        per distinct allowance) to avoid per-member round-trips.
+        """
+        if not (category_id and user_ids):
+            return set()
+
+        allowances = (
+            await self.db.execute(
+                select(IssuanceAllowance)
+                .where(IssuanceAllowance.organization_id == organization_id)
+                .where(IssuanceAllowance.category_id == category_id)
+                .where(IssuanceAllowance.is_active.is_(True))
+            )
+        ).scalars().all()
+        if not allowances:
+            return set()
+
+        # Member -> set of position ids, for role-specific allowance matching.
+        pos_map: Dict[str, set] = {}
+        for uid, pid in (
+            await self.db.execute(
+                select(user_positions.c.user_id, user_positions.c.position_id)
+                .where(user_positions.c.user_id.in_(user_ids))
+            )
+        ).all():
+            pos_map.setdefault(uid, set()).add(pid)
+
+        role_allowances = {a.role_id: a for a in allowances if a.role_id}
+        org_wide = next((a for a in allowances if not a.role_id), None)
+
+        def _pick(uid):
+            for pid in pos_map.get(uid, ()):  # role-specific wins
+                if pid in role_allowances:
+                    return role_allowances[pid]
+            return org_wide
+
+        chosen = {uid: _pick(uid) for uid in user_ids}
+
+        # Pool item ids in the category (issuances are tracked against items).
+        item_ids = [
+            r[0]
+            for r in (
+                await self.db.execute(
+                    select(InventoryItem.id).where(
+                        InventoryItem.organization_id == organization_id,
+                        InventoryItem.category_id == category_id,
+                        InventoryItem.tracking_type == TrackingType.POOL,
+                    )
+                )
+            ).all()
+        ]
+
+        # Batch issued-this-period counts, grouped by the chosen allowance
+        # (period differs per allowance).
+        issued: Dict[str, int] = {}
+        if item_ids:
+            groups: Dict[str, List[str]] = {}
+            for uid, allowance in chosen.items():
+                if allowance is not None:
+                    groups.setdefault(allowance.id, []).append(uid)
+            by_id = {a.id: a for a in allowances}
+            for aid, uids in groups.items():
+                allowance = by_id[aid]
+                q = (
+                    select(
+                        ItemIssuance.user_id,
+                        func.coalesce(func.sum(ItemIssuance.quantity_issued), 0),
+                    )
+                    .where(ItemIssuance.organization_id == organization_id)
+                    .where(ItemIssuance.user_id.in_(uids))
+                    .where(ItemIssuance.item_id.in_(item_ids))
+                    .group_by(ItemIssuance.user_id)
+                )
+                if allowance.period_type == "annual":
+                    now = datetime.now(timezone.utc)
+                    q = q.where(
+                        ItemIssuance.issued_at
+                        >= datetime(now.year, 1, 1, tzinfo=timezone.utc)
+                    )
+                for uid, cnt in (await self.db.execute(q)).all():
+                    issued[uid] = int(cnt or 0)
+
+        over = set()
+        for uid in user_ids:
+            allowance = chosen.get(uid)
+            if allowance is None:
+                continue
+            if issued.get(uid, 0) >= allowance.max_quantity:
+                over.add(uid)
+        return over
+
     async def analyze_impact(
         self,
         organization_id,
@@ -4783,6 +4882,7 @@ class InventoryService:
         size_field = filters.get("size_field")
         stock_category_id = filters.get("stock_category_id")
         replacement_aware = bool(filters.get("replacement_aware"))
+        allowance_aware = bool(filters.get("allowance_aware"))
 
         related_category_id = (
             str(related_category_id) if related_category_id else None
@@ -4839,11 +4939,21 @@ class InventoryService:
             org_id, related_category_id, user_ids
         )
 
+        # Members at/over their issuance allowance for the category being
+        # issued (the stock category), so the plan can warn before a bulk issue
+        # would skip them.
+        over_allowance_uids = set()
+        if allowance_aware and stock_category_id:
+            over_allowance_uids = await self._get_over_allowance_uids(
+                org_id, stock_category_id, user_ids
+            )
+
         members: List[Dict[str, Any]] = []
         size_buckets: Dict[str, Dict[str, int]] = {}
         with_related = 0
         missing_sizes = 0
         needing_replacement = 0
+        over_allowance_count = 0
 
         for u in users:
             holdings = related_map.get(u.id, [])
@@ -4869,6 +4979,11 @@ class InventoryService:
             has_size = needed_size is not None
             if size_field and not has_related and not has_size:
                 missing_sizes += 1
+
+            # Only members who'd actually be issued (need the item) are flagged.
+            over_allowance = (not has_related) and (u.id in over_allowance_uids)
+            if over_allowance:
+                over_allowance_count += 1
 
             members.append(
                 {
@@ -4897,6 +5012,7 @@ class InventoryService:
                     "has_size_on_file": has_size,
                     "has_related_item": has_related,
                     "needs_replacement": needs_replacement,
+                    "over_allowance": over_allowance,
                     "related_item_names": names,
                 }
             )
@@ -4963,7 +5079,9 @@ class InventoryService:
             "members_needing_item": total - with_related,
             "members_needing_replacement": needing_replacement,
             "members_missing_sizes": missing_sizes,
+            "members_over_allowance": over_allowance_count,
             "replacement_aware": replacement_aware,
+            "allowance_aware": allowance_aware,
             "size_field": size_field,
             "size_breakdown": size_breakdown,
             "stock_checked": stock_checked,

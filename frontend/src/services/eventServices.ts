@@ -1202,6 +1202,7 @@ export interface ImpactPlannerRequest {
   size_field?: string | undefined;
   stock_category_id?: string | undefined;
   replacement_aware?: boolean | undefined;
+  allowance_aware?: boolean | undefined;
 }
 
 export interface ImpactPlannerMember {
@@ -1218,6 +1219,7 @@ export interface ImpactPlannerMember {
   has_size_on_file: boolean;
   has_related_item: boolean;
   needs_replacement: boolean;
+  over_allowance: boolean;
   related_item_names: string[];
 }
 
@@ -1237,7 +1239,9 @@ export interface ImpactPlannerResult {
   members_needing_item: number;
   members_needing_replacement: number;
   members_missing_sizes: number;
+  members_over_allowance: number;
   replacement_aware: boolean;
+  allowance_aware: boolean;
   size_field?: string;
   size_breakdown: ImpactPlannerSizeBreakdown[];
   stock_checked: boolean;
