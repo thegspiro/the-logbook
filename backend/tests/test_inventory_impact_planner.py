@@ -76,6 +76,8 @@ def _stock_item(
     quantity=0,
     issued=0,
     status=ItemStatus.AVAILABLE,
+    replacement_cost=None,
+    purchase_price=None,
 ):
     return SimpleNamespace(
         tracking_type=TrackingType.POOL if pool else TrackingType.INDIVIDUAL,
@@ -84,6 +86,8 @@ def _stock_item(
         status=status,
         standard_size=standard_size,
         size=size,
+        replacement_cost=replacement_cost,
+        purchase_price=purchase_price,
     )
 
 
@@ -313,7 +317,7 @@ class TestItemStockSizeValue:
         )
 
 
-class TestAvailableStockBySize:
+class TestStockAndCostBySize:
 
     @pytest.mark.asyncio
     async def test_pool_and_individual_counts(self, service, mock_db):
@@ -322,14 +326,37 @@ class TestAvailableStockBySize:
             _stock_item(standard_size="m", pool=True, quantity=3, issued=1),
             # individual available "M" -> +1
             _stock_item(size="M", status=ItemStatus.AVAILABLE),
-            # individual assigned -> not counted
+            # individual assigned -> not counted toward stock
             _stock_item(size="M", status=ItemStatus.ASSIGNED),
             # individual available "L"
             _stock_item(standard_size="l", status=ItemStatus.AVAILABLE),
         ]
         mock_db.execute.side_effect = [_scalars_result(items)]
-        stock = await service._get_available_stock_by_size("org", "cat")
+        stock, _unit, _avg = await service._get_stock_and_cost_by_size(
+            "org", "cat"
+        )
         assert stock == {"m": 3, "l": 1}
+
+    @pytest.mark.asyncio
+    async def test_cost_averaging_and_fallback(self, service, mock_db):
+        items = [
+            # two priced "M" items -> mean 110.0; replacement_cost preferred
+            _stock_item(standard_size="m", replacement_cost=100, purchase_price=50),
+            _stock_item(standard_size="m", replacement_cost=120),
+            # "L" item priced via purchase_price fallback
+            _stock_item(standard_size="l", purchase_price=200),
+            # unpriced item is ignored for cost
+            _stock_item(standard_size="xl"),
+        ]
+        mock_db.execute.side_effect = [_scalars_result(items)]
+        _stock, unit_cost, avg = await service._get_stock_and_cost_by_size(
+            "org", "cat"
+        )
+        assert unit_cost["m"] == 110.0
+        assert unit_cost["l"] == 200.0
+        assert "xl" not in unit_cost
+        # category mean across the three priced items
+        assert avg == round((100 + 120 + 200) / 3, 2)
 
 
 class TestAnalyzeImpactStockAware:
@@ -371,6 +398,50 @@ class TestAnalyzeImpactStockAware:
         assert breakdown["Unknown"]["on_hand"] == 0
         assert breakdown["Unknown"]["shortfall"] == 1
         assert result["total_to_purchase"] == 1
+
+    @pytest.mark.asyncio
+    async def test_cost_estimate_from_priced_stock(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams"), _user("u2", "Bob", "Baker")]
+        prefs = [_prefs("u1", shirt_size="M"), _prefs("u2", shirt_size="M")]
+        # No M on hand, priced at $180 each -> buy 2, cost 360
+        stock_items = [
+            _stock_item(standard_size="m", pool=True, quantity=0, replacement_cost=180),
+        ]
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result(prefs),
+            _scalars_result(stock_items),
+        ]
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={"size_field": "shirt", "stock_category_id": str(uuid4())},
+            include_contact=False,
+        )
+        assert result["cost_estimated"] is True
+        assert result["estimated_total_cost"] == 360.0
+        m = next(b for b in result["size_breakdown"] if b["size"] == "M")
+        assert m["unit_cost"] == 180.0
+        assert m["estimated_cost"] == 360.0
+
+    @pytest.mark.asyncio
+    async def test_no_prices_leaves_cost_unset(self, service, mock_db):
+        org_id = str(uuid4())
+        users = [_user("u1", "Amy", "Adams")]
+        prefs = [_prefs("u1", shirt_size="M")]
+        stock_items = [_stock_item(standard_size="m", pool=True, quantity=0)]
+        mock_db.execute.side_effect = [
+            _scalars_result(users),
+            _scalars_result(prefs),
+            _scalars_result(stock_items),
+        ]
+        result = await service.analyze_impact(
+            organization_id=org_id,
+            filters={"size_field": "shirt", "stock_category_id": str(uuid4())},
+            include_contact=False,
+        )
+        assert result["cost_estimated"] is False
+        assert result["estimated_total_cost"] is None
 
     @pytest.mark.asyncio
     async def test_no_stock_category_leaves_fields_unset(self, service, mock_db):

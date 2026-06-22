@@ -15,6 +15,7 @@ import {
 import toast from 'react-hot-toast';
 import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatCurrency } from '../../../utils/currencyFormatting';
 import type {
   ImpactPlannerOptions,
   ImpactPlannerRequest,
@@ -399,12 +400,19 @@ const ImpactPlannerPage: React.FC = () => {
                       <h3 className="text-sm font-semibold text-theme-text-primary">
                         Sizes to purchase{sizeFieldLabel ? ` — ${sizeFieldLabel}` : ''}
                       </h3>
-                      {result.stock_checked && result.total_to_purchase != null && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 px-3 py-1 text-xs font-semibold">
-                          <ShoppingCart className="w-3.5 h-3.5" />
-                          {result.total_to_purchase} to buy
-                        </span>
-                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {result.stock_checked && result.total_to_purchase != null && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-400 px-3 py-1 text-xs font-semibold">
+                            <ShoppingCart className="w-3.5 h-3.5" />
+                            {result.total_to_purchase} to buy
+                          </span>
+                        )}
+                        {result.cost_estimated && result.estimated_total_cost != null && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 px-3 py-1 text-xs font-semibold">
+                            ~{formatCurrency(result.estimated_total_cost)} est.
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {result.size_breakdown.map((b) => (
@@ -419,6 +427,11 @@ const ImpactPlannerPage: React.FC = () => {
                               <span className="font-semibold text-purple-600 dark:text-purple-400">
                                 buy {b.shortfall ?? b.needing}
                               </span>
+                              {result.cost_estimated && b.estimated_cost != null && (
+                                <span className="text-green-700 dark:text-green-400">
+                                  {' '}&middot; {formatCurrency(b.estimated_cost)}
+                                </span>
+                              )}
                             </span>
                           ) : (
                             <span className="text-xs text-theme-text-muted">

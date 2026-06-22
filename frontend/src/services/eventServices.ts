@@ -1225,6 +1225,8 @@ export interface ImpactPlannerSizeBreakdown {
   needing: number;
   on_hand?: number;
   shortfall?: number;
+  unit_cost?: number;
+  estimated_cost?: number;
 }
 
 export interface ImpactPlannerResult {
@@ -1236,6 +1238,8 @@ export interface ImpactPlannerResult {
   size_breakdown: ImpactPlannerSizeBreakdown[];
   stock_checked: boolean;
   total_to_purchase?: number;
+  cost_estimated: boolean;
+  estimated_total_cost?: number;
   members: ImpactPlannerMember[];
 }
 

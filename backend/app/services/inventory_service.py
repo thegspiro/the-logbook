@@ -4529,15 +4529,39 @@ class InventoryService:
                 return val
         return item.size
 
-    async def _get_available_stock_by_size(
-        self, organization_id: str, category_id: str
-    ) -> Dict[str, int]:
-        """Count currently available units in a category, keyed by size.
+    @staticmethod
+    def _item_unit_cost(item: InventoryItem) -> Optional[float]:
+        """Best estimate of an item's unit cost for budgeting.
 
-        Pool-tracked items contribute their unissued quantity
-        (``quantity - quantity_issued``); individually-tracked items each
-        contribute one unit when their status is ``available``. Retired items
-        are ignored. Keys are normalized via :meth:`_normalize_size_key`.
+        Prefers ``replacement_cost`` (what it costs to buy a new one today)
+        and falls back to the original ``purchase_price``.
+        """
+        for attr in ("replacement_cost", "purchase_price"):
+            val = getattr(item, attr, None)
+            if val is not None:
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    async def _get_stock_and_cost_by_size(
+        self, organization_id: str, category_id: str
+    ) -> Tuple[Dict[str, int], Dict[str, float], Optional[float]]:
+        """Return available stock and unit-cost estimates for a category.
+
+        Returns ``(stock_by_size, unit_cost_by_size, avg_unit_cost)``:
+
+        - ``stock_by_size``: available units keyed by normalized size. Pool
+          items contribute unissued quantity (``quantity - quantity_issued``);
+          individually-tracked items contribute one unit when ``available``.
+        - ``unit_cost_by_size``: mean unit cost of priced items at each size,
+          used to estimate per-size purchase cost.
+        - ``avg_unit_cost``: mean unit cost across the whole category, used as
+          a fallback for sizes with no priced items (or unknown sizes).
+
+        Retired items are ignored. Keys are normalized via
+        :meth:`_normalize_size_key`.
         """
         items = (
             await self.db.execute(
@@ -4549,18 +4573,36 @@ class InventoryService:
         ).scalars().all()
 
         stock: Dict[str, int] = {}
+        cost_sums: Dict[str, float] = {}
+        cost_counts: Dict[str, int] = {}
+        all_cost_sum = 0.0
+        all_cost_count = 0
         for item in items:
+            key = self._normalize_size_key(self._item_stock_size_value(item))
+
             if item.tracking_type == TrackingType.POOL:
                 avail = (item.quantity or 0) - (item.quantity_issued or 0)
                 if avail < 0:
                     avail = 0
             else:
                 avail = 1 if item.status == ItemStatus.AVAILABLE else 0
-            if avail <= 0:
-                continue
-            key = self._normalize_size_key(self._item_stock_size_value(item))
-            stock[key] = stock.get(key, 0) + avail
-        return stock
+            if avail > 0:
+                stock[key] = stock.get(key, 0) + avail
+
+            unit_cost = self._item_unit_cost(item)
+            if unit_cost is not None:
+                cost_sums[key] = cost_sums.get(key, 0.0) + unit_cost
+                cost_counts[key] = cost_counts.get(key, 0) + 1
+                all_cost_sum += unit_cost
+                all_cost_count += 1
+
+        unit_cost_by_size = {
+            key: round(cost_sums[key] / cost_counts[key], 2) for key in cost_sums
+        }
+        avg_unit_cost = (
+            round(all_cost_sum / all_cost_count, 2) if all_cost_count else None
+        )
+        return stock, unit_cost_by_size, avg_unit_cost
 
     @staticmethod
     def _format_needed_size(
@@ -4745,34 +4787,49 @@ class InventoryService:
                     bucket["needing"] += 1
 
         # Net per-size demand against currently available stock so the
-        # breakdown shows the real purchase quantity (need − on-hand).
+        # breakdown shows the real purchase quantity (need − on-hand), and
+        # estimate the purchase cost from the stock category's item prices.
         # Members with no size on file ("Unknown") can't be matched to stock,
         # so their full demand carries to the shortfall.
         stock_checked = bool(stock_category_id and size_field)
         stock_map: Dict[str, int] = {}
+        unit_cost_map: Dict[str, float] = {}
+        avg_unit_cost: Optional[float] = None
         if stock_checked:
-            stock_map = await self._get_available_stock_by_size(
-                org_id, stock_category_id
-            )
+            (
+                stock_map,
+                unit_cost_map,
+                avg_unit_cost,
+            ) = await self._get_stock_and_cost_by_size(org_id, stock_category_id)
+        cost_estimated = stock_checked and avg_unit_cost is not None
 
         # Sort the breakdown so "Unknown" (members lacking a size) sorts last
         # and the rest are alphabetical for a stable, readable table.
         size_breakdown = []
         total_to_purchase = 0
+        total_cost = 0.0
         for key, vals in sorted(
             size_buckets.items(), key=lambda kv: (kv[0] == "Unknown", kv[0])
         ):
             entry = {"size": key, "total": vals["total"], "needing": vals["needing"]}
             if stock_checked:
-                on_hand = (
-                    0
-                    if key == "Unknown"
-                    else stock_map.get(self._normalize_size_key(key), 0)
-                )
+                norm_key = self._normalize_size_key(key)
+                on_hand = 0 if key == "Unknown" else stock_map.get(norm_key, 0)
                 shortfall = max(0, vals["needing"] - on_hand)
                 entry["on_hand"] = on_hand
                 entry["shortfall"] = shortfall
                 total_to_purchase += shortfall
+                if cost_estimated:
+                    unit_cost = unit_cost_map.get(norm_key, avg_unit_cost)
+                    entry["unit_cost"] = unit_cost
+                    line_cost = (
+                        round(unit_cost * shortfall, 2)
+                        if unit_cost is not None
+                        else None
+                    )
+                    entry["estimated_cost"] = line_cost
+                    if line_cost:
+                        total_cost += line_cost
             size_breakdown.append(entry)
 
         total = len(members)
@@ -4785,6 +4842,8 @@ class InventoryService:
             "size_breakdown": size_breakdown,
             "stock_checked": stock_checked,
             "total_to_purchase": total_to_purchase if stock_checked else None,
+            "cost_estimated": cost_estimated,
+            "estimated_total_cost": round(total_cost, 2) if cost_estimated else None,
             "members": members,
         }
 

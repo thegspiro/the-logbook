@@ -1873,6 +1873,8 @@ class ImpactPlannerSizeBreakdown(BaseModel):
 
     ``on_hand`` and ``shortfall`` are populated only when the request nets
     demand against a stock category (``stock_category_id`` + ``size_field``).
+    ``unit_cost``/``estimated_cost`` are populated when that category has
+    priced items.
     """
 
     size: str
@@ -1880,6 +1882,8 @@ class ImpactPlannerSizeBreakdown(BaseModel):
     needing: int
     on_hand: Optional[int] = None
     shortfall: Optional[int] = None
+    unit_cost: Optional[float] = None
+    estimated_cost: Optional[float] = None
 
 
 class ImpactPlannerResponse(BaseModel):
@@ -1893,6 +1897,8 @@ class ImpactPlannerResponse(BaseModel):
     size_breakdown: List[ImpactPlannerSizeBreakdown] = []
     stock_checked: bool = False
     total_to_purchase: Optional[int] = None
+    cost_estimated: bool = False
+    estimated_total_cost: Optional[float] = None
     members: List[ImpactPlannerMember]
 
 

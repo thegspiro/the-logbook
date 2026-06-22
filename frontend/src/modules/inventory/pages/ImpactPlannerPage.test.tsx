@@ -54,6 +54,7 @@ const RESULT = {
     { size: 'Unknown', total: 1, needing: 1 },
   ],
   stock_checked: false,
+  cost_estimated: false,
   members: [
     {
       user_id: 'u1', full_name: 'Amy Adams', membership_number: '001',
@@ -152,6 +153,30 @@ describe('ImpactPlannerPage', () => {
     expect(mockAnalyzeImpact).toHaveBeenCalledWith(
       expect.objectContaining({ size_field: 'jacket', stock_category_id: 'cat-jacket' }),
     );
+  });
+
+  it('shows estimated cost when stock is priced', async () => {
+    const user = userEvent.setup();
+    mockAnalyzeImpact.mockResolvedValue({
+      ...RESULT,
+      stock_checked: true,
+      total_to_purchase: 2,
+      cost_estimated: true,
+      estimated_total_cost: 360,
+      size_breakdown: [
+        { size: 'M', total: 2, needing: 2, on_hand: 0, shortfall: 2, unit_cost: 180, estimated_cost: 360 },
+      ],
+    });
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+
+    const selects = screen.getAllByRole('combobox');
+    await user.selectOptions(selects[1] as HTMLSelectElement, 'jacket');
+    const withStock = screen.getAllByRole('combobox');
+    await user.selectOptions(withStock[2] as HTMLSelectElement, 'cat-jacket');
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+
+    expect(await screen.findByText('~$360.00 est.')).toBeInTheDocument();
   });
 
   it('creates reorder requests from the shortfall', async () => {
