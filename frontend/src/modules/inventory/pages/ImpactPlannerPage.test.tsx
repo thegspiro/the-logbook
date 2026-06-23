@@ -445,6 +445,28 @@ describe('ImpactPlannerPage', () => {
     expect(await screen.findByText(/Requested from 1/)).toBeInTheDocument();
   });
 
+  it('sorts the member list when a column header is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+    await screen.findByText('Amy Adams');
+
+    const memberLinks = () =>
+      screen
+        .getAllByRole('link')
+        .filter((l) => l.getAttribute('href')?.startsWith('/members/'));
+
+    // Default order from the API response: Amy, then Bob.
+    expect(memberLinks()[0]).toHaveTextContent('Amy Adams');
+
+    // Click "Member" twice -> ascending, then descending.
+    const header = screen.getByRole('button', { name: /^Member/i });
+    await user.click(header);
+    await user.click(header);
+    expect(memberLinks()[0]).toHaveTextContent('Bob Baker');
+  });
+
   it('shows an error toast when options fail to load', async () => {
     mockGetOptions.mockRejectedValueOnce(new Error('boom'));
     renderWithRouter(<ImpactPlannerPage />);

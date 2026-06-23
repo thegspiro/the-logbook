@@ -18,6 +18,9 @@ import { inventoryService } from '../../../services/api';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { formatCurrency } from '../../../utils/currencyFormatting';
 import { ConfirmDialog } from '../../../components/ux/ConfirmDialog';
+import { EmptyState } from '../../../components/ux/EmptyState';
+import { Skeleton } from '../../../components/ux/Skeleton';
+import { SortableHeader, type SortDirection } from '../../../components/ux/SortableHeader';
 import type {
   ImpactPlannerOptions,
   ImpactPlannerRequest,
@@ -102,6 +105,8 @@ const ImpactPlannerPage: React.FC = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<ImpactPlannerResult | null>(null);
   const [memberSearch, setMemberSearch] = useState('');
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<SortDirection>(null);
 
   // The exact request behind the displayed result, so reorders are generated
   // from what the user actually sees (not later edits to the filters).
@@ -272,6 +277,27 @@ const ImpactPlannerPage: React.FC = () => {
     );
   }, [result, memberSearch]);
 
+  const sortedMembers = useMemo<ImpactPlannerMember[]>(() => {
+    if (!sortField || !sortDir) return filteredMembers;
+    const key = (m: ImpactPlannerMember): string => {
+      if (sortField === 'rank') return (m.rank || '').toLowerCase();
+      if (sortField === 'needed_size') return (m.needed_size || '').toLowerCase();
+      return (m.full_name || '').toLowerCase();
+    };
+    const sorted = [...filteredMembers].sort((a, b) => key(a).localeCompare(key(b)));
+    return sortDir === 'desc' ? sorted.reverse() : sorted;
+  }, [filteredMembers, sortField, sortDir]);
+
+  const onSort = useCallback((field: string, direction: SortDirection) => {
+    setSortField(direction ? field : null);
+    setSortDir(direction);
+  }, []);
+
+  const maxNeeding = useMemo(
+    () => Math.max(1, ...(result?.size_breakdown ?? []).map((b) => b.needing)),
+    [result],
+  );
+
   const sizeFieldLabel = useMemo(() => {
     if (!result?.size_field || !options) return null;
     return options.size_fields.find((s) => s.value === result.size_field)?.label ?? null;
@@ -399,8 +425,13 @@ const ImpactPlannerPage: React.FC = () => {
             <h2 className="text-sm font-semibold text-theme-text-primary">Who fits the category?</h2>
 
             {optionsLoading ? (
-              <div className="flex items-center gap-2 text-sm text-theme-text-muted py-6">
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading options…
+              <div className="space-y-4" aria-label="Loading filters" role="status">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-9 w-full" />
+                  </div>
+                ))}
               </div>
             ) : options ? (
               <>
@@ -580,11 +611,12 @@ const ImpactPlannerPage: React.FC = () => {
           {/* Results */}
           <div className="min-w-0">
             {!result ? (
-              <div className="card p-10 text-center text-theme-text-muted">
-                <Target className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p className="text-sm">
-                  Choose your filters and run an analysis to see who is impacted and the sizes needed.
-                </p>
+              <div className="card">
+                <EmptyState
+                  icon={Target}
+                  title="No analysis yet"
+                  description="Choose your filters and run an analysis to see who is impacted and the sizes needed."
+                />
               </div>
             ) : (
               <div className="space-y-6">
@@ -662,15 +694,25 @@ const ImpactPlannerPage: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    {/* Horizontal bars: bar length is the per-size "need". */}
+                    <div className="space-y-1.5">
                       {result.size_breakdown.map((b) => (
-                        <div
-                          key={b.size}
-                          className="flex items-center gap-2 rounded-lg border border-theme-surface-border bg-theme-surface px-3 py-2"
-                        >
-                          <span className="text-sm font-semibold text-theme-text-primary">{b.size}</span>
+                        <div key={b.size} className="flex items-center gap-3">
+                          <span className="w-14 shrink-0 text-sm font-semibold text-theme-text-primary truncate" title={b.size}>
+                            {b.size}
+                          </span>
+                          <div
+                            className="relative flex-1 h-5 rounded bg-theme-surface-secondary overflow-hidden"
+                            role="img"
+                            aria-label={`${b.size}: ${b.needing} needed`}
+                          >
+                            <div
+                              className="h-full bg-purple-500/30"
+                              style={{ width: `${(b.needing / maxNeeding) * 100}%` }}
+                            />
+                          </div>
                           {result.stock_checked ? (
-                            <span className="text-xs text-theme-text-muted">
+                            <span className="shrink-0 text-xs text-theme-text-muted">
                               need {b.needing} &middot; {b.on_hand ?? 0} on hand &middot;{' '}
                               <span className="font-semibold text-purple-600 dark:text-purple-400">
                                 buy {b.shortfall ?? b.needing}
@@ -682,7 +724,7 @@ const ImpactPlannerPage: React.FC = () => {
                               )}
                             </span>
                           ) : (
-                            <span className="text-xs text-theme-text-muted">
+                            <span className="shrink-0 text-xs text-theme-text-muted">
                               need <span className="font-semibold text-purple-600 dark:text-purple-400">{b.needing}</span>
                               {b.total !== b.needing && ` of ${b.total}`}
                             </span>
@@ -827,22 +869,34 @@ const ImpactPlannerPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {filteredMembers.length === 0 ? (
-                    <p className="text-sm text-theme-text-muted py-6 text-center">No members match.</p>
+                  {sortedMembers.length === 0 ? (
+                    <EmptyState
+                      icon={Users}
+                      title="No members match"
+                      description="Adjust the filters or the list search to see members."
+                    />
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="text-left text-xs uppercase tracking-wider text-theme-text-muted border-b border-theme-surface-border">
-                            <th className="py-2 pr-3 font-semibold">Member</th>
-                            <th className="py-2 px-3 font-semibold">Rank / Station</th>
-                            {result.size_field && <th className="py-2 px-3 font-semibold">Size</th>}
-                            {relatedCategoryId && <th className="py-2 px-3 font-semibold">Existing</th>}
-                            <th className="py-2 pl-3 font-semibold">Contact</th>
+                          <tr className="text-left border-b border-theme-surface-border">
+                            <th className="py-2 pr-3">
+                              <SortableHeader label="Member" field="full_name" currentSort={sortField} currentDirection={sortDir} onSort={onSort} />
+                            </th>
+                            <th className="py-2 px-3 hidden sm:table-cell">
+                              <SortableHeader label="Rank / Station" field="rank" currentSort={sortField} currentDirection={sortDir} onSort={onSort} />
+                            </th>
+                            {result.size_field && (
+                              <th className="py-2 px-3">
+                                <SortableHeader label="Size" field="needed_size" currentSort={sortField} currentDirection={sortDir} onSort={onSort} />
+                              </th>
+                            )}
+                            {relatedCategoryId && <th className="py-2 px-3 text-xs font-semibold uppercase tracking-wider text-theme-text-secondary">Existing</th>}
+                            <th className="py-2 pl-3 text-xs font-semibold uppercase tracking-wider text-theme-text-secondary">Contact</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredMembers.map((m) => (
+                          {sortedMembers.map((m) => (
                             <tr key={m.user_id} className="border-b border-theme-surface-border/50 last:border-0">
                               <td className="py-2.5 pr-3">
                                 <Link
@@ -860,7 +914,7 @@ const ImpactPlannerPage: React.FC = () => {
                                   </span>
                                 )}
                               </td>
-                              <td className="py-2.5 px-3 text-theme-text-secondary">
+                              <td className="py-2.5 px-3 text-theme-text-secondary hidden sm:table-cell">
                                 <span className="capitalize">{m.rank || '—'}</span>
                                 {m.station && <span className="block text-xs text-theme-text-muted">{m.station}</span>}
                               </td>
