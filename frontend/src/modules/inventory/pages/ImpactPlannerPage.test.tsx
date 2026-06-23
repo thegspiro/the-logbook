@@ -467,6 +467,58 @@ describe('ImpactPlannerPage', () => {
     expect(memberLinks()[0]).toHaveTextContent('Bob Baker');
   });
 
+  it('includes a toggled filter in the analysis request', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: 'Firefighter' }));
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+
+    await waitFor(() => {
+      expect(mockAnalyzeImpact).toHaveBeenCalledWith(
+        expect.objectContaining({ ranks: ['firefighter'] }),
+      );
+    });
+  });
+
+  it('exports the member list to CSV', async () => {
+    const user = userEvent.setup();
+    const createUrl = vi.fn(() => 'blob:csv');
+    vi.stubGlobal('URL', { createObjectURL: createUrl, revokeObjectURL: vi.fn() });
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => {});
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByText('Firefighter')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Analyze Impact/i }));
+    await screen.findByText('Amy Adams');
+
+    await user.click(screen.getByRole('button', { name: 'CSV' }));
+    expect(createUrl).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    clickSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it('deletes a saved plan', async () => {
+    const user = userEvent.setup();
+    mockGetImpactPlans.mockResolvedValue([
+      { id: 'plan-1', organization_id: 'o1', name: 'Boots plan', filters: {}, created_at: '', updated_at: '' },
+    ]);
+    mockDeleteImpactPlan.mockResolvedValue(undefined);
+    renderWithRouter(<ImpactPlannerPage />);
+    expect(await screen.findByRole('option', { name: 'Boots plan' })).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Saved plans' }), 'plan-1');
+    await user.click(screen.getByRole('button', { name: /Delete plan/i }));
+
+    await waitFor(() => {
+      expect(mockDeleteImpactPlan).toHaveBeenCalledWith('plan-1');
+    });
+    expect(mockToastSuccess).toHaveBeenCalledWith('Plan deleted');
+  });
+
   it('shows an error toast when options fail to load', async () => {
     mockGetOptions.mockRejectedValueOnce(new Error('boom'));
     renderWithRouter(<ImpactPlannerPage />);
