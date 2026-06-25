@@ -47,6 +47,7 @@ import { invalidateRanksCache } from '../hooks/useRanks';
 import EmailSettingsSection from '../components/settings/EmailSettingsSection';
 import StorageSettingsSection from '../components/settings/StorageSettingsSection';
 import AuthSettingsSection from '../components/settings/AuthSettingsSection';
+import { MfaPolicyCard } from '../components/settings/MfaPolicyCard';
 import RanksSettingsSection from '../components/settings/RanksSettingsSection';
 
 // ── Section definitions ──
@@ -1027,14 +1028,17 @@ export const SettingsPage: React.FC = () => {
       // ════════════════════════════════════════════
       case 'authentication':
         return (
-          <AuthSettingsSection
-            authSettings={authSettings}
-            onAuthSettingsChange={setAuthSettings}
-            savingAuth={savingAuth}
-            authSecretVisible={authSecretVisible}
-            onToggleSecretVisible={() => setAuthSecretVisible(!authSecretVisible)}
-            onSave={() => { void handleSaveAuth(); }}
-          />
+          <div className="space-y-6">
+            <AuthSettingsSection
+              authSettings={authSettings}
+              onAuthSettingsChange={setAuthSettings}
+              savingAuth={savingAuth}
+              authSecretVisible={authSecretVisible}
+              onToggleSecretVisible={() => setAuthSecretVisible(!authSecretVisible)}
+              onSave={() => { void handleSaveAuth(); }}
+            />
+            <MfaPolicyCard />
+          </div>
         );
     }
   };

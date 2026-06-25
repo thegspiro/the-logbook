@@ -479,6 +479,86 @@ Shift templates can now be linked to actual department vehicles from the Apparat
 
 ---
 
+## Platoon Rotations (Added 2026-06-19)
+
+Departments that staff by **platoon** (a/k/a shift, group, or color — A/B/C
+crews that rotate through the same cycle) can have the schedule built from
+platoon membership instead of assigning each shift by hand. The entire feature
+is **opt-in** and **off by default**.
+
+### Enabling Platoons (Department Toggle)
+
+Platoons are enabled per organization via
+`org.settings["scheduling"]["platoons_enabled"]` (boolean, default `false`),
+controlled from the Scheduling settings. When disabled, the module behaves
+exactly as before — no platoon fields, badges, or roster are surfaced anywhere
+in the UI, and generation ignores platoons.
+
+### Platoon Membership Is a Person-Level Attribute
+
+Platoon membership lives on the member, not the shift: `User.platoon` (nullable
+string, migration `20260618_0100`). This mirrors how departments actually
+operate — a firefighter is "on A platoon" as a standing assignment, and the
+schedule is derived from that.
+
+- **Members** see their platoon on their profile / assignments view.
+- **Managers** set a member's platoon from the member admin UI (one-click
+  control plus a card badge showing the current platoon).
+
+### Multi-Platoon Rotation Generation
+
+When generating from a rotation, each platoon runs the **same cycle offset by**
+`i × cycle_length / num_platoons` **days**, so the platoons tile to exactly one
+on-duty platoon per day:
+
+| Rotation | Cycle | Platoons | Offsets (days) |
+|----------|-------|----------|----------------|
+| 24/48 | 3 | 3 (A/B/C) | 0, 1, 2 |
+| Kelly (9-day) | 9 | 3 | 0, 3, 6 |
+| 48/96 | 6 | 3 | 0, 2, 4 |
+
+The offset math was verified to tile cleanly (exactly one platoon on duty each
+day) for these common presets.
+
+### Leave Integration
+
+Generated platoon shifts reflect the platoon's **actual makeup**:
+
+- A member with **approved leave** is omitted from the shifts they would
+  otherwise staff during the generation window.
+- **Approving leave cancels** the member's conflicting already-generated shifts,
+  so the roster stays accurate after the schedule is built.
+
+### Hold-Over Roster & One-Click Assign
+
+The **shift detail** view shows a **hold-over roster** — members who are
+available to fill a gap or be held over: same organization, **not on leave**,
+and **not already assigned** to the shift. Each row has a **one-click Assign**
+so a supervisor can immediately fill an open slot. The platoon responsible for a
+generated shift is stored on the row (`Shift.platoon`, migration
+`20260618_0200`).
+
+### Department Platoon Overview & Bulk Assignment
+
+A dedicated **Platoon Management** page (`/scheduling/platoons`,
+`scheduling.manage`, linked from Scheduling Settings → Platoons) shows every
+platoon and the unassigned bucket with their active members at a glance, and
+lets a manager **bulk-assign** many members to a platoon (or clear it) in one
+operation:
+
+- `GET /scheduling/platoons/overview` (`scheduling.view`) → `{ platoons_enabled,
+  groups: [{ platoon, member_count, members: [{ user_id, user_name, rank }] }] }`
+  (named platoons sorted, then the `platoon: null` unassigned group).
+- `POST /scheduling/platoons/bulk-assign` (`scheduling.manage`) → body
+  `{ user_ids: [...], platoon: "A" | null }`; only members in the caller's org
+  are updated (IDOR-safe), audit-logged `platoon_bulk_assigned`. Returns
+  `{ updated, platoon }`.
+
+The inline per-member roster (Settings → Platoons) remains for quick single
+edits; the overview page is the roster-wide view + batch tool.
+
+---
+
 ## Training Module Integration
 
 The scheduling module connects to the training module through **Shift Completion Reports** and the **Shift Finalization Workflow**:

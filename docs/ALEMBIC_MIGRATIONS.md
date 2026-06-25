@@ -237,5 +237,11 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260604_0200` | `20260604_0100` | `20260604_0200_backfill_inventory_item_barcodes.py` | Backfill barcodes for legacy `inventory_items` (superseded by `20260610_0001`) |
 | `20260610_0001` | `(20260604_0001, 20260604_0200)` | `20260610_0001_sequential_inventory_barcodes.py` | **Merge** the two heads; switch inventory barcodes to per-org sequential numbers (`INV-000001` …), reassign existing items, and seed each org's counter in `organizations.settings["barcode"]` |
 | `20260610_0002` | `20260610_0001` | `20260610_0002_add_position_settings.py` | Add nullable `positions.settings` JSON column for per-position, per-module UI preferences (e.g. `label_presets` — the label printer a role uses in each module) |
+| `20260613_0001` | `20260610_0002` | `20260613_0001_lowercase_form_category_enum.py` | Lowercase the `form_category` enum values to match the `(str, Enum)` convention |
+| `20260618_0100` | `20260613_0001` | `20260618_0100_add_user_platoon.py` | Add nullable `users.platoon` column (person-level platoon membership for shift rotations) |
+| `20260618_0200` | `20260618_0100` | `20260618_0200_add_shift_platoon.py` | Add nullable `shifts.platoon` column (records the platoon responsible for a generated shift) — **current single head** |
 
-> **Single head as of 2026-06-10:** `20260610_0001` merges the two heads that PRs #1062 (`20260604_0200`) and #1063 (`20260604_0001`) had left open (both descended from `20260528_0002`), so `alembic upgrade head` is unambiguous again. `tests/test_alembic_migrations.py` validates the single-head DAG (it now understands merge migrations).
+> **Single head as of 2026-06-18:** `20260618_0200` is the linear head of the
+> chain (`20260610_0002 → 20260613_0001 → 20260618_0100 → 20260618_0200`), so
+> `alembic upgrade head` is unambiguous. `tests/test_alembic_migrations.py`
+> validates the single-head DAG (it understands merge migrations).

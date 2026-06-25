@@ -1164,6 +1164,164 @@ export interface MembersInventoryListResponse {
   total: number;
 }
 
+// Inventory Impact Planner
+
+export interface ImpactPlannerOption {
+  value: string;
+  label: string;
+}
+
+export interface ImpactPlannerCategoryOption {
+  id: string;
+  name: string;
+  item_type?: string;
+}
+
+export interface ImpactPlannerPositionOption {
+  id: string;
+  name: string;
+}
+
+export interface ImpactPlannerOptions {
+  statuses: ImpactPlannerOption[];
+  membership_types: ImpactPlannerOption[];
+  ranks: ImpactPlannerOption[];
+  stations: string[];
+  positions: ImpactPlannerPositionOption[];
+  categories: ImpactPlannerCategoryOption[];
+  size_fields: ImpactPlannerOption[];
+}
+
+export interface ImpactPlannerRequest {
+  statuses?: string[] | undefined;
+  membership_types?: string[] | undefined;
+  ranks?: string[] | undefined;
+  stations?: string[] | undefined;
+  position_ids?: string[] | undefined;
+  related_category_id?: string | undefined;
+  size_field?: string | undefined;
+  stock_category_id?: string | undefined;
+  replacement_aware?: boolean | undefined;
+  allowance_aware?: boolean | undefined;
+}
+
+export interface ImpactPlannerMember {
+  user_id: string;
+  full_name?: string;
+  membership_number?: string;
+  rank?: string;
+  station?: string;
+  status?: string;
+  membership_type?: string;
+  email?: string;
+  phone?: string;
+  needed_size?: string;
+  has_size_on_file: boolean;
+  has_related_item: boolean;
+  needs_replacement: boolean;
+  over_allowance: boolean;
+  related_item_names: string[];
+}
+
+export interface ImpactPlannerSizeBreakdown {
+  size: string;
+  total: number;
+  needing: number;
+  on_hand?: number;
+  shortfall?: number;
+  unit_cost?: number;
+  estimated_cost?: number;
+}
+
+export interface ImpactPlannerResult {
+  total_members: number;
+  members_with_related_item: number;
+  members_needing_item: number;
+  members_needing_replacement: number;
+  members_missing_sizes: number;
+  members_over_allowance: number;
+  replacement_aware: boolean;
+  allowance_aware: boolean;
+  size_field?: string;
+  size_breakdown: ImpactPlannerSizeBreakdown[];
+  stock_checked: boolean;
+  total_to_purchase?: number;
+  cost_estimated: boolean;
+  estimated_total_cost?: number;
+  members: ImpactPlannerMember[];
+}
+
+export interface ImpactPlannerReorderRequest extends ImpactPlannerRequest {
+  vendor?: string | undefined;
+  urgency?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface ImpactPlannerReorderResultItem {
+  id: string;
+  item_name: string;
+  size: string;
+  quantity_requested: number;
+}
+
+export interface ImpactPlannerIssueRequest extends ImpactPlannerRequest {
+  reason?: string | undefined;
+}
+
+export interface ImpactPlan {
+  id: string;
+  organization_id: string;
+  name: string;
+  description?: string;
+  filters: ImpactPlannerRequest;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ImpactPlanCreate {
+  name: string;
+  description?: string | undefined;
+  filters: ImpactPlannerRequest;
+}
+
+export interface ImpactPlannerNotifiedMember {
+  user_id: string;
+  name?: string;
+}
+
+export interface ImpactPlannerRequestSizesResponse {
+  notified_count: number;
+  members: ImpactPlannerNotifiedMember[];
+}
+
+export interface ImpactPlannerIssuedItem {
+  user_id: string;
+  name?: string;
+  item_name: string;
+  size: string;
+}
+
+export interface ImpactPlannerSkippedItem {
+  user_id: string;
+  name?: string;
+  reason: string;
+}
+
+export interface ImpactPlannerIssueResponse {
+  issued_count: number;
+  skipped_count: number;
+  issued: ImpactPlannerIssuedItem[];
+  skipped: ImpactPlannerSkippedItem[];
+}
+
+export interface ImpactPlannerReorderResponse {
+  created_count: number;
+  total_quantity: number;
+  skipped_unknown_size: number;
+  reorder_requests: ImpactPlannerReorderResultItem[];
+}
+
 export interface LabelFormat {
   id: string;
   description: string;

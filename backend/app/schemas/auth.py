@@ -133,11 +133,13 @@ class CurrentUser(BaseModel):
     roles: list[str] = []  # List of role/position names (backward-compatible alias)
     positions: list[str] = []  # List of position names (same as roles)
     rank: Optional[str] = None  # Operational rank, e.g. "captain", "firefighter"
+    platoon: Optional[str] = None  # Duty platoon / shift group, e.g. "A"
     membership_type: Optional[str] = None  # Membership tier, e.g. "active", "reserve"
     permissions: list[str] = []  # List of permission names (includes rank defaults)
     is_active: bool
     email_verified: bool
     mfa_enabled: bool
+    mfa_enrollment_required: bool = False  # Org requires MFA and user not enrolled
     password_expired: bool = False  # True when password age exceeds HIPAA max
     must_change_password: bool = (
         False  # True when admin requires password change on next login
@@ -191,7 +193,17 @@ class MFAVerify(BaseModel):
 
 
 class MFALogin(BaseModel):
-    """Schema for MFA login (second step)"""
+    """Schema for MFA login (second step).
+
+    Provide either a 6-digit authenticator ``code`` or a ``recovery_code``.
+    """
 
     temp_token: str
-    code: str = Field(..., min_length=6, max_length=6)
+    code: str | None = Field(None, min_length=6, max_length=6)
+    recovery_code: str | None = Field(None, max_length=32)
+
+
+class MFAPolicy(BaseModel):
+    """Organization-wide MFA requirement policy."""
+
+    mfa_required: bool = False

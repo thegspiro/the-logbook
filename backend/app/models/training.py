@@ -2266,6 +2266,9 @@ class Shift(Base):
     # Assignment
     apparatus_id = Column(String(36))  # Link to apparatus (future)
     station_id = Column(String(36))  # Link to station (future)
+    # Duty platoon this shift belongs to (A/B/C…) when generated from a platoon
+    # rotation. Lets the UI label the shift and show the platoon roster.
+    platoon = Column(String(20), nullable=True)
 
     # Leadership
     shift_officer_id = Column(

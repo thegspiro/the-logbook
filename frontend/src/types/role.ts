@@ -44,11 +44,13 @@ export interface UserWithRoles {
   personal_email?: string | undefined;
   photo_url?: string | undefined;
   status: UserStatus;
+  mfa_enabled?: boolean | undefined;
   membership_type?: string | undefined;
   hire_date?: string | undefined;
   date_of_birth?: string | undefined;
   rank?: string | undefined;
   station?: string | undefined;
+  platoon?: string | undefined;
   address_street?: string | undefined;
   address_city?: string | undefined;
   address_state?: string | undefined;

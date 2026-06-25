@@ -19,9 +19,13 @@ export interface RegisterData {
 export interface TokenResponse {
   // SEC: Tokens are no longer included in response bodies — they are
   // transported exclusively via httpOnly cookies to prevent XSS exfiltration.
-  token_type: string;
-  expires_in: number;
+  token_type?: string;
+  expires_in?: number;
   user?: CurrentUser;
+  // Present instead of a session when the account has MFA enabled: the caller
+  // must complete /auth/mfa/login with this short-lived token + a code.
+  mfa_required?: boolean;
+  mfa_token?: string;
 }
 
 export interface CurrentUser {
@@ -37,11 +41,13 @@ export interface CurrentUser {
   roles: string[];
   positions: string[];
   rank: string | null;
+  platoon?: string | null;
   membership_type: string | null;
   permissions: string[];
   is_active: boolean;
   email_verified: boolean;
   mfa_enabled: boolean;
+  mfa_enrollment_required?: boolean;
   password_expired: boolean;
   must_change_password: boolean;
 }

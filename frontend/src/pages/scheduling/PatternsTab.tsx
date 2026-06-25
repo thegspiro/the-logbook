@@ -32,6 +32,8 @@ import { useTimezone } from "../../hooks/useTimezone";
 import { formatDateCustom } from "../../utils/dateFormatting";
 import { getErrorMessage } from "../../utils/errorHandling";
 import type { PresetPatternDef, CycleEntry } from "./shiftPatternPresets";
+import { PlatoonSelector } from "./PlatoonSelector";
+import { useSchedulingStore } from "../../modules/scheduling/store/schedulingStore";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
 const PresetPatterns = lazyWithRetry(() => import("./PresetPatterns"));
@@ -132,6 +134,10 @@ export const PatternsTab: React.FC = () => {
   });
   const [creating, setCreating] = useState(false);
 
+  // Platoons declared by a rotation pattern (membership lives on profiles)
+  const { members, loadMembers, platoonsEnabled, loadSettings } = useSchedulingStore();
+  const [platoons, setPlatoons] = useState<string[]>(["A", "B", "C"]);
+
   // Generate form
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
   const [generateForm, setGenerateForm] = useState({
@@ -166,6 +172,11 @@ export const PatternsTab: React.FC = () => {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    void loadMembers();
+    void loadSettings();
+  }, [loadMembers, loadSettings]);
+
   // Escape key closes inline confirmations
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -198,6 +209,7 @@ export const PatternsTab: React.FC = () => {
     setCreationMode("preset");
     setSelectedPreset(null);
     setCustomCyclePattern(Array.from({ length: 7 }, () => "off" as const));
+    setPlatoons(["A", "B", "C"]);
     setCreateForm({
       name: "",
       description: "",
@@ -286,6 +298,13 @@ export const PatternsTab: React.FC = () => {
         if (createForm.night_template_id) {
           scheduleConfig.night_template_id = createForm.night_template_id;
         }
+      }
+
+      // Declare the platoons a rotation covers. Generation pulls current
+      // members by their profile platoon (User.platoon) — no per-pattern crew
+      // snapshot is stored.
+      if (platoonsEnabled && patternType === "platoon" && platoons.length > 0) {
+        scheduleConfig.platoons = platoons;
       }
 
       await schedulingService.createPattern({
@@ -760,6 +779,19 @@ export const PatternsTab: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Platoon declaration (platoon rotations only) */}
+                {platoonsEnabled &&
+                  ((creationMode === "preset" && selectedPreset) ||
+                  creationMode === "custom" ||
+                  (creationMode === "manual" &&
+                    createForm.pattern_type === "platoon")) && (
+                  <PlatoonSelector
+                    members={members}
+                    platoons={platoons}
+                    onPlatoonsChange={setPlatoons}
+                  />
+                )}
+
                 {/* Actions */}
                 <div className="flex items-center gap-2 justify-end pt-2">
                   <button
@@ -820,6 +852,7 @@ export const PatternsTab: React.FC = () => {
               pattern.schedule_config ?? {};
             const weekdays = config.weekdays as number[] | undefined;
             const cyclePattern = config.cycle_pattern as string[] | undefined;
+            const patternPlatoons = config.platoons as string[] | undefined;
 
             return (
               <div
@@ -944,6 +977,24 @@ export const PatternsTab: React.FC = () => {
                             {pattern.rotation_days} days
                           </span>
                         </span>
+                      </div>
+                    )}
+
+                    {patternPlatoons && patternPlatoons.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-theme-text-secondary">
+                          Platoons (members assigned on their profile)
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {patternPlatoons.map((p) => (
+                            <span
+                              key={p}
+                              className="px-2 py-0.5 text-[11px] rounded-full bg-violet-500/10 text-theme-text-secondary border border-violet-500/20"
+                            >
+                              Platoon {p}
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     )}
 

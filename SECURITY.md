@@ -367,10 +367,14 @@ Automated monitoring for:
    - Account lockout after failed attempts
 
 2. **Multi-Factor Authentication (MFA)**
-   - TOTP (Time-based One-Time Password)
-   - QR code setup
-   - Backup codes
-   - Optional enforcement per user/role
+   - TOTP (Time-based One-Time Password) via any authenticator app
+   - QR code (`otpauth://`) enrollment, confirmed with a 6-digit code
+   - One-time recovery codes (shown once, stored hashed)
+   - Login challenge: MFA-enabled accounts receive a short-lived `mfa_token`
+     and must complete `POST /auth/mfa/login` before session cookies are issued
+   - Self-enrollment from Settings → Security; admins can require MFA org-wide
+     (Settings → Authentication), enforced server-side in `get_current_user`
+   - Secret and recovery codes encrypted at rest
 
 3. **OAuth 2.0 / SSO**
    - Microsoft Azure AD

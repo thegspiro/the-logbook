@@ -77,6 +77,7 @@ class AdminUserCreate(BaseModel):
     # Department info
     rank: Optional[str] = Field(None, max_length=100)
     station: Optional[str] = Field(None, max_length=100)
+    platoon: Optional[str] = Field(None, max_length=20)
 
     # Address
     address_street: Optional[str] = Field(None, max_length=255)
@@ -118,6 +119,7 @@ class UserUpdate(BaseModel):
     # Department info
     rank: Optional[str] = Field(None, max_length=100)
     station: Optional[str] = Field(None, max_length=100)
+    platoon: Optional[str] = Field(None, max_length=20)
 
     # Address
     address_street: Optional[str] = Field(None, max_length=255)
@@ -158,6 +160,7 @@ class UserResponse(UserBase, UTCResponseBase):
     # Department info
     rank: Optional[str] = None
     station: Optional[str] = None
+    platoon: Optional[str] = None
 
     # Address info
     address_street: Optional[str] = None
@@ -204,6 +207,7 @@ class UserListResponse(BaseModel):
     # Department info
     rank: Optional[str] = None
     station: Optional[str] = None
+    platoon: Optional[str] = None
 
     model_config = _response_config
 

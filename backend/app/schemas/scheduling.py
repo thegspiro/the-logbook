@@ -97,6 +97,7 @@ class ShiftResponse(UTCResponseBase):
     apparatus_id: Optional[str] = None
     apparatus_name: Optional[str] = None
     apparatus_unit_number: Optional[str] = None
+    platoon: Optional[str] = None
     positions: Optional[List[Any]] = None
     apparatus_positions: Optional[List[Any]] = None
     min_staffing: Optional[int] = None
@@ -174,10 +175,73 @@ class ShiftAttendanceResponse(UTCResponseBase):
 # ============================================
 
 
+class PlatoonRosterEntry(BaseModel):
+    """A platoon member's status for a specific shift."""
+
+    user_id: UUID
+    user_name: str
+    # "assigned" (on the shift), "on_leave" (approved time-off / leave that
+    # date), or "available" (in the platoon, not assigned, could fill in).
+    status: str
+
+    model_config = _response_config
+
+
+class PlatoonMember(BaseModel):
+    """A member shown in the department-wide platoon overview."""
+
+    user_id: UUID
+    user_name: str
+    rank: Optional[str] = None
+
+    model_config = _response_config
+
+
+class PlatoonGroup(BaseModel):
+    """A platoon (or the unassigned bucket) and its members.
+
+    ``platoon`` is ``None`` for members with no platoon assigned.
+    """
+
+    platoon: Optional[str] = None
+    member_count: int = 0
+    members: List[PlatoonMember] = []
+
+    model_config = _response_config
+
+
+class PlatoonOverviewResponse(BaseModel):
+    """Department-wide platoon roster: every platoon plus the unassigned bucket."""
+
+    platoons_enabled: bool = False
+    groups: List[PlatoonGroup] = []
+
+    model_config = _response_config
+
+
+class PlatoonBulkAssign(BaseModel):
+    """Assign a platoon (or clear it, with ``platoon=None``) for many members."""
+
+    user_ids: List[UUID] = Field(..., min_length=1, max_length=500)
+    platoon: Optional[str] = Field(None, max_length=20)
+
+
+class PlatoonBulkAssignResult(BaseModel):
+    """Result of a bulk platoon assignment."""
+
+    updated: int = 0
+    platoon: Optional[str] = None
+
+    model_config = _response_config
+
+
 class ShiftDetailResponse(ShiftResponse):
     """Extended shift response with attendees"""
 
     attendees: List[ShiftAttendanceResponse] = []
+    # Full duty-platoon roster for the shift's platoon (when set), so officers
+    # can see who is on, who is on leave, and who could fill in / be held over.
+    platoon_roster: List[PlatoonRosterEntry] = []
 
     model_config = _response_config
 
@@ -327,14 +391,6 @@ class PatternType(str, PyEnum):
 # ============================================
 
 
-class TemplateCategory(str, PyEnum):
-    """Enum for shift template categories"""
-
-    STANDARD = "standard"
-    SPECIALTY = "specialty"
-    EVENT = "event"
-
-
 class ShiftTemplateCreate(BaseModel):
     """Schema for creating a shift template"""
 
@@ -465,13 +521,6 @@ class GenerateShiftsRequest(BaseModel):
     end_date: date
 
 
-class GenerateShiftsResponse(BaseModel):
-    """Schema for shift generation response"""
-
-    shifts_created: int
-    shifts: List[ShiftResponse]
-
-
 # ============================================
 # Shift Assignment Schemas
 # ============================================
@@ -592,14 +641,6 @@ class ShiftTimeOffCreate(BaseModel):
         return self
 
 
-class ShiftTimeOffUpdate(BaseModel):
-    """Schema for updating a time off request"""
-
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    reason: Optional[str] = None
-
-
 class ShiftTimeOffReview(BaseModel):
     """Schema for reviewing a time off request"""
 
@@ -625,51 +666,6 @@ class ShiftTimeOffResponse(UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
-
-
-# ============================================
-# Reporting Schemas
-# ============================================
-
-
-class MemberHoursReport(BaseModel):
-    """Schema for member hours report"""
-
-    user_id: UUID
-    email: str
-    first_name: str = ""
-    last_name: str = ""
-    shift_count: int
-    total_minutes: int
-    total_hours: float
-
-
-class ShiftCoverageReport(BaseModel):
-    """Schema for shift coverage report"""
-
-    date: str
-    total_shifts: int
-    total_assigned: int
-    total_confirmed: int
-    understaffed_shifts: int
-
-
-class CallVolumeReport(BaseModel):
-    """Schema for call volume report"""
-
-    period: str
-    total_calls: int
-    by_type: dict
-    avg_response_seconds: Optional[float] = None
-
-
-class MemberHoursListResponse(BaseModel):
-    """Schema for member hours list response"""
-
-    members: List[MemberHoursReport]
-    period_start: date
-    period_end: date
-    total_members: int
 
 
 # ============================================
@@ -707,6 +703,12 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
 
     excluded_membership_types: List[str]
     open_positions: List[str]
+
+
+class SchedulingFeatureSettings(BaseModel):
+    """Department-wide scheduling feature toggles (readable by any member)."""
+
+    platoons_enabled: bool = False
 
 
 # ============================================

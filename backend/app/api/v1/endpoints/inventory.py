@@ -74,6 +74,17 @@ from app.schemas.inventory import (
     EquipmentRequestCreate,
     EquipmentRequestFulfill,
     EquipmentRequestReview,
+    ImpactPlanCreate,
+    ImpactPlanResponse,
+    ImpactPlanUpdate,
+    ImpactPlannerIssueRequest,
+    ImpactPlannerIssueResponse,
+    ImpactPlannerOptionsResponse,
+    ImpactPlannerRequestSizesResponse,
+    ImpactPlannerReorderRequest,
+    ImpactPlannerReorderResponse,
+    ImpactPlannerRequest,
+    ImpactPlannerResponse,
     InventoryCategoryCreate,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
@@ -136,6 +147,7 @@ from app.schemas.inventory import (
 from app.services.departure_clearance_service import DepartureClearanceService
 from app.services.inventory_service import InventoryService
 from app.services.label_service import LabelService
+from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
 
 router = APIRouter()
@@ -154,6 +166,30 @@ async def _publish_inventory_event(org_id: str, action: str, data: dict = None):
         )
     except Exception:
         pass  # Never let WS publishing break an API response
+
+
+async def _planner_contact_visibility(db, organization_id) -> dict:
+    """Resolve member contact visibility from the organization's settings.
+
+    Mirrors the member-list endpoint so the impact planner honours the same
+    privacy toggles (enabled + per-field) rather than exposing contact info
+    on permission alone. Returns an empty dict (no contact) when disabled or
+    if settings can't be loaded.
+    """
+    try:
+        settings = await OrganizationService(db).get_organization_settings(
+            organization_id
+        )
+        vis = settings.contact_info_visibility
+        if not vis.enabled:
+            return {}
+        return {
+            "show_email": vis.show_email,
+            "show_phone": vis.show_phone,
+            "show_mobile": vis.show_mobile,
+        }
+    except Exception:
+        return {}
 
 
 # ============================================
@@ -2056,6 +2092,416 @@ async def get_members_inventory_summary(
         search=search,
     )
     return MembersInventoryListResponse(members=members, total=len(members))
+
+
+# ============================================
+# Impact Planner Endpoints
+# ============================================
+
+
+@router.get(
+    "/impact-planner/options", response_model=ImpactPlannerOptionsResponse
+)
+async def get_impact_planner_options(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Get the filter options for the inventory impact planner.
+
+    Returns the distinct ranks, stations, positions, member statuses,
+    membership types, inventory categories, and garment size fields that can
+    be used to scope an impact analysis.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.get_impact_planner_options(
+        organization_id=current_user.organization_id,
+    )
+
+
+@router.get(
+    "/impact-planner/plans", response_model=list[ImpactPlanResponse]
+)
+async def list_impact_plans(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    List saved impact-planner scenarios.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    return await service.list_impact_plans(current_user.organization_id)
+
+
+@router.post(
+    "/impact-planner/plans",
+    response_model=ImpactPlanResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_impact_plan(
+    payload: ImpactPlanCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Save an impact-planner scenario (its filter set) for later re-use.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    data = {
+        "name": payload.name,
+        "description": payload.description,
+        "filters": payload.filters.model_dump(mode="json"),
+    }
+    plan = await service.create_impact_plan(
+        organization_id=current_user.organization_id,
+        data=data,
+        created_by=current_user.id,
+    )
+    await db.commit()
+    return plan
+
+
+@router.patch(
+    "/impact-planner/plans/{plan_id}", response_model=ImpactPlanResponse
+)
+async def update_impact_plan(
+    plan_id: UUID,
+    payload: ImpactPlanUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Update a saved impact-planner scenario.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    data = payload.model_dump(exclude_unset=True)
+    if "filters" in data and data["filters"] is not None:
+        data["filters"] = payload.filters.model_dump(mode="json")
+    plan, error = await service.update_impact_plan(
+        plan_id=plan_id,
+        organization_id=current_user.organization_id,
+        data=data,
+    )
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=error
+        )
+    await db.commit()
+    return plan
+
+
+@router.delete(
+    "/impact-planner/plans/{plan_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_impact_plan(
+    plan_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Delete a saved impact-planner scenario.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    deleted = await service.delete_impact_plan(
+        plan_id, current_user.organization_id
+    )
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Impact plan not found"
+        )
+    await db.commit()
+
+
+@router.post("/impact-planner", response_model=ImpactPlannerResponse)
+async def analyze_inventory_impact(
+    payload: ImpactPlannerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Analyze how many members a prospective new issue would impact.
+
+    Given a set of member filters (rank, station, status, membership type,
+    position) the planner returns the matching members, the size each needs
+    (when a size field is chosen), whether they already hold a comparable
+    item (when a related category is chosen), and a per-size breakdown for
+    purchase planning.
+
+    Member contact details honour the organization's contact-visibility
+    settings (the same toggles used by the member list).
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    contact_visibility = await _planner_contact_visibility(
+        db, current_user.organization_id
+    )
+
+    service = InventoryService(db)
+    try:
+        return await service.analyze_impact(
+            organization_id=current_user.organization_id,
+            filters=payload.model_dump(),
+            contact_visibility=contact_visibility,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+
+@router.post(
+    "/impact-planner/reorder",
+    response_model=ImpactPlannerReorderResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_reorder_from_impact_plan(
+    payload: ImpactPlannerReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create reorder requests from an impact plan's per-size shortfall.
+
+    Re-runs the analysis server-side and creates one pending reorder request
+    per size that has a shortfall, scoped to the plan's stock category. The
+    request must include a size field and a stock category.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    reorder_meta = {
+        "vendor": payload.vendor,
+        "urgency": payload.urgency,
+        "notes": payload.notes,
+    }
+    filters = payload.model_dump(exclude={"vendor", "urgency", "notes"})
+    try:
+        result = await service.create_reorder_from_plan(
+            organization_id=current_user.organization_id,
+            filters=filters,
+            reorder_meta=reorder_meta,
+            requested_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="reorder_requests_created_from_plan",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "created_count": result["created_count"],
+            "total_quantity": result["total_quantity"],
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    return result
+
+
+@router.post(
+    "/impact-planner/issue", response_model=ImpactPlannerIssueResponse
+)
+async def bulk_issue_from_impact_plan(
+    payload: ImpactPlannerIssueRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Bulk-issue on-hand pool stock to the members a plan says still need it.
+
+    One unit of a matching-size pool item from the stock category is issued
+    to each targeted member; members with no size on file, no matching stock,
+    or a blocked issuance are skipped and reported. Requires a size field and
+    a stock category.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    filters = payload.model_dump(exclude={"reason"})
+    try:
+        result = await service.bulk_issue_from_plan(
+            organization_id=current_user.organization_id,
+            filters=filters,
+            issued_by=current_user.id,
+            reason=payload.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_bulk_issued_from_plan",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "item_issuance",
+            "issued_count": result["issued_count"],
+            "skipped_count": result["skipped_count"],
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    # Notify live inventory views (member/items pages) that stock moved,
+    # matching the single pool-issue endpoint.
+    if result["issued_count"] > 0:
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "bulk_issued_from_plan",
+            {"issued_count": result["issued_count"]},
+        )
+
+    return result
+
+
+@router.post(
+    "/impact-planner/request-sizes",
+    response_model=ImpactPlannerRequestSizesResponse,
+)
+async def request_member_sizes(
+    payload: ImpactPlannerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Ask members with no size on file to submit their equipment sizes.
+
+    Sends an in-app notification to each member who needs the item but has no
+    size on record, so the next plan run can size and cost them. Requires a
+    size field.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    try:
+        result = await service.request_member_sizes(
+            organization_id=current_user.organization_id,
+            filters=payload.model_dump(),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="inventory_size_request_sent",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "notification",
+            "notified_count": result["notified_count"],
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+
+    return result
+
+
+@router.post("/impact-planner/pdf")
+async def export_impact_plan_pdf(
+    payload: ImpactPlannerRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Export the impact plan as a print-ready PDF for procurement.
+
+    Member contact details honour the organization's contact-visibility
+    settings (the same toggles used by the member list).
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    from fastapi.responses import StreamingResponse
+
+    contact_visibility = await _planner_contact_visibility(
+        db, current_user.organization_id
+    )
+
+    service = InventoryService(db)
+    try:
+        pdf_buf = await service.generate_impact_plan_pdf(
+            organization_id=current_user.organization_id,
+            filters=payload.model_dump(),
+            contact_visibility=contact_visibility,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=safe_error_detail(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=safe_error_detail(e),
+        )
+
+    headers = {
+        "Content-Disposition": "attachment; filename=impact-plan.pdf"
+    }
+    return StreamingResponse(
+        pdf_buf, media_type="application/pdf", headers=headers
+    )
 
 
 @router.get("/users/{user_id}/inventory", response_model=UserInventoryResponse)

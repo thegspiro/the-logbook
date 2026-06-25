@@ -23,7 +23,7 @@ export interface Assignment {
   user_id: string;
   shift_id: string;
   position: string;
-  /** Canonical status field. Resolved from `assignment_status` via {@link normalizeAssignmentStatus}. */
+  /** Canonical status field, mirrored from the backend `assignment_status`. */
   status: AssignmentStatus;
   /** Raw backend field — prefer `status` in display code. */
   assignment_status?: AssignmentStatus;
@@ -31,13 +31,6 @@ export interface Assignment {
   shift?: ShiftRecord;
   confirmed_at?: string;
   notes?: string;
-}
-
-/** Normalize assignment status: the backend returns `assignment_status` while
- *  some frontend code expects `status`. This helper ensures both are populated. */
-export function normalizeAssignment(raw: Partial<Assignment>): Assignment {
-  const effectiveStatus = raw.assignment_status || raw.status || 'assigned';
-  return { ...raw, status: effectiveStatus, assignment_status: effectiveStatus } as Assignment;
 }
 
 /** A request to swap shifts between two members. */
@@ -81,22 +74,6 @@ export interface TimeOffRequest {
   created_at: string;
 }
 
-/** A shift template used for quick shift creation. */
-export interface ShiftTemplate {
-  id: string;
-  name: string;
-  start_time_of_day: string;
-  end_time_of_day: string;
-  duration_hours: number;
-  color?: string;
-  positions?: string[];
-  min_staffing: number;
-  category?: string;
-  apparatus_type?: string;
-  is_default: boolean;
-  is_active: boolean;
-}
-
 /** A recurring shift pattern for automatic schedule generation. */
 export interface ShiftPattern {
   id: string;
@@ -112,39 +89,4 @@ export interface ShiftPattern {
   end_date?: string;
   assigned_members?: Array<{ user_id: string; position: string; platoon?: string }>;
   is_active: boolean;
-}
-
-/** A basic apparatus/vehicle definition for shift staffing. */
-export interface BasicApparatus {
-  id: string;
-  unit_number: string;
-  name: string;
-  apparatus_type: string;
-  min_staffing?: number;
-  positions?: string[];
-  is_active: boolean;
-}
-
-/** Shift completion report filed by an officer about a trainee. */
-export interface ShiftCompletionReport {
-  id: string;
-  shift_date: string;
-  trainee_id: string;
-  officer_id: string;
-  hours_on_shift: number;
-  calls_responded: number;
-  call_types: string[];
-  performance_rating?: number;
-  skills_observed?: Array<{ skill: string; rating: number; notes?: string }>;
-  tasks_performed?: Array<{ task: string; completed: boolean; notes?: string }>;
-  areas_of_strength?: string;
-  areas_for_improvement?: string;
-  officer_narrative?: string;
-  trainee_comments?: string;
-  trainee_acknowledged?: boolean;
-  trainee_acknowledged_at?: string;
-  review_status?: string;
-  reviewer_notes?: string;
-  redact_fields?: string[];
-  created_at: string;
 }

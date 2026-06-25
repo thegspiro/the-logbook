@@ -22,12 +22,14 @@ interface OnboardingStatus {
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isLoading, isAuthenticated, error, clearError, lockedUntil } = useAuthStore();
+  const { login, completeMfaLogin, cancelMfa, mfaRequired, isLoading, isAuthenticated, error, clearError, lockedUntil } = useAuthStore();
 
   const [formData, setFormData] = useState({
     username: '',
     password: '',
   });
+  const [mfaCode, setMfaCode] = useState('');
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [lockoutRemaining, setLockoutRemaining] = useState(0);
   const [oauthError, setOAuthError] = useState<string | null>(null);
@@ -176,6 +178,11 @@ export const LoginPage: React.FC = () => {
         username: formData.username,
         password: formData.password,
       });
+      // If the account has MFA, login set mfaRequired instead of a session —
+      // stay on the page to collect the second factor.
+      if (useAuthStore.getState().mfaRequired) {
+        return;
+      }
       // Redirect to the page the user was trying to access (saved by
       // ProtectedRoute), or default to /dashboard.
       // SEC: Validate redirect target is a relative path starting with '/'
@@ -187,6 +194,30 @@ export const LoginPage: React.FC = () => {
       navigate(from, { replace: true });
     } catch (_err) {
       // Error is handled by the store and displayed via error state
+    }
+  };
+
+  const redirectAfterAuth = () => {
+    const rawFrom = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
+    const from = (typeof rawFrom === 'string' && rawFrom.startsWith('/') && !rawFrom.startsWith('//'))
+      ? rawFrom
+      : '/dashboard';
+    navigate(from, { replace: true });
+  };
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const value = mfaCode.trim();
+    if (!value) return;
+    try {
+      if (useRecoveryCode) {
+        await completeMfaLogin(undefined, value);
+      } else {
+        await completeMfaLogin(value);
+      }
+      redirectAfterAuth();
+    } catch (_err) {
+      // Error surfaced via store error state.
     }
   };
 
@@ -211,12 +242,78 @@ export const LoginPage: React.FC = () => {
 
   const hasOAuthEnabled = oauthConfig.googleEnabled || oauthConfig.microsoftEnabled;
 
-  // While we confirm the app is configured, show a spinner rather than
-  // flashing the login form (which we may immediately redirect away from).
-  if (checkingOnboarding) {
+  if (mfaRequired) {
     return (
-      <main className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8" id="main-content">
-        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-theme-accent-red"></div>
+      <main className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8 pb-24" id="main-content">
+        <div className="max-w-md w-full space-y-8">
+          <div>
+            <div className="flex justify-center">
+              <div className="h-36 max-w-[18rem] rounded-lg overflow-hidden shadow-md flex items-center justify-center">
+                <img
+                  src={branding.logo || '/logo.png'}
+                  alt={branding.name ? `${branding.name} logo` : 'The Logbook logo'}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            </div>
+            <h1 className="mt-4 text-center text-3xl font-extrabold text-theme-text-primary">
+              Two-factor authentication
+            </h1>
+            <p className="mt-2 text-center text-sm text-theme-text-secondary">
+              {useRecoveryCode
+                ? 'Enter one of your saved recovery codes.'
+                : 'Enter the 6-digit code from your authenticator app.'}
+            </p>
+          </div>
+
+          <form className="mt-8 space-y-6" onSubmit={(e) => { void handleMfaSubmit(e); }} aria-label="Two-factor authentication form">
+            {error && (
+              <div className="rounded-md bg-red-50 border border-red-200 dark:bg-red-500/10 dark:border-red-500/30 p-4" role="alert" aria-live="assertive">
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              </div>
+            )}
+            <div>
+              <label htmlFor="mfa-code" className="block text-sm font-medium text-theme-text-secondary mb-1">
+                {useRecoveryCode ? 'Recovery code' : 'Authenticator code'}
+              </label>
+              <input
+                id="mfa-code"
+                name="mfa-code"
+                type="text"
+                autoFocus
+                autoComplete="one-time-code"
+                inputMode={useRecoveryCode ? 'text' : 'numeric'}
+                value={mfaCode}
+                onChange={(e) => setMfaCode(e.target.value)}
+                placeholder={useRecoveryCode ? 'xxxxx-xxxxx' : '123456'}
+                className="w-full px-4 py-2.5 bg-theme-input-bg border border-theme-input-border rounded-lg text-theme-text-primary placeholder-theme-text-muted focus:outline-hidden focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isLoading || !mfaCode.trim()}
+              className="w-full flex justify-center py-2.5 px-4 rounded-lg text-white bg-violet-600 hover:bg-violet-700 font-medium disabled:opacity-50"
+            >
+              {isLoading ? 'Verifying…' : 'Verify'}
+            </button>
+            <div className="flex items-center justify-between text-sm">
+              <button
+                type="button"
+                onClick={() => { setUseRecoveryCode((v) => !v); setMfaCode(''); clearError(); }}
+                className="text-violet-600 dark:text-violet-400 hover:underline"
+              >
+                {useRecoveryCode ? 'Use authenticator code' : 'Use a recovery code'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { cancelMfa(); setMfaCode(''); setUseRecoveryCode(false); }}
+                className="text-theme-text-muted hover:text-theme-text-primary"
+              >
+                Back to sign in
+              </button>
+            </div>
+          </form>
+        </div>
       </main>
     );
   }
