@@ -112,6 +112,7 @@ export const userService = {
     hire_date?: string | undefined;
     rank?: string | undefined;
     station?: string | undefined;
+    platoon?: string | undefined;
     address_street?: string | undefined;
     address_city?: string | undefined;
     address_state?: string | undefined;
@@ -140,6 +141,16 @@ export const userService = {
       new_password: newPassword,
       force_change: forceChange,
     });
+    return response.data;
+  },
+
+  /**
+   * Reset (disable) a user's two-factor authentication (admin only).
+   * For members who lost their authenticator and recovery codes; lets them
+   * re-enroll from their own Security settings.
+   */
+  async adminResetMfa(userId: string): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>(`/users/${userId}/reset-mfa`);
     return response.data;
   },
 

@@ -76,6 +76,10 @@ export const MembersAdminPage: React.FC = () => {
   const [resetForceChange, setResetForceChange] = useState(true);
   const [savingReset, setSavingReset] = useState(false);
 
+  // Reset MFA state
+  const [resetMfaUser, setResetMfaUser] = useState<UserWithRoles | null>(null);
+  const [savingMfaReset, setSavingMfaReset] = useState(false);
+
   // Delete modal state
   const [deleteModalUser, setDeleteModalUser] = useState<UserWithRoles | null>(null);
 
@@ -299,6 +303,22 @@ export const MembersAdminPage: React.FC = () => {
     }
   };
 
+  const handleResetMfa = async () => {
+    if (!resetMfaUser) return;
+    try {
+      setSavingMfaReset(true);
+      setError(null);
+      await userService.adminResetMfa(resetMfaUser.id);
+      setResetMfaUser(null);
+      await fetchData();
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || 'Unable to reset MFA. Please try again.');
+    } finally {
+      setSavingMfaReset(false);
+    }
+  };
+
   const handleDeleteUser = (user: UserWithRoles) => {
     setDeleteModalUser(user);
   };
@@ -367,7 +387,7 @@ export const MembersAdminPage: React.FC = () => {
     );
   }
 
-  if (error && !editingRoles && !editingMembers && !editingProfile) {
+  if (error && !editingRoles && !editingMembers && !editingProfile && !resetPasswordUser && !resetMfaUser) {
     return (
       <div className="min-h-screen">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -552,6 +572,14 @@ export const MembersAdminPage: React.FC = () => {
                           className="text-yellow-700 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-300"
                         >
                           Reset Password
+                        </button>
+                      )}
+                      {currentUser?.id !== user.id && user.mfa_enabled && (
+                        <button
+                          onClick={() => setResetMfaUser(user)}
+                          className="text-yellow-700 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-300"
+                        >
+                          Reset MFA
                         </button>
                       )}
                       {currentUser?.id !== user.id && (
@@ -848,6 +876,47 @@ export const MembersAdminPage: React.FC = () => {
             </span>
           </label>
 
+          {error && (
+            <div className="text-sm text-red-700 dark:text-red-400">{error}</div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Reset MFA Modal */}
+      <Modal
+        isOpen={!!resetMfaUser}
+        onClose={() => { setResetMfaUser(null); setError(null); }}
+        title={`Reset MFA for ${resetMfaUser?.full_name || resetMfaUser?.username}`}
+        footer={
+          <>
+            <button
+              onClick={() => { void handleResetMfa(); }}
+              disabled={savingMfaReset}
+              className="btn-warning focus:ring-offset-(--ring-offset-bg) font-medium rounded-md sm:ml-3 sm:w-auto text-sm w-full"
+            >
+              {savingMfaReset ? 'Resetting...' : 'Reset MFA'}
+            </button>
+            <button
+              onClick={() => { setResetMfaUser(null); setError(null); }}
+              disabled={savingMfaReset}
+              className="w-full sm:w-auto px-4 py-2 text-sm font-medium text-theme-text-secondary bg-theme-surface border border-theme-surface-border rounded-md hover:bg-theme-surface-hover focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-theme-focus-ring focus:ring-offset-(--ring-offset-bg) disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-theme-text-secondary">
+            This disables two-factor authentication and clears the member's
+            authenticator and recovery codes. Use this only when the member has
+            lost their device and recovery codes.
+          </p>
+          <p className="text-sm text-theme-text-secondary">
+            They'll be signed out of active sessions and can re-enroll from their
+            own Security settings. If your department requires MFA, they'll be
+            prompted to set it up again on next login.
+          </p>
           {error && (
             <div className="text-sm text-red-700 dark:text-red-400">{error}</div>
           )}

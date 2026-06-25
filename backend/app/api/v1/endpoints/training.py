@@ -15,7 +15,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -194,7 +199,11 @@ async def list_records(
     current_user: User = Depends(get_current_user),
 ):
     """
-    List training records
+    List training records.
+
+    Officers (training.manage) may list any member's records; other members
+    may only see their own — training records can include certifications and
+    scores that aren't roster-public.
 
     **Authentication required**
     """
@@ -202,7 +211,13 @@ async def list_records(
         TrainingRecord.organization_id == current_user.organization_id
     )
 
-    if user_id:
+    is_officer = _has_permission(
+        "training.manage", _collect_user_permissions(current_user)
+    )
+    if not is_officer:
+        # Non-officers are confined to their own records regardless of filter.
+        query = query.where(TrainingRecord.user_id == str(current_user.id))
+    elif user_id:
         query = query.where(TrainingRecord.user_id == str(user_id))
 
     if status:
@@ -389,9 +404,14 @@ async def create_records_bulk(
     errors: list[str] = []
     created_ids: list[str] = []
 
-    # Pre-fetch member rank/station for all unique user_ids
+    # Pre-fetch members (scoped to this org) for rank/station and to validate
+    # that every record targets an in-org member — never trust client user_ids.
     unique_user_ids = list({str(r.user_id) for r in payload.records})
-    members_result = await db.execute(select(User).where(User.id.in_(unique_user_ids)))
+    members_result = await db.execute(
+        select(User)
+        .where(User.id.in_(unique_user_ids))
+        .where(User.organization_id == org_id)
+    )
     members_by_id = {str(m.id): m for m in members_result.scalars().all()}
 
     for idx, entry in enumerate(payload.records):
@@ -424,14 +444,18 @@ async def create_records_bulk(
                 skipped += 1
                 continue
 
-        # Build record data
+        # Reject rows for users that are not members of this org.
         member = members_by_id.get(user_id_str)
+        if member is None:
+            errors.append(f"Row {idx + 1}: user is not a member of this organization")
+            failed += 1
+            continue
+
         record_data = entry.model_dump()
 
         # Auto-populate rank/station from member
-        if member:
-            record_data.setdefault("rank_at_completion", member.rank)
-            record_data.setdefault("station_at_completion", member.station)
+        record_data.setdefault("rank_at_completion", member.rank)
+        record_data.setdefault("station_at_completion", member.station)
 
         # Auto-calculate expiration from course
         if (
@@ -1748,10 +1772,28 @@ async def confirm_historical_import(
     failed = 0
     errors = []
 
+    # Validate every targeted user is a member of this org — the client-supplied
+    # row.user_id must never be trusted on confirm.
+    row_user_ids = {str(r.user_id) for r in request.rows if r.user_id}
+    valid_member_ids: set[str] = set()
+    if row_user_ids:
+        member_result = await db.execute(
+            select(User.id)
+            .where(User.id.in_(row_user_ids))
+            .where(User.organization_id == str(current_user.organization_id))
+        )
+        valid_member_ids = {str(uid) for (uid,) in member_result.all()}
+
     for row in request.rows:
         # Skip rows without matched member
         if not row.user_id:
             skipped += 1
+            continue
+
+        # Reject rows targeting a user outside this org.
+        if str(row.user_id) not in valid_member_ids:
+            failed += 1
+            errors.append("Row skipped: user is not a member of this organization")
             continue
 
         # Determine course_id and course_name

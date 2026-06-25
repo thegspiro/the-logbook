@@ -51,8 +51,8 @@ export type {
   ReportFilters,
   AvailabilityFilters,
   MemberHoursReport,
-  CoverageReport,
-  CallVolumeReport,
+  CoverageReportEntry,
+  CallVolumeReportEntry,
   AvailabilityRecord,
   ShiftSignupResponse,
 } from "./types";

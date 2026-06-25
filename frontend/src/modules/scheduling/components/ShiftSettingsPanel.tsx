@@ -8,7 +8,9 @@
  * delegates rendering to focused card components.
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { Link } from "react-router-dom";
+import toast from "react-hot-toast";
 import {
   Settings,
   Truck,
@@ -17,8 +19,11 @@ import {
   LayoutTemplate,
   Shield,
   FileBarChart,
+  Users,
 } from "lucide-react";
 import type { ShiftTemplateRecord } from "../services/api";
+import { schedulingService } from "../services/api";
+import { useSchedulingStore } from "../store/schedulingStore";
 import type { ShiftSettings } from "../types/shiftSettings";
 import {
   BUILTIN_POSITIONS,
@@ -34,10 +39,11 @@ import { PositionNamesCard } from "./PositionNamesCard";
 import { EquipmentCheckTemplateList } from "./EquipmentCheckTemplateList";
 import { EligibilitySettingsCard } from "./EligibilitySettingsCard";
 import { ShiftReportsSettingsPanel } from "./ShiftReportsSettingsPanel";
+import { PlatoonRosterPanel } from "./PlatoonRosterPanel";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export type SettingsTab = "general" | "apparatus" | "notifications" | "equipment" | "eligibility" | "shift-reports";
+export type SettingsTab = "general" | "apparatus" | "platoons" | "notifications" | "equipment" | "eligibility" | "shift-reports";
 
 const SETTINGS_TABS: {
   id: SettingsTab;
@@ -46,6 +52,7 @@ const SETTINGS_TABS: {
 }[] = [
   { id: "general", label: "General", icon: LayoutTemplate },
   { id: "apparatus", label: "Apparatus", icon: Truck },
+  { id: "platoons", label: "Platoons", icon: Users },
   { id: "eligibility", label: "Eligibility", icon: Shield },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "equipment", label: "Equipment", icon: ClipboardCheck },
@@ -76,6 +83,34 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   defaultTab,
 }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>(defaultTab || "general");
+  const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
+  const loadSettings = useSchedulingStore((s) => s.loadSettings);
+  const setPlatoonsEnabled = useSchedulingStore((s) => s.setPlatoonsEnabled);
+  const [savingPlatoonToggle, setSavingPlatoonToggle] = useState(false);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  // Hide the Platoons tab unless the department has enabled platoon scheduling.
+  const visibleTabs = SETTINGS_TABS.filter(
+    (t) => t.id !== "platoons" || platoonsEnabled,
+  );
+
+  const handleTogglePlatoons = async (enabled: boolean) => {
+    setSavingPlatoonToggle(true);
+    try {
+      await schedulingService.updateFeatureSettings({ platoons_enabled: enabled });
+      setPlatoonsEnabled(enabled);
+      toast.success(`Platoon scheduling ${enabled ? "enabled" : "disabled"}`);
+      if (!enabled && activeTab === "platoons") setActiveTab("general");
+    } catch {
+      toast.error("Failed to update platoon setting");
+    } finally {
+      setSavingPlatoonToggle(false);
+    }
+  };
+
   const [settings, setSettings] = useState<ShiftSettings>(() => {
     try {
       const stored = localStorage.getItem(SETTINGS_KEY);
@@ -136,7 +171,7 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
 
       {/* Tab Navigation */}
       <div className="flex gap-1 p-1 bg-theme-surface-hover/50 rounded-lg overflow-x-auto">
-        {SETTINGS_TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
@@ -159,6 +194,35 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       {/* ─── General Tab ─── */}
       {activeTab === "general" && (
         <div className="space-y-6">
+          <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-semibold text-theme-text-primary flex items-center gap-2">
+                  <Users className="w-4 h-4" /> Platoon Scheduling
+                </h3>
+                <p className="text-sm text-theme-text-muted mt-1">
+                  Enable platoon (A/B/C) rotations: assign members to platoons,
+                  build shifts per platoon, and show platoon rosters on shifts.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={platoonsEnabled}
+                disabled={savingPlatoonToggle}
+                onClick={() => { void handleTogglePlatoons(!platoonsEnabled); }}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                  platoonsEnabled ? "bg-violet-600" : "bg-theme-surface-border"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    platoonsEnabled ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
           <TemplatesOverviewCard
             templates={templates}
             onNavigateToTemplates={onNavigateToTemplates}
@@ -233,6 +297,21 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ─── Platoons Tab ─── */}
+      {activeTab === "platoons" && (
+        <div className="space-y-6">
+          <div className="flex justify-end">
+            <Link
+              to="/scheduling/platoons"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-theme-surface-border rounded-lg text-theme-text-secondary hover:bg-theme-surface-hover"
+            >
+              <Users className="w-4 h-4" /> Department platoon overview
+            </Link>
+          </div>
+          <PlatoonRosterPanel />
         </div>
       )}
 

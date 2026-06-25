@@ -20,6 +20,8 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { useAuthStore } from '../../stores/authStore';
+import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -27,6 +29,10 @@ interface MyShiftsTabProps {
 
 export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const tz = useTimezone();
+  const platoon = useAuthStore((s) => s.user?.platoon);
+  const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
+  const loadSettings = useSchedulingStore((s) => s.loadSettings);
+  useEffect(() => { void loadSettings(); }, [loadSettings]);
   const [searchParams] = useSearchParams();
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,7 +168,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       await schedulingService.createSwapRequest({
         offering_shift_id: swapAssignment.shift_id,
         requesting_shift_id: (swapForm.target_shift_id && swapForm.target_shift_id !== 'pick') ? swapForm.target_shift_id : undefined,
-        reason: swapForm.reason,
+        reason: swapForm.reason || undefined,
       });
       toast.success('Swap request submitted — check Requests tab for status');
       setShowSwapModal(false);
@@ -193,7 +199,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
       await schedulingService.createTimeOff({
         start_date: timeOffForm.start_date,
         end_date: timeOffForm.end_date || timeOffForm.start_date,
-        reason: timeOffForm.reason,
+        reason: timeOffForm.reason || undefined,
       });
       toast.success('Time off request submitted — check Requests tab for status');
       setShowTimeOffModal(false);
@@ -267,13 +273,15 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const handleBulkConfirm = async () => {
     setBulkActioning(true);
     let count = 0;
+    let failed = 0;
     for (const id of selectedIds) {
       try {
         await schedulingService.confirmAssignment(id);
         count++;
-      } catch { /* individual failures handled silently */ }
+      } catch { failed++; }
     }
     if (count > 0) toast.success(`${count} shift${count > 1 ? 's' : ''} confirmed`);
+    if (failed > 0) toast.error(`${failed} shift${failed > 1 ? 's' : ''} could not be confirmed`);
     setSelectedIds(new Set());
     setBulkActioning(false);
     void loadData();
@@ -282,13 +290,15 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
   const handleBulkDecline = async () => {
     setBulkActioning(true);
     let count = 0;
+    let failed = 0;
     for (const id of selectedIds) {
       try {
         await schedulingService.updateAssignment(id, { assignment_status: 'declined' });
         count++;
-      } catch { /* individual failures handled silently */ }
+      } catch { failed++; }
     }
     if (count > 0) toast.success(`${count} shift${count > 1 ? 's' : ''} declined`);
+    if (failed > 0) toast.error(`${failed} shift${failed > 1 ? 's' : ''} could not be declined`);
     setSelectedIds(new Set());
     setBulkActioning(false);
     void loadData();
@@ -309,7 +319,8 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
     <div className="space-y-6">
       {/* Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex bg-theme-input-bg rounded-lg p-1">
+        <div className="flex items-center gap-3">
+          <div className="flex bg-theme-input-bg rounded-lg p-1">
           <button onClick={() => setView('upcoming')}
             className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'upcoming' ? 'bg-violet-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
           >
@@ -320,6 +331,12 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
           >
             Past ({past.length})
           </button>
+          </div>
+          {platoonsEnabled && platoon && (
+            <span className="px-2.5 py-1 rounded-lg text-xs font-medium bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/20 whitespace-nowrap">
+              Platoon {platoon}
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <button onClick={() => { setTimeOffForm({ start_date: '', end_date: '', reason: '' }); setShowTimeOffModal(true); }}

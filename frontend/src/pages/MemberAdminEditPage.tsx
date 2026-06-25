@@ -40,6 +40,7 @@ interface FormData {
   membership_number: string;
   rank: string;
   station: string;
+  platoon: string;
   hire_date: string;
   membership_type: string;
   compliance_exempt: boolean;
@@ -64,6 +65,7 @@ function buildInitialForm(user: UserWithRoles & { personal_email?: string; membe
     membership_number: user.membership_number || '',
     rank: user.rank || '',
     station: user.station || '',
+    platoon: user.platoon || '',
     hire_date: user.hire_date || '',
     membership_type: user.membership_type || '',
     compliance_exempt: user.compliance_exempt || false,
@@ -192,6 +194,7 @@ export const MemberAdminEditPage: React.FC = () => {
       if (form.membership_number !== initialForm.membership_number) { profileUpdate.membership_number = form.membership_number; hasProfileChanges = true; }
       if (form.rank !== initialForm.rank) { profileUpdate.rank = form.rank; hasProfileChanges = true; }
       if (form.station !== initialForm.station) { profileUpdate.station = form.station; hasProfileChanges = true; }
+      if (form.platoon !== initialForm.platoon) { profileUpdate.platoon = form.platoon; hasProfileChanges = true; }
       if (form.hire_date !== initialForm.hire_date) { profileUpdate.hire_date = form.hire_date; hasProfileChanges = true; }
       if (form.phone !== initialForm.phone) { profileUpdate.phone = form.phone; hasProfileChanges = true; }
       if (form.mobile !== initialForm.mobile) { profileUpdate.mobile = form.mobile; hasProfileChanges = true; }
@@ -449,6 +452,23 @@ export const MemberAdminEditPage: React.FC = () => {
                     <option key={s.id} value={s.name}>{s.name}</option>
                   ))}
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs text-theme-text-muted uppercase font-medium mb-1">
+                  Platoon
+                </label>
+                <input
+                  type="text"
+                  value={form.platoon}
+                  onChange={(e) => handleFieldChange('platoon', e.target.value)}
+                  placeholder="e.g. A, B, C"
+                  maxLength={20}
+                  className="w-full px-3 py-2 border border-theme-surface-border rounded-md text-sm text-theme-text-primary bg-theme-surface-secondary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring"
+                  disabled={saving}
+                />
+                <p className="text-[11px] text-theme-text-muted mt-1">
+                  Duty platoon for shift rotations
+                </p>
               </div>
             </div>
 

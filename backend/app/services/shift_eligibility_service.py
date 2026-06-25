@@ -73,6 +73,85 @@ class ShiftEligibilityService:
         sched = self._get_scheduling_settings(org)
         return sched.get("open_positions", [])
 
+    def get_platoons_enabled(self, org: Organization) -> bool:
+        """Whether platoon scheduling features are enabled for the org."""
+        sched = self._get_scheduling_settings(org)
+        return bool(sched.get("platoons_enabled", False))
+
+    async def get_platoon_overview(
+        self, organization_id: str
+    ) -> List[Dict[str, Any]]:
+        """Group active members by platoon for the department-wide overview.
+
+        Returns one group per named platoon (alphabetical) followed by the
+        unassigned bucket (``platoon=None``). Members with no platoon are only
+        included in the unassigned group.
+        """
+        result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == str(organization_id))
+            .where(User.deleted_at.is_(None))
+            .where(User.is_active)
+            .order_by(User.last_name, User.first_name)
+        )
+        users = result.scalars().all()
+
+        by_platoon: Dict[Optional[str], List[User]] = {}
+        for u in users:
+            key = (u.platoon or "").strip() or None
+            by_platoon.setdefault(key, []).append(u)
+
+        named = sorted(
+            (k for k in by_platoon if k is not None), key=lambda s: s.upper()
+        )
+        ordered_keys: List[Optional[str]] = list(named)
+        if None in by_platoon:
+            ordered_keys.append(None)
+
+        groups: List[Dict[str, Any]] = []
+        for key in ordered_keys:
+            members = by_platoon[key]
+            groups.append(
+                {
+                    "platoon": key,
+                    "member_count": len(members),
+                    "members": [
+                        {
+                            "user_id": u.id,
+                            "user_name": u.full_name,
+                            "rank": u.rank,
+                        }
+                        for u in members
+                    ],
+                }
+            )
+        return groups
+
+    async def bulk_assign_platoon(
+        self,
+        organization_id: str,
+        user_ids: List[str],
+        platoon: Optional[str],
+    ) -> int:
+        """Set (or clear) the platoon for many members at once.
+
+        Only members belonging to ``organization_id`` are updated, so a caller
+        cannot reassign users in another org (IDOR-safe). Returns the number of
+        members actually updated.
+        """
+        normalized = (platoon or "").strip() or None
+        result = await self.db.execute(
+            select(User)
+            .where(User.organization_id == str(organization_id))
+            .where(User.id.in_([str(uid) for uid in user_ids]))
+            .where(User.deleted_at.is_(None))
+        )
+        members = result.scalars().all()
+        for member in members:
+            member.platoon = normalized
+        await self.db.commit()
+        return len(members)
+
     # ------------------------------------------------------------------
     # Eligibility resolution
     # ------------------------------------------------------------------
@@ -216,6 +295,7 @@ class ShiftEligibilityService:
         organization_id: str,
         excluded_membership_types: Optional[List[str]] = None,
         open_positions: Optional[List[str]] = None,
+        platoons_enabled: Optional[bool] = None,
     ) -> dict:
         """Update scheduling eligibility settings on the organization."""
         org = await self._get_org(organization_id)
@@ -229,6 +309,8 @@ class ShiftEligibilityService:
             scheduling["excluded_membership_types"] = excluded_membership_types
         if open_positions is not None:
             scheduling["open_positions"] = open_positions
+        if platoons_enabled is not None:
+            scheduling["platoons_enabled"] = platoons_enabled
 
         settings["scheduling"] = scheduling
         org.settings = settings

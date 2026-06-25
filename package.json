@@ -12,7 +12,7 @@
     "setup:backend": "cd backend && pip install -r requirements.txt",
     "setup:frontend": "cd frontend && npm install",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 3001",
+    "dev:backend": "cd backend && uvicorn main:app --reload --host 0.0.0.0 --port 3001",
     "dev:frontend": "cd frontend && npm run dev",
     "build": "npm run build:backend && npm run build:frontend",
     "build:backend": "echo 'Python backend does not require build step'",
@@ -32,8 +32,8 @@
     "docker:logs": "docker-compose logs -f",
     "db:migrate": "cd backend && python -m alembic upgrade head",
     "db:rollback": "cd backend && python -m alembic downgrade -1",
-    "db:seed": "cd backend && python scripts/seed_data.py",
-    "db:reset": "npm run db:rollback && npm run db:migrate && npm run db:seed",
+    "db:seed": "echo 'Seed data is applied automatically by db:migrate (Alembic SEED_DATA_FILES in backend/main.py).'",
+    "db:reset": "npm run db:rollback && npm run db:migrate",
     "clean": "rm -rf node_modules frontend/node_modules frontend/dist backend/__pycache__ backend/**/__pycache__ backend/.pytest_cache"
   },
   "keywords": [

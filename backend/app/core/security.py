@@ -486,6 +486,23 @@ def create_access_token(
     return encoded_jwt
 
 
+def create_mfa_pending_token(user_id: str, minutes: int = 5) -> str:
+    """Create a short-lived token marking a password-verified MFA challenge.
+
+    This token is NOT a session token: it only authorizes completing the MFA
+    second factor (verified via decode_token + type == 'mfa_pending'), never
+    API access.
+    """
+    now = datetime.now(timezone.utc)
+    to_encode = {
+        "sub": str(user_id),
+        "exp": now + timedelta(minutes=minutes),
+        "iat": now,
+        "type": "mfa_pending",
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
 def create_refresh_token(data: dict[str, Any]) -> str:
     """
     Create a JWT refresh token with longer expiration
@@ -513,7 +530,12 @@ def create_refresh_token(data: dict[str, Any]) -> str:
 
 def decode_token(token: str) -> dict[str, Any]:
     """
-    Decode and validate a JWT token
+    Decode and validate a JWT token's signature and expiry.
+
+    NOTE: This only verifies the signature and `exp`. It does NOT check the
+    token type (access vs refresh) or whether a server-side session still
+    exists. For authentication/authorization, use
+    AuthService.get_user_from_token, which performs those checks.
 
     Args:
         token: JWT token string

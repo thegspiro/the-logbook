@@ -247,6 +247,9 @@ class User(Base):
     # Operational Rank (one per member, has default permissions)
     rank = Column(String(100))  # e.g., "fire_chief", "captain", "firefighter"
     station = Column(String(100))  # e.g., "Station 1", "Headquarters"
+    # Duty platoon / shift group for platoon-rotation scheduling (A/B/C/...).
+    # Single source of truth consumed by shift pattern generation.
+    platoon = Column(String(20))
 
     # Address
     address_street = Column(String(255))

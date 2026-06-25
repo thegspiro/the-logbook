@@ -32,6 +32,10 @@ const SchedulingSettingsPage = lazyWithRetry(
   () => import('../../pages/scheduling/SchedulingSettingsPage'),
 );
 
+const SchedulingPlatoonsPage = lazyWithRetry(
+  () => import('../../pages/scheduling/SchedulingPlatoonsPage'),
+);
+
 const EquipmentCheckTemplateBuilder = lazyWithRetry(
   () => import('../../pages/scheduling/EquipmentCheckTemplateBuilder'),
 );
@@ -98,6 +102,16 @@ export const getSchedulingRoutes = () => {
           <Suspense fallback={null}>
             <ProtectedRoute requiredPermission="scheduling.manage">
               <SchedulingSettingsPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/platoons"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute requiredPermission="scheduling.manage">
+              <SchedulingPlatoonsPage />
             </ProtectedRoute>
           </Suspense>
         }

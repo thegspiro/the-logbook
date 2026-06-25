@@ -154,23 +154,41 @@ LDAP_USER_FILTER=(sAMAccountName={username})
 
 ---
 
-## Multi-Factor Authentication (MFA)
+## Multi-Factor Authentication (MFA) *(2026-06-19)*
 
-TOTP-based two-factor authentication using apps like Google Authenticator, Authy, or 1Password.
+App-based **TOTP** two-factor authentication using apps like Google
+Authenticator, Authy, or 1Password. MFA is self-enrolled by default and can be
+required org-wide by an administrator. See [MFA](../docs/MFA.md) for full
+implementation detail.
 
-### Enabling MFA
+### Enrolling (per-user, opt-in)
 
-**Per-user (opt-in):**
-1. Navigate to **Account Settings > Security**
-2. Click **Enable Two-Factor Authentication**
+1. Navigate to **Settings → Security**
+2. Start **Two-Factor Authentication** setup
 3. Scan the QR code with your authenticator app
-4. Enter the 6-digit code to verify
-5. Save backup codes securely
+4. Enter the 6-digit code to confirm and enable MFA
+5. **Save the recovery codes** — they are shown exactly once
 
-**Admin-enforced:**
-1. Navigate to **Settings > Security**
-2. Enable **Require MFA for all users** or **Require MFA for admin roles**
-3. Users will be prompted to set up MFA on their next login
+### Login Challenge
+
+When an account has MFA enabled, the password step (`POST /auth/login`) does
+**not** issue a session. It returns `{ mfa_required: true, mfa_token }`, and the
+client completes `POST /auth/mfa/login` with that token plus either a 6-digit
+TOTP code or a single-use recovery code before session cookies are issued. TOTP
+verification tolerates ±30 s of clock drift.
+
+### Admin-enforced (org-wide)
+
+1. Navigate to **Settings → Authentication**
+2. Toggle **Require two-factor authentication**
+3. Members who have not enrolled are forced into MFA setup before they can use
+   the rest of the app (enforced server-side in `get_current_user`); the
+   requirement is stored at `org.settings["security"]["mfa_required"]`
+
+Recovery codes are single-use and stored hashed; the MFA secret is encrypted at
+rest. A member who loses their authenticator and exhausts their recovery codes
+can have MFA reset by an administrator (Members admin → **Reset MFA**, or
+`POST /users/{user_id}/reset-mfa`), then re-enroll from Settings → Security.
 
 ---
 
@@ -194,8 +212,14 @@ POST   /api/v1/auth/refresh                  # Refresh access token
 POST   /api/v1/auth/logout                   # Invalidate session
 POST   /api/v1/auth/forgot-password          # Request password reset
 POST   /api/v1/auth/reset-password           # Reset password with token
-POST   /api/v1/auth/mfa/setup               # Initialize MFA setup
-POST   /api/v1/auth/mfa/verify              # Verify MFA code
+POST   /api/v1/auth/mfa/setup                # Begin MFA enrollment (secret + QR URI)
+POST   /api/v1/auth/mfa/verify-setup         # Confirm code, enable MFA, return recovery codes
+POST   /api/v1/auth/mfa/login                # Complete login second factor
+POST   /api/v1/auth/mfa/disable              # Disable MFA (verifies a code)
+GET    /api/v1/auth/mfa/status               # Enrollment status + recovery codes remaining
+GET    /api/v1/auth/mfa/policy               # Read org-wide MFA requirement (admin)
+PUT    /api/v1/auth/mfa/policy               # Set org-wide MFA requirement (admin)
+POST   /api/v1/users/{user_id}/reset-mfa     # Admin: reset a member's MFA (lost device)
 GET    /api/v1/auth/oauth-config             # Which OAuth providers are enabled (for login page)
 GET    /api/v1/auth/oauth/google             # Initiate Google sign-in (404 if not configured)
 GET    /api/v1/auth/oauth/google/callback    # Google OAuth callback

@@ -3368,10 +3368,16 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     """
     from datetime import timezone as _tz_compliance
 
+    import calendar
+
     from app.models.compliance_config import ComplianceConfig
     from app.services.compliance_config_service import ComplianceReportService
 
     today = datetime.now(_tz_compliance.utc)
+    # Clamp the configured report day to the current month's length so a
+    # report_day of 29/30/31 still fires on the last day of shorter months
+    # (e.g. Feb 28) instead of being silently skipped.
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
     results = []
     total_generated = 0
 
@@ -3384,17 +3390,18 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
         try:
             freq = config.auto_report_frequency
             report_day = config.report_day_of_month or 1
+            effective_day = min(report_day, days_in_month)
             org_id = str(config.organization_id)
 
             should_generate_monthly = (
-                freq in ("monthly", "quarterly") and today.day == report_day
+                freq in ("monthly", "quarterly") and today.day == effective_day
             )
             # For quarterly, only generate on quarter months
             if freq == "quarterly" and today.month not in (1, 4, 7, 10):
                 should_generate_monthly = False
 
             should_generate_yearly = (
-                freq == "yearly" and today.month == 1 and today.day == report_day
+                freq == "yearly" and today.month == 1 and today.day == effective_day
             )
 
             service = ComplianceReportService(db)
@@ -3964,7 +3971,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                             checked_in = att.checked_in_at
                             if checked_in and shift.end_time:
                                 delta = (shift.end_time - checked_in).total_seconds()
-                                att.duration_minutes = max(round(delta / 60.0, 1), 0)
+                                att.duration_minutes = max(int(delta / 60.0), 0)
                             org_checkouts += 1
                         except Exception as e:
                             logger.error(
