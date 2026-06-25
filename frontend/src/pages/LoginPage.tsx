@@ -242,6 +242,16 @@ export const LoginPage: React.FC = () => {
 
   const hasOAuthEnabled = oauthConfig.googleEnabled || oauthConfig.microsoftEnabled;
 
+  // While we confirm the app is configured, show a spinner rather than
+  // flashing the login form (which we may immediately redirect away from).
+  if (checkingOnboarding) {
+    return (
+      <main className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8" id="main-content">
+        <div className="inline-block animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-theme-accent-red"></div>
+      </main>
+    );
+  }
+
   if (mfaRequired) {
     return (
       <main className="relative min-h-screen flex items-center justify-center bg-linear-to-br from-theme-bg-from via-theme-bg-via to-theme-bg-to py-12 px-4 sm:px-6 lg:px-8 pb-24" id="main-content">
