@@ -499,11 +499,18 @@ class AuthService:
                 "Current password is incorrect. Please verify your existing password and try again.",
             )
 
-        # Enforce minimum password age (prevent rapid cycling through history)
-        # Skip this check when user is forced to change password (e.g., first login
-        # after admin creation or admin password reset)
+        # Enforce minimum password age (prevent rapid cycling through history).
+        # Skip this check when the user is required to change their password
+        # (e.g. first login after admin creation, self-registration, or an admin
+        # reset): the mandatory change would otherwise be blocked by the very
+        # timestamp set when the temporary password was issued, locking the user
+        # out of completing setup.
         min_age_days = settings.HIPAA_MINIMUM_PASSWORD_AGE_DAYS
-        if min_age_days > 0 and user.password_changed_at:
+        if (
+            min_age_days > 0
+            and user.password_changed_at
+            and not user.must_change_password
+        ):
             pwd_changed = (
                 user.password_changed_at.replace(tzinfo=timezone.utc)
                 if user.password_changed_at.tzinfo is None
