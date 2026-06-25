@@ -74,6 +74,9 @@ const VariantGroupsPage = lazyWithRetry(
 const AllowancesPage = lazyWithRetry(
   () => import('./pages/AllowancesPage'),
 );
+const ImpactPlannerPage = lazyWithRetry(
+  () => import('./pages/ImpactPlannerPage'),
+);
 
 export const getInventoryRoutes = () => {
   return (
@@ -249,6 +252,17 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <AllowancesPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/inventory/admin/impact-planner"
+        element={
+          <ProtectedRoute requiredPermission="inventory.manage">
+            <Suspense fallback={null}>
+              <ImpactPlannerPage />
             </Suspense>
           </ProtectedRoute>
         }

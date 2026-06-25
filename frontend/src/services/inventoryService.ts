@@ -17,6 +17,10 @@ import type {
   ItemVariantGroup, ItemVariantGroupCreate,
   EquipmentKit, EquipmentKitCreate,
   MemberSizePreferences, MemberSizePreferencesCreate,
+  ImpactPlannerOptions, ImpactPlannerRequest, ImpactPlannerResult,
+  ImpactPlannerReorderRequest, ImpactPlannerReorderResponse,
+  ImpactPlannerIssueRequest, ImpactPlannerIssueResponse,
+  ImpactPlan, ImpactPlanCreate, ImpactPlannerRequestSizesResponse,
 } from './eventServices';
 
 export const inventoryService = {
@@ -30,6 +34,52 @@ export const inventoryService = {
   async getUserInventory(userId: string): Promise<UserInventoryResponse> {
     const response = await api.get<UserInventoryResponse>(`/inventory/users/${userId}/inventory`);
     return response.data;
+  },
+
+  async getImpactPlannerOptions(): Promise<ImpactPlannerOptions> {
+    const response = await api.get<ImpactPlannerOptions>('/inventory/impact-planner/options');
+    return response.data;
+  },
+
+  async analyzeImpact(request: ImpactPlannerRequest): Promise<ImpactPlannerResult> {
+    const response = await api.post<ImpactPlannerResult>('/inventory/impact-planner', request);
+    return response.data;
+  },
+
+  async createReorderFromPlan(request: ImpactPlannerReorderRequest): Promise<ImpactPlannerReorderResponse> {
+    const response = await api.post<ImpactPlannerReorderResponse>('/inventory/impact-planner/reorder', request);
+    return response.data;
+  },
+
+  async exportPlanPdf(request: ImpactPlannerRequest): Promise<Blob> {
+    const response = await api.post<Blob>('/inventory/impact-planner/pdf', request, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  async bulkIssueFromPlan(request: ImpactPlannerIssueRequest): Promise<ImpactPlannerIssueResponse> {
+    const response = await api.post<ImpactPlannerIssueResponse>('/inventory/impact-planner/issue', request);
+    return response.data;
+  },
+
+  async requestMemberSizes(request: ImpactPlannerRequest): Promise<ImpactPlannerRequestSizesResponse> {
+    const response = await api.post<ImpactPlannerRequestSizesResponse>('/inventory/impact-planner/request-sizes', request);
+    return response.data;
+  },
+
+  async getImpactPlans(): Promise<ImpactPlan[]> {
+    const response = await api.get<ImpactPlan[]>('/inventory/impact-planner/plans');
+    return response.data;
+  },
+
+  async createImpactPlan(data: ImpactPlanCreate): Promise<ImpactPlan> {
+    const response = await api.post<ImpactPlan>('/inventory/impact-planner/plans', data);
+    return response.data;
+  },
+
+  async deleteImpactPlan(planId: string): Promise<void> {
+    await api.delete(`/inventory/impact-planner/plans/${planId}`);
   },
 
   async getSummary(): Promise<InventorySummary> {

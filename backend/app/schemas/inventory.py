@@ -1810,3 +1810,253 @@ class LabelPresetUpdate(BaseModel):
     preset: str = Field(min_length=1, max_length=50)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
+
+
+# ============================================
+# Impact Planner
+# Helps the quartermaster size up a prospective new issue (e.g. a new
+# jacket for a subset of members): who fits the chosen category, the
+# sizes they need, and who already holds a comparable item.
+# ============================================
+
+# The member size field whose value drives the "size needed" report.
+# Mirrors the columns on MemberSizePreferences.
+SizeFieldLiteral = Literal["shirt", "pant", "jacket", "boot", "glove", "hat"]
+
+
+class ImpactPlannerRequest(BaseModel):
+    """Filter criteria describing the subset of members to plan an issue for.
+
+    All filters are ANDed together; each multi-value filter matches any of
+    its values (OR within the field). When ``statuses`` is omitted the
+    analysis is limited to active members, since planning a new issue almost
+    always targets the current active roster.
+    """
+
+    statuses: Optional[List[str]] = None
+    membership_types: Optional[List[str]] = None
+    ranks: Optional[List[str]] = None
+    stations: Optional[List[str]] = None
+    position_ids: Optional[List[UUID]] = None
+    # When set, each member is flagged with whether they already hold an
+    # active item in this category (assignment or pool issuance).
+    related_category_id: Optional[UUID] = None
+    # When set, each member's needed size for this garment type is reported
+    # and rolled up into a size breakdown for purchasing.
+    size_field: Optional[SizeFieldLiteral] = None
+    # When set (with size_field), per-size demand is netted against the
+    # available on-hand stock in this category to compute the quantity to buy.
+    stock_category_id: Optional[UUID] = None
+    # When True (with related_category_id), members whose only held items are
+    # worn out or past NFPA retirement count as needing a replacement.
+    replacement_aware: bool = False
+    # When True (with stock_category_id), members at/over their issuance
+    # allowance for that category are flagged before a bulk issue.
+    allowance_aware: bool = False
+
+
+class ImpactPlannerMember(BaseModel):
+    """A single member in the impact analysis result."""
+
+    user_id: UUID
+    full_name: Optional[str] = None
+    membership_number: Optional[str] = None
+    rank: Optional[str] = None
+    station: Optional[str] = None
+    status: Optional[str] = None
+    membership_type: Optional[str] = None
+    # Contact fields are populated only when the caller may view contact info.
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    needed_size: Optional[str] = None
+    has_size_on_file: bool = False
+    has_related_item: bool = False
+    needs_replacement: bool = False
+    over_allowance: bool = False
+    related_item_names: List[str] = []
+
+
+class ImpactPlannerSizeBreakdown(BaseModel):
+    """Per-size rollup used to plan a purchase quantity.
+
+    ``on_hand`` and ``shortfall`` are populated only when the request nets
+    demand against a stock category (``stock_category_id`` + ``size_field``).
+    ``unit_cost``/``estimated_cost`` are populated when that category has
+    priced items.
+    """
+
+    size: str
+    total: int
+    needing: int
+    on_hand: Optional[int] = None
+    shortfall: Optional[int] = None
+    unit_cost: Optional[float] = None
+    estimated_cost: Optional[float] = None
+
+
+class ImpactPlannerResponse(BaseModel):
+    """Aggregated impact analysis for the selected member subset."""
+
+    total_members: int
+    members_with_related_item: int
+    members_needing_item: int
+    members_needing_replacement: int = 0
+    members_missing_sizes: int
+    members_over_allowance: int = 0
+    replacement_aware: bool = False
+    allowance_aware: bool = False
+    size_field: Optional[str] = None
+    size_breakdown: List[ImpactPlannerSizeBreakdown] = []
+    stock_checked: bool = False
+    total_to_purchase: Optional[int] = None
+    cost_estimated: bool = False
+    estimated_total_cost: Optional[float] = None
+    members: List[ImpactPlannerMember]
+
+
+class ImpactPlannerOption(BaseModel):
+    """A selectable value/label pair for a planner filter dropdown."""
+
+    value: str
+    label: str
+
+
+class ImpactPlannerCategoryOption(BaseModel):
+    """An inventory category that can be used as the 'related item' filter."""
+
+    id: UUID
+    name: str
+    item_type: Optional[str] = None
+
+
+class ImpactPlannerPositionOption(BaseModel):
+    """A corporate position/role that can be used to filter members."""
+
+    id: UUID
+    name: str
+
+
+class ImpactPlannerOptionsResponse(BaseModel):
+    """Filter options for building an impact-planner query."""
+
+    statuses: List[ImpactPlannerOption]
+    membership_types: List[ImpactPlannerOption]
+    ranks: List[ImpactPlannerOption]
+    stations: List[str]
+    positions: List[ImpactPlannerPositionOption]
+    categories: List[ImpactPlannerCategoryOption]
+    size_fields: List[ImpactPlannerOption]
+
+
+class ImpactPlanCreate(BaseModel):
+    """Create a saved, named impact-planner scenario."""
+
+    name: str = Field(min_length=1, max_length=255)
+    description: Optional[FreeText] = None
+    filters: ImpactPlannerRequest
+
+
+class ImpactPlanUpdate(BaseModel):
+    """Update a saved impact-planner scenario."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[FreeText] = None
+    filters: Optional[ImpactPlannerRequest] = None
+
+
+class ImpactPlanResponse(UTCResponseBase):
+    """A saved impact-planner scenario."""
+
+    id: UUID
+    organization_id: UUID
+    name: str
+    description: Optional[str] = None
+    filters: Dict[str, Any]
+    created_by: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = _response_config
+
+
+class ImpactPlannerReorderRequest(ImpactPlannerRequest):
+    """Generate reorder requests from an impact plan's per-size shortfall.
+
+    Reuses the analysis filters and requires both ``size_field`` and
+    ``stock_category_id`` so a shortfall can be computed; one reorder is
+    created per size with a positive shortfall. The vendor/urgency/notes are
+    applied to every created reorder.
+    """
+
+    vendor: Optional[str] = Field(None, max_length=255)
+    urgency: ReorderUrgencyLiteral = "normal"
+    notes: Optional[FreeText] = None
+
+
+class ImpactPlannerIssueRequest(ImpactPlannerRequest):
+    """Bulk-issue on-hand pool stock to the members a plan says need it.
+
+    Reuses the analysis filters; requires ``size_field`` and
+    ``stock_category_id`` so members can be matched to sized stock.
+    """
+
+    reason: Optional[FreeText] = None
+
+
+class ImpactPlannerIssuedItem(BaseModel):
+    """A member who was issued an item by the bulk action."""
+
+    user_id: UUID
+    name: Optional[str] = None
+    item_name: str
+    size: str
+
+
+class ImpactPlannerSkippedItem(BaseModel):
+    """A member who could not be issued, with the reason why."""
+
+    user_id: UUID
+    name: Optional[str] = None
+    reason: str
+
+
+class ImpactPlannerIssueResponse(BaseModel):
+    """Summary of a bulk issue run from an impact plan."""
+
+    issued_count: int
+    skipped_count: int
+    issued: List[ImpactPlannerIssuedItem]
+    skipped: List[ImpactPlannerSkippedItem]
+
+
+class ImpactPlannerNotifiedMember(BaseModel):
+    """A member notified to submit their sizes."""
+
+    user_id: UUID
+    name: Optional[str] = None
+
+
+class ImpactPlannerRequestSizesResponse(BaseModel):
+    """Summary of a request-sizes run from an impact plan."""
+
+    notified_count: int
+    members: List[ImpactPlannerNotifiedMember]
+
+
+class ImpactPlannerReorderResultItem(BaseModel):
+    """A single reorder request created from the plan."""
+
+    id: UUID
+    item_name: str
+    size: str
+    quantity_requested: int
+
+
+class ImpactPlannerReorderResponse(BaseModel):
+    """Summary of reorder requests created from an impact plan."""
+
+    created_count: int
+    total_quantity: int
+    # Members whose size is unknown can't be reordered and are surfaced here.
+    skipped_unknown_size: int
+    reorder_requests: List[ImpactPlannerReorderResultItem]

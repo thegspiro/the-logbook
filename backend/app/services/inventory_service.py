@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
+from app.models.notification import NotificationLog
+from app.utils.impact_plan_pdf import render_impact_plan_pdf
 from app.utils.label_renderer import LabelSpec, render_labels
 from app.models.inventory import (
     AssignmentType,
@@ -27,6 +29,7 @@ from app.models.inventory import (
     EquipmentRequest,
     InventoryActionType,
     InventoryCategory,
+    InventoryImpactPlan,
     InventoryItem,
     IssuanceAllowance,
     ItemAssignment,
@@ -38,6 +41,7 @@ from app.models.inventory import (
     MaintenanceRecord,
     MemberSizePreferences,
     NFPAInspectionDetail,
+    NFPAItemCompliance,
     ReorderRequest,
     ReorderStatus,
     RequestStatus,
@@ -49,7 +53,15 @@ from app.models.inventory import (
     WriteOffRequest,
     WriteOffStatus,
 )
-from app.models.user import Organization, User
+from app.models.operational_rank import OperationalRank
+from app.models.user import (
+    MembershipType,
+    Organization,
+    Position,
+    User,
+    UserStatus,
+    user_positions,
+)
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -4448,3 +4460,1090 @@ class InventoryService:
         except Exception as e:
             logger.error(f"Error upserting member size preferences: {e}")
             return None, str(e)
+
+    # ============================================
+    # Impact Planner
+    # ============================================
+
+    # Maps a requested size_field to the MemberSizePreferences attributes that
+    # compose the displayed/bucketed size value.
+    _SIZE_FIELD_LABELS = {
+        "shirt": "Shirt",
+        "pant": "Pants",
+        "jacket": "Jacket",
+        "boot": "Boots",
+        "glove": "Gloves",
+        "hat": "Hat",
+    }
+
+    # Canonicalises common alpha-size spellings so member preferences and
+    # on-hand item sizes match even when entered differently (e.g. "3XL" vs
+    # "XXXL", "Medium" vs "M"). Keys/values are already lowercased/trimmed.
+    _SIZE_ALIASES = {
+        "2xs": "xxs",
+        "xxs": "xxs",
+        "xs": "xs",
+        "extra small": "xs",
+        "s": "s",
+        "sm": "s",
+        "small": "s",
+        "m": "m",
+        "med": "m",
+        "medium": "m",
+        "l": "l",
+        "lg": "l",
+        "large": "l",
+        "xl": "xl",
+        "1xl": "xl",
+        "extra large": "xl",
+        "xxl": "xxl",
+        "2xl": "xxl",
+        "xxxl": "xxxl",
+        "3xl": "xxxl",
+        "xxxxl": "xxxxl",
+        "4xl": "xxxxl",
+    }
+
+    @classmethod
+    def _normalize_size_key(cls, value: Optional[str]) -> str:
+        """Normalize a size string into a key for matching demand to stock.
+
+        Drops any parenthetical qualifier (e.g. boot width), collapses
+        whitespace, lowercases, then maps common alpha-size aliases to a
+        canonical form. Best-effort: matching is only as reliable as the
+        consistency of the entered sizes.
+        """
+        if not value:
+            return ""
+        base = value.split("(")[0]
+        key = " ".join(base.lower().split())
+        return cls._SIZE_ALIASES.get(key, key)
+
+    @classmethod
+    def _item_stock_size_value(cls, item: InventoryItem) -> Optional[str]:
+        """The size string to bucket an item's on-hand stock by.
+
+        Prefers the structured ``standard_size`` (skipping the ``custom``
+        sentinel, which signals the real value lives in free-text ``size``)
+        and falls back to the free-text ``size`` field.
+        """
+        ss = item.standard_size
+        if ss is not None:
+            val = ss.value if hasattr(ss, "value") else ss
+            if val and val != "custom":
+                return val
+        return item.size
+
+    # Conditions that mark a held item as no longer serviceable — a member
+    # holding only these still needs a replacement.
+    _WORN_CONDITION_VALUES = {"poor", "damaged", "out_of_service"}
+
+    async def _get_related_holdings(
+        self,
+        organization_id: str,
+        related_category_id: Optional[str],
+        user_ids: List[str],
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Active items each member holds in the related category.
+
+        Returns ``{user_id: [{"name", "unserviceable"}, ...]}`` over both
+        permanent assignments and pool issuances. An item is *unserviceable*
+        when its condition is worn (poor/damaged/out-of-service) or it is past
+        its NFPA retirement (expected retirement date reached, or retired by
+        age).
+        """
+        holdings: Dict[str, List[Dict[str, Any]]] = {}
+        if not (related_category_id and user_ids):
+            return holdings
+
+        today = date.today()
+
+        def _record(uid, name, condition, ret_date, retired_by_age):
+            cond_val = (
+                condition.value if hasattr(condition, "value") else condition
+            )
+            worn = cond_val in self._WORN_CONDITION_VALUES
+            expired = bool(retired_by_age) or (
+                ret_date is not None and ret_date <= today
+            )
+            holdings.setdefault(uid, []).append(
+                {"name": name, "unserviceable": worn or expired}
+            )
+
+        for source_user, source_item in (
+            (ItemAssignment.user_id, ItemAssignment.item_id),
+            (ItemIssuance.user_id, ItemIssuance.item_id),
+        ):
+            is_assignment = source_user is ItemAssignment.user_id
+            active_clause = (
+                ItemAssignment.is_active == True  # noqa: E712
+                if is_assignment
+                else ItemIssuance.is_returned == False  # noqa: E712
+            )
+            org_clause = (
+                ItemAssignment.organization_id == organization_id
+                if is_assignment
+                else ItemIssuance.organization_id == organization_id
+            )
+            rows = await self.db.execute(
+                select(
+                    source_user,
+                    InventoryItem.name,
+                    InventoryItem.condition,
+                    NFPAItemCompliance.expected_retirement_date,
+                    NFPAItemCompliance.is_retired_by_age,
+                )
+                .join(InventoryItem, source_item == InventoryItem.id)
+                .outerjoin(
+                    NFPAItemCompliance,
+                    NFPAItemCompliance.item_id == InventoryItem.id,
+                )
+                .where(org_clause)
+                .where(active_clause)
+                .where(source_user.in_(user_ids))
+                .where(InventoryItem.category_id == related_category_id)
+            )
+            for uid, name, condition, ret_date, retired_by_age in rows.all():
+                _record(uid, name, condition, ret_date, retired_by_age)
+
+        return holdings
+
+    @staticmethod
+    def _item_unit_cost(item: InventoryItem) -> Optional[float]:
+        """Best estimate of an item's unit cost for budgeting.
+
+        Prefers ``replacement_cost`` (what it costs to buy a new one today)
+        and falls back to the original ``purchase_price``.
+        """
+        for attr in ("replacement_cost", "purchase_price"):
+            val = getattr(item, attr, None)
+            if val is not None:
+                try:
+                    return float(val)
+                except (TypeError, ValueError):
+                    continue
+        return None
+
+    async def _get_stock_and_cost_by_size(
+        self, organization_id: str, category_id: str
+    ) -> Tuple[Dict[str, int], Dict[str, float], Optional[float]]:
+        """Return available stock and unit-cost estimates for a category.
+
+        Returns ``(stock_by_size, unit_cost_by_size, avg_unit_cost)``:
+
+        - ``stock_by_size``: available units keyed by normalized size. Pool
+          items contribute unissued quantity (``quantity - quantity_issued``);
+          individually-tracked items contribute one unit when ``available``.
+        - ``unit_cost_by_size``: mean unit cost of priced items at each size,
+          used to estimate per-size purchase cost.
+        - ``avg_unit_cost``: mean unit cost across the whole category, used as
+          a fallback for sizes with no priced items (or unknown sizes).
+
+        Retired items are ignored. Keys are normalized via
+        :meth:`_normalize_size_key`.
+        """
+        items = (
+            await self.db.execute(
+                select(InventoryItem)
+                .where(InventoryItem.organization_id == organization_id)
+                .where(InventoryItem.category_id == category_id)
+                .where(InventoryItem.status != ItemStatus.RETIRED)
+            )
+        ).scalars().all()
+
+        stock: Dict[str, int] = {}
+        cost_sums: Dict[str, float] = {}
+        cost_counts: Dict[str, int] = {}
+        all_cost_sum = 0.0
+        all_cost_count = 0
+        for item in items:
+            key = self._normalize_size_key(self._item_stock_size_value(item))
+
+            if item.tracking_type == TrackingType.POOL:
+                avail = (item.quantity or 0) - (item.quantity_issued or 0)
+                if avail < 0:
+                    avail = 0
+            else:
+                avail = 1 if item.status == ItemStatus.AVAILABLE else 0
+            if avail > 0:
+                stock[key] = stock.get(key, 0) + avail
+
+            unit_cost = self._item_unit_cost(item)
+            if unit_cost is not None:
+                cost_sums[key] = cost_sums.get(key, 0.0) + unit_cost
+                cost_counts[key] = cost_counts.get(key, 0) + 1
+                all_cost_sum += unit_cost
+                all_cost_count += 1
+
+        unit_cost_by_size = {
+            key: round(cost_sums[key] / cost_counts[key], 2) for key in cost_sums
+        }
+        avg_unit_cost = (
+            round(all_cost_sum / all_cost_count, 2) if all_cost_count else None
+        )
+        return stock, unit_cost_by_size, avg_unit_cost
+
+    async def _get_available_pool_items_by_size(
+        self, organization_id: str, category_id: str
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Available pool items in a category, grouped by normalized size.
+
+        Returns ``{size_key: [{"item_id", "name", "remaining"}, ...]}`` for
+        pool-tracked items with unissued stock — the candidates a bulk issue
+        draws from. Only pool items are returned; individually-tracked items
+        are assigned through a different flow.
+        """
+        items = (
+            await self.db.execute(
+                select(InventoryItem)
+                .where(InventoryItem.organization_id == organization_id)
+                .where(InventoryItem.category_id == category_id)
+                .where(InventoryItem.status != ItemStatus.RETIRED)
+                .where(InventoryItem.tracking_type == TrackingType.POOL)
+            )
+        ).scalars().all()
+
+        by_size: Dict[str, List[Dict[str, Any]]] = {}
+        for item in items:
+            avail = (item.quantity or 0) - (item.quantity_issued or 0)
+            if avail <= 0:
+                continue
+            key = self._normalize_size_key(self._item_stock_size_value(item))
+            by_size.setdefault(key, []).append(
+                {"item_id": item.id, "name": item.name, "remaining": avail}
+            )
+        return by_size
+
+    @staticmethod
+    def _format_needed_size(
+        prefs: Optional[MemberSizePreferences], size_field: Optional[str]
+    ) -> Optional[str]:
+        """Render a member's stored size for *size_field* as a display string.
+
+        Returns ``None`` when no size is on file so callers can bucket those
+        members separately (they must be measured before purchasing).
+        """
+        if prefs is None or not size_field:
+            return None
+        if size_field == "shirt":
+            return prefs.shirt_size or None
+        if size_field == "jacket":
+            return prefs.jacket_size or None
+        if size_field == "glove":
+            return prefs.glove_size or None
+        if size_field == "hat":
+            return prefs.hat_size or None
+        if size_field == "boot":
+            if not prefs.boot_size:
+                return None
+            if prefs.boot_width:
+                return f"{prefs.boot_size} ({prefs.boot_width})"
+            return prefs.boot_size
+        if size_field == "pant":
+            waist = prefs.pant_waist
+            inseam = prefs.pant_inseam
+            if waist and inseam:
+                return f"{waist} x {inseam}"
+            return waist or inseam or None
+        return None
+
+    async def _get_over_allowance_uids(
+        self, organization_id: str, category_id: str, user_ids: List[str]
+    ) -> set:
+        """User IDs who are at/over their issuance allowance for a category.
+
+        Issuing one more unit would exceed the member's per-category cap. The
+        applicable allowance is the role-specific one matching any of the
+        member's positions, else the org-wide one. Computed in batch (a query
+        per distinct allowance) to avoid per-member round-trips.
+        """
+        if not (category_id and user_ids):
+            return set()
+
+        allowances = (
+            await self.db.execute(
+                select(IssuanceAllowance)
+                .where(IssuanceAllowance.organization_id == organization_id)
+                .where(IssuanceAllowance.category_id == category_id)
+                .where(IssuanceAllowance.is_active.is_(True))
+            )
+        ).scalars().all()
+        if not allowances:
+            return set()
+
+        # Member -> set of position ids, for role-specific allowance matching.
+        pos_map: Dict[str, set] = {}
+        for uid, pid in (
+            await self.db.execute(
+                select(user_positions.c.user_id, user_positions.c.position_id)
+                .where(user_positions.c.user_id.in_(user_ids))
+            )
+        ).all():
+            pos_map.setdefault(uid, set()).add(pid)
+
+        role_allowances = {a.role_id: a for a in allowances if a.role_id}
+        org_wide = next((a for a in allowances if not a.role_id), None)
+
+        def _pick(uid):
+            for pid in pos_map.get(uid, ()):  # role-specific wins
+                if pid in role_allowances:
+                    return role_allowances[pid]
+            return org_wide
+
+        chosen = {uid: _pick(uid) for uid in user_ids}
+
+        # Pool item ids in the category (issuances are tracked against items).
+        item_ids = [
+            r[0]
+            for r in (
+                await self.db.execute(
+                    select(InventoryItem.id).where(
+                        InventoryItem.organization_id == organization_id,
+                        InventoryItem.category_id == category_id,
+                        InventoryItem.tracking_type == TrackingType.POOL,
+                    )
+                )
+            ).all()
+        ]
+
+        # Batch issued-this-period counts, grouped by the chosen allowance
+        # (period differs per allowance).
+        issued: Dict[str, int] = {}
+        if item_ids:
+            groups: Dict[str, List[str]] = {}
+            for uid, allowance in chosen.items():
+                if allowance is not None:
+                    groups.setdefault(allowance.id, []).append(uid)
+            by_id = {a.id: a for a in allowances}
+            for aid, uids in groups.items():
+                allowance = by_id[aid]
+                q = (
+                    select(
+                        ItemIssuance.user_id,
+                        func.coalesce(func.sum(ItemIssuance.quantity_issued), 0),
+                    )
+                    .where(ItemIssuance.organization_id == organization_id)
+                    .where(ItemIssuance.user_id.in_(uids))
+                    .where(ItemIssuance.item_id.in_(item_ids))
+                    .group_by(ItemIssuance.user_id)
+                )
+                if allowance.period_type == "annual":
+                    now = datetime.now(timezone.utc)
+                    q = q.where(
+                        ItemIssuance.issued_at
+                        >= datetime(now.year, 1, 1, tzinfo=timezone.utc)
+                    )
+                for uid, cnt in (await self.db.execute(q)).all():
+                    issued[uid] = int(cnt or 0)
+
+        over = set()
+        for uid in user_ids:
+            allowance = chosen.get(uid)
+            if allowance is None:
+                continue
+            if issued.get(uid, 0) >= allowance.max_quantity:
+                over.add(uid)
+        return over
+
+    async def analyze_impact(
+        self,
+        organization_id,
+        filters: Dict[str, Any],
+        include_contact: bool = False,
+        contact_visibility: Optional[Dict[str, bool]] = None,
+    ) -> Dict[str, Any]:
+        """Analyze how many members a prospective new issue would impact.
+
+        Filters the member roster by the supplied criteria, then annotates
+        each member with the size they need (when *size_field* is given) and
+        whether they already hold a comparable item (when
+        *related_category_id* is given). Returns the per-member list plus
+        aggregate counts and a per-size breakdown for purchase planning.
+
+        Contact fields honour the organization's contact-visibility settings:
+        *contact_visibility* is a ``{"show_email", "show_phone",
+        "show_mobile"}`` dict (as resolved from org settings). When it is not
+        supplied, *include_contact* is used as a blanket on/off for all three
+        fields (kept for internal callers/tests).
+        """
+        org_id = str(organization_id)
+        if contact_visibility is None:
+            contact_visibility = {
+                "show_email": include_contact,
+                "show_phone": include_contact,
+                "show_mobile": include_contact,
+            }
+
+        statuses = filters.get("statuses")
+        membership_types = filters.get("membership_types")
+        ranks = filters.get("ranks")
+        stations = filters.get("stations")
+        position_ids = filters.get("position_ids")
+        related_category_id = filters.get("related_category_id")
+        size_field = filters.get("size_field")
+        stock_category_id = filters.get("stock_category_id")
+        replacement_aware = bool(filters.get("replacement_aware"))
+        allowance_aware = bool(filters.get("allowance_aware"))
+
+        related_category_id = (
+            str(related_category_id) if related_category_id else None
+        )
+        stock_category_id = (
+            str(stock_category_id) if stock_category_id else None
+        )
+
+        query = (
+            select(User)
+            .where(User.organization_id == org_id)
+            .where(User.deleted_at.is_(None))
+        )
+
+        # Default to the active roster — planning a new issue targets members
+        # currently in service unless the caller explicitly broadens the scope.
+        if statuses:
+            query = query.where(User.status.in_(statuses))
+        else:
+            query = query.where(User.status == UserStatus.ACTIVE.value)
+
+        if membership_types:
+            query = query.where(User.membership_type.in_(membership_types))
+        if ranks:
+            query = query.where(User.rank.in_(ranks))
+        if stations:
+            query = query.where(User.station.in_(stations))
+        if position_ids:
+            pos_ids = [str(pid) for pid in position_ids]
+            query = query.where(User.positions.any(Position.id.in_(pos_ids)))
+
+        query = query.order_by(User.last_name, User.first_name)
+        users = (await self.db.execute(query)).scalars().all()
+        user_ids = [u.id for u in users]
+
+        # Size preferences for the matched members (one-to-one per member).
+        size_map: Dict[str, MemberSizePreferences] = {}
+        if size_field and user_ids:
+            prefs_rows = (
+                await self.db.execute(
+                    select(MemberSizePreferences).where(
+                        MemberSizePreferences.user_id.in_(user_ids)
+                    )
+                )
+            ).scalars().all()
+            size_map = {p.user_id: p for p in prefs_rows}
+
+        # Members who already hold an active item in the related category —
+        # via permanent assignment or pool issuance. Each held item's condition
+        # and NFPA retirement are captured so that, when replacement_aware is
+        # set, worn-out or expired gear counts as "needs replacement" rather
+        # than excluding the member from the purchase counts.
+        related_map = await self._get_related_holdings(
+            org_id, related_category_id, user_ids
+        )
+
+        # Members at/over their issuance allowance for the category being
+        # issued (the stock category), so the plan can warn before a bulk issue
+        # would skip them.
+        over_allowance_uids = set()
+        if allowance_aware and stock_category_id:
+            over_allowance_uids = await self._get_over_allowance_uids(
+                org_id, stock_category_id, user_ids
+            )
+
+        members: List[Dict[str, Any]] = []
+        size_buckets: Dict[str, Dict[str, int]] = {}
+        with_related = 0
+        missing_sizes = 0
+        needing_replacement = 0
+        over_allowance_count = 0
+
+        for u in users:
+            holdings = related_map.get(u.id, [])
+            names = [h["name"] for h in holdings if h["name"]]
+            has_any = bool(holdings)
+            serviceable = sum(1 for h in holdings if not h["unserviceable"])
+
+            if replacement_aware:
+                # "Already covered" means they hold a serviceable item; a member
+                # whose only items are worn/expired still needs a replacement.
+                has_related = serviceable > 0
+                needs_replacement = has_any and serviceable == 0
+            else:
+                has_related = has_any
+                needs_replacement = False
+
+            if has_related:
+                with_related += 1
+            if needs_replacement:
+                needing_replacement += 1
+
+            needed_size = self._format_needed_size(size_map.get(u.id), size_field)
+            has_size = needed_size is not None
+            if size_field and not has_related and not has_size:
+                missing_sizes += 1
+
+            # Only members who'd actually be issued (need the item) are flagged.
+            over_allowance = (not has_related) and (u.id in over_allowance_uids)
+            if over_allowance:
+                over_allowance_count += 1
+
+            members.append(
+                {
+                    "user_id": u.id,
+                    "full_name": u.full_name or None,
+                    "membership_number": u.membership_number,
+                    "rank": u.rank,
+                    "station": u.station,
+                    "status": (
+                        u.status.value if hasattr(u.status, "value") else u.status
+                    ),
+                    "membership_type": u.membership_type,
+                    "email": (
+                        u.email if contact_visibility.get("show_email") else None
+                    ),
+                    "phone": (
+                        u.phone
+                        if contact_visibility.get("show_phone") and u.phone
+                        else (
+                            u.mobile
+                            if contact_visibility.get("show_mobile") and u.mobile
+                            else None
+                        )
+                    ),
+                    "needed_size": needed_size,
+                    "has_size_on_file": has_size,
+                    "has_related_item": has_related,
+                    "needs_replacement": needs_replacement,
+                    "over_allowance": over_allowance,
+                    "related_item_names": names,
+                }
+            )
+
+            if size_field:
+                bucket_key = needed_size or "Unknown"
+                bucket = size_buckets.setdefault(
+                    bucket_key, {"total": 0, "needing": 0}
+                )
+                bucket["total"] += 1
+                if not has_related:
+                    bucket["needing"] += 1
+
+        # Net per-size demand against currently available stock so the
+        # breakdown shows the real purchase quantity (need − on-hand), and
+        # estimate the purchase cost from the stock category's item prices.
+        # Members with no size on file ("Unknown") can't be matched to stock,
+        # so their full demand carries to the shortfall.
+        stock_checked = bool(stock_category_id and size_field)
+        stock_map: Dict[str, int] = {}
+        unit_cost_map: Dict[str, float] = {}
+        avg_unit_cost: Optional[float] = None
+        if stock_checked:
+            (
+                stock_map,
+                unit_cost_map,
+                avg_unit_cost,
+            ) = await self._get_stock_and_cost_by_size(org_id, stock_category_id)
+        cost_estimated = stock_checked and avg_unit_cost is not None
+
+        # Sort the breakdown so "Unknown" (members lacking a size) sorts last
+        # and the rest are alphabetical for a stable, readable table.
+        size_breakdown = []
+        total_to_purchase = 0
+        total_cost = 0.0
+        for key, vals in sorted(
+            size_buckets.items(), key=lambda kv: (kv[0] == "Unknown", kv[0])
+        ):
+            entry = {"size": key, "total": vals["total"], "needing": vals["needing"]}
+            if stock_checked:
+                norm_key = self._normalize_size_key(key)
+                on_hand = 0 if key == "Unknown" else stock_map.get(norm_key, 0)
+                shortfall = max(0, vals["needing"] - on_hand)
+                entry["on_hand"] = on_hand
+                entry["shortfall"] = shortfall
+                total_to_purchase += shortfall
+                if cost_estimated:
+                    unit_cost = unit_cost_map.get(norm_key, avg_unit_cost)
+                    entry["unit_cost"] = unit_cost
+                    line_cost = (
+                        round(unit_cost * shortfall, 2)
+                        if unit_cost is not None
+                        else None
+                    )
+                    entry["estimated_cost"] = line_cost
+                    if line_cost:
+                        total_cost += line_cost
+            size_breakdown.append(entry)
+
+        total = len(members)
+        return {
+            "total_members": total,
+            "members_with_related_item": with_related,
+            "members_needing_item": total - with_related,
+            "members_needing_replacement": needing_replacement,
+            "members_missing_sizes": missing_sizes,
+            "members_over_allowance": over_allowance_count,
+            "replacement_aware": replacement_aware,
+            "allowance_aware": allowance_aware,
+            "size_field": size_field,
+            "size_breakdown": size_breakdown,
+            "stock_checked": stock_checked,
+            "total_to_purchase": total_to_purchase if stock_checked else None,
+            "cost_estimated": cost_estimated,
+            "estimated_total_cost": round(total_cost, 2) if cost_estimated else None,
+            "members": members,
+        }
+
+    async def create_reorder_from_plan(
+        self,
+        organization_id,
+        filters: Dict[str, Any],
+        reorder_meta: Dict[str, Any],
+        requested_by: str,
+    ) -> Dict[str, Any]:
+        """Create reorder requests from an impact plan's per-size shortfall.
+
+        Re-runs the analysis server-side (so quantities can't be tampered with
+        or go stale) and creates one PENDING reorder per size with a positive
+        shortfall, all scoped to the plan's stock category. Sizes with unknown
+        member sizes can't be ordered and are reported back, not created.
+        """
+        org_id = str(organization_id)
+
+        analysis = await self.analyze_impact(
+            org_id, filters, include_contact=False
+        )
+        if not analysis["stock_checked"]:
+            raise ValueError(
+                "Select a size field and a stock category before "
+                "generating reorder requests."
+            )
+
+        stock_category_id = str(filters.get("stock_category_id"))
+        category = await self.db.scalar(
+            select(InventoryCategory)
+            .where(InventoryCategory.id == stock_category_id)
+            .where(InventoryCategory.organization_id == org_id)
+        )
+        base_name = category.name if category else "Item"
+        size_label = self._SIZE_FIELD_LABELS.get(filters.get("size_field"), "")
+
+        vendor = reorder_meta.get("vendor")
+        urgency = reorder_meta.get("urgency") or "normal"
+        extra_notes = reorder_meta.get("notes")
+
+        created: List[Tuple[ReorderRequest, str]] = []
+        total_qty = 0
+        skipped_unknown = 0
+
+        for entry in analysis["size_breakdown"]:
+            if entry["size"] == "Unknown":
+                skipped_unknown += entry.get("needing", 0)
+                continue
+            shortfall = entry.get("shortfall") or 0
+            if shortfall <= 0:
+                continue
+
+            note = (
+                f"Generated from impact plan ({size_label} {entry['size']}): "
+                f"{entry['needing']} needed, {entry.get('on_hand', 0)} on hand."
+            )
+            if extra_notes:
+                note = f"{note} {extra_notes}"
+
+            reorder = ReorderRequest(
+                organization_id=org_id,
+                category_id=stock_category_id,
+                item_name=f"{base_name} — {entry['size']}"[:255],
+                quantity_requested=shortfall,
+                vendor=vendor,
+                # Carry the plan's per-size cost estimate onto the PO so the
+                # reorder is pre-priced when it lands in the reorder queue.
+                estimated_unit_cost=entry.get("unit_cost"),
+                urgency=urgency,
+                notes=note,
+                requested_by=requested_by,
+            )
+            self.db.add(reorder)
+            created.append((reorder, entry["size"]))
+            total_qty += shortfall
+
+        await self.db.flush()
+        for reorder, _ in created:
+            await self.db.refresh(reorder)
+
+        return {
+            "created_count": len(created),
+            "total_quantity": total_qty,
+            "skipped_unknown_size": skipped_unknown,
+            "reorder_requests": [
+                {
+                    "id": reorder.id,
+                    "item_name": reorder.item_name,
+                    "size": size,
+                    "quantity_requested": reorder.quantity_requested,
+                }
+                for reorder, size in created
+            ],
+        }
+
+    async def bulk_issue_from_plan(
+        self,
+        organization_id,
+        filters: Dict[str, Any],
+        issued_by: str,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Issue on-hand pool stock to the members a plan says still need it.
+
+        Re-runs the analysis, then for each member who needs the item (and,
+        when replacement-aware, those whose gear is worn/expired) issues one
+        unit of a matching-size pool item from the stock category. Members are
+        skipped — with a reason — when they have no size on file, no matching
+        stock remains, or issuance is blocked (e.g. allowance). Stock is drawn
+        down across members so the same units aren't issued twice.
+        """
+        org_id = str(organization_id)
+        size_field = filters.get("size_field")
+        stock_category_id = filters.get("stock_category_id")
+        if not (size_field and stock_category_id):
+            raise ValueError(
+                "Select a size field and a stock category before bulk issuing."
+            )
+        stock_category_id = str(stock_category_id)
+
+        analysis = await self.analyze_impact(org_id, filters, include_contact=False)
+        pool_by_size = await self._get_available_pool_items_by_size(
+            org_id, stock_category_id
+        )
+
+        issued: List[Dict[str, Any]] = []
+        skipped: List[Dict[str, Any]] = []
+
+        for member in analysis["members"]:
+            if member["has_related_item"]:
+                continue  # already covered — not a target
+
+            name = member.get("full_name")
+            size = member.get("needed_size")
+            if not size:
+                skipped.append(
+                    {"user_id": member["user_id"], "name": name,
+                     "reason": "No size on file"}
+                )
+                continue
+
+            candidates = pool_by_size.get(self._normalize_size_key(size), [])
+            chosen = next((c for c in candidates if c["remaining"] > 0), None)
+            if chosen is None:
+                skipped.append(
+                    {"user_id": member["user_id"], "name": name,
+                     "reason": f"No {size} stock available"}
+                )
+                continue
+
+            issuance, error = await self.issue_from_pool(
+                item_id=chosen["item_id"],
+                user_id=member["user_id"],
+                organization_id=org_id,
+                issued_by=issued_by,
+                quantity=1,
+                reason=reason or "Bulk issue from impact plan",
+            )
+            if error:
+                skipped.append(
+                    {"user_id": member["user_id"], "name": name,
+                     "reason": error}
+                )
+                continue
+
+            chosen["remaining"] -= 1
+            issued.append(
+                {
+                    "user_id": member["user_id"],
+                    "name": name,
+                    "item_name": chosen["name"],
+                    "size": size,
+                }
+            )
+
+        return {
+            "issued_count": len(issued),
+            "skipped_count": len(skipped),
+            "issued": issued,
+            "skipped": skipped,
+        }
+
+    async def list_impact_plans(
+        self, organization_id
+    ) -> List[InventoryImpactPlan]:
+        """List the organization's saved impact-planner scenarios."""
+        rows = await self.db.execute(
+            select(InventoryImpactPlan)
+            .where(InventoryImpactPlan.organization_id == str(organization_id))
+            .order_by(InventoryImpactPlan.name)
+        )
+        return list(rows.scalars().all())
+
+    async def get_impact_plan(
+        self, plan_id, organization_id
+    ) -> Optional[InventoryImpactPlan]:
+        """Fetch a single saved plan scoped to the organization."""
+        return await self.db.scalar(
+            select(InventoryImpactPlan)
+            .where(InventoryImpactPlan.id == str(plan_id))
+            .where(InventoryImpactPlan.organization_id == str(organization_id))
+        )
+
+    async def create_impact_plan(
+        self, organization_id, data: Dict[str, Any], created_by: str
+    ) -> InventoryImpactPlan:
+        """Create a saved impact-planner scenario."""
+        plan = InventoryImpactPlan(
+            organization_id=str(organization_id),
+            name=data["name"],
+            description=data.get("description"),
+            filters=data.get("filters") or {},
+            created_by=created_by,
+        )
+        self.db.add(plan)
+        await self.db.flush()
+        await self.db.refresh(plan)
+        return plan
+
+    async def update_impact_plan(
+        self, plan_id, organization_id, data: Dict[str, Any]
+    ) -> Tuple[Optional[InventoryImpactPlan], Optional[str]]:
+        """Update a saved plan's name, description, or filters."""
+        plan = await self.get_impact_plan(plan_id, organization_id)
+        if not plan:
+            return None, "Impact plan not found"
+        for key in ("name", "description", "filters"):
+            if key in data and data[key] is not None:
+                setattr(plan, key, data[key])
+        await self.db.flush()
+        await self.db.refresh(plan)
+        return plan, None
+
+    async def delete_impact_plan(self, plan_id, organization_id) -> bool:
+        """Delete a saved plan; returns False when not found."""
+        plan = await self.get_impact_plan(plan_id, organization_id)
+        if not plan:
+            return False
+        await self.db.delete(plan)
+        await self.db.flush()
+        return True
+
+    async def request_member_sizes(
+        self, organization_id, filters: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Notify members who need the item but have no size on file.
+
+        Sends an in-app notification asking each such member to add their
+        equipment sizes (self-service), so the next run of the plan can size
+        and cost them. Requires a size field to know which size is missing.
+        """
+        org_id = str(organization_id)
+        size_field = filters.get("size_field")
+        if not size_field:
+            raise ValueError(
+                "Select a size field to identify members missing sizes."
+            )
+
+        analysis = await self.analyze_impact(org_id, filters)
+        size_label = self._SIZE_FIELD_LABELS.get(size_field, "equipment")
+        subject = "Equipment sizes needed"
+        message = (
+            f"Your {size_label.lower()} size isn't on file. Please add your "
+            "equipment sizes so the quartermaster can issue your gear."
+        )
+
+        notified: List[Dict[str, Any]] = []
+        for member in analysis["members"]:
+            if member["has_related_item"] or member["has_size_on_file"]:
+                continue
+            self.db.add(
+                NotificationLog(
+                    organization_id=org_id,
+                    recipient_id=str(member["user_id"]),
+                    channel="in_app",
+                    category="inventory",
+                    subject=subject,
+                    message=message,
+                    action_url="/inventory/my-equipment",
+                    delivered=True,
+                )
+            )
+            notified.append(
+                {"user_id": member["user_id"], "name": member.get("full_name")}
+            )
+
+        await self.db.flush()
+        return {"notified_count": len(notified), "members": notified}
+
+    async def generate_impact_plan_pdf(
+        self,
+        organization_id,
+        filters: Dict[str, Any],
+        contact_visibility: Optional[Dict[str, bool]] = None,
+    ) -> BytesIO:
+        """Render the impact-plan analysis to a print-ready PDF.
+
+        Runs the analysis, resolves organization and category names for the
+        report header, then delegates layout to ``render_impact_plan_pdf``.
+        Contact columns honour *contact_visibility* (org settings).
+        """
+        org_id = str(organization_id)
+        data = await self.analyze_impact(
+            org_id, filters, contact_visibility=contact_visibility
+        )
+        show_contact = bool(contact_visibility and any(contact_visibility.values()))
+
+        org = await self.db.scalar(
+            select(Organization).where(Organization.id == org_id)
+        )
+        org_name = org.name if org else ""
+
+        async def _cat_name(cat_id) -> Optional[str]:
+            if not cat_id:
+                return None
+            cat = await self.db.scalar(
+                select(InventoryCategory)
+                .where(InventoryCategory.id == str(cat_id))
+                .where(InventoryCategory.organization_id == org_id)
+            )
+            return cat.name if cat else None
+
+        related_name = await _cat_name(filters.get("related_category_id"))
+        stock_name = await _cat_name(filters.get("stock_category_id"))
+
+        parameters: List[str] = []
+        size_field = filters.get("size_field")
+        if size_field:
+            parameters.append(
+                f"Size: {self._SIZE_FIELD_LABELS.get(size_field, size_field)}"
+            )
+        if related_name:
+            parameters.append(f"Existing item: {related_name}")
+            if filters.get("replacement_aware"):
+                parameters.append("Replacement-aware")
+        if stock_name:
+            parameters.append(f"Stock source: {stock_name}")
+
+        meta = {
+            "org_name": org_name,
+            "generated_at": datetime.now(timezone.utc),
+            "parameters": parameters,
+            "show_size": bool(size_field),
+            "show_existing": bool(filters.get("related_category_id")),
+            "show_contact": show_contact,
+        }
+        return render_impact_plan_pdf(data, meta)
+
+    async def get_impact_planner_options(
+        self, organization_id
+    ) -> Dict[str, Any]:
+        """Return the selectable filter options for the impact planner.
+
+        Centralises the distinct ranks, stations, positions, and categories
+        that exist for the organization so the planner UI can populate its
+        filters from a single request.
+        """
+        org_id = str(organization_id)
+
+        def _humanize(value: str) -> str:
+            return value.replace("_", " ").title()
+
+        statuses = [
+            {"value": s.value, "label": _humanize(s.value)} for s in UserStatus
+        ]
+        membership_types = [
+            {"value": m.value, "label": _humanize(m.value)} for m in MembershipType
+        ]
+
+        # Ranks: prefer the org's configured operational ranks (code →
+        # display name); fall back to any free-text rank values still in use.
+        rank_rows = (
+            await self.db.execute(
+                select(OperationalRank)
+                .where(OperationalRank.organization_id == org_id)
+                .where(OperationalRank.is_active == True)  # noqa: E712
+                .order_by(OperationalRank.sort_order, OperationalRank.display_name)
+            )
+        ).scalars().all()
+        ranks = [
+            {"value": r.rank_code, "label": r.display_name or _humanize(r.rank_code)}
+            for r in rank_rows
+        ]
+        known_rank_codes = {r["value"] for r in ranks}
+        distinct_ranks = (
+            await self.db.execute(
+                select(User.rank)
+                .where(User.organization_id == org_id)
+                .where(User.deleted_at.is_(None))
+                .where(User.rank.isnot(None))
+                .distinct()
+            )
+        ).scalars().all()
+        for code in distinct_ranks:
+            if code and code not in known_rank_codes:
+                ranks.append({"value": code, "label": _humanize(code)})
+                known_rank_codes.add(code)
+
+        stations = [
+            s
+            for s in (
+                await self.db.execute(
+                    select(User.station)
+                    .where(User.organization_id == org_id)
+                    .where(User.deleted_at.is_(None))
+                    .where(User.station.isnot(None))
+                    .distinct()
+                    .order_by(User.station)
+                )
+            ).scalars().all()
+            if s
+        ]
+
+        position_rows = (
+            await self.db.execute(
+                select(Position)
+                .where(Position.organization_id == org_id)
+                .order_by(Position.name)
+            )
+        ).scalars().all()
+        positions = [{"id": p.id, "name": p.name} for p in position_rows]
+
+        category_rows = (
+            await self.db.execute(
+                select(InventoryCategory)
+                .where(InventoryCategory.organization_id == org_id)
+                .where(InventoryCategory.active == True)  # noqa: E712
+                .order_by(InventoryCategory.name)
+            )
+        ).scalars().all()
+        categories = [
+            {
+                "id": c.id,
+                "name": c.name,
+                "item_type": (
+                    c.item_type.value
+                    if hasattr(c.item_type, "value")
+                    else c.item_type
+                ),
+            }
+            for c in category_rows
+        ]
+
+        size_fields = [
+            {"value": key, "label": label}
+            for key, label in self._SIZE_FIELD_LABELS.items()
+        ]
+
+        return {
+            "statuses": statuses,
+            "membership_types": membership_types,
+            "ranks": ranks,
+            "stations": stations,
+            "positions": positions,
+            "categories": categories,
+            "size_fields": size_fields,
+        }
