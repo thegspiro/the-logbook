@@ -25,6 +25,7 @@ import {
   Megaphone,
   Building2,
   Flame,
+  HeartPulse,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
@@ -216,6 +217,14 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         description: 'Line firefighter with standard operational access',
         icon: Shield,
         priority: 15,
+        permissions: generateRolePermissions(modules, 'member'),
+      },
+      {
+        id: 'emt',
+        name: 'EMT',
+        description: 'Emergency Medical Technician providing patient care on EMS calls',
+        icon: HeartPulse,
+        priority: 10,
         permissions: generateRolePermissions(modules, 'member'),
       },
     ],
@@ -478,7 +487,7 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
 // Icon lookup map for serialization/deserialization
 const ICON_MAP: Record<string, React.ElementType> = {
   Shield, Crown, Star, Briefcase, GraduationCap, ClipboardList, Wrench, Users, UserCog,
-  Truck, Monitor, UserPlus, BadgeCheck, Megaphone, Building2, Flame,
+  Truck, Monitor, UserPlus, BadgeCheck, Megaphone, Building2, Flame, HeartPulse,
 };
 
 const getIconName = (icon: React.ElementType): string => {

@@ -15,6 +15,10 @@ interface OrgBranding {
   logo: string | null;
 }
 
+interface OnboardingStatus {
+  needs_onboarding: boolean;
+}
+
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,6 +38,10 @@ export const LoginPage: React.FC = () => {
     googleEnabled: false,
     microsoftEnabled: false,
   });
+  // Block the login form until we've confirmed the app has actually been
+  // configured. An unconfigured install has no accounts to sign into, so the
+  // user belongs in the onboarding wizard, not here.
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   // If user is already authenticated, redirect to dashboard
   useEffect(() => {
@@ -41,6 +49,33 @@ export const LoginPage: React.FC = () => {
       navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, navigate]);
+
+  // Guard /login against unconfigured installations: if onboarding hasn't been
+  // completed there is nothing to log into, so send the user to onboarding
+  // instead of rendering the login form.
+  useEffect(() => {
+    let cancelled = false;
+    const checkOnboarding = async () => {
+      try {
+        const response = await axios.get<OnboardingStatus>('/api/v1/onboarding/status');
+        if (!cancelled && response.data?.needs_onboarding) {
+          navigate('/onboarding', { replace: true });
+          return;
+        }
+      } catch {
+        // If the status check fails we can't confirm the app is unconfigured.
+        // Fall through and render the login page; an unconfigured backend
+        // can't authenticate anyone anyway.
+      }
+      if (!cancelled) {
+        setCheckingOnboarding(false);
+      }
+    };
+    void checkOnboarding();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   // Countdown timer for client-side lockout
   useEffect(() => {

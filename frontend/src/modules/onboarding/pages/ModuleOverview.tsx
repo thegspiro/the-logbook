@@ -323,10 +323,15 @@ const ModuleOverview: React.FC = () => {
               {groupedModules.optional.map(module => {
                 const Icon = module.icon;
                 const status = moduleStatuses[module.id];
+                const isEnabled = status === FeatureStatus.ENABLED;
                 return (
                   <div
                     key={module.id}
-                    className="card-secondary backdrop-blur-xs hover:border-theme-surface-hover p-5 transition-all"
+                    className={`card-secondary backdrop-blur-xs p-5 transition-all ${
+                      isEnabled
+                        ? 'border-green-500/60 ring-1 ring-green-500/40'
+                        : 'hover:border-theme-surface-hover'
+                    }`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center space-x-2">
@@ -341,9 +346,21 @@ const ModuleOverview: React.FC = () => {
                     <div className="flex flex-col space-y-2">
                       <button
                         onClick={() => handleModuleAction(module.id, 'start')}
-                        className="w-full px-3 py-2 bg-theme-surface hover:bg-theme-surface-hover text-theme-text-primary rounded-lg text-sm font-medium transition-colors"
+                        aria-pressed={isEnabled}
+                        className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          isEnabled
+                            ? 'bg-green-600 text-white hover:bg-green-700'
+                            : 'bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover'
+                        }`}
                       >
-                        Enable
+                        {isEnabled ? (
+                          <>
+                            <CheckCircle aria-hidden="true" className="h-4 w-4" />
+                            Enabled
+                          </>
+                        ) : (
+                          'Enable'
+                        )}
                       </button>
                       <button
                         onClick={() => handleModuleAction(module.id, 'ignore')}
