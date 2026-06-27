@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory Impact Planner — Demand Forecasting & Bulk Operations (2026-06-22)
+
+- **Impact Planner page** at `/inventory/admin/impact-planner` (`inventory.manage`) allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations (issue, reorder, size requests) from a single analysis. Targets a filtered subset of the roster (by status, rank, station, membership type, position) and analyzes who needs a given item category, broken down by size
+- **Stock-aware shortfall analysis**: when both a `size_field` and `stock_category_id` are provided, the planner queries on-hand pool stock per size, calculates `shortfall = max(0, needing - on_hand)` per size, and surfaces the purchase quantity needed — not just what members need, but what must actually be ordered
+- **Cost estimation**: items with `replacement_cost` or `purchase_price` feed per-size unit costs into the shortfall analysis, producing `estimated_cost = shortfall × unit_cost` per size and a total purchase cost estimate across all sizes
+- **One-click reorder generation** (`POST /api/v1/inventory/impact-planner/reorder`): re-runs the analysis server-side (tamper-proof), creates one `ReorderRequest` per size with shortfall > 0, pre-fills vendor/urgency/unit cost/note (e.g., "Generated from impact plan (Shirt Medium): 7 needed, 3 on hand"), all in PENDING status for quartermaster review. Returns `{created_count, total_quantity, reorder_ids}`
+- **Replacement-aware targeting**: when `replacement_aware=true` with a `related_category_id`, the planner checks each member's held items for serviceability (condition, NFPA retirement). Members with only worn-out/expired items are flagged `needs_replacement=true` and counted in the purchase total. UI badges them as "Replace" vs "Needs item" separately
+- **Bulk-issue from planner** (`POST /api/v1/inventory/impact-planner/issue`): iterates each member who needs the item, looks up their size preference, finds the first available pool item matching that size in the stock category, issues 1 unit via `issue_from_pool()`, decrements on-hand. Skips members without size on file, no matching stock, or over their allowance (with reasons logged). Returns `{issued_count, skipped_count}` with per-member detail
+- **Saved/named plans** (`inventory_impact_plans` table, migration `20260622_0001`): the entire filter set (statuses, ranks, size_field, stock_category_id, replacement_aware, allowance_aware, etc.) can be saved with a human name and description for reuse. CRUD via `GET`/`POST`/`PATCH`/`DELETE /api/v1/inventory/impact-planner/plans`. Use cases: annual uniform refresh, seasonal PPE cycle, onboarding kits
+- **Allowance-aware warnings**: when `allowance_aware=true`, the planner queries `IssuanceAllowance` records for the category, calculates each member's `issued_this_period`, flags members at or over their `max_quantity` as `over_allowance=true`. Bulk-issue skips them with reason "Allowance exceeded". UI shows an "over allowance" badge
+- **Request sizes from members** (`POST /api/v1/inventory/impact-planner/request-sizes`): identifies members who need the item but have no size on file, sends each an in-app notification directing them to `/inventory/my-equipment` to add their `MemberSizePreferences`. Returns `{notified_count}`
+- **Printable PDF summary** (`POST /api/v1/inventory/impact-planner/pdf`): generates a branded PDF with org name, analysis date, filter parameters, size breakdown table, and optionally contact columns (email/phone) based on org visibility settings. Returns `application/pdf` attachment
+- **Carried cost estimate**: when generating reorder requests from a plan, the estimated unit cost from the analysis is carried onto each reorder request so the quartermaster sees the projected cost in the approval workflow
+- **Privacy compliance**: member contact info (email, phone) in the planner respects `org.settings.contact_info_visibility`, mirroring the member-list endpoint's privacy controls. "Unknown" sized members are bucketed and sorted last; reorder generation skips them (can't order for unknown sizes)
+- **Real-time updates**: bulk operations publish `inventory_changed` events via WebSocket so other connected users see updates immediately
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/inventory/impact-planner/options` | Filter options (statuses, ranks, stations, positions, categories, size fields) |
+| `POST` | `/api/v1/inventory/impact-planner` | Analyze impact of a prospective issue |
+| `GET` | `/api/v1/inventory/impact-planner/plans` | List saved plans for the organization |
+| `POST` | `/api/v1/inventory/impact-planner/plans` | Save a new plan with its filter set |
+| `PATCH` | `/api/v1/inventory/impact-planner/plans/{plan_id}` | Update a saved plan |
+| `DELETE` | `/api/v1/inventory/impact-planner/plans/{plan_id}` | Delete a saved plan |
+| `POST` | `/api/v1/inventory/impact-planner/reorder` | Generate reorder requests from shortfall analysis |
+| `POST` | `/api/v1/inventory/impact-planner/issue` | Bulk-issue on-hand stock to members who need it |
+| `POST` | `/api/v1/inventory/impact-planner/request-sizes` | Send size-request notifications to members |
+| `POST` | `/api/v1/inventory/impact-planner/pdf` | Generate printable PDF summary |
+
+**New Database Table:**
+
+| Table | Columns | Description |
+|-------|---------|-------------|
+| `inventory_impact_plans` | `id`, `organization_id`, `name`, `description`, `filters` (JSON), `created_by`, timestamps | Saved impact planner scenarios |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Member with no size preference | Bucketed as "Unknown"; skipped by bulk-issue and reorder generation |
+| Size labels with different casing ("S" vs "small") | Normalized for matching |
+| Stock category with varying costs per size | Average unit cost used for estimation |
+| Bulk-issue exhausts stock mid-run | Issues what's available; remaining members skipped with "no matching stock" reason |
+| Allowance check on member with no matching rule | Org-wide rule (role_id=NULL) applies; if none exists, no limit enforced |
+| Plan filters reference deleted rank/station | Analysis runs with remaining valid filters; deleted values silently ignored |
+| Replacement-aware with no NFPA tracking | Falls back to condition-based serviceability check |
+| PDF with contact visibility set to "hidden" | Email and phone columns omitted from PDF |
+| Reorder from plan with zero shortfall | No reorder requests created; returns `created_count: 0` |
+
+---
+
 ### Two-Factor Authentication — TOTP (2026-06-19)
 
 - **App-based MFA (TOTP)** is now fully implemented end-to-end. Members enroll from **Settings → Security** (`MfaSettingsCard`): the backend issues a secret + `otpauth://` provisioning URI rendered as a QR code, the member confirms with a 6-digit code, and a one-time set of **recovery codes** is shown (displayed once, stored hashed). Secret and recovery codes are encrypted at rest (Fernet via `encrypt_data`/`decrypt_data`); no migration was needed (existing `mfa_secret`/`mfa_backup_codes` model fields)

@@ -522,6 +522,69 @@ FF Schmidt was on a 2-week Leave of Absence (April 1-14), so his requirement was
 
 ---
 
+## Platoon Management (2026-06-19)
+
+Platoon membership is now a **person-level attribute** — each member belongs to a platoon (A, B, C, etc.) and the schedule is built from that membership.
+
+### Enabling Platoons
+
+Platoons are **off by default**. To enable them:
+
+1. Navigate to **Scheduling > Settings**
+2. Enable the **Platoons** toggle
+3. The platoon fields and management UI become visible across the scheduling module
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of Scheduling Settings showing the "Platoons" toggle enabled, with a note explaining that this adds platoon fields to member profiles and shift generation._
+
+### Assigning Members to Platoons
+
+1. Navigate to **Scheduling > Platoons** (or **Settings > Platoons**)
+2. The **Platoon Management** page shows every platoon and the unassigned bucket
+3. Select members using checkboxes
+4. Choose a target platoon (A, B, C, D, or custom) from the dropdown
+5. Click **Assign** to move selected members to that platoon
+6. Use **Clear** to remove members from their current platoon
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Platoon Management page showing three platoon columns (A, B, C) with member names listed under each, checkboxes for selection, and the "Assign to Platoon" dropdown/button at the top. Show an "Unassigned" bucket with members not yet assigned._
+
+### How Platoon Shift Generation Works
+
+When generating shifts from a platoon pattern:
+
+- Every platoon runs the **same cycle offset** by `i × cycle_length / num_platoons` days
+  - 24/48 rotation: offsets 0/1/2 (3 platoons tile perfectly)
+  - 48/96 rotation: offsets 0/2/4
+  - Kelly 9-day: offsets 0/3/6
+- Generated shifts include the platoon's **actual members** — a member on approved leave is omitted from shifts they'd otherwise staff
+- Approving a leave of absence **cancels** the member's conflicting generated shifts automatically
+
+### Hold-Over Roster
+
+When a shift has a gap (member on leave or open position), the **Shift Detail Panel** shows a **hold-over roster** of available members:
+
+- Same organization, not on leave, not already assigned that day
+- One-click **Assign** button next to each available member
+- Designed for supervisors who need to fill gaps or hold over members
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Shift Detail Panel for a shift with one vacant position, showing the hold-over roster panel below the crew list with available members and "Assign" buttons._
+
+### Platoon Badge on Shifts
+
+Shifts generated from platoon patterns display a **platoon badge** (e.g., "A Platoon") on calendar cards and in the shift detail panel.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Platoons disabled | No platoon fields or management UI visible; scheduling works as before |
+| Member not assigned to any platoon | Appears in the "Unassigned" bucket; not included in platoon shift generation |
+| Two platoons collide on one calendar slot | Shifts labeled correctly for each platoon; no mislabeling |
+| Leave approved after shifts generated | Conflicting shifts auto-cancelled for that member |
+| Custom platoon names | Supported alongside standard A/B/C/D |
+| Bulk assignment of 50+ members | Processed in a single request with audit logging |
+
+---
+
 ## Position Eligibility & Equipment Checks (2026-03-19)
 
 ### Shift Position Eligibility
