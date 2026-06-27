@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Inventory — Impact Planner (2026-06-23)
+
+- **New Quartermaster planning tool** at `/inventory/admin/impact-planner` (`inventory.manage`) for scoping a prospective new issue (e.g. a new department jacket) end-to-end. Filter the roster by status, membership type, rank, station, and corporate position; each matched member shows the size they need (from `member_size_preferences`), whether they already hold a comparable item (active assignment or pool issuance in a chosen category), and gated contact details. New table `inventory_impact_plans` and migration `20260622_0001`
+- **Stock-aware shortfall**: with a stock category + size field, per-size demand is netted against available on-hand stock (pool `quantity − quantity_issued`; available individual units) to show the exact quantity to purchase. Sizes are matched on a normalized key (drops boot-width/parenthetical notes; canonicalizes alpha-size aliases like `3XL`↔`XXXL`, `Medium`↔`M`). Members with no size on file can't be matched and carry their full demand to the shortfall
+- **Cost estimate**: per-size and total purchase cost from the stock category's item prices (`replacement_cost`, then `purchase_price`; category-average fallback for sizes with no priced items)
+- **Replacement-aware** (opt-in, with a related category): members whose only held items are worn (poor/damaged/out-of-service) or past NFPA retirement count as needing a replacement rather than being excluded
+- **Allowance-aware** (opt-in, with a stock category): flags members at/over their per-category `issuance_allowances` cap before a bulk issue would skip them (role-specific allowance beats org-wide; batched, not per-member)
+- **Act on the plan**: `POST /inventory/impact-planner/reorder` drafts one pending, pre-priced reorder request per shortfall size; `POST …/issue` bulk-issues matching on-hand pool stock via the existing `issue_from_pool` flow (respects allowances, reports skips with reasons, publishes an `inventory_changed` WebSocket event); `POST …/request-sizes` sends an in-app notification to members with no size on file linking to self-service preferences
+- **Share & reuse**: `POST …/pdf` streams a print-ready PDF summary (reportlab); the member list exports to CSV client-side; named plans are saved/loaded via `GET/POST/PATCH/DELETE …/plans`
+- **Endpoints**: `GET …/options`, `POST /inventory/impact-planner` (analyze), `…/reorder`, `…/issue`, `…/request-sizes`, `…/pdf`, and `…/plans[/{id}]` — all `inventory.manage`. The analyze filter set is reused by reorder/issue/pdf and stored verbatim by saved plans
+- **Privacy**: `analyze`/`pdf` resolve member contact visibility from the org's `contact_info_visibility` settings (enabled + per-field email/phone/mobile), matching the member list, rather than exposing contact info on permission alone
+- **UI/UX**: filter panel with multi-select groups, summary stat cards, a horizontal-bar size breakdown, a sortable + mobile-responsive impacted-member table, skeleton/empty states, and inline reorder/issue/request-sizes actions. Frontend page `modules/inventory/pages/ImpactPlannerPage.tsx`; service methods on `inventoryService`. Covered by backend unit tests, frontend component tests, and a Playwright E2E spec
+
 ### Cross-Module Barcode Label Printing (2026-06-10)
 
 - Barcode-label printing is now a **shared, module-neutral system** so any module can print labels with its own per-position remembered printer. Backend: `app/utils/label_renderer.py` (the `LabelSpec` + Avery-sheet/thermal renderer, extracted from inventory), `app/services/label_service.py` (per-module spec-builder registry + the per-position/per-module preset, moved off `InventoryService`), and generic endpoints `app/api/v1/endpoints/labels.py`: `POST /labels/generate`, `POST /labels/preview`, and `GET`/`PUT /label-preset/{module}` (each gated by the module's view permission)

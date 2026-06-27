@@ -109,6 +109,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `equipment_kit_items` | Component items within a kit *(2026-03-07)* |
 | `member_size_preferences` | Garment size preferences per member *(2026-03-07)* |
 | `reorder_requests` | Reorder request lifecycle (pending → received) *(2026-03-07)* |
+| `inventory_impact_plans` | Saved impact-planner scenarios: `name`, optional `description`, the filter set as `filters` (JSON), `created_by`. Migration `20260622_0001` *(2026-06-23)* |
 
 ### Elections
 
