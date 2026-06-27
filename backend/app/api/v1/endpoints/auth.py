@@ -731,6 +731,7 @@ async def mfa_setup(
 @router.post("/mfa/verify-setup", dependencies=[rate_limit_login()])
 async def mfa_verify_setup(
     data: MFAVerify,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -765,6 +766,7 @@ async def mfa_verify_setup(
             "Two-factor authentication was just enabled on your account. "
             "If this wasn't you, contact an administrator immediately."
         ),
+        background_tasks=background_tasks,
     )
     # Recovery codes are shown exactly once.
     return {"recovery_codes": recovery_codes}
@@ -773,6 +775,7 @@ async def mfa_verify_setup(
 @router.post("/mfa/disable", dependencies=[rate_limit_login()])
 async def mfa_disable(
     data: MFAVerify,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -805,6 +808,7 @@ async def mfa_disable(
             "Two-factor authentication was just disabled on your account. "
             "If this wasn't you, contact an administrator immediately."
         ),
+        background_tasks=background_tasks,
     )
     return {"mfa_enabled": False}
 
@@ -823,6 +827,7 @@ async def mfa_status(
 @router.post("/mfa/recovery-codes", dependencies=[rate_limit_login()])
 async def mfa_regenerate_recovery_codes(
     data: MFAVerify,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -860,6 +865,7 @@ async def mfa_regenerate_recovery_codes(
             "account; your previous codes no longer work. If this wasn't you, "
             "contact an administrator immediately."
         ),
+        background_tasks=background_tasks,
     )
     # New recovery codes are shown exactly once.
     return {"recovery_codes": recovery_codes}

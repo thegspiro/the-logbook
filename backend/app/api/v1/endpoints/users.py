@@ -1234,6 +1234,7 @@ async def admin_reset_password(
 )
 async def admin_reset_mfa(
     user_id: UUID,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create", "members.manage")),
 ):
@@ -1316,6 +1317,7 @@ async def admin_reset_mfa(
             "account. You have been signed out. If your organization requires "
             "MFA, you'll be asked to set it up again at your next login."
         ),
+        background_tasks=background_tasks,
     )
 
     await db.commit()

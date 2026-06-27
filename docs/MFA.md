@@ -84,9 +84,12 @@ require MFA for the whole department from **Settings → Authentication**
 - **Audit:** `mfa_enabled` / `mfa_disabled` /
   `mfa_recovery_codes_regenerated` / `admin_mfa_reset` events logged via
   `log_audit_event` (category `security`).
-- **Notifications:** `app/utils/security_notifications.py` sends the affected
-  member an in-app notification + best-effort email on each of those events
-  (fire-and-forget — never blocks the security action).
+- **Notifications:** `app/utils/security_notifications.py` notifies the affected
+  member on each of those events. The in-app notification is written
+  synchronously in the request transaction; the email is dispatched to a FastAPI
+  background task (`_send_security_email`, its own DB session) so SMTP I/O never
+  blocks the response. Both are fire-and-forget — a notification failure never
+  blocks the security action.
 - **Frontend:** `authService` MFA methods; `authStore` challenge state
   (`mfaRequired`, `mfaToken`, `completeMfaLogin`, `cancelMfa`); the two-factor
   step on `LoginPage`; `MfaSettingsCard` (enrollment) and `MfaPolicyCard`
