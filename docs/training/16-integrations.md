@@ -339,4 +339,92 @@ Click any integration to see:
 
 ---
 
+## Realistic Example: Connecting Slack and Google Calendar
+
+### Background
+
+**Oakville Fire Department** IT Manager **Steve Park** wants to set up two integrations: Slack notifications for department events and Google Calendar sync so members see shifts on their personal calendars.
+
+### Part 1: Connecting Slack (Monday Morning)
+
+1. Steve navigates to **Settings > Integrations**
+2. Finds **Slack** in the Messaging category → clicks **Connect**
+3. In a separate browser tab, he opens Oakville FD's Slack workspace:
+   - Goes to **Settings > Manage Apps > Incoming Webhooks**
+   - Creates a webhook for the `#department-alerts` channel
+   - Copies the webhook URL: `https://hooks.slack.com/services/T0ABC.../B0DEF.../xxxxx`
+4. Back in The Logbook, pastes the webhook URL
+5. Configures event triggers:
+   - New Event Created: **On**
+   - Shift Assignment: **On**
+   - Training Completed: **On**
+   - Member Joined: **On**
+   - Equipment Check Failed: **On**
+6. Clicks **Test Connection** → a test message appears in `#department-alerts`: "The Logbook connected successfully"
+7. Clicks **Save**
+
+That afternoon, Lt. Santos creates a training event "Q3 Hazmat Refresher" → a Slack notification automatically posts to `#department-alerts`:
+
+> **The Logbook** — New Event: Q3 Hazmat Refresher
+> Date: July 15, 2026 | 08:00 AM - 12:00 PM
+> Location: Station 1 Training Bay
+> RSVP by July 10
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Slack integration configuration page showing the webhook URL field, event trigger checkboxes, and the Test Connection button. Below, show the Slack channel with a sample notification message._
+
+### Part 2: Connecting Google Calendar (Monday Afternoon)
+
+1. Steve navigates to **Integrations** → finds **Google Calendar** → clicks **Connect**
+2. The system redirects to Google OAuth consent screen
+3. Steve signs in with the department's Google Workspace account
+4. Grants calendar read/write permissions
+5. Back in The Logbook, selects which calendar to sync: "Oakville FD — Events"
+6. Enables two-way sync:
+   - Logbook → Google: Events created in The Logbook appear on Google Calendar
+   - Google → Logbook: Not enabled (department creates all events in The Logbook)
+7. Clicks **Save**
+
+Members who subscribe to the "Oakville FD — Events" Google Calendar now see department events alongside their personal calendar.
+
+### Part 3: Setting Up ICS Feed for Shifts (Optional)
+
+Steve also sets up an ICS feed so members can subscribe to their personal shift schedule:
+
+1. Enables the **iCalendar (ICS)** integration
+2. The system generates feed URLs:
+   - All Events: `https://app.thelogbook.io/api/v1/calendar/ics/events?token=abc123`
+   - My Shifts: `https://app.thelogbook.io/api/v1/calendar/ics/my-shifts?token=abc123`
+   - Training Only: `https://app.thelogbook.io/api/v1/calendar/ics/training?token=abc123`
+3. Steve shares the "My Shifts" feed URL with members
+4. Members subscribe in their calendar app → shifts appear as events
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the ICS Feed configuration showing three generated feed URLs with Copy buttons, and a phone showing a calendar app with department shifts displayed._
+
+### Part 4: Monitoring Health (Ongoing)
+
+The next week, Steve checks the integrations dashboard:
+
+| Integration | Status | Last Sync | Notes |
+|-------------|--------|-----------|-------|
+| Slack | Green (healthy) | 2 hours ago | 14 notifications sent this week |
+| Google Calendar | Green (healthy) | 30 min ago | 8 events synced |
+| iCalendar (ICS) | Green (healthy) | N/A (pull-based) | 12 subscribers |
+
+**Edge case encountered:** On Wednesday, Slack returns a 429 (rate limit) error during a bulk event creation. The Logbook retries with exponential backoff and succeeds on the second attempt. Steve sees a brief yellow warning that auto-resolves.
+
+**Edge case:** A member reports their shift calendar shows UTC times instead of Eastern. Steve checks and the ICS feed correctly includes timezone metadata — the member's calendar app was set to UTC. Fixed on the member's device, not in The Logbook.
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Slack webhook URL becomes invalid (channel deleted) | Integration shows red status; error: "channel_not_found". Reconnect with new URL. |
+| Google OAuth token expires | Auto-refreshed transparently. If refresh fails, integration shows yellow with "Re-authenticate" button. |
+| ICS feed subscriber exceeds rate limit | Feed returns 429; subscriber's calendar app retries automatically. |
+| Two integrations send the same event notification | Each integration sends independently — member may see duplicate notifications in Slack and email. Configure triggers to avoid overlap. |
+| Webhook secret not configured | Notifications still send but without HMAC signature — receiving system cannot verify authenticity. |
+| Integration configured but module disabled | Events from disabled modules don't trigger notifications (e.g., inventory disabled → no equipment alerts). |
+
+---
+
 **Previous:** [Prospective Members Pipeline](./15-prospective-members.md)
