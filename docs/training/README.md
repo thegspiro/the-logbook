@@ -19,6 +19,12 @@ Welcome to the training documentation for The Logbook. These guides are designed
 | 8 | [Administration & Reports](./08-admin-reports.md) | Settings, roles, modules, reports, analytics, public portal, security, first-time setup, Salesforce integration |
 | 9 | [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | Skill sheet templates, NREMT-style evaluations, point-based scoring, statement criteria, practice mode, test visibility, post-completion review, test deletion, pass/fail, realistic example |
 | 10 | [Mobile & PWA Usage](./10-mobile-pwa.md) | Installing the app, offline behavior, mobile features, QR scanning, version detection, troubleshooting |
+| 11 | [Finance](./11-finance.md) | Fiscal years, budgets, purchase requests, expense reports, check requests, approval chains, dues & assessments, QuickBooks export |
+| 12 | [Grants & Fundraising](./12-grants-fundraising.md) | Grant opportunities, applications, budget tracking, compliance tasks, campaigns, donor CRM, donations, pledges, fundraising events |
+| 13 | [Medical Screening](./13-medical-screening.md) | Screening requirements, records, compliance dashboard, expiring screenings, prospect screening |
+| 14 | [Elections & Voting](./14-elections.md) | Ballot items, candidates, anonymous voting, proxy voting, runoff elections, vote integrity, forensics |
+| 15 | [Prospective Members Pipeline](./15-prospective-members.md) | Pipeline stages, applicant tracking, document collection, interviews, election packages, member conversion |
+| 16 | [Integrations](./16-integrations.md) | Salesforce, calendar sync, Slack/Discord/Teams, weather alerts, ePCR import, NEMSIS/NFIRS export, webhooks |
 
 ---
 
@@ -43,11 +49,20 @@ All of the above, plus:
 - [Apparatus & Facilities](./06-apparatus-facilities.md) - All sections
 - [Documents, Forms & Communications](./07-documents-forms.md) - All sections including form builder walkthrough
 - [Administration & Reports](./08-admin-reports.md) - Sections 5-6 (reports, analytics)
+- [Elections & Voting](./14-elections.md) - All sections (secretary/officer responsibilities)
+- [Prospective Members Pipeline](./15-prospective-members.md) - All sections (membership coordinator responsibilities)
+
+### Treasurer / Finance Officer
+All of the above, plus:
+- [Finance](./11-finance.md) - All sections including budgets, purchase requests, expense reports, approval chains, dues
+- [Grants & Fundraising](./12-grants-fundraising.md) - All sections including applications, compliance, campaigns, donor management
 
 ### IT Manager / System Administrator
 All guides in their entirety, with special attention to:
 - [Administration & Reports](./08-admin-reports.md) - All sections, especially the first-time setup walkthrough
 - [Documents, Forms & Communications](./07-documents-forms.md) - Sections 8-10 (integrations)
+- [Integrations](./16-integrations.md) - All sections including Salesforce, webhooks, and reporting exports
+- [Medical Screening](./13-medical-screening.md) - Compliance configuration and HIPAA considerations
 - [Mobile & PWA Usage](./10-mobile-pwa.md) - Understand what members experience on their devices
 
 ---
@@ -88,9 +103,9 @@ Not all modules are enabled by default. Your department administrator controls w
 | Module | Default State |
 |--------|--------------|
 | Dashboard, Membership, Scheduling, Settings, Documents, Forms | **Always On** (Core, enabled by default) |
-| Apparatus, Inventory, Communications | **On** (Recommended, enabled by default) |
+| Apparatus, Inventory, Communications, Elections | **On** (Recommended, enabled by default) |
 | Training, Facilities, Prospective Pipeline, Admin Hours | **Off** (Optional, enable in Settings > Modules) |
-| Incidents, HR, Grants, Public Info | **Off** (Optional, enable in Settings > Modules) |
+| Finance, Grants, Medical Screening, Incidents, HR, Public Info | **Off** (Optional, enable in Settings > Modules) |
 
 > **Note (2026-04-12):** Salesforce CRM integration (bidirectional sync, webhooks, field mappings). Vector Solutions enhancements (category catalog fetch, credit hours preservation, API spec compliance). NREMT NCCR standard linkage via `registry_code` on training categories. Training program export/import for cross-department sharing. Manual shift report page for departments without scheduling module. Shift completion service hardened (submit-all scope fix, enrollment validation, draft regression guard). Facilities module refactored (legacy duplicates removed, shared constants/hooks extracted). Membership pipeline decomposed (ElectionPackageSection, LinkedEventsSection, ApplicantActionPanels). Email service Loguru format fix. Audit log hash chain reliability fix (`_build_hash_data` helper). 39 pre-existing frontend test failures fixed. 5 new backend integration test suites (election voting, event lifecycle, membership pipeline, training compliance, shift completion). ESLint error cleanup.
 >
