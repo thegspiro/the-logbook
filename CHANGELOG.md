@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Onboarding, MFA & Password Policy Fixes (2026-06-25)
+
+- **Onboarding guard restored**: The render gate that blocks access to the application until onboarding is complete was inadvertently removed during the MFA merge. Restored so unauthenticated users cannot bypass the initial setup wizard
+- **Password minimum-age policy bypass**: Mandatory password changes (e.g., admin-forced reset, first-login) were being blocked by the password minimum-age policy, preventing users from changing their password when required. The minimum-age check now skips enforcement when `must_change_password` is set
+- **EMT position in onboarding**: The "EMT" position is now included in the default Operational Ranks template during onboarding, matching the 9 standard shift positions used elsewhere in the scheduling module
+- **Login block until configured**: The `/login` page is now blocked with a setup prompt until the application has completed initial configuration (organization created, admin user set up). Prevents confusion when accessing a fresh installation before onboarding
+
 ### Inventory Impact Planner — Demand Forecasting & Bulk Operations (2026-06-22)
 
 - **Impact Planner page** at `/inventory/admin/impact-planner` (`inventory.manage`) allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations (issue, reorder, size requests) from a single analysis. Targets a filtered subset of the roster (by status, rank, station, membership type, position) and analyzes who needs a given item category, broken down by size
