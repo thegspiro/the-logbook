@@ -585,7 +585,7 @@ async def list_tests(
 async def create_test(
     test_data: SkillTestCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Create a new skill test session.
@@ -713,7 +713,7 @@ async def update_test(
     test_id: UUID,
     test_update: SkillTestUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Update a skill test (save progress or results).
@@ -805,7 +805,7 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
 async def complete_test(
     test_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Mark a skill test as complete and calculate the final result.
@@ -1009,7 +1009,7 @@ async def discard_practice_test(
 async def email_test_results(
     test_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Email a summary of the test results to the candidate.

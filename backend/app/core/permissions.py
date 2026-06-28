@@ -26,6 +26,7 @@ class PermissionCategory(str, Enum):
     POSITIONS = "positions"
     ORGANIZATION = "organization"
     SETTINGS = "settings"
+    SECURITY = "security"
     MEMBERS = "members"
     TRAINING = "training"
     COMPLIANCE = "compliance"
@@ -151,6 +152,14 @@ SETTINGS_EDIT = Permission(
 SETTINGS_MANAGE = Permission(
     "settings.manage", "Full settings and admin management", PermissionCategory.SETTINGS
 )
+# IP allow/deny lists and access-control monitoring. Endpoints accept this OR
+# settings.manage; registering it lets admins delegate security management
+# without granting full settings access.
+SECURITY_MANAGE = Permission(
+    "security.manage",
+    "Manage IP security and access controls",
+    PermissionCategory.SECURITY,
+)
 SETTINGS_MANAGE_CONTACT_VISIBILITY = Permission(
     "settings.manage_contact_visibility",
     "Manage contact info visibility",
@@ -262,6 +271,11 @@ FUNDRAISING_MANAGE = Permission(
 # Audit
 AUDIT_VIEW = Permission("audit.view", "View audit logs", PermissionCategory.AUDIT)
 AUDIT_EXPORT = Permission("audit.export", "Export audit logs", PermissionCategory.AUDIT)
+# Destructive log management (clearing error/audit logs) is anti-forensics
+# sensitive and must be gated more strongly than read/export.
+AUDIT_MANAGE = Permission(
+    "audit.manage", "Manage and delete audit/error logs", PermissionCategory.AUDIT
+)
 
 # Events
 EVENTS_VIEW = Permission("events.view", "View events", PermissionCategory.EVENTS)
@@ -394,6 +408,11 @@ NOTIFICATIONS_MANAGE = Permission(
 REPORTS_VIEW = Permission(
     "reports.view", "View and generate reports", PermissionCategory.REPORTS
 )
+# Creating/editing/deleting saved-report definitions (incl. email recipients)
+# is a mutation and must be gated separately from read/generate access.
+REPORTS_MANAGE = Permission(
+    "reports.manage", "Create, edit, and delete saved reports", PermissionCategory.REPORTS
+)
 
 # Members (additional)
 MEMBERS_CREATE = Permission(
@@ -472,6 +491,7 @@ ALL_PERMISSIONS: list[Permission] = [
     SETTINGS_VIEW,
     SETTINGS_EDIT,
     SETTINGS_MANAGE,
+    SECURITY_MANAGE,
     SETTINGS_MANAGE_CONTACT_VISIBILITY,
     # Modules
     TRAINING_VIEW,
@@ -498,6 +518,7 @@ ALL_PERMISSIONS: list[Permission] = [
     FUNDRAISING_MANAGE,
     AUDIT_VIEW,
     AUDIT_EXPORT,
+    AUDIT_MANAGE,
     # Events
     EVENTS_VIEW,
     EVENTS_CREATE,
@@ -544,6 +565,7 @@ ALL_PERMISSIONS: list[Permission] = [
     NOTIFICATIONS_MANAGE,
     # Reports
     REPORTS_VIEW,
+    REPORTS_MANAGE,
     # Members (additional)
     MEMBERS_CREATE,
     # Training (additional)
@@ -731,6 +753,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             ORGANIZATION_UPDATE_SETTINGS.name,
             SETTINGS_EDIT.name,
             SETTINGS_MANAGE.name,
+            SECURITY_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_MANAGE.name,
             COMPLIANCE_MANAGE.name,
@@ -744,6 +767,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             ELECTIONS_MANAGE.name,
             FUNDRAISING_MANAGE.name,
             AUDIT_EXPORT.name,
+            AUDIT_MANAGE.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             EVENTS_DELETE.name,
@@ -1064,6 +1088,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SETTINGS_VIEW.name,
             SETTINGS_EDIT.name,
             SETTINGS_MANAGE.name,
+            SECURITY_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
@@ -1086,6 +1111,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FUNDRAISING_MANAGE.name,
             AUDIT_VIEW.name,
             AUDIT_EXPORT.name,
+            AUDIT_MANAGE.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
@@ -1119,6 +1145,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
             REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
             ADMIN_ACCESS.name,
         ],
     },
@@ -1159,6 +1186,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             ANALYTICS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
         ],
     },
     "treasurer": {
@@ -1180,6 +1208,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
             REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
             AUDIT_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
@@ -1222,6 +1251,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
             MEMBERS_CREATE.name,
         ],
     },
@@ -1245,6 +1275,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
             REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
             NOTIFICATIONS_VIEW.name,
         ],
     },
@@ -1403,6 +1434,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
             REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
             NOTIFICATIONS_VIEW.name,
@@ -1439,6 +1471,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
         ],
     },
     "fundraising_chair": {
@@ -1462,6 +1495,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             NOTIFICATIONS_VIEW.name,
             COMPLIANCE_VIEW.name,
             REPORTS_VIEW.name,
+            REPORTS_MANAGE.name,
         ],
     },
     "assistant_secretary": {

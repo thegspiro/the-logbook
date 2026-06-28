@@ -93,19 +93,32 @@ async def salesforce_inbound_webhook(
 
     body = await request.body()
 
-    # Verify signature if a webhook_secret is configured
+    # HMAC verification is mandatory: this is a public, unauthenticated,
+    # data-mutating endpoint. An integration with no webhook_secret configured
+    # must NOT accept unsigned payloads — otherwise anyone who learns the
+    # integration_id UUID could inject records. Reject rather than skip.
     webhook_secret = integration.get_secret("webhook_secret")
-    if webhook_secret:
-        sig_header = request.headers.get("X-Salesforce-Signature", "")
-        if not sig_header or not _verify_signature(body, webhook_secret, sig_header):
-            logger.warning(
-                "Salesforce webhook signature mismatch for integration %s",
-                integration_id,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid signature",
-            )
+    if not webhook_secret:
+        logger.warning(
+            "Salesforce webhook rejected: no webhook_secret configured for "
+            "integration %s",
+            integration_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Webhook signature verification is not configured",
+        )
+
+    sig_header = request.headers.get("X-Salesforce-Signature", "")
+    if not sig_header or not _verify_signature(body, webhook_secret, sig_header):
+        logger.warning(
+            "Salesforce webhook signature mismatch for integration %s",
+            integration_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid signature",
+        )
 
     try:
         payload = await request.json()
