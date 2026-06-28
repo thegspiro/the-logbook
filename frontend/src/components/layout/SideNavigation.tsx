@@ -224,6 +224,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({
                 label: "Skills Testing",
                 path: "/training/skills-testing",
                 icon: ClipboardCheck,
+                permission: "training.manage",
               },
             ],
           } as NavItem,

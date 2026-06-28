@@ -125,7 +125,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({
         { label: 'Submit Training', path: '/training/submit' },
         { label: 'Course Library', path: '/training/courses' },
         { label: 'Programs', path: '/training/programs' },
-        { label: 'Skills Testing', path: '/training/skills-testing' },
+        { label: 'Skills Testing', path: '/training/skills-testing', permission: 'training.manage' },
       ],
     } as NavItem] : []),
     { label: 'Admin Hours', path: '/admin-hours' },

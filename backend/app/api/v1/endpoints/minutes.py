@@ -63,7 +63,7 @@ async def list_minutes(
     List meeting minutes with optional filtering
 
     **Authentication required**
-    **Requires permission: meetings.view**
+    **Requires permission: minutes.view**
     """
     service = MinuteService(db)
     minutes_list = await service.list_minutes(
@@ -111,7 +111,7 @@ async def get_minutes_stats(
     Get aggregate stats for the minutes dashboard
 
     **Authentication required**
-    **Requires permission: meetings.view**
+    **Requires permission: minutes.view**
     """
     service = MinuteService(db)
     return await service.get_stats(current_user.organization_id)
@@ -128,7 +128,7 @@ async def search_minutes(
     Full-text search across meeting minutes
 
     **Authentication required**
-    **Requires permission: meetings.view**
+    **Requires permission: minutes.view**
     """
     if len(q.strip()) < 2:
         raise HTTPException(
@@ -154,7 +154,7 @@ async def get_minutes(
     Get a single meeting minutes record with motions and action items
 
     **Authentication required**
-    **Requires permission: meetings.view**
+    **Requires permission: minutes.view**
     """
     service = MinuteService(db)
     minutes = ensure_found(
@@ -175,7 +175,7 @@ async def create_minutes(
     Create new meeting minutes
 
     **Authentication required**
-    **Requires permission: meetings.manage**
+    **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
     minutes = await service.create_minutes(
@@ -210,7 +210,7 @@ async def update_minutes(
     Update meeting minutes (only draft or rejected)
 
     **Authentication required**
-    **Requires permission: meetings.manage**
+    **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
 
@@ -244,7 +244,7 @@ async def delete_minutes(
     Delete meeting minutes (only drafts)
 
     **Authentication required**
-    **Requires permission: meetings.manage**
+    **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
 
@@ -282,7 +282,7 @@ async def submit_minutes(
     Submit meeting minutes for approval
 
     **Authentication required**
-    **Requires permission: meetings.manage**
+    **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
 
@@ -318,7 +318,7 @@ async def approve_minutes(
     Approve submitted meeting minutes
 
     **Authentication required**
-    **Requires permission: meetings.manage**
+    **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
 
@@ -353,7 +353,7 @@ async def reject_minutes(
     Reject submitted meeting minutes with a reason
 
     **Authentication required**
-    **Requires permission: meetings.manage**
+    **Requires permission: minutes.manage**
     """
     service = MinuteService(db)
 
