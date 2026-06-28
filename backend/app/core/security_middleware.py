@@ -1091,7 +1091,24 @@ class SecurityMonitoringMiddleware:
 
         # Analyze request for threats (only for write operations)
         actual_receive = receive
-        if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        # Only buffer the body for inline analysis when its declared size is
+        # known and small. Large or unknown-length bodies (file uploads,
+        # streaming) bypass analysis and stream straight through, so the
+        # middleware never holds an unbounded request body in memory.
+        MAX_ANALYSIS_BODY_BYTES = 1_000_000  # 1 MB
+        _content_length = request.headers.get("content-length")
+        try:
+            _declared_len = (
+                int(_content_length) if _content_length is not None else None
+            )
+        except ValueError:
+            _declared_len = None
+        _should_buffer = (
+            request.method not in {"GET", "HEAD", "OPTIONS"}
+            and _declared_len is not None
+            and _declared_len <= MAX_ANALYSIS_BODY_BYTES
+        )
+        if _should_buffer:
             try:
                 body_chunks: list[bytes] = []
                 while True:
