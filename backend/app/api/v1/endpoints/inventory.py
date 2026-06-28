@@ -4715,7 +4715,12 @@ async def list_return_requests(
     """
     service = InventoryService(db)
 
-    requester_id = current_user.id if mine_only else None
+    # Non-managers may only ever see their own return requests, regardless of
+    # the mine_only flag; only inventory.manage holders may list all members'.
+    can_manage = _has_permission(
+        "inventory.manage", _collect_user_permissions(current_user)
+    )
+    requester_id = None if (can_manage and not mine_only) else current_user.id
 
     requests = await service.get_return_requests(
         organization_id=current_user.organization_id,
