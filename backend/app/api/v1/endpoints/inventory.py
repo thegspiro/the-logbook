@@ -1719,12 +1719,13 @@ async def extend_checkout(
     if checkout.is_returned:
         raise HTTPException(status_code=400, detail="Cannot extend a returned checkout")
 
-    # Authorization: own checkout or inventory.manage
+    # Authorization: own checkout or inventory.manage. Use the shared permission
+    # resolver so rank-default permissions (and wildcards) are honored, matching
+    # the rest of this module — a hand-rolled scan of role.permissions misses
+    # permissions granted via the member's rank.
     is_own = str(checkout.user_id) == str(current_user.id)
-    can_manage = any(
-        p in (role.permissions or [])
-        for role in current_user.roles
-        for p in ("inventory.manage", "inventory.*", "*")
+    can_manage = _has_permission(
+        "inventory.manage", _collect_user_permissions(current_user)
     )
     if not is_own and not can_manage:
         raise HTTPException(
