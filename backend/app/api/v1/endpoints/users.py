@@ -32,7 +32,7 @@ from app.api.dependencies import (
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_MEMBER
-from app.core.database import get_db
+from app.core.database import database_manager, get_db
 from app.core.security_middleware import check_rate_limit
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
@@ -349,7 +349,10 @@ async def create_member(
             else "/login"
         )
 
-        # Capture scalar values before they expire after the response returns
+        # Capture scalar values before they expire after the response returns.
+        # The background task runs after this request's DB session has closed, so
+        # it must open its own session and reload the org rather than reuse the
+        # request `db` or the detached `organization` ORM object.
         welcome_email = new_user.email
         welcome_first = new_user.first_name
         welcome_last = new_user.last_name
@@ -358,18 +361,24 @@ async def create_member(
 
         async def _send_welcome():
             try:
-                email_svc = EmailService(organization)
-                await email_svc.send_welcome_email(
-                    to_email=welcome_email,
-                    first_name=welcome_first,
-                    last_name=welcome_last,
-                    username=welcome_username,
-                    temp_password=initial_password,
-                    organization_name=org_name,
-                    login_url=login_url,
-                    db=db,
-                    organization_id=welcome_org_id,
-                )
+                async for session in database_manager.get_session():
+                    org = (
+                        await session.execute(
+                            select(OrgModel).where(OrgModel.id == welcome_org_id)
+                        )
+                    ).scalar_one_or_none()
+                    email_svc = EmailService(org)
+                    await email_svc.send_welcome_email(
+                        to_email=welcome_email,
+                        first_name=welcome_first,
+                        last_name=welcome_last,
+                        username=welcome_username,
+                        temp_password=initial_password,
+                        organization_name=org_name,
+                        login_url=login_url,
+                        db=session,
+                        organization_id=welcome_org_id,
+                    )
             except Exception as e:
                 logger.error(f"Failed to send welcome email to {welcome_email}: {e}")
 
