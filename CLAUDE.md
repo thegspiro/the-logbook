@@ -229,8 +229,8 @@ npm run test             # Run all tests (backend + frontend)
 npm run lint             # Lint everything
 npm run format           # Format everything
 npm run build            # Build frontend (backend build is a no-op)
-npm run db:migrate       # Run Alembic migrations
-npm run db:seed          # Seed database
+npm run db:migrate       # Run Alembic migrations (also applies seed data via SEED_DATA_FILES)
+npm run db:seed          # No-op notice; seed data is applied by db:migrate
 npm run docker:up        # Start Docker Compose stack
 ```
 
@@ -638,4 +638,4 @@ Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED
 
 ### Module Feature Flags
 
-All `MODULE_*_ENABLED` variables (`MODULE_TRAINING_ENABLED`, `MODULE_ELECTIONS_ENABLED`, etc.) toggle features without code changes. See `backend/app/core/config.py` for the full list.
+The `MODULE_*_ENABLED` variables (`MODULE_TRAINING_ENABLED`, `MODULE_ELECTIONS_ENABLED`, `MODULE_FINANCE_ENABLED`, `MODULE_MEDICAL_SCREENING_ENABLED`, etc. — see `backend/app/core/config.py` for the full list of 9) are deployment-level configuration flags. **Note:** they are currently consumed only by the health endpoint, platform analytics, and elections vote-key validation — they do **not** gate API router registration, so toggling one does not by itself disable that module's endpoints. Actual per-organization module enablement is controlled at runtime via the organization settings (`enabled_modules`), which the frontend navigation consumes. Wiring the deployment flags into router registration (or removing them) is a pending decision; their defaults in `config.py` do not currently match which modules ship enabled.

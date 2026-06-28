@@ -106,10 +106,17 @@ Reports catalog with member, training, event, and compliance report categories.
 | **Module Configuration** | Priority-based module overview system |
 | **Navigation Options** | Configurable top and side navigation layouts |
 | Vehicle/Apparatus Management | Vehicle and apparatus tracking |
+| Fundraising & Grants | Grant application tracking and fundraising/donation management |
+| Budget & Finance Tracking | Fiscal years, budgets, purchase/expense/check requests, and approval chains |
+| Medical Screening | Member medical screening records and compliance (PHI) |
+| Prospective Members | Applicant intake and membership pipeline |
+| Public Portal | Public-facing event request and form submission portal |
+| Integrations | Salesforce sync and third-party integration management |
+| Skills Testing | Skill test templates, sessions, and official record management |
+| Admin Hours | Member administrative-hours tracking and clock-in records |
+| Operational Ranks | Rank definitions and default rank permissions |
 | Incident Reporting | *Planned* |
 | Equipment Maintenance | *Planned* |
-| Fundraising & Donations | *Planned* |
-| Budget & Finance Tracking | *Planned* |
 
 ## Quick Start
 
