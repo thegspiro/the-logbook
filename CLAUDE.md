@@ -636,6 +636,6 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 
 Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED`, `AZURE_AD_ENABLED`, `GOOGLE_OAUTH_ENABLED`, `LDAP_ENABLED`. Each requires additional config vars — see `.env.example.full`.
 
-### Module Feature Flags
+### Module Enablement
 
-The `MODULE_*_ENABLED` variables (`MODULE_TRAINING_ENABLED`, `MODULE_ELECTIONS_ENABLED`, `MODULE_FINANCE_ENABLED`, `MODULE_MEDICAL_SCREENING_ENABLED`, etc. — see `backend/app/core/config.py` for the full list of 9) are deployment-level configuration flags. **Note:** they are currently consumed only by the health endpoint, platform analytics, and elections vote-key validation — they do **not** gate API router registration, so toggling one does not by itself disable that module's endpoints. Actual per-organization module enablement is controlled at runtime via the organization settings (`enabled_modules`), which the frontend navigation consumes. Wiring the deployment flags into router registration (or removing them) is a pending decision; their defaults in `config.py` do not currently match which modules ship enabled.
+Module availability is controlled **per organization** at runtime via the organization settings (`enabled_modules`), which the frontend navigation consumes. There are no deployment-level `MODULE_*_ENABLED` environment flags — they were removed because they gated nothing (all routers register unconditionally) and merely duplicated the per-org mechanism.

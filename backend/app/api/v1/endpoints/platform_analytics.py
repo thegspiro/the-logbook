@@ -13,7 +13,6 @@ from sqlalchemy import Date, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
-from app.core.config import settings
 from app.core.database import get_db
 from app.models.document import Document
 from app.models.election import Election
@@ -113,39 +112,42 @@ async def get_platform_analytics(
 
     # ── Module Usage ──
     modules: list[ModuleUsage] = []
+    # Modules are available platform-wide; per-org usage is reflected by
+    # record_count/last_activity below (actual per-org availability lives in the
+    # organization's enabled_modules setting, not a deployment flag).
     module_configs = [
         ("Events", True, Event, Event.organization_id, Event.created_at),
         (
             "Training",
-            settings.MODULE_TRAINING_ENABLED,
+            True,
             TrainingRecord,
             TrainingRecord.organization_id,
             TrainingRecord.created_at,
         ),
         (
             "Scheduling",
-            settings.MODULE_SCHEDULING_ENABLED,
+            True,
             Shift,
             Shift.organization_id,
             Shift.created_at,
         ),
         (
             "Inventory",
-            settings.MODULE_INVENTORY_ENABLED,
+            True,
             InventoryItem,
             InventoryItem.organization_id,
             InventoryItem.created_at,
         ),
         (
             "Meetings",
-            settings.MODULE_MEETINGS_ENABLED,
+            True,
             Meeting,
             Meeting.organization_id,
             Meeting.created_at,
         ),
         (
             "Elections",
-            settings.MODULE_ELECTIONS_ENABLED,
+            True,
             Election,
             Election.organization_id,
             Election.created_at,
