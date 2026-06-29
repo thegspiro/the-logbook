@@ -27,7 +27,6 @@ class PermissionCategory(str, Enum):
     ORGANIZATION = "organization"
     SETTINGS = "settings"
     SECURITY = "security"
-    SYSTEM = "system"
     MEMBERS = "members"
     TRAINING = "training"
     COMPLIANCE = "compliance"
@@ -463,16 +462,6 @@ FINANCE_CONFIGURE_APPROVALS = Permission(
     PermissionCategory.FINANCE,
 )
 
-# System
-# Cross-organization platform operations (e.g. all-orgs cron jobs). Granted to
-# no default role; intended for a dedicated service account. Global "*" holders
-# already pass, so registering it does not change current access.
-SYSTEM_ADMIN = Permission(
-    "system.admin",
-    "Cross-organization platform administration (service accounts)",
-    PermissionCategory.SYSTEM,
-)
-
 # ============================================
 # All Permissions Registry
 # ============================================
@@ -590,8 +579,6 @@ ALL_PERMISSIONS: list[Permission] = [
     FINANCE_MANAGE,
     FINANCE_APPROVE,
     FINANCE_CONFIGURE_APPROVALS,
-    # System
-    SYSTEM_ADMIN,
     # Prospective Members
     PROSPECTIVE_MEMBERS_VIEW,
     PROSPECTIVE_MEMBERS_MANAGE,

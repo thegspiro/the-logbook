@@ -862,10 +862,10 @@ class EquipmentCheckService:
             .options(selectinload(ShiftEquipmentCheck.items))
         )
         check = result.scalars().first()
-        if not check:
+        # Treat "not yours" the same as "not found" so check ids can't be
+        # enumerated by an unauthorized caller.
+        if not check or (not allow_any and str(check.checked_by) != str(checked_by)):
             raise ValueError("Check not found")
-        if not allow_any and str(check.checked_by) != str(checked_by):
-            raise ValueError("Not authorized to complete this check")
         if check.overall_status != "incomplete":
             raise ValueError("Only incomplete checks can be updated")
 
