@@ -481,7 +481,7 @@ docker-compose ps
 | ASYNC_SQLALCHEMY_REVIEW.md | 1.0 | 2026-02-10 | Current |
 | PROSPECTIVE_MEMBERS_MODULE.md | 1.0 | 2026-02-12 | Current |
 | MEETING_MINUTES_MODULE.md | 1.0 | 2026-02-13 | Current |
-| ONBOARDING_FLOW.md | 1.2 | 2026-02-12 | Current |
+| ONBOARDING_FLOW.md | 1.3 | 2026-06-25 | Current — login page guards against unconfigured installs, EMT operational rank, optional-module enabled-state visibility |
 | DROP_NOTIFICATIONS.md | 1.0 | 2026-02-14 | Current |
 | TYPESCRIPT_SAFEGUARDS.md | 1.1 | 2026-02-14 | Current |
 

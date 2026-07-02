@@ -206,6 +206,25 @@ DELETE /api/v1/inventory/kits/{kit_id}                                 # Soft-de
 
 > Issuing a pool item enforces the per-category allowance unless `override_allowance=true`. Member-specific inventory endpoints (`/inventory/my/`, `/inventory/members/`, `/inventory/charges`, `/inventory/checkout/`, `/inventory/users/`, `/inventory/members-summary`) are excluded from client caching (PII).
 
+## Inventory — Impact Planner *(2026-06-23)*
+
+All endpoints require `inventory.manage`.
+
+```
+GET    /api/v1/inventory/impact-planner/options                        # Filter options (ranks, stations, positions, statuses, membership types, categories, size fields)
+POST   /api/v1/inventory/impact-planner                                # Analyze a filter set → matched members, per-size breakdown, counts (contact gated by org settings)
+POST   /api/v1/inventory/impact-planner/reorder                        # Create one pending, pre-priced reorder request per shortfall size
+POST   /api/v1/inventory/impact-planner/issue                          # Bulk-issue matching on-hand pool stock to members who need it (audit + WS event)
+POST   /api/v1/inventory/impact-planner/request-sizes                  # In-app notification to members missing a size on file
+POST   /api/v1/inventory/impact-planner/pdf                            # Print-ready PDF summary (application/pdf)
+GET    /api/v1/inventory/impact-planner/plans                          # List saved plans
+POST   /api/v1/inventory/impact-planner/plans                          # Save a named plan (filter set)
+PATCH  /api/v1/inventory/impact-planner/plans/{plan_id}                # Update a saved plan
+DELETE /api/v1/inventory/impact-planner/plans/{plan_id}                # Delete a saved plan
+```
+
+> The analyze body (statuses, membership types, ranks, stations, position ids, related/stock category, size field, `replacement_aware`, `allowance_aware`) is reused by reorder/issue/pdf and stored verbatim by saved plans. On-hand netting, cost, replacement, and allowance layers only run when their inputs are supplied.
+
 ## Election Results & Verification *(2026-03-29)*
 
 ```
