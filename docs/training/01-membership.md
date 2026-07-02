@@ -662,4 +662,270 @@ Membership IDs are now auto-generated when a member is created or transferred. A
 
 ---
 
+## Realistic Example: New Member Onboarding (End-to-End)
+
+This walkthrough follows a single applicant — **Alex Rivera** — from first contact through the end of their third month at **Oakville Fire Department (OFD)**. It touches six modules (Membership, Elections, Inventory, Medical, Training, Scheduling) and highlights the cross-module data flows that make The Logbook more than a collection of independent tools.
+
+**Personas:**
+
+| Person | Role |
+|--------|------|
+| **Alex Rivera** | New applicant, later Probationary Firefighter |
+| **Lt. Morrison** | Membership Coordinator |
+| **Capt. Davis** | Training Officer |
+| **Lt. Walsh** | Quartermaster (Inventory) |
+| **Secretary Sarah Kim** | Election administrator |
+| **Capt. Alvarez** | Health & Safety Officer |
+
+---
+
+### Part 1: Application (January 5)
+
+Alex discovers OFD's recruitment page and submits an interest form through the **public portal**.
+
+1. Lt. Morrison opens **Administration > Members > Prospective** and clicks **Add Prospect**. She enters Alex's name, email, phone, and sets the desired membership type to **Regular**.
+2. The prospect card appears in the Kanban board at **Stage 1: Interest Form** (a Form Submission stage linked to the Membership Interest Form in the Forms module).
+3. Because Stage 1 is configured as an **Automated Email** follow-up, the system sends Alex a welcome email containing a status tracker link and instructions for completing the interest form.
+4. Alex clicks the link, fills out the interest form online, and submits it.
+5. The stage has **auto-advance** enabled, so Alex's card automatically moves to **Stage 2: Application Review**.
+
+**Edge case — duplicate detection:** When Lt. Morrison creates the prospect, the system detects an archived member with the last name "Rivera" but a different email address. A duplicate warning banner appears on the prospect drawer. Lt. Morrison reviews the archived record, confirms this is a different person, and dismisses the warning. The prospect proceeds normally.
+
+> **[SCREENSHOT NEEDED]:** _The Prospective Members Kanban board showing Alex Rivera's card in Stage 2: Application Review, with the duplicate warning banner visible at the top of the prospect detail drawer._
+
+---
+
+### Part 2: Background Check & Interview (January 10 -- February 15)
+
+1. Lt. Morrison advances Alex to **Stage 3: Background Check** (a Document Upload stage).
+2. The background check takes three weeks. On January 31, the results are uploaded as a PDF document to Alex's prospect record (up to 50 MB, PDF/DOC/DOCX/JPEG/PNG/GIF).
+3. With the document uploaded and auto-advance enabled, Alex moves to **Stage 4: Interview** (a Meeting stage linked to the February interview event).
+
+**Interview panel — three officers evaluate Alex:**
+
+| Interviewer | Recommendation | Notes |
+|-------------|---------------|-------|
+| Capt. Davis | Recommend | "Strong mechanical aptitude, team-oriented" |
+| Lt. Hernandez | Recommend | "Excellent communication skills" |
+| FF Brooks | Recommend with reservations | "Limited weekday availability — works full-time until May" |
+
+Each interviewer records their recommendation in the prospect's pipeline steps. FF Brooks's reservation is captured as a note on the step but does not block advancement — the pipeline requires a majority "Recommend" to proceed, not unanimity.
+
+4. Lt. Morrison reviews all three recommendations and advances Alex to **Stage 5: Membership Vote**.
+
+**Edge case — reservation handling:** FF Brooks's "Recommend with reservations" is stored in the prospect's history. If a future coordinator reviews Alex's file, the reservation and its context are visible in the audit trail. Reservations do not create a separate approval gate; they are informational.
+
+---
+
+### Part 3: Membership Vote (March Business Meeting)
+
+When Alex reaches the **Election/Vote** stage, the system automatically creates an **election package** in the Elections module. The package includes:
+
+- Alex's name, photo, and desired membership type
+- A snapshot of pipeline progress (all stages completed, interviewer recommendations)
+- Uploaded documents (background check results, interest form responses)
+
+1. Secretary Sarah Kim opens **Elections** and sees the auto-created package with status **Pending**.
+2. She adds Alex to the **March Business Meeting** election ballot.
+3. At the meeting, 38 members are present. The vote proceeds:
+   - **Yes:** 35
+   - **No:** 3
+   - **Result:** Approved (simple majority required)
+4. Secretary Kim records the results. The election package status changes to **Elected**.
+5. Alex's prospect card in the pipeline automatically reflects the election result.
+
+**Edge case — failed vote:** If the vote had been 15-23 (Not Elected), the election package status would change to **Not Elected**. Alex would remain in the pipeline at the Election/Vote stage with the option to re-apply after a configurable waiting period (default: 6 months). Lt. Morrison would see a "Re-application eligible" date on the prospect card.
+
+> **[SCREENSHOT NEEDED]:** _The Elections module showing Alex Rivera's election package with status "Elected", vote tally (35-3), and the linked prospect record._
+
+---
+
+### Part 4: Member Conversion & Gear Assignment (March 16)
+
+#### Conversion to Full Member
+
+1. Lt. Morrison clicks **Transfer to Membership** on Alex's prospect card.
+2. The system creates a new user account:
+   - **Rank:** Probationary Firefighter
+   - **Station:** Station 1
+   - **Status:** Probationary
+   - **Membership number:** OFD-2026-047 (auto-generated)
+   - **Department email:** alex.rivera@oakvillefd.org (auto-generated from the `first.last` pattern)
+   - **Personal email:** preserved from the prospect record
+   - **Role:** "member" (assigned automatically)
+3. A welcome email is sent to Alex's personal email with login credentials and a prompt to change the password on first login.
+
+#### Gear Assignment via Impact Planner
+
+4. Lt. Walsh opens the **Inventory** module and navigates to the **Impact Planner**.
+5. He runs an analysis filtered to **Station 1 probationary members needing PPE**.
+6. Alex appears in the results as **"Needs item"** for five categories:
+   - Turnout coat
+   - Turnout pants
+   - Helmet
+   - Gloves
+   - Boots
+7. Alex's sizes are not on file. Lt. Walsh clicks **"Request Sizes"** next to Alex's name. The system sends Alex a notification asking them to enter size preferences.
+8. Alex logs in for the first time, changes their password, and navigates to **My Equipment > Size Preferences**. Alex enters:
+   - Coat: L Regular
+   - Pants: 34x32
+   - Helmet: 7 1/4
+   - Gloves: XL
+   - Boots: 11 Wide
+9. Lt. Walsh returns to the Impact Planner, sees Alex's sizes are now on file, and clicks **Issue PPE Kit**. The system matches available inventory to Alex's size preferences and creates assignment records.
+
+**Edge case — stock shortage:** XL gloves are out of stock. The system issues a partial kit (coat, pants, helmet, boots) and flags gloves as **"Pending — Out of Stock"**. An automatic reorder request is created in the Inventory module, and Lt. Walsh receives a notification. Alex's equipment profile shows 4 of 5 items assigned with the gloves line item showing a yellow "Backordered" badge.
+
+> **[SCREENSHOT NEEDED]:** _The Impact Planner results showing Alex Rivera with "Needs item" status for five PPE categories, with the "Request Sizes" button visible and size preference fields partially filled._
+
+---
+
+### Part 5: Medical Screening (March 20)
+
+Capt. Alvarez opens the **Medical Screening** module and creates screening records for Alex:
+
+| Screening | Status | Scheduled Date |
+|-----------|--------|---------------|
+| Annual Physical Exam | Scheduled | March 25 |
+| Pre-Employment Drug Screen | Scheduled | March 22 |
+
+**March 22 — Drug Screen:**
+- Alex completes the drug screen at the designated facility.
+- Capt. Alvarez updates the record: Status changes from **Scheduled** to **Passed**.
+
+**March 25 — Physical Exam:**
+- Alex completes the annual physical.
+- Capt. Alvarez updates the record: Status changes to **Passed**, Expiration set to **March 25, 2027**.
+
+**Alex's compliance summary** now shows:
+- Requirements met: **2 / 2**
+- Overall status: **Fully Compliant** (green badge)
+- Next expiration: March 25, 2027 (Annual Physical)
+
+**Edge case — failed drug screen:** If the drug screen result had been **Failed**, the screening record would display a red "Failed" badge. Alex's membership would be automatically flagged for HR review. The compliance summary would show **1 / 2 requirements met** with a red "Non-Compliant" status. HR would receive a notification to initiate the department's substance abuse policy procedures.
+
+---
+
+### Part 6: Training Enrollment (March 25)
+
+Capt. Davis opens the **Training** module and enrolls Alex in the **Probationary Firefighter Program** — a Sequential program with four phases:
+
+**Phase 1: Orientation (4 requirements)**
+- Department history presentation
+- SOPs review and acknowledgment
+- Facility tour (all stations)
+- Radio procedures and protocol
+
+**Phase 2: Basic Skills (6 requirements)**
+- Hose operations (3 observed evolutions)
+- Ladder operations (3 observed evolutions)
+- SCBA donning and use
+- Forcible entry techniques
+- Search and rescue procedures
+- Ventilation operations
+
+**Phase 3: EMS (3 requirements)**
+- CPR/AED certification
+- First Responder certification
+- Patient assessment competency
+
+**Phase 4: Live Fire (2 requirements)**
+- 40 hours supervised fireground operations
+- Officer sign-off on fireground competency
+
+Alex completes all four Phase 1 orientation requirements during the first week (March 25--31). Capt. Davis marks each requirement as complete in the training program tracker. Phase 1 status changes to **Complete**, and Phase 2 unlocks (sequential programs require phase completion in order).
+
+**Edge case — prior certification credit:** Alex holds a current CPR/AED certification from a previous employer. Alex uploads the certification card as a training record attachment. Capt. Davis reviews the document, confirms the certification is current and from an accredited provider, and approves it. The Phase 3 CPR/AED requirement is automatically credited — Alex will only need to complete the remaining two EMS requirements when Phase 3 unlocks.
+
+> **[SCREENSHOT NEEDED]:** _The Training Program detail view for Alex Rivera showing Phase 1 (Complete, 4/4), Phase 2 (In Progress, 0/6), Phase 3 (Locked, 1/3 pre-credited), and Phase 4 (Locked, 0/2), with the overall progress bar at 25%._
+
+---
+
+### Part 7: First Shift & Ongoing (April 1)
+
+Alex is assigned to **A Platoon** and works their first shift on April 1 — a 24-hour shift on **Engine 1**.
+
+**Shift completion report filed by the shift officer:**
+
+| Field | Value |
+|-------|-------|
+| Hours worked | 24 |
+| Calls responded | 3 (1 medical, 1 fire alarm, 1 MVA) |
+| Skills observed | Hose deployment (Score: 3 — Competent), SCBA donning (Score: 2 — Developing) |
+| Tasks completed | Hydrant connection, Equipment inventory |
+
+The shift officer submits the completion report for review. Once approved, the training program is updated automatically:
+
+- **Phase 2 "Hose operations"** — partial credit recorded (1 of 3 required observations completed)
+- **Phase 4 "40 hours supervised"** — 24 hours logged toward the 40-hour requirement
+- Shift hours are counted in Scheduling toward Alex's monthly attendance
+
+**Edge case — report revision:** The reviewer initially flags the report with a note: "Please add more detail to the SCBA observation — what drills were performed?" The shift officer updates the narrative section with specifics ("Donned SCBA in 90 seconds during morning drill; used SCBA during fire alarm response at 1420"). The reviewer re-reviews and approves the updated report.
+
+**Alex's dashboard after one month shows:**
+
+- **Name:** Alex Rivera
+- **Rank:** Probationary Firefighter
+- **Station:** Station 1, A Platoon
+- **Training:** 25% through Probationary Firefighter Program (Phase 2 in progress)
+- **Medical:** 2/2 compliant (physical expires March 2027)
+- **Equipment:** All PPE assigned (gloves on backorder)
+- **Shifts:** 4 shifts completed, 96 hours logged
+
+---
+
+### Summary: Alex's Status After 3 Months
+
+| Module | Status |
+|--------|--------|
+| Membership | Probationary Firefighter, Station 1, A Platoon |
+| Inventory | Full PPE kit issued (gloves on backorder) |
+| Medical | Fully compliant (physical expires March 2027) |
+| Training | 25% through Probationary Program (Phase 2) |
+| Scheduling | A Platoon, 4 shifts completed, 96 hours logged |
+| Finance | Annual dues generated ($100, pending) |
+
+---
+
+### Cross-Module Data Flow
+
+The following diagram shows how data flows between modules during the onboarding process:
+
+```
+Prospective Pipeline → converts to → Membership (User record)
+                                        ↓
+                              Inventory (gear assignment via Impact Planner)
+                              Medical Screening (compliance tracking)
+                              Training (program enrollment)
+                              Scheduling (platoon assignment, shift reports)
+                              Finance (dues generation)
+                                        ↓
+                              Dashboard (unified status view)
+```
+
+Key integration points:
+
+- **Pipeline to Membership:** The "Transfer to Membership" action creates a user record, auto-generates a membership number and department email, assigns the default "member" role, and sends the welcome email — all in one step.
+- **Pipeline to Elections:** Reaching an Election/Vote pipeline stage auto-creates an election package with the prospect's snapshot and documents.
+- **Membership to Inventory:** The Impact Planner queries membership records to identify new members needing gear. Size preferences entered by the member flow into kit assignment matching.
+- **Membership to Medical:** New members appear in the Medical Screening module as needing baseline screenings. Compliance status feeds back to the member's profile.
+- **Membership to Training:** Program enrollment links the member to a structured curriculum. Shift completion reports auto-credit training requirements.
+- **Membership to Scheduling:** Platoon assignment drives shift scheduling. Shift reports flow into training credit and attendance tracking.
+- **Membership to Finance:** Member creation triggers dues generation based on the membership tier and billing cycle configured in Finance settings.
+
+---
+
+### Cross-Module Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Membership vote fails | Applicant stays in pipeline; can re-apply after configurable waiting period |
+| Gear out of stock during onboarding | Partial kit issued; reorder request auto-created; admin notified |
+| Drug screen fails | Membership flagged for HR review; medical record shows "Failed" |
+| Training program phase requires certification Alex already has | Upload cert as attachment; officer approves; requirement auto-credited |
+| Alex goes on leave during probation | Training requirements pro-rated; shifts excluded from compliance |
+| Dues not paid by grace period | Status auto-changes to Overdue; late fee applied if configured |
+
+---
+
 **Previous:** [Getting Started](./00-getting-started.md) | **Next:** [Training & Certification](./02-training.md)

@@ -1225,4 +1225,91 @@ Use these in templates to provide consistent branding links. For example: `<a hr
 
 ---
 
+## Cloudflare Email Service (2026-04-28)
+
+The Logbook now supports **Cloudflare Email Routing** as an email delivery platform in addition to direct SMTP and other providers.
+
+### Configuring Cloudflare Email
+
+1. Navigate to **Settings > Email Configuration**
+2. Select **Cloudflare** as the email platform
+3. Enter your Cloudflare credentials:
+   - **Account ID** — Your Cloudflare account identifier (validated against SSRF attacks)
+   - **API Token** — Cloudflare Email API token with send permissions
+4. Save and send a test email to verify the configuration
+
+### How It Works
+
+- Cloudflare Email Routing handles DNS and authentication automatically
+- Retry logic with **exponential backoff** handles transient failures
+- **Concurrency controls** prevent overwhelming the Cloudflare API during bulk sends
+- The `send_batch` method respects the enabled state — it won't attempt sends when email is disabled
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Invalid Cloudflare Account ID format | Rejected with SSRF validation error before any API call |
+| Cloudflare API rate limit hit | Retried with exponential backoff (up to 3 retries) |
+| Bulk send with 100+ recipients | Batched with concurrency limits to avoid API throttling |
+| Email disabled in settings | `send_batch` returns immediately without attempting delivery |
+| Cloudflare API timeout | Retried; failure logged to message history with error details |
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Email Configuration page showing the Cloudflare platform selected, with Account ID and API Token fields, and a "Send Test Email" button._
+
+---
+
+## Admin Audit Log Page (2026-05-02)
+
+Administrators can now view the tamper-proof audit trail directly from the application at **Administration > Audit Log** (`/audit-logs`).
+
+**Required Permission:** `audit.view`
+
+### What the Audit Log Shows
+
+The audit log page displays a real-time, searchable, filterable table of every administrative and security event in your organization:
+
+| Column | Description |
+|--------|-------------|
+| **Timestamp** | When the event occurred (displayed in your timezone) |
+| **Severity** | Info (blue), Warning (amber), or Critical (red) badge |
+| **Event Type** | Technical event identifier (e.g., `shift_report_reviewed`, `member_dropped`) |
+| **Category** | Event group (e.g., "training", "security", "inventory") |
+| **Username** | Who performed the action (or "System" for automated events) |
+| **IP Address** | IP address of the acting user |
+
+### Filtering and Searching
+
+- **Search**: Filter by username or event type
+- **Severity filter**: Show only Info, Warning, or Critical events
+- **Category filter**: Dynamically populated from your org's event categories
+- **Pagination**: Configurable page size
+
+### Summary Statistics
+
+Four stat cards appear at the top of the page:
+- **Total events** — All-time event count
+- **Critical** — Count of critical-severity events
+- **Warnings** — Count of warning-severity events
+- **Info** — Count of informational events
+
+### Expanding Event Details
+
+Click any row to expand it and see the full **event metadata** — a JSON view of all data associated with the event (e.g., report ID, review status, affected member, old/new values).
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Audit Log page showing the summary stat cards at the top, the filter bar (search, severity, category dropdowns), and the event table with several rows. Show one row expanded to reveal the JSON event metadata._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| System-level events (no acting user) | Excluded from org-scoped view |
+| Very large audit trail (100k+ events) | Paginated; server-side filtering |
+| Multiple severity levels selected | Events matching any selected severity shown |
+| Event with no metadata | Expandable row shows empty JSON `{}` |
+
+> **Note:** The audit log is scoped to your organization — events for your department's users only. System-level events (such as scheduled jobs that have no acting user) are deliberately excluded from this view.
+
+---
+
 **Previous:** [Documents & Forms](./07-documents-forms.md) | **Next:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md)

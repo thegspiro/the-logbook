@@ -76,6 +76,8 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/import` | CSV Import | `inventory.manage` |
 | `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
+| `/inventory/admin/allowances` | Issuance Allowances | `inventory.manage` |
+| `/inventory/admin/impact-planner` | Impact Planner | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
 ---
@@ -533,6 +535,75 @@ Filters are applied in the InventoryItemsPage as dropdown selectors alongside ex
 | Size/color/style filter with no matches | Empty results; filter state preserved |
 | Label content with all optional fields unchecked | Minimum: barcode image + item name always included |
 | `category_name` null on older items | Falls back to empty string display |
+
+---
+
+## Inventory Impact Planner (2026-06-22)
+
+The Impact Planner at `/inventory/admin/impact-planner` allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations from a single analysis.
+
+### Core Workflow
+
+1. **Filter the roster**: Select which members to analyze (by status, rank, station, membership type, position)
+2. **Choose the item category and size field**: e.g., "Job Shirts" + "Shirt Size"
+3. **Analyze**: The system determines who needs the item, broken down by size, with on-hand stock comparison
+4. **Act**: One-click reorder generation, bulk-issue from stock, or request sizes from members
+
+### Key Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| **Stock-aware shortfall** | Compares member demand per size against on-hand pool stock to calculate purchase quantities |
+| **Cost estimation** | Multiplies shortfall × unit cost per size for a total projected purchase cost |
+| **One-click reorder** | Generates `ReorderRequest` records (PENDING status) for each size with shortfall > 0 |
+| **Replacement-aware targeting** | Flags members whose existing items are worn/expired (not just missing) |
+| **Bulk-issue** | Issues on-hand stock to members who need it, matching by size preference |
+| **Saved plans** | Save filter sets with names for reuse (annual refresh, seasonal cycles) |
+| **Allowance-aware warnings** | Flags members at or over their issuance allowance; bulk-issue skips them |
+| **Request sizes** | Sends in-app notifications to members without sizes, directing them to add preferences |
+| **PDF summary** | Branded printable PDF with size breakdown, filters, and optional contact columns |
+
+### API Endpoints
+
+```
+GET    /api/v1/inventory/impact-planner/options              # Filter options
+POST   /api/v1/inventory/impact-planner                      # Analyze impact
+GET    /api/v1/inventory/impact-planner/plans                 # List saved plans
+POST   /api/v1/inventory/impact-planner/plans                 # Save new plan
+PATCH  /api/v1/inventory/impact-planner/plans/{plan_id}       # Update plan
+DELETE /api/v1/inventory/impact-planner/plans/{plan_id}       # Delete plan
+POST   /api/v1/inventory/impact-planner/reorder               # Generate reorder requests
+POST   /api/v1/inventory/impact-planner/issue                 # Bulk-issue from stock
+POST   /api/v1/inventory/impact-planner/request-sizes         # Send size-request notifications
+POST   /api/v1/inventory/impact-planner/pdf                   # Generate PDF summary
+```
+
+### Data Model
+
+**Table: `inventory_impact_plans`** (migration `20260622_0001`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `organization_id` | UUID (FK) | Organization scope |
+| `name` | String(255) | Human-readable scenario name |
+| `description` | Text | Optional narrative |
+| `filters` | JSON | Persisted filter set |
+| `created_by` | UUID (FK, nullable) | Who created the plan |
+| `created_at`, `updated_at` | DateTime(tz) | Timestamps |
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Member with no size preference | Bucketed as "Unknown"; skipped by bulk-issue and reorder |
+| Stock exhausted during bulk-issue | Issues what's available; remaining members skipped with reason |
+| All shortfalls are zero | Reorder generates nothing; returns `created_count: 0` |
+| Contact visibility set to "hidden" | Email/phone columns omitted from PDF |
+| Allowance exceeded for a member | Bulk-issue skips with "Allowance exceeded" reason |
+| Plan filters reference deleted rank | Deleted values silently ignored; remaining filters applied |
+| Replacement-aware with NFPA tracking | Uses NFPA retirement dates for serviceability |
+| Multiple items at different costs | Average unit cost used for estimation |
 
 ---
 

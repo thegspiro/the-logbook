@@ -1322,4 +1322,353 @@ This is particularly useful for:
 
 ---
 
+## Realistic Example: Completing a Probationary Training Program
+
+This walkthrough follows **FF Alex Rivera**, a probationary firefighter at Oakville Fire Department, through a 6-month training program managed by **Capt. Davis** (Training Officer). It demonstrates program enrollment, phase progression, shift report integration, external certification handling, and graduation.
+
+### Part 1: Enrollment (March 25)
+
+Capt. Davis navigates to **Training > Programs** and opens the "Probationary Firefighter Program." This is a **Sequential** program with 4 phases and 15 total requirements. He clicks **Enroll Member**, searches for Alex Rivera, and confirms the enrollment.
+
+After enrollment, the program dashboard for Alex shows:
+
+| Field | Value |
+|-------|-------|
+| Program | Probationary Firefighter Program |
+| Type | Sequential |
+| Enrolled | March 25, 2026 |
+| Overall Progress | 0% |
+| Phases | 4 (Phase 1 unlocked, Phases 2-4 locked) |
+| Requirements | 0 of 15 complete |
+
+Phase 1 (Orientation) is immediately accessible. Phases 2 through 4 display a lock icon with the tooltip "Complete the previous phase to unlock." Alex can see her enrollment on the **My Training** dashboard under **Active Program Enrollments** with a progress bar at 0%.
+
+> **[SCREENSHOT NEEDED]:** _The program enrollment detail page showing Alex Rivera's enrollment at 0% progress, Phase 1 unlocked with 4 requirements listed, and Phases 2-4 showing lock icons._
+
+**Edge case — duplicate enrollment:** Later that week, Lt. Park (another officer) attempts to enroll Alex in the same program. The system returns: "Member is already enrolled in this program" and prevents the duplicate. Each member can have only one active enrollment per program.
+
+### Part 2: Phase 1 — Orientation (March 25 - April 5)
+
+Phase 1 requires Alex to complete 4 orientation tasks. Each has a different completion method:
+
+| # | Requirement | Completion Method | Hours |
+|---|-------------|-------------------|-------|
+| 1 | Department History Course | Self-reported | 2 |
+| 2 | SOPs Review | Self-reported (attachment required) | 3 |
+| 3 | Facility Tour | Officer-verified | 1 |
+| 4 | Radio Procedures | Officer-verified | 1 |
+
+**Self-reported records (Requirements 1 and 2):**
+
+Alex navigates to **Training > Submit Training**, selects "Department History" from the course dropdown, enters 2 hours, and submits. The record enters **Pending Review** status. Capt. Davis sees the submission in **Training Admin > Review Submissions**, reviews the details, and clicks **Approve**. The requirement is marked complete, and Alex receives a notification.
+
+For the SOPs Review, Alex submits a training record but forgets to upload the signed acknowledgment form. Capt. Davis reviews the submission, notices the missing attachment, and clicks **Reject** with the note: "Please upload your signed acknowledgment form." Alex receives the rejection notification, resubmits with the PDF attached, and Capt. Davis approves the corrected submission.
+
+**Officer-verified records (Requirements 3 and 4):**
+
+After walking Alex through the facility tour, Capt. Davis creates a training record directly on Alex's behalf via **Training Admin > Officer Dashboard**, selecting "Facility Tour" and marking it as complete. The same process applies for Radio Procedures after Alex demonstrates proficiency.
+
+After all 4 requirements are approved:
+
+| Metric | Value |
+|--------|-------|
+| Phase 1 Progress | 100% (4/4 complete) |
+| Overall Progress | 27% (4/15 complete) |
+| Phase 2 Status | Unlocked (auto-triggered by Phase 1 completion) |
+| Total Hours | 7 |
+
+Phase 2 (Basic Skills) automatically unlocks because the program type is Sequential — no officer action is needed to advance phases.
+
+### Part 3: Phase 2 — Basic Skills via Shift Reports (April - June)
+
+Phase 2 focuses on fireground skills observed during regular shift work. Over 12 shifts, shift officers file completion reports documenting Alex's skill demonstrations. Each skill requires 3 satisfactory observations before the requirement is considered complete.
+
+**How shift reports credit requirements:**
+
+After each shift, the shift officer finalizes the shift (creating draft reports for all enrolled trainees), then completes Alex's evaluation by scoring observed skills on a 1-5 scale. When the report is submitted and approved, the system automatically credits matching Phase 2 requirements.
+
+**Progress after 12 shifts:**
+
+| Requirement | Observations Needed | Observations Complete | Score Progression | Status |
+|-------------|--------------------|-----------------------|-------------------|--------|
+| Hose Operations | 3 | 3 | 2 → 3 → 4 | Complete |
+| Ladder Operations | 3 | 3 | 2 → 3 → 3 | Complete |
+| SCBA | 3 | 3 | 3 → 4 → 4 | Complete |
+| Forcible Entry | 3 | 2 | 3 → 3 | In Progress (67%) |
+| Search & Rescue | 3 | 3 | 3 → 3 → 4 | Complete |
+| Ventilation | 3 | 3 | 2 → 3 → 4 | Complete |
+
+> **[SCREENSHOT NEEDED]:** _The Phase 2 detail view showing the six skill requirements with observation counts, score progressions displayed as small bar charts, and status indicators (green checkmarks for complete, yellow progress bars for in-progress)._
+
+**Edge case — unmatched call type:** On April 18, Engine 1 responds to a carbon monoxide alarm. The shift officer files a completion report for that call, but the call type "CO Investigation" does not match any Phase 2 requirement's `required_call_types`. The 2 hours from that shift are counted toward Alex's overall program hours but no specific Phase 2 requirement is credited. The system logs this in `progress_notes`: "Call type 'CO Investigation' did not match any Phase 2 requirements."
+
+**Edge case — officer omits "demonstrated" flag:** On May 3, Lt. Park files a shift report noting Alex performed ladder operations but forgets to check the "Demonstrated" checkbox on the skill entry. The skill observation is recorded but not credited toward the requirement. Lt. Park catches this during his weekly report review, edits the report to mark the skill as demonstrated, and the requirement progress updates on the next sync.
+
+### Part 4: Phase 3 — EMS Certifications (June - July)
+
+Phase 3 has 3 requirements focused on EMS qualifications:
+
+| # | Requirement | Completion Method |
+|---|-------------|-------------------|
+| 1 | CPR/AED Certification | External certificate upload |
+| 2 | First Responder Course | Self-reported (40 hrs) |
+| 3 | Patient Assessment | Shift report observations (2 needed) |
+
+**External certification (Requirement 1):**
+
+Alex already holds a CPR/AED certification from a previous employer. She navigates to **Training > Submit Training**, selects the CPR/AED course, uploads the certificate PDF, and enters the certification date and expiration date. The record appears with source tagged as **External**. Capt. Davis reviews and approves it, and the Phase 3 requirement is auto-credited.
+
+**Self-reported course (Requirement 2):**
+
+Alex completes a 40-hour First Responder course at the community college. She submits the training record with 40 hours and attaches the completion certificate. Capt. Davis approves the submission.
+
+**Shift report observations (Requirement 3):**
+
+Over two medical calls in June, shift officers observe and document Alex's patient assessment skills in their completion reports. After the second approved observation, the requirement is complete.
+
+Phase 3 is now 100% complete. Phase 4 unlocks automatically.
+
+**Edge case — expiring certification:** Alex's CPR/AED certificate expires in 3 months (September). The system adds it to the **Expiring Certifications** view with a 90-day warning. Alex and Capt. Davis both receive an in-app and email notification at the 90-day mark. The certification shows a yellow indicator on Alex's compliance card.
+
+### Part 5: Phase 4 — Live Fire & Graduation (August - September)
+
+Phase 4 has 2 final requirements:
+
+| # | Requirement | Target | Method |
+|---|-------------|--------|--------|
+| 1 | Supervised Hours | 40 hours | Auto-calculated from all approved shift reports |
+| 2 | Officer Sign-Off | Final evaluation | Officer-verified |
+
+**Supervised hours (Requirement 1):**
+
+The system automatically tallies all approved shift completion report hours filed for Alex across the entire program. By late August, Alex has accumulated 40.5 hours from 18 shift reports. The requirement shows 100% (40.5 / 40 hours). No manual entry is needed — this is purely calculated from existing report data.
+
+**Officer sign-off (Requirement 2):**
+
+Capt. Davis conducts a final evaluation session with Alex, reviews her performance across all phases, and marks the final sign-off requirement as complete in the system.
+
+**Program completion:**
+
+| Metric | Value |
+|--------|-------|
+| Overall Progress | 100% (15/15 complete) |
+| Program Status | Completed |
+| Total Hours | 98.5 |
+| Duration | March 25 - September 12 (171 days) |
+
+Alex's membership status is now eligible for upgrade from **Probationary** to **Active** (see [Membership Management — Member Lifecycle](./01-membership.md)). The compliance matrix shows Alex green across all requirements.
+
+> **[SCREENSHOT NEEDED]:** _The completed program dashboard showing 100% progress, all 4 phases with green checkmarks, the total hours summary, and a "Program Completed" banner with the completion date._
+
+**Edge case — insufficient hours:** If Alex had only accumulated 38 of the required 40 supervised hours, the system would show 95% on that requirement (38/40). Capt. Davis can navigate to the requirement detail to see exactly which shifts contributed hours: a table listing each shift date, officer, hours credited, and call types. This transparency helps identify whether additional shifts need to be scheduled.
+
+**What Auto-Progressed vs. What Required Manual Action:**
+
+| Action | Method | Triggered By |
+|--------|--------|-------------|
+| Phase unlocking | Automatic | Previous phase reaching 100% |
+| Shift report hours/calls/skills | Automatic | Approved shift completion reports |
+| Self-reported training approval | Manual | Officer review in Review Submissions |
+| External certification credit | Manual | Officer review of uploaded certificate |
+| Duplicate enrollment prevention | Automatic | System constraint check |
+| Officer sign-off | Manual | Officer marks requirement complete |
+| Membership status upgrade | Manual | Administrator action in Member Lifecycle |
+
+---
+
+## Realistic Example: Running a Quarterly Training Drill
+
+This walkthrough follows **Lt. Santos** (Training Officer) as he plans and executes a department-wide multi-company drill at Oakville Fire Department. The example spans the Events, Training, Scheduling, Inventory, and Apparatus modules to show how they work together during a large-scale training exercise.
+
+### Part 1: Planning (2 Weeks Before)
+
+Lt. Santos navigates to **Events > Create Event** and fills in the drill details:
+
+| Field | Value |
+|-------|-------|
+| Title | Q2 Structural Fire Drill — Acquired Structure |
+| Event Type | Training |
+| Recurring | No |
+| Date | Saturday, June 13, 2026 |
+| Time | 08:00 - 12:00 |
+| Location | 415 Industrial Pkwy (acquired structure) |
+| Linked Course | Structural Firefighting Operations |
+| Credit Hours | 4 |
+| RSVP Required | Yes |
+| RSVP Fields | Dietary restrictions, accessibility needs (for lunch provision) |
+| Maximum Participants | 30 |
+| Assigned Apparatus | Engine 1, Engine 3, Ladder 1 |
+
+Lt. Santos saves the event. The system creates the event record and links it to the "Structural Firefighting Operations" training course so that attendance will automatically generate training credit.
+
+**Edge case — schedule conflict:** The drill date overlaps with Shift B's regular duty schedule. The system displays a conflict warning: "This event overlaps with Shift B (08:00-20:00 on June 13)." Lt. Santos acknowledges the warning and proceeds — training events can override regular scheduling, and the affected members will receive both the shift and event notifications.
+
+### Part 2: Scheduling & Equipment (1 Week Before)
+
+**Member RSVPs:**
+
+Members receive RSVP notifications via the app. Over the next week, 28 of 30 available slots are filled. Lt. Santos can see the RSVP list under the event detail page, including dietary notes (3 vegetarian, 1 gluten-free) and one accessibility request (ground-level staging area needed).
+
+**Apparatus crew assignments:**
+
+Lt. Santos creates shift assignments for the drill, distributing the 28 confirmed members across the 3 apparatus:
+
+| Apparatus | Assigned Members | Role Focus |
+|-----------|-----------------|------------|
+| Engine 1 | 8 members | Pump ops, hose advancement, hydrant connection |
+| Engine 3 | 8 members | Search & rescue, ventilation, RIT |
+| Ladder 1 | 10 members + 2 observers | Aerial ops, ground ladders, ventilation |
+
+**Equipment checkout:**
+
+Lt. Santos navigates to **Inventory > Check Out** to reserve training equipment:
+
+| Item | Quantity | Checkout Type | Return Expected |
+|------|----------|--------------|-----------------|
+| SCBA Units | 6 | Temporary (same-day return) | June 13, 16:00 |
+| Thermal Imaging Cameras | 2 | Temporary (same-day return) | June 13, 16:00 |
+| Attack Hose (1.75") | 12 lengths | Pool item issuance | June 13, 16:00 |
+
+> **[SCREENSHOT NEEDED]:** _The Inventory checkout form showing the 6 SCBA units being checked out with "Temporary" selected, the return date auto-filled, and the equipment list below showing current availability counts._
+
+**Edge case — equipment in maintenance:** When Lt. Santos attempts to check out 6 SCBA units, the system reports that SCBA Unit #14 is currently flagged as "In Maintenance" (last inspection failed — regulator issue). Only 5 of the 6 requested units from that batch are available. Lt. Santos substitutes SCBA Unit #22 from a different station's inventory, and the checkout proceeds with 6 available units.
+
+### Part 3: Drill Day — Check-In (Morning)
+
+Members arrive at the acquired structure starting at 07:30. Lt. Santos has printed and posted the event QR code at the staging area.
+
+**QR code check-in:**
+
+Members open the Logbook app on their phones, navigate to the event, and tap **Check In** which activates the camera to scan the QR code. Each scan records the member's attendance with a timestamp.
+
+By 08:15, the attendance dashboard shows:
+
+| Metric | Value |
+|--------|-------|
+| RSVP'd | 28 |
+| Checked In | 24 |
+| Pending | 4 |
+| No-Shows | 0 (not yet determined) |
+
+Two more members arrive by 08:20 and scan in. The remaining 2 members do not arrive.
+
+**Late arrival and manual check-in:**
+
+At 08:25, FF Thompson arrives — his phone camera is malfunctioning and cannot scan the QR code. Lt. Santos opens the event admin panel on his tablet, searches for Thompson in the attendee list, and clicks **Manual Check-In**. The system records Thompson's attendance with the current timestamp and a note: "Manual check-in by Lt. Santos."
+
+By 08:30, final attendance is 27 present out of 28 RSVP'd, with 1 confirmed no-show (FF Garcia — called in sick that morning).
+
+**Edge case — phone camera failure:** When a member's device cannot scan QR codes, the officer uses the admin panel's manual check-in feature. This is logged distinctly from QR scans for audit purposes, showing the authorizing officer's name alongside the timestamp.
+
+### Part 4: Drill Execution & Documentation
+
+The 4-hour drill runs from 08:30 to 12:30 with 3 rotations. Each rotation lasts approximately 75 minutes with 15-minute transitions.
+
+| Rotation | Time | Engine 1 Activity | Engine 3 Activity | Ladder 1 Activity |
+|----------|------|-------------------|-------------------|--------------------|
+| 1 | 08:30-09:45 | Hydrant connection & supply line | Primary search drill | Ground ladder deployment |
+| 2 | 10:00-11:15 | Interior attack (hose advancement) | RIT activation & rescue | Aerial operations & ventilation |
+| 3 | 11:30-12:30 | Overhaul & salvage ops | Ventilation (PPV setup) | Roof-level ventilation |
+
+During the drill, 2 simulated structure fire scenarios are run. Shift officers observe and take notes on each trainee's performance at their rotation, recording skill demonstrations, scores, and areas needing improvement. These notes will feed into the post-drill completion reports.
+
+### Part 5: Post-Drill Reports (Same Evening)
+
+After the drill concludes and equipment is staged for return, the three apparatus officers file shift completion reports for their respective crews.
+
+**Batch report creation workflow:**
+
+Each officer uses the shift-first workflow: they select the drill shift, which auto-populates shared data (date, hours, call types), and then add per-trainee evaluations.
+
+**Engine 1 Officer — 8 trainees:**
+
+| Trainee | Skills Observed | Score | Hours |
+|---------|----------------|-------|-------|
+| Rivera | Pump ops, hydrant connection | 4 | 4 |
+| Chen | Hose advancement, nozzle work | 3 | 4 |
+| Okafor | Hydrant connection, supply line | 3 | 4 |
+| (5 more) | Various fire skills | 3-4 | 4 each |
+
+**Engine 3 Officer — 8 trainees:**
+
+Skills observed include search & rescue techniques, ventilation procedures, and RIT activation. All 8 trainees receive 4-hour credits.
+
+**Ladder 1 Officer — 10 trainees:**
+
+Skills observed include aerial operations, ground ladder throws, and roof ventilation. All 10 trainees receive 4-hour credits.
+
+**Training records auto-generated:**
+
+When all reports are submitted and approved, the system generates training records:
+
+| Metric | Value |
+|--------|-------|
+| Reports Filed | 26 (one per attendee, excluding the 1 no-show) |
+| Credit Hours Each | 4 |
+| Total Hours Logged | 104 |
+| Linked Course | Structural Firefighting Operations |
+
+> **[SCREENSHOT NEEDED]:** _The Shift Reports tab showing the batch of 26 reports filed for the Q2 drill, with columns for trainee name, apparatus, hours (all showing 4), skills observed count, and approval status._
+
+**Edge case — early departure:** FF Patel had to leave the drill after Rotation 2 due to a family emergency, completing only 2 of the 4 hours. The Ladder 1 officer adjusts Patel's report to show 2 hours instead of 4. The system credits Patel with 2 hours toward the "Structural Firefighting" training requirement rather than the full 4. Patel's compliance status reflects the partial credit.
+
+### Part 6: Follow-Up
+
+**Equipment return:**
+
+After the drill, Lt. Santos processes equipment returns through **Inventory > Check In**:
+
+| Item | Quantity Returned | Status |
+|------|-------------------|--------|
+| SCBA Units | 6 of 6 | All returned |
+| Thermal Imaging Cameras | 2 of 2 | All returned |
+| Attack Hose | 12 lengths | Pool items returned |
+
+Inventory counts update in real-time via WebSocket — other officers viewing the inventory dashboard see availability numbers increase as items are checked in.
+
+**Edge case — equipment deficiency:** During the return process, Lt. Santos notes that SCBA Unit #09 has a cracked facepiece lens. He updates the item's condition from "Good" to "Fair" in the inventory system and adds a maintenance note: "Facepiece lens cracked during Q2 drill — needs replacement before next use." The system automatically:
+- Creates a maintenance record for SCBA Unit #09
+- Sets the unit's status to "In Maintenance"
+- Flags a deficiency on the apparatus (Engine 1) that the unit is assigned to
+- The deficiency persists until the next inspection passes and the status is restored to "Good"
+
+**Compliance matrix update:**
+
+After all 26 reports are approved, the training compliance matrix refreshes. Lt. Santos navigates to **Training Admin > Compliance Matrix** and filters by the "Structural Firefighting" requirement:
+
+| Before Drill | After Drill | Change |
+|-------------|-------------|--------|
+| 14 members green (compliant) | 26 members green | +12 |
+| 8 members yellow (in progress) | 0 members yellow | -8 |
+| 4 members red (non-compliant) | 0 members red | -4 |
+
+12 members who were previously yellow or red on "Structural Firefighting" have advanced to green (compliant) based on the 4 hours credited from the drill.
+
+**Event analytics:**
+
+The event detail page now shows post-event analytics:
+
+| Metric | Value |
+|--------|-------|
+| Attendance Rate | 93% (26 of 28 RSVP'd) |
+| Average Hours | 3.9 (due to one 2-hour partial) |
+| Total Participants | 26 |
+| Skills Observations | 78 (3 skills avg per trainee) |
+| Apparatus Used | 3 (Engine 1, Engine 3, Ladder 1) |
+
+> **[SCREENSHOT NEEDED]:** _The event analytics panel showing the attendance rate pie chart, average hours bar, participant count, and a breakdown table by apparatus showing skills observed per unit._
+
+**PDF report generation:**
+
+Lt. Santos clicks **Generate PDF Report** on the event page. The system produces a formatted training report containing:
+- Event summary (date, location, apparatus, hours)
+- Full attendance roster with check-in times
+- Per-apparatus skill observation summaries
+- Aggregate training hours credited
+- Compliance impact summary
+
+This PDF is saved to the department's records and can be submitted to the state fire marshal's office as documentation of quarterly training compliance.
+
+---
+
 **Previous:** [Membership Management](./01-membership.md) | **Next:** [Shifts & Scheduling](./03-scheduling.md)

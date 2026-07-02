@@ -1458,4 +1458,247 @@ These filters work alongside existing category, status, condition, and location 
 
 ---
 
+## Quick-Assign from Admin Hub (2026-06-09)
+
+The Inventory Admin Hub now includes a **quick "Assign to Member" action** for streamlined equipment distribution:
+
+1. Navigate to **Inventory Admin** (`/inventory/admin`)
+2. Click **Assign to Member** in the hub header
+3. **Select a member** — use the member picker modal (search by name or scan a member ID badge)
+4. **Scan or search for items** — the inventory scan modal opens in checkout mode. Scan barcodes with a camera or type item names/serials to find items
+5. Assign items to the selected member
+
+This workflow is designed for events like annual PPE distribution where you need to process many members quickly — scan their badge, then scan the items they're receiving.
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Inventory Admin Hub showing the "Assign to Member" button in the header, and below it the standard admin navigation cards._
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the member picker modal showing the search field and a list of members with name, rank, and station. Show the badge scan icon next to the search field._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Badge scan fails | Falls back to name search in the picker |
+| Item already assigned to another member | Error shown; item not reassigned |
+| Member has no membership number | Badge scan won't find them; use name search |
+
+---
+
+## Cross-Module Barcode Label Printing (2026-06-10)
+
+Barcode label printing is now available across multiple modules — not just Inventory. Each module has its own "Print Labels" entry point that generates module-specific labels.
+
+### Modules Supporting Labels
+
+| Module | Route | What's on the Label | Entry Point |
+|--------|-------|--------------------:|------------|
+| **Inventory** | `/inventory/print-labels` | Item name, barcode, serial/asset tag | Select items → Print Labels |
+| **Apparatus** | `/apparatus/print-labels` | Unit number, asset tag, apparatus type | Per-row "Print Label" action |
+| **Facilities** | `/facilities/print-labels` | Facility name, facility number | Header "Print Labels" button |
+| **Members** | `/members/print-labels` | Member name, membership number | Bulk "Print Badges" button |
+| **Prospects** | `/prospective-members/print-labels` | Applicant name, status token barcode | Bulk "Print Badges" button |
+
+### Remembered Printer Preference
+
+The system remembers your chosen **printer/size per position and per module**:
+
+- A Quartermaster's inventory printer can be different from the apparatus team's printer
+- The preference follows the **role position**, not the computer — whoever holds the role gets their predecessor's printer setting
+- Stored in `positions.settings["label_presets"][module]`
+- A local `localStorage` copy provides an instant/offline fallback
+
+### Label Formats
+
+| Format | Size | Use Case |
+|--------|------|----------|
+| Dymo 30252 | 1.125×3.5" | Address labels |
+| Dymo 30256 | 2.3125×4" | Shipping labels |
+| Dymo 30334 | 1.25×2.25" | Multi-purpose labels |
+| Rollo 4×6 | 4×6" | Thermal shipping labels |
+| Letter sheet | 8.5×11" | Standard printer, 2×5 grid |
+| Custom | User-defined | 0.5-8" wide × 0.5-11" tall |
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the label print page (any module) showing the label format dropdown, printer preference selector, copies per record field, and a preview of the generated label._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Record without existing barcode | Auto-generated during label preview |
+| Roll-fed thermal printer (Rollo/Brother) | Labels auto-rotated for maximum print area |
+| First time printing (no saved preference) | Defaults to Dymo 30334; saved on first print |
+| Different user fills same position | Inherits the position's printer preference |
+
+---
+
+## Sequential Barcode Numbering (2026-06-10)
+
+Inventory barcodes now use a **per-organization sequential scheme** instead of random hex:
+
+- Format: `<prefix><zero-padded number>` (default: `INV-000001`, `INV-000002`, ...)
+- The prefix and counter live in `organizations.settings["barcode"]`
+- The org row is locked `FOR UPDATE` during the read-increment to ensure concurrent creates get distinct numbers
+- Barcodes are assigned at **item creation time** (no longer lazily on first read)
+- Migration `20260610_0001` reassigned existing items and seeded each org's counter
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of an inventory item detail page showing the sequential barcode value (e.g., "INV-000042") displayed in the barcode sidebar._
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Concurrent item creation | Row-level locking ensures unique sequential numbers |
+| Existing items before migration | Reassigned sequential barcodes during migration |
+| Custom barcode prefix | Configurable per org via settings |
+
+---
+
+## Responsive Tables (2026-06-10)
+
+Several inventory admin pages have been **collapsed from separate desktop and mobile renders** into a single responsive table using the `.rwd-table` CSS utility:
+
+- **Desktop (≥768px)**: Standard table layout
+- **Mobile (<768px)**: Each row becomes a stacked card with field labels on the left
+
+### Pages Updated
+
+| Page | Before | After |
+|------|--------|-------|
+| InventoryItemsPage | Separate table + card grid | Single responsive table |
+| InventoryMembersPage | Separate table + card list | Single responsive table |
+| ReorderRequestsPage | Separate renders | Single responsive table |
+| InventoryMaintenancePage | Separate renders | Single responsive table |
+
+Each `<td>` uses a `data-label` attribute to display the field name on mobile. Cells without `data-label` (checkboxes, action buttons) are hidden in mobile view.
+
+> **[SCREENSHOT NEEDED]:** _Side-by-side comparison of an inventory table on desktop (standard horizontal table) and mobile (stacked card format with field labels on the left, values on the right)._
+
+---
+
+## Impact Planner — Demand Forecasting & Bulk Operations (2026-06-22)
+
+The **Impact Planner** at `/inventory/admin/impact-planner` allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations from a single analysis.
+
+### How to Use the Impact Planner
+
+**Required Permission:** `inventory.manage`
+
+1. Navigate to **Inventory Admin > Impact Planner**
+2. **Filter the roster**: Select which members to analyze using the filter panel:
+   - **Statuses**: Active, Inactive, etc.
+   - **Ranks**: Firefighter, Captain, etc.
+   - **Stations**: Station 1, Station 2, etc.
+   - **Membership types**: Regular, Reserve, etc.
+   - **Positions**: Specific role positions
+3. **Select the item category**: e.g., "Job Shirts", "Turnout Coats"
+4. **Choose a size field**: Shirt, Pant, Jacket, Boot, Glove, or Hat
+5. Click **Analyze**
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Impact Planner page showing the filter panel on the left (status, rank, station dropdowns), category and size field selectors, and the Analyze button. Show the filter panel with "Active" status selected and "Firefighter" rank selected._
+
+### Reading the Analysis Results
+
+The analysis shows:
+
+- **Summary cards**: Total members analyzed, members who already have the item, members who need it, members needing replacement, members missing sizes
+- **Size breakdown table**: Each size (S, M, L, XL, etc.) with columns for:
+  - Total members with that size
+  - Members who need the item
+  - On-hand stock (if stock category selected)
+  - Shortfall (needing minus on-hand)
+  - Unit cost (if available)
+  - Estimated cost (shortfall × unit cost)
+- **Total purchase cost estimate**: Sum of all size line costs
+- **Member list**: Expandable table showing each member's name, rank, station, size, and whether they need the item, need a replacement, or are over their allowance
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the analysis results showing summary cards at the top (e.g., "42 members analyzed, 28 need item, 3 need replacement, 5 missing sizes"), the size breakdown table with shortfall and cost columns, and the total cost estimate at the bottom._
+
+### Taking Action from the Analysis
+
+After analyzing, you can take four actions directly from the results:
+
+#### Generate Reorder Requests
+
+Click **Generate Reorders** to automatically create purchase requests:
+- One `ReorderRequest` per size with shortfall > 0
+- Pre-fills vendor, urgency, unit cost, and a descriptive note
+- All requests land in PENDING status for approval
+- The cost estimate from the analysis carries onto each request
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the "Generate Reorders" confirmation dialog showing a preview of the reorder requests to be created (e.g., "M: 5 units, L: 8 units, XL: 3 units — Total: 16 units, Est. cost: $1,280")._
+
+#### Bulk Issue from Stock
+
+Click **Issue from Stock** to distribute on-hand inventory:
+- Issues one unit per member from matching pool stock
+- Matches by member's size preference
+- Skips members without a size, with no matching stock, or over their allowance
+- Shows results: `{issued: 12, skipped: 4}` with per-member reasons for skips
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the bulk-issue results showing "Issued: 12 members" with a green success list and "Skipped: 4 members" with reasons (e.g., "No size on file", "Over allowance", "No matching stock")._
+
+#### Request Sizes from Members
+
+Click **Request Sizes** to notify members who haven't recorded their size preference:
+- Sends in-app notifications directing them to `/inventory/my-equipment`
+- After members add their sizes, re-run the analysis to see updated results
+- Returns count of members notified
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the "Request Sizes" confirmation showing "8 members will be notified to add their shirt size" with a Send button._
+
+#### Download PDF Summary
+
+Click **Download PDF** to generate a branded printable summary:
+- Includes org name, analysis date, all filter parameters, and size breakdown table
+- Contact columns (email, phone) included only if org visibility settings allow
+- Suitable for budget approval meetings or procurement documentation
+
+### Saving Plans for Reuse
+
+To save your filter configuration for future use:
+
+1. Run an analysis with your desired filters
+2. Click **Save Plan**
+3. Enter a name (e.g., "Annual Uniform Refresh") and optional description
+4. The plan appears in the **Saved Plans** dropdown on subsequent visits
+5. Load a saved plan to re-run the same analysis without re-entering filters
+6. Plans can be updated or deleted from the same dropdown
+
+Use cases: Annual uniform refresh, seasonal PPE cycle, new recruit onboarding kits, station-specific distributions.
+
+### Replacement-Aware Analysis
+
+When you enable **Include replacements** and select a related category:
+
+1. The system checks each member's held items in that category
+2. Items are assessed for serviceability (condition, NFPA retirement dates)
+3. Members with only worn-out or expired items are flagged "Needs replacement"
+4. The purchase count includes both members with no item AND those needing replacement
+5. The UI distinguishes "Needs item" (never had one) from "Replace" (has a worn/expired one)
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the member list with replacement-aware analysis enabled, showing two badge types: "Needs item" (red) for a member with no turnout coat, and "Replace" (amber) for a member with an expired coat._
+
+### Allowance-Aware Warnings
+
+When you enable **Check allowances**:
+
+1. The system queries issuance allowance rules for the selected category
+2. Members at or over their allowance limit are flagged with an "Over allowance" badge
+3. Bulk-issue skips these members automatically
+4. The summary cards show a count of members over their allowance
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Member with no size preference | Bucketed as "Unknown"; skipped by bulk-issue and reorder generation |
+| Stock exhausted during bulk-issue | Issues what's available; remaining skipped with "No matching stock" |
+| All shortfalls are zero | Reorder generates nothing; `created_count: 0` |
+| Contact visibility set to "hidden" | Email/phone columns omitted from PDF |
+| Different cost per size variant | Average unit cost used for estimation |
+| Replacement check without NFPA tracking | Falls back to item condition assessment |
+| Concurrent users running bulk-issue | Per-size quantity tracking prevents double-issue |
+
+---
+
 **Previous:** [Events & Meetings](./04-events-meetings.md) | **Next:** [Apparatus & Facilities](./06-apparatus-facilities.md)

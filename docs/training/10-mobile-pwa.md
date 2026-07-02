@@ -344,4 +344,57 @@ The notification unread count badge is now visible on both mobile and desktop:
 
 ---
 
+## Realistic Example: Mobile Workflow — Event Check-In, Equipment Scan & Offline Queue
+
+Follow **FF Sarah Chen** using the PWA on her phone during a busy training day.
+
+### Part 1: Event QR Check-In (Morning)
+
+Sarah arrives at the station for a training event. She pulls out her phone and opens The Logbook from the home screen icon (she installed the PWA last month). She navigates to **Events** and sees today's event at the top: "Q2 Hazmat Refresher."
+
+Sarah taps the event to open the detail page, then taps the **Check In** button. Her phone's camera opens in the barcode scanner view. She points it at the QR code posted on the training room door — the scanner reads it instantly and displays a confirmation: "Checked in at 08:02 AM."
+
+> **Edge case:** The QR code printout at Door B is water-damaged and unreadable. Sarah taps **Manual Check-In** below the scanner. She enters her membership number (OFD-0047) and taps Submit. The system confirms: "Checked in at 08:04 AM — manual entry."
+
+> **[SCREENSHOT NEEDED]:** _Phone camera view showing the QR scanner overlay pointed at a QR code on a door, with the event name "Q2 Hazmat Refresher" displayed at the top of the scanner screen_
+
+### Part 2: Equipment Barcode Scan (Mid-Morning)
+
+During a break between training modules, Sarah needs to check out a portable gas monitor from the equipment room. She opens **Inventory** and taps the **Scan** button in the toolbar. Her camera activates in barcode scanning mode.
+
+She points the camera at the barcode label on the gas monitor. The scanner reads it and the item detail card loads: **MSA Altair 5X**, serial number **INV-000234**, condition **Good**, status **Available**.
+
+Sarah taps **Check Out**, selects herself as the borrower (her name is pre-filled since she is logged in), sets the expected return date to today, and confirms. The item status changes to "Checked Out" with her name shown as the current holder.
+
+> **Edge case:** The barcode on a second gas monitor is partially obscured by a sticker. The camera scan fails after a few seconds. Sarah taps the manual entry field below the scanner, types `INV-000234` in the search box, and the item is found immediately.
+
+> **[SCREENSHOT NEEDED]:** _Inventory item detail card on mobile showing the MSA Altair 5X with serial number, condition badge, and the "Check Out" button at the bottom of the card_
+
+### Part 3: Offline Training Submission (Afternoon — No Signal)
+
+The morning Hazmat Refresher ends at noon. Sarah drives to a remote training site in a rural area for an afternoon practical exercise. Cell coverage drops to zero.
+
+After the practical, Sarah opens **Training > Submit Training** and fills out the form: course name "Hazmat Refresher," duration 4 hours, date today, and selects "Completed" status. She taps **Submit**.
+
+The app detects no network connectivity and shows a toast notification: "Queued for sync — your submission will be sent when connectivity is restored." The submission is stored in the browser's IndexedDB offline queue.
+
+While still offline, Sarah also navigates to **Events** and RSVPs "Going" to next week's event, "Q3 Ladder Operations Drill." That RSVP is also queued with a similar toast message.
+
+> **Edge case:** Sarah force-closes the app and reopens it 30 minutes later. She navigates to the sync queue indicator and sees both items still listed — queued items are persisted in IndexedDB, not held in memory, so they survive app restarts.
+
+### Part 4: Back Online (Evening)
+
+Sarah drives back toward town. As her phone regains cell signal, the app detects connectivity in the background. The offline queue begins syncing automatically:
+
+1. **Training submission** — synced successfully. The record enters **Pending Review** status, waiting for an officer to approve it.
+2. **Event RSVP** — synced successfully. Sarah's RSVP to "Q3 Ladder Operations Drill" is confirmed as "Going."
+
+A notification appears: "2 queued items synced successfully." Sarah taps it to verify — her training submission shows "Pending Review" in Training, and her RSVP shows "Going" on the event page.
+
+> **Edge case:** If one of the queued items had failed during sync (for example, if someone else had already submitted an identical training record creating a duplicate conflict), the sync would show an error toast with the specific failure reason: "Training submission failed: A record for this course on this date already exists." The failed item remains in the queue with an error badge. Sarah can tap it to edit and retry, or dismiss it if the duplicate was submitted by someone else on her behalf.
+
+> **[SCREENSHOT NEEDED]:** _Sync status notification on mobile showing "2 queued items synced successfully" with green checkmarks next to "Training submission" and "Event RSVP," displayed as a toast or notification card_
+
+---
+
 **Previous:** [Skills Testing & Psychomotor Evaluations](./09-skills-testing.md) | **Next:** Return to [Training Guide Index](./README.md)
