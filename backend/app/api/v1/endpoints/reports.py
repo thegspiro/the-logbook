@@ -111,7 +111,7 @@ async def list_saved_reports(
 async def create_saved_report(
     request: SavedReportCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("reports.view")),
+    current_user: User = Depends(require_permission("reports.manage")),
 ):
     """Create a new saved report configuration"""
     report = SavedReport(
@@ -153,7 +153,7 @@ async def update_saved_report(
     report_id: str,
     request: SavedReportUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("reports.view")),
+    current_user: User = Depends(require_permission("reports.manage")),
 ):
     """Update a saved report configuration"""
     result = await db.execute(
@@ -193,7 +193,7 @@ async def update_saved_report(
 async def delete_saved_report(
     report_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("reports.view")),
+    current_user: User = Depends(require_permission("reports.manage")),
 ):
     """Delete (soft-delete) a saved report"""
     result = await db.execute(

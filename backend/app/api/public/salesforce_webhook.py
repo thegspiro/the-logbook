@@ -93,19 +93,32 @@ async def salesforce_inbound_webhook(
 
     body = await request.body()
 
-    # Verify signature if a webhook_secret is configured
+    # HMAC verification is mandatory: this is a public, unauthenticated,
+    # data-mutating endpoint. An integration with no webhook_secret configured
+    # must NOT accept unsigned payloads — otherwise anyone who learns the
+    # integration_id UUID could inject records. Reject rather than skip.
     webhook_secret = integration.get_secret("webhook_secret")
-    if webhook_secret:
-        sig_header = request.headers.get("X-Salesforce-Signature", "")
-        if not sig_header or not _verify_signature(body, webhook_secret, sig_header):
-            logger.warning(
-                "Salesforce webhook signature mismatch for integration %s",
-                integration_id,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid signature",
-            )
+    if not webhook_secret:
+        logger.warning(
+            "Salesforce webhook rejected: no webhook_secret configured for "
+            "integration %s",
+            integration_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Webhook signature verification is not configured",
+        )
+
+    sig_header = request.headers.get("X-Salesforce-Signature", "")
+    if not sig_header or not _verify_signature(body, webhook_secret, sig_header):
+        logger.warning(
+            "Salesforce webhook signature mismatch for integration %s",
+            integration_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid signature",
+        )
 
     try:
         payload = await request.json()
@@ -130,13 +143,28 @@ async def salesforce_inbound_webhook(
     sf_service = SalesforceService(creds)
     sync_service = SalesforceSyncService(db, sf_service, integration)
 
-    processed = 0
+    # NOTE: inbound sync is not yet implemented. parse_inbound_contact only maps
+    # Salesforce fields to Logbook fields and returns them — nothing is persisted
+    # to the database. We parse to validate the payload shape and surface that
+    # records were received, but report them as parsed (not stored) so callers
+    # and the audit trail are not misled into thinking members were updated.
+    parsed = 0
     for record in records:
         if sobject == "Contact":
             sync_service.parse_inbound_contact(record)
-            processed += 1
+            parsed += 1
         else:
             logger.info("Ignoring unsupported sObject type: %s", sobject)
+
+    if parsed:
+        logger.warning(
+            "Salesforce inbound webhook parsed %d %s record(s) for integration "
+            "%s but inbound persistence is not implemented; records were NOT "
+            "stored.",
+            parsed,
+            sobject,
+            integration_id,
+        )
 
     # Audit log
     await log_audit_event(
@@ -150,14 +178,20 @@ async def salesforce_inbound_webhook(
             "sobject": sobject,
             "action": action,
             "record_count": len(records),
-            "processed": processed,
+            "parsed": parsed,
+            "persisted": 0,
+            "inbound_persistence_implemented": False,
             "source_ip": get_client_ip(request),
         },
     )
 
     return {
         "success": True,
-        "processed": processed,
+        "received": len(records),
+        "parsed": parsed,
+        "persisted": 0,
+        "detail": "Inbound records were parsed but not stored; "
+        "inbound sync is not yet implemented.",
         "sobject": sobject,
         "action": action,
     }

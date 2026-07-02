@@ -535,6 +535,7 @@ async def check_request_status(
 async def public_cancel_request(
     token: str,
     data: EventRequestPublicCancel,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -543,6 +544,17 @@ async def public_cancel_request(
     No authentication required. Only works on requests that are not
     in a terminal state (completed, declined, already cancelled).
     """
+    # Per-IP rate limit: this public endpoint mutates DB and sends email, so
+    # throttle to prevent token-guessing and notification amplification (mirrors
+    # the public submit endpoint).
+    client_ip = get_client_ip(request)
+    allowed, _count, _limit = await check_ip_rate_limit(client_ip, limit=10)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
+        )
+
     result = await db.execute(
         select(EventRequest).where(EventRequest.status_token == token)
     )

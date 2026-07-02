@@ -226,9 +226,13 @@ async def update_competency_matrix(
 async def get_member_competencies(
     user_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_permission("training.manage")),
 ):
-    """Get competency levels for a member"""
+    """Get competency levels for a member.
+
+    Officer-only: competency levels are member training PII. Members read their
+    own via GET /competency/me.
+    """
     service = CompetencyService(db)
     competencies = await service.get_member_competencies(
         user_id, current_user.organization_id

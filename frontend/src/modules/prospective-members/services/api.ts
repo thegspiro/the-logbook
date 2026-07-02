@@ -280,12 +280,21 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
   return payload;
 }
 
+// The frontend uses 'converted' as the user-facing term for the backend's
+// 'transferred' status (a prospect who became a member). Translate at the API
+// boundary so list filtering and display use consistent terminology — otherwise
+// filtering by 'converted' sends a value the backend enum doesn't recognize and
+// silently matches nothing.
+const BACKEND_STATUS_TO_FRONTEND: Record<string, string> = { transferred: 'converted' };
+const FRONTEND_STATUS_TO_BACKEND: Record<string, string> = { converted: 'transferred' };
+
 /** Extract a plain string status from a backend status value that may be a string or object. */
 function extractStatus(status: string | { value: string }): string {
-  if (typeof status === 'object' && status !== null) {
-    return status.value ?? JSON.stringify(status);
-  }
-  return status;
+  const raw =
+    typeof status === 'object' && status !== null
+      ? (status.value ?? JSON.stringify(status))
+      : status;
+  return BACKEND_STATUS_TO_FRONTEND[raw] ?? raw;
 }
 
 /** Map a backend prospect response to a frontend Applicant */
@@ -628,7 +637,10 @@ export const applicantService = {
       {
         params: {
           pipeline_id: params?.filters?.pipeline_id,
-          status: params?.filters?.status,
+          status: params?.filters?.status
+            ? (FRONTEND_STATUS_TO_BACKEND[params.filters.status] ??
+              params.filters.status)
+            : params?.filters?.status,
           search: params?.filters?.search,
           limit: pageSize,
           offset,

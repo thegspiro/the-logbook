@@ -1719,12 +1719,13 @@ async def extend_checkout(
     if checkout.is_returned:
         raise HTTPException(status_code=400, detail="Cannot extend a returned checkout")
 
-    # Authorization: own checkout or inventory.manage
+    # Authorization: own checkout or inventory.manage. Use the shared permission
+    # resolver so rank-default permissions (and wildcards) are honored, matching
+    # the rest of this module — a hand-rolled scan of role.permissions misses
+    # permissions granted via the member's rank.
     is_own = str(checkout.user_id) == str(current_user.id)
-    can_manage = any(
-        p in (role.permissions or [])
-        for role in current_user.roles
-        for p in ("inventory.manage", "inventory.*", "*")
+    can_manage = _has_permission(
+        "inventory.manage", _collect_user_permissions(current_user)
     )
     if not is_own and not can_manage:
         raise HTTPException(
@@ -4714,7 +4715,12 @@ async def list_return_requests(
     """
     service = InventoryService(db)
 
-    requester_id = current_user.id if mine_only else None
+    # Non-managers may only ever see their own return requests, regardless of
+    # the mine_only flag; only inventory.manage holders may list all members'.
+    can_manage = _has_permission(
+        "inventory.manage", _collect_user_permissions(current_user)
+    )
+    requester_id = None if (can_manage and not mine_only) else current_user.id
 
     requests = await service.get_return_requests(
         organization_id=current_user.organization_id,

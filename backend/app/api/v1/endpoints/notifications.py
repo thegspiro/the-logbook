@@ -273,7 +273,9 @@ async def mark_my_notification_read(
 ):
     """Mark one of the current user's notifications as read."""
     service = NotificationsService(db)
-    result, error = await service.mark_as_read(log_id, current_user.organization_id)
+    result, error = await service.mark_as_read(
+        log_id, current_user.organization_id, current_user.id
+    )
     if error:
         raise HTTPException(
             status_code=400, detail=f"Unable to mark notification as read. {error}"

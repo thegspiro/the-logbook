@@ -5,7 +5,7 @@ React + TypeScript + Vite frontend application for The Logbook fire department i
 ## Features
 
 - ⚡ **Vite** - Lightning fast build tool
-- ⚛️ **React 18** - Latest React with hooks
+- ⚛️ **React 19** - Latest React with hooks
 - 📘 **TypeScript** - Type safety
 - 🎨 **Tailwind CSS** - Utility-first CSS
 - 🚀 **React Router** - Client-side routing

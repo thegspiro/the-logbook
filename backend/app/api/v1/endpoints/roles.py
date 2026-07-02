@@ -128,7 +128,9 @@ async def create_role(
     role_data: RoleCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("positions.create", "roles.create")
+        require_permission(
+            "positions.create", "positions.manage_permissions", "roles.create"
+        )
     ),
 ):
     """
@@ -200,7 +202,11 @@ async def update_role(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "positions.edit", "positions.update", "roles.edit", "roles.update"
+            "positions.edit",
+            "positions.update",
+            "positions.manage_permissions",
+            "roles.edit",
+            "roles.update",
         )
     ),
 ):
@@ -247,7 +253,9 @@ async def delete_role(
     role_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("positions.delete", "roles.delete")
+        require_permission(
+            "positions.delete", "positions.manage_permissions", "roles.delete"
+        )
     ),
 ):
     """
@@ -306,7 +314,9 @@ async def clone_role(
     clone_request: RoleCloneRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("positions.create", "roles.create")
+        require_permission(
+            "positions.create", "positions.manage_permissions", "roles.create"
+        )
     ),
 ):
     """

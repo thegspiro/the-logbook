@@ -229,8 +229,8 @@ npm run test             # Run all tests (backend + frontend)
 npm run lint             # Lint everything
 npm run format           # Format everything
 npm run build            # Build frontend (backend build is a no-op)
-npm run db:migrate       # Run Alembic migrations
-npm run db:seed          # Seed database
+npm run db:migrate       # Run Alembic migrations (also applies seed data via SEED_DATA_FILES)
+npm run db:seed          # No-op notice; seed data is applied by db:migrate
 npm run docker:up        # Start Docker Compose stack
 ```
 
@@ -636,6 +636,6 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 
 Enable with `*_ENABLED=true`: `EMAIL_ENABLED`, `TWILIO_ENABLED`, `SENTRY_ENABLED`, `AZURE_AD_ENABLED`, `GOOGLE_OAUTH_ENABLED`, `LDAP_ENABLED`. Each requires additional config vars — see `.env.example.full`.
 
-### Module Feature Flags
+### Module Enablement
 
-All `MODULE_*_ENABLED` variables (`MODULE_TRAINING_ENABLED`, `MODULE_ELECTIONS_ENABLED`, etc.) toggle features without code changes. See `backend/app/core/config.py` for the full list.
+Module availability is controlled **per organization** at runtime via the organization settings (`enabled_modules`), which the frontend navigation consumes. There are no deployment-level `MODULE_*_ENABLED` environment flags — they were removed because they gated nothing (all routers register unconditionally) and merely duplicated the per-org mechanism.

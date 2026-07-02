@@ -5,6 +5,7 @@ Endpoints for user authentication, registration, and session management.
 """
 
 import copy
+import secrets
 
 from fastapi import (
     APIRouter,
@@ -391,7 +392,13 @@ async def oauth_google_callback(
         return _oauth_fail_redirect("access_denied")
 
     # CSRF: the returned state must match the cookie we set at initiation.
-    if not code or not state or not oauth_state_cookie or state != oauth_state_cookie:
+    # Use a constant-time compare to avoid leaking the state via timing.
+    if (
+        not code
+        or not state
+        or not oauth_state_cookie
+        or not secrets.compare_digest(state, oauth_state_cookie)
+    ):
         return _oauth_fail_redirect("invalid_state")
 
     service = GoogleOAuthService(db)
@@ -450,7 +457,12 @@ async def oauth_microsoft_callback(
         logger.info(f"Microsoft OAuth returned error: {error}")
         return _oauth_fail_redirect("access_denied")
 
-    if not code or not state or not oauth_state_cookie or state != oauth_state_cookie:
+    if (
+        not code
+        or not state
+        or not oauth_state_cookie
+        or not secrets.compare_digest(state, oauth_state_cookie)
+    ):
         return _oauth_fail_redirect("invalid_state")
 
     service = MicrosoftOAuthService(db)

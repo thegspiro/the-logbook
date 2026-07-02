@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { errorTracker, type ErrorLog } from '../services/errorTracking';
+import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateFormatting';
 
@@ -13,6 +14,8 @@ import { formatDateTime, formatTime, getTodayLocalDate } from '../utils/dateForm
  */
 const ErrorMonitoringPage: React.FC = () => {
   const tz = useTimezone();
+  const { checkPermission } = useAuthStore();
+  const canClearErrors = checkPermission('audit.manage');
   const [errors, setErrors] = useState<ErrorLog[]>([]);
   const [filter, setFilter] = useState<string>('all');
   const [stats, setStats] = useState<{ total: number; byType: Record<string, number>; recentErrors: ErrorLog[] } | null>(null);
@@ -115,12 +118,14 @@ const ErrorMonitoringPage: React.FC = () => {
           >
             Export Errors
           </button>
-          <button
-            onClick={() => { void clearAllErrors(); }}
-            className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-red-700 dark:text-red-400 bg-theme-surface hover:bg-theme-surface-hover"
-          >
-            Clear All
-          </button>
+          {canClearErrors && (
+            <button
+              onClick={() => { void clearAllErrors(); }}
+              className="px-4 py-2 border border-theme-surface-border rounded-md text-sm font-medium text-red-700 dark:text-red-400 bg-theme-surface hover:bg-theme-surface-hover"
+            >
+              Clear All
+            </button>
+          )}
         </div>
       </div>
 

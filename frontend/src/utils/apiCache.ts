@@ -62,6 +62,8 @@ const UNCACHEABLE_PREFIXES = [
   '/documents/',           // private organizational documents
   '/compliance/',          // compliance attestations, member compliance data (PII)
   '/integrations/',        // integration config may contain API keys, webhook URLs, secrets
+  '/finance/',             // budgets, purchase/expense/check requests & reimbursements tied to members (PII)
+  '/grants/',              // grant applications and donor/fundraising records (PII)
 ] as const;
 
 interface CacheEntry {

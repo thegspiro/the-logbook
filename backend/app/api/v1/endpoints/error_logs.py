@@ -162,7 +162,7 @@ async def get_error_stats(
 async def clear_errors(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("audit.export")),
+    current_user: User = Depends(require_permission("audit.manage")),
 ):
     """Clear all error logs for the organization"""
     # Count how many will be deleted for audit trail

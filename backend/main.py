@@ -2153,12 +2153,6 @@ async def health_check_detailed():
             "enable_docs": settings.ENABLE_DOCS,
             "email_enabled": settings.EMAIL_ENABLED,
             "redis_enabled": bool(settings.REDIS_HOST),
-            "modules": {
-                "training": settings.MODULE_TRAINING_ENABLED,
-                "compliance": settings.MODULE_COMPLIANCE_ENABLED,
-                "scheduling": settings.MODULE_SCHEDULING_ENABLED,
-                "elections": settings.MODULE_ELECTIONS_ENABLED,
-            },
         },
     }
 

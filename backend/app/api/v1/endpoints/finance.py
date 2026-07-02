@@ -659,7 +659,7 @@ async def list_purchase_requests(
 async def create_purchase_request(
     data: PurchaseRequestCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -705,7 +705,7 @@ async def update_purchase_request(
     pr_id: str,
     data: PurchaseRequestUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -727,7 +727,7 @@ async def update_purchase_request(
 async def submit_purchase_request(
     pr_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -854,7 +854,7 @@ async def list_expense_reports(
 async def create_expense_report(
     data: ExpenseReportCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -893,7 +893,7 @@ async def update_expense_report(
     er_id: str,
     data: ExpenseReportUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -917,7 +917,7 @@ async def add_expense_line_item(
     er_id: str,
     data: ExpenseLineItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -939,7 +939,7 @@ async def add_expense_line_item(
 async def submit_expense_report(
     er_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -1000,7 +1000,7 @@ async def list_check_requests(
 async def create_check_request(
     data: CheckRequestCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -1033,7 +1033,7 @@ async def update_check_request(
     cr_id: str,
     data: CheckRequestUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
@@ -1055,7 +1055,7 @@ async def update_check_request(
 async def submit_check_request(
     cr_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("finance.view")),
+    current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
     try:
