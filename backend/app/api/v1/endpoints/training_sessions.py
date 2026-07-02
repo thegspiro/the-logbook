@@ -229,18 +229,25 @@ async def finalize_training_session(
 async def get_training_approval(
     token: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Get training approval data by token
 
-    This endpoint is accessed via email link and does not require authentication.
-    The token serves as authentication.
+    Returns the roster (attendee names/emails) for an officer to review
+    before approving. Requires an authenticated officer in the approval's
+    organization — the token alone is not sufficient, matching the POST
+    approval endpoint.
 
-    **No authentication required** (token-based access)
+    **Authentication required**
+    **Requires permission: training.manage**
     """
     service = TrainingSessionService(db)
 
-    approval_data, error = await service.get_training_approval_by_token(token=token)
+    approval_data, error = await service.get_training_approval_by_token(
+        token=token,
+        organization_id=current_user.organization_id,
+    )
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)

@@ -589,14 +589,22 @@ class TrainingSessionService:
     async def get_training_approval_by_token(
         self,
         token: str,
+        organization_id: UUID,
     ) -> Tuple[Optional[dict], Optional[str]]:
         """
         Get training approval by token for approval page
 
+        The approval response contains attendee PII (names, emails), so the
+        lookup is scoped to the caller's organization — the token is not a
+        standalone authorization boundary (see submit_training_approval).
+
         Returns: (approval_data, error_message)
         """
         approval_result = await self.db.execute(
-            select(TrainingApproval).where(TrainingApproval.approval_token == token)
+            select(TrainingApproval).where(
+                TrainingApproval.approval_token == token,
+                TrainingApproval.organization_id == str(organization_id),
+            )
         )
         approval = approval_result.scalar_one_or_none()
 

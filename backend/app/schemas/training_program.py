@@ -41,23 +41,32 @@ class TrainingRequirementEnhancedBase(BaseModel):
     registry_code: Optional[str] = Field(None, max_length=50)
     is_editable: bool = True
 
-    # Different requirement quantities
+    # Different requirement quantities.
+    # required_courses / required_skills / required_roles are stored as JSON
+    # arrays of scalar id/slug strings (matching the training_requirements
+    # columns and the compliance evaluator, which does membership tests like
+    # `str(course_id) in required_courses` and `rank in required_roles`).
+    # They are NOT lists of dicts, and required_roles holds role slugs, not
+    # UUIDs — a UUID type here would fail to serialize a slug-based value.
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
-    required_courses: Optional[List[Dict[str, Any]]] = None
+    required_courses: Optional[List[str]] = None
     required_shifts: Optional[int] = Field(None, ge=0)
     required_calls: Optional[int] = Field(None, ge=0)
     required_call_types: Optional[List[str]] = None
-    required_skills: Optional[List[Dict[str, Any]]] = None
+    required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[str]] = None
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
 
     frequency: str
     time_limit_days: Optional[int] = Field(None, ge=0)
-    applies_to_all: bool = False
+    # Default matches the model column (default=True) and the base
+    # TrainingRequirement schema so the same table isn't created with
+    # conflicting defaults depending on which endpoint is used.
+    applies_to_all: bool = True
     required_positions: Optional[List[str]] = None
-    required_roles: Optional[List[UUID]] = None
+    required_roles: Optional[List[str]] = None
 
     @field_validator("frequency")
     @classmethod
@@ -83,11 +92,11 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     is_editable: Optional[bool] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
-    required_courses: Optional[List[Dict[str, Any]]] = None
+    required_courses: Optional[List[str]] = None
     required_shifts: Optional[int] = Field(None, ge=0)
     required_calls: Optional[int] = Field(None, ge=0)
     required_call_types: Optional[List[str]] = None
-    required_skills: Optional[List[Dict[str, Any]]] = None
+    required_skills: Optional[List[str]] = None
     checklist_items: Optional[List[str]] = None
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
@@ -95,7 +104,7 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     time_limit_days: Optional[int] = Field(None, ge=0)
     applies_to_all: Optional[bool] = None
     required_positions: Optional[List[str]] = None
-    required_roles: Optional[List[UUID]] = None
+    required_roles: Optional[List[str]] = None
     active: Optional[bool] = None
 
     @field_validator("frequency")

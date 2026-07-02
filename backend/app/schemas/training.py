@@ -181,8 +181,13 @@ class TrainingRecordBase(BaseModel):
     certification_number: Optional[str] = Field(None, max_length=100)
     issuing_agency: Optional[str] = Field(None, max_length=255)
     status: str = "scheduled"
-    score: Optional[float] = Field(None, ge=0, le=100)
-    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    # No upper bound: a training record's score may be a percentage OR a
+    # raw point total (e.g. 120/150 on a written exam), per the model
+    # column's documented intent. Capping at 100 rejected legitimate
+    # point-based scores with a 422. passing_score is the record-level
+    # threshold and follows the same unit as score.
+    score: Optional[float] = Field(None, ge=0)
+    passing_score: Optional[float] = Field(None, ge=0)
     passed: Optional[bool] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
@@ -224,8 +229,9 @@ class TrainingRecordUpdate(BaseModel):
     certification_number: Optional[str] = Field(None, max_length=100)
     issuing_agency: Optional[str] = Field(None, max_length=255)
     status: Optional[str] = None
-    score: Optional[float] = Field(None, ge=0, le=100)
-    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    # See TrainingRecordBase.score: percentage or raw points, no upper cap.
+    score: Optional[float] = Field(None, ge=0)
+    passing_score: Optional[float] = Field(None, ge=0)
     passed: Optional[bool] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)

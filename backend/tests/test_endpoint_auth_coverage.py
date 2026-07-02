@@ -41,7 +41,6 @@ ALLOWLISTED_PUBLIC = {
     ("auth.py", "forgot_password"),
     ("auth.py", "reset_password"),
     ("auth.py", "validate_reset_token"),
-    ("training_sessions.py", "get_training_approval"),
     ("event_requests.py", "submit_public_event_request"),
     ("event_requests.py", "check_request_status"),
     ("event_requests.py", "public_cancel_request"),
