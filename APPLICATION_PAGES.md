@@ -278,6 +278,7 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
 | `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
 | `/inventory/admin/allowances` | Issuance Allowances | `inventory.manage` |
+| `/inventory/admin/impact-planner` | Impact Planner | `inventory.manage` |
 | `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
@@ -286,7 +287,7 @@ Requires `inventory.manage` permission. Dashboard with summary stats (total item
 | `/inventory/admin/variant-groups` | Variant Groups | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
-> The admin dashboard provides summary statistics and quick-link navigation with grouped card sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests, equipment kits, and variant groups. The **Issuance Allowances** page (`/inventory/admin/allowances`) configures per-category issue limits by role and period (annual/career/one-time). Member uniform/PPE sizing is captured via the **Size Preferences** modal — members edit their own (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance). Non-admin users see only their own assigned equipment on the inventory dashboard.
+> The admin dashboard provides summary statistics and quick-link navigation with grouped card sections. Individual sub-pages handle items, pool items, categories, maintenance, members, charges, return/equipment/write-off/reorder requests, equipment kits, and variant groups. The **Issuance Allowances** page (`/inventory/admin/allowances`) configures per-category issue limits by role and period (annual/career/one-time). The **Impact Planner** (`/inventory/admin/impact-planner`) scopes a prospective new issue: filter the roster to see who is impacted and the sizes needed, net demand against on-hand stock for the quantity to buy, estimate cost, then act on it (draft reorders, bulk-issue stock, request missing sizes, export PDF/CSV, save named plans). Member uniform/PPE sizing is captured via the **Size Preferences** modal — members edit their own (`/inventory/my/size-preferences`) and quartermasters edit any member's (`/inventory/members/{user_id}/size-preferences`). The Item Detail page (`/inventory/items/:id`) has a two-column layout with barcode sidebar and tabbed content (overview, history, maintenance, NFPA compliance). Non-admin users see only their own assigned equipment on the inventory dashboard.
 
 ---
 
