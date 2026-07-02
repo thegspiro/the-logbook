@@ -229,18 +229,19 @@ async def finalize_training_session(
 async def get_training_approval(
     token: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(require_permission("events.manage")),
 ):
     """
     Get training approval data by token
 
     Returns the roster (attendee names/emails) for an officer to review
     before approving. Requires an authenticated officer in the approval's
-    organization — the token alone is not sufficient, matching the POST
-    approval endpoint.
+    organization — the token alone is not sufficient. Gated by
+    ``events.manage`` to match the POST approval endpoint and the rest of
+    the training-session lifecycle (create/finalize).
 
     **Authentication required**
-    **Requires permission: training.manage**
+    **Requires permission: events.manage**
     """
     service = TrainingSessionService(db)
 
@@ -269,7 +270,7 @@ async def submit_training_approval(
     or override durations for individual members.
 
     **Authentication required**
-    **Requires permission: training.manage**
+    **Requires permission: events.manage**
     """
     service = TrainingSessionService(db)
 

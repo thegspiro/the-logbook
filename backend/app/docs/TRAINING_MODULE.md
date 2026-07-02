@@ -1434,7 +1434,7 @@ tenant boundary. The 2026-07-02 review enforced it at the **service layer** for
 all by-ID mutations so it can't be forgotten in an endpoint:
 
 - `TrainingSubmissionService.get_submission(submission_id, organization_id)` filters by org; every mutation path (review/update/delete) funnels through it. Do not add an unscoped variant.
-- Training approval (`GET`/`POST /training/sessions/approve/{token}`) requires `training.manage` **and** an org-matched token lookup — the token is not a standalone authorization boundary.
+- Training approval (`GET`/`POST /training/sessions/approve/{token}`) requires `events.manage` (matching the `create`/`finalize` session lifecycle) **and** an org-matched token lookup — the token is not a standalone authorization boundary.
 - External-import and enrollment paths validate the target `user_id` against the caller's organization before writing (`_verify_user_in_org`, `enroll_member`).
 - xAPI actor-email lookup is org-scoped.
 
