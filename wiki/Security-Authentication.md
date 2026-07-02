@@ -27,7 +27,17 @@ Username and password authentication with Argon2id password hashing.
 - At least one uppercase, one lowercase, one number, one special character
 - Cannot reuse last 12 passwords
 - Must change every 90 days
+- **Minimum password age of 1 day** (prevents rapidly cycling through the history to return to an old password)
 - Account locks after 5 failed attempts (30-minute lockout)
+
+> **Forced-change exemption (2026-06-25):** When an account is flagged
+> `must_change_password` — a new admin-created user, a self-registration, or an
+> admin password reset with *force change* — the user must change their password
+> on first login. That mandatory change is **exempt from the 1-day minimum
+> password age**, because the temporary password was just issued (its
+> `password_changed_at` is fresh) and would otherwise block the very change
+> being demanded. The exemption applies only while `must_change_password` is set;
+> once cleared, the minimum-age rule resumes for ordinary voluntary changes.
 
 ---
 
