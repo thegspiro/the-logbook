@@ -20,7 +20,7 @@ from sqlalchemy.orm import selectinload
 from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
-from app.core.database import get_db
+from app.core.database import database_manager, get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import Organization, User, UserStatus
 
@@ -54,6 +54,121 @@ class MemberStatusChangeResponse(BaseModel):
     property_return_report: dict[str, Any] | None = None
     document_id: str | None = None
     email_sent: bool | None = None
+
+
+async def _send_property_return_email(
+    *,
+    organization_id: str,
+    to_emails: list[str],
+    cc_emails: list[str],
+    report_data: dict[str, Any],
+    member_email: str,
+) -> None:
+    """Email the member's property-return report as a background task.
+
+    Runs after the response, so it opens its own DB session and reloads the
+    organization rather than reusing the request session or a detached ORM
+    object. ``EmailService`` is constructed while the session is open so it
+    caches the org SMTP config before the session closes. Never raises.
+    """
+    from loguru import logger
+
+    try:
+        from app.services.email_service import EmailService
+        from app.services.email_template_service import (
+            build_items_list_html,
+            build_items_list_text,
+        )
+
+        async for session in database_manager.get_session():
+            org = (
+                await session.execute(
+                    select(Organization).where(Organization.id == organization_id)
+                )
+            ).scalar_one_or_none()
+            email_svc = EmailService(org)
+            org_name = org.name if org else "Department"
+
+            items = report_data.get("items", [])
+            total_val = report_data.get("total_value", 0.0)
+            items_html = build_items_list_html(
+                items, total_val, include_condition=True
+            )
+            items_text = build_items_list_text(
+                items, total_val, include_condition=True
+            )
+
+            context = {
+                "member_name": report_data["member_name"],
+                "organization_name": org_name,
+                "drop_type_display": report_data["drop_type_display"],
+                "reason": report_data.get("reason", ""),
+                "effective_date": report_data["effective_date"],
+                "return_deadline": report_data["return_deadline"],
+                "item_count": str(report_data["item_count"]),
+                "total_value": f"{total_val:,.2f}",
+                "items_list_html": items_html,
+                "items_list_text": items_text,
+                "performed_by_name": report_data["performed_by_name"],
+                "performed_by_title": report_data["performed_by_title"],
+            }
+
+            subject = None
+            html_body = None
+            text_body = None
+
+            # Try loading the admin-configured template (same session).
+            try:
+                from app.models.email_template import EmailTemplateType
+                from app.services.email_template_service import (
+                    EmailTemplateService,
+                )
+
+                tmpl_svc = EmailTemplateService(session)
+                template = await tmpl_svc.get_template(
+                    organization_id,
+                    EmailTemplateType.MEMBER_DROPPED,
+                )
+                if template:
+                    subject, html_body, text_body = tmpl_svc.render(
+                        template, context, organization=org
+                    )
+            except Exception as tmpl_err:
+                logger.warning(
+                    f"Failed to load member_dropped template, using default: {tmpl_err}"
+                )
+
+            # Fall back to inline default.
+            if not subject:
+                import re
+
+                from app.services.email_template_service import (
+                    DEFAULT_CSS,
+                    DEFAULT_MEMBER_DROPPED_HTML,
+                    DEFAULT_MEMBER_DROPPED_TEXT,
+                )
+
+                subject = f"Notice of Department Property Return — {org_name}"
+                rendered_html = DEFAULT_MEMBER_DROPPED_HTML
+                rendered_text = DEFAULT_MEMBER_DROPPED_TEXT
+                for key, val in context.items():
+                    pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                    rendered_html = re.sub(pattern, str(val), rendered_html)
+                    rendered_text = re.sub(pattern, str(val), rendered_text)
+                html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
+                text_body = rendered_text
+
+            await email_svc.send_email(
+                to_emails=to_emails,
+                subject=subject,
+                html_body=html_body,
+                text_body=text_body,
+                cc_emails=cc_emails if cc_emails else None,
+            )
+    except Exception as e:
+        logger.error(
+            f"Failed to send property return email to {member_email}: {e}"
+        )
 
 
 @router.patch("/{user_id}/status", response_model=MemberStatusChangeResponse)
@@ -238,106 +353,14 @@ async def change_member_status(
                 if member.personal_email not in to_emails:
                     to_emails.append(member.personal_email)
 
-            async def _send_report():
-                try:
-                    from app.services.email_service import EmailService
-                    from app.services.email_template_service import (
-                        build_items_list_html,
-                        build_items_list_text,
-                    )
-
-                    email_svc = EmailService(organization)
-                    org_name = organization.name if organization else "Department"
-
-                    # Build item list HTML/text from the report data
-                    items = report_data.get("items", [])
-                    total_val = report_data.get("total_value", 0.0)
-                    items_html = build_items_list_html(
-                        items, total_val, include_condition=True
-                    )
-                    items_text = build_items_list_text(
-                        items, total_val, include_condition=True
-                    )
-
-                    context = {
-                        "member_name": report_data["member_name"],
-                        "organization_name": org_name,
-                        "drop_type_display": report_data["drop_type_display"],
-                        "reason": report_data.get("reason", ""),
-                        "effective_date": report_data["effective_date"],
-                        "return_deadline": report_data["return_deadline"],
-                        "item_count": str(report_data["item_count"]),
-                        "total_value": f"{total_val:,.2f}",
-                        "items_list_html": items_html,
-                        "items_list_text": items_text,
-                        "performed_by_name": report_data["performed_by_name"],
-                        "performed_by_title": report_data["performed_by_title"],
-                    }
-
-                    subject = None
-                    html_body = None
-                    text_body = None
-
-                    # Try loading the admin-configured template
-                    try:
-                        from app.core.database import async_session_factory
-                        from app.models.email_template import EmailTemplateType
-                        from app.services.email_template_service import (
-                            EmailTemplateService,
-                        )
-
-                        async with async_session_factory() as tmpl_db:
-                            tmpl_svc = EmailTemplateService(tmpl_db)
-                            template = await tmpl_svc.get_template(
-                                str(current_user.organization_id),
-                                EmailTemplateType.MEMBER_DROPPED,
-                            )
-                            if template:
-                                subject, html_body, text_body = tmpl_svc.render(
-                                    template, context, organization=organization
-                                )
-                    except Exception as tmpl_err:
-                        from loguru import logger
-
-                        logger.warning(
-                            f"Failed to load member_dropped template, using default: {tmpl_err}"
-                        )
-
-                    # Fall back to inline default
-                    if not subject:
-                        import re
-
-                        from app.services.email_template_service import (
-                            DEFAULT_CSS,
-                            DEFAULT_MEMBER_DROPPED_HTML,
-                            DEFAULT_MEMBER_DROPPED_TEXT,
-                        )
-
-                        subject = f"Notice of Department Property Return — {org_name}"
-                        rendered_html = DEFAULT_MEMBER_DROPPED_HTML
-                        rendered_text = DEFAULT_MEMBER_DROPPED_TEXT
-                        for key, val in context.items():
-                            pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
-                            rendered_html = re.sub(pattern, str(val), rendered_html)
-                            rendered_text = re.sub(pattern, str(val), rendered_text)
-                        html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
-                        text_body = rendered_text
-
-                    await email_svc.send_email(
-                        to_emails=to_emails,
-                        subject=subject,
-                        html_body=html_body,
-                        text_body=text_body,
-                        cc_emails=cc_emails if cc_emails else None,
-                    )
-                except Exception as e:
-                    from loguru import logger
-
-                    logger.error(
-                        f"Failed to send property return email to {member.email}: {e}"
-                    )
-
-            background_tasks.add_task(_send_report)
+            background_tasks.add_task(
+                _send_property_return_email,
+                organization_id=str(current_user.organization_id),
+                to_emails=to_emails,
+                cc_emails=cc_emails,
+                report_data=report_data,
+                member_email=member.email,
+            )
             response.email_sent = True
 
     return response
