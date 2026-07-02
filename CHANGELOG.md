@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Module — Security Review & Hardening (2026-07-02)
+
+A full security review of the training module (endpoints, services, models,
+schemas, and frontend) closed several cross-tenant and input-handling gaps and
+resolved a set of schema/data-integrity inconsistencies.
+
+#### Cross-tenant access fixes (IDOR / tenancy)
+
+- **Training approval is now an authenticated, org-scoped officer action.** `POST /training/sessions/approve/{token}` previously required only a valid session — any authenticated user in any organization who obtained a (emailed, forwardable) approval token could finalize another org's training session, forging `TrainingRecord` rows and overriding check-in/out times. It now requires `training.manage` **and** binds the token lookup to the caller's `organization_id`. The companion `GET /training/sessions/approve/{token}` (which returns attendee names/emails) was made consistent — same permission and org scoping — instead of being an unauthenticated token-only endpoint
+- **Submission review/update/delete are org-scoped in the service layer.** `TrainingSubmissionService.get_submission` now filters by `organization_id`, so `POST /training/submissions/{id}/review` (and update/delete) can no longer act on another org's submission by ID. Previously only the read endpoint compensated with a manual org check; the review path had none
+- **External-import target users are validated against the caller's org.** `POST …/imports/{import_id}/import` and `…/imports/bulk` no longer trust the `user_id` in the request/mapping — a new `_verify_user_in_org` guard ensures a forged/mismatched user ID can't stamp a completed training record onto a member of another organization
+- **xAPI actor lookup is org-scoped.** `XAPIService.ingest_statement` matches the actor email within the caller's organization only, preventing a statement (and the training record it later produces) from attaching to a same-email user in a different org
+- **Program enrollment validates the enrolled user's org** (`enroll_member` / `bulk_enroll_members`)
+
+#### Input handling & data protection
+
+- **SSRF protection on external training providers.** Provider `api_base_url` is now validated with `validate_integration_url()` (HTTPS-only, blocks private/loopback/link-local IPs and cloud-metadata hosts) both when a provider is created/updated and again before every server-side request in the sync service. Upstream connection/category-sync errors are passed through `safe_error_detail()` instead of echoing raw exception text back to the client
+- **CSV formula-injection protection.** All training report exports (individual, bulk, compliance, hours-summary, certification) now write through a new `SafeCsvWriter` (`app/utils/csv_export.py`) that neutralizes cells beginning with `=`, `+`, `-`, `@`, tab, or CR — these exports carry attacker-influenceable free-text (course names, instructors, synced provider fields) and are opened in Excel/Sheets
+- **Enum validation at the schema boundary.** `training_type`, `status`, and `frequency` request fields (typed as plain strings for client compatibility) now validate — and lowercase — against the model enums via a shared `validate_enum_value` helper (`app/schemas/enum_validation.py`), returning a clean `422` instead of a `500` at DB flush. The JSON program-import path coerces the same enum fields
+- **Attachment download is confined to the attachment directory.** `GET …/records/{id}/attachments/{index}/download` resolves the stored path with `os.path.realpath` and rejects anything outside `TRAINING_ATTACHMENT_DIR` (defense-in-depth against a future path-traversal via the attachments JSON column)
+- **Negative-value guards** on self-report submission create and officer overrides (hours/credit hours)
+
+#### Frontend
+
+- **Per-member training endpoints excluded from the client API cache.** Added `/training/compliance-summary/`, `/training/requirements/progress/`, `/training/competency/`, `/training/recertification/tasks/`, `/training/module-config/my-training`, `/training/programs/enrollments/`, and `/training/instructors/qualifications` to `UNCACHEABLE_PREFIXES` (HIPAA cache rule + shorter authorization-revocation window)
+- **Print routes gated.** `/training/print/member` and `/training/print/program` are now wrapped in `<ProtectedRoute>` (were auth-only via the backend), matching the compliance print page
+
+#### Schema & data-integrity fixes
+
+- **Reconciled the two divergent schemas for the `training_requirements` table.** The "Enhanced" requirement schemas (`schemas/training_program.py`, used by `/training/programs/requirements`) disagreed with the base schemas (`schemas/training.py`): `required_courses`/`required_skills` are now `List[str]` (flat arrays of id strings, matching the model columns and the compliance evaluator's `str(course_id) in required_courses` membership test — the previous `List[Dict]` form never matched); `required_roles` is `List[str]` (role slugs — the previous `List[UUID]` type would crash the response serializer on a slug value); and `applies_to_all` defaults to `True`, matching the model column and base schema so the same table isn't created with conflicting defaults depending on which endpoint is used. The frontend already sent `string[]` and an explicit `applies_to_all`, so existing clients are unaffected
+- **Training-record scores may be point totals, not just percentages.** `TrainingRecord.score`/`passing_score` drop the `le=100` cap (keep `ge=0`), per the model column's documented "percentage or points" intent — a raw score like 145/150 was previously rejected with a 422. The requirement-level `passing_score` (a knowledge-test percentage threshold) keeps its 0–100 bound
+- **Actor/audit foreign keys are now `ON DELETE SET NULL`** (migration `20260702_0001`). All 28 audit references in the training module (`created_by`, `updated_by`, `approved_by`, `reviewed_by`, `verified_by`, `finalized_by`, `enrolled_by`, `mapped_by`, `initiated_by`, `granted_by`, `evaluated_by`, `evaluator_id`, `last_evaluator_id`) were bare `ForeignKey("users.id")` with no `ondelete`, defaulting to MySQL RESTRICT — deleting a user who had ever touched the training module failed with FK error 1451. They now clear the actor link (preserving the historical record) on user deletion. `skill_checkoffs.evaluator_id` was additionally relaxed from NOT NULL so SET NULL is legal. The migration discovers the existing MySQL auto-named constraints via the inspector at run time, drops them, and recreates each with `ON DELETE SET NULL`
+
+#### Repo maintenance surfaced during the review
+
+- Re-parented migration `20260622_0001` onto `20260618_0200` to restore a single Alembic head
+- Allowlisted `auth.py:mfa_login` in the endpoint auth-coverage test (the second factor of login is pre-auth by design, gated by the short-lived `mfa_pending` token)
+
 ### Onboarding, MFA & Password Policy Fixes (2026-06-25)
 
 - **Onboarding guard restored**: The render gate that blocks access to the application until onboarding is complete was inadvertently removed during the MFA merge. Restored so unauthenticated users cannot bypass the initial setup wizard

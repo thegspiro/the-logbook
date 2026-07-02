@@ -9,9 +9,13 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.models.training import RequirementFrequency as ModelRequirementFrequency
+from app.models.training import TrainingStatus as ModelTrainingStatus
+from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
+from app.schemas.enum_validation import validate_enum_value
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -112,6 +116,11 @@ class TrainingCourseBase(BaseModel):
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None  # Categories this course belongs to
 
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
 
 class TrainingCourseCreate(TrainingCourseBase):
     """Schema for creating a new training course"""
@@ -133,6 +142,11 @@ class TrainingCourseUpdate(BaseModel):
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
 class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):
@@ -167,8 +181,13 @@ class TrainingRecordBase(BaseModel):
     certification_number: Optional[str] = Field(None, max_length=100)
     issuing_agency: Optional[str] = Field(None, max_length=255)
     status: str = "scheduled"
-    score: Optional[float] = Field(None, ge=0, le=100)
-    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    # No upper bound: a training record's score may be a percentage OR a
+    # raw point total (e.g. 120/150 on a written exam), per the model
+    # column's documented intent. Capping at 100 rejected legitimate
+    # point-based scores with a 422. passing_score is the record-level
+    # threshold and follows the same unit as score.
+    score: Optional[float] = Field(None, ge=0)
+    passing_score: Optional[float] = Field(None, ge=0)
     passed: Optional[bool] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
@@ -176,6 +195,16 @@ class TrainingRecordBase(BaseModel):
     attachments: Optional[List[str]] = None
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @field_validator("status")
+    @classmethod
+    def _validate_status(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingStatus, "status")
 
 
 class TrainingRecordCreate(TrainingRecordBase):
@@ -200,8 +229,9 @@ class TrainingRecordUpdate(BaseModel):
     certification_number: Optional[str] = Field(None, max_length=100)
     issuing_agency: Optional[str] = Field(None, max_length=255)
     status: Optional[str] = None
-    score: Optional[float] = Field(None, ge=0, le=100)
-    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    # See TrainingRecordBase.score: percentage or raw points, no upper cap.
+    score: Optional[float] = Field(None, ge=0)
+    passing_score: Optional[float] = Field(None, ge=0)
     passed: Optional[bool] = None
     instructor: Optional[str] = Field(None, max_length=255)
     location: Optional[str] = Field(None, max_length=255)
@@ -209,6 +239,16 @@ class TrainingRecordUpdate(BaseModel):
     attachments: Optional[List[str]] = None
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @field_validator("status")
+    @classmethod
+    def _validate_status(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingStatus, "status")
 
 
 class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
@@ -275,6 +315,16 @@ class TrainingRequirementBase(BaseModel):
     # Category requirements - training in these categories satisfies this requirement
     category_ids: Optional[List[str]] = None
 
+    @field_validator("frequency")
+    @classmethod
+    def _validate_frequency(cls, v: str) -> str:
+        return validate_enum_value(v, ModelRequirementFrequency, "frequency")
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
 
 class TrainingRequirementCreate(TrainingRequirementBase):
     """Schema for creating a new training requirement"""
@@ -337,6 +387,16 @@ class TrainingRequirementUpdate(BaseModel):
     include_current_month: Optional[bool] = None
     category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
+
+    @field_validator("frequency")
+    @classmethod
+    def _validate_frequency(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelRequirementFrequency, "frequency")
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
 class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):

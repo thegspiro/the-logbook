@@ -6,7 +6,6 @@ instructor qualifications, training effectiveness, multi-agency training,
 report exports, and xAPI ingestion.
 """
 
-import csv
 import io
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -33,6 +32,7 @@ from app.models.training import (
     XAPIStatement,
 )
 from app.models.user import User, UserStatus
+from app.utils.csv_export import SafeCsvWriter
 
 
 class RecertificationService:
@@ -654,11 +654,18 @@ class XAPIService:
         except (ValueError, AttributeError):
             stmt_time = datetime.now(timezone.utc)
 
-        # Try to map actor to internal user
+        # Try to map actor to internal user. The org filter is a tenant
+        # boundary: actor email comes from the (attacker-influenceable)
+        # xAPI payload, and without it a statement could attach to — and
+        # later create a training record for — a same-email user in a
+        # different organization.
         user_id = None
         if actor_email:
             user_result = await self.db.execute(
-                select(User.id).where(User.email == actor_email)
+                select(User.id).where(
+                    User.email == actor_email,
+                    User.organization_id == organization_id,
+                )
             )
             user = user_result.scalar_one_or_none()
             if user:
@@ -825,7 +832,7 @@ class ReportExportService:
         requirements = req_result.scalars().all()
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = SafeCsvWriter(output)
 
         # Header
         header = ["Member Name", "Email", "Total Hours", "Completed Courses"]
@@ -895,7 +902,7 @@ class ReportExportService:
         records = records_result.scalars().all()
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = SafeCsvWriter(output)
         writer.writerow(
             [
                 "Course Name",
@@ -1303,7 +1310,7 @@ class ReportExportService:
         users = users_result.scalars().all()
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = SafeCsvWriter(output)
         writer.writerow(
             [
                 "Member Name",
@@ -1473,7 +1480,7 @@ class ReportExportService:
         users = users_result.scalars().all()
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = SafeCsvWriter(output)
         writer.writerow(
             [
                 "Member Name",
@@ -1567,7 +1574,7 @@ class ReportExportService:
         records = (await self.db.execute(query)).scalars().all()
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = SafeCsvWriter(output)
         writer.writerow(
             [
                 "Member Name",

@@ -822,15 +822,26 @@ class TestTrainingSchemas:
                 hours_completed=-1.0,
             )
 
-    def test_training_record_create_score_out_of_range(self):
-        """Should fail with score > 100"""
+    def test_training_record_create_score_allows_points(self):
+        """Score may be a raw point total (>100), not just a percentage."""
+        schema = TrainingRecordCreate(
+            user_id=uuid4(),
+            course_name="Test",
+            training_type="certification",
+            hours_completed=1.0,
+            score=150.0,
+        )
+        assert schema.score == 150.0
+
+    def test_training_record_create_score_rejects_negative(self):
+        """Score must not be negative regardless of unit (percentage/points)."""
         with pytest.raises(ValidationError):
             TrainingRecordCreate(
                 user_id=uuid4(),
                 course_name="Test",
                 training_type="certification",
                 hours_completed=1.0,
-                score=150.0,
+                score=-5.0,
             )
 
     def test_training_requirement_create_valid(self):
@@ -931,8 +942,12 @@ class TestTrainingSchemas:
         assert schema.checklist_items == items
 
     def test_training_requirement_enhanced_create_skills_type(self):
-        """TrainingRequirementEnhancedCreate with skills_evaluation requirement"""
-        skills = [{"skill_id": str(uuid4()), "name": "SCBA Operations"}]
+        """TrainingRequirementEnhancedCreate with skills_evaluation requirement.
+
+        required_skills is a JSON array of scalar skill-id strings (matching
+        the model column and the compliance evaluator), not a list of dicts.
+        """
+        skills = [str(uuid4()), str(uuid4())]
         schema = TrainingRequirementEnhancedCreate(
             name="Skills Evaluation",
             requirement_type="skills_evaluation",
@@ -942,6 +957,8 @@ class TestTrainingSchemas:
         )
         assert schema.requirement_type == "skills_evaluation"
         assert schema.required_skills == skills
+        # applies_to_all defaults to True, matching the model column default
+        assert schema.applies_to_all is True
 
     def test_training_program_create_valid(self):
         """Valid TrainingProgramCreate schema"""

@@ -150,17 +150,15 @@ async def get_submission(
 ):
     """Get a specific submission. Members can see their own; officers can see all."""
     service = TrainingSubmissionService(db)
+    # Org boundary enforced in the service query (404 hides cross-org
+    # existence), then authorization: members may see only their own
+    # submission; officers (training.manage) may see any in their org.
+    # A same-org non-owner without the permission must be rejected —
+    # submissions can carry PHI.
     submission = ensure_found(
-        await service.get_submission(submission_id),
+        await service.get_submission(submission_id, current_user.organization_id),
         "Submission",
     )
-
-    # Org boundary first (404 hides cross-org existence), then authorization:
-    # members may see only their own submission; officers (training.manage)
-    # may see any in their org. A same-org non-owner without the permission
-    # must be rejected — submissions can carry PHI.
-    if submission.organization_id != current_user.organization_id:
-        raise HTTPException(status_code=404, detail="Submission not found")
 
     if submission.submitted_by != current_user.id and not _has_permission(
         "training.manage", _collect_user_permissions(current_user)
@@ -185,6 +183,7 @@ async def update_submission(
         submission = await service.update_submission(
             submission_id=submission_id,
             user_id=current_user.id,
+            organization_id=current_user.organization_id,
             **updates.model_dump(exclude_unset=True),
         )
         return submission
@@ -199,7 +198,9 @@ async def delete_submission(
     """Delete a submission (only by submitter, before approval)."""
     service = TrainingSubmissionService(db)
     async with handle_service_errors("Failed to delete submission"):
-        await service.delete_submission(submission_id, current_user.id)
+        await service.delete_submission(
+            submission_id, current_user.id, current_user.organization_id
+        )
 
 
 # ==================== Officer Review ====================
@@ -218,6 +219,7 @@ async def review_submission(
         submission = await service.review_submission(
             submission_id=submission_id,
             reviewer_id=current_user.id,
+            organization_id=current_user.organization_id,
             action=review.action,
             reviewer_notes=review.reviewer_notes,
             override_hours=review.override_hours,

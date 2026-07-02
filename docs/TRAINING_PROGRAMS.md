@@ -469,11 +469,13 @@ Require completion of specific courses.
 ```json
 {
   "requirement_type": "courses",
-  "required_courses": [
-    {"course_id": "uuid", "name": "Firefighter I"}
-  ]
+  "required_courses": ["firefighter-i-course-uuid", "firefighter-ii-course-uuid"]
 }
 ```
+
+> `required_courses` is a flat array of course-ID strings (not objects). The
+> compliance evaluator matches a member's completed `course_id` against these
+> values directly.
 
 #### 3. Certification Requirements
 Require obtaining certifications.
@@ -525,11 +527,12 @@ Require demonstrating skills with officer evaluation.
 ```json
 {
   "requirement_type": "skills_evaluation",
-  "required_skills": [
-    {"skill_id": "uuid", "name": "SCBA Donning"}
-  ]
+  "required_skills": ["scba-donning-skill-uuid", "ladder-throw-skill-uuid"]
 }
 ```
+
+> `required_skills` (like `required_courses` and `required_roles`) is a flat
+> array of ID/slug strings, not objects.
 
 #### 7. Checklist Requirements
 Require completing a checklist of tasks.

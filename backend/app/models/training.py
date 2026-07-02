@@ -172,7 +172,9 @@ class TrainingCategory(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     subcategories = relationship(
@@ -242,7 +244,9 @@ class TrainingCourse(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     training_records = relationship(
@@ -375,7 +379,9 @@ class TrainingRecord(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     course = relationship("TrainingCourse", back_populates="training_records")
@@ -522,7 +528,9 @@ class TrainingRequirement(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("idx_requirement_org_source", "organization_id", "source"),
@@ -638,14 +646,18 @@ class TrainingSession(Base):
         Boolean, default=False
     )  # Event ended, approval workflow triggered
     finalized_at = Column(DateTime(timezone=True))
-    finalized_by = Column(String(36), ForeignKey("users.id"))
+    finalized_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     event = relationship("Event", foreign_keys=[event_id], lazy="select")
@@ -715,7 +727,9 @@ class TrainingApproval(Base):
         default=ApprovalStatus.PENDING,
         index=True,
     )
-    approved_by = Column(String(36), ForeignKey("users.id"))
+    approved_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     approved_at = Column(DateTime(timezone=True))
     approval_notes = Column(Text)
 
@@ -812,7 +826,9 @@ class TrainingProgram(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     phases = relationship(
@@ -1076,7 +1092,9 @@ class ProgramEnrollment(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    enrolled_by = Column(String(36), ForeignKey("users.id"))  # Who enrolled the member
+    enrolled_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )  # Who enrolled the member
 
     # Relationships
     program = relationship("TrainingProgram", back_populates="enrollments")
@@ -1136,7 +1154,9 @@ class RequirementProgress(Base):
     started_at = Column(DateTime(timezone=True))
     completed_at = Column(DateTime(timezone=True))
     verified_at = Column(DateTime(timezone=True))
-    verified_by = Column(String(36), ForeignKey("users.id"))
+    verified_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     verification_notes = Column(Text)
 
     # Timestamps
@@ -1213,7 +1233,9 @@ class SkillEvaluation(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (Index("idx_skill_org_category", "organization_id", "category"),)
 
@@ -1251,7 +1273,9 @@ class SkillCheckoff(Base):
     )
 
     # Evaluation Details
-    evaluator_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    evaluator_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     status = Column(String(20), nullable=False)  # pending, passed, failed
 
     # Training context — links checkoff to the session and apparatus used
@@ -1552,7 +1576,9 @@ class TrainingModuleConfig(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    updated_by = Column(String(36), ForeignKey("users.id"))
+    updated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     def __repr__(self):
         return f"<TrainingModuleConfig(org_id={self.organization_id})>"
@@ -1726,7 +1752,9 @@ class SelfReportConfig(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    updated_by = Column(String(36), ForeignKey("users.id"))
+    updated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     def __repr__(self):
         return f"<SelfReportConfig(org_id={self.organization_id}, require_approval={self.require_approval})>"
@@ -1798,7 +1826,9 @@ class TrainingSubmission(Base):
     )
 
     # Review Details
-    reviewed_by = Column(String(36), ForeignKey("users.id"))
+    reviewed_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     reviewed_at = Column(DateTime(timezone=True))
     reviewer_notes = Column(Text)  # Officer notes on approval/rejection
 
@@ -1919,7 +1949,9 @@ class ExternalTrainingProvider(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     category_mappings = relationship(
@@ -1999,7 +2031,9 @@ class ExternalCategoryMapping(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    mapped_by = Column(String(36), ForeignKey("users.id"))
+    mapped_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     provider = relationship(
@@ -2059,7 +2093,9 @@ class ExternalUserMapping(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    mapped_by = Column(String(36), ForeignKey("users.id"))
+    mapped_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("idx_ext_user_provider", "provider_id"),
@@ -2125,7 +2161,9 @@ class ExternalTrainingSyncLog(Base):
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    initiated_by = Column(String(36), ForeignKey("users.id"))  # Null for auto-sync
+    initiated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )  # Null for auto-sync
 
     # Relationships
     provider = relationship("ExternalTrainingProvider", back_populates="sync_history")
@@ -2308,7 +2346,9 @@ class Shift(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (Index("idx_shift_date", "organization_id", "shift_date"),)
 
@@ -2893,7 +2933,9 @@ class TrainingWaiver(Base):
     requirement_ids = Column(JSON, nullable=True)
 
     # Approval
-    granted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    granted_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     granted_at = Column(DateTime(timezone=True), nullable=True)
 
     active = Column(Boolean, default=True, nullable=False)
@@ -2997,7 +3039,9 @@ class RecertificationPathway(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("idx_recert_pathway_org", "organization_id", "active"),
@@ -3151,7 +3195,9 @@ class CompetencyMatrix(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("idx_competency_matrix_org", "organization_id", "position"),
@@ -3205,7 +3251,9 @@ class MemberCompetency(Base):
 
     # Evaluation history
     last_evaluated_at = Column(DateTime(timezone=True))
-    last_evaluator_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    last_evaluator_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     evaluation_count = Column(Integer, default=0)
     last_score = Column(Float)
 
@@ -3298,7 +3346,9 @@ class InstructorQualification(Base):
     # Status
     active = Column(Boolean, default=True, index=True)
     verified = Column(Boolean, default=False)
-    verified_by = Column(String(36), ForeignKey("users.id"))
+    verified_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     verified_at = Column(DateTime(timezone=True))
 
     # Timestamps
@@ -3306,7 +3356,9 @@ class InstructorQualification(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("idx_instructor_qual_user", "user_id", "active"),
@@ -3405,7 +3457,9 @@ class TrainingEffectivenessEvaluation(Base):
     results_notes = Column(Text)
 
     # Evaluator
-    evaluated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    evaluated_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     evaluated_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Timestamps
@@ -3498,7 +3552,9 @@ class MultiAgencyTraining(Base):
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
-    created_by = Column(String(36), ForeignKey("users.id"))
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     __table_args__ = (
         Index("idx_multi_agency_org", "organization_id"),

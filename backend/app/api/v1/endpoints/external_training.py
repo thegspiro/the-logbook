@@ -17,6 +17,8 @@ from app.api.dependencies import require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security import encrypt_data
+from app.core.utils import safe_error_detail
+from app.utils.url_validator import validate_integration_url
 from app.models.training import (
     ExternalCategoryMapping,
     ExternalTrainingImport,
@@ -50,6 +52,23 @@ from app.schemas.training import TestConnectionResponse
 from app.services.external_training_service import ExternalTrainingSyncService
 
 router = APIRouter()
+
+
+async def _verify_user_in_org(
+    db: AsyncSession, user_id: str, organization_id: str
+) -> bool:
+    """Tenant-isolation check for import targets: the user_id on an import
+    request (or a stored user mapping) is attacker-influenceable, so a
+    training record must never be attached to a user outside the caller's
+    organization.
+    """
+    result = await db.execute(
+        select(User.id).where(
+            User.id == str(user_id),
+            User.organization_id == str(organization_id),
+        )
+    )
+    return result.scalar_one_or_none() is not None
 
 
 # ============================================
@@ -98,6 +117,17 @@ async def create_provider(
     **Authentication required**
     **Requires permission: training.manage**
     """
+    # SSRF guard: the base URL is fetched server-side during syncs, so it
+    # must be a public HTTPS endpoint (no private IPs / metadata hosts).
+    if provider.api_base_url:
+        try:
+            validate_integration_url(provider.api_base_url)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid API base URL: {e}",
+            )
+
     # Encrypt sensitive credentials before storing
     new_provider = ExternalTrainingProvider(
         organization_id=current_user.organization_id,
@@ -198,6 +228,16 @@ async def update_provider(
 
     # Update fields
     update_data = provider_update.model_dump(exclude_unset=True)
+
+    # SSRF guard: same validation as create_provider
+    if update_data.get("api_base_url"):
+        try:
+            validate_integration_url(update_data["api_base_url"])
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid API base URL: {e}",
+            )
 
     # Handle config separately
     if "config" in update_data and update_data["config"]:
@@ -328,7 +368,9 @@ async def test_provider_connection(
         logger.exception(f"Connection test failed for provider {provider_id}")
         provider.connection_verified = False
         provider.last_connection_test = datetime.now(timezone.utc)
-        provider.connection_error = str(e)
+        # connection_error is shown back to admins in the UI — sanitize so
+        # upstream response fragments / internal paths never reach the client
+        provider.connection_error = safe_error_detail(e)
         await db.commit()
 
         return TestConnectionResponse(
@@ -439,7 +481,7 @@ async def sync_categories(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to fetch categories: {e}",
+            detail=f"Failed to fetch categories: {safe_error_detail(e)}",
         )
     finally:
         await sync_service.close()
@@ -947,6 +989,14 @@ async def import_single_record(
             detail="This record has already been imported",
         )
 
+    if not await _verify_user_in_org(
+        db, str(import_request.user_id), str(current_user.organization_id)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Target user not found",
+        )
+
     try:
         # Create internal training record
         training_record = TrainingRecord(
@@ -1070,6 +1120,13 @@ async def bulk_import_records(
         if not user_id:
             skipped += 1
             errors.append(f"No user mapping for import {import_id}")
+            continue
+
+        if not await _verify_user_in_org(
+            db, str(user_id), str(current_user.organization_id)
+        ):
+            skipped += 1
+            errors.append(f"Mapped user for import {import_id} is not in organization")
             continue
 
         try:

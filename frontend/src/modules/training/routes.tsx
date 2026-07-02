@@ -240,20 +240,28 @@ export const getTrainingRoutes = () => {
         }
       />
       {/* Training Module - Print Pages */}
+      {/* Member/program print are auth-only (not training.manage) because
+          members print their own history; per-record authorization is
+          enforced by the backend, which scopes non-officers to their own
+          records. */}
       <Route
         path="/training/print/member"
         element={
-          <React.Suspense fallback={null}>
-            <MemberTrainingPrintPage />
-          </React.Suspense>
+          <ProtectedRoute>
+            <React.Suspense fallback={null}>
+              <MemberTrainingPrintPage />
+            </React.Suspense>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/training/print/program"
         element={
-          <React.Suspense fallback={null}>
-            <ProgramPrintPage />
-          </React.Suspense>
+          <ProtectedRoute>
+            <React.Suspense fallback={null}>
+              <ProgramPrintPage />
+            </React.Suspense>
+          </ProtectedRoute>
         }
       />
       <Route
