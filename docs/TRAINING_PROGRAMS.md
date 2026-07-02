@@ -1199,8 +1199,8 @@ Navigate to **Training** → **Review Submissions** → **Settings** tab to conf
 ### API Endpoints
 
 ```http
-POST   /api/v1/training/submissions/                 Submit training (member)
-GET    /api/v1/training/submissions/my-submissions    Member's own submissions
+POST   /api/v1/training/submissions                  Submit training (member)
+GET    /api/v1/training/submissions/my               Member's own submissions
 POST   /api/v1/training/submissions/{id}/review       Approve/reject (officer)
 GET    /api/v1/training/submissions/config             Get config
 PUT    /api/v1/training/submissions/config             Update config (officer)

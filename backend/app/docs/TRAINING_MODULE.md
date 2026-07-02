@@ -682,8 +682,8 @@ GET    /api/v1/training/programs/requirements
 POST   /api/v1/training/programs/requirements
 GET    /api/v1/training/programs/requirements/{id}
 PATCH  /api/v1/training/programs/requirements/{id}
-DELETE /api/v1/training/programs/requirements/{id}   # Soft delete (sets active=false)
 POST   /api/v1/training/programs/requirements/import/{registry_name}
+DELETE /api/v1/training/requirements/{id}             # Soft delete (sets active=false) — served by the base training router, not the /programs prefix
 ```
 
 **Create Requirement with Due Date Type:**
