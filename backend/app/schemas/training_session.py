@@ -8,9 +8,11 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
+from app.schemas.enum_validation import validate_enum_value
 
 
 class TrainingSessionCreate(BaseModel):
@@ -73,6 +75,11 @@ class TrainingSessionCreate(BaseModel):
     )
     credit_hours: float = Field(..., ge=0)
     instructor: Optional[str] = Field(None, max_length=255)
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
 
     # Certification details
     issues_certification: bool = Field(default=False)

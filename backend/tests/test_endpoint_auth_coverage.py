@@ -34,6 +34,9 @@ ALLOWLISTED_PUBLIC = {
     ("auth.py", "oauth_microsoft_callback"),
     ("auth.py", "register"),
     ("auth.py", "login"),
+    # Second factor of login: caller is pre-auth by definition; gated by the
+    # short-lived mfa_pending token from the password step + login rate limit.
+    ("auth.py", "mfa_login"),
     ("auth.py", "refresh_token"),
     ("auth.py", "forgot_password"),
     ("auth.py", "reset_password"),

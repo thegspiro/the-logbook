@@ -26,12 +26,14 @@ from app.models.training import (
     ProgramRequirement,
     ProgramStructureType,
     RequirementProgress,
+    RequirementFrequency,
     RequirementProgressStatus,
     RequirementSource,
     RequirementType,
     TrainingCategory,
     TrainingProgram,
     TrainingRequirement,
+    TrainingType,
 )
 from app.models.user import User
 from app.schemas.training_program import (
@@ -714,9 +716,14 @@ class TrainingProgramService:
         if not program:
             return None, "Training program not found"
 
-        # Verify user exists
+        # Verify user exists in the same organization — the user_id comes
+        # from the request body, so without this filter an officer could
+        # enroll a member of another organization.
         user_result = await self.db.execute(
-            select(User).where(User.id == str(enrollment_data.user_id))
+            select(User).where(
+                User.id == str(enrollment_data.user_id),
+                User.organization_id == str(organization_id),
+            )
         )
         user = user_result.scalar_one_or_none()
         if not user:
@@ -1477,6 +1484,18 @@ class TrainingProgramService:
         """
         prog_data = data.get("program", {})
 
+        # Uploaded JSON — validate the enum-backed field before it reaches
+        # the DB enum column (invalid values crash at flush as a 500).
+        try:
+            structure_type = ProgramStructureType(
+                str(prog_data.get("structure_type", "flexible")).strip().lower()
+            )
+        except ValueError:
+            raise ValueError(
+                f"Invalid structure_type '{prog_data.get('structure_type')}' "
+                "in imported program"
+            )
+
         program = TrainingProgram(
             organization_id=organization_id,
             name=prog_data.get("name", "Imported Program"),
@@ -1485,7 +1504,7 @@ class TrainingProgramService:
             version=prog_data.get("version", 1),
             target_position=prog_data.get("target_position"),
             target_roles=prog_data.get("target_roles"),
-            structure_type=prog_data.get("structure_type", "flexible"),
+            structure_type=structure_type,
             allows_concurrent_enrollment=prog_data.get(
                 "allows_concurrent_enrollment", True
             ),
@@ -1611,7 +1630,35 @@ class TrainingProgramService:
             return None
 
         name = req_data["name"]
-        source = req_data.get("source", "department")
+
+        # req_data comes from an uploaded JSON file, so enum-backed fields
+        # must be validated here — an invalid value would otherwise be
+        # written to (or crash on) the DB enum columns.
+        def _coerce_enum(raw: Any, enum_cls: type, field: str, default: Any = None):
+            if raw is None:
+                return default
+            try:
+                return enum_cls(str(raw).strip().lower())
+            except ValueError:
+                raise ValueError(
+                    f"Invalid {field} '{raw}' in imported requirement '{name}'"
+                )
+
+        source = _coerce_enum(
+            req_data.get("source"), RequirementSource, "source",
+            RequirementSource.DEPARTMENT,
+        )
+        requirement_type = _coerce_enum(
+            req_data.get("requirement_type"), RequirementType, "requirement_type",
+            RequirementType.HOURS,
+        )
+        training_type = _coerce_enum(
+            req_data.get("training_type"), TrainingType, "training_type"
+        )
+        frequency = _coerce_enum(
+            req_data.get("frequency"), RequirementFrequency, "frequency",
+            RequirementFrequency.ANNUAL,
+        )
 
         existing = await self.db.execute(
             select(TrainingRequirement).where(
@@ -1628,13 +1675,13 @@ class TrainingProgramService:
             organization_id=organization_id,
             name=name,
             description=req_data.get("description"),
-            requirement_type=req_data.get("requirement_type", "hours"),
-            training_type=req_data.get("training_type"),
+            requirement_type=requirement_type,
+            training_type=training_type,
             source=source,
             registry_name=req_data.get("registry_name"),
             registry_code=req_data.get("registry_code"),
             required_hours=req_data.get("required_hours"),
-            frequency=req_data.get("frequency", "annual"),
+            frequency=frequency,
             time_limit_days=req_data.get("time_limit_days"),
             applies_to_all=req_data.get("applies_to_all", False),
             required_positions=req_data.get("required_positions"),

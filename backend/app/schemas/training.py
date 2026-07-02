@@ -9,9 +9,13 @@ from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.models.training import RequirementFrequency as ModelRequirementFrequency
+from app.models.training import TrainingStatus as ModelTrainingStatus
+from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
+from app.schemas.enum_validation import validate_enum_value
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -112,6 +116,11 @@ class TrainingCourseBase(BaseModel):
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None  # Categories this course belongs to
 
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
 
 class TrainingCourseCreate(TrainingCourseBase):
     """Schema for creating a new training course"""
@@ -133,6 +142,11 @@ class TrainingCourseUpdate(BaseModel):
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
 class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):
@@ -177,6 +191,16 @@ class TrainingRecordBase(BaseModel):
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
 
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @field_validator("status")
+    @classmethod
+    def _validate_status(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingStatus, "status")
+
 
 class TrainingRecordCreate(TrainingRecordBase):
     """Schema for creating a new training record"""
@@ -209,6 +233,16 @@ class TrainingRecordUpdate(BaseModel):
     attachments: Optional[List[str]] = None
     rank_at_completion: Optional[str] = Field(None, max_length=100)
     station_at_completion: Optional[str] = Field(None, max_length=100)
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @field_validator("status")
+    @classmethod
+    def _validate_status(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingStatus, "status")
 
 
 class TrainingRecordResponse(TrainingRecordBase, UTCResponseBase):
@@ -275,6 +309,16 @@ class TrainingRequirementBase(BaseModel):
     # Category requirements - training in these categories satisfies this requirement
     category_ids: Optional[List[str]] = None
 
+    @field_validator("frequency")
+    @classmethod
+    def _validate_frequency(cls, v: str) -> str:
+        return validate_enum_value(v, ModelRequirementFrequency, "frequency")
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
 
 class TrainingRequirementCreate(TrainingRequirementBase):
     """Schema for creating a new training requirement"""
@@ -337,6 +381,16 @@ class TrainingRequirementUpdate(BaseModel):
     include_current_month: Optional[bool] = None
     category_ids: Optional[List[str]] = None
     active: Optional[bool] = None
+
+    @field_validator("frequency")
+    @classmethod
+    def _validate_frequency(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelRequirementFrequency, "frequency")
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
 class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):

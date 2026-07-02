@@ -28,6 +28,7 @@ from app.models.training import (
     TrainingType,
 )
 from app.models.user import User
+from app.utils.url_validator import validate_integration_url
 
 
 class ExternalTrainingSyncService:
@@ -40,6 +41,20 @@ class ExternalTrainingSyncService:
     async def close(self):
         """Close HTTP client connections"""
         await self.http_client.aclose()
+
+    @staticmethod
+    def _validate_provider_url(provider: ExternalTrainingProvider) -> None:
+        """SSRF guard: re-validate the provider base URL before any
+        server-side request. The URL is admin-supplied and also validated
+        at write time, but DNS can change between then and now (rebinding),
+        so every network entry point must call this first.
+
+        Raises ValueError if the URL is missing, non-HTTPS, or resolves to
+        a private/metadata address.
+        """
+        if not provider.api_base_url:
+            raise ValueError("Provider API base URL is not configured")
+        validate_integration_url(provider.api_base_url)
 
     # ==========================================
     # Connection Testing
@@ -55,6 +70,7 @@ class ExternalTrainingSyncService:
             Tuple of (success, message)
         """
         try:
+            self._validate_provider_url(provider)
             if provider.provider_type in (
                 ExternalProviderType.VECTOR_SOLUTIONS,
                 ExternalProviderType.TARGET_SOLUTIONS,
@@ -383,6 +399,7 @@ class ExternalTrainingSyncService:
         to_date: date,
     ) -> List[Dict[str, Any]]:
         """Fetch training records from external provider"""
+        self._validate_provider_url(provider)
         if provider.provider_type in (
             ExternalProviderType.VECTOR_SOLUTIONS,
             ExternalProviderType.TARGET_SOLUTIONS,
@@ -460,6 +477,7 @@ class ExternalTrainingSyncService:
         Returns:
             List of dicts with external_category_id and external_category_name.
         """
+        self._validate_provider_url(provider)
         headers = self._get_auth_headers(provider)
         site_id = self._get_vector_site_id(provider)
         url = f"{provider.api_base_url.rstrip('/')}/sites/{site_id}/categories"

@@ -43,6 +43,13 @@ const UNCACHEABLE_PREFIXES = [
   '/training/shift-reports/', // attendance/location data
   '/training/stats/user/',    // individual compliance stats
   '/training/reports/user/',  // individual training reports
+  '/training/compliance-summary/', // per-member compliance status
+  '/training/requirements/progress/', // per-member requirement progress
+  '/training/competency/',    // per-member competency evaluations
+  '/training/recertification/tasks/', // per-member renewal tasks
+  '/training/module-config/my-training', // current user's full training record
+  '/training/programs/enrollments/',  // per-member program enrollment & progress
+  '/training/instructors/qualifications', // per-member instructor credentials
   '/facilities/emergency-contacts', // emergency contact PII
   '/messages/',       // private member-to-member messages
   '/admin-hours/',    // individual work hours and clock-in records

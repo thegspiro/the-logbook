@@ -856,11 +856,20 @@ async def download_record_attachment(
         raise HTTPException(status_code=404, detail="Attachment file unavailable")
 
     file_path = attachment["file_path"]
-    if not os.path.isfile(file_path):
+    # Confine the stored path to the attachment directory. file_path is
+    # server-generated today, but it round-trips through a JSON column —
+    # if any future code path lets that column be written from user input,
+    # this check is what stands between it and arbitrary file read.
+    real_path = os.path.realpath(file_path)
+    attachment_root = os.path.realpath(TRAINING_ATTACHMENT_DIR)
+    if not real_path.startswith(attachment_root + os.sep):
+        raise HTTPException(status_code=404, detail="Attachment file not found")
+
+    if not os.path.isfile(real_path):
         raise HTTPException(status_code=404, detail="Attachment file not found")
 
     return FileResponse(
-        file_path,
+        real_path,
         media_type=attachment.get("file_type") or "application/octet-stream",
-        filename=attachment.get("file_name") or os.path.basename(file_path),
+        filename=attachment.get("file_name") or os.path.basename(real_path),
     )

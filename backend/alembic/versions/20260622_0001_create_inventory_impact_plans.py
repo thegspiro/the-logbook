@@ -5,7 +5,7 @@ impact-planner scenarios (their filter set) so quartermasters can re-run
 recurring plans without re-entering filters.
 
 Revision ID: 20260622_0001
-Revises: 20260613_0001
+Revises: 20260618_0200
 Create Date: 2026-06-22 00:00:00.000000
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '20260622_0001'
-down_revision = '20260613_0001'
+down_revision = '20260618_0200'
 branch_labels = None
 depends_on = None
 

@@ -253,7 +253,7 @@ async def submit_training_approval(
     token: str,
     approval_data: TrainingApprovalRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("training.manage")),
 ):
     """
     Submit training approval with time adjustments
@@ -262,6 +262,7 @@ async def submit_training_approval(
     or override durations for individual members.
 
     **Authentication required**
+    **Requires permission: training.manage**
     """
     service = TrainingSessionService(db)
 
@@ -270,6 +271,7 @@ async def submit_training_approval(
         attendees=approval_data.attendees,
         approval_notes=approval_data.approval_notes,
         approved_by=current_user.id,
+        organization_id=current_user.organization_id,
     )
 
     if error:

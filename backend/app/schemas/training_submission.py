@@ -9,9 +9,11 @@ from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
+from app.schemas.enum_validation import validate_enum_value
 
 # ==================== Self-Report Config Schemas ====================
 
@@ -95,6 +97,11 @@ class TrainingSubmissionCreate(BaseModel):
     category_id: Optional[UUID] = None
     attachments: Optional[list[str]] = None
 
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: str) -> str:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
 
 class TrainingSubmissionUpdate(BaseModel):
     """Schema for updating a submission (before approval)"""
@@ -117,6 +124,11 @@ class TrainingSubmissionUpdate(BaseModel):
 
     category_id: Optional[UUID] = None
     attachments: Optional[list[str]] = None
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
 class TrainingSubmissionResponse(UTCResponseBase):
@@ -168,3 +180,8 @@ class SubmissionReviewRequest(BaseModel):
     override_hours: Optional[float] = Field(None, gt=0)
     override_credit_hours: Optional[float] = Field(None, ge=0)
     override_training_type: Optional[str] = None
+
+    @field_validator("override_training_type")
+    @classmethod
+    def _validate_override_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")

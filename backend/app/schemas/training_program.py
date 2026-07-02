@@ -8,9 +8,12 @@ from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.models.training import RequirementFrequency as ModelRequirementFrequency
+from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
+from app.schemas.enum_validation import validate_enum_value
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -56,6 +59,16 @@ class TrainingRequirementEnhancedBase(BaseModel):
     required_positions: Optional[List[str]] = None
     required_roles: Optional[List[UUID]] = None
 
+    @field_validator("frequency")
+    @classmethod
+    def _validate_frequency(cls, v: str) -> str:
+        return validate_enum_value(v, ModelRequirementFrequency, "frequency")
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
+
 
 class TrainingRequirementEnhancedCreate(TrainingRequirementEnhancedBase):
     """Schema for creating an enhanced training requirement"""
@@ -84,6 +97,16 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     required_positions: Optional[List[str]] = None
     required_roles: Optional[List[UUID]] = None
     active: Optional[bool] = None
+
+    @field_validator("frequency")
+    @classmethod
+    def _validate_frequency(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelRequirementFrequency, "frequency")
+
+    @field_validator("training_type")
+    @classmethod
+    def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
+        return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
 class TrainingRequirementEnhancedResponse(

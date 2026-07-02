@@ -87,6 +87,9 @@ class TrainingSubmissionService:
         """Create a new self-reported training submission."""
         config = await self.get_config(organization_id)
 
+        if hours_completed <= 0:
+            raise ValueError("Hours completed must be greater than zero")
+
         # Validate against config
         if (
             config.max_hours_per_submission
@@ -140,10 +143,20 @@ class TrainingSubmissionService:
 
         return submission
 
-    async def get_submission(self, submission_id: str) -> Optional[TrainingSubmission]:
-        """Get a single submission by ID."""
+    async def get_submission(
+        self, submission_id: str, organization_id: str
+    ) -> Optional[TrainingSubmission]:
+        """Get a single submission by ID, scoped to the caller's organization.
+
+        The org filter is the tenant-isolation boundary for every mutation
+        path (update/delete/review) that funnels through this method — do
+        not remove it or add an unscoped variant.
+        """
         result = await self.db.execute(
-            select(TrainingSubmission).where(TrainingSubmission.id == submission_id)
+            select(TrainingSubmission).where(
+                TrainingSubmission.id == submission_id,
+                TrainingSubmission.organization_id == organization_id,
+            )
         )
         return result.scalar_one_or_none()
 
@@ -176,10 +189,11 @@ class TrainingSubmissionService:
         self,
         submission_id: str,
         user_id: str,
+        organization_id: str,
         **kwargs,
     ) -> TrainingSubmission:
         """Update a submission (only by the submitter, before approval)."""
-        submission = await self.get_submission(submission_id)
+        submission = await self.get_submission(submission_id, organization_id)
         if not submission:
             raise ValueError("Submission not found")
 
@@ -207,9 +221,11 @@ class TrainingSubmissionService:
         await self.db.refresh(submission)
         return submission
 
-    async def delete_submission(self, submission_id: str, user_id: str) -> bool:
+    async def delete_submission(
+        self, submission_id: str, user_id: str, organization_id: str
+    ) -> bool:
         """Delete a submission (only if draft or pending)."""
-        submission = await self.get_submission(submission_id)
+        submission = await self.get_submission(submission_id, organization_id)
         if not submission:
             raise ValueError("Submission not found")
 
@@ -235,6 +251,7 @@ class TrainingSubmissionService:
         self,
         submission_id: str,
         reviewer_id: str,
+        organization_id: str,
         action: str,
         reviewer_notes: Optional[str] = None,
         override_hours: Optional[float] = None,
@@ -242,7 +259,7 @@ class TrainingSubmissionService:
         override_training_type: Optional[str] = None,
     ) -> TrainingSubmission:
         """Officer reviews a submission: approve, reject, or request revision."""
-        submission = await self.get_submission(submission_id)
+        submission = await self.get_submission(submission_id, organization_id)
         if not submission:
             raise ValueError("Submission not found")
 
@@ -256,6 +273,10 @@ class TrainingSubmissionService:
 
         if action == "approve":
             # Apply overrides
+            if override_hours is not None and override_hours <= 0:
+                raise ValueError("Override hours must be greater than zero")
+            if override_credit_hours is not None and override_credit_hours < 0:
+                raise ValueError("Override credit hours cannot be negative")
             if override_hours:
                 submission.hours_completed = override_hours
             if override_credit_hours is not None:
