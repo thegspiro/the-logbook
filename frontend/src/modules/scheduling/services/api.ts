@@ -41,8 +41,8 @@ import type {
   CheckTemplateItemUpdate,
   ShiftEquipmentCheckCreate,
   StandaloneEquipmentCheckCreate,
-  CoverageReport,
-  CallVolumeReport,
+  CoverageReportEntry,
+  CallVolumeReportEntry,
   AvailabilityRecord,
   ShiftSignupResponse,
   EligiblePositionsResponse,
@@ -91,6 +91,7 @@ export interface ShiftRecord {
   apparatus_name?: string;
   apparatus_unit_number?: string;
   apparatus_type?: string;
+  platoon?: string | null;
   positions?: PositionSlot[] | null;
   apparatus_positions?: PositionSlot[] | null;
   min_staffing?: number | null;
@@ -111,6 +112,31 @@ export interface ShiftRecord {
   updated_at: string;
   created_by?: string;
   attendees?: ShiftAttendanceRecord[];
+  platoon_roster?: PlatoonRosterEntry[];
+}
+
+export interface PlatoonRosterEntry {
+  user_id: string;
+  user_name: string;
+  status: 'assigned' | 'on_leave' | 'available';
+}
+
+export interface PlatoonMember {
+  user_id: string;
+  user_name: string;
+  rank?: string | null;
+}
+
+export interface PlatoonGroup {
+  // null = the "unassigned" bucket (members with no platoon).
+  platoon: string | null;
+  member_count: number;
+  members: PlatoonMember[];
+}
+
+export interface PlatoonOverview {
+  platoons_enabled: boolean;
+  groups: PlatoonGroup[];
 }
 
 export interface ShiftAttendanceRecord {
@@ -518,12 +544,12 @@ export const schedulingService = {
     const response = await api.get<MemberHoursReport>('/scheduling/reports/member-hours', { params });
     return response.data;
   },
-  async getCoverageReport(params?: ReportFilters): Promise<CoverageReport> {
-    const response = await api.get<CoverageReport>('/scheduling/reports/coverage', { params });
+  async getCoverageReport(params?: ReportFilters): Promise<CoverageReportEntry[]> {
+    const response = await api.get<CoverageReportEntry[]>('/scheduling/reports/coverage', { params });
     return response.data;
   },
-  async getCallVolumeReport(params?: ReportFilters): Promise<CallVolumeReport> {
-    const response = await api.get<CallVolumeReport>('/scheduling/reports/call-volume', { params });
+  async getCallVolumeReport(params?: ReportFilters): Promise<CallVolumeReportEntry[]> {
+    const response = await api.get<CallVolumeReportEntry[]>('/scheduling/reports/call-volume', { params });
     return response.data;
   },
   async getAvailability(params?: AvailabilityFilters): Promise<AvailabilityRecord[]> {
@@ -598,6 +624,32 @@ export const schedulingService = {
   },
   async updateEligibilitySettings(data: Partial<SchedulingEligibilitySettings>): Promise<SchedulingEligibilitySettings> {
     const response = await api.put<SchedulingEligibilitySettings>('/scheduling/eligibility/settings', data);
+    return response.data;
+  },
+
+  // --- Department feature toggles ---
+  async getFeatureSettings(): Promise<{ platoons_enabled: boolean }> {
+    const response = await api.get<{ platoons_enabled: boolean }>('/scheduling/settings');
+    return response.data;
+  },
+  async updateFeatureSettings(data: { platoons_enabled: boolean }): Promise<{ platoons_enabled: boolean }> {
+    const response = await api.put<{ platoons_enabled: boolean }>('/scheduling/settings', data);
+    return response.data;
+  },
+
+  // --- Platoon management ---
+  async getPlatoonOverview(): Promise<PlatoonOverview> {
+    const response = await api.get<PlatoonOverview>('/scheduling/platoons/overview');
+    return response.data;
+  },
+  async bulkAssignPlatoon(
+    userIds: string[],
+    platoon: string | null,
+  ): Promise<{ updated: number; platoon: string | null }> {
+    const response = await api.post<{ updated: number; platoon: string | null }>(
+      '/scheduling/platoons/bulk-assign',
+      { user_ids: userIds, platoon },
+    );
     return response.data;
   },
 

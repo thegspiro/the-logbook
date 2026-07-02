@@ -23,10 +23,13 @@ vi.mock('../../modules/scheduling/services/api', () => ({
 
 // Mock auth store
 vi.mock('../../stores/authStore', () => ({
-  useAuthStore: () => ({
-    checkPermission: () => false,
-    user: { id: 'user-1', first_name: 'Test', last_name: 'User' },
-  }),
+  useAuthStore: (selector?: (state: unknown) => unknown) => {
+    const state = {
+      checkPermission: () => false,
+      user: { id: 'user-1', first_name: 'Test', last_name: 'User', platoon: 'A' },
+    };
+    return selector ? selector(state) : state;
+  },
 }));
 
 vi.mock('../../hooks/useTimezone', () => ({

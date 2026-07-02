@@ -671,10 +671,11 @@ Automated monitoring for:
    - Account lockout after failed attempts
 
 2. **Multi-Factor Authentication (MFA)**
-   - TOTP (Time-based One-Time Password)
-   - QR code setup
-   - Backup codes
-   - Optional enforcement per user/role
+   - TOTP (Time-based One-Time Password) via any authenticator app
+   - QR code (`otpauth://`) enrollment, confirmed with a 6-digit code
+   - One-time recovery codes (shown once, stored hashed)
+   - Login challenge before session issuance for MFA-enabled accounts
+   - Self-enrollment; admins can require MFA org-wide (server-enforced)
 
 3. **OAuth 2.0 / SSO**
    - Microsoft Azure AD

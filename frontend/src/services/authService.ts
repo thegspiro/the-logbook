@@ -16,6 +16,84 @@ export const authService = {
   },
 
   /**
+   * Complete an MFA-gated login with a TOTP code or a recovery code.
+   */
+  async mfaLogin(payload: {
+    temp_token: string;
+    code?: string;
+    recovery_code?: string;
+  }): Promise<TokenResponse> {
+    const response = await api.post<TokenResponse>('/auth/mfa/login', payload);
+    return response.data;
+  },
+
+  /**
+   * Begin MFA enrollment: returns the secret + otpauth provisioning URI.
+   */
+  async setupMfa(): Promise<{ secret: string; qr_code_url: string }> {
+    const response = await api.post<{ secret: string; qr_code_url: string }>(
+      '/auth/mfa/setup',
+    );
+    return response.data;
+  },
+
+  /**
+   * Confirm enrollment with a code; returns one-time recovery codes.
+   */
+  async verifyMfaSetup(code: string): Promise<{ recovery_codes: string[] }> {
+    const response = await api.post<{ recovery_codes: string[] }>(
+      '/auth/mfa/verify-setup',
+      { code },
+    );
+    return response.data;
+  },
+
+  /** Disable MFA (requires a current authenticator code). */
+  async disableMfa(code: string): Promise<{ mfa_enabled: boolean }> {
+    const response = await api.post<{ mfa_enabled: boolean }>('/auth/mfa/disable', {
+      code,
+    });
+    return response.data;
+  },
+
+  /**
+   * Regenerate recovery codes (requires a current authenticator code).
+   * Returns a fresh one-time set; previous codes stop working.
+   */
+  async regenerateRecoveryCodes(code: string): Promise<{ recovery_codes: string[] }> {
+    const response = await api.post<{ recovery_codes: string[] }>(
+      '/auth/mfa/recovery-codes',
+      { code },
+    );
+    return response.data;
+  },
+
+  /** Current user's MFA status. */
+  async getMfaStatus(): Promise<{
+    mfa_enabled: boolean;
+    recovery_codes_remaining: number;
+  }> {
+    const response = await api.get<{
+      mfa_enabled: boolean;
+      recovery_codes_remaining: number;
+    }>('/auth/mfa/status');
+    return response.data;
+  },
+
+  /** Org-wide MFA requirement policy (admin). */
+  async getMfaPolicy(): Promise<{ mfa_required: boolean }> {
+    const response = await api.get<{ mfa_required: boolean }>('/auth/mfa/policy');
+    return response.data;
+  },
+
+  async setMfaPolicy(mfa_required: boolean): Promise<{ mfa_required: boolean }> {
+    const response = await api.put<{ mfa_required: boolean }>('/auth/mfa/policy', {
+      mfa_required,
+    });
+    return response.data;
+  },
+
+  /**
    * Register new user
    */
   async register(data: RegisterData): Promise<TokenResponse> {

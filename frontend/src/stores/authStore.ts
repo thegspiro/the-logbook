@@ -109,8 +109,14 @@ interface AuthState {
   loginAttempts: number;
   lockedUntil: number | null; // epoch ms
 
+  // MFA challenge state (set when login returns mfa_required)
+  mfaRequired: boolean;
+  mfaToken: string | null;
+
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
+  completeMfaLogin: (code?: string, recoveryCode?: string) => Promise<void>;
+  cancelMfa: () => void;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   loadUser: () => Promise<void>;
@@ -129,6 +135,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   error: null,
   loginAttempts: initialLockout.loginAttempts,
   lockedUntil: initialLockout.lockedUntil,
+  mfaRequired: false,
+  mfaToken: null,
 
   login: async (credentials: LoginCredentials) => {
     // Client-side lockout check (defense-in-depth; backend enforces the real limit)
@@ -149,6 +157,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const csrfBefore = getCsrfCookie();
 
       const loginResponse = await authService.login(credentials);
+
+      // MFA-enabled accounts get no session yet — surface the challenge so the
+      // login form can collect a second factor (completed via completeMfaLogin).
+      if (loginResponse?.mfa_required && loginResponse?.mfa_token) {
+        set({
+          isLoading: false,
+          mfaRequired: true,
+          mfaToken: loginResponse.mfa_token,
+          loginAttempts: 0,
+          lockedUntil: null,
+        });
+        saveLockoutState(0, null);
+        return;
+      }
 
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       // Only persist a lightweight session flag — never the actual tokens.
@@ -221,6 +243,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw Object.assign(new Error(appError.message), appError);
     }
   },
+
+  completeMfaLogin: async (code?: string, recoveryCode?: string) => {
+    const { mfaToken } = get();
+    if (!mfaToken) {
+      set({ error: 'Your sign-in session expired. Please log in again.', mfaRequired: false });
+      return;
+    }
+    set({ isLoading: true, error: null });
+    try {
+      const csrfBefore = getCsrfCookie();
+      const resp = await authService.mfaLogin({
+        temp_token: mfaToken,
+        ...(code ? { code } : {}),
+        ...(recoveryCode ? { recovery_code: recoveryCode } : {}),
+      });
+      localStorage.setItem('has_session', '1');
+      await waitForLoginCookies(csrfBefore);
+      markLoginComplete();
+      if (resp?.user) {
+        const normalizedUser: CurrentUser = {
+          ...resp.user,
+          positions: resp.user.positions ?? resp.user.roles ?? [],
+          rank: resp.user.rank ?? null,
+          membership_type: resp.user.membership_type ?? 'member',
+          must_change_password: resp.user.must_change_password ?? false,
+        };
+        set({ user: normalizedUser, isAuthenticated: true });
+      } else {
+        await get().loadUser();
+      }
+      set({ isLoading: false, mfaRequired: false, mfaToken: null });
+    } catch (err: unknown) {
+      const appError = toAppError(err);
+      set({ isLoading: false, error: getErrorMessage(err, 'Verification failed. Please try again.') });
+      throw Object.assign(new Error(appError.message), appError);
+    }
+  },
+
+  cancelMfa: () => set({ mfaRequired: false, mfaToken: null, error: null, isLoading: false }),
 
   register: async (data: RegisterData) => {
     set({ isLoading: true, error: null });

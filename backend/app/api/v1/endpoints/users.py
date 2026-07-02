@@ -51,6 +51,7 @@ from app.schemas.user import (
 )
 from app.services.organization_service import OrganizationService
 from app.services.user_service import UserService
+from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
 
@@ -235,6 +236,7 @@ async def create_member(
         # Department info
         rank=user_data.rank,
         station=user_data.station,
+        platoon=user_data.platoon,
         # Address
         address_street=user_data.address_street,
         address_city=user_data.address_city,
@@ -953,8 +955,9 @@ async def update_user_profile(
                 detail="A member with this membership number already exists",
             )
 
-    # Rank, station, and membership number changes restricted to leadership / secretary / membership coordinator
-    restricted_fields = {"rank", "station", "membership_number"}
+    # Rank, station, platoon, and membership number changes restricted to
+    # leadership / secretary / membership coordinator
+    restricted_fields = {"rank", "station", "platoon", "membership_number"}
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
         perm_result = await db.execute(
@@ -968,7 +971,7 @@ async def update_user_profile(
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, or membership number",
+                detail="Only leadership, the secretary, or the membership coordinator can update rank, station, platoon, or membership number",
             )
 
     # Handle emergency_contacts separately (needs serialization)
@@ -993,6 +996,7 @@ async def update_user_profile(
         "hire_date",
         "rank",
         "station",
+        "platoon",
         "address_street",
         "address_city",
         "address_state",
@@ -1221,6 +1225,102 @@ async def admin_reset_password(
     await db.commit()
 
     return {"message": f"Password has been reset for {target_username}"}
+
+
+@router.post(
+    "/{user_id}/reset-mfa",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(_rate_limit_admin_reset)],
+)
+async def admin_reset_mfa(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("users.create", "members.manage")),
+):
+    """
+    Reset (disable) a user's two-factor authentication (IT Lead / Admin only).
+
+    For members who have lost their authenticator device and exhausted their
+    recovery codes. Clears the MFA secret and recovery codes so the member can
+    re-enroll from their own Security settings. If the org requires MFA, the
+    member is forced back into enrollment on next login.
+
+    Admins cannot reset their own MFA here (they retain their recovery codes or
+    can disable it from their own Security settings).
+
+    Requires `users.create` or `members.manage` permission.
+
+    **Authentication required**
+    """
+    from app.models.user import Session as UserSession
+
+    if str(user_id) == str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use your own Security settings to manage your MFA",
+        )
+
+    result = await db.execute(
+        select(User)
+        .where(User.id == str(user_id))
+        .where(User.organization_id == str(current_user.organization_id))
+        .where(User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if not user.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This user does not have MFA enabled",
+        )
+
+    target_username = user.username
+
+    user.mfa_enabled = False
+    user.mfa_secret = None
+    user.mfa_backup_codes = None
+
+    # Revoke active sessions so the reset takes effect immediately (and the org
+    # MFA requirement, if any, re-challenges enrollment on next login).
+    sessions_result = await db.execute(
+        select(UserSession).where(UserSession.user_id == str(user_id))
+    )
+    for session in sessions_result.scalars().all():
+        await db.delete(session)
+
+    await log_audit_event(
+        db=db,
+        event_type="admin_mfa_reset",
+        event_category="user_management",
+        severity="warning",
+        event_data={
+            "target_user_id": str(user_id),
+            "target_username": target_username,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    await notify_security_event(
+        db,
+        user,
+        subject="Your two-factor authentication was reset",
+        message=(
+            "An administrator reset the two-factor authentication on your "
+            "account. You have been signed out. If your organization requires "
+            "MFA, you'll be asked to set it up again at your next login."
+        ),
+    )
+
+    await db.commit()
+
+    return {"message": f"MFA has been reset for {target_username}"}
 
 
 @router.get("/{user_id}/deletion-impact", response_model=DeletionImpactResponse)

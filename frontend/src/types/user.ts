@@ -20,6 +20,7 @@ export interface User {
   photo_url?: string | undefined;
   rank?: string | undefined;
   station?: string | undefined;
+  platoon?: string | undefined;
   status: UserStatus;
   membership_type?: string | undefined;
   compliance_exempt?: boolean | undefined;
@@ -157,6 +158,7 @@ export interface UserProfileUpdate {
   hire_date?: string | undefined;
   rank?: string | undefined;
   station?: string | undefined;
+  platoon?: string | undefined;
   address_street?: string | undefined;
   address_city?: string | undefined;
   address_state?: string | undefined;

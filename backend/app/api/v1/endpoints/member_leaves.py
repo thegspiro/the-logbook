@@ -18,6 +18,7 @@ DELETE /users/leaves-of-absence/{id}             - Deactivate a leave
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +33,7 @@ from app.core.database import get_db
 from app.core.utils import ensure_found
 from app.models.user import User
 from app.services.member_leave_service import MemberLeaveService
+from app.services.scheduling_service import SchedulingService
 
 router = APIRouter()
 
@@ -132,6 +134,24 @@ async def create_leave_of_absence(
         granted_by=str(current_user.id),
         exempt_from_training_waiver=data.exempt_from_training_waiver,
     )
+
+    # Keep the schedule representative: drop the member's existing shift
+    # assignments during the leave so those slots show as open for fill-in or
+    # hold-over. Best-effort — the leave itself is already committed.
+    try:
+        await SchedulingService(db).cancel_member_assignments_in_range(
+            current_user.organization_id,
+            data.user_id,
+            data.start_date,
+            data.end_date,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "Failed to cancel shift assignments for leave (user %s): %s",
+            data.user_id,
+            exc,
+        )
+
     return _to_response(leave)
 
 

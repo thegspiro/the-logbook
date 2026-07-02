@@ -614,6 +614,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                   const maxHeight = 128;
                   const passH = total > 0 ? (entry.passCount / total) * maxHeight : 0;
                   const failH = total > 0 ? (entry.failCount / total) * maxHeight : 0;
+                  const notCheckedH = total > 0 ? (entry.notCheckedCount / total) * maxHeight : 0;
                   return (
                     <div key={entry.period} className="flex-1 flex flex-col items-center gap-0.5">
                       <div className="flex flex-col-reverse w-full max-w-[32px]" style={{ height: maxHeight }}>
@@ -626,9 +627,16 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                         )}
                         {failH > 0 && (
                           <div
-                            className="bg-red-500 w-full"
+                            className="bg-red-500 rounded-t-sm w-full"
                             style={{ height: failH }}
                             title={`Fail: ${entry.failCount}`}
+                          />
+                        )}
+                        {notCheckedH > 0 && (
+                          <div
+                            className="bg-theme-text-muted/40 rounded-t-sm w-full"
+                            style={{ height: notCheckedH }}
+                            title={`Not checked: ${entry.notCheckedCount}`}
                           />
                         )}
                       </div>
@@ -645,6 +653,9 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="w-2.5 h-2.5 rounded-sm bg-red-500" /> Fail
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-theme-text-muted/40" /> Not checked
                 </span>
               </div>
             </div>

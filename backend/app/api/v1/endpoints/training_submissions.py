@@ -8,7 +8,12 @@ and self-report configuration management.
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
@@ -150,13 +155,19 @@ async def get_submission(
         "Submission",
     )
 
-    # Check access: own submission or has training.manage permission
-    if submission.submitted_by != current_user.id:
-        # Check if user has training.manage permission
-        # We rely on the endpoint-level check for officer endpoints,
-        # but for this one we do a manual check
-        if submission.organization_id != current_user.organization_id:
-            raise HTTPException(status_code=404, detail="Submission not found")
+    # Org boundary first (404 hides cross-org existence), then authorization:
+    # members may see only their own submission; officers (training.manage)
+    # may see any in their org. A same-org non-owner without the permission
+    # must be rejected — submissions can carry PHI.
+    if submission.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    if submission.submitted_by != current_user.id and not _has_permission(
+        "training.manage", _collect_user_permissions(current_user)
+    ):
+        raise HTTPException(
+            status_code=403, detail="Not authorized to view this submission"
+        )
 
     return submission
 

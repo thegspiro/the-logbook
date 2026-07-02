@@ -11,6 +11,7 @@ vi.mock('../services/api', () => ({
     getTemplates: (...args: unknown[]) => mockGetTemplates(...args) as unknown,
     getBasicApparatus: (...args: unknown[]) => mockGetBasicApparatus(...args) as unknown,
     getSummary: (...args: unknown[]) => mockGetSummary(...args) as unknown,
+    getFeatureSettings: () => Promise.resolve({ platoons_enabled: false }),
   },
 }));
 
@@ -38,9 +39,6 @@ describe('schedulingStore', () => {
       summary: null,
       summaryLoading: false,
       summaryError: null,
-      shifts: [],
-      shiftsLoading: false,
-      shiftsError: null,
     });
   });
 
@@ -202,24 +200,6 @@ describe('schedulingStore', () => {
       expect(mockGetUsers).not.toHaveBeenCalled();
       expect(mockGetTemplates).not.toHaveBeenCalled();
       expect(mockGetBasicApparatus).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('shift state helpers', () => {
-    it('should set shifts', () => {
-      const shifts = [{ id: 's1' }] as never[];
-      useSchedulingStore.getState().setShifts(shifts);
-      expect(useSchedulingStore.getState().shifts).toEqual(shifts);
-    });
-
-    it('should set loading state', () => {
-      useSchedulingStore.getState().setShiftsLoading(true);
-      expect(useSchedulingStore.getState().shiftsLoading).toBe(true);
-    });
-
-    it('should set error state', () => {
-      useSchedulingStore.getState().setShiftsError('Something broke');
-      expect(useSchedulingStore.getState().shiftsError).toBe('Something broke');
     });
   });
 });

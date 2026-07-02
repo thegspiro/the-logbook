@@ -36,7 +36,7 @@ import type {
 } from '../../types/training';
 import type { User } from '../../types/user';
 import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateCustom, getTodayLocalDate } from '../../utils/dateFormatting';
+import { formatDateCustom, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
 import {
   DEFAULT_SKILLS,
   DEFAULT_CALL_TYPE_OPTIONS,
@@ -294,18 +294,18 @@ export const ShiftReportsTab: React.FC = () => {
   useEffect(() => {
     if (viewMode !== 'create' || linkedShiftId) return;
     setLoadingShifts(true);
-    const today = new Date();
-    const twoWeeksAgo = new Date(today);
-    twoWeeksAgo.setDate(today.getDate() - 14);
+    const now = new Date();
+    const twoWeeksAgo = new Date(now);
+    twoWeeksAgo.setDate(now.getDate() - 14);
     schedulingService.getShifts({
-      start_date: twoWeeksAgo.toISOString().split('T')[0] ?? '',
-      end_date: today.toISOString().split('T')[0] ?? '',
+      start_date: toLocalDateString(twoWeeksAgo, tz),
+      end_date: getTodayLocalDate(tz),
       limit: 50,
     })
       .then(res => setShiftList(res.shifts))
       .catch(() => { /* shifts not critical */ })
       .finally(() => setLoadingShifts(false));
-  }, [viewMode, linkedShiftId]);
+  }, [viewMode, linkedShiftId, tz]);
 
   // Auto-save draft to localStorage when form changes
   useEffect(() => {

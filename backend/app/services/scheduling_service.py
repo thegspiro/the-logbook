@@ -739,6 +739,21 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    async def _user_in_org(self, user_id: UUID, organization_id: UUID) -> bool:
+        """Return True if user_id belongs to the given organization.
+
+        Used to reject caller-supplied user IDs (attendance, assignments)
+        that reference members of a different organization (cross-tenant write).
+        """
+        if not user_id:
+            return False
+        result = await self.db.execute(
+            select(User.id)
+            .where(User.id == str(user_id))
+            .where(User.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none() is not None
+
     async def get_active_shift_for_apparatus(
         self,
         apparatus_id: str,
@@ -948,6 +963,12 @@ class SchedulingService:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return None, "Shift not found"
+
+            att_user_id = attendance_data.get("user_id")
+            if att_user_id and not await self._user_in_org(
+                att_user_id, organization_id
+            ):
+                return None, "User not found"
 
             attendance = ShiftAttendance(shift_id=shift_id, **attendance_data)
 
@@ -1513,59 +1534,174 @@ class SchedulingService:
                         night_tmpl_times = (nh, nm, neh, nem)
                         night_tmpl_color = nt.color
 
-            # Determine which dates get a shift and what type they are.
-            # shift_type_map tracks the cycle entry ("on"/"day"/"night")
-            # for each date so we can pick the right template later.
-            shift_dates: list[date] = []
-            shift_type_map: dict[date, str] = {}
-            current = start_date
-            while current <= end_date:
-                should_create = False
-                entry_type = "on"
+            # ----------------------------------------------------------------
+            # Determine occurrences: which (date, shift type) combinations get
+            # a shift, and which members staff each one.
+            #
+            # Platoon patterns may define multiple platoons in
+            # schedule_config["platoons"] (e.g. ["A", "B", "C"]). Each platoon
+            # runs the SAME base cycle but offset by a different number of days
+            # so exactly one platoon is on duty per day — the standard
+            # fire-service A/B/C rotation (24/48, Kelly, 48/96, ...). Members
+            # are assigned to a platoon via assigned_members[].platoon, and
+            # only that platoon's members staff its on-days.
+            #
+            # When no platoons are configured (or for daily/weekly/custom
+            # patterns) a single track at offset 0 staffs every on-day with
+            # all assigned members — the original behavior.
+            # ----------------------------------------------------------------
+            assigned_members = pattern.assigned_members or []
 
+            # Drop any member IDs that don't belong to this org (stale entries
+            # from removed/transferred users) so generation never creates a
+            # cross-org or dangling assignment.
+            if assigned_members:
+                member_ids = {
+                    m.get("user_id") for m in assigned_members if m.get("user_id")
+                }
+                if member_ids:
+                    valid_result = await self.db.execute(
+                        select(User.id)
+                        .where(User.id.in_(member_ids))
+                        .where(User.organization_id == str(organization_id))
+                    )
+                    valid_ids = {row[0] for row in valid_result.all()}
+                    assigned_members = [
+                        m for m in assigned_members if m.get("user_id") in valid_ids
+                    ]
+
+            def _cycle_length() -> int:
+                if cycle_pattern_cfg and len(cycle_pattern_cfg) > 0:
+                    return len(cycle_pattern_cfg)
+                return (pattern.days_on or 1) + (pattern.days_off or 1)
+
+            def _occurrence(current: date, offset: int) -> tuple[bool, str]:
+                """Return (has_shift, entry_type) for a date.
+
+                ``offset`` shifts the platoon cycle by N days and only applies
+                to PLATOON patterns.
+                """
                 if pattern.pattern_type == PatternType.DAILY:
-                    should_create = True
-
-                elif pattern.pattern_type == PatternType.WEEKLY:
+                    return True, "on"
+                if pattern.pattern_type == PatternType.WEEKLY:
                     weekdays = config.get("weekdays", [])
                     # Frontend stores weekdays in JS convention
-                    # (0=Sun, 1=Mon, …, 6=Sat).
-                    # Python's date.weekday() returns 0=Mon, …, 6=Sun.
-                    # Convert Python weekday → JS weekday before comparing.
+                    # (0=Sun, …, 6=Sat); convert from Python's 0=Mon.
                     js_weekday = (current.weekday() + 1) % 7
-                    if js_weekday in weekdays:
-                        should_create = True
-
-                elif pattern.pattern_type == PatternType.PLATOON:
+                    return (js_weekday in weekdays), "on"
+                if pattern.pattern_type == PatternType.PLATOON:
+                    days_since = (current - pattern.start_date).days - offset
                     if cycle_pattern_cfg and len(cycle_pattern_cfg) > 0:
-                        # Advanced cycle: array of "on"/"off"/"day"/"night"
-                        cycle_length = len(cycle_pattern_cfg)
-                        days_since_start = (current - pattern.start_date).days
-                        position_in_cycle = days_since_start % cycle_length
-                        entry = cycle_pattern_cfg[position_in_cycle]
+                        entry = cycle_pattern_cfg[days_since % len(cycle_pattern_cfg)]
                         if isinstance(entry, str) and entry != "off":
-                            should_create = True
-                            entry_type = entry
-                    else:
-                        # Simple on/off cycle
-                        days_on = pattern.days_on or 1
-                        days_off = pattern.days_off or 1
-                        cycle_length = days_on + days_off
-                        days_since_start = (current - pattern.start_date).days
-                        position_in_cycle = days_since_start % cycle_length
-                        if position_in_cycle < days_on:
-                            should_create = True
-
-                elif pattern.pattern_type == PatternType.CUSTOM:
+                            return True, entry
+                        return False, "on"
+                    days_on = pattern.days_on or 1
+                    days_off = pattern.days_off or 1
+                    return ((days_since % (days_on + days_off)) < days_on), "on"
+                if pattern.pattern_type == PatternType.CUSTOM:
                     custom_dates = config.get("dates", [])
-                    if current.isoformat() in custom_dates:
-                        should_create = True
+                    return (current.isoformat() in custom_dates), "on"
+                return False, "on"
 
-                if should_create:
-                    shift_dates.append(current)
-                    shift_type_map[current] = entry_type
+            # Build the list of tracks: (offset_days, members for that track).
+            platoons_cfg = config.get("platoons") if isinstance(config, dict) else None
+            if not isinstance(platoons_cfg, list) or not platoons_cfg:
+                platoons_cfg = None
 
-                current += timedelta(days=1)
+            # Live platoon membership is the source of truth: members are
+            # assigned to a platoon on their profile (User.platoon), pulled
+            # fresh at generation time. Explicit per-pattern crews in
+            # assigned_members still override a platoon when present.
+            live_platoon_members: dict[str, list] = {}
+            if pattern.pattern_type == PatternType.PLATOON and platoons_cfg:
+                live_result = await self.db.execute(
+                    select(User.id, User.platoon).where(
+                        User.organization_id == str(organization_id),
+                        User.platoon.isnot(None),
+                        User.status == "active",
+                    )
+                )
+                for uid, platoon_name in live_result.all():
+                    live_platoon_members.setdefault(platoon_name, []).append(
+                        {
+                            "user_id": uid,
+                            "position": "firefighter",
+                            "platoon": platoon_name,
+                        }
+                    )
+
+            def _members_for(platoon_name: str) -> list:
+                explicit = [
+                    m
+                    for m in assigned_members
+                    if (m.get("platoon") or None) == platoon_name
+                ]
+                if explicit:
+                    return explicit
+                return live_platoon_members.get(platoon_name, [])
+
+            tracks: list[tuple[int, Optional[str], list]] = []
+            if pattern.pattern_type == PatternType.PLATOON and platoons_cfg:
+                cycle_len = _cycle_length()
+                num_platoons = len(platoons_cfg)
+                raw_offsets = config.get("platoon_offsets")
+                offsets_cfg = raw_offsets if isinstance(raw_offsets, dict) else {}
+                for idx, platoon_name in enumerate(platoons_cfg):
+                    raw_offset = offsets_cfg.get(platoon_name)
+                    if isinstance(raw_offset, int):
+                        offset = raw_offset
+                    else:
+                        # Evenly space platoons across the cycle so exactly one
+                        # is on duty per day (offset_i = i * cycle / count).
+                        offset = round(idx * cycle_len / num_platoons)
+                    tracks.append((offset, platoon_name, _members_for(platoon_name)))
+            else:
+                tracks.append((0, None, assigned_members))
+
+            # Members on approved time-off or active leave are skipped on those
+            # dates, so the generated roster reflects who can actually work and
+            # the freed slot stays open for fill-in / hold-over.
+            candidate_ids = list(
+                {
+                    m.get("user_id")
+                    for _offset, _platoon, track_members in tracks
+                    for m in track_members
+                    if m.get("user_id")
+                }
+            )
+            unavailable_by_user = await self._get_unavailable_dates_by_user(
+                organization_id, candidate_ids, start_date, end_date
+            )
+
+            # occurrences[(date, entry_type)] -> {"platoon", "members"}
+            occurrences: dict[tuple[date, str], dict] = {}
+            for offset, platoon_name, track_members in tracks:
+                current = start_date
+                while current <= end_date:
+                    has_shift, entry_type = _occurrence(current, offset)
+                    if has_shift:
+                        iso = current.isoformat()
+                        occ = occurrences.setdefault(
+                            (current, entry_type),
+                            {"platoon": platoon_name, "members": []},
+                        )
+                        # If two platoons collide on the same slot (only
+                        # possible with misconfigured platoon_offsets), don't
+                        # mislabel the shift with one platoon while staffing it
+                        # from both — leave it untagged.
+                        if occ["platoon"] != platoon_name:
+                            occ["platoon"] = None
+                        for member in track_members:
+                            uid = member.get("user_id")
+                            if not uid:
+                                continue
+                            if iso in unavailable_by_user.get(uid, ()):
+                                continue
+                            occ["members"].append(
+                                (uid, member.get("position", "firefighter"))
+                            )
+                    current += timedelta(days=1)
 
             # Helper: resolve template times and color for a given shift type
             def _resolve_times(stype: str) -> tuple:
@@ -1576,34 +1712,34 @@ class SchedulingService:
                     return (*day_tmpl_times, day_tmpl_color)
                 return (start_hour, start_minute, end_hour, end_minute, template.color)
 
-            # Duplicate guard: skip dates that already have a shift starting
-            # at the same time (allows multiple shifts per day, e.g. day + night)
-            if shift_dates:
+            # Duplicate guard: skip occurrences that already have a shift
+            # starting at the same time (allows multiple shifts per day, e.g.
+            # day + night). Tracks created within this run are added to the set
+            # too, so two tracks resolving to the same start time don't produce
+            # duplicate shifts.
+            if occurrences:
+                occ_dates = list({d for (d, _etype) in occurrences})
                 existing_result = await self.db.execute(
                     select(Shift.shift_date, Shift.start_time)
                     .where(Shift.organization_id == str(organization_id))
-                    .where(Shift.shift_date.in_(shift_dates))
+                    .where(Shift.shift_date.in_(occ_dates))
                 )
                 existing_shifts = {
                     (row[0], row[1].hour, row[1].minute)
                     for row in existing_result.all()
                 }
-                filtered_dates: list[date] = []
-                for d in shift_dates:
-                    sh, sm, _eh, _em, _c = _resolve_times(shift_type_map.get(d, "on"))
-                    # Convert local template time to UTC for comparison
-                    # with existing DB records (stored as UTC).
-                    local_dt = datetime(d.year, d.month, d.day, sh, sm, tzinfo=org_tz)
-                    utc_dt = local_dt.astimezone(timezone.utc)
-                    if (d, utc_dt.hour, utc_dt.minute) not in existing_shifts:
-                        filtered_dates.append(d)
-                shift_dates = filtered_dates
+            else:
+                existing_shifts = set()
 
-            # Create shifts for each date
+            # Create shifts for each occurrence (date order, day before night)
             created_shifts = []
-            for shift_date_val in shift_dates:
+            for (shift_date_val, entry_type), occ in sorted(
+                occurrences.items(), key=lambda kv: (kv[0][0], kv[0][1])
+            ):
+                members = occ["members"]
+                shift_platoon = occ["platoon"]
                 s_hour, s_minute, e_hour, e_minute, shift_color = _resolve_times(
-                    shift_type_map.get(shift_date_val, "on")
+                    entry_type
                 )
                 # Build datetimes in the org's local timezone, then
                 # convert to UTC for storage so the frontend's
@@ -1617,6 +1753,10 @@ class SchedulingService:
                     tzinfo=org_tz,
                 )
                 shift_start = shift_start_local.astimezone(timezone.utc)
+                start_key = (shift_date_val, shift_start.hour, shift_start.minute)
+                if start_key in existing_shifts:
+                    continue
+                existing_shifts.add(start_key)
                 shift_end_local = datetime(
                     shift_date_val.year,
                     shift_date_val.month,
@@ -1636,6 +1776,7 @@ class SchedulingService:
                     start_time=shift_start,
                     end_time=shift_end,
                     apparatus_id=getattr(template, "apparatus_id", None),
+                    platoon=shift_platoon,
                     color=shift_color,
                     positions=self._resolve_template_positions(
                         getattr(template, "positions", None)
@@ -1646,19 +1787,18 @@ class SchedulingService:
                 self.db.add(shift)
                 await self.db.flush()  # Get the shift ID without committing
 
-                # Auto-create assignments for assigned members (skip duplicates)
-                assigned_members = pattern.assigned_members or []
+                # Auto-create assignments for this occurrence's members
+                # (skip duplicate users on the same shift).
                 seen_users: set[str] = set()
-                for member in assigned_members:
-                    member_user_id = member.get("user_id")
-                    if not member_user_id or member_user_id in seen_users:
+                for member_user_id, position in members:
+                    if member_user_id in seen_users:
                         continue
                     seen_users.add(member_user_id)
                     assignment = ShiftAssignment(
                         organization_id=organization_id,
                         shift_id=shift.id,
                         user_id=member_user_id,
-                        position=member.get("position", "firefighter"),
+                        position=position,
                         assignment_status=AssignmentStatus.ASSIGNED,
                         assigned_by=created_by,
                     )
@@ -1695,6 +1835,9 @@ class SchedulingService:
                 return None, "Shift not found"
 
             user_id = assignment_data.get("user_id")
+
+            if user_id and not await self._user_in_org(user_id, organization_id):
+                return None, "User not found"
 
             # Prevent duplicate assignment to the same shift
             if user_id:
@@ -1945,19 +2088,20 @@ class SchedulingService:
             return False, str(e)
 
     async def confirm_assignment(
-        self, assignment_id: UUID, user_id: UUID, organization_id: Optional[UUID] = None
+        self, assignment_id: UUID, user_id: UUID, organization_id: UUID
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
-        """Confirm a shift assignment (by the assigned user)"""
+        """Confirm a shift assignment (by the assigned user).
+
+        organization_id is required and always filtered so a confirmation can
+        never cross tenants even if the caller passes a foreign assignment id.
+        """
         try:
             query = (
                 select(ShiftAssignment)
                 .where(ShiftAssignment.id == str(assignment_id))
                 .where(ShiftAssignment.user_id == str(user_id))
+                .where(ShiftAssignment.organization_id == str(organization_id))
             )
-            if organization_id:
-                query = query.where(
-                    ShiftAssignment.organization_id == str(organization_id)
-                )
             result = await self.db.execute(query)
             assignment = result.scalar_one_or_none()
             if not assignment:
@@ -2384,8 +2528,50 @@ class SchedulingService:
     async def create_swap_request(
         self, organization_id: UUID, requesting_user_id: UUID, swap_data: Dict[str, Any]
     ) -> Tuple[Optional[ShiftSwapRequest], Optional[str]]:
-        """Create a new shift swap request"""
+        """Create a new shift swap request.
+
+        The caller-supplied shift/user IDs are untrusted, so each is validated
+        against the caller's organization before persisting. Without this a
+        member could reference shifts they are not on, or IDs from another
+        organization, and have them enter the swap review queue (IDOR).
+        """
         try:
+            offering_shift_id = swap_data.get("offering_shift_id")
+            requesting_shift_id = swap_data.get("requesting_shift_id")
+            target_user_id = swap_data.get("target_user_id")
+
+            # The offering shift must exist in the caller's org and the
+            # requester must actually hold an assignment on it.
+            offering_shift = await self.get_shift_by_id(
+                offering_shift_id, organization_id
+            )
+            if not offering_shift:
+                return None, "Offering shift not found"
+
+            own_assignment = await self.db.execute(
+                select(ShiftAssignment.id)
+                .where(ShiftAssignment.shift_id == str(offering_shift_id))
+                .where(ShiftAssignment.user_id == str(requesting_user_id))
+                .where(ShiftAssignment.organization_id == str(organization_id))
+            )
+            if own_assignment.scalar_one_or_none() is None:
+                return None, "You are not assigned to the offering shift"
+
+            # Optional targets must also be in the caller's org.
+            if requesting_shift_id and not await self.get_shift_by_id(
+                requesting_shift_id, organization_id
+            ):
+                return None, "Requested shift not found"
+
+            if target_user_id:
+                target_user = await self.db.execute(
+                    select(User.id)
+                    .where(User.id == str(target_user_id))
+                    .where(User.organization_id == str(organization_id))
+                )
+                if target_user.scalar_one_or_none() is None:
+                    return None, "Target user not found"
+
             swap_request = ShiftSwapRequest(
                 organization_id=organization_id,
                 requesting_user_id=requesting_user_id,
@@ -2507,7 +2693,31 @@ class SchedulingService:
                     req_assignment.user_id = swap_request.target_user_id
                     target_assign.user_id = swap_request.requesting_user_id
                 elif req_assignment and swap_request.requesting_shift_id:
-                    # Move requesting user to the new shift
+                    # Move requesting user to the new shift. Guard against an
+                    # existing active assignment on the target shift, which
+                    # would otherwise violate UniqueConstraint(shift_id,
+                    # user_id) and surface as a raw DB error.
+                    dup_result = await self.db.execute(
+                        select(ShiftAssignment.id)
+                        .where(
+                            ShiftAssignment.shift_id == swap_request.requesting_shift_id
+                        )
+                        .where(
+                            ShiftAssignment.user_id == swap_request.requesting_user_id
+                        )
+                        .where(ShiftAssignment.organization_id == str(organization_id))
+                        .where(
+                            ShiftAssignment.assignment_status.notin_(
+                                self.INACTIVE_ASSIGNMENT_STATUSES
+                            )
+                        )
+                    )
+                    if dup_result.scalar_one_or_none():
+                        await self.db.rollback()
+                        return (
+                            None,
+                            "Member is already assigned to the requested shift",
+                        )
                     req_assignment.shift_id = swap_request.requesting_shift_id
 
             await self.db.commit()
@@ -2750,6 +2960,174 @@ class SchedulingService:
 
         return unavailable
 
+    async def _get_unavailable_dates_by_user(
+        self,
+        organization_id: UUID,
+        user_ids: List[str],
+        start_date: date,
+        end_date: date,
+    ) -> Dict[str, set]:
+        """Return ``{user_id: {iso_date, ...}}`` of dates each user cannot work
+        within the range, combining approved time-off and active leaves of
+        absence.
+
+        This is the single source of "who is unavailable when", used both by
+        the availability report and by shift generation so a member on leave or
+        approved time-off is never auto-assigned — keeping generated platoon
+        rosters representative of who can actually work.
+        """
+        user_unavailable: Dict[str, set] = {}
+        if not user_ids:
+            return user_unavailable
+
+        timeoff_result = await self.db.execute(
+            select(ShiftTimeOff).where(
+                ShiftTimeOff.organization_id == str(organization_id),
+                ShiftTimeOff.status == TimeOffStatus.APPROVED,
+                ShiftTimeOff.start_date <= end_date,
+                ShiftTimeOff.end_date >= start_date,
+                ShiftTimeOff.user_id.in_(user_ids),
+            )
+        )
+        for rec in timeoff_result.scalars().all():
+            bucket = user_unavailable.setdefault(str(rec.user_id), set())
+            d = max(rec.start_date, start_date)
+            end_d = min(rec.end_date, end_date)
+            while d <= end_d:
+                bucket.add(d.isoformat())
+                d += timedelta(days=1)
+
+        leave_result = await self.db.execute(
+            select(MemberLeaveOfAbsence).where(
+                MemberLeaveOfAbsence.organization_id == str(organization_id),
+                MemberLeaveOfAbsence.active == True,  # noqa: E712
+                MemberLeaveOfAbsence.start_date <= end_date,
+                or_(
+                    MemberLeaveOfAbsence.end_date >= start_date,
+                    MemberLeaveOfAbsence.end_date.is_(None),
+                ),
+                MemberLeaveOfAbsence.user_id.in_(user_ids),
+            )
+        )
+        for leave in leave_result.scalars().all():
+            bucket = user_unavailable.setdefault(str(leave.user_id), set())
+            d = max(leave.start_date, start_date)
+            end_d = min(leave.end_date, end_date) if leave.end_date else end_date
+            while d <= end_d:
+                bucket.add(d.isoformat())
+                d += timedelta(days=1)
+
+        return user_unavailable
+
+    async def get_platoon_roster_for_shift(self, shift: Shift) -> List[Dict]:
+        """Return the duty-platoon roster for a shift.
+
+        For each active member of the shift's platoon, reports whether they are
+        ``assigned`` to this shift, ``on_leave`` (approved time-off / active
+        leave on the shift date), or ``available`` (in the platoon but not
+        assigned — a candidate to fill in or be held over). Returns an empty
+        list for shifts not tied to a platoon.
+        """
+        if not shift.platoon:
+            return []
+
+        org_id = shift.organization_id
+
+        # Active members of this platoon.
+        member_result = await self.db.execute(
+            select(User.id, User.first_name, User.last_name, User.email).where(
+                User.organization_id == str(org_id),
+                User.platoon == shift.platoon,
+                User.status == "active",
+            )
+        )
+        members = member_result.all()
+        if not members:
+            return []
+
+        member_ids = [str(m.id) for m in members]
+
+        # Who is actively assigned to this shift.
+        assigned_result = await self.db.execute(
+            select(ShiftAssignment.user_id).where(
+                ShiftAssignment.shift_id == str(shift.id),
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                ),
+            )
+        )
+        assigned_ids = {str(uid) for (uid,) in assigned_result.all()}
+
+        # Who is unavailable on the shift date.
+        unavailable = await self._get_unavailable_dates_by_user(
+            org_id, member_ids, shift.shift_date, shift.shift_date
+        )
+        iso = shift.shift_date.isoformat()
+
+        roster = []
+        for m in members:
+            uid = str(m.id)
+            if uid in assigned_ids:
+                status = "assigned"
+            elif iso in unavailable.get(uid, ()):
+                status = "on_leave"
+            else:
+                status = "available"
+            name = f"{m.first_name or ''} {m.last_name or ''}".strip()
+            roster.append(
+                {
+                    "user_id": uid,
+                    "user_name": name or m.email or uid,
+                    "status": status,
+                }
+            )
+        # Surface assigned first, then available, then on-leave; alpha within.
+        order = {"assigned": 0, "available": 1, "on_leave": 2}
+        roster.sort(key=lambda r: (order.get(r["status"], 3), r["user_name"]))
+        return roster
+
+    async def cancel_member_assignments_in_range(
+        self,
+        organization_id: UUID,
+        user_id: str,
+        start_date: date,
+        end_date: Optional[date] = None,
+    ) -> int:
+        """Cancel a member's active shift assignments from ``start_date``
+        onward (through ``end_date`` if given), never touching shifts before
+        today so historical/attended shifts are preserved.
+
+        Called when a member is placed on leave so their generated shifts free
+        up as open spots for fill-in or hold-over. Commits when it changes
+        anything. Returns the number of assignments cancelled.
+        """
+        effective_start = max(start_date, date.today())
+        if end_date is not None and end_date < effective_start:
+            return 0
+
+        query = (
+            select(ShiftAssignment)
+            .join(Shift, ShiftAssignment.shift_id == Shift.id)
+            .where(ShiftAssignment.user_id == str(user_id))
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.shift_date >= effective_start)
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                )
+            )
+        )
+        if end_date is not None:
+            query = query.where(Shift.shift_date <= end_date)
+
+        result = await self.db.execute(query)
+        conflicting = result.scalars().all()
+        for assignment in conflicting:
+            assignment.assignment_status = AssignmentStatus.CANCELLED
+        if conflicting:
+            await self.db.commit()
+        return len(conflicting)
+
     async def get_availability_summary(
         self,
         organization_id: UUID,
@@ -2808,52 +3186,9 @@ class SchedulingService:
             str(row.user_id): row.cnt for row in assign_result.all()
         }
 
-        # Approved time-off per user
-        timeoff_result = await self.db.execute(
-            select(ShiftTimeOff).where(
-                ShiftTimeOff.organization_id == str(organization_id),
-                ShiftTimeOff.status == TimeOffStatus.APPROVED,
-                ShiftTimeOff.start_date <= end_date,
-                ShiftTimeOff.end_date >= start_date,
-                ShiftTimeOff.user_id.in_(user_ids),
-            )
+        user_unavailable = await self._get_unavailable_dates_by_user(
+            organization_id, user_ids, start_date, end_date
         )
-        timeoff_records = timeoff_result.scalars().all()
-
-        # Build per-user unavailable date sets
-        user_unavailable: Dict[str, set] = {}
-        for rec in timeoff_records:
-            uid = str(rec.user_id)
-            if uid not in user_unavailable:
-                user_unavailable[uid] = set()
-            d = max(rec.start_date, start_date)
-            end_d = min(rec.end_date, end_date)
-            while d <= end_d:
-                user_unavailable[uid].add(d.isoformat())
-                d += timedelta(days=1)
-
-        # Also include leave-of-absence dates
-        leave_result = await self.db.execute(
-            select(MemberLeaveOfAbsence).where(
-                MemberLeaveOfAbsence.organization_id == str(organization_id),
-                MemberLeaveOfAbsence.active == True,  # noqa: E712
-                MemberLeaveOfAbsence.start_date <= end_date,
-                or_(
-                    MemberLeaveOfAbsence.end_date >= start_date,
-                    MemberLeaveOfAbsence.end_date.is_(None),
-                ),
-                MemberLeaveOfAbsence.user_id.in_(user_ids),
-            )
-        )
-        for leave in leave_result.scalars().all():
-            uid = str(leave.user_id)
-            if uid not in user_unavailable:
-                user_unavailable[uid] = set()
-            d = max(leave.start_date, start_date)
-            end_d = min(leave.end_date, end_date) if leave.end_date else end_date
-            while d <= end_d:
-                user_unavailable[uid].add(d.isoformat())
-                d += timedelta(days=1)
 
         summaries = []
         for u in users:
