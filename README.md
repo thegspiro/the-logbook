@@ -52,6 +52,8 @@ Unified location management that serves as the single source of truth for rooms,
 - Template system with duplication and versioning
 - Prerequisite programs and concurrent enrollment controls
 - Training session creation with approval workflow and location dropdown
+- Member self-reported training submissions with an officer review/approval queue
+- Percentage **or** point-based scoring on training records (e.g. 145/150)
 - Check-in/check-out tracking integrated with events
 - Milestone system with conditional reminders
 - Officer dashboard, requirements management, and external training integration pages

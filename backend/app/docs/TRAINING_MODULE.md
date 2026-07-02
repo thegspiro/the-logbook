@@ -120,7 +120,7 @@ Individual member training history.
 - `expiration_date`: When certification expires
 - `hours_completed`: Hours completed
 - `status`: scheduled | in_progress | completed | cancelled | failed
-- `score`: Test score (optional)
+- `score`: Test score (optional). May be a **percentage or a raw point total** (e.g. 145/150) — the schema enforces `ge=0` only, no upper bound (2026-07-02). `passing_score` follows the same unit
 - `passed`: Pass/fail status
 - `location_id`: FK to `locations` table (optional) — references a wizard-created location. When set, provides consistent location data across the app. The existing `location` text field is preserved as a fallback for "Other Location" or legacy records.
 - `location`: Free-text location string (fallback for non-standard locations)
@@ -995,6 +995,10 @@ Adds to `training_requirements`:
 - `20260503_0001_add_include_current_month_to_compliance_config.py` — Adds `include_current_month` (Bool NOT NULL, default `true`) to `compliance_configs`
 - `20260503_0002_add_include_current_month_to_training_requirements.py` — Adds nullable `include_current_month` override to `training_requirements` (NULL inherits the org default)
 
+### Actor FK On-Delete Hardening (2026-07-02)
+
+- `20260702_0001_training_actor_fks_set_null.py` — Switches all 28 audit/actor FKs across the training tables (`created_by`, `updated_by`, `approved_by`, `reviewed_by`, `verified_by`, `granted_by`, `evaluated_by`, `evaluator_id`, `last_evaluator_id`, etc.) from bare `ForeignKey("users.id")` (MySQL default RESTRICT, which blocked user deletion) to `ON DELETE SET NULL`, and relaxes `skill_checkoffs.evaluator_id` from NOT NULL. Existing MySQL auto-named constraints are discovered via the inspector at run time and recreated under deterministic names
+
 See `docs/ALEMBIC_MIGRATIONS.md` for the full revision chain (these branch off
 `20260411_0200`).
 
@@ -1325,9 +1329,15 @@ POST   /api/v1/training/external/providers/{id}/imports/{import_id}/import
 POST   /api/v1/training/external/providers/{id}/imports/bulk
 ```
 
+### Security (SSRF & Import Tenancy) *(2026-07-02)*
+
+- **`api_base_url` is SSRF-validated.** Because the sync service issues server-side requests to the provider URL, `create_provider`/`update_provider` validate it with `validate_integration_url()` (`app/utils/url_validator.py`) — HTTPS-only, and it rejects hosts resolving to private/loopback/link-local ranges or cloud-metadata endpoints (e.g. `169.254.169.254`). `ExternalTrainingSyncService` re-validates before every network call (`test_connection`, record fetch, category fetch) so DNS re-binding between save and fetch can't bypass the check.
+- **Import target users are org-validated.** `import_single_record` and `bulk_import_records` verify the resolved `user_id` (from the request body or a stored user mapping) belongs to the caller's organization before creating a `TrainingRecord` — a forged or cross-org user ID cannot receive a forged completion record.
+- **Upstream errors are sanitized.** Connection-test and category-sync failures pass through `safe_error_detail()` rather than returning raw exception/response text to the client.
+
 ### Sync Workflow
 
-1. **Configure Provider**: Admin creates provider with API credentials
+1. **Configure Provider**: Admin creates provider with API credentials (URL validated for SSRF)
 2. **Test Connection**: System verifies API connectivity
 3. **Trigger Sync**: Manual or automatic sync fetches records
 4. **Process Records**: Each record is normalized and stored as ExternalTrainingImport
@@ -1417,21 +1427,44 @@ Indexes for performance:
 - `training.view`: View own progress
 - `training.update`: Update own progress (if self-reporting enabled)
 
+### Multi-Tenant Isolation *(reviewed 2026-07-02)*
+
+Every training record is scoped to an `organization_id`, and that scope is the
+tenant boundary. The 2026-07-02 review enforced it at the **service layer** for
+all by-ID mutations so it can't be forgotten in an endpoint:
+
+- `TrainingSubmissionService.get_submission(submission_id, organization_id)` filters by org; every mutation path (review/update/delete) funnels through it. Do not add an unscoped variant.
+- Training approval (`GET`/`POST /training/sessions/approve/{token}`) requires `training.manage` **and** an org-matched token lookup — the token is not a standalone authorization boundary.
+- External-import and enrollment paths validate the target `user_id` against the caller's organization before writing (`_verify_user_in_org`, `enroll_member`).
+- xAPI actor-email lookup is org-scoped.
+
+When adding a training endpoint that fetches or mutates a record by ID, scope
+the query by `organization_id` in the **service method**, not just the handler.
+
 ### Data Validation
 
 All inputs validated with Pydantic schemas:
 - Required fields enforced
 - Type checking automatic
-- Range validation (e.g., `ge=0` for hours)
+- Range validation (e.g., `ge=0` for hours; `score` has no upper cap — percentage or points)
 - Custom validators for business rules
+- **Enum string fields** (`training_type`, `status`, `frequency`) are validated and lowercased against the model enums via `validate_enum_value` (`app/schemas/enum_validation.py`) — an invalid value returns `422`, not a `500` at flush (2026-07-02)
 
-### SQL Injection Prevention
+### Injection Prevention
 
-Using SQLAlchemy ORM:
-- Parameterized queries automatic
-- No raw SQL execution
-- Safe from injection attacks
+- **SQL**: SQLAlchemy ORM with parameterized queries only; no raw SQL execution.
+- **CSV formula injection**: report exports write through `SafeCsvWriter` (`app/utils/csv_export.py`), which prefixes cells beginning with `= + - @` (or tab/CR) so attacker-influenceable free-text can't execute when the export is opened in a spreadsheet (2026-07-02).
+- **SSRF**: external-provider URLs are validated with `validate_integration_url()` — see "External Training Integration → Security".
+
+### Actor / Audit Foreign Keys
+
+Audit references (`created_by`, `updated_by`, `approved_by`, `reviewed_by`,
+`verified_by`, `evaluated_by`, `evaluator_id`, etc.) use
+`ForeignKey("users.id", ondelete="SET NULL")` so a user can be deleted without
+being blocked by RESTRICT (MySQL error 1451); the historical record is kept and
+the actor link is cleared. Every such column is `nullable=True` (CLAUDE.md
+pitfall #2). See migration `20260702_0001`.
 
 ---
 
-*Last Updated: May 29, 2026*
+*Last Updated: July 2, 2026*
