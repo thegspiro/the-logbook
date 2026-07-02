@@ -959,6 +959,56 @@ Organizations may pursue:
 - HITRUST CSF
 - PCI DSS (if processing payments)
 
+## Recent Security Hardening (2026-05 — 2026-06)
+
+### IDOR (Insecure Direct Object Reference) Fixes
+
+Multiple cross-organization IDOR vulnerabilities were identified and fixed:
+
+| Module | Vulnerability | Fix |
+|--------|---------------|-----|
+| Training submissions | Any same-org member could read other members' submissions | Org boundary check + owner-or-`training.manage` gate |
+| Grant notes | Cross-org read/write on grant notes | Org-scoped query |
+| Grant budget items | Cross-org access to budget items, expenditures, compliance tasks | Org-scoped queries on all paths |
+| Finance approvals | Cross-org approve/deny on approval steps | Org-scope check in approval handler |
+| Documents | Folder-less document listing bypassed access control; by-id fetch bypassed folder restrictions | Enforce folder access on all document queries |
+| Equipment requests | Double-issue race in fulfillment | Row-level locking during fulfillment |
+| IP exception approval | Cross-org IDOR in IP exception workflow | Org-scoped query + 404 for missing/foreign exceptions |
+| Shift reports | Any authenticated user could read any report by ID | Trainee/officer/`training.manage` gate |
+
+### IP Spoofing Protection
+
+`get_client_ip()` was rewritten to be **spoof-proof**:
+- Reads `X-Forwarded-For` only when behind a trusted reverse proxy
+- Validates the proxy's own IP against a trusted list
+- Supports multi-worker environments with synchronized state
+- Warnings logged for untrusted proxy headers
+
+### Geo-Blocking with Database-Driven Rules
+
+The GeoIP-based country blocking middleware now reads rules from the database:
+- Country block rules stored in `ip_security_rules` table
+- Applied in real-time via the `GeoBlockingMiddleware`
+- IP allowlist exceptions honored (whitelisted IPs bypass country blocks)
+- Admin UI for managing allowed/blocked countries
+
+### Scheduled Task Auto-Run
+
+Five scheduled tasks that previously required an external cron job to fire are now auto-run by the built-in asyncio task runner:
+- `process_inactivity_warnings` (prospect pipeline)
+- `expire_old_exceptions` (IP security)
+- `refresh_overdue_checkouts` (inventory)
+- `auto_close_stale_sessions` (admin hours)
+- `mark_overdue_dues` (membership)
+
+### Server-Side Enforcement
+
+- `must_change_password` is now enforced server-side in `get_current_user` (previously only the frontend honored this flag)
+- Public event-request endpoint uses real client IP for abuse tracking with per-IP rate limiting (10/min)
+- Unauthenticated v1 endpoint guard prevents accidental exposure of new endpoints
+
+---
+
 ## Security Resources
 
 - [OWASP Top 10](https://owasp.org/www-project-top-ten/)

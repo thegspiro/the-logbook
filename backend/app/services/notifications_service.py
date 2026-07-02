@@ -291,15 +291,30 @@ class NotificationsService:
         return len(logs)
 
     async def mark_as_read(
-        self, log_id: UUID, organization_id: UUID
+        self,
+        log_id: UUID,
+        organization_id: UUID,
+        user_id: Optional[UUID] = None,
     ) -> Tuple[Optional[NotificationLog], Optional[str]]:
-        """Mark a notification as read"""
+        """Mark a notification as read.
+
+        When ``user_id`` is provided the lookup is additionally scoped to the
+        owning recipient. The self-service ``/my/`` route passes it to prevent
+        an IDOR where any authenticated member could mark another member's
+        notification as read by guessing its log_id. The privileged
+        org-management route omits it (org-wide scope).
+        """
         try:
-            result = await self.db.execute(
+            query = (
                 select(NotificationLog)
                 .where(NotificationLog.id == str(log_id))
                 .where(NotificationLog.organization_id == str(organization_id))
             )
+            if user_id is not None:
+                query = query.where(
+                    NotificationLog.recipient_id == str(user_id)
+                )
+            result = await self.db.execute(query)
             log = result.scalar_one_or_none()
             if not log:
                 return None, "Notification not found"

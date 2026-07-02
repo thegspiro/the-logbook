@@ -20,6 +20,13 @@ The system automatically detects if onboarding is needed by checking:
 - Whether any organizations exist in the database
 - Whether an OnboardingStatus record exists and is marked complete
 
+> **Login blocked until configured (2026-06-25):** Visiting `/login` directly on
+> an unconfigured install no longer shows the sign-in form. The login page checks
+> `GET /api/v1/onboarding/status` on load and, when `needs_onboarding` is true,
+> redirects to `/onboarding` (a brief spinner shows during the check). There are
+> no accounts to sign into before setup, so users are routed into the wizard
+> instead. If the status check can't be reached, the login page still renders.
+
 ### 2. Onboarding Steps
 
 The onboarding process consists of 10 steps:
@@ -81,6 +88,16 @@ The onboarding process consists of 10 steps:
   - **Governance:** Elections & Voting, Meeting Minutes, Reports & Analytics
   - **Communication:** Email Notifications, Mobile App Access
   - **Advanced:** Custom Forms, External Integrations
+- Optional modules show a clear **Enabled** state once turned on — the button
+  turns green with a checkmark and the card is highlighted — so it's obvious at a
+  glance which optional features are active *(2026-06-25)*
+
+> **Positions & Permissions:** Before module selection, the wizard's
+> **Set Up Positions & Permissions** step offers ready-made position templates.
+> The **Operational Ranks** group (Fire Chief, Deputy/Assistant Chief, Captain,
+> Lieutenant, Engineer, Firefighter, **EMT** *(EMT added 2026-06-25)*) mirrors the
+> default operational ranks seeded for the organization; the Leadership, Officer,
+> Support, and Member groups cover corporate/administrative roles.
 
 #### Step 9: Admin User Creation & Review
 - Create first administrator account

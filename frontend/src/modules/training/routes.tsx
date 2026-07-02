@@ -182,10 +182,14 @@ export const getTrainingRoutes = () => {
         }
       />
 
-      {/* Skills Testing Module - Member-facing */}
+      {/* Skills Testing Module - examiner/officer administered (training.manage) */}
       <Route
         path="/training/skills-testing"
-        element={<SkillsTestingPage />}
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <SkillsTestingPage />
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/training/skills-testing/templates/new"
@@ -213,15 +217,27 @@ export const getTrainingRoutes = () => {
       />
       <Route
         path="/training/skills-testing/test/new"
-        element={<StartSkillTestPage />}
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <StartSkillTestPage />
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/training/skills-testing/test/:testId"
-        element={<ActiveSkillTestPage />}
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <ActiveSkillTestPage />
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/training/skills-testing/test/:testId/active"
-        element={<ActiveSkillTestPage />}
+        element={
+          <ProtectedRoute requiredPermission="training.manage">
+            <ActiveSkillTestPage />
+          </ProtectedRoute>
+        }
       />
       {/* Training Module - Print Pages */}
       {/* Member/program print are auth-only (not training.manage) because

@@ -14,7 +14,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    get_current_user,
+    require_permission,
+)
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.training import ShiftEquipmentCheck, ShiftEquipmentCheckItem
@@ -575,12 +580,18 @@ async def complete_incomplete_check(
 ):
     """Complete remaining items on an incomplete check."""
     service = EquipmentCheckService(db)
+    # Only the member who started the check may complete it; managers may
+    # complete any check in their org (supervisory correction / shift handover).
+    allow_any = _has_permission(
+        "equipment_check.manage", _collect_user_permissions(current_user)
+    )
     try:
         check = await service.complete_incomplete_check(
             check_id=check_id,
             organization_id=current_user.organization_id,
             checked_by=str(current_user.id),
             data=data.model_dump(exclude_unset=True),
+            allow_any=allow_any,
         )
         return check
     except ValueError as e:

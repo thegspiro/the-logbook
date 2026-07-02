@@ -260,7 +260,7 @@ async def submit_training_approval(
     token: str,
     approval_data: TrainingApprovalRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("training.manage")),
+    current_user: User = Depends(require_permission("events.manage")),
 ):
     """
     Submit training approval with time adjustments

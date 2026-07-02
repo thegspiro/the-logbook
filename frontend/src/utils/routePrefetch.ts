@@ -60,7 +60,7 @@ const routeImportMap: Record<string, () => Promise<unknown>> = {
   '/settings/roles': () => import('../pages/RoleManagementPage'),
   '/account': () => import('../pages/UserSettingsPage'),
   '/setup': () => import('../pages/DepartmentSetupPage'),
-  '/reports': () => import('../pages/ReportsPage'),
+  '/reports': () => import('../modules/reports/pages/ReportsPage'),
 
   // Admin
   '/admin/analytics': () => import('../pages/AnalyticsDashboardPage'),

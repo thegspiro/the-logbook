@@ -45,6 +45,85 @@ resolved a set of schema/data-integrity inconsistencies.
 - Re-parented migration `20260622_0001` onto `20260618_0200` to restore a single Alembic head
 - Allowlisted `auth.py:mfa_login` in the endpoint auth-coverage test (the second factor of login is pre-auth by design, gated by the short-lived `mfa_pending` token)
 
+### Onboarding, MFA & Password Policy Fixes (2026-06-25)
+
+- **Onboarding guard restored**: The render gate that blocks access to the application until onboarding is complete was inadvertently removed during the MFA merge. Restored so unauthenticated users cannot bypass the initial setup wizard
+- **Password minimum-age policy bypass**: Mandatory password changes (e.g., admin-forced reset, first-login) were being blocked by the password minimum-age policy, preventing users from changing their password when required. The minimum-age check now skips enforcement when `must_change_password` is set
+- **EMT position in onboarding**: The "EMT" position is now included in the default Operational Ranks template during onboarding, matching the 9 standard shift positions used elsewhere in the scheduling module
+- **Login block until configured**: The `/login` page is now blocked with a setup prompt until the application has completed initial configuration (organization created, admin user set up). Prevents confusion when accessing a fresh installation before onboarding
+
+### Inventory Impact Planner — Demand Forecasting & Bulk Operations (2026-06-22)
+
+- **Impact Planner page** at `/inventory/admin/impact-planner` (`inventory.manage`) allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations (issue, reorder, size requests) from a single analysis. Targets a filtered subset of the roster (by status, rank, station, membership type, position) and analyzes who needs a given item category, broken down by size
+- **Stock-aware shortfall analysis**: when both a `size_field` and `stock_category_id` are provided, the planner queries on-hand pool stock per size, calculates `shortfall = max(0, needing - on_hand)` per size, and surfaces the purchase quantity needed — not just what members need, but what must actually be ordered
+- **Cost estimation**: items with `replacement_cost` or `purchase_price` feed per-size unit costs into the shortfall analysis, producing `estimated_cost = shortfall × unit_cost` per size and a total purchase cost estimate across all sizes
+- **One-click reorder generation** (`POST /api/v1/inventory/impact-planner/reorder`): re-runs the analysis server-side (tamper-proof), creates one `ReorderRequest` per size with shortfall > 0, pre-fills vendor/urgency/unit cost/note (e.g., "Generated from impact plan (Shirt Medium): 7 needed, 3 on hand"), all in PENDING status for quartermaster review. Returns `{created_count, total_quantity, reorder_ids}`
+- **Replacement-aware targeting**: when `replacement_aware=true` with a `related_category_id`, the planner checks each member's held items for serviceability (condition, NFPA retirement). Members with only worn-out/expired items are flagged `needs_replacement=true` and counted in the purchase total. UI badges them as "Replace" vs "Needs item" separately
+- **Bulk-issue from planner** (`POST /api/v1/inventory/impact-planner/issue`): iterates each member who needs the item, looks up their size preference, finds the first available pool item matching that size in the stock category, issues 1 unit via `issue_from_pool()`, decrements on-hand. Skips members without size on file, no matching stock, or over their allowance (with reasons logged). Returns `{issued_count, skipped_count}` with per-member detail
+- **Saved/named plans** (`inventory_impact_plans` table, migration `20260622_0001`): the entire filter set (statuses, ranks, size_field, stock_category_id, replacement_aware, allowance_aware, etc.) can be saved with a human name and description for reuse. CRUD via `GET`/`POST`/`PATCH`/`DELETE /api/v1/inventory/impact-planner/plans`. Use cases: annual uniform refresh, seasonal PPE cycle, onboarding kits
+- **Allowance-aware warnings**: when `allowance_aware=true`, the planner queries `IssuanceAllowance` records for the category, calculates each member's `issued_this_period`, flags members at or over their `max_quantity` as `over_allowance=true`. Bulk-issue skips them with reason "Allowance exceeded". UI shows an "over allowance" badge
+- **Request sizes from members** (`POST /api/v1/inventory/impact-planner/request-sizes`): identifies members who need the item but have no size on file, sends each an in-app notification directing them to `/inventory/my-equipment` to add their `MemberSizePreferences`. Returns `{notified_count}`
+- **Printable PDF summary** (`POST /api/v1/inventory/impact-planner/pdf`): generates a branded PDF with org name, analysis date, filter parameters, size breakdown table, and optionally contact columns (email/phone) based on org visibility settings. Returns `application/pdf` attachment
+- **Carried cost estimate**: when generating reorder requests from a plan, the estimated unit cost from the analysis is carried onto each reorder request so the quartermaster sees the projected cost in the approval workflow
+- **Privacy compliance**: member contact info (email, phone) in the planner respects `org.settings.contact_info_visibility`, mirroring the member-list endpoint's privacy controls. "Unknown" sized members are bucketed and sorted last; reorder generation skips them (can't order for unknown sizes)
+- **Real-time updates**: bulk operations publish `inventory_changed` events via WebSocket so other connected users see updates immediately
+
+**New API Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/inventory/impact-planner/options` | Filter options (statuses, ranks, stations, positions, categories, size fields) |
+| `POST` | `/api/v1/inventory/impact-planner` | Analyze impact of a prospective issue |
+| `GET` | `/api/v1/inventory/impact-planner/plans` | List saved plans for the organization |
+| `POST` | `/api/v1/inventory/impact-planner/plans` | Save a new plan with its filter set |
+| `PATCH` | `/api/v1/inventory/impact-planner/plans/{plan_id}` | Update a saved plan |
+| `DELETE` | `/api/v1/inventory/impact-planner/plans/{plan_id}` | Delete a saved plan |
+| `POST` | `/api/v1/inventory/impact-planner/reorder` | Generate reorder requests from shortfall analysis |
+| `POST` | `/api/v1/inventory/impact-planner/issue` | Bulk-issue on-hand stock to members who need it |
+| `POST` | `/api/v1/inventory/impact-planner/request-sizes` | Send size-request notifications to members |
+| `POST` | `/api/v1/inventory/impact-planner/pdf` | Generate printable PDF summary |
+
+**New Database Table:**
+
+| Table | Columns | Description |
+|-------|---------|-------------|
+| `inventory_impact_plans` | `id`, `organization_id`, `name`, `description`, `filters` (JSON), `created_by`, timestamps | Saved impact planner scenarios |
+
+**Edge Cases:**
+
+| Scenario | Behavior |
+|----------|----------|
+| Member with no size preference | Bucketed as "Unknown"; skipped by bulk-issue and reorder generation |
+| Size labels with different casing ("S" vs "small") | Normalized for matching |
+| Stock category with varying costs per size | Average unit cost used for estimation |
+| Bulk-issue exhausts stock mid-run | Issues what's available; remaining members skipped with "no matching stock" reason |
+| Allowance check on member with no matching rule | Org-wide rule (role_id=NULL) applies; if none exists, no limit enforced |
+| Plan filters reference deleted rank/station | Analysis runs with remaining valid filters; deleted values silently ignored |
+| Replacement-aware with no NFPA tracking | Falls back to condition-based serviceability check |
+| PDF with contact visibility set to "hidden" | Email and phone columns omitted from PDF |
+| Reorder from plan with zero shortfall | No reorder requests created; returns `created_count: 0` |
+
+---
+
+### Onboarding & Login Hardening (2026-06-25)
+
+- **`/login` is now blocked until the app is configured.** On mount the login page calls `GET /api/v1/onboarding/status`; when `needs_onboarding` is true it redirects to `/onboarding` instead of rendering the sign-in form (an unconfigured install has no accounts to sign into). A spinner is shown while the check is in flight so the form never flashes before the redirect; if the status check fails the page falls back to rendering normally. This closes the gap where a user could reach `/login` directly and bypass the Welcome splash (`frontend/src/pages/LoginPage.tsx`, regression-tested in `LoginPage.test.tsx`)
+- **First-login forced password change is no longer blocked by the minimum-password-age policy.** A user created by an admin (or self-registration, or an admin reset with `force_change`) carries `must_change_password=True` together with a fresh `password_changed_at`. The HIPAA minimum-password-age check (`HIPAA_MINIMUM_PASSWORD_AGE_DAYS`, default 1) previously rejected their *required* first change with "Password was changed recently…", trapping the user until an admin reset. `AuthService.change_password` now **skips the minimum-age check when `must_change_password` is set**; normal (voluntary) changes still enforce it, so the anti-cycling protection is preserved rather than weakened (`backend/app/services/auth_service.py`, tested in `backend/tests/test_password_min_age.py`)
+- **EMT added to the onboarding "Operational Ranks" position template.** The setup wizard's operational-rank list (Fire Chief → Firefighter) was missing EMT even though the backend already seeds `emt` in `DEFAULT_RANKS` and lists it as an operational role slug. EMT is now a selectable operational rank in **Set Up Positions & Permissions**, with a distinct medical icon (`frontend/src/modules/onboarding/pages/RoleSetup.tsx`)
+- **Optional modules now show a clear "Enabled" state.** In the onboarding **Choose Your Modules** step, an enabled optional module's button turns solid green with a check and reads "Enabled" (and the card gains a green border/ring), instead of looking identical to a not-yet-enabled module. Adds `aria-pressed` for screen readers (`frontend/src/modules/onboarding/pages/ModuleOverview.tsx`)
+
+### Inventory — Impact Planner (2026-06-23)
+
+- **New Quartermaster planning tool** at `/inventory/admin/impact-planner` (`inventory.manage`) for scoping a prospective new issue (e.g. a new department jacket) end-to-end. Filter the roster by status, membership type, rank, station, and corporate position; each matched member shows the size they need (from `member_size_preferences`), whether they already hold a comparable item (active assignment or pool issuance in a chosen category), and gated contact details. New table `inventory_impact_plans` and migration `20260622_0001`
+- **Stock-aware shortfall**: with a stock category + size field, per-size demand is netted against available on-hand stock (pool `quantity − quantity_issued`; available individual units) to show the exact quantity to purchase. Sizes are matched on a normalized key (drops boot-width/parenthetical notes; canonicalizes alpha-size aliases like `3XL`↔`XXXL`, `Medium`↔`M`). Members with no size on file can't be matched and carry their full demand to the shortfall
+- **Cost estimate**: per-size and total purchase cost from the stock category's item prices (`replacement_cost`, then `purchase_price`; category-average fallback for sizes with no priced items)
+- **Replacement-aware** (opt-in, with a related category): members whose only held items are worn (poor/damaged/out-of-service) or past NFPA retirement count as needing a replacement rather than being excluded
+- **Allowance-aware** (opt-in, with a stock category): flags members at/over their per-category `issuance_allowances` cap before a bulk issue would skip them (role-specific allowance beats org-wide; batched, not per-member)
+- **Act on the plan**: `POST /inventory/impact-planner/reorder` drafts one pending, pre-priced reorder request per shortfall size; `POST …/issue` bulk-issues matching on-hand pool stock via the existing `issue_from_pool` flow (respects allowances, reports skips with reasons, publishes an `inventory_changed` WebSocket event); `POST …/request-sizes` sends an in-app notification to members with no size on file linking to self-service preferences
+- **Share & reuse**: `POST …/pdf` streams a print-ready PDF summary (reportlab); the member list exports to CSV client-side; named plans are saved/loaded via `GET/POST/PATCH/DELETE …/plans`
+- **Endpoints**: `GET …/options`, `POST /inventory/impact-planner` (analyze), `…/reorder`, `…/issue`, `…/request-sizes`, `…/pdf`, and `…/plans[/{id}]` — all `inventory.manage`. The analyze filter set is reused by reorder/issue/pdf and stored verbatim by saved plans
+- **Privacy**: `analyze`/`pdf` resolve member contact visibility from the org's `contact_info_visibility` settings (enabled + per-field email/phone/mobile), matching the member list, rather than exposing contact info on permission alone
+- **UI/UX**: filter panel with multi-select groups, summary stat cards, a horizontal-bar size breakdown, a sortable + mobile-responsive impacted-member table, skeleton/empty states, and inline reorder/issue/request-sizes actions. Frontend page `modules/inventory/pages/ImpactPlannerPage.tsx`; service methods on `inventoryService`. Covered by backend unit tests, frontend component tests, and a Playwright E2E spec
 ### Two-Factor Authentication — TOTP (2026-06-19)
 
 - **App-based MFA (TOTP)** is now fully implemented end-to-end. Members enroll from **Settings → Security** (`MfaSettingsCard`): the backend issues a secret + `otpauth://` provisioning URI rendered as a QR code, the member confirms with a 6-digit code, and a one-time set of **recovery codes** is shown (displayed once, stored hashed). Secret and recovery codes are encrypted at rest (Fernet via `encrypt_data`/`decrypt_data`); no migration was needed (existing `mfa_secret`/`mfa_backup_codes` model fields)
@@ -52,7 +131,7 @@ resolved a set of schema/data-integrity inconsistencies.
 - **Org-wide requirement (admin)**: a department can require MFA for everyone via **Settings → Authentication** (`MfaPolicyCard`, `GET`/`PUT /auth/mfa/policy`, stored in `org.settings`). Enforcement is **server-side** in `get_current_user` — an un-enrolled member is blocked from all but the enrollment/session paths until they set up MFA, and `/auth/me` surfaces `mfa_enrollment_required` so the frontend can force the setup flow (`ProtectedRoute` redirect). The org policy check is skipped for already-enrolled users to avoid a per-request query
 - **Admin MFA reset (lost device)**: an administrator (`users.create`/`members.manage`) can reset a member's MFA via a **Reset MFA** action on the Members admin page or `POST /users/{user_id}/reset-mfa` (org-scoped, rate-limited, audit-logged `admin_mfa_reset`). It clears the member's secret/recovery codes and revokes their sessions so they re-enroll cleanly; admins can't reset their own MFA this way
 - **Self-service recovery-code regeneration**: members can mint a fresh set of recovery codes from **Settings → Security** (`POST /auth/mfa/recovery-codes`, requires a current TOTP code; the new set replaces the old and is shown once). The Security card also warns when codes are running low (≤3) or exhausted
-- **Account-security notifications**: enabling, disabling, regenerating codes, or an admin reset now sends the affected member an in-app notification and a best-effort email ("if this wasn't you, contact an administrator"). New `app/utils/security_notifications.py` helper; failures never block the security action
+- **Account-security notifications**: enabling, disabling, regenerating codes, or an admin reset now notifies the affected member ("if this wasn't you, contact an administrator"). The in-app notification is written synchronously in the request transaction; the email is dispatched to a FastAPI background task (its own DB session) so SMTP I/O never blocks the response. New `app/utils/security_notifications.py` helper; failures never block the security action
 - **Backend**: new `app/services/mfa_service.py` (`generate_secret`, `provisioning_uri`, `verify_totp`, `generate_recovery_codes`, `normalize_recovery_code`), `create_mfa_pending_token` in `core/security.py`, MFA endpoints in `auth.py` (`/mfa/login`, `/mfa/setup`, `/mfa/verify-setup`, `/mfa/disable`, `/mfa/status`, `/mfa/policy`), and `MFALogin`/`MFAPolicy` schemas. **Frontend**: `authService` MFA methods, `authStore` MFA challenge state (`completeMfaLogin`/`cancelMfa`), and the two-factor step on `LoginPage`
 
 ### Shift Scheduling — Platoon Rotations, Leave Integration & Hold-Over Roster (2026-06-19)

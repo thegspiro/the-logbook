@@ -5,6 +5,7 @@ Endpoints for user authentication, registration, and session management.
 """
 
 import copy
+import secrets
 
 from fastapi import (
     APIRouter,
@@ -29,7 +30,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import database_manager, get_db
 from app.core.permissions import get_rank_default_permissions
 from app.core.security import create_mfa_pending_token, decode_token
 from app.core.security_middleware import (
@@ -391,7 +392,13 @@ async def oauth_google_callback(
         return _oauth_fail_redirect("access_denied")
 
     # CSRF: the returned state must match the cookie we set at initiation.
-    if not code or not state or not oauth_state_cookie or state != oauth_state_cookie:
+    # Use a constant-time compare to avoid leaking the state via timing.
+    if (
+        not code
+        or not state
+        or not oauth_state_cookie
+        or not secrets.compare_digest(state, oauth_state_cookie)
+    ):
         return _oauth_fail_redirect("invalid_state")
 
     service = GoogleOAuthService(db)
@@ -450,7 +457,12 @@ async def oauth_microsoft_callback(
         logger.info(f"Microsoft OAuth returned error: {error}")
         return _oauth_fail_redirect("access_denied")
 
-    if not code or not state or not oauth_state_cookie or state != oauth_state_cookie:
+    if (
+        not code
+        or not state
+        or not oauth_state_cookie
+        or not secrets.compare_digest(state, oauth_state_cookie)
+    ):
         return _oauth_fail_redirect("invalid_state")
 
     service = MicrosoftOAuthService(db)
@@ -731,6 +743,7 @@ async def mfa_setup(
 @router.post("/mfa/verify-setup", dependencies=[rate_limit_login()])
 async def mfa_verify_setup(
     data: MFAVerify,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -765,6 +778,7 @@ async def mfa_verify_setup(
             "Two-factor authentication was just enabled on your account. "
             "If this wasn't you, contact an administrator immediately."
         ),
+        background_tasks=background_tasks,
     )
     # Recovery codes are shown exactly once.
     return {"recovery_codes": recovery_codes}
@@ -773,6 +787,7 @@ async def mfa_verify_setup(
 @router.post("/mfa/disable", dependencies=[rate_limit_login()])
 async def mfa_disable(
     data: MFAVerify,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -805,6 +820,7 @@ async def mfa_disable(
             "Two-factor authentication was just disabled on your account. "
             "If this wasn't you, contact an administrator immediately."
         ),
+        background_tasks=background_tasks,
     )
     return {"mfa_enabled": False}
 
@@ -823,6 +839,7 @@ async def mfa_status(
 @router.post("/mfa/recovery-codes", dependencies=[rate_limit_login()])
 async def mfa_regenerate_recovery_codes(
     data: MFAVerify,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -860,6 +877,7 @@ async def mfa_regenerate_recovery_codes(
             "account; your previous codes no longer work. If this wasn't you, "
             "contact an administrator immediately."
         ),
+        background_tasks=background_tasks,
     )
     # New recovery codes are shown exactly once.
     return {"recovery_codes": recovery_codes}
@@ -1169,28 +1187,49 @@ async def forgot_password(
         user_agent=request.headers.get("user-agent"),
     )
 
-    # Send emails in background (even if user not found, we don't reveal that)
+    # Send emails in background (even if user not found, we don't reveal that).
+    # Background tasks run AFTER the response, once this request's DB session has
+    # closed — so they must open their own session and capture only primitives
+    # here, never the request `db` or detached ORM objects (`user`,
+    # `organization`).
     if user and raw_token:
         from app.services.email_service import EmailService
 
         # Use URL fragment (#) instead of query param so the token is
         # never sent to the server in Referer headers or logged in access logs.
         reset_url = f"{settings.FRONTEND_URL}/reset-password#token={raw_token}"
+        org_id = str(organization.id)
         org_name = organization.name
         expiry_minutes = RESET_TOKEN_EXPIRY_MINUTES
+        recipient_email = user.email
+        recipient_first_name = user.first_name or user.username
+        recipient_full_name = (
+            f"{user.first_name or ''} {user.last_name or ''}".strip()
+            or user.username
+        )
+        it_team = org_settings.get("it_team", {})
+        it_emails = [
+            m["email"] for m in it_team.get("members", []) if m.get("email")
+        ]
 
         async def _send_reset():
             try:
-                email_svc = EmailService(organization)
-                await email_svc.send_password_reset_email(
-                    to_email=user.email,
-                    first_name=user.first_name or user.username,
-                    reset_url=reset_url,
-                    organization_name=org_name,
-                    expiry_minutes=expiry_minutes,
-                    db=db,
-                    organization_id=str(organization.id),
-                )
+                async for session in database_manager.get_session():
+                    org = (
+                        await session.execute(
+                            select(Organization).where(Organization.id == org_id)
+                        )
+                    ).scalar_one_or_none()
+                    email_svc = EmailService(org)
+                    await email_svc.send_password_reset_email(
+                        to_email=recipient_email,
+                        first_name=recipient_first_name,
+                        reset_url=reset_url,
+                        organization_name=org_name,
+                        expiry_minutes=expiry_minutes,
+                        db=session,
+                        organization_id=org_id,
+                    )
             except Exception as e:
                 logger.error(f"Failed to send password reset email: {e}")
 
@@ -1198,24 +1237,25 @@ async def forgot_password(
 
         # Notify IT team in background
         async def _notify_it_team():
+            if not it_emails:
+                return
             try:
-                it_team = org_settings.get("it_team", {})
-                it_members = it_team.get("members", [])
-                it_emails = [m["email"] for m in it_members if m.get("email")]
-                if not it_emails:
-                    return
-
-                email_svc = EmailService(organization)
-                await email_svc.send_it_password_reset_notification(
-                    to_emails=it_emails,
-                    user_email=user.email,
-                    user_name=f"{user.first_name or ''} {user.last_name or ''}".strip()
-                    or user.username,
-                    organization_name=org_name,
-                    ip_address=ip_address,
-                    db=db,
-                    organization_id=str(organization.id),
-                )
+                async for session in database_manager.get_session():
+                    org = (
+                        await session.execute(
+                            select(Organization).where(Organization.id == org_id)
+                        )
+                    ).scalar_one_or_none()
+                    email_svc = EmailService(org)
+                    await email_svc.send_it_password_reset_notification(
+                        to_emails=it_emails,
+                        user_email=recipient_email,
+                        user_name=recipient_full_name,
+                        organization_name=org_name,
+                        ip_address=ip_address,
+                        db=session,
+                        organization_id=org_id,
+                    )
             except Exception as e:
                 logger.error(f"Failed to send IT team notification: {e}")
 

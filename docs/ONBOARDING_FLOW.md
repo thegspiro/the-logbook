@@ -239,6 +239,13 @@ Response: {
 - If `needs_onboarding = true` → `/onboarding/start`
 - If `needs_onboarding = false` → `/login`
 
+> **Login page guard (2026-06-25):** `/login` enforces the same check itself, so
+> it can't be reached directly on an unconfigured install. On mount the login
+> page calls `GET /api/v1/onboarding/status`; when `needs_onboarding = true` it
+> redirects to `/onboarding` (showing a brief spinner during the check) rather
+> than rendering the sign-in form. If the status endpoint can't be reached, the
+> login page renders normally as a fallback.
+
 ---
 
 ### 3. Organization Setup (`/onboarding/start`)
@@ -523,6 +530,13 @@ Body: {
 - Custom role creation support
 - Priority-based role ordering (0-100)
 
+> **Operational Ranks group (EMT added 2026-06-25):** The position templates
+> include an **Operational Ranks** group — Fire Chief, Deputy Chief, Assistant
+> Chief, Captain, Lieutenant, Engineer/Driver Operator, Firefighter, and **EMT** —
+> mirroring the default operational ranks seeded for the organization. EMT was
+> previously absent from this list even though the backend already seeded it as a
+> default rank.
+
 **API Call**:
 ```
 POST /api/v1/onboarding/session/roles
@@ -572,6 +586,12 @@ Body: {
 - "Enable & Configure" → `/onboarding/modules/{moduleId}/config`
 - "Configure Later" → Mark as "skipped"
 - "Ignore" → Mark as "ignored"
+
+> **Enabled-state visibility (2026-06-25):** Once an optional module is enabled,
+> its action button turns solid green with a checkmark and reads **"Enabled"**,
+> and the module card gains a green border/ring — so it's obvious which optional
+> modules are active rather than relying on a small status icon. The control
+> exposes `aria-pressed` for screen readers.
 
 **API Call**:
 ```

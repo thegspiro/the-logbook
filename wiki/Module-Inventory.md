@@ -45,6 +45,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Sequential Barcodes Assigned at Creation** — *(2026-06-10)* Item barcodes use one per-organization sequential scheme (`<prefix><zero-padded number>`, default `INV-000001`, `INV-000002`, …). The prefix and counter live in `organizations.settings["barcode"]`; the org row is locked `FOR UPDATE` for the read-increment so concurrent creates get distinct numbers. Assigned at item-creation time (no longer lazily on read); migration `20260610_0001` reassigned existing items and seeded each org's counter
 - **Taxonomy Soft-Delete** — *(2026-06-09)* `DELETE` endpoints for categories (blocked when active items reference them), variant groups, and equipment kits set `active = False` and audit-log rather than hard-deleting
 - **NFPA 1851 Inspection Detail** — *(2026-06-09)* Maintenance records can persist structured NFPA Ch. 6–8 inspection results (assessment booleans, contamination level, SCBA fields, recommendation) to `nfpa_inspection_details` when supplied
+- **Inventory Impact Planner** — *(2026-06-23)* Quartermaster planning tool (`/inventory/admin/impact-planner`) for scoping a prospective new issue. Filter the roster (status, membership type, rank, station, position) and see who is impacted, the size each needs (from member size preferences), and who already holds a comparable item. Optional layers: net per-size demand against on-hand stock for the exact quantity to buy, estimate cost from item prices, treat worn or NFPA-expired gear as needing replacement, and warn when members are over their issuance allowance. Acts on the result — draft pre-priced per-size **reorder requests**, **bulk-issue** matching on-hand pool stock, **request sizes** from members with none on file (in-app notification), export **PDF/CSV**, and **save/load named plans** (`inventory_impact_plans`). Member contact details honour the org's `contact_info_visibility` settings
 
 ---
 
@@ -67,12 +68,16 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `/inventory/admin/requests` | Equipment Requests | `inventory.manage` |
 | `/inventory/admin/write-offs` | Write-Off Requests | `inventory.manage` |
 | `/inventory/admin/reorder` | Reorder Requests | `inventory.manage` |
+| `/inventory/admin/allowances` | Issuance Allowances | `inventory.manage` |
+| `/inventory/admin/impact-planner` | Impact Planner | `inventory.manage` |
 | `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
 | `/inventory/checkouts` | Active Checkouts | `inventory.manage` |
 | `/inventory/import` | CSV Import | `inventory.manage` |
 | `/inventory/admin/kits` | Equipment Kits Management | `inventory.manage` |
 | `/inventory/admin/variant-groups` | Variant Groups Management | `inventory.manage` |
+| `/inventory/admin/allowances` | Issuance Allowances | `inventory.manage` |
+| `/inventory/admin/impact-planner` | Impact Planner | `inventory.manage` |
 | `/inventory/print-labels` | Barcode Label Printing | Authenticated |
 
 ---
@@ -100,6 +105,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 | `inventory_write_offs` | Write-off request/approval workflow for lost/damaged items |
 | `inventory_notification_queue` | Delayed notification consolidation queue |
 | `property_return_reminders` | Tracks reminder notices sent to departed members |
+| `inventory_impact_plans` | Saved impact-planner scenarios (named filter sets) *(2026-06-23)* |
 
 ### Variant & Kit Tables *(2026-03-07)*
 
@@ -280,6 +286,25 @@ GET    /api/v1/inventory/nfpa/summary                    # NFPA compliance dashb
 GET    /api/v1/inventory/nfpa/retirement-due             # Items nearing 10-year retirement
 ```
 
+### Impact Planner *(2026-06-23)*
+
+All endpoints require `inventory.manage`.
+
+```
+GET    /api/v1/inventory/impact-planner/options          # Filter options (ranks, stations, positions, statuses, membership types, categories, size fields)
+POST   /api/v1/inventory/impact-planner                  # Analyze impact for a filter set → matched members, per-size breakdown, counts
+POST   /api/v1/inventory/impact-planner/reorder          # Create one pending reorder request per size with a shortfall (pre-priced)
+POST   /api/v1/inventory/impact-planner/issue            # Bulk-issue matching on-hand pool stock to members who need it
+POST   /api/v1/inventory/impact-planner/request-sizes    # Notify (in-app) members who need the item but have no size on file
+POST   /api/v1/inventory/impact-planner/pdf              # Stream a print-ready PDF summary
+GET    /api/v1/inventory/impact-planner/plans            # List saved plans
+POST   /api/v1/inventory/impact-planner/plans            # Save a named plan (filter set)
+PATCH  /api/v1/inventory/impact-planner/plans/{plan_id}  # Update a saved plan
+DELETE /api/v1/inventory/impact-planner/plans/{plan_id}  # Delete a saved plan
+```
+
+The analyze request is reused (and extended) by reorder/issue/pdf/plans. Optional layers — `stock_category_id` (+`size_field`) for on-hand netting and cost, `replacement_aware`, and `allowance_aware` — gate the extra computation so a basic query stays cheap. `analyze`/`pdf` include member contact details only per the org's `contact_info_visibility` settings; `reorder`/`issue` are audit-logged and `issue` publishes an `inventory_changed` WebSocket event.
+
 ---
 
 ## Real-Time Updates (WebSocket)
@@ -337,6 +362,23 @@ Frontend tests in `src/pages/InventoryMembersTab.test.tsx` and `src/constants/en
 - Sort by name, total items, overdue, and assigned
 - Search filtering with debounce
 - Condition constant consistency
+
+---
+
+## Recent Changes (2026-06-23)
+
+### Inventory Impact Planner
+
+A new Quartermaster planning tool (`/inventory/admin/impact-planner`, `inventory.manage`) for scoping a prospective new issue end-to-end, plus the supporting endpoints and the `inventory_impact_plans` table (migration `20260622_0001`).
+
+- **Who is impacted** — filter the roster by status, membership type, rank, station, and corporate position; each matched member shows the size they need (from `member_size_preferences`), whether they already hold a comparable item (active assignment or pool issuance in a chosen category), and gated contact details
+- **Stock-aware shortfall** — with a stock category + size field, per-size demand is netted against available on-hand stock (pool `quantity − quantity_issued` and available individual units) to show the exact quantity to buy. Sizes are matched by a normalized key (drops boot-width/parenthetical notes; canonicalizes alpha-size aliases like `3XL`↔`XXXL`)
+- **Cost estimate** — per-size and total purchase cost from the stock category's item prices (`replacement_cost`, then `purchase_price`; category-average fallback)
+- **Replacement-aware** — optionally treat members whose only held items are worn (poor/damaged/out-of-service) or past NFPA retirement as needing a replacement rather than excluding them
+- **Allowance-aware** — optionally flag members at/over their per-category `issuance_allowances` cap before a bulk issue would skip them (role-specific allowance beats org-wide)
+- **Act on the plan** — generate one pre-priced pending reorder request per shortfall size; bulk-issue matching on-hand pool stock via the existing `issue_from_pool` flow (skips reported with reasons; respects allowances; publishes a WebSocket event); request sizes from members with none on file via an in-app notification linking to self-service preferences
+- **Share & reuse** — print-ready PDF summary (reportlab) and client-side CSV export; save/load named plans (`inventory_impact_plans`)
+- **Privacy** — `analyze`/`pdf` resolve member contact visibility from the org's `contact_info_visibility` settings (enabled + per-field), matching the member list, rather than exposing it on permission alone
 
 ---
 
@@ -493,6 +535,75 @@ Filters are applied in the InventoryItemsPage as dropdown selectors alongside ex
 | Size/color/style filter with no matches | Empty results; filter state preserved |
 | Label content with all optional fields unchecked | Minimum: barcode image + item name always included |
 | `category_name` null on older items | Falls back to empty string display |
+
+---
+
+## Inventory Impact Planner (2026-06-22)
+
+The Impact Planner at `/inventory/admin/impact-planner` allows quartermasters to forecast equipment demand, estimate costs, and execute bulk operations from a single analysis.
+
+### Core Workflow
+
+1. **Filter the roster**: Select which members to analyze (by status, rank, station, membership type, position)
+2. **Choose the item category and size field**: e.g., "Job Shirts" + "Shirt Size"
+3. **Analyze**: The system determines who needs the item, broken down by size, with on-hand stock comparison
+4. **Act**: One-click reorder generation, bulk-issue from stock, or request sizes from members
+
+### Key Capabilities
+
+| Capability | Description |
+|------------|-------------|
+| **Stock-aware shortfall** | Compares member demand per size against on-hand pool stock to calculate purchase quantities |
+| **Cost estimation** | Multiplies shortfall × unit cost per size for a total projected purchase cost |
+| **One-click reorder** | Generates `ReorderRequest` records (PENDING status) for each size with shortfall > 0 |
+| **Replacement-aware targeting** | Flags members whose existing items are worn/expired (not just missing) |
+| **Bulk-issue** | Issues on-hand stock to members who need it, matching by size preference |
+| **Saved plans** | Save filter sets with names for reuse (annual refresh, seasonal cycles) |
+| **Allowance-aware warnings** | Flags members at or over their issuance allowance; bulk-issue skips them |
+| **Request sizes** | Sends in-app notifications to members without sizes, directing them to add preferences |
+| **PDF summary** | Branded printable PDF with size breakdown, filters, and optional contact columns |
+
+### API Endpoints
+
+```
+GET    /api/v1/inventory/impact-planner/options              # Filter options
+POST   /api/v1/inventory/impact-planner                      # Analyze impact
+GET    /api/v1/inventory/impact-planner/plans                 # List saved plans
+POST   /api/v1/inventory/impact-planner/plans                 # Save new plan
+PATCH  /api/v1/inventory/impact-planner/plans/{plan_id}       # Update plan
+DELETE /api/v1/inventory/impact-planner/plans/{plan_id}       # Delete plan
+POST   /api/v1/inventory/impact-planner/reorder               # Generate reorder requests
+POST   /api/v1/inventory/impact-planner/issue                 # Bulk-issue from stock
+POST   /api/v1/inventory/impact-planner/request-sizes         # Send size-request notifications
+POST   /api/v1/inventory/impact-planner/pdf                   # Generate PDF summary
+```
+
+### Data Model
+
+**Table: `inventory_impact_plans`** (migration `20260622_0001`)
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID | Primary key |
+| `organization_id` | UUID (FK) | Organization scope |
+| `name` | String(255) | Human-readable scenario name |
+| `description` | Text | Optional narrative |
+| `filters` | JSON | Persisted filter set |
+| `created_by` | UUID (FK, nullable) | Who created the plan |
+| `created_at`, `updated_at` | DateTime(tz) | Timestamps |
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Member with no size preference | Bucketed as "Unknown"; skipped by bulk-issue and reorder |
+| Stock exhausted during bulk-issue | Issues what's available; remaining members skipped with reason |
+| All shortfalls are zero | Reorder generates nothing; returns `created_count: 0` |
+| Contact visibility set to "hidden" | Email/phone columns omitted from PDF |
+| Allowance exceeded for a member | Bulk-issue skips with "Allowance exceeded" reason |
+| Plan filters reference deleted rank | Deleted values silently ignored; remaining filters applied |
+| Replacement-aware with NFPA tracking | Uses NFPA retirement dates for serviceability |
+| Multiple items at different costs | Average unit cost used for estimation |
 
 ---
 

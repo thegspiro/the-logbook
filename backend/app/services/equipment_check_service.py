@@ -844,8 +844,15 @@ class EquipmentCheckService:
         organization_id: str,
         checked_by: str,
         data: Dict[str, Any],
+        allow_any: bool = False,
     ) -> ShiftEquipmentCheck:
-        """Complete remaining items on an incomplete check."""
+        """Complete remaining items on an incomplete check.
+
+        Only the member who originally performed the check may complete it,
+        unless ``allow_any`` is set (caller holds equipment_check.manage). This
+        prevents an IDOR where any member could overwrite another member's
+        safety-critical equipment check by supplying its id.
+        """
         result = await self.db.execute(
             select(ShiftEquipmentCheck)
             .where(
@@ -855,7 +862,9 @@ class EquipmentCheckService:
             .options(selectinload(ShiftEquipmentCheck.items))
         )
         check = result.scalars().first()
-        if not check:
+        # Treat "not yours" the same as "not found" so check ids can't be
+        # enumerated by an unauthorized caller.
+        if not check or (not allow_any and str(check.checked_by) != str(checked_by)):
             raise ValueError("Check not found")
         if check.overall_status != "incomplete":
             raise ValueError("Only incomplete checks can be updated")

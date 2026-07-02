@@ -23,8 +23,6 @@ export interface Module {
   setupDescription?: string;
   /** Module is planned but not yet implemented in the codebase. */
   comingSoon?: boolean;
-  /** Backend feature flag env var name (e.g. MODULE_TRAINING_ENABLED). */
-  backendFlag?: string;
 }
 
 export interface ModuleConfig {
@@ -85,9 +83,7 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: false,
     icon: 'Calendar',
-    route: '/scheduling',
-    backendFlag: 'MODULE_SCHEDULING_ENABLED',
-    features: [
+    route: '/scheduling',    features: [
       'Shift scheduling and rosters',
       'Availability tracking',
       'Coverage requirements',
@@ -189,9 +185,7 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: true,
     icon: 'Truck',
-    route: '/apparatus',
-    backendFlag: 'MODULE_APPARATUS_ENABLED',
-    features: [
+    route: '/apparatus',    features: [
       'Vehicle inventory and tracking',
       'Maintenance schedules',
       'Equipment per vehicle',
@@ -211,9 +205,7 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: true,
     icon: 'Package',
-    route: '/inventory',
-    backendFlag: 'MODULE_INVENTORY_ENABLED',
-    features: [
+    route: '/inventory',    features: [
       'Equipment and supply tracking',
       'Low stock alerts',
       'Maintenance records',
@@ -232,9 +224,7 @@ export const AVAILABLE_MODULES: Module[] = [
     enabled: true,
     canDisable: true,
     icon: 'GraduationCap',
-    route: '/training',
-    backendFlag: 'MODULE_TRAINING_ENABLED',
-    features: [
+    route: '/training',    features: [
       'Course scheduling and management',
       'Certification tracking and expiration alerts',
       'Training attendance records',
@@ -302,9 +292,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Data whitelist controls',
       'Access logs and usage stats',
       'Rate limiting',
-    ],
-    backendFlag: 'MODULE_PUBLIC_PORTAL_ENABLED',
-  },
+    ],  },
 
   // ============================================
   // ADDITIONAL MODULES (Disabled by Default)
@@ -327,9 +315,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Attendance tracking',
       'Public event requests',
       'Recurring events',
-    ],
-    backendFlag: 'MODULE_EVENTS_ENABLED',
-  },
+    ],  },
   {
     id: 'admin-hours',
     name: 'Admin Hours',
@@ -347,9 +333,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Pending entry review',
       'Session monitoring',
       'Summary reports and CSV export',
-    ],
-    backendFlag: 'MODULE_ADMIN_HOURS_ENABLED',
-  },
+    ],  },
   {
     id: 'communications',
     name: 'Communications',
@@ -372,9 +356,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Emergency notifications',
       'Email integration',
       'In-app notifications',
-    ],
-    backendFlag: 'MODULE_COMMUNICATIONS_ENABLED',
-  },
+    ],  },
   {
     id: 'elections',
     name: 'Elections & Voting',
@@ -392,9 +374,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Result tallying and reporting',
       'Election scheduling',
       'Public ballot voting via token',
-    ],
-    backendFlag: 'MODULE_ELECTIONS_ENABLED',
-  },
+    ],  },
   {
     id: 'minutes',
     name: 'Meeting Minutes',
@@ -411,9 +391,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Approval workflows',
       'Historical archive',
       'Action item tracking',
-    ],
-    backendFlag: 'MODULE_MEETINGS_ENABLED',
-  },
+    ],  },
   {
     id: 'incidents',
     name: 'Incidents & Reports',
@@ -480,9 +458,7 @@ export const AVAILABLE_MODULES: Module[] = [
       'Pledge management',
       'Financial and compliance reporting',
       'Grant deadline reminders',
-    ],
-    backendFlag: 'MODULE_FUNDRAISING_ENABLED',
-  },
+    ],  },
   {
     id: 'mobile',
     name: 'Mobile App Access',

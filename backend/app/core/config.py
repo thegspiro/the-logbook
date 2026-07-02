@@ -285,11 +285,11 @@ class Settings(BaseSettings):
                     "WARNING: API documentation should be disabled in production"
                 )
 
-            if self.MODULE_ELECTIONS_ENABLED and not self.VOTE_SIGNING_KEY:
+            if not self.VOTE_SIGNING_KEY:
                 warnings.append(
-                    "WARNING: VOTE_SIGNING_KEY should be set when elections module "
-                    "is enabled. Without it, vote signatures use SECRET_KEY and "
-                    "will be invalidated if SECRET_KEY is rotated."
+                    "WARNING: VOTE_SIGNING_KEY should be set for any organization "
+                    "using the elections module. Without it, vote signatures use "
+                    "SECRET_KEY and will be invalidated if SECRET_KEY is rotated."
                 )
 
             if not self.SECURITY_ENFORCE_HTTPS:
@@ -497,19 +497,6 @@ class Settings(BaseSettings):
     LDAP_BIND_DN: str | None = None
     LDAP_BIND_PASSWORD: str | None = None
     LDAP_SEARCH_BASE: str | None = None
-
-    # ============================================
-    # Modules
-    # ============================================
-    MODULE_TRAINING_ENABLED: bool = True
-    MODULE_COMPLIANCE_ENABLED: bool = True
-    MODULE_SCHEDULING_ENABLED: bool = True
-    MODULE_INVENTORY_ENABLED: bool = True
-    MODULE_MEETINGS_ENABLED: bool = True
-    MODULE_ELECTIONS_ENABLED: bool = False
-    MODULE_FUNDRAISING_ENABLED: bool = False
-    MODULE_FINANCE_ENABLED: bool = False
-    MODULE_MEDICAL_SCREENING_ENABLED: bool = True
 
     # ============================================
     # Monitoring

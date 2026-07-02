@@ -216,4 +216,71 @@ From here you can:
 
 ---
 
+## Realistic Example: Your First Day on The Logbook
+
+Follow **FF Jake Thompson**, a new member at Oakville Fire Department who just received his login credentials.
+
+### Part 1: First Login
+
+Jake opens the department's Logbook URL on his laptop and enters the email and temporary password from his welcome email. He clicks **Sign In** and the system immediately prompts him: "You must change your password."
+
+Jake sets a new password. The department requires passwords to be at least 12 characters with uppercase, lowercase, a number, and a special character. Jake first tries `password123` — the form rejects it with a clear message: "Password must be at least 12 characters and include an uppercase letter, a lowercase letter, a number, and a special character." He enters a compliant password and clicks **Change Password**.
+
+Because Oakville FD requires multi-factor authentication, Jake is redirected to MFA setup. He scans the displayed QR code with his authenticator app (Google Authenticator, Authy, etc.), enters the 6-digit code from the app, and the system confirms MFA is enabled. Jake is shown a set of recovery codes and told to save them in a safe place.
+
+> **Edge case:** If Jake loses his recovery codes later and is locked out, he must contact his department administrator. An admin can reset MFA from the Members Admin panel, allowing Jake to re-enroll.
+
+### Part 2: Dashboard Orientation
+
+After completing setup, the dashboard loads with personalized widgets:
+
+- **My Upcoming Shifts** — shows Jake's next 3 shifts with dates, times, and assigned apparatus
+- **Open Shifts** — available shifts Jake can sign up for
+- **Upcoming Events** — events in the next 30 days
+- **Training Progress** — Jake's enrollment status in active training programs
+- **Notifications** — a bell icon in the header with an unread count badge
+
+Jake clicks a notification: "Welcome to Oakville FD! Complete your profile to get started." The notification card expands to show details and a link to his account settings.
+
+> **Edge case:** If Jake hasn't been assigned to a platoon yet, the "My Upcoming Shifts" widget shows "No upcoming shifts" and the "Open Shifts" widget may still display shifts he can volunteer for.
+
+> **[SCREENSHOT NEEDED]:** _Dashboard after first login showing the personalized widgets (My Upcoming Shifts, Open Shifts, Upcoming Events, Training Progress) and the welcome notification expanded with a link to complete the profile_
+
+### Part 3: Completing Your Profile
+
+Jake navigates to **My Account** by clicking his avatar in the top-right corner and selecting **Account Settings**. He updates:
+
+- **Phone number** — enters his cell phone for SMS notifications
+- **Emergency contact** — adds his spouse's name and number
+- **Profile photo** — uploads a headshot
+
+He then visits his **Member Profile** (visible from the Members directory) and sees his department information: rank (Probationary), station (Station 1), and membership number.
+
+> **Edge case:** Jake tries to upload a 15MB photo. The upload is rejected with a message: "Maximum file size is 5MB." He resizes the image on his phone and re-uploads successfully.
+
+> **[SCREENSHOT NEEDED]:** _Account Settings page showing the profile photo upload area, phone number field, and emergency contact section with sample data filled in_
+
+### Part 4: Installing the Mobile App
+
+Jake opens the Logbook URL on his phone's browser (Chrome on Android). A banner appears at the bottom of the screen: "Add The Logbook to Home screen." Jake taps **Install** and the Logbook icon appears on his home screen.
+
+He opens the app from the home screen icon. The app launches in full-screen standalone mode — no browser toolbar, no address bar. It looks and feels like a native app.
+
+> **Edge case:** Jake's colleague uses Firefox on Android. No install banner appears automatically. He must tap the three-dot browser menu and select "Add to Home screen" manually. On iOS, only Safari supports PWA installation.
+
+### Part 5: First Actions
+
+Back on his laptop, Jake takes his first actions in the system:
+
+1. **RSVPs to an upcoming training event** — navigates to Events, finds "Q3 Ladder Operations Drill," clicks RSVP, selects "Going," and sets dietary preference to "None" and accessibility needs to "None"
+2. **Checks training program progress** — navigates to Training and sees his Phase 1 requirements listed with completion status (all currently incomplete)
+3. **Views assigned gear** — navigates to My Equipment under Inventory and sees his PPE items (helmet, turnout coat, turnout pants, boots, gloves) each with an assigned barcode
+4. **Manages notifications** — taps the bell icon in the header, reads a notification about an upcoming drill, and marks it as read by collapsing the card
+
+> **Edge case:** Jake navigates to **Training Admin** in the sidebar. The page loads with a "You don't have permission to view this page" message. Training Admin features are restricted to officers and administrators — regular members access their own training records through the member-facing Training section.
+
+> **[SCREENSHOT NEEDED]:** _Events page showing the RSVP modal for "Q3 Ladder Operations Drill" with the attendance dropdown set to "Going" and the dietary preference and accessibility fields visible_
+
+---
+
 **Next:** [Membership Management](./01-membership.md)
