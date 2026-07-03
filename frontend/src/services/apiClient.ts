@@ -143,16 +143,6 @@ export function clearTempAccessToken(): void {
   // Kept for backward compatibility with existing imports.
 }
 
-/** @deprecated Tokens are no longer stored in memory. Always returns null. */
-export function getTempAccessToken(): string | null {
-  return null;
-}
-
-/** @deprecated Tokens are no longer stored in memory. Always returns null. */
-export function getTempRefreshToken(): string | null {
-  return null;
-}
-
 /**
  * Perform a token refresh, sharing a single in-flight request across
  * all axios instances (global + module-specific).  This prevents
