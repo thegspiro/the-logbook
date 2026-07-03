@@ -299,7 +299,6 @@ class User(Base):
     compliance_exempt = Column(Boolean, default=False, nullable=False)
 
     email_verified = Column(Boolean, default=False)
-    email_verified_at = Column(DateTime(timezone=True))
 
     # MFA — secret and backup codes are encrypted at rest via
     # application-layer AES-256 (Fernet) to protect against DB compromise.
@@ -555,16 +554,11 @@ class Prospect(Base):
     address_zip = Column(String(20))
 
     # Application Details
-    application_date = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(
         String(50), default="applied"
     )  # applied, interviewing, accepted, rejected, withdrawn
     notes = Column(Text)
     referred_by = Column(String(255))  # Who referred them
-
-    # Conversion tracking
-    converted_to_user_id = Column(String(36), ForeignKey("users.id"), index=True)
-    converted_at = Column(DateTime(timezone=True))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -689,7 +683,6 @@ class Session(Base):
     refresh_token = Column(String(512))
     ip_address = Column(String(45))
     user_agent = Column(Text)
-    device_info = Column(JSON)
     geo_location = Column(JSON)
 
     expires_at = Column(DateTime(timezone=True), nullable=False, index=True)

@@ -71,15 +71,10 @@ class AuditLog(Base):
 
     # Event Data
     event_data = Column(JSON, nullable=False)
-    sensitive_data_encrypted = Column(Text)  # AES encrypted sensitive fields
 
     # Integrity Chain (Blockchain-inspired)
     previous_hash = Column(String(64), nullable=False)
     current_hash = Column(String(64), nullable=False, index=True)
-
-    # Metadata
-    server_id = Column(String(100))
-    process_id = Column(Integer)
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -127,8 +122,6 @@ class AuditLogCheckpoint(Base):
 
     # Verification results
     verified_at = Column(DateTime(timezone=True))
-    verification_status = Column(String(20))  # pending, verified, failed
-    verification_details = Column(JSON)
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

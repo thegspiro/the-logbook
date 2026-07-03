@@ -68,9 +68,8 @@ class IPException(Base):
     # Request Information
     # ============================================
 
-    # IP address or CIDR range (e.g., "192.168.1.100" or "10.0.0.0/8")
+    # IP address (single address; CIDR-range support was never implemented)
     ip_address = Column(String(45), nullable=False, index=True)
-    cidr_range = Column(String(50))  # Optional CIDR notation for ranges
 
     # Exception type
     exception_type = Column(
@@ -271,7 +270,6 @@ class BlockedAccessAttempt(Base):
     request_path = Column(String(500))
     request_method = Column(String(10))
     user_agent = Column(Text)
-    request_headers = Column(Text)  # JSON string of relevant headers
 
     # Timestamp
     blocked_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

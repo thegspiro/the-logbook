@@ -949,9 +949,7 @@ class Donation(Base):
 
     # Receipt and thank you tracking
     receipt_sent = Column(Boolean, nullable=False, server_default="0")
-    receipt_sent_at = Column(DateTime(timezone=True), nullable=True)
     thank_you_sent = Column(Boolean, nullable=False, server_default="0")
-    thank_you_sent_at = Column(DateTime(timezone=True), nullable=True)
 
     # Tax
     tax_deductible = Column(Boolean, nullable=False, server_default="1")

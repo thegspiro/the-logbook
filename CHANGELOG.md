@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dead-Code Cleanup (2026-07-03)
+
+Codebase-wide review for deprecated/unused code (training module excluded — it
+was reviewed separately). Only items verified to have zero live callers were
+removed.
+
+- **Removed ~1,900 lines of orphan/deprecated code**: two never-imported backend
+  services (`onboarding_session.py`, which also carried a duplicate
+  `OnboardingSessionModel`, and `integration_services/notification_dispatcher.py`),
+  nine dead frontend files (superseded `DepartmentInfo` onboarding page, a
+  duplicate top-level `types/minutes.ts`, `security-init.ts`, an unwired
+  `InlineConfirmAction` UX component, four unused hooks, and a dead
+  `MinutesDetailPage` re-export shim), and several `@deprecated` exports with no
+  importers (temp-token no-op getters, superseded onboarding API methods, and
+  redundant `RoleSetup`/`AdminUserCreation` barrel aliases).
+- **Dropped 14 dead columns** (migration `20260703_0001`) that were defined on
+  models but never read or written: `audit_logs.{sensitive_data_encrypted,
+  server_id, process_id}`, `audit_log_checkpoints.{verification_status,
+  verification_details}`, `users.email_verified_at`, `prospects.{application_date,
+  converted_to_user_id, converted_at}` (conversion tracking superseded by the
+  membership-pipeline module), `sessions.device_info`, `donations.{receipt_sent_at,
+  thank_you_sent_at}`, `ip_exceptions.cidr_range`, and
+  `blocked_access_attempts.request_headers`. Paired live booleans (`email_verified`,
+  `receipt_sent`, `thank_you_sent`) were kept. The migration guards each drop with
+  an existence check and discovers the auto-named FK on `converted_to_user_id` via
+  the inspector.
+- Forward-looking config stubs (S3/Azure/GCS storage, LDAP) and legacy
+  **data-format** handlers were intentionally left in place.
+
 ### Training Module — Security Review & Hardening (2026-07-02)
 
 A full security review of the training module (endpoints, services, models,
