@@ -40,6 +40,16 @@ removed.
   operational_rank}.py` — including the dead "report aggregate" cluster in
   `reports.py` (`MemberRosterReport`/`TrainingSummaryReport`/`EventAttendanceReport`
   and their entry sub-schemas). Pure code deletion, no DB impact.
+- **Consolidated the duplicate `schemas/document.py` into `schemas/documents.py`.**
+  The two modules defined same-named `DocumentCreate`/`DocumentUpdate`/`DocumentResponse`
+  classes for the same `documents` table — a footgun where an import's shape
+  depended on which module it came from. The `document.py` classes are a distinct
+  projection (the minutes-publish flow renames columns: `name`→`title`,
+  `file_type`→`mime_type`, `uploaded_by`→`created_by`), so they were moved into
+  `documents.py` under clear names (`PublishedDocumentResponse`,
+  `ServiceDocumentCreate/Update`, `ServiceFolderCreate/Update`) rather than merged
+  field-for-field, and the two importers (`document_service.py`, `minutes.py`) were
+  updated. `document.py` was deleted. No API behavior change.
 - Forward-looking config stubs (S3/Azure/GCS storage, LDAP) and legacy
   **data-format** handlers were intentionally left in place.
 

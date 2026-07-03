@@ -17,11 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.document import SYSTEM_FOLDERS, Document, DocumentFolder, DocumentType
 from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import Organization
-from app.schemas.document import (
-    DocumentCreate,
-    DocumentUpdate,
-    FolderCreate,
-    FolderUpdate,
+from app.schemas.documents import (
+    ServiceDocumentCreate,
+    ServiceDocumentUpdate,
+    ServiceFolderCreate,
+    ServiceFolderUpdate,
 )
 
 
@@ -102,7 +102,7 @@ class DocumentService:
         return result.scalar_one_or_none()
 
     async def create_folder(
-        self, data: FolderCreate, organization_id: UUID, created_by: UUID
+        self, data: ServiceFolderCreate, organization_id: UUID, created_by: UUID
     ) -> DocumentFolder:
         """Create a custom folder"""
         folder = DocumentFolder(
@@ -123,7 +123,7 @@ class DocumentService:
         return folder
 
     async def update_folder(
-        self, folder_id: str, organization_id: UUID, data: FolderUpdate
+        self, folder_id: str, organization_id: UUID, data: ServiceFolderUpdate
     ) -> Optional[DocumentFolder]:
         """Update a folder (system folders: only description, icon, color)"""
         folder = await self.get_folder(folder_id, organization_id)
@@ -207,7 +207,7 @@ class DocumentService:
 
     async def create_document(
         self,
-        data: DocumentCreate,
+        data: ServiceDocumentCreate,
         organization_id: UUID,
         uploaded_by: UUID,
         document_type: str = "uploaded",
@@ -240,7 +240,7 @@ class DocumentService:
         return doc
 
     async def update_document(
-        self, document_id: str, organization_id: UUID, data: DocumentUpdate
+        self, document_id: str, organization_id: UUID, data: ServiceDocumentUpdate
     ) -> Optional[Document]:
         """Update a document"""
         doc = await self.get_document(document_id, organization_id)
