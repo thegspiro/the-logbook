@@ -3,20 +3,15 @@ Tests for the document service (app/services/document_service.py).
 
 Covers the published-minutes HTML rendering (_generate_minutes_html) with a
 focus on HTML escaping of member-supplied text (XSS) and present/absent
-attendee partitioning, the timezone helper, and system-folder delete
-protection. DB mocked; no MySQL.
+attendee partitioning, plus the timezone helper. DB mocked; no MySQL.
 """
 
 from datetime import datetime
 from datetime import timezone as tz
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 from app.services.document_service import DocumentService
-
-
-def _one(obj):
-    return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
 def _svc(db=None):
@@ -101,30 +96,6 @@ class TestToLocal:
         out = _svc()._to_local(dt, None)
         # No tz name -> stays UTC.
         assert out.hour == 12
-
-
-class TestDeleteFolder:
-    async def test_system_folder_protected(self):
-        folder = SimpleNamespace(id="f1", is_system=True)
-        db = MagicMock()
-        db.execute = AsyncMock(return_value=_one(folder))
-        db.delete = AsyncMock()
-        assert await DocumentService(db).delete_folder("f1", "org-1") is False
-        db.delete.assert_not_awaited()
-
-    async def test_missing_folder_returns_false(self):
-        db = MagicMock()
-        db.execute = AsyncMock(return_value=_one(None))
-        assert await DocumentService(db).delete_folder("f1", "org-1") is False
-
-    async def test_regular_folder_deleted(self):
-        folder = SimpleNamespace(id="f1", is_system=False)
-        db = MagicMock()
-        db.execute = AsyncMock(return_value=_one(folder))
-        db.delete = AsyncMock()
-        db.commit = AsyncMock()
-        assert await DocumentService(db).delete_folder("f1", "org-1") is True
-        db.delete.assert_awaited()
 
 
 if __name__ == "__main__":  # pragma: no cover

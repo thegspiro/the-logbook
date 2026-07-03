@@ -147,58 +147,8 @@ class DocumentsSummary(BaseModel):
 
 
 # ============================================
-# Internal DocumentService / minutes-publish schemas
+# Minutes-publish response
 # ============================================
-# These model a *different projection* of the documents table than the
-# endpoint schemas above: the minutes-publish response renames columns
-# (name -> title, file_type -> mime_type, uploaded_by -> created_by) and
-# exposes source/content fields. Kept distinct on purpose — do not merge
-# their fields with the endpoint DocumentResponse/DocumentCreate above.
-
-
-class ServiceFolderCreate(BaseModel):
-    """Folder-create schema used by the internal DocumentService."""
-
-    name: str = Field(..., min_length=1, max_length=200)
-    slug: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = None
-    parent_folder_id: Optional[str] = None
-    sort_order: int = Field(default=0, ge=0)
-    icon: Optional[str] = Field(None, max_length=50)
-    color: Optional[str] = Field(None, max_length=50)
-
-
-class ServiceFolderUpdate(BaseModel):
-    """Folder-update schema used by the internal DocumentService."""
-
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = None
-    sort_order: Optional[int] = Field(None, ge=0)
-    icon: Optional[str] = Field(None, max_length=50)
-    color: Optional[str] = Field(None, max_length=50)
-
-
-class ServiceDocumentCreate(BaseModel):
-    """Document-create schema used by the internal DocumentService."""
-
-    folder_id: str
-    title: str = Field(..., min_length=1, max_length=300)
-    description: Optional[str] = None
-    file_path: Optional[str] = None
-    file_name: Optional[str] = Field(None, max_length=255)
-    file_size: Optional[int] = None
-    mime_type: Optional[str] = Field(None, max_length=100)
-    content_html: Optional[str] = None
-    tags: Optional[List[str]] = None
-
-
-class ServiceDocumentUpdate(BaseModel):
-    """Document-update schema used by the internal DocumentService."""
-
-    title: Optional[str] = Field(None, min_length=1, max_length=300)
-    description: Optional[str] = None
-    folder_id: Optional[str] = None
-    tags: Optional[List[str]] = None
 
 
 class PublishedDocumentResponse(UTCResponseBase):

@@ -50,6 +50,14 @@ removed.
   `ServiceDocumentCreate/Update`, `ServiceFolderCreate/Update`) rather than merged
   field-for-field, and the two importers (`document_service.py`, `minutes.py`) were
   updated. `document.py` was deleted. No API behavior change.
+- **Removed 9 superseded `DocumentService` CRUD methods** (~170 lines) —
+  `create`/`update`/`delete` folder & document, `get_folder`,
+  `get_folder_document_count`, `list_documents`. `DocumentService` is only
+  instantiated for the minutes-publish flow (`publish_minutes`), whose call
+  chain never reaches these; the document CRUD surface is owned by the plural
+  `DocumentsService`. Also removed the now-orphaned `Service*Create/Update`
+  schemas and the dead-method test cases (keeping the HTML-render / timezone
+  tests). `PublishedDocumentResponse` and the minutes-publish flow are unchanged.
 - Forward-looking config stubs (S3/Azure/GCS storage, LDAP) and legacy
   **data-format** handlers were intentionally left in place.
 
