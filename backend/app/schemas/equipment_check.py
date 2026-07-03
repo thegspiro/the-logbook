@@ -213,28 +213,6 @@ class EquipmentCheckTemplateResponse(UTCResponseBase):
     created_by: Optional[str] = None
 
 
-class EquipmentCheckTemplateSummary(BaseModel):
-    """Lightweight response for template listing."""
-
-    model_config = ConfigDict(
-        from_attributes=True,
-        alias_generator=to_camel,
-        populate_by_name=True,
-    )
-
-    id: str
-    name: str
-    apparatus_id: Optional[str] = None
-    apparatus_type: Optional[str] = None
-    check_timing: str
-    template_type: str = "equipment"
-    assigned_positions: Optional[List[str]] = None
-    is_active: bool
-    sort_order: int
-    compartment_count: int = 0
-    item_count: int = 0
-
-
 # ============================================
 # Shift Equipment Check Submission Schemas
 # ============================================

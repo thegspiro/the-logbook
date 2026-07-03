@@ -264,13 +264,6 @@ class FormSubmissionResponse(UTCResponseBase):
     model_config = _response_config
 
 
-class FormSubmissionDetailResponse(FormSubmissionResponse):
-    """Extended submission with submitter info"""
-
-    submitter_display_name: Optional[str] = None
-    form_name: Optional[str] = None
-
-
 class SubmissionsListResponse(BaseModel):
     """Schema for paginated submissions list"""
 

@@ -19,7 +19,7 @@ from app.schemas.event import (
     RequestPipelineTask,
     RSVPBase,
 )
-from app.schemas.user import EmergencyContact, AddressInfo
+from app.schemas.user import EmergencyContact
 
 
 # ============================================================
@@ -280,25 +280,3 @@ class TestEmergencyContactProperty:
         )
         assert contact.name == name
         assert contact.phone == phone
-
-
-class TestAddressInfoProperty:
-    """Property-based tests for AddressInfo schema."""
-
-    @given(
-        city=st.one_of(st.none(), st.text(max_size=100)),
-        state=st.one_of(st.none(), st.text(max_size=50)),
-        zip_code=st.one_of(st.none(), st.from_regex(r"\d{5}(-\d{4})?", fullmatch=True)),
-    )
-    @settings(max_examples=30)
-    def test_all_optional_fields_accepted(self, city, state, zip_code):
-        """AddressInfo with any combination of optional fields should work."""
-        addr = AddressInfo(city=city, state=state, zip_code=zip_code)
-        assert addr.country == "USA"  # Default
-
-    @given(city=st.text(min_size=101, max_size=200))
-    @settings(max_examples=10)
-    def test_oversized_city_fails(self, city):
-        """City > 100 chars should be rejected."""
-        with pytest.raises(ValidationError):
-            AddressInfo(city=city)

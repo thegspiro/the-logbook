@@ -986,20 +986,6 @@ class TestBallotResponse(BaseModel):
     message: str
 
 
-class BallotPreviewItem(BaseModel):
-    """Ballot item with eligibility annotation"""
-
-    id: str
-    type: str
-    title: str
-    description: Optional[str] = None
-    position: Optional[str] = None
-    eligible_voter_types: List[str] = Field(default=["all"])
-    vote_type: str = "approval"
-    require_attendance: bool = False
-    eligibility: Dict[str, Any]
-
-
 class BallotPreviewCandidate(BaseModel):
     """Simplified candidate for ballot preview"""
 

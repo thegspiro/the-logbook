@@ -950,15 +950,6 @@ class GrantsDashboardResponse(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
-class GrantReportFilters(BaseModel):
-    """Filters for grant and fundraising reports"""
-
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    campaign_id: Optional[UUID] = None
-    status: Optional[str] = None
-
-
 class ComplianceSummary(BaseModel):
     """Compliance summary for grant report"""
 

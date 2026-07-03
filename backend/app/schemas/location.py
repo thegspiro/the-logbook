@@ -110,15 +110,6 @@ class LocationListItem(UTCResponseBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class LocationWithCurrentEvents(LocationResponse):
-    """Location with information about current/upcoming events"""
-
-    current_events: list = Field(
-        default_factory=list, description="Events currently in check-in window"
-    )
-    next_event: Optional[dict] = Field(None, description="Next upcoming event")
-
-
 class LocationDisplayInfo(BaseModel):
     """Information for location display screens (iPads, etc.)"""
 

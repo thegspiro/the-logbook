@@ -69,13 +69,6 @@ class RankResponse(UTCResponseBase):
     updated_at: datetime
 
 
-class RankListResponse(BaseModel):
-    """List wrapper for rank responses."""
-
-    ranks: List[RankResponse]
-    total: int
-
-
 class RankReorderItem(BaseModel):
     """Single item in a reorder request."""
 

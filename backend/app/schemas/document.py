@@ -36,26 +36,6 @@ class FolderUpdate(BaseModel):
     color: Optional[str] = Field(None, max_length=50)
 
 
-class FolderResponse(UTCResponseBase):
-    """Folder response schema"""
-
-    id: str
-    organization_id: str
-    name: str
-    slug: Optional[str] = None
-    description: Optional[str] = None
-    parent_id: Optional[str] = None
-    sort_order: int = 0
-    is_system: bool = False
-    icon: Optional[str] = None
-    color: Optional[str] = None
-    document_count: int = 0
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class DocumentCreate(BaseModel):
     """Schema for creating a document via the document service"""
 
@@ -99,24 +79,5 @@ class DocumentResponse(UTCResponseBase):
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class DocumentListItem(UTCResponseBase):
-    """Compact document listing"""
-
-    id: str
-    folder_id: Optional[str] = None
-    title: str
-    description: Optional[str] = None
-    document_type: str
-    file_name: Optional[str] = None
-    file_size: Optional[int] = None
-    mime_type: Optional[str] = None
-    source_type: Optional[str] = None
-    tags: Optional[List[str]] = None
-    created_by: Optional[str] = None
-    created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

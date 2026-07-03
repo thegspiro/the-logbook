@@ -33,6 +33,13 @@ removed.
   `receipt_sent`, `thank_you_sent`) were kept. The migration guards each drop with
   an existence check and discovers the auto-named FK on `converted_to_user_id` via
   the inspector.
+- **Removed 38 unused Pydantic schema classes** (no importers, not used as
+  `response_model`, base class, or nested field) across `schemas/{reports,
+  inventory, apparatus, membership_pipeline, public_portal, finance, integration,
+  document, minute, user, election, equipment_check, forms, grant, location,
+  operational_rank}.py` — including the dead "report aggregate" cluster in
+  `reports.py` (`MemberRosterReport`/`TrainingSummaryReport`/`EventAttendanceReport`
+  and their entry sub-schemas). Pure code deletion, no DB impact.
 - Forward-looking config stubs (S3/Azure/GCS storage, LDAP) and legacy
   **data-format** handlers were intentionally left in place.
 
