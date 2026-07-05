@@ -512,6 +512,11 @@ def make_user(**overrides):
         address_state=None,
         address_zip=None,
         address_country=None,
+        date_of_birth=None,
+        membership_number=None,
+        membership_type=None,
+        status=None,
+        hire_date=None,
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -608,3 +613,170 @@ async def test_sync_inbound_contacts_tallies_actions():
     assert counts["updated"] == 1
     assert counts["unmatched"] == 1
     assert counts["failed"] == 0
+
+
+# ============================================================
+# Org orchestration + scheduled auto-sync
+# ============================================================
+
+
+import app.services.integration_services.salesforce_sync_service as svcmod  # noqa: E402
+
+
+class FakeScalars:
+    def __init__(self, items):
+        self._items = items
+
+    def all(self):
+        return self._items
+
+
+class FakeExecuteResult:
+    def __init__(self, items):
+        self._items = items
+
+    def scalars(self):
+        return FakeScalars(self._items)
+
+
+def make_integration_row(*, org_id="org-1", config=None):
+    return SimpleNamespace(
+        id="sf-int",
+        organization_id=org_id,
+        integration_type="salesforce",
+        enabled=True,
+        status="connected",
+        config=config or {},
+        last_sync_at=None,
+    )
+
+
+async def test_push_org_members_only_converts_and_pushes():
+    user = make_user(status=None)
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=FakeExecuteResult([user]))
+    sync = AsyncMock()
+
+    await svcmod.push_org_to_salesforce(db, sync, "org-1", ["members"])
+
+    sync.sync_all_members_to_salesforce.assert_awaited_once()
+    pushed = sync.sync_all_members_to_salesforce.await_args.args[0]
+    assert pushed[0]["id"] == "u1"
+    assert pushed[0]["status"] == "active"  # None status → default
+    # Only the members query ran; training/events were not requested.
+    sync.sync_all_training_to_salesforce.assert_not_awaited()
+
+
+async def test_pull_org_skips_when_inbound_disabled():
+    sync = AsyncMock()
+    sync.inbound_enabled = False
+    counts = await svcmod.pull_org_from_salesforce(
+        AsyncMock(), sync, make_integration_row()
+    )
+    assert counts == {"updated": 0, "unchanged": 0, "unmatched": 0, "failed": 0}
+    sync.pull_contacts.assert_not_awaited()
+
+
+async def test_pull_org_applies_when_inbound_enabled():
+    sync = AsyncMock()
+    sync.inbound_enabled = True
+    sync.pull_contacts = AsyncMock(return_value=[{"email": "a@b.c"}])
+    sync.sync_inbound_contacts = AsyncMock(
+        return_value={"updated": 1, "unchanged": 0, "unmatched": 0, "failed": 0}
+    )
+    counts = await svcmod.pull_org_from_salesforce(
+        AsyncMock(), sync, make_integration_row()
+    )
+    assert counts["updated"] == 1
+    sync.sync_inbound_contacts.assert_awaited_once()
+
+
+def _patch_orchestration(monkeypatch):
+    """Patch the sync-service helpers the runner imports at call time."""
+    calls = {"get": 0, "push": [], "pull": 0}
+
+    async def fake_get(_db, _org):
+        calls["get"] += 1
+        return object()
+
+    async def fake_push(_db, _svc, org_id, sync_types):
+        calls["push"].append((org_id, sync_types))
+        return {}
+
+    async def fake_pull(_db, _svc, _integration):
+        calls["pull"] += 1
+        return {}
+
+    monkeypatch.setattr(svcmod, "get_salesforce_sync_service", fake_get)
+    monkeypatch.setattr(svcmod, "push_org_to_salesforce", fake_push)
+    monkeypatch.setattr(svcmod, "pull_org_from_salesforce", fake_pull)
+    return calls
+
+
+async def test_auto_sync_skips_integrations_without_opt_in(monkeypatch):
+    from app.services import scheduled_tasks as st
+
+    integ = make_integration_row(config={"auto_sync_enabled": False})
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=FakeExecuteResult([integ]))
+    calls = _patch_orchestration(monkeypatch)
+
+    result = await st.run_salesforce_auto_sync(db)
+
+    assert result["integrations_enabled"] == 0
+    assert calls == {"get": 0, "push": [], "pull": 0}
+
+
+async def test_auto_sync_pushes_for_push_direction(monkeypatch):
+    from app.services import scheduled_tasks as st
+
+    integ = make_integration_row(
+        config={"auto_sync_enabled": True, "sync_direction": "push"}
+    )
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=FakeExecuteResult([integ]))
+    calls = _patch_orchestration(monkeypatch)
+
+    result = await st.run_salesforce_auto_sync(db)
+
+    assert result["integrations_enabled"] == 1
+    assert result["synced"] == 1
+    assert len(calls["push"]) == 1
+    assert calls["pull"] == 0
+    assert integ.last_sync_at is not None
+    db.commit.assert_awaited()
+
+
+async def test_auto_sync_pushes_and_pulls_for_both_direction(monkeypatch):
+    from app.services import scheduled_tasks as st
+
+    integ = make_integration_row(
+        config={"auto_sync_enabled": True, "sync_direction": "both"}
+    )
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=FakeExecuteResult([integ]))
+    calls = _patch_orchestration(monkeypatch)
+
+    await st.run_salesforce_auto_sync(db)
+
+    assert len(calls["push"]) == 1
+    assert calls["pull"] == 1
+
+
+async def test_auto_sync_isolates_per_org_failures(monkeypatch):
+    from app.services import scheduled_tasks as st
+
+    integ = make_integration_row(config={"auto_sync_enabled": True})
+    db = AsyncMock()
+    db.execute = AsyncMock(return_value=FakeExecuteResult([integ]))
+
+    async def boom(_db, _org):
+        raise RuntimeError("connection lost")
+
+    monkeypatch.setattr(svcmod, "get_salesforce_sync_service", boom)
+
+    result = await st.run_salesforce_auto_sync(db)
+
+    assert result["failed"] == 1
+    assert result["synced"] == 0
+    db.rollback.assert_awaited()

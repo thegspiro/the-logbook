@@ -13,6 +13,7 @@ The Salesforce integration enables bidirectional synchronization between The Log
 - **Readiness Check & Dry-Run Preview** — Before writing anything, confirm the target org has the custom fields the sync needs, and preview how many members would be created vs. matched. Ideal for an org that is still being built out
 - **Graceful Field Handling** — Custom fields the org has not created yet are dropped at write time (and reported) instead of failing the record, so a half-configured org still receives data
 - **Bidirectional Sync** — Push Logbook data to Salesforce and pull Salesforce changes back. Sync direction configurable: push-only, pull-only, or bidirectional
+- **Automatic Scheduled Sync** — Opt in with `auto_sync_enabled` and the background scheduler runs the org's sync (per its direction) every 30 minutes, on top of the manual sync buttons and inbound webhook
 - **Configurable Field Mappings** — Map Logbook fields to Salesforce fields per object type (members↔contacts, training→tasks, events→events)
 - **Real-Time Webhooks** — Receive Salesforce outbound messages via HMAC-validated webhook for immediate updates
 - **Sync History** — Full audit trail of sync operations with created/updated/adopted/failed counts
@@ -205,6 +206,25 @@ Logbook members, subject to these rules:
   `sync_direction` is `pull` or `both`. A push-only org returns pulled contacts
   for review but writes nothing.
 
+### Automatic scheduled sync
+
+Set `auto_sync_enabled: true` on the integration (a checkbox in the connect
+form) to have the background scheduler sync the org automatically.
+
+- Runs every 30 minutes via the in-process scheduler
+  (`run_salesforce_auto_sync` in `scheduled_tasks.py`, registered in
+  `TASK_RUNNERS` / `TASK_INTERVALS_SECONDS` / `SCHEDULE`). No Celery — the app
+  uses the same in-process asyncio loop as every other periodic task.
+- Only connected integrations with `auto_sync_enabled` are processed.
+- Honors `sync_direction`: pushes members/training/events when `push`/`both`,
+  and pulls + applies contacts when `pull`/`both`.
+- `sync_types` (default members, training, events) selects which entity types
+  are pushed.
+- Each org is isolated in its own transaction — one org's failure is logged and
+  does not abort the others. `last_sync_at` advances only on success, so pulls
+  stay incremental.
+- Manual sync (the buttons / endpoints) works regardless of this setting.
+
 ---
 
 ## Edge Cases
@@ -250,6 +270,7 @@ Salesforce configuration is stored in the `integrations` table with `provider_ty
   "sync_types": ["members", "training", "events"],
   "match_strategy": "email",
   "graceful_fields": true,
+  "auto_sync_enabled": false,
   "field_mappings": { ... },
   "webhook_secret": "..."
 }

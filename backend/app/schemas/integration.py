@@ -162,6 +162,9 @@ class SalesforceConfig(BaseModel):
     # When True, custom fields the target org has not created yet are dropped
     # at write time instead of failing the record (for orgs still being built).
     graceful_fields: bool = True
+    # When True, the background scheduler pushes/pulls this org automatically
+    # every 30 minutes per sync_direction (in addition to manual sync buttons).
+    auto_sync_enabled: bool = False
 
 
 # Map integration_type → config schema for strict validation

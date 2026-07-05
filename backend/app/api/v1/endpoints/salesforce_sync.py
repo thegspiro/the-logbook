@@ -7,7 +7,6 @@ status, and managing field mappings between Logbook and Salesforce.
 
 import secrets
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
@@ -32,7 +31,10 @@ from app.services.integration_services.salesforce_oauth_service import (
     get_client_credentials,
 )
 from app.services.integration_services.salesforce_sync_service import (
+    event_to_dict,
     get_salesforce_sync_service,
+    training_record_to_dict,
+    user_to_member_dict,
 )
 
 router = APIRouter()
@@ -66,60 +68,6 @@ async def _get_sf_integration(db: AsyncSession, organization_id: str) -> Integra
             detail="Salesforce integration is not connected",
         )
     return integration
-
-
-def _user_to_dict(user: User) -> dict[str, Any]:
-    """Convert a User model to a plain dict for the sync service."""
-    return {
-        "id": user.id,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "email": user.email,
-        "phone": user.phone,
-        "mobile": user.mobile,
-        "rank": user.rank,
-        "station": user.station,
-        "address_street": user.address_street,
-        "address_city": user.address_city,
-        "address_state": user.address_state,
-        "address_zip": user.address_zip,
-        "address_country": user.address_country,
-        "date_of_birth": user.date_of_birth,
-        "membership_number": user.membership_number,
-        "membership_type": user.membership_type,
-        "status": user.status.value if user.status else "active",
-        "hire_date": user.hire_date,
-    }
-
-
-def _training_record_to_dict(rec: TrainingRecord) -> dict[str, Any]:
-    """Convert a TrainingRecord to a plain dict for the sync service."""
-    return {
-        "id": rec.id,
-        "user_id": rec.user_id,
-        "course_name": rec.course_name,
-        "completion_date": rec.completion_date,
-        "hours_completed": rec.hours_completed,
-        "status": rec.status.value if rec.status else "completed",
-        "certification_number": rec.certification_number,
-        "expiration_date": rec.expiration_date,
-        "training_type": (rec.training_type.value if rec.training_type else ""),
-        "instructor": rec.instructor,
-    }
-
-
-def _event_to_dict(event: Event) -> dict[str, Any]:
-    """Convert an Event model to a plain dict for the sync service."""
-    return {
-        "id": event.id,
-        "title": event.title,
-        "description": event.description,
-        "event_type": (event.event_type.value if event.event_type else "other"),
-        "location": event.location,
-        "start_datetime": event.start_datetime,
-        "end_datetime": event.end_datetime,
-        "is_mandatory": event.is_mandatory,
-    }
 
 
 # ============================================================
@@ -168,7 +116,7 @@ async def push_members_to_salesforce(
         )
     )
     members = result.scalars().all()
-    member_dicts = [_user_to_dict(m) for m in members]
+    member_dicts = [user_to_member_dict(m) for m in members]
     counts = await sync_service.sync_all_members_to_salesforce(member_dicts)
 
     # Update last_sync_at
@@ -220,7 +168,7 @@ async def push_training_to_salesforce(
         )
     )
     records = result.scalars().all()
-    record_dicts = [_training_record_to_dict(r) for r in records]
+    record_dicts = [training_record_to_dict(r) for r in records]
     counts = await sync_service.sync_all_training_to_salesforce(record_dicts)
 
     integration = await _get_sf_integration(db, org_id)
@@ -277,7 +225,7 @@ async def push_events_to_salesforce(
     failed = 0
     for event in events:
         try:
-            sf_id = await sync_service.push_event(_event_to_dict(event))
+            sf_id = await sync_service.push_event(event_to_dict(event))
             if sf_id:
                 created += 1
             else:
@@ -421,7 +369,7 @@ async def preview_member_sync(
         )
     )
     members = result.scalars().all()
-    member_dicts = [_user_to_dict(m) for m in members]
+    member_dicts = [user_to_member_dict(m) for m in members]
     preview = await sync_service.preview_member_sync(member_dicts)
     return {"success": True, **preview}
 

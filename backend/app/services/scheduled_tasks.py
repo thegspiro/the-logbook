@@ -72,6 +72,9 @@ Recommended crontab (add to host or container cron):
 
 # Every 30 minutes — auto-sync external training providers (Vector Solutions, etc.)
 */30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=external_training_auto_sync
+
+# Every 30 minutes — auto-sync Salesforce for orgs with auto-sync enabled
+*/30 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=salesforce_auto_sync
 -----------------------------------------------------
 """
 
@@ -228,6 +231,12 @@ SCHEDULE = {
     },
     "external_training_auto_sync": {
         "description": "Sync training records from external providers (Vector Solutions, etc.) that have auto-sync enabled and are due",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30 * * * *",
+        "cron": "*/30 * * * *",
+    },
+    "salesforce_auto_sync": {
+        "description": "Push/pull Salesforce for organizations with auto-sync enabled, per each org's sync direction (members, training, events, and inbound contacts)",
         "frequency": "every 30 minutes",
         "recommended_time": "*/30 * * * *",
         "cron": "*/30 * * * *",
@@ -4178,6 +4187,74 @@ async def run_expire_ip_exceptions(db: AsyncSession) -> Dict[str, Any]:
     return {"task": "expire_ip_exceptions", "expired": expired}
 
 
+async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
+    """Automatically sync Salesforce for organizations that opted in.
+
+    For each connected Salesforce integration whose config sets
+    ``auto_sync_enabled``, runs the operations its ``sync_direction`` permits:
+    push members/training/events out, and/or pull Contacts back and apply them
+    to members. Each org is isolated — one org's failure does not abort the
+    others. Runs every 30 minutes.
+    """
+    from datetime import timezone as dt_timezone
+
+    from app.models.integration import Integration
+    from app.services.integration_services.salesforce_sync_service import (
+        get_salesforce_sync_service,
+        pull_org_from_salesforce,
+        push_org_to_salesforce,
+    )
+
+    result = await db.execute(
+        select(Integration).where(
+            Integration.integration_type == "salesforce",
+            Integration.enabled.is_(True),
+            Integration.status == "connected",
+        )
+    )
+    integrations = list(result.scalars().all())
+
+    enabled = 0
+    synced = 0
+    failed = 0
+    for integration in integrations:
+        config = integration.config or {}
+        if not config.get("auto_sync_enabled"):
+            continue
+        enabled += 1
+        org_id = str(integration.organization_id)
+        try:
+            sync_service = await get_salesforce_sync_service(db, org_id)
+            if not sync_service:
+                continue
+            direction = str(config.get("sync_direction", "push")).lower()
+            sync_types = config.get("sync_types") or [
+                "members",
+                "training",
+                "events",
+            ]
+            if direction in ("push", "both"):
+                await push_org_to_salesforce(db, sync_service, org_id, sync_types)
+            if direction in ("pull", "both"):
+                await pull_org_from_salesforce(db, sync_service, integration)
+            integration.last_sync_at = datetime.now(dt_timezone.utc)
+            await db.commit()
+            synced += 1
+        except Exception:
+            await db.rollback()
+            logger.warning(
+                "Salesforce auto-sync failed for org %s", org_id, exc_info=True
+            )
+            failed += 1
+
+    return {
+        "task": "salesforce_auto_sync",
+        "integrations_enabled": enabled,
+        "synced": synced,
+        "failed": failed,
+    }
+
+
 # Task runner map
 TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
@@ -4204,6 +4281,7 @@ TASK_RUNNERS = {
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
     "external_training_auto_sync": run_external_training_auto_sync,
+    "salesforce_auto_sync": run_salesforce_auto_sync,
     "mark_overdue_dues": run_mark_overdue_dues,
     "mark_overdue_maintenance": run_mark_overdue_maintenance,
     "admin_hours_auto_close": run_admin_hours_auto_close,
@@ -4233,6 +4311,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "end_of_shift_checklist_reminders": 1800,
     "end_of_shift_summary": 1800,
     "external_training_auto_sync": 1800,
+    "salesforce_auto_sync": 1800,
     # Daily (checked each loop tick; runs at most once per interval)
     "cert_expiration_alerts": 86400,
     "action_item_reminders": 86400,

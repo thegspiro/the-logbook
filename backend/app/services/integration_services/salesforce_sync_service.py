@@ -798,3 +798,155 @@ async def get_salesforce_sync_service(
     graceful = bool(config.get("graceful_fields", True))
     sf_service = SalesforceService(creds, skip_unknown_fields=graceful)
     return SalesforceSyncService(db, sf_service, integration)
+
+
+# ============================================================
+# Entity → sync-dict converters (shared by the manual endpoints and the
+# scheduled auto-sync so the field set stays in one place)
+# ============================================================
+
+
+def user_to_member_dict(user: User) -> dict[str, Any]:
+    """Convert a User model to the plain dict the sync service expects."""
+    return {
+        "id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "phone": user.phone,
+        "mobile": user.mobile,
+        "rank": user.rank,
+        "station": user.station,
+        "address_street": user.address_street,
+        "address_city": user.address_city,
+        "address_state": user.address_state,
+        "address_zip": user.address_zip,
+        "address_country": user.address_country,
+        "date_of_birth": user.date_of_birth,
+        "membership_number": user.membership_number,
+        "membership_type": user.membership_type,
+        "status": user.status.value if user.status else "active",
+        "hire_date": user.hire_date,
+    }
+
+
+def training_record_to_dict(rec: Any) -> dict[str, Any]:
+    """Convert a TrainingRecord model to a plain dict for the sync service."""
+    return {
+        "id": rec.id,
+        "user_id": rec.user_id,
+        "course_name": rec.course_name,
+        "completion_date": rec.completion_date,
+        "hours_completed": rec.hours_completed,
+        "status": rec.status.value if rec.status else "completed",
+        "certification_number": rec.certification_number,
+        "expiration_date": rec.expiration_date,
+        "training_type": (rec.training_type.value if rec.training_type else ""),
+        "instructor": rec.instructor,
+    }
+
+
+def event_to_dict(event: Any) -> dict[str, Any]:
+    """Convert an Event model to a plain dict for the sync service."""
+    return {
+        "id": event.id,
+        "title": event.title,
+        "description": event.description,
+        "event_type": (event.event_type.value if event.event_type else "other"),
+        "location": event.location,
+        "start_datetime": event.start_datetime,
+        "end_datetime": event.end_datetime,
+        "is_mandatory": event.is_mandatory,
+    }
+
+
+# ============================================================
+# Org-level orchestration (used by the manual endpoints and auto-sync)
+# ============================================================
+
+
+async def push_org_to_salesforce(
+    db: AsyncSession,
+    sync_service: "SalesforceSyncService",
+    organization_id: str,
+    sync_types: list[str],
+) -> dict[str, Any]:
+    """Push the requested entity types for one organization.
+
+    Does not commit — outbound pushes write to Salesforce, not the local DB.
+    The caller owns any local writes (e.g. last_sync_at).
+    """
+    from app.models.event import Event
+    from app.models.training import TrainingRecord
+
+    results: dict[str, Any] = {}
+
+    if "members" in sync_types:
+        rows = (
+            await db.execute(
+                select(User).where(
+                    User.organization_id == organization_id,
+                    User.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        results["members"] = await sync_service.sync_all_members_to_salesforce(
+            [user_to_member_dict(u) for u in rows]
+        )
+
+    if "training" in sync_types:
+        rows = (
+            await db.execute(
+                select(TrainingRecord).where(
+                    TrainingRecord.organization_id == organization_id
+                )
+            )
+        ).scalars().all()
+        results["training"] = await sync_service.sync_all_training_to_salesforce(
+            [training_record_to_dict(r) for r in rows]
+        )
+
+    if "events" in sync_types:
+        rows = (
+            await db.execute(
+                select(Event).where(
+                    Event.organization_id == organization_id,
+                    Event.is_cancelled.is_(False),
+                )
+            )
+        ).scalars().all()
+        synced = 0
+        failed = 0
+        for event in rows:
+            try:
+                if await sync_service.push_event(event_to_dict(event)):
+                    synced += 1
+                else:
+                    failed += 1
+            except Exception:
+                logger.warning(
+                    "Auto-sync event push failed for %s", event.id, exc_info=True
+                )
+                failed += 1
+        results["events"] = {"synced": synced, "failed": failed}
+
+    return results
+
+
+async def pull_org_from_salesforce(
+    db: AsyncSession,
+    sync_service: "SalesforceSyncService",
+    integration: Integration,
+) -> dict[str, int]:
+    """Pull Salesforce Contacts and apply them to members for one org.
+
+    Mutates matched User rows on the session but does not commit — the caller
+    owns the transaction. Respects the org's sync direction.
+    """
+    empty = {"updated": 0, "unchanged": 0, "unmatched": 0, "failed": 0}
+    if not sync_service.inbound_enabled:
+        return empty
+    contacts = await sync_service.pull_contacts(since=integration.last_sync_at)
+    if not contacts:
+        return empty
+    return await sync_service.sync_inbound_contacts(contacts)

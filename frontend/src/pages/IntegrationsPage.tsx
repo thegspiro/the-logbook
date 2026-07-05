@@ -256,6 +256,7 @@ const IntegrationsPage: React.FC = () => {
   const [sfSyncDirection, setSfSyncDirection] = useState('push');
   const [sfMatchStrategy, setSfMatchStrategy] = useState('email');
   const [sfGracefulFields, setSfGracefulFields] = useState(true);
+  const [sfAutoSync, setSfAutoSync] = useState(false);
 
   const loadIntegrations = useCallback(async () => {
     try {
@@ -329,6 +330,7 @@ const IntegrationsPage: React.FC = () => {
     setSfSyncDirection('push');
     setSfMatchStrategy('email');
     setSfGracefulFields(true);
+    setSfAutoSync(false);
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -356,6 +358,7 @@ const IntegrationsPage: React.FC = () => {
           sync_direction: sfSyncDirection,
           match_strategy: sfMatchStrategy,
           graceful_fields: sfGracefulFields,
+          auto_sync_enabled: sfAutoSync,
         };
       default:
         return {};
@@ -741,6 +744,19 @@ const IntegrationsPage: React.FC = () => {
               <label htmlFor="sf-graceful-fields" className="text-xs text-theme-text-secondary">
                 Skip custom fields my Salesforce org hasn&apos;t created yet
                 (recommended while building out your org).
+              </label>
+            </div>
+            <div className="flex items-start gap-2">
+              <input
+                id="sf-auto-sync"
+                type="checkbox"
+                checked={sfAutoSync}
+                onChange={(e) => setSfAutoSync(e.target.checked)}
+                className="mt-0.5"
+              />
+              <label htmlFor="sf-auto-sync" className="text-xs text-theme-text-secondary">
+                Automatically sync every 30 minutes (per the sync direction
+                above), in addition to the manual sync buttons.
               </label>
             </div>
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
