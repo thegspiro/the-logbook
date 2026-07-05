@@ -176,11 +176,34 @@ Set the strategy in the integration config, e.g. `{ "match_strategy": "email_las
 1. Salesforce fires outbound message on Contact change
 2. POST /public/v1/webhooks/salesforce/{integration_id}
 3. HMAC-SHA256 signature validated against integration webhook_secret
-4. Salesforce Organization ID validated against stored config
-5. Contact payload parsed and mapped to Logbook member fields
-6. Member record created or updated
-7. 200 OK returned to Salesforce
+4. Contact payload parsed and mapped to Logbook member fields
+5. Matched to an existing member (Logbook external ID, then email)
+6. The member's contact/demographic fields are updated (see below)
+7. 200 OK returned to Salesforce with per-record counts
 ```
+
+### Inbound persistence (Salesforce → Logbook)
+
+Both the webhook and a manual `POST /pull/contacts` apply inbound Contacts to
+Logbook members, subject to these rules:
+
+- **Update-only, never create.** Inbound Contacts are matched to *existing*
+  members by Logbook external ID, then email. Unmatched Contacts are counted
+  and skipped — a Salesforce Contact never auto-creates a Logbook user (mirrors
+  the app's link-to-existing OAuth policy, and avoids creating members without
+  roles/auth/onboarding).
+- **Never delete.** A Salesforce Contact deletion is logged and ignored; it
+  does not remove or deactivate a member.
+- **Bounded field set.** Only contact/demographic fields are written
+  (`first_name`, `last_name`, `phone`, `mobile`, `rank`, `station`, and the
+  `address_*` fields). Identity (`email`, membership number), the member
+  `status` state machine, and date fields are intentionally **not** overwritten
+  from Salesforce.
+- **No blanking.** An empty inbound value never clears an existing Logbook
+  value.
+- **Respects sync direction.** Inbound changes are applied only when the org's
+  `sync_direction` is `pull` or `both`. A push-only org returns pulled contacts
+  for review but writes nothing.
 
 ---
 
@@ -190,7 +213,9 @@ Set the strategy in the integration config, e.g. `{ "match_strategy": "email_las
 |----------|----------|
 | Salesforce API rate limit exceeded during sync | Sync pauses, retries with exponential backoff, logs partial progress |
 | Webhook received for unmapped Salesforce object | Event logged and skipped; no error returned to Salesforce |
-| Member deleted in Logbook but exists in Salesforce | Configurable: soft-delete in Salesforce or unlink without delete |
+| Inbound Contact matches no existing member | Counted as `unmatched` and skipped — never auto-creates a member |
+| Salesforce Contact deleted | Logged and ignored — never deletes or deactivates the Logbook member |
+| Inbound value is empty | Skipped — an empty Salesforce value never blanks an existing Logbook field |
 | Salesforce field mapping references nonexistent field | Mapping validation on save rejects invalid field references |
 | OAuth token expires mid-sync | Auto-refresh token and retry the request once |
 | Member already exists in Salesforce (no Logbook external ID yet) | Matched by the configured strategy (email / email+lastname) and **adopted** — the Logbook ID is stamped on and the record updated, never duplicated |

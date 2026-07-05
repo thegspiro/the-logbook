@@ -479,3 +479,132 @@ def test_build_authorization_url_uses_sandbox_and_scopes():
     assert "state=state-8" in url
     assert "refresh_token" in url  # offline-access scope is requested
     assert "client_id=cid" in url
+
+
+# ============================================================
+# Inbound persistence (Salesforce → Logbook)
+# ============================================================
+
+
+class FakeResult:
+    """Stand-in for a SQLAlchemy Result exposing scalar_one_or_none()."""
+
+    def __init__(self, value):
+        self._value = value
+
+    def scalar_one_or_none(self):
+        return self._value
+
+
+def make_user(**overrides):
+    defaults = dict(
+        id="u1",
+        organization_id="org-1",
+        email="jane@dept.org",
+        first_name="Jane",
+        last_name="Doe",
+        phone=None,
+        mobile=None,
+        rank=None,
+        station=None,
+        address_street=None,
+        address_city=None,
+        address_state=None,
+        address_zip=None,
+        address_country=None,
+    )
+    defaults.update(overrides)
+    return SimpleNamespace(**defaults)
+
+
+def make_inbound_service(*, config=None, results=None):
+    """Build a sync service whose db.execute() returns queued FakeResults."""
+    db = AsyncMock()
+    if results is not None:
+        db.execute = AsyncMock(side_effect=[FakeResult(r) for r in results])
+    sf = AsyncMock()
+    sf.skipped_fields = set()
+    integration = make_integration(config=config or {})
+    return SalesforceSyncService(db=db, sf_service=sf, integration=integration)
+
+
+def test_inbound_enabled_respects_sync_direction():
+    assert make_inbound_service(config={"sync_direction": "push"}).inbound_enabled is False
+    assert make_inbound_service(config={"sync_direction": "pull"}).inbound_enabled is True
+    assert make_inbound_service(config={"sync_direction": "both"}).inbound_enabled is True
+
+
+async def test_apply_inbound_updates_matched_user_by_external_id():
+    user = make_user()
+    service = make_inbound_service(config={"sync_direction": "both"}, results=[user])
+    lb = {
+        "logbook_member_id": "u1",
+        "email": "jane@dept.org",
+        "phone": "555-1234",
+        "first_name": "Janet",
+    }
+    action = await service.apply_inbound_contact(lb)
+    assert action == "updated"
+    assert user.phone == "555-1234"
+    assert user.first_name == "Janet"
+
+
+async def test_apply_inbound_matches_by_email_when_no_external_id():
+    user = make_user()
+    service = make_inbound_service(results=[user])
+    action = await service.apply_inbound_contact(
+        {"email": "jane@dept.org", "mobile": "555-9999"}
+    )
+    assert action == "updated"
+    assert user.mobile == "555-9999"
+
+
+async def test_apply_inbound_unmatched_creates_nothing():
+    service = make_inbound_service(results=[None])
+    action = await service.apply_inbound_contact(
+        {"email": "ghost@dept.org", "phone": "555-0000"}
+    )
+    assert action == "unmatched"
+
+
+async def test_apply_inbound_ignores_non_whitelisted_and_identity_fields():
+    user = make_user(email="old@dept.org")
+    service = make_inbound_service(results=[user])
+    action = await service.apply_inbound_contact(
+        {
+            "logbook_member_id": "u1",
+            "email": "new@dept.org",  # identity — must not change
+            "membership_number": "999",  # not whitelisted
+            "status": "inactive",  # not whitelisted
+            "phone": "555-7777",  # whitelisted
+        }
+    )
+    assert action == "updated"
+    assert user.phone == "555-7777"
+    assert user.email == "old@dept.org"
+    assert not hasattr(user, "status") or user.status != "inactive"
+
+
+async def test_apply_inbound_does_not_blank_existing_values():
+    user = make_user(phone="555-1234")
+    service = make_inbound_service(results=[user])
+    action = await service.apply_inbound_contact(
+        {"email": "jane@dept.org", "phone": ""}
+    )
+    assert action == "unchanged"
+    assert user.phone == "555-1234"
+
+
+async def test_sync_inbound_contacts_tallies_actions():
+    matched = make_user()
+    # First contact matches by email → updated; second matches nobody.
+    service = make_inbound_service(results=[matched, None])
+    counts = await service.sync_inbound_contacts(
+        [
+            {"email": "jane@dept.org", "phone": "555-1"},
+            {"email": "ghost@dept.org", "phone": "555-2"},
+        ]
+    )
+    assert counts["updated"] == 1
+    assert counts["unmatched"] == 1
+    assert counts["failed"] == 0

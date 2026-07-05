@@ -318,7 +318,13 @@ async def pull_contacts_from_salesforce(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("integrations.manage")),
 ):
-    """Pull Contacts from Salesforce (incremental since last sync)."""
+    """Pull Contacts from Salesforce and apply them to Logbook members.
+
+    Contacts are matched to existing members (by Logbook external ID, then
+    email) and their demographic fields updated. Members are never created or
+    deleted. If the org's sync direction is push-only, contacts are returned
+    for review but not written.
+    """
     org_id = str(current_user.organization_id)
     sync_service = await get_salesforce_sync_service(db, org_id)
     if not sync_service:
@@ -329,6 +335,11 @@ async def pull_contacts_from_salesforce(
 
     integration = await _get_sf_integration(db, org_id)
     contacts = await sync_service.pull_contacts(since=integration.last_sync_at)
+
+    counts = {"updated": 0, "unchanged": 0, "unmatched": 0, "failed": 0}
+    inbound_enabled = sync_service.inbound_enabled
+    if inbound_enabled and contacts:
+        counts = await sync_service.sync_inbound_contacts(contacts)
 
     integration.last_sync_at = datetime.now(timezone.utc)
     await db.commit()
@@ -342,6 +353,8 @@ async def pull_contacts_from_salesforce(
             "user_id": current_user.id,
             "organization_id": org_id,
             "contacts_pulled": len(contacts),
+            "inbound_enabled": inbound_enabled,
+            **counts,
         },
     )
 
@@ -349,6 +362,9 @@ async def pull_contacts_from_salesforce(
         "success": True,
         "contacts": contacts,
         "count": len(contacts),
+        "inbound_enabled": inbound_enabled,
+        "persisted": counts["updated"],
+        **counts,
     }
 
 

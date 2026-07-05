@@ -423,7 +423,15 @@ const IntegrationsPage: React.FC = () => {
         toast.success(result.message);
       } else if (syncType === 'pull-contacts') {
         const result = await integrationsService.salesforcePullContacts();
-        toast.success(`Pulled ${result.count} contacts from Salesforce`);
+        if (!result.inbound_enabled) {
+          toast.success(
+            `Pulled ${result.count} contacts for review. Set sync direction to Pull or Bidirectional to apply them.`
+          );
+        } else {
+          toast.success(
+            `Pulled ${result.count} contacts: ${result.updated} member(s) updated, ${result.unmatched} unmatched.`
+          );
+        }
       }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Sync failed'));
@@ -974,12 +982,12 @@ const IntegrationsPage: React.FC = () => {
                   disabled={syncing !== null}
                   className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
                 >
-                  <span>Contacts &rarr; Review</span>
+                  <span>Contacts &rarr; Members</span>
                   {syncing === 'pull-contacts' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
                 </button>
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mt-2">
                   <p className="text-blue-700 dark:text-blue-400 text-xs">
-                    Pulled contacts are returned for review. Real-time inbound sync is available via the Salesforce webhook endpoint.
+                    Matches contacts to existing members (by ID, then email) and updates their contact details. Members are never created or deleted. Requires sync direction Pull or Bidirectional. Real-time updates also arrive via the Salesforce webhook.
                   </p>
                 </div>
               </div>

@@ -143,28 +143,40 @@ async def salesforce_inbound_webhook(
     sf_service = SalesforceService(creds)
     sync_service = SalesforceSyncService(db, sf_service, integration)
 
-    # NOTE: inbound sync is not yet implemented. parse_inbound_contact only maps
-    # Salesforce fields to Logbook fields and returns them — nothing is persisted
-    # to the database. We parse to validate the payload shape and surface that
-    # records were received, but report them as parsed (not stored) so callers
-    # and the audit trail are not misled into thinking members were updated.
-    parsed = 0
-    for record in records:
-        if sobject == "Contact":
-            sync_service.parse_inbound_contact(record)
-            parsed += 1
-        else:
-            logger.info("Ignoring unsupported sObject type: %s", sobject)
-
-    if parsed:
-        logger.warning(
-            "Salesforce inbound webhook parsed %d %s record(s) for integration "
-            "%s but inbound persistence is not implemented; records were NOT "
-            "stored.",
-            parsed,
-            sobject,
+    # Only Contact create/update events map to a Logbook user update. We never
+    # act on 'deleted' — removing a member because a Salesforce Contact was
+    # deleted would be destructive and is out of scope for inbound sync.
+    if sobject != "Contact":
+        logger.info("Ignoring unsupported inbound sObject type: %s", sobject)
+        detail = f"sObject '{sobject}' is not handled by inbound sync."
+        counts = {"updated": 0, "unchanged": 0, "unmatched": 0, "failed": 0}
+    elif action == "deleted":
+        logger.info(
+            "Ignoring Salesforce Contact deletion for integration %s "
+            "(inbound deletes are not applied).",
             integration_id,
         )
+        detail = "Contact deletions are not applied to Logbook members."
+        counts = {"updated": 0, "unchanged": 0, "unmatched": 0, "failed": 0}
+    elif not sync_service.inbound_enabled:
+        # Push-only org: parse to validate the payload, but do not write.
+        logger.info(
+            "Salesforce webhook for integration %s ignored: sync direction "
+            "is push-only.",
+            integration_id,
+        )
+        detail = "Sync direction is push-only; inbound changes were not applied."
+        counts = {"updated": 0, "unchanged": 0, "unmatched": 0, "failed": 0}
+    else:
+        parsed = [sync_service.parse_inbound_contact(rec) for rec in records]
+        counts = await sync_service.sync_inbound_contacts(parsed)
+        await db.commit()
+        detail = (
+            f"{counts['updated']} member(s) updated, "
+            f"{counts['unmatched']} unmatched."
+        )
+
+    persisted = counts["updated"]
 
     # Audit log
     await log_audit_event(
@@ -178,9 +190,8 @@ async def salesforce_inbound_webhook(
             "sobject": sobject,
             "action": action,
             "record_count": len(records),
-            "parsed": parsed,
-            "persisted": 0,
-            "inbound_persistence_implemented": False,
+            "persisted": persisted,
+            **counts,
             "source_ip": get_client_ip(request),
         },
     )
@@ -188,10 +199,9 @@ async def salesforce_inbound_webhook(
     return {
         "success": True,
         "received": len(records),
-        "parsed": parsed,
-        "persisted": 0,
-        "detail": "Inbound records were parsed but not stored; "
-        "inbound sync is not yet implemented.",
+        "persisted": persisted,
+        "detail": detail,
         "sobject": sobject,
         "action": action,
+        **counts,
     }

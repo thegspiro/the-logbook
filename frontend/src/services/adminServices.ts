@@ -726,6 +726,12 @@ export interface SalesforcePullResult {
   success: boolean;
   contacts: Record<string, unknown>[];
   count: number;
+  inbound_enabled: boolean;
+  persisted: number;
+  updated: number;
+  unchanged: number;
+  unmatched: number;
+  failed: number;
 }
 
 export interface SalesforceReadinessObject {

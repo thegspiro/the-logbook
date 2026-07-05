@@ -15,11 +15,33 @@ from datetime import date, datetime
 from typing import Any, Optional
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.integration import Integration
+from app.models.user import User
 from app.services.integration_services.salesforce_service import SalesforceService
+
+# Logbook User attributes an inbound Salesforce sync may overwrite. Deliberately
+# limited to contact/demographic fields. Identity fields (email, membership
+# number), the status state machine, and typed date fields are intentionally
+# excluded — Salesforce is not authoritative for those, and changing email would
+# break login/matching.
+INBOUND_UPDATABLE_FIELDS: frozenset[str] = frozenset(
+    {
+        "first_name",
+        "last_name",
+        "phone",
+        "mobile",
+        "rank",
+        "station",
+        "address_street",
+        "address_city",
+        "address_state",
+        "address_zip",
+        "address_country",
+    }
+)
 
 # ============================================================
 # Default field mappings  (Logbook field → Salesforce field)
@@ -425,6 +447,112 @@ class SalesforceSyncService:
         lb_fields["salesforce_id"] = sf_contact.get("Id", "")
         lb_fields["logbook_member_id"] = sf_contact.get("Logbook_Member_ID__c", "")
         return lb_fields
+
+    # ============================================================
+    # Inbound persistence: Salesforce → Logbook
+    # ============================================================
+
+    @property
+    def inbound_enabled(self) -> bool:
+        """Whether the org's sync direction permits writing inbound changes.
+
+        A push-only org receives no updates from Salesforce even if a webhook
+        fires or a pull is triggered.
+        """
+        direction = str(
+            (self.integration.config or {}).get("sync_direction", "push")
+        ).lower()
+        return direction in ("pull", "both")
+
+    async def _find_user_for_inbound(
+        self, lb_fields: dict[str, Any]
+    ) -> Optional[User]:
+        """Match an inbound Salesforce Contact to an existing Logbook user.
+
+        Resolution mirrors the outbound path: the Logbook external ID first,
+        then email — both scoped to this integration's organization. Never
+        creates a user (link-to-existing policy, matching the app's OAuth
+        account model).
+        """
+        org_id = self.integration.organization_id
+
+        logbook_id = (lb_fields.get("logbook_member_id") or "").strip()
+        if logbook_id:
+            result = await self.db.execute(
+                select(User).where(
+                    User.id == logbook_id,
+                    User.organization_id == org_id,
+                    User.deleted_at.is_(None),
+                )
+            )
+            user = result.scalar_one_or_none()
+            if user:
+                return user
+
+        email = (lb_fields.get("email") or "").strip()
+        if email:
+            result = await self.db.execute(
+                select(User).where(
+                    func.lower(User.email) == email.lower(),
+                    User.organization_id == org_id,
+                    User.deleted_at.is_(None),
+                )
+            )
+            return result.scalar_one_or_none()
+
+        return None
+
+    async def apply_inbound_contact(self, lb_fields: dict[str, Any]) -> str:
+        """Apply one inbound Salesforce Contact to a Logbook user.
+
+        Returns one of:
+          - ``updated``   — a matched user had one or more fields changed
+          - ``unchanged`` — a user matched but no whitelisted field differed
+          - ``unmatched`` — no existing Logbook user matched (nothing created)
+
+        Only fields in ``INBOUND_UPDATABLE_FIELDS`` are written, and only when
+        the inbound value is non-empty, so Salesforce never blanks out Logbook
+        data. The row is mutated on the session but not committed here.
+        """
+        user = await self._find_user_for_inbound(lb_fields)
+        if not user:
+            return "unmatched"
+
+        changed = False
+        for field in INBOUND_UPDATABLE_FIELDS:
+            if field not in lb_fields:
+                continue
+            value = lb_fields[field]
+            if value is None or value == "":
+                continue
+            if getattr(user, field, None) != value:
+                setattr(user, field, value)
+                changed = True
+
+        return "updated" if changed else "unchanged"
+
+    async def sync_inbound_contacts(
+        self, contacts: list[dict[str, Any]]
+    ) -> dict[str, int]:
+        """Apply a batch of inbound Salesforce Contacts to Logbook users.
+
+        *contacts* are Logbook-shaped dicts (from ``parse_inbound_contact`` or
+        ``pull_contacts``). Returns counts keyed by action. Does not commit —
+        the caller owns the transaction.
+        """
+        counts = {"updated": 0, "unchanged": 0, "unmatched": 0, "failed": 0}
+        for lb_fields in contacts:
+            try:
+                action = await self.apply_inbound_contact(lb_fields)
+                counts[action] += 1
+            except Exception:
+                logger.warning(
+                    "Failed to apply inbound contact %s",
+                    lb_fields.get("salesforce_id", "?"),
+                    exc_info=True,
+                )
+                counts["failed"] += 1
+        return counts
 
     # ============================================================
     # Bulk sync helpers
