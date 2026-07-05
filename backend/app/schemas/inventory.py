@@ -348,17 +348,6 @@ class InventoryItemResponse(InventoryItemBase):
     model_config = _response_config
 
 
-class InventoryItemDetailResponse(InventoryItemResponse):
-    """Extended item response with relationships"""
-
-    category: Optional[InventoryCategoryResponse] = None
-    assigned_to_user: Optional[Dict[str, Any]] = None  # User info
-    checkout_count: int = 0
-    maintenance_count: int = 0
-
-    model_config = _response_config
-
-
 # ============================================
 # Assignment Schemas
 # ============================================
@@ -551,18 +540,6 @@ class NFPAInspectionDetailCreate(BaseModel):
     cylinder_pressure: Optional[float] = None
     low_air_alarm: Optional[bool] = None
     recommendation: Optional[NFPARecommendationLiteral] = None
-
-
-class NFPAInspectionDetailResponse(NFPAInspectionDetailCreate):
-    """NFPA inspection detail response"""
-
-    id: UUID
-    maintenance_record_id: UUID
-    organization_id: UUID
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = _response_config
 
 
 class MaintenanceRecordBase(BaseModel):
@@ -760,20 +737,6 @@ class ItemsListResponse(BaseModel):
     limit: int
 
 
-class MaintenanceDueItem(BaseModel):
-    """Schema for item with maintenance due"""
-
-    id: UUID
-    name: str
-    serial_number: Optional[str] = None
-    asset_tag: Optional[str] = None
-    category_name: Optional[str] = None
-    next_inspection_due: date
-    days_until_due: int
-    condition: ItemConditionLiteral
-    status: ItemStatusLiteral
-
-
 # ============================================
 # Departure Clearance Schemas
 # ============================================
@@ -835,24 +798,6 @@ class DepartureClearanceResponse(UTCResponseBase):
     line_items: List[ClearanceLineItemResponse] = []
 
     model_config = _response_config
-
-
-class DepartureClearanceSummaryResponse(UTCResponseBase):
-    """Lightweight clearance summary (no line items)"""
-
-    id: UUID
-    user_id: UUID
-    member_name: Optional[str] = None
-    status: ClearanceStatusLiteral
-    total_items: int
-    items_cleared: int
-    items_outstanding: int
-    total_value: float
-    value_outstanding: float
-    initiated_at: datetime
-    completed_at: Optional[datetime] = None
-    return_deadline: Optional[datetime] = None
-    departure_type: Optional[DepartureTypeLiteral] = None
 
 
 class ResolveClearanceItemRequest(BaseModel):
@@ -1049,35 +994,6 @@ class EquipmentRequestFulfill(BaseModel):
     quantity: Optional[int] = Field(default=None, ge=1)
     expected_return_at: Optional[datetime] = None
     override_allowance: bool = False
-
-
-class EquipmentRequestResponse(UTCResponseBase):
-    """Schema for equipment request response"""
-
-    id: UUID
-    organization_id: UUID
-    requester_id: UUID
-    requester_name: Optional[str] = None
-    item_name: str
-    item_id: Optional[UUID] = None
-    category_id: Optional[UUID] = None
-    quantity: int
-    request_type: RequestTypeLiteral
-    priority: RequestPriorityLiteral
-    reason: Optional[str] = None
-    status: RequestStatusLiteral
-    reviewed_by: Optional[UUID] = None
-    reviewer_name: Optional[str] = None
-    reviewed_at: Optional[datetime] = None
-    review_notes: Optional[str] = None
-    fulfilled_by: Optional[UUID] = None
-    fulfilled_at: Optional[datetime] = None
-    fulfillment_type: Optional[str] = None
-    fulfillment_reference_id: Optional[UUID] = None
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = _response_config
 
 
 # ============================================
@@ -1776,10 +1692,6 @@ class MemberSizePreferencesCreate(BaseModel):
     glove_size: Optional[str] = Field(None, max_length=10)
     hat_size: Optional[str] = Field(None, max_length=10)
     custom_sizes: Optional[Dict[str, Any]] = None
-
-
-class MemberSizePreferencesUpdate(MemberSizePreferencesCreate):
-    """Schema for updating member size preferences (same fields, all optional)"""
 
 
 class MemberSizePreferencesResponse(UTCResponseBase):

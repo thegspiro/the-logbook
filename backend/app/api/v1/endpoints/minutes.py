@@ -16,7 +16,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
-from app.schemas.document import DocumentResponse
+from app.schemas.documents import PublishedDocumentResponse
 from app.schemas.minute import (
     ActionItemCreate,
     ActionItemResponse,
@@ -534,7 +534,7 @@ async def delete_action_item(
 # ============================================
 
 
-@router.post("/{minutes_id}/publish", response_model=DocumentResponse)
+@router.post("/{minutes_id}/publish", response_model=PublishedDocumentResponse)
 async def publish_minutes(
     minutes_id: str,
     db: AsyncSession = Depends(get_db),
@@ -568,7 +568,7 @@ async def publish_minutes(
 
     dt = doc.document_type
     tags_list = doc.tags.split(",") if doc.tags else None
-    return DocumentResponse(
+    return PublishedDocumentResponse(
         id=doc.id,
         organization_id=doc.organization_id,
         folder_id=doc.folder_id,

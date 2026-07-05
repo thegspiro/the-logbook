@@ -467,14 +467,6 @@ class PipelineKanbanColumn(BaseModel):
     count: int = 0
 
 
-class PipelineKanbanResponse(BaseModel):
-    """Schema for the full kanban board view"""
-
-    pipeline: PipelineListResponse
-    columns: List[PipelineKanbanColumn] = []
-    total_prospects: int = 0
-
-
 # --- Document Schemas ---
 
 
@@ -552,28 +544,7 @@ class ElectionPackageResponse(UTCResponseBase):
 # --- Public Status Check Schema ---
 
 
-class PublicApplicationStatusResponse(BaseModel):
-    """Public-safe response for prospect status check via token"""
-
-    first_name: str
-    last_name: str
-    status: str
-    current_stage_name: Optional[str] = None
-    pipeline_name: Optional[str] = None
-    total_stages: int = 0
-    stage_timeline: List[Dict[str, Any]] = []
-    applied_at: Optional[str] = None
-
-
 # --- Inactivity Check Schemas ---
-
-
-class InactivityCheckResponse(BaseModel):
-    """Response from processing inactivity warnings"""
-
-    warnings_sent: int
-    marked_inactive: int
-    total_checked: int
 
 
 # --- Interview Schemas ---

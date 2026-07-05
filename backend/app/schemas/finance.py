@@ -370,12 +370,6 @@ class PurchaseRequestResponse(UTCResponseBase):
     approval_steps: list[ApprovalStepRecordResponse] = []
 
 
-class DenialRequest(BaseModel):
-    """Request to deny a purchase request, expense, or check request"""
-
-    reason: str = Field(..., min_length=1)
-
-
 # ============================================
 # Expense Report Schemas
 # ============================================
@@ -389,18 +383,6 @@ class ExpenseLineItemCreate(BaseModel):
     amount: float = Field(..., gt=0)
     date_incurred: datetime
     expense_type: str = "general"
-    receipt_url: Optional[str] = None
-    merchant: Optional[str] = None
-
-
-class ExpenseLineItemUpdate(BaseModel):
-    """Update an expense line item"""
-
-    budget_id: Optional[str] = None
-    description: Optional[str] = Field(None, min_length=1, max_length=500)
-    amount: Optional[float] = Field(None, gt=0)
-    date_incurred: Optional[datetime] = None
-    expense_type: Optional[str] = None
     receipt_url: Optional[str] = None
     merchant: Optional[str] = None
 

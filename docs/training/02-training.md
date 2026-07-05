@@ -620,11 +620,11 @@ For ad-hoc reports (no shift selected), the full member list is shown.
 
 **Required Permission:** `training.manage`
 
-For departments that do not use the Scheduling module, The Logbook provides a standalone manual shift report page at `/training/manual-shift-report`. This allows officers to file shift completion reports by entering shift data manually instead of linking to a scheduled shift.
+For departments that do not use the Scheduling module, The Logbook provides a standalone manual shift report page at `/training/log-shift`. This allows officers to file shift completion reports by entering shift data manually instead of linking to a scheduled shift.
 
 ### Filing a Manual Shift Report
 
-1. Navigate to **Training Admin > Shift Reports** and click **Manual Entry**, or go directly to `/training/manual-shift-report`
+1. Navigate to **Training Admin > Shift Reports** and click **Manual Entry**, or go directly to `/training/log-shift`
 2. Select the **shift date** and enter **start time** and **end time** (handles midnight crossover for overnight shifts)
 3. Optionally select an **apparatus** — this auto-populates relevant skills and tasks for the evaluation
 4. The system auto-calculates **hours** from the start/end times
@@ -791,7 +791,7 @@ Navigate to **Training Admin > Import History** to import historical training re
 
 **Required Permission:** `training.manage`
 
-Navigate to **Training Admin > Compliance Matrix** and select the **Competency** view to see a department-wide readiness heat-map.
+Navigate to **Training Admin > Advanced > Competency** to see a department-wide readiness heat-map.
 
 The competency matrix provides a visual representation of skills and qualifications across all members. Each cell shows a proficiency level using color-coded indicators:
 
@@ -820,7 +820,7 @@ The system automatically tracks certification expiration dates and generates rec
 
 ### Recertification Pathways
 
-Navigate to **Training Admin > Enhancements > Recertification** to configure recertification pathways. Each pathway defines:
+Navigate to **Training Admin > Advanced > Recertification** to configure recertification pathways. Each pathway defines:
 
 - **Certification type** — Which certification this pathway applies to
 - **Lead time** — How far in advance to begin sending reminders (e.g., 90 days before expiry)
@@ -855,7 +855,7 @@ Members can view their upcoming recertification tasks at **Training > My Trainin
 
 **Required Permission:** `training.manage`
 
-Navigate to **Training Admin > Enhancements > Instructors** to manage instructor qualifications and availability.
+Navigate to **Training Admin > Advanced > Instructors** to manage instructor qualifications and availability.
 
 ### Instructor Qualifications
 
@@ -888,7 +888,7 @@ When creating a training session, you can assign a qualified instructor. The sys
 
 **Required Permission:** `training.manage`
 
-Navigate to **Training Admin > Enhancements > Effectiveness** to view and manage training effectiveness evaluations.
+Navigate to **Training Admin > Advanced > Effectiveness** to view and manage training effectiveness evaluations.
 
 The system uses the **Kirkpatrick Model** to measure training effectiveness across four levels:
 
@@ -923,7 +923,7 @@ The effectiveness summary for a course aggregates all evaluations and displays:
 
 ## Multi-Agency Training
 
-Navigate to **Training Admin > Enhancements > Multi-Agency** to coordinate joint training sessions with other departments.
+Navigate to **Training Admin > Advanced > Multi-Agency** to coordinate joint training sessions with other departments.
 
 Multi-agency training sessions allow:
 - Scheduling joint training events across departments
@@ -977,7 +977,7 @@ xAPI integration enables standardized training activity tracking using the Exper
 
 **Required Permission:** `training.manage`
 
-Navigate to **Training Admin > Enhancements > Compliance** for a specialized compliance officer view.
+Navigate to **Training Admin > Compliance** for a specialized compliance officer view (Annual Report, ISO Readiness, Record Quality, Attestations, and Forecast).
 
 This dashboard provides:
 

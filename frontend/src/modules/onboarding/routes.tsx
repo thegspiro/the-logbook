@@ -39,7 +39,7 @@ export const getOnboardingRoutes = () => {
     {/* Onboarding wizard - Step 1: Organization Setup (comprehensive) */}
     <Route path="/onboarding/start" element={<OrganizationSetup />} />
 
-    {/* Legacy route redirect for DepartmentInfo */}
+    {/* Legacy route redirect: the old department-info step is now folded into OrganizationSetup */}
     <Route path="/onboarding/department" element={<Navigate to="/onboarding/start" replace />} />
 
     {/* Onboarding wizard - Step 2: Navigation Choice */}

@@ -25,16 +25,6 @@ class EmergencyContact(BaseModel):
     is_primary: bool = False
 
 
-class AddressInfo(BaseModel):
-    """Address information schema"""
-
-    street: Optional[str] = Field(None, max_length=255)
-    city: Optional[str] = Field(None, max_length=100)
-    state: Optional[str] = Field(None, max_length=50)
-    zip_code: Optional[str] = Field(None, max_length=20)
-    country: Optional[str] = Field(default="USA", max_length=100)
-
-
 class UserBase(BaseModel):
     """Base user schema with common fields"""
 
@@ -261,17 +251,6 @@ class ContactInfoUpdate(BaseModel):
     phone: Optional[str] = Field(None, max_length=20)
     mobile: Optional[str] = Field(None, max_length=20)
     notification_preferences: Optional[NotificationPreferences] = None
-
-
-class MembershipNumberAssignment(BaseModel):
-    """Schema for manually assigning or updating a member's membership number"""
-
-    membership_number: str = Field(
-        ...,
-        min_length=1,
-        max_length=50,
-        description="The membership number to assign (e.g. '042', 'M-007')",
-    )
 
 
 class UserProfileResponse(UserResponse):

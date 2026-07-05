@@ -48,8 +48,6 @@ export interface ModuleDefinition {
     view: string[];
     manage: string[];
     defaultManagePositions: string[];
-    /** @deprecated Use defaultManagePositions */
-    defaultManageRoles?: string[];
   };
 }
 

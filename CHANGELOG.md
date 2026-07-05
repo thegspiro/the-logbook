@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Dead-Code Cleanup (2026-07-03)
+
+Codebase-wide review for deprecated/unused code (training module excluded — it
+was reviewed separately). Only items verified to have zero live callers were
+removed.
+
+- **Removed ~1,900 lines of orphan/deprecated code**: two never-imported backend
+  services (`onboarding_session.py`, which also carried a duplicate
+  `OnboardingSessionModel`, and `integration_services/notification_dispatcher.py`),
+  nine dead frontend files (superseded `DepartmentInfo` onboarding page, a
+  duplicate top-level `types/minutes.ts`, `security-init.ts`, an unwired
+  `InlineConfirmAction` UX component, four unused hooks, and a dead
+  `MinutesDetailPage` re-export shim), and several `@deprecated` exports with no
+  importers (temp-token no-op getters, superseded onboarding API methods, and
+  redundant `RoleSetup`/`AdminUserCreation` barrel aliases).
+- **Dropped 14 dead columns** (migration `20260703_0001`) that were defined on
+  models but never read or written: `audit_logs.{sensitive_data_encrypted,
+  server_id, process_id}`, `audit_log_checkpoints.{verification_status,
+  verification_details}`, `users.email_verified_at`, `prospects.{application_date,
+  converted_to_user_id, converted_at}` (conversion tracking superseded by the
+  membership-pipeline module), `sessions.device_info`, `donations.{receipt_sent_at,
+  thank_you_sent_at}`, `ip_exceptions.cidr_range`, and
+  `blocked_access_attempts.request_headers`. Paired live booleans (`email_verified`,
+  `receipt_sent`, `thank_you_sent`) were kept. The migration guards each drop with
+  an existence check and discovers the auto-named FK on `converted_to_user_id` via
+  the inspector.
+- **Removed 38 unused Pydantic schema classes** (no importers, not used as
+  `response_model`, base class, or nested field) across `schemas/{reports,
+  inventory, apparatus, membership_pipeline, public_portal, finance, integration,
+  document, minute, user, election, equipment_check, forms, grant, location,
+  operational_rank}.py` — including the dead "report aggregate" cluster in
+  `reports.py` (`MemberRosterReport`/`TrainingSummaryReport`/`EventAttendanceReport`
+  and their entry sub-schemas). Pure code deletion, no DB impact.
+- **Consolidated the duplicate `schemas/document.py` into `schemas/documents.py`.**
+  The two modules defined same-named `DocumentCreate`/`DocumentUpdate`/`DocumentResponse`
+  classes for the same `documents` table — a footgun where an import's shape
+  depended on which module it came from. The `document.py` classes are a distinct
+  projection (the minutes-publish flow renames columns: `name`→`title`,
+  `file_type`→`mime_type`, `uploaded_by`→`created_by`), so they were moved into
+  `documents.py` under clear names (`PublishedDocumentResponse`,
+  `ServiceDocumentCreate/Update`, `ServiceFolderCreate/Update`) rather than merged
+  field-for-field, and the two importers (`document_service.py`, `minutes.py`) were
+  updated. `document.py` was deleted. No API behavior change.
+- **Removed 9 superseded `DocumentService` CRUD methods** (~170 lines) —
+  `create`/`update`/`delete` folder & document, `get_folder`,
+  `get_folder_document_count`, `list_documents`. `DocumentService` is only
+  instantiated for the minutes-publish flow (`publish_minutes`), whose call
+  chain never reaches these; the document CRUD surface is owned by the plural
+  `DocumentsService`. Also removed the now-orphaned `Service*Create/Update`
+  schemas and the dead-method test cases (keeping the HTML-render / timezone
+  tests). `PublishedDocumentResponse` and the minutes-publish flow are unchanged.
+- Forward-looking config stubs (S3/Azure/GCS storage, LDAP) and legacy
+  **data-format** handlers were intentionally left in place.
+
 ### Training Module — Security Review & Hardening (2026-07-02)
 
 A full security review of the training module (endpoints, services, models,
@@ -15,7 +69,7 @@ resolved a set of schema/data-integrity inconsistencies.
 
 #### Cross-tenant access fixes (IDOR / tenancy)
 
-- **Training approval is now an authenticated, org-scoped officer action.** `POST /training/sessions/approve/{token}` previously required only a valid session — any authenticated user in any organization who obtained a (emailed, forwardable) approval token could finalize another org's training session, forging `TrainingRecord` rows and overriding check-in/out times. It now requires `training.manage` **and** binds the token lookup to the caller's `organization_id`. The companion `GET /training/sessions/approve/{token}` (which returns attendee names/emails) was made consistent — same permission and org scoping — instead of being an unauthenticated token-only endpoint
+- **Training approval is now an authenticated, org-scoped officer action.** `POST /training/sessions/approve/{token}` previously required only a valid session — any authenticated user in any organization who obtained a (emailed, forwardable) approval token could finalize another org's training session, forging `TrainingRecord` rows and overriding check-in/out times. It now requires `events.manage` **and** binds the token lookup to the caller's `organization_id`. The companion `GET /training/sessions/approve/{token}` (which returns attendee names/emails) was made consistent — same permission and org scoping — instead of being an unauthenticated token-only endpoint. (`events.manage` matches the rest of the training-session lifecycle: `create`/`finalize` are also `events.manage`.)
 - **Submission review/update/delete are org-scoped in the service layer.** `TrainingSubmissionService.get_submission` now filters by `organization_id`, so `POST /training/submissions/{id}/review` (and update/delete) can no longer act on another org's submission by ID. Previously only the read endpoint compensated with a manual org check; the review path had none
 - **External-import target users are validated against the caller's org.** `POST …/imports/{import_id}/import` and `…/imports/bulk` no longer trust the `user_id` in the request/mapping — a new `_verify_user_in_org` guard ensures a forged/mismatched user ID can't stamp a completed training record onto a member of another organization
 - **xAPI actor lookup is org-scoped.** `XAPIService.ingest_statement` matches the actor email within the caller's organization only, preventing a statement (and the training record it later produces) from attaching to a same-email user in a different org

@@ -144,3 +144,37 @@ class DocumentsSummary(BaseModel):
     total_folders: int
     total_size_bytes: int
     documents_this_month: int
+
+
+# ============================================
+# Minutes-publish response
+# ============================================
+
+
+class PublishedDocumentResponse(UTCResponseBase):
+    """Document response for the minutes-publish endpoint.
+
+    A minutes-specific projection: renames model columns (name -> title,
+    file_type -> mime_type, uploaded_by -> created_by) and returns tags as a
+    list. Distinct from the endpoint ``DocumentResponse`` above.
+    """
+
+    id: str
+    organization_id: str
+    folder_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    document_type: str
+    file_path: Optional[str] = None
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    content_html: Optional[str] = None
+    source_type: Optional[str] = None
+    source_id: Optional[str] = None
+    tags: Optional[List[str]] = None
+    created_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

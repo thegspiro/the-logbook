@@ -151,20 +151,6 @@ class PublicPortalAccessLogResponse(UTCResponseBase):
     model_config = ConfigDict(from_attributes=True)
 
 
-class PublicPortalAccessLogFilter(BaseModel):
-    """Schema for filtering access logs"""
-
-    api_key_id: Optional[UUID] = None
-    ip_address: Optional[str] = None
-    endpoint: Optional[str] = None
-    status_code: Optional[int] = None
-    flagged_suspicious: Optional[bool] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    limit: int = Field(default=100, ge=1, le=1000)
-    offset: int = Field(default=0, ge=0)
-
-
 # ==============================================================================
 # Data Whitelist Schemas
 # ==============================================================================
@@ -268,25 +254,6 @@ class PublicEvent(UTCResponseBase):
     is_public: bool
 
 
-class PublicPersonnelRoster(BaseModel):
-    """Public personnel roster (minimal PII)"""
-
-    name: str
-    rank: Optional[str]
-    years_of_service: Optional[int]
-    certifications: Optional[List[str]]
-
-
 # ==============================================================================
 # Error Response Schema
 # ==============================================================================
-
-
-class PublicPortalErrorResponse(BaseModel):
-    """Standard error response for public API"""
-
-    error: str = Field(..., description="Error code")
-    message: str = Field(..., description="Human-readable error message")
-    details: Optional[Dict[str, Any]] = Field(
-        None, description="Additional error details"
-    )

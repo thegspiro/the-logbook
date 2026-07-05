@@ -5,13 +5,10 @@ Request/response schemas for the integrations API.
 Includes per-integration-type config schemas with strict validation.
 """
 
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
-
-from app.schemas.base import UTCResponseBase
 
 # ============================================
 # Shared response config (camelCase)
@@ -193,24 +190,6 @@ SECRET_CONFIG_KEYS = frozenset(
 # ============================================
 
 
-class IntegrationResponse(UTCResponseBase):
-    model_config = _response_config
-
-    id: str
-    organization_id: str
-    integration_type: str
-    name: str
-    description: Optional[str] = None
-    category: str
-    status: str
-    config: Dict[str, Any] = Field(default_factory=dict)
-    enabled: bool = False
-    contains_phi: bool = False
-    last_sync_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-
 # ============================================
 # External API Response Schemas (trust boundary)
 # ============================================
@@ -230,14 +209,6 @@ class WeatherAlertResponse(BaseModel):
     onset: Optional[str] = None
     expires: Optional[str] = None
     area_desc: str = Field(default="", alias="areaDesc")
-
-
-class SlackWebhookTestResponse(BaseModel):
-    """Expected response from Slack webhook POST."""
-
-    model_config = ConfigDict(extra="ignore")
-
-    ok: bool = True
 
 
 class EPCRImportRow(BaseModel):

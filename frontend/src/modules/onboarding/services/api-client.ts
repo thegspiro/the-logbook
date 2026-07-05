@@ -445,26 +445,6 @@ class SecureApiClient {
     return this.request('POST', '/onboarding/session/positions', data, true);
   }
 
-  /** @deprecated Use savePositionsConfig instead */
-  async saveRolesConfig(data: {
-    roles: Array<{
-      id: string;
-      name: string;
-      description?: string | undefined;
-      priority: number;
-      permissions: Record<string, { view: boolean; manage: boolean }>;
-      is_custom?: boolean | undefined;
-    }>;
-  }): Promise<ApiResponse<{
-    success: boolean;
-    message: string;
-    created: string[];
-    updated: string[];
-    total_roles: number;
-  }>> {
-    return this.request('POST', '/onboarding/session/positions', { positions: data.roles }, true);
-  }
-
   /**
    * Create organization (legacy simple method)
    * Creates the first organization during onboarding with default roles
@@ -561,19 +541,6 @@ class SecureApiClient {
     }
 
     return response;
-  }
-
-  /** @deprecated Use createSystemOwner instead */
-  async createAdminUser(data: {
-    username: string;
-    email: string;
-    password: string;
-    password_confirm: string;
-    first_name: string;
-    last_name: string;
-    membership_number?: string | undefined;
-  }): Promise<ApiResponse<{ authenticated?: boolean | undefined }>> {
-    return this.createSystemOwner(data);
   }
 
   /**

@@ -404,14 +404,6 @@ class MinutesListItem(UTCResponseBase):
     model_config = _response_config
 
 
-class MinutesSubmit(BaseModel):
-    """Schema for submitting minutes for approval"""
-
-
-class MinutesApprove(BaseModel):
-    """Schema for approving minutes"""
-
-
 class MinutesReject(BaseModel):
     """Schema for rejecting minutes"""
 

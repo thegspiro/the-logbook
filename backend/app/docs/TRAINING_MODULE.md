@@ -682,8 +682,8 @@ GET    /api/v1/training/programs/requirements
 POST   /api/v1/training/programs/requirements
 GET    /api/v1/training/programs/requirements/{id}
 PATCH  /api/v1/training/programs/requirements/{id}
-DELETE /api/v1/training/programs/requirements/{id}   # Soft delete (sets active=false)
 POST   /api/v1/training/programs/requirements/import/{registry_name}
+DELETE /api/v1/training/requirements/{id}             # Soft delete (sets active=false) — served by the base training router, not the /programs prefix
 ```
 
 **Create Requirement with Due Date Type:**
@@ -1434,7 +1434,7 @@ tenant boundary. The 2026-07-02 review enforced it at the **service layer** for
 all by-ID mutations so it can't be forgotten in an endpoint:
 
 - `TrainingSubmissionService.get_submission(submission_id, organization_id)` filters by org; every mutation path (review/update/delete) funnels through it. Do not add an unscoped variant.
-- Training approval (`GET`/`POST /training/sessions/approve/{token}`) requires `training.manage` **and** an org-matched token lookup — the token is not a standalone authorization boundary.
+- Training approval (`GET`/`POST /training/sessions/approve/{token}`) requires `events.manage` (matching the `create`/`finalize` session lifecycle) **and** an org-matched token lookup — the token is not a standalone authorization boundary.
 - External-import and enrollment paths validate the target `user_id` against the caller's organization before writing (`_verify_user_in_org`, `enroll_member`).
 - xAPI actor-email lookup is org-scoped.
 

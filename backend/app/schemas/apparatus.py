@@ -924,25 +924,6 @@ class ApparatusFuelLogCreate(ApparatusFuelLogBase):
     """Schema for creating fuel log"""
 
 
-class ApparatusFuelLogUpdate(BaseModel):
-    """Schema for updating fuel log"""
-
-    fuel_date: Optional[datetime] = None
-    fuel_type: Optional[FuelTypeEnum] = None
-    gallons: Optional[Decimal] = Field(None, gt=0)
-    price_per_gallon: Optional[Decimal] = Field(None, ge=0)
-    total_cost: Optional[Decimal] = Field(None, ge=0)
-
-    mileage_at_fill: Optional[int] = Field(None, ge=0)
-    hours_at_fill: Optional[Decimal] = Field(None, ge=0)
-
-    is_full_tank: Optional[bool] = None
-    station_name: Optional[str] = Field(None, max_length=200)
-    station_address: Optional[str] = None
-
-    notes: Optional[str] = None
-
-
 class ApparatusFuelLogResponse(ApparatusFuelLogBase):
     """Schema for fuel log response"""
 
@@ -1178,16 +1159,6 @@ class ApparatusPhotoCreate(ApparatusPhotoBase):
     mime_type: Optional[str] = Field(None, max_length=100)
 
 
-class ApparatusPhotoUpdate(BaseModel):
-    """Schema for updating photo"""
-
-    title: Optional[str] = Field(None, max_length=200)
-    description: Optional[str] = None
-    taken_at: Optional[datetime] = None
-    photo_type: Optional[str] = Field(None, max_length=50)
-    is_primary: Optional[bool] = None
-
-
 class ApparatusPhotoResponse(ApparatusPhotoBase):
     """Schema for photo response"""
 
@@ -1231,16 +1202,6 @@ class ApparatusDocumentCreate(ApparatusDocumentBase):
     file_name: str = Field(..., max_length=255)
     file_size: Optional[int] = Field(None, ge=0)
     mime_type: Optional[str] = Field(None, max_length=100)
-
-
-class ApparatusDocumentUpdate(BaseModel):
-    """Schema for updating document"""
-
-    title: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = None
-    document_type: Optional[str] = Field(None, max_length=50)
-    expiration_date: Optional[date] = None
-    document_date: Optional[date] = None
 
 
 class ApparatusDocumentResponse(ApparatusDocumentBase):

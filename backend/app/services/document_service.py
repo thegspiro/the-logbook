@@ -17,12 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.document import SYSTEM_FOLDERS, Document, DocumentFolder, DocumentType
 from app.models.minute import MeetingMinutes, MinutesStatus
 from app.models.user import Organization
-from app.schemas.document import (
-    DocumentCreate,
-    DocumentUpdate,
-    FolderCreate,
-    FolderUpdate,
-)
 
 
 class DocumentService:
@@ -79,17 +73,6 @@ class DocumentService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
-    async def get_folder(
-        self, folder_id: str, organization_id: UUID
-    ) -> Optional[DocumentFolder]:
-        """Get a folder by ID"""
-        result = await self.db.execute(
-            select(DocumentFolder)
-            .where(DocumentFolder.id == folder_id)
-            .where(DocumentFolder.organization_id == str(organization_id))
-        )
-        return result.scalar_one_or_none()
-
     async def get_folder_by_slug(
         self, slug: str, organization_id: UUID
     ) -> Optional[DocumentFolder]:
@@ -101,98 +84,9 @@ class DocumentService:
         )
         return result.scalar_one_or_none()
 
-    async def create_folder(
-        self, data: FolderCreate, organization_id: UUID, created_by: UUID
-    ) -> DocumentFolder:
-        """Create a custom folder"""
-        folder = DocumentFolder(
-            organization_id=str(organization_id),
-            created_by=str(created_by),
-            is_system=False,
-            name=data.name,
-            slug=data.slug,
-            description=data.description,
-            parent_id=data.parent_folder_id,
-            sort_order=data.sort_order,
-            icon=data.icon,
-            color=data.color,
-        )
-        self.db.add(folder)
-        await self.db.commit()
-        await self.db.refresh(folder)
-        return folder
-
-    async def update_folder(
-        self, folder_id: str, organization_id: UUID, data: FolderUpdate
-    ) -> Optional[DocumentFolder]:
-        """Update a folder (system folders: only description, icon, color)"""
-        folder = await self.get_folder(folder_id, organization_id)
-        if not folder:
-            return None
-
-        update_data = data.model_dump(exclude_unset=True)
-
-        # System folders cannot have their name or sort_order changed
-        if folder.is_system:
-            update_data.pop("name", None)
-            update_data.pop("sort_order", None)
-
-        for field, value in update_data.items():
-            setattr(folder, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(folder)
-        return folder
-
-    async def delete_folder(self, folder_id: str, organization_id: UUID) -> bool:
-        """Delete a folder (system folders cannot be deleted)"""
-        folder = await self.get_folder(folder_id, organization_id)
-        if not folder or folder.is_system:
-            return False
-
-        await self.db.delete(folder)
-        await self.db.commit()
-        return True
-
-    async def get_folder_document_count(
-        self, folder_id: str, organization_id: UUID
-    ) -> int:
-        """Get the number of documents in a folder"""
-        result = await self.db.execute(
-            select(func.count(Document.id))
-            .where(Document.folder_id == folder_id)
-            .where(Document.organization_id == str(organization_id))
-        )
-        return result.scalar() or 0
-
     # ============================================
     # Document CRUD
     # ============================================
-
-    async def list_documents(
-        self,
-        organization_id: UUID,
-        folder_id: Optional[str] = None,
-        document_type: Optional[str] = None,
-        search: Optional[str] = None,
-        skip: int = 0,
-        limit: int = 50,
-    ) -> List[Document]:
-        """List documents with filtering"""
-        query = select(Document).where(Document.organization_id == str(organization_id))
-        if folder_id:
-            query = query.where(Document.folder_id == folder_id)
-        if document_type:
-            query = query.where(Document.document_type == document_type)
-        if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            query = query.where(Document.name.ilike(f"%{safe_search}%"))
-
-        query = query.order_by(Document.created_at.desc()).offset(skip).limit(limit)
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
 
     async def get_document(
         self, document_id: str, organization_id: UUID
@@ -204,71 +98,6 @@ class DocumentService:
             .where(Document.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none()
-
-    async def create_document(
-        self,
-        data: DocumentCreate,
-        organization_id: UUID,
-        uploaded_by: UUID,
-        document_type: str = "uploaded",
-        source_type: Optional[str] = None,
-        source_id: Optional[str] = None,
-        content_html: Optional[str] = None,
-    ) -> Document:
-        """Create a document record"""
-        doc = Document(
-            folder_id=data.folder_id,
-            name=data.title,
-            description=data.description,
-            file_name=data.file_name or "",
-            file_path=data.file_path or "",
-            file_size=data.file_size or 0,
-            file_type=data.mime_type,
-            organization_id=str(organization_id),
-            uploaded_by=str(uploaded_by),
-            document_type=DocumentType(document_type),
-            source_type=source_type,
-            source_id=source_id,
-        )
-        if content_html:
-            doc.content_html = content_html
-        if data.tags:
-            doc.tags = ",".join(data.tags)
-        self.db.add(doc)
-        await self.db.commit()
-        await self.db.refresh(doc)
-        return doc
-
-    async def update_document(
-        self, document_id: str, organization_id: UUID, data: DocumentUpdate
-    ) -> Optional[Document]:
-        """Update a document"""
-        doc = await self.get_document(document_id, organization_id)
-        if not doc:
-            return None
-
-        update_data = data.model_dump(exclude_unset=True)
-        # Map schema field 'title' to model field 'name'
-        if "title" in update_data:
-            update_data["name"] = update_data.pop("title")
-        # Convert tags list to comma-separated string
-        if "tags" in update_data and isinstance(update_data["tags"], list):
-            update_data["tags"] = ",".join(update_data["tags"])
-        for field, value in update_data.items():
-            setattr(doc, field, value)
-
-        await self.db.commit()
-        await self.db.refresh(doc)
-        return doc
-
-    async def delete_document(self, document_id: str, organization_id: UUID) -> bool:
-        """Delete a document"""
-        doc = await self.get_document(document_id, organization_id)
-        if not doc:
-            return False
-        await self.db.delete(doc)
-        await self.db.commit()
-        return True
 
     # ============================================
     # Publish Meeting Minutes
