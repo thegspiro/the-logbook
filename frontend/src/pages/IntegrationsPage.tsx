@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plug,
   Calendar,
@@ -30,10 +31,20 @@ import {
   RefreshCw,
   Upload,
   Download,
+  ListChecks,
+  Eye,
+  ExternalLink,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
-import { integrationsService, type IntegrationConfig } from '../services/api';
+import {
+  integrationsService,
+  type IntegrationConfig,
+  type SalesforceReadiness,
+  type SalesforcePreviewResult,
+} from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ConnectionStatus } from '../constants/enums';
 
@@ -209,6 +220,8 @@ const labelClass = 'form-label';
 const IntegrationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('integrations.manage');
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -219,6 +232,12 @@ const IntegrationsPage: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [showSyncPanel, setShowSyncPanel] = useState(false);
+
+  // Salesforce readiness / preview panel state
+  const [readiness, setReadiness] = useState<SalesforceReadiness | null>(null);
+  const [checkingReadiness, setCheckingReadiness] = useState(false);
+  const [preview, setPreview] = useState<SalesforcePreviewResult | null>(null);
+  const [previewing, setPreviewing] = useState(false);
 
   // Config form state
   const [webhookUrl, setWebhookUrl] = useState('');
@@ -235,20 +254,43 @@ const IntegrationsPage: React.FC = () => {
   const [sfRefreshToken, setSfRefreshToken] = useState('');
   const [sfEnvironment, setSfEnvironment] = useState('production');
   const [sfSyncDirection, setSfSyncDirection] = useState('push');
+  const [sfMatchStrategy, setSfMatchStrategy] = useState('email');
+  const [sfGracefulFields, setSfGracefulFields] = useState(true);
+  const [sfAutoSync, setSfAutoSync] = useState(false);
+
+  const loadIntegrations = useCallback(async () => {
+    try {
+      const data = await integrationsService.getIntegrations();
+      setIntegrations(data);
+    } catch {
+      toast.error('Failed to load integrations');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadIntegrations = async () => {
-      try {
-        const data = await integrationsService.getIntegrations();
-        setIntegrations(data);
-      } catch {
-        toast.error('Failed to load integrations');
-      } finally {
-        setLoading(false);
-      }
-    };
     void loadIntegrations();
-  }, []);
+  }, [loadIntegrations]);
+
+  // Handle the return leg of the Salesforce OAuth redirect. The backend sends
+  // the browser back to /integrations?salesforce=connected (or
+  // ?salesforce_error=<code>); surface the outcome, refresh, and strip the param
+  // so a page refresh does not re-trigger the toast.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const connected = params.get('salesforce');
+    const sfError = params.get('salesforce_error');
+    if (connected === 'connected') {
+      toast.success('Salesforce connected successfully!');
+      setShowConnectModal(null);
+      void loadIntegrations();
+      navigate('/integrations', { replace: true });
+    } else if (sfError) {
+      toast.error(`Salesforce connection failed: ${sfError.replace(/_/g, ' ')}`);
+      navigate('/integrations', { replace: true });
+    }
+  }, [location.search, navigate, loadIntegrations]);
 
   const getUI = (type: string) => INTEGRATION_UI[type] ?? DEFAULT_UI;
 
@@ -286,6 +328,9 @@ const IntegrationsPage: React.FC = () => {
     setSfRefreshToken('');
     setSfEnvironment('production');
     setSfSyncDirection('push');
+    setSfMatchStrategy('email');
+    setSfGracefulFields(true);
+    setSfAutoSync(false);
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -306,11 +351,14 @@ const IntegrationsPage: React.FC = () => {
       case 'salesforce':
         return {
           instance_url: sfInstanceUrl,
-          client_id: sfClientId,
+          client_id: sfClientId || undefined,
           client_secret: sfClientSecret || undefined,
           refresh_token: sfRefreshToken || undefined,
           environment: sfEnvironment,
           sync_direction: sfSyncDirection,
+          match_strategy: sfMatchStrategy,
+          graceful_fields: sfGracefulFields,
+          auto_sync_enabled: sfAutoSync,
         };
       default:
         return {};
@@ -378,12 +426,63 @@ const IntegrationsPage: React.FC = () => {
         toast.success(result.message);
       } else if (syncType === 'pull-contacts') {
         const result = await integrationsService.salesforcePullContacts();
-        toast.success(`Pulled ${result.count} contacts from Salesforce`);
+        if (!result.inbound_enabled) {
+          toast.success(
+            `Pulled ${result.count} contacts for review. Set sync direction to Pull or Bidirectional to apply them.`
+          );
+        } else {
+          toast.success(
+            `Pulled ${result.count} contacts: ${result.updated} member(s) updated, ${result.unmatched} unmatched.`
+          );
+        }
       }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Sync failed'));
     } finally {
       setSyncing(null);
+    }
+  };
+
+  const handleSalesforceOAuth = async (integrationId: string) => {
+    if (!sfInstanceUrl.trim()) {
+      toast.error('Enter your Salesforce instance URL before connecting');
+      return;
+    }
+    setConnecting(true);
+    try {
+      // Persist the entered config (instance URL, environment, match strategy,
+      // and any Connected App credentials) so the authorize endpoint can read
+      // them, then hand off to Salesforce's consent screen. The OAuth callback
+      // marks the integration connected and stores the refresh token.
+      await integrationsService.updateIntegration(integrationId, getConfigFromForm('salesforce'));
+      window.location.href = integrationsService.getSalesforceOAuthUrl();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to start Salesforce connection'));
+      setConnecting(false);
+    }
+  };
+
+  const handleCheckReadiness = async () => {
+    setCheckingReadiness(true);
+    try {
+      const result = await integrationsService.salesforceReadiness();
+      setReadiness(result);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Readiness check failed'));
+    } finally {
+      setCheckingReadiness(false);
+    }
+  };
+
+  const handlePreviewMembers = async () => {
+    setPreviewing(true);
+    try {
+      const result = await integrationsService.salesforcePreviewMembers();
+      setPreview(result);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Preview failed'));
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -527,13 +626,71 @@ const IntegrationsPage: React.FC = () => {
               </p>
             </div>
             <div>
+              <label htmlFor="sf-environment" className={labelClass}>Environment</label>
+              <select
+                id="sf-environment"
+                value={sfEnvironment}
+                onChange={(e) => setSfEnvironment(e.target.value)}
+                className={inputClass}
+              >
+                <option value="production">Production</option>
+                <option value="sandbox">Sandbox</option>
+              </select>
+              <p className="text-xs text-theme-text-muted mt-1">
+                Select Sandbox if connecting to a Salesforce sandbox org for testing.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="sf-match-strategy" className={labelClass}>Contact Matching</label>
+              <select
+                id="sf-match-strategy"
+                value={sfMatchStrategy}
+                onChange={(e) => setSfMatchStrategy(e.target.value)}
+                className={inputClass}
+              >
+                <option value="email">Match by email (recommended)</option>
+                <option value="email_lastname">Match by email + last name (stricter)</option>
+                <option value="external_id">Never match &mdash; always create new</option>
+              </select>
+              <p className="text-xs text-theme-text-muted mt-1">
+                How to reconcile members with Contacts your org may already have.
+                Matching avoids creating duplicate Contacts.
+              </p>
+            </div>
+
+            {/* Recommended path: one-click OAuth */}
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => { void handleSalesforceOAuth(integration.id); }}
+                disabled={connecting}
+                className="w-full px-4 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>{connecting ? 'Redirecting…' : 'Connect with Salesforce'}</span>
+              </button>
+              <p className="text-xs text-theme-text-muted mt-1">
+                Recommended. Redirects you to Salesforce to grant access &mdash; no
+                refresh token to copy. Uses your department&apos;s Connected App if
+                configured below, otherwise the platform&apos;s.
+              </p>
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3 py-1">
+              <div className="flex-1 h-px bg-theme-surface-border" />
+              <span className="text-xs text-theme-text-muted uppercase">or connect manually</span>
+              <div className="flex-1 h-px bg-theme-surface-border" />
+            </div>
+
+            <div>
               <label htmlFor="sf-client-id" className={labelClass}>Connected App Client ID</label>
               <input
                 id="sf-client-id"
                 type="text"
                 value={sfClientId}
                 onChange={(e) => setSfClientId(e.target.value)}
-                placeholder="3MVG9..."
+                placeholder="3MVG9... (optional if using the platform app)"
                 className={inputClass}
               />
             </div>
@@ -559,22 +716,8 @@ const IntegrationsPage: React.FC = () => {
                 className={inputClass}
               />
               <p className="text-xs text-theme-text-muted mt-1">
-                Obtain a refresh token by completing the OAuth flow in your Salesforce Connected App.
-              </p>
-            </div>
-            <div>
-              <label htmlFor="sf-environment" className={labelClass}>Environment</label>
-              <select
-                id="sf-environment"
-                value={sfEnvironment}
-                onChange={(e) => setSfEnvironment(e.target.value)}
-                className={inputClass}
-              >
-                <option value="production">Production</option>
-                <option value="sandbox">Sandbox</option>
-              </select>
-              <p className="text-xs text-theme-text-muted mt-1">
-                Select Sandbox if connecting to a Salesforce sandbox org for testing.
+                Only needed for manual connection. Leave blank if using
+                &quot;Connect with Salesforce&quot; above. Then click Connect below.
               </p>
             </div>
             <div>
@@ -590,9 +733,35 @@ const IntegrationsPage: React.FC = () => {
                 <option value="both">Bidirectional</option>
               </select>
             </div>
+            <div className="flex items-start gap-2">
+              <input
+                id="sf-graceful-fields"
+                type="checkbox"
+                checked={sfGracefulFields}
+                onChange={(e) => setSfGracefulFields(e.target.checked)}
+                className="mt-0.5"
+              />
+              <label htmlFor="sf-graceful-fields" className="text-xs text-theme-text-secondary">
+                Skip custom fields my Salesforce org hasn&apos;t created yet
+                (recommended while building out your org).
+              </label>
+            </div>
+            <div className="flex items-start gap-2">
+              <input
+                id="sf-auto-sync"
+                type="checkbox"
+                checked={sfAutoSync}
+                onChange={(e) => setSfAutoSync(e.target.checked)}
+                className="mt-0.5"
+              />
+              <label htmlFor="sf-auto-sync" className="text-xs text-theme-text-secondary">
+                Automatically sync every 30 minutes (per the sync direction
+                above), in addition to the manual sync buttons.
+              </label>
+            </div>
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
               <p className="text-blue-700 dark:text-blue-400 text-xs">
-                Create a Connected App in Salesforce Setup &rarr; App Manager with the &quot;Full access (full)&quot; OAuth scope. Enable the refresh token grant flow.
+                Create a Connected App in Salesforce Setup &rarr; App Manager with the &quot;api&quot; and &quot;refresh_token&quot; OAuth scopes, and add this app&apos;s callback URL to it.
               </p>
             </div>
           </div>
@@ -829,18 +998,109 @@ const IntegrationsPage: React.FC = () => {
                   disabled={syncing !== null}
                   className="w-full px-4 py-2.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center justify-between disabled:opacity-50"
                 >
-                  <span>Contacts &rarr; Review</span>
+                  <span>Contacts &rarr; Members</span>
                   {syncing === 'pull-contacts' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
                 </button>
                 <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 mt-2">
                   <p className="text-blue-700 dark:text-blue-400 text-xs">
-                    Pulled contacts are returned for review. Real-time inbound sync is available via the Salesforce webhook endpoint.
+                    Matches contacts to existing members (by ID, then email) and updates their contact details. Members are never created or deleted. Requires sync direction Pull or Bidirectional. Real-time updates also arrive via the Salesforce webhook.
                   </p>
                 </div>
               </div>
             </div>
 
+            {/* Readiness & dry-run preview */}
             <div className="mt-4 pt-4 border-t border-theme-surface-border">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <button
+                  onClick={() => { void handleCheckReadiness(); }}
+                  disabled={checkingReadiness}
+                  className="px-3 py-1.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {checkingReadiness ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ListChecks className="w-3.5 h-3.5" />}
+                  <span>Check readiness</span>
+                </button>
+                <button
+                  onClick={() => { void handlePreviewMembers(); }}
+                  disabled={previewing}
+                  className="px-3 py-1.5 text-sm bg-theme-surface-secondary text-theme-text-secondary hover:bg-theme-surface-hover rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {previewing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span>Preview member sync</span>
+                </button>
+              </div>
+
+              {readiness && (
+                <div className="bg-theme-surface-secondary rounded-lg p-3 mb-3 text-xs">
+                  <div className="flex items-center gap-2 mb-2">
+                    {readiness.ready ? (
+                      <span className="flex items-center gap-1 text-green-700 dark:text-green-400 font-medium">
+                        <CheckCircle2 className="w-4 h-4" />
+                        Ready &mdash; sync will not create duplicates
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-medium">
+                        <AlertCircle className="w-4 h-4" />
+                        {readiness.connected
+                          ? 'Connected, but setup needed for duplicate-free sync'
+                          : 'Not connected to Salesforce'}
+                      </span>
+                    )}
+                  </div>
+                  {!readiness.connected && readiness.error && (
+                    <p className="text-theme-text-muted">{readiness.error}</p>
+                  )}
+                  {readiness.connected && (
+                    <div className="space-y-1">
+                      {Object.entries(readiness.objects).map(([name, obj]) => {
+                        const ok = obj.missing_fields.length === 0 && !obj.error;
+                        return (
+                          <div key={name} className="flex items-start gap-2">
+                            {ok ? (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-green-700 dark:text-green-400 mt-0.5 shrink-0" />
+                            ) : (
+                              <XCircle className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 mt-0.5 shrink-0" />
+                            )}
+                            <div>
+                              <span className="text-theme-text-primary font-medium">{name}</span>
+                              {obj.error ? (
+                                <span className="text-theme-text-muted"> &mdash; {obj.error}</span>
+                              ) : obj.missing_fields.length > 0 ? (
+                                <span className="text-theme-text-muted"> &mdash; missing: {obj.missing_fields.join(', ')}</span>
+                              ) : (
+                                <span className="text-theme-text-muted"> &mdash; all fields present</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {!readiness.external_id_fields_ready && (
+                        <p className="text-amber-700 dark:text-amber-400 mt-1">
+                          Add the missing Logbook_*__c external-ID fields in Salesforce to guarantee duplicate-free sync.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {preview && (
+                <div className="bg-theme-surface-secondary rounded-lg p-3 mb-3 text-xs">
+                  <p className="text-theme-text-primary font-medium mb-1">
+                    Member sync preview ({preview.total} member{preview.total === 1 ? '' : 's'})
+                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-theme-text-secondary">
+                    <span><span className="text-theme-text-primary font-medium">{preview.would_create}</span> new</span>
+                    <span><span className="text-theme-text-primary font-medium">{preview.would_update}</span> updated</span>
+                    <span><span className="text-theme-text-primary font-medium">{preview.would_adopt}</span> matched existing</span>
+                    <span><span className="text-theme-text-primary font-medium">{preview.skipped}</span> skipped</span>
+                  </div>
+                  <p className="text-theme-text-muted mt-1">
+                    Nothing has been written. Use &quot;Members &rarr; Contacts&quot; above to run the sync.
+                  </p>
+                </div>
+              )}
+
               <p className="text-theme-text-muted text-xs">
                 Events and training are also pushed automatically when sync direction is set to &quot;Push&quot; or &quot;Both&quot;.
               </p>

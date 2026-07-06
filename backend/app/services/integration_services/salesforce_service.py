@@ -6,6 +6,7 @@ Supports syncing contacts, events, training records, and incidents
 between The Logbook and a department's Salesforce org.
 """
 
+import re
 from typing import Any
 
 from loguru import logger
@@ -21,11 +22,24 @@ _TOKEN_URLS = {
     "sandbox": "https://test.salesforce.com/services/oauth2/token",
 }
 
+# Salesforce reports an unknown column as INVALID_FIELD with a message like
+# "No such column 'Foo__c' on sobject of type Contact".
+_UNKNOWN_COLUMN_RE = re.compile(r"No such column '([^']+)'")
+
+# Cap the drop-unknown-field retry loop so a genuinely broken payload cannot
+# spin indefinitely (each retry removes at least one field, but guard anyway).
+_MAX_FIELD_RETRIES = 6
+
 
 class SalesforceService:
     """Client for the Salesforce REST API."""
 
-    def __init__(self, credentials: dict[str, Any]):
+    def __init__(
+        self,
+        credentials: dict[str, Any],
+        *,
+        skip_unknown_fields: bool = True,
+    ):
         self.instance_url: str = credentials.get("instance_url", "")
         self.client_id: str = credentials.get("client_id", "")
         self.client_secret: str = credentials.get("client_secret", "")
@@ -33,6 +47,13 @@ class SalesforceService:
         self.api_version: str = credentials.get("api_version", "v62.0")
         self.environment: str = credentials.get("environment", "production")
         self._access_token: str = credentials.get("access_token", "")
+        # When True, a write that references a custom field the target org has
+        # not created yet (common while a department is still building out its
+        # Salesforce org) drops the offending field and retries instead of
+        # failing the whole record. Names of dropped fields accumulate here so
+        # callers can surface them to the admin.
+        self.skip_unknown_fields: bool = skip_unknown_fields
+        self.skipped_fields: set[str] = set()
 
     @property
     def _token_url(self) -> str:
@@ -176,11 +197,61 @@ class SalesforceService:
 
         return records
 
+    def _extract_unknown_fields(
+        self, response: "httpx.Response", payload: dict[str, Any]  # noqa: F821
+    ) -> list[str]:
+        """Return field names Salesforce rejected as non-existent columns.
+
+        Only fields actually present in *payload* are returned, so a retry
+        always makes progress and never loops on an unrelated error.
+        """
+        try:
+            errors = response.json()
+        except Exception:
+            return []
+        if not isinstance(errors, list):
+            return []
+
+        dropped: list[str] = []
+        for err in errors:
+            if not isinstance(err, dict):
+                continue
+            if err.get("errorCode") != "INVALID_FIELD":
+                continue
+            match = _UNKNOWN_COLUMN_RE.search(err.get("message", ""))
+            if match and match.group(1) in payload and match.group(1) not in dropped:
+                dropped.append(match.group(1))
+            # Salesforce sometimes lists the offending field(s) separately.
+            for field in err.get("fields", []) or []:
+                if field in payload and field not in dropped:
+                    dropped.append(field)
+        return dropped
+
     async def create_record(self, sobject: str, fields: dict[str, Any]) -> str:
-        """Create a record in Salesforce. Returns the new record ID."""
-        url = self._api_url(f"/sobjects/{sobject}")
-        response = await self._request("POST", url, json=fields)
-        if response.status_code not in (200, 201):
+        """Create a record in Salesforce. Returns the new record ID.
+
+        If the org is missing custom fields referenced in *fields* and
+        ``skip_unknown_fields`` is enabled, those fields are dropped and the
+        create is retried so a half-configured org still receives the record.
+        """
+        payload = dict(fields)
+        for _ in range(_MAX_FIELD_RETRIES):
+            url = self._api_url(f"/sobjects/{sobject}")
+            response = await self._request("POST", url, json=payload)
+            if response.status_code in (200, 201):
+                result = response.json()
+                record_id: str = result.get("id", "")
+                return record_id
+
+            if self.skip_unknown_fields and response.status_code == 400:
+                unknown = self._extract_unknown_fields(response, payload)
+                if unknown:
+                    for field in unknown:
+                        payload.pop(field, None)
+                        self.skipped_fields.add(field)
+                    if payload:
+                        continue
+
             logger.warning(
                 "Salesforce create %s failed (%d): %s",
                 sobject,
@@ -188,26 +259,70 @@ class SalesforceService:
                 response.text[:200],
             )
             raise Exception(f"Failed to create {sobject} in Salesforce")
-        result = response.json()
-        record_id: str = result.get("id", "")
-        return record_id
+
+        raise Exception(
+            f"Failed to create {sobject}: too many unknown-field retries"
+        )
 
     async def update_record(
         self, sobject: str, record_id: str, fields: dict[str, Any]
     ) -> bool:
-        """Update an existing Salesforce record by ID."""
-        url = self._api_url(f"/sobjects/{sobject}/{record_id}")
-        response = await self._request("PATCH", url, json=fields)
-        if response.status_code == 204:
-            return True
-        logger.warning(
-            "Salesforce update %s/%s failed (%d): %s",
-            sobject,
-            record_id,
-            response.status_code,
-            response.text[:200],
-        )
+        """Update an existing Salesforce record by ID.
+
+        Unknown custom fields are dropped and retried when
+        ``skip_unknown_fields`` is enabled (see ``create_record``).
+        """
+        payload = dict(fields)
+        for _ in range(_MAX_FIELD_RETRIES):
+            url = self._api_url(f"/sobjects/{sobject}/{record_id}")
+            response = await self._request("PATCH", url, json=payload)
+            if response.status_code == 204:
+                return True
+
+            if self.skip_unknown_fields and response.status_code == 400:
+                unknown = self._extract_unknown_fields(response, payload)
+                if unknown:
+                    for field in unknown:
+                        payload.pop(field, None)
+                        self.skipped_fields.add(field)
+                    if payload:
+                        continue
+
+            logger.warning(
+                "Salesforce update %s/%s failed (%d): %s",
+                sobject,
+                record_id,
+                response.status_code,
+                response.text[:200],
+            )
+            return False
+
         return False
+
+    async def describe_sobject(self, sobject: str) -> dict[str, Any]:
+        """Return field metadata for an sObject via the describe endpoint.
+
+        Used by the readiness check to determine which custom fields the
+        target org has actually created.
+        """
+        url = self._api_url(f"/sobjects/{sobject}/describe")
+        response = await self._request("GET", url)
+        if response.status_code != 200:
+            raise Exception(
+                f"Failed to describe {sobject} (HTTP {response.status_code})"
+            )
+        result: dict[str, Any] = response.json()
+        return result
+
+    async def get_field_names(self, sobject: str) -> set[str]:
+        """Return the set of field API names defined on an sObject."""
+        described = await self.describe_sobject(sobject)
+        fields = described.get("fields", [])
+        return {
+            f.get("name", "")
+            for f in fields
+            if isinstance(f, dict) and f.get("name")
+        }
 
     async def get_record(self, sobject: str, record_id: str) -> dict[str, Any]:
         """Fetch a single Salesforce record by ID."""

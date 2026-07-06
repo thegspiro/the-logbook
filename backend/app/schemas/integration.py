@@ -149,6 +149,19 @@ class SalesforceConfig(BaseModel):
     environment: str = Field(default="production", pattern=r"^(production|sandbox)$")
     sync_direction: str = Field(default="push", pattern=r"^(push|pull|both)$")
     sync_types: List[str] = Field(default_factory=list)
+    # How to reconcile members with Contacts a department already has:
+    #   email          — fall back to matching by email, then adopt
+    #   email_lastname — require email AND last name to match
+    #   external_id    — never adopt pre-existing records (may create duplicates)
+    match_strategy: str = Field(
+        default="email", pattern=r"^(email|email_lastname|external_id)$"
+    )
+    # When True, custom fields the target org has not created yet are dropped
+    # at write time instead of failing the record (for orgs still being built).
+    graceful_fields: bool = True
+    # When True, the background scheduler pushes/pulls this org automatically
+    # every 30 minutes per sync_direction (in addition to manual sync buttons).
+    auto_sync_enabled: bool = False
 
 
 # Map integration_type → config schema for strict validation

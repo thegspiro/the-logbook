@@ -717,12 +717,44 @@ export interface SalesforceSyncResult {
   created: number;
   updated: number;
   failed: number;
+  adopted?: number;
+  skipped?: number;
+  skipped_fields?: string[];
 }
 
 export interface SalesforcePullResult {
   success: boolean;
   contacts: Record<string, unknown>[];
   count: number;
+  inbound_enabled: boolean;
+  persisted: number;
+  updated: number;
+  unchanged: number;
+  unmatched: number;
+  failed: number;
+}
+
+export interface SalesforceReadinessObject {
+  accessible: boolean;
+  missing_fields: string[];
+  error: string | null;
+}
+
+export interface SalesforceReadiness {
+  connected: boolean;
+  objects: Record<string, SalesforceReadinessObject>;
+  external_id_fields_ready: boolean;
+  ready: boolean;
+  error?: string;
+}
+
+export interface SalesforcePreviewResult {
+  success: boolean;
+  total: number;
+  would_create: number;
+  would_update: number;
+  would_adopt: number;
+  skipped: number;
 }
 
 export const integrationsService = {
@@ -778,6 +810,23 @@ export const integrationsService = {
   async salesforcePullContacts(): Promise<SalesforcePullResult> {
     const response = await api.post<SalesforcePullResult>('/integrations/salesforce/pull/contacts');
     return response.data;
+  },
+
+  async salesforceReadiness(): Promise<SalesforceReadiness> {
+    const response = await api.get<SalesforceReadiness>('/integrations/salesforce/readiness');
+    return response.data;
+  },
+
+  async salesforcePreviewMembers(): Promise<SalesforcePreviewResult> {
+    const response = await api.post<SalesforcePreviewResult>('/integrations/salesforce/preview/members');
+    return response.data;
+  },
+
+  // Full-page navigation target for the one-click OAuth connect flow. Not an
+  // axios call — the browser navigates here and the backend 302s to Salesforce.
+  getSalesforceOAuthUrl(): string {
+    const baseUrl = api.defaults.baseURL || '';
+    return `${baseUrl}/integrations/salesforce/oauth/authorize`;
   },
 };
 

@@ -471,6 +471,17 @@ class Settings(BaseSettings):
     OAUTH_SUCCESS_REDIRECT: str = "/auth/callback"
     OAUTH_FAILURE_REDIRECT: str = "/login"
 
+    # Salesforce Connected App (deployment-wide fallback). Each org may instead
+    # supply its own client_id/client_secret on the integration; those take
+    # precedence. Used by the "Connect Salesforce" authorization-code flow.
+    SALESFORCE_CLIENT_ID: str | None = None
+    SALESFORCE_CLIENT_SECRET: str | None = None
+    # Absolute URL Salesforce redirects back to after consent. Must exactly
+    # match a Callback URL on the Connected App, e.g.
+    # https://app.example.org/api/v1/integrations/salesforce/oauth/callback
+    # Leave unset to derive it from the incoming request's base URL.
+    SALESFORCE_OAUTH_REDIRECT_URI: str | None = None
+
     def get_google_allowed_domains(self) -> set[str]:
         """Allowed Google email domains as a lowercased set (empty = any)."""
         if not self.GOOGLE_ALLOWED_DOMAINS:

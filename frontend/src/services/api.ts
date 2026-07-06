@@ -128,4 +128,5 @@ export type {
   DepartmentMessageRecord, InboxMessage, MessageStats, RoleOption,
   AnalyticsEventRecord, AnalyticsMetrics,
   TestConnectionResult,
+  SalesforceReadiness, SalesforceReadinessObject, SalesforcePreviewResult, SalesforceSyncResult,
 } from './adminServices';
