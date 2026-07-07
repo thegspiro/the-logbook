@@ -287,12 +287,19 @@ code-level `/security-review` must run against the implementation before merge.
   transaction**. `alembic_head` is validated before any write. The manifest is
   an integrity hint only — **never** an authorization or trust control (its
   checksum only detects corruption; an attacker recomputes it).
+- **Actor gating — super user only (decided).** Both endpoints are restricted
+  to the org **System Owner** (`it_manager`, the sole `*` holder) via a
+  dedicated `organization.template.manage` permission granted **only** to
+  `it_manager` in `DEFAULT_ROLES` — not to president/other admins, and not the
+  broad `settings.manage`. Gate on the permission (explicit, auditable), not a
+  hardcoded slug. See §8.4 for exactly which risks this closes and which it does
+  not.
 
 ### 8.2 Threats and required mitigations
 
 | # | Threat | Severity | Required mitigation |
 |---|---|---|---|
-| S1 | **Privilege escalation via `positions` upsert.** A crafted `{slug:"member", permissions:["*"]}` overwrites an existing role → every member becomes system owner. | Critical | Roles are **create-only** on import (never update an existing role's permissions). Never touch `is_system` roles. Validate every imported permission is a **subset of the importer's own effective permissions** ("cannot grant what you don't have"); reject `*` unless importer is a system owner. |
+| S1 | **Privilege escalation via `positions` upsert.** A crafted `{slug:"member", permissions:["*"]}` overwrites an existing role → every member becomes system owner. | Critical → **Medium** with super-user gating (§8.4): the actor already holds `*`, so it is no longer an escalation, only a confused-deputy footgun from a malicious/tampered file. | Roles remain **create-only** (never update existing/`is_system` roles) — cheap guardrail against the footgun. The subset-of-importer check is moot for a `*` holder but harmless. |
 | S2 | **Cross-tenant write / tenant-creation escalation.** Target org taken from input → write into another dept. New-org creation via org-scoped perm → arbitrary tenant creation. | Critical | Merge-mode target org = `current_user.organization_id`, **never** from request/manifest. New-org mode gated behind a **platform/superadmin** permission, not `settings.manage`. Userless-org bootstrap (first admin) is an explicit, separately-authorized step — never auto-inject an account. |
 | S3 | **Stored XSS / SSRF / invalid-state injection** — bulk insert bypasses Pydantic validators, enum-lowercasing, and HTML sanitization. Vectors: `email_templates.body_html`/`css`, `minutes_templates.header_config.logo_url`, `notification_rules.config` (webhook URLs), portal `allowed_origins`. | Critical | Route **every** imported row through the same schema validation + sanitization as its normal create path. Sanitize all HTML. Allowlist/validate URL fields. Re-validate CORS origins; never trust them. |
 | S4 | **Silent overwrite of security config** via one-per-org upsert — re-enable a disabled public portal, widen `allowed_origins`, slacken rate limits. | High | Security-relevant config (`public_portal_config`, `compliance_configs`, `notification_rules`) is **create-only / never-overwrite**, or requires explicit per-item opt-in in the dry-run confirmation. Never silently enable the portal or broaden origins. |
@@ -313,6 +320,38 @@ therefore still requires a separate, deliberately-authorized member/credential
 bootstrap. This is intentional (per the structure-only decision) but must be
 stated so operators don't mistake a template import for a complete DR restore.
 
+### 8.4 What super-user gating does and does not cover
+
+Restricting both endpoints to the System Owner is **necessary but not
+sufficient**. The trust boundary is the **file, not the person** — a super user
+handling a template obtained elsewhere, or a tampered/corrupt archive, is still
+fully exposed to the content-driven threats.
+
+**Closed / reduced by actor restriction:**
+
+- **S1** — no longer an escalation (actor already holds `*`); downgraded to a
+  create-only footgun guard.
+- **S2 (actor half)** — far fewer accounts can trigger export/import; smaller
+  exfiltration and misuse surface.
+
+**Unchanged by actor restriction — must still be built:**
+
+- **S3** (stored XSS / SSRF from imported content) — a super user's session is a
+  *higher-value* XSS target, not a lower one.
+- **S5** (fail-open ID passthrough) — a data-integrity defect, privilege-agnostic.
+- **S6** (secret/PII leakage on export, e.g. `organizations.settings`) — the
+  leak is in the file's contents, not the exporter's rights.
+- **S7** (zip bomb / zip slip / DoS) — privilege-agnostic.
+- **S4** (security-config overwrite) — remains a real footgun; keep
+  never-overwrite.
+
+**Structurally not solvable by "super user":** there is **no cross-org platform
+super user** — `it_manager` is org-scoped, and even platform-analytics is
+`settings.manage` filtered to the caller's org. So S2's **tenant-creation** half
+cannot be authorized by super-user gating. → **v1 supports merge-into-your-own-
+org only**; new-org-creation import is deferred until a genuine platform-admin
+tier exists.
+
 ## 9. Backend deliverables
 
 - `app/services/org_template_service.py` — engine (export, import, dry-run,
@@ -324,8 +363,9 @@ stated so operators don't mistake a template import for a complete DR restore.
 - Endpoints appended to `app/api/v1/endpoints/organizations.py`:
   `GET  /organizations/template/export`,
   `POST /organizations/template/import` (`?dry_run=`).
-- Permissions: add `organization.template.export` / `.import` (org-scoped) plus
-  a separate **platform-level** permission for new-org-creation import (S2).
+- Permission: add `organization.template.manage`, granted **only** to
+  `it_manager` in `DEFAULT_ROLES`; gate both endpoints on it (§8.1). New-org
+  mode is out of v1 (no platform-admin tier exists — §8.4).
 - Security controls from §8.2 are backend deliverables, not follow-ups:
   create-only role import + permission-subset check (S1), server-derived target
   org (S2), per-row schema revalidation + HTML/URL sanitization (S3),
@@ -342,14 +382,14 @@ stated so operators don't mistake a template import for a complete DR restore.
 ## 10. Frontend deliverables
 
 - New page `pages/DepartmentTemplatePage.tsx` under Settings, route
-  `/settings/template` gated by `settings.manage`; link from `SettingsPage` and
-  `DepartmentSetupPage`.
+  `/settings/template` gated by `organization.template.manage` (System Owner
+  only, §8.1); link from `SettingsPage` / `DepartmentSetupPage`.
 - **Export tab:** module multi-select (default all), "Export template" →
   downloads the `.zip`.
-- **Import tab:** `FileDropzone` for the `.zip`; target-mode selector (new dept
-  vs. this dept); **runs dry-run first** and shows the `TemplateImportSummary`
-  preview (created/updated/skipped per module, nulled refs) behind a
-  `ConfirmDialog` before committing.
+- **Import tab:** `FileDropzone` for the `.zip` (imports into **this org** only
+  in v1 — no new-org mode, §8.4); **runs dry-run first** and shows the
+  `TemplateImportSummary` preview (created/updated/skipped per module, nulled
+  refs) behind a `ConfirmDialog` before committing.
 - New module axios instance (or reuse global) with `withCredentials` + CSRF per
   project convention; template endpoints added to `UNCACHEABLE_PREFIXES`.
 - Types in `types/`, enums/labels in `constants/enums.ts`, form-value coercion
@@ -367,15 +407,12 @@ stated so operators don't mistake a template import for a complete DR restore.
 
 ## 12. Open questions for stakeholder
 
-- **Q1 — Import target.** Merge into the current org (target = session org) is
-  the safe default. New-org-creation import is a **platform-privileged** action
-  (S2) and also yields a userless org (§8.3) — support it, but behind a
-  platform permission and with an explicit admin-bootstrap step. (Recommend:
-  ship merge-into-current-org first; add gated new-org mode in a later phase.)
-- **Q2 — Roles/positions.** Positions travel, but import is **create-only**,
-  never overwriting existing or `is_system` roles, and imported permissions must
-  be a subset of the importer's own (S1). (Recommend: yes, create-only — *not*
-  upsert-overwrite, which was a privilege-escalation vector.)
+- **Q1 — Import target. DECIDED:** super-user-gated, **merge-into-your-own-org
+  only** for v1 (target = session org, server-derived). New-org-creation import
+  deferred — no platform-admin tier exists to authorize it safely (§8.4).
+- **Q2 — Roles/positions. DECIDED:** positions travel, import is **create-only**
+  (never overwrite existing/`is_system` roles). With super-user gating this is a
+  footgun guard rather than an anti-escalation control (§8.4), but kept.
 - **Q3 — Borderline tables.** Exclude `grant_opportunities` (reference catalog,
   nothing depends on it) and the global `onboarding_checklist` (not
   org-scoped)? (Recommend: exclude both from v1.)
