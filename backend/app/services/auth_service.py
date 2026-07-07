@@ -353,6 +353,7 @@ class AuthService:
         last_name: str,
         organization_id: UUID,
         membership_number: Optional[str] = None,
+        must_change_password: bool = True,
     ) -> Tuple[Optional[User], Optional[str]]:
         """
         Register a new user
@@ -365,6 +366,10 @@ class AuthService:
             last_name: Last name
             organization_id: Organization ID
             membership_number: Optional membership number
+            must_change_password: Force a password change on first use. Defaults
+                to True for admin-created accounts (temporary password). Pass
+                False when the user chose their own password (e.g. onboarding
+                system owner, self-registration).
 
         Returns:
             Tuple of (User object if successful, error message if failed)
@@ -414,7 +419,7 @@ class AuthService:
             membership_number=membership_number,
             status=UserStatus.ACTIVE,
             email_verified=False,
-            must_change_password=True,
+            must_change_password=must_change_password,
             password_changed_at=now,
         )
 

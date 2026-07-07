@@ -539,6 +539,9 @@ async def register(
         last_name=user_data.last_name,
         organization_id=organization.id,
         membership_number=user_data.membership_number,
+        # Self-registrants choose their own password and are logged in
+        # immediately, so there is no temporary password to force-change.
+        must_change_password=False,
     )
 
     if error:
