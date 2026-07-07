@@ -49,7 +49,7 @@ def safe_error_detail(
     msg = str(exc)
 
     # Always log the real error for ops debugging
-    logger.error("Exception in request handler: %s: %s", type(exc).__name__, msg)
+    logger.error("Exception in request handler: {}: {}", type(exc).__name__, msg)
 
     # Trusted validation exceptions — pass through if safe
     if isinstance(exc, (ValueError, PermissionError)):
@@ -78,7 +78,7 @@ def sanitize_error_message(
         return fallback
     for pattern in _UNSAFE_PATTERNS:
         if pattern.search(msg):
-            logger.warning("Suppressed unsafe error message: %s", msg)
+            logger.warning("Suppressed unsafe error message: {}", msg)
             return fallback
     if len(msg) > 300:
         return fallback

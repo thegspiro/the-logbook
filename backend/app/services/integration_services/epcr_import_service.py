@@ -64,7 +64,7 @@ def parse_csv_file(
             continue
 
     # Never log file contents or parsed row data (HIPAA)
-    logger.info("Parsed %d records from CSV (%d skipped)", len(records), skipped)
+    logger.info("Parsed {} records from CSV ({} skipped)", len(records), skipped)
     return records
 
 
@@ -101,7 +101,7 @@ def parse_nemsis_xml(file_content: bytes) -> list[dict[str, Any]]:
         except Exception:
             continue
 
-    logger.info("Parsed %d records from NEMSIS XML", len(records))
+    logger.info("Parsed {} records from NEMSIS XML", len(records))
     return records
 
 

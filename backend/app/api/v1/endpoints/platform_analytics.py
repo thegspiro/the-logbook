@@ -103,7 +103,7 @@ async def get_platform_analytics(
             login_trend.append(DailyCount(date=day, count=login_map.get(day, 0)))
 
     except Exception as exc:
-        logger.warning("platform-analytics: user adoption query failed: %s", exc)
+        logger.warning("platform-analytics: user adoption query failed: {}", exc)
 
     inactive_users = total_users - active_users
     adoption_rate = (
@@ -184,7 +184,7 @@ async def get_platform_analytics(
                 )
             )
         except Exception as exc:
-            logger.warning("platform-analytics: module %s query failed: %s", name, exc)
+            logger.warning("platform-analytics: module {} query failed: {}", name, exc)
             modules.append(ModuleUsage(name=name, enabled=enabled, record_count=0))
 
     # ── Operational Activity ──
@@ -212,7 +212,7 @@ async def get_platform_analytics(
         )
         events_last_30 = result.scalar() or 0
     except Exception as exc:
-        logger.warning("platform-analytics: events query failed: %s", exc)
+        logger.warning("platform-analytics: events query failed: {}", exc)
 
     try:
         result = await db.execute(
@@ -223,7 +223,7 @@ async def get_platform_analytics(
         )
         total_check_ins = result.scalar() or 0
     except Exception as exc:
-        logger.warning("platform-analytics: check-ins query failed: %s", exc)
+        logger.warning("platform-analytics: check-ins query failed: {}", exc)
 
     try:
         result = await db.execute(
@@ -235,7 +235,7 @@ async def get_platform_analytics(
         )
         training_hours_last_30 = float(result.scalar() or 0)
     except Exception as exc:
-        logger.warning("platform-analytics: training hours query failed: %s", exc)
+        logger.warning("platform-analytics: training hours query failed: {}", exc)
 
     try:
         result = await db.execute(
@@ -246,7 +246,7 @@ async def get_platform_analytics(
         )
         forms_submitted_last_30 = result.scalar() or 0
     except Exception as exc:
-        logger.warning("platform-analytics: forms query failed: %s", exc)
+        logger.warning("platform-analytics: forms query failed: {}", exc)
 
     # ── System Health ──
     errors_last_7 = 0
@@ -293,7 +293,7 @@ async def get_platform_analytics(
         )
         top_error_types = {row[0]: row[1] for row in result.all() if row[0]}
     except Exception as exc:
-        logger.warning("platform-analytics: error logs query failed: %s", exc)
+        logger.warning("platform-analytics: error logs query failed: {}", exc)
 
     # ── Content ──
     total_documents = 0
@@ -313,7 +313,7 @@ async def get_platform_analytics(
         )
         documents_last_30 = result.scalar() or 0
     except Exception as exc:
-        logger.warning("platform-analytics: documents query failed: %s", exc)
+        logger.warning("platform-analytics: documents query failed: {}", exc)
 
     return PlatformAnalyticsResponse(
         total_users=total_users,

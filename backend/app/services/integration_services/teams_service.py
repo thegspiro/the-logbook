@@ -63,7 +63,7 @@ async def send_teams_notification(
         if response.status_code == 200:
             return True
         logger.warning(
-            "Teams webhook returned %d: %s",
+            "Teams webhook returned {}: {}",
             response.status_code,
             response.text[:200],
         )

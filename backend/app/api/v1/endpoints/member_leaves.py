@@ -147,7 +147,7 @@ async def create_leave_of_absence(
         )
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning(
-            "Failed to cancel shift assignments for leave (user %s): %s",
+            "Failed to cancel shift assignments for leave (user {}): {}",
             data.user_id,
             exc,
         )

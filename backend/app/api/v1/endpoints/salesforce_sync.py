@@ -231,7 +231,7 @@ async def push_events_to_salesforce(
             else:
                 failed += 1
         except Exception:
-            logger.warning("Failed to push event %s", event.id, exc_info=True)
+            logger.opt(exception=True).warning("Failed to push event {}", event.id)
             failed += 1
 
     integration = await _get_sf_integration(db, org_id)
@@ -547,7 +547,7 @@ async def salesforce_oauth_callback(
     except SalesforceOAuthError as exc:
         return _connect_result_redirect(str(exc))
     except Exception:
-        logger.warning("Salesforce token exchange raised", exc_info=True)
+        logger.opt(exception=True).warning("Salesforce token exchange raised")
         return _connect_result_redirect("server_error")
 
     integration.set_secret("refresh_token", tokens["refresh_token"])

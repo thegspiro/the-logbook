@@ -606,7 +606,7 @@ class OnboardingService:
 
         if not facility_type:
             logger.warning(
-                "No facility types available for org %s — skipping "
+                "No facility types available for org {} — skipping "
                 "headquarters facility creation",
                 org.id,
             )
@@ -642,7 +642,7 @@ class OnboardingService:
 
         if not facility_status:
             logger.warning(
-                "No facility statuses available for org %s — skipping "
+                "No facility statuses available for org {} — skipping "
                 "headquarters facility creation",
                 org.id,
             )
@@ -878,6 +878,11 @@ class OnboardingService:
             first_name=first_name,
             last_name=last_name,
             membership_number=membership_number,
+            # The System Owner chooses their own password in the onboarding
+            # form, so there is no temporary password to force-change. Leaving
+            # this True would 403 every request outside the auth allow-list via
+            # the must_change_password gate in get_current_user.
+            must_change_password=False,
         )
 
         if error or not user:

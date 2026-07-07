@@ -149,7 +149,7 @@ async def exchange_code_for_tokens(
 
     if resp.status_code != 200:
         logger.warning(
-            "Salesforce token exchange failed (%d): %s",
+            "Salesforce token exchange failed ({}): {}",
             resp.status_code,
             resp.text[:300],
         )

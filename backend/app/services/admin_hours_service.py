@@ -203,7 +203,7 @@ class AdminHoursService:
         await self.db.flush()
         await self.db.refresh(entry, ["created_at", "updated_at"])
 
-        logger.info("User %s clocked in to category %s", user_id, category.name)
+        logger.info("User {} clocked in to category {}", user_id, category.name)
         return entry
 
     async def clock_out(self, entry_id: str, user_id: str) -> AdminHoursEntry:
@@ -232,7 +232,7 @@ class AdminHoursService:
 
         await self.db.flush()
         await self.db.refresh(entry, ["created_at", "updated_at"])
-        logger.info("User %s clocked out: %d minutes", user_id, entry.duration_minutes)
+        logger.info("User {} clocked out: {} minutes", user_id, entry.duration_minutes)
         return entry
 
     async def clock_out_by_category(
@@ -389,7 +389,7 @@ class AdminHoursService:
         await self.db.refresh(entry, ["created_at", "updated_at"])
 
         logger.info(
-            "Admin %s force-clocked-out session %s for user %s (%d min)",
+            "Admin {} force-clocked-out session {} for user {} ({} min)",
             admin_id,
             entry_id,
             entry.user_id,
@@ -680,7 +680,7 @@ class AdminHoursService:
         await self.db.refresh(entry, ["created_at", "updated_at"])
 
         logger.info(
-            "Admin %s edited pending entry %s (user %s)",
+            "Admin {} edited pending entry {} (user {})",
             admin_id,
             entry_id,
             entry.user_id,
@@ -729,7 +729,7 @@ class AdminHoursService:
 
         await self.db.flush()
         await self.db.refresh(entry, ["created_at", "updated_at"])
-        logger.info("Entry %s %sd by %s", entry_id, action, approver_id)
+        logger.info("Entry {} {}d by {}", entry_id, action, approver_id)
         return entry
 
     # =========================================================================
@@ -869,7 +869,7 @@ class AdminHoursService:
                 approved_count += 1
 
         await self.db.flush()
-        logger.info("Bulk approved %d entries by %s", approved_count, approver_id)
+        logger.info("Bulk approved {} entries by {}", approved_count, approver_id)
         return approved_count
 
     # =========================================================================
@@ -1038,7 +1038,7 @@ class AdminHoursService:
                 entry.status = AdminHoursEntryStatus.PENDING
                 closed += 1
                 logger.info(
-                    "Auto-closed stale session %s for user %s (%.1fh limit)",
+                    "Auto-closed stale session {} for user {} ({}h limit)",
                     entry.id,
                     entry.user_id,
                     max_hours,

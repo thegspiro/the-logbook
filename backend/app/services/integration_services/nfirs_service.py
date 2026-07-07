@@ -65,7 +65,7 @@ def export_nfirs_data(
         row = _incident_to_nfirs_row(incident, state_fdid, state_code)
         writer.writerow(row)
 
-    logger.info("Exported %d incidents in NFIRS format", len(incidents))
+    logger.info("Exported {} incidents in NFIRS format", len(incidents))
     return output.getvalue().encode("utf-8")
 
 

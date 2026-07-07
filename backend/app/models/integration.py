@@ -78,6 +78,6 @@ class Integration(Base):
             return json.loads(decrypted)
         except Exception:
             logger.warning(
-                "Failed to decrypt encrypted_config for integration %s", self.id
+                "Failed to decrypt encrypted_config for integration {}", self.id
             )
             return {}

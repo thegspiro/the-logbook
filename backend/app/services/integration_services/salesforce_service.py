@@ -78,7 +78,7 @@ class SalesforceService:
             )
             if response.status_code != 200:
                 body = response.text[:300]
-                logger.error("Salesforce token refresh failed: %s", body)
+                logger.error("Salesforce token refresh failed: {}", body)
                 raise Exception(
                     "Failed to refresh Salesforce access token — "
                     "verify your Connected App credentials"
@@ -172,7 +172,7 @@ class SalesforceService:
         response = await self._request("GET", url, params={"q": soql})
         if response.status_code != 200:
             logger.warning(
-                "Salesforce query failed (%d): %s",
+                "Salesforce query failed ({}): {}",
                 response.status_code,
                 response.text[:200],
             )
@@ -188,7 +188,7 @@ class SalesforceService:
             response = await self._request("GET", next_url)
             if response.status_code != 200:
                 logger.warning(
-                    "Salesforce query pagination failed (%d)",
+                    "Salesforce query pagination failed ({})",
                     response.status_code,
                 )
                 break
@@ -253,7 +253,7 @@ class SalesforceService:
                         continue
 
             logger.warning(
-                "Salesforce create %s failed (%d): %s",
+                "Salesforce create {} failed ({}): {}",
                 sobject,
                 response.status_code,
                 response.text[:200],
@@ -289,7 +289,7 @@ class SalesforceService:
                         continue
 
             logger.warning(
-                "Salesforce update %s/%s failed (%d): %s",
+                "Salesforce update {}/{} failed ({}): {}",
                 sobject,
                 record_id,
                 response.status_code,

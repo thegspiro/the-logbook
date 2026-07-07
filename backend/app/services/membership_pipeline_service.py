@@ -1580,9 +1580,8 @@ class MembershipPipelineService:
             logger.warning(f"Auto-enrollment skipped for user {user_id}: {e}")
             return None
         except Exception as e:
-            logger.error(
+            logger.opt(exception=True).error(
                 f"Auto-enrollment failed for user {user_id}: {e}",
-                exc_info=True,
             )
             raise
 

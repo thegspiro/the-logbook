@@ -457,7 +457,7 @@ class ExternalTrainingSyncService:
             else:
                 wait = 2 ** (attempt + 1)
             logger.info(
-                "Vector Solutions rate limited (429) — retrying in %ds",
+                "Vector Solutions rate limited (429) — retrying in {}s",
                 wait,
             )
             await asyncio.sleep(wait)

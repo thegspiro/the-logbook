@@ -328,7 +328,7 @@ class OrganizationService:
         configurable_fields = list(ModuleSettings.model_fields.keys())
         if not any(getattr(module_settings, f) for f in configurable_fields):
             logger.warning(
-                "All configurable modules are disabled for org %s — "
+                "All configurable modules are disabled for org {} — "
                 "users will see a minimal navigation.  Check the "
                 "organization's module settings.",
                 organization_id,

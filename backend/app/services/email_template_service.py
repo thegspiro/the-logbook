@@ -2105,7 +2105,7 @@ class EmailTemplateService:
         # to prevent MissingGreenlet when serializing in async mode.
         await self.db.refresh(template, attribute_names=["created_at", "updated_at"])
         logger.info(
-            "Template created id=%s type=%s org=%s by=%s",
+            "Template created id={} type={} org={} by={}",
             template.id,
             template_type,
             organization_id,
@@ -2155,7 +2155,7 @@ class EmailTemplateService:
         # async lazy-load when Pydantic serializes the response.
         await self.db.refresh(template, attribute_names=["updated_at"])
         logger.info(
-            "Template updated id=%s fields=[%s] org=%s by=%s",
+            "Template updated id={} fields=[{}] org={} by={}",
             template_id,
             ",".join(
                 sorted(
@@ -2211,7 +2211,7 @@ class EmailTemplateService:
         await self.db.refresh(template, attribute_names=["updated_at"])
 
         logger.info(
-            "Template reset to default id=%s type=%s org=%s by=%s",
+            "Template reset to default id={} type={} org={} by={}",
             template_id,
             ttype,
             organization_id,
@@ -2232,7 +2232,7 @@ class EmailTemplateService:
             return False
 
         logger.info(
-            "Template deleted id=%s type=%s org=%s",
+            "Template deleted id={} type={} org={}",
             template_id,
             template.template_type,
             organization_id,

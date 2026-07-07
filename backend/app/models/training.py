@@ -2683,10 +2683,14 @@ class ShiftAssignment(Base):
     )
 
     position = Column(
-        Enum(ShiftPosition), nullable=False, default=ShiftPosition.FIREFIGHTER
+        Enum(ShiftPosition, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ShiftPosition.FIREFIGHTER,
     )
     assignment_status = Column(
-        Enum(AssignmentStatus), nullable=False, default=AssignmentStatus.ASSIGNED
+        Enum(AssignmentStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=AssignmentStatus.ASSIGNED,
     )
 
     # Tracking
@@ -2754,7 +2758,9 @@ class ShiftSwapRequest(Base):
     )
 
     status = Column(
-        Enum(SwapRequestStatus), nullable=False, default=SwapRequestStatus.PENDING
+        Enum(SwapRequestStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=SwapRequestStatus.PENDING,
     )
     reason = Column(Text)
 
@@ -2813,7 +2819,11 @@ class ShiftTimeOff(Base):
     end_date = Column(Date, nullable=False)
     reason = Column(Text)
 
-    status = Column(Enum(TimeOffStatus), nullable=False, default=TimeOffStatus.PENDING)
+    status = Column(
+        Enum(TimeOffStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=TimeOffStatus.PENDING,
+    )
     approved_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

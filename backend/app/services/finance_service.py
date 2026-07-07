@@ -79,7 +79,7 @@ class FinanceService:
         self.db.add(fy)
         await self.db.flush()
         await self.db.refresh(fy, ["created_at", "updated_at"])
-        logger.info("Created fiscal year %s for org %s", fy.id, org_id)
+        logger.info("Created fiscal year {} for org {}", fy.id, org_id)
         return fy
 
     async def update_fiscal_year(self, fy_id: str, org_id: str, **kwargs) -> FiscalYear:
@@ -114,7 +114,7 @@ class FinanceService:
         fy.status = FiscalYearStatus.ACTIVE
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])
-        logger.info("Activated fiscal year %s for org %s", fy_id, org_id)
+        logger.info("Activated fiscal year {} for org {}", fy_id, org_id)
         return fy
 
     async def lock_fiscal_year(self, fy_id: str, org_id: str) -> FiscalYear:
@@ -125,7 +125,7 @@ class FinanceService:
         fy.status = FiscalYearStatus.CLOSED
         await self.db.flush()
         await self.db.refresh(fy, ["updated_at"])
-        logger.info("Locked fiscal year %s", fy_id)
+        logger.info("Locked fiscal year {}", fy_id)
         return fy
 
     async def get_active_fiscal_year(self, org_id: str) -> Optional[FiscalYear]:
@@ -562,7 +562,7 @@ class FinanceService:
                 record.entity_type, record.entity_id, approver_id
             )
 
-        logger.info("Approval step %s approved by %s", step_record_id, approver_id)
+        logger.info("Approval step {} approved by {}", step_record_id, approver_id)
         return record
 
     async def deny_step(
@@ -602,7 +602,7 @@ class FinanceService:
         )
 
         await self.db.flush()
-        logger.info("Approval step %s denied by %s", step_record_id, denier_id)
+        logger.info("Approval step {} denied by {}", step_record_id, denier_id)
         return record
 
     async def approve_by_token(
@@ -745,7 +745,7 @@ class FinanceService:
                     record.acted_at = datetime.now(timezone.utc)
                     # In production, trigger email sending here
                     logger.info(
-                        "Notification step %s auto-sent for %s %s",
+                        "Notification step {} auto-sent for {} {}",
                         record.id,
                         entity_type.value,
                         entity_id,
@@ -985,7 +985,7 @@ class FinanceService:
         self.db.add(pr)
         await self.db.flush()
         await self.db.refresh(pr, ["created_at", "updated_at"])
-        logger.info("Created purchase request %s", request_number)
+        logger.info("Created purchase request {}", request_number)
         return pr
 
     async def update_purchase_request(
@@ -1052,7 +1052,7 @@ class FinanceService:
 
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
-        logger.info("Submitted purchase request %s", pr.request_number)
+        logger.info("Submitted purchase request {}", pr.request_number)
         return pr
 
     async def mark_pr_ordered(self, pr_id: str, org_id: str) -> PurchaseRequest:
@@ -1529,7 +1529,7 @@ class FinanceService:
             count += 1
 
         await self.db.flush()
-        logger.info("Generated %d member dues for schedule %s", count, schedule_id)
+        logger.info("Generated {} member dues for schedule {}", count, schedule_id)
         return count
 
     async def list_member_dues(

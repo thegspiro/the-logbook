@@ -890,7 +890,7 @@ class EventService:
             )
         except Exception as e:
             logger.error(
-                "Failed to notify waitlist promotion for user %s event %s: %s",
+                "Failed to notify waitlist promotion for user {} event {}: {}",
                 waitlisted_rsvp.user_id,
                 event.id,
                 e,
@@ -1512,7 +1512,7 @@ class EventService:
                     custom_category=event.custom_category,
                 )
             except Exception:
-                logger.exception("Failed to credit admin hours for RSVP %s", rsvp.id)
+                logger.exception("Failed to credit admin hours for RSVP {}", rsvp.id)
         await self.db.commit()
 
         return updated_count, None
@@ -1953,14 +1953,13 @@ class EventService:
             self.db.add(training_record)
             await self.db.commit()
         except Exception:
-            logger.error(
+            logger.opt(exception=True).error(
                 "Failed to auto-create training record for user {} "
                 "at event {} (session {}). Check-in succeeded but "
                 "training credit was not recorded.",
                 user_id,
                 event.id,
                 event.title,
-                exc_info=True,
             )
             await self.db.rollback()
 

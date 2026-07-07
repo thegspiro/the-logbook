@@ -219,7 +219,7 @@ class SalesforceSyncService:
         )
         if not sf_fields.get("LastName"):
             logger.warning(
-                "Skipping member push — missing LastName: %s",
+                "Skipping member push — missing LastName: {}",
                 member.get("id", "?"),
             )
             return None, "skipped"
@@ -236,7 +236,7 @@ class SalesforceSyncService:
             # record found by email/name is a pre-existing one we are adopting.
             action = "updated" if match_type == "external" else "adopted"
             logger.info(
-                "%s Salesforce Contact %s (match=%s)",
+                "{} Salesforce Contact {} (match={})",
                 action.capitalize(),
                 existing_id,
                 match_type,
@@ -244,7 +244,7 @@ class SalesforceSyncService:
             return existing_id, action
 
         record_id = await self.sf.create_record("Contact", sf_fields)
-        logger.info("Created Salesforce Contact %s", record_id)
+        logger.info("Created Salesforce Contact {}", record_id)
         return record_id, "created"
 
     async def _find_contact_for_member(
@@ -301,7 +301,7 @@ class SalesforceSyncService:
             if records:
                 return records[0].get("Id")
         except Exception:
-            logger.debug("Contact email lookup failed", exc_info=True)
+            logger.opt(exception=True).debug("Contact email lookup failed")
         return None
 
     async def push_event(self, event: dict[str, Any]) -> str | None:
@@ -327,7 +327,7 @@ class SalesforceSyncService:
             return existing
 
         record_id = await self.sf.create_record("Event", sf_fields)
-        logger.info("Created Salesforce Event %s", record_id)
+        logger.info("Created Salesforce Event {}", record_id)
         return record_id
 
     async def push_training_record(
@@ -371,7 +371,7 @@ class SalesforceSyncService:
             return existing
 
         record_id = await self.sf.create_record("Task", sf_fields)
-        logger.info("Created Salesforce Task (training) %s", record_id)
+        logger.info("Created Salesforce Task (training) {}", record_id)
         return record_id
 
     async def push_incident(
@@ -401,7 +401,7 @@ class SalesforceSyncService:
             return existing
 
         record_id = await self.sf.create_record("Task", sf_fields)
-        logger.info("Created Salesforce Task (incident) %s", record_id)
+        logger.info("Created Salesforce Task (incident) {}", record_id)
         return record_id
 
     # ============================================================
@@ -546,10 +546,9 @@ class SalesforceSyncService:
                 action = await self.apply_inbound_contact(lb_fields)
                 counts[action] += 1
             except Exception:
-                logger.warning(
-                    "Failed to apply inbound contact %s",
+                logger.opt(exception=True).warning(
+                    "Failed to apply inbound contact {}",
                     lb_fields.get("salesforce_id", "?"),
-                    exc_info=True,
                 )
                 counts["failed"] += 1
         return counts
@@ -573,10 +572,9 @@ class SalesforceSyncService:
                 _sf_id, action = await self.upsert_member(member)
                 counts[action] = counts.get(action, 0) + 1
             except Exception:
-                logger.warning(
-                    "Failed to sync member %s",
+                logger.opt(exception=True).warning(
+                    "Failed to sync member {}",
                     member.get("id", "?"),
-                    exc_info=True,
                 )
                 counts["failed"] += 1
         counts["skipped_fields"] = sorted(self.sf.skipped_fields)
@@ -600,10 +598,9 @@ class SalesforceSyncService:
                 else:
                     counts["failed"] += 1
             except Exception:
-                logger.warning(
-                    "Failed to sync training record %s",
+                logger.opt(exception=True).warning(
+                    "Failed to sync training record {}",
                     rec.get("id", "?"),
-                    exc_info=True,
                 )
                 counts["failed"] += 1
         counts["skipped_fields"] = sorted(self.sf.skipped_fields)
@@ -743,12 +740,11 @@ class SalesforceSyncService:
             if records:
                 return records[0].get("Id")
         except Exception:
-            logger.debug(
-                "External ID lookup failed for %s.%s=%s",
+            logger.opt(exception=True).debug(
+                "External ID lookup failed for {}.{}={}",
                 sobject,
                 field,
                 value,
-                exc_info=True,
             )
         return None
 
@@ -924,8 +920,8 @@ async def push_org_to_salesforce(
                 else:
                     failed += 1
             except Exception:
-                logger.warning(
-                    "Auto-sync event push failed for %s", event.id, exc_info=True
+                logger.opt(exception=True).warning(
+                    "Auto-sync event push failed for {}", event.id
                 )
                 failed += 1
         results["events"] = {"synced": synced, "failed": failed}

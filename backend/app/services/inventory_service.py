@@ -2703,7 +2703,7 @@ class InventoryService:
 
         if missing_ids:
             logger.warning(
-                "Label generation: %d of %d items not found or inaccessible: %s",
+                "Label generation: {} of {} items not found or inaccessible: {}",
                 len(missing_ids),
                 len(item_ids),
                 ", ".join(missing_ids[:10]),

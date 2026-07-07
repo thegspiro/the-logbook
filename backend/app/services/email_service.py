@@ -341,7 +341,7 @@ class EmailService:
                 loaded = await svc.get_template(organization_id, template_type)
             except Exception as e:
                 logger.warning(
-                    "Failed to load %s template, using default: %s",
+                    "Failed to load {} template, using default: {}",
                     template_type.value,
                     e,
                 )
@@ -511,7 +511,7 @@ class EmailService:
                 self._smtp_config["password"],
             )
         logger.info(
-            "SMTP connected host=%s port=%s encryption=%s auth=%s",
+            "SMTP connected host={} port={} encryption={} auth={}",
             host,
             port,
             encryption,
@@ -667,8 +667,8 @@ class EmailService:
                         if retryable and attempt < max_retries:
                             delay = 2 ** attempt
                             logger.warning(
-                                "Cloudflare API %d for %s, retrying in %ds "
-                                "(attempt %d/%d)",
+                                "Cloudflare API {} for {}, retrying in {}s "
+                                "(attempt {}/{})",
                                 resp.status_code,
                                 _redact_email(to_email),
                                 delay,
@@ -680,7 +680,7 @@ class EmailService:
 
                         body = resp.text[:500]
                         logger.error(
-                            "Cloudflare email API error (status=%d) to=%s: %s",
+                            "Cloudflare email API error (status={}) to={}: {}",
                             resp.status_code,
                             _redact_email(to_email),
                             body,
@@ -691,7 +691,7 @@ class EmailService:
                             await asyncio.sleep(2 ** attempt)
                             continue
                         logger.error(
-                            "Cloudflare email send failed to=%s: %s",
+                            "Cloudflare email send failed to={}: {}",
                             _redact_email(to_email),
                             e,
                         )
@@ -705,7 +705,7 @@ class EmailService:
 
         succeeded = sum(1 for r in results if r)
         logger.info(
-            "Cloudflare batch send complete: %d/%d succeeded", succeeded, len(results)
+            "Cloudflare batch send complete: {}/{} succeeded", succeeded, len(results)
         )
         return list(results)
 
@@ -830,7 +830,7 @@ class EmailService:
         )
         if not email_enabled:
             logger.info(
-                "Email disabled. Would send to %d recipients: %s",
+                "Email disabled. Would send to {} recipients: {}",
                 len(to_emails),
                 subject,
             )
@@ -1426,7 +1426,7 @@ class EmailService:
                     attachment_paths = (attachment_paths or []) + stored_paths
             except Exception as e:
                 logger.warning(
-                    "Failed to load welcome email template, using default: %s", e
+                    "Failed to load welcome email template, using default: {}", e
                 )
 
         subject, html_body, text_body = await self._render_with_fallback(

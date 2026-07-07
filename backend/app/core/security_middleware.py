@@ -392,6 +392,7 @@ async def check_rate_limit(
     max_requests: int = 5,
     window_seconds: int = 60,
     lockout_seconds: int = 1800,
+    scope: str = "auth",
 ) -> None:
     """
     Dependency to check rate limits.
@@ -399,6 +400,13 @@ async def check_rate_limit(
     Tries Redis-backed distributed rate limiting first (for multi-instance
     deployments).  Falls back to the in-memory ``rate_limiter`` when Redis
     is unavailable.
+
+    ``scope`` isolates each operation into its own counter. Without it, every
+    auth limiter (login, token refresh, password reset, change-password, ...)
+    shared a single ``auth:{ip}`` bucket, so unrelated operations drained each
+    other's budget — e.g. the token refreshes fired after a password change
+    (which revokes all sessions) would exhaust the login limit and 429 the
+    user's legitimate re-login. Each scope now tracks independently.
 
     Usage:
         @router.post("/endpoint", dependencies=[Depends(check_rate_limit)])
@@ -412,7 +420,7 @@ async def check_rate_limit(
 
         if cache_manager.is_connected and cache_manager.redis_client:
             exceeded = await redis_rate_limited(
-                key=f"auth:{client_ip}",
+                key=f"auth:{scope}:{client_ip}",
                 limit=max_requests,
                 window_seconds=window_seconds,
                 fail_closed=False,  # Fall back to in-memory on error
@@ -431,7 +439,7 @@ async def check_rate_limit(
 
     # Fallback: in-memory rate limiter
     is_limited, reason = rate_limiter.is_rate_limited(
-        key=client_ip,
+        key=f"{scope}:{client_ip}",
         max_requests=max_requests,
         window_seconds=window_seconds,
         lockout_seconds=lockout_seconds,
@@ -450,7 +458,11 @@ def rate_limit_login():
 
     async def _dependency(request: Request) -> None:
         await check_rate_limit(
-            request, max_requests=5, window_seconds=60, lockout_seconds=1800
+            request,
+            max_requests=5,
+            window_seconds=60,
+            lockout_seconds=1800,
+            scope="login",
         )
 
     return Depends(_dependency)
@@ -461,7 +473,11 @@ def rate_limit_register():
 
     async def _dependency(request: Request) -> None:
         await check_rate_limit(
-            request, max_requests=3, window_seconds=60, lockout_seconds=1800
+            request,
+            max_requests=3,
+            window_seconds=60,
+            lockout_seconds=1800,
+            scope="register",
         )
 
     return Depends(_dependency)
@@ -472,7 +488,11 @@ def rate_limit_password_reset():
 
     async def _dependency(request: Request) -> None:
         await check_rate_limit(
-            request, max_requests=3, window_seconds=300, lockout_seconds=1800
+            request,
+            max_requests=3,
+            window_seconds=300,
+            lockout_seconds=1800,
+            scope="password_reset",
         )
 
     return Depends(_dependency)
@@ -483,7 +503,32 @@ def rate_limit_token_refresh():
 
     async def _dependency(request: Request) -> None:
         await check_rate_limit(
-            request, max_requests=10, window_seconds=60, lockout_seconds=600
+            request,
+            max_requests=10,
+            window_seconds=60,
+            lockout_seconds=600,
+            scope="token_refresh",
+        )
+
+    return Depends(_dependency)
+
+
+def rate_limit_password_change():
+    """Rate limit password changes: 5 per 60 seconds, on its own bucket.
+
+    Kept separate from the login bucket: a password change revokes all
+    sessions and forces an immediate re-login, so counting it against the
+    login limit would eat into the very budget the user needs to sign back
+    in with their new password.
+    """
+
+    async def _dependency(request: Request) -> None:
+        await check_rate_limit(
+            request,
+            max_requests=5,
+            window_seconds=60,
+            lockout_seconds=1800,
+            scope="password_change",
         )
 
     return Depends(_dependency)

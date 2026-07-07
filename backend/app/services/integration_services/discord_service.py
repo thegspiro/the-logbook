@@ -37,7 +37,7 @@ async def send_discord_notification(
         if response.status_code == 204:
             return True
         logger.warning(
-            "Discord webhook returned %d: %s",
+            "Discord webhook returned {}: {}",
             response.status_code,
             response.text[:200],
         )

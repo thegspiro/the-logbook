@@ -1464,9 +1464,15 @@ async def lifespan(app: FastAPI):
         try:
             logger.info("Validating database enum consistency...")
             from app.core.database import async_session_factory
+            from app.utils.enum_normalization import normalize_legacy_enum_case
             from app.utils.startup_validators import run_startup_validations
 
             async with async_session_factory() as db:
+                # Self-heal legacy UPPERCASE enum columns before validating. This
+                # deployment stamps Alembic to head and skips migrations, so the
+                # accompanying migration never runs on an existing DB — this is the
+                # only path that reaches an already-created schema.
+                await normalize_legacy_enum_case(db)
                 # Run validations in non-strict mode (log warnings but don't block startup)
                 await run_startup_validations(db, strict=False)
             logger.info("✓ Database validations complete")
