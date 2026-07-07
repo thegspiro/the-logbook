@@ -66,7 +66,7 @@ def export_nemsis_data(
     full_xml = f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_bytes}'
 
     logger.info(
-        "Exported %d records in NEMSIS %s format for agency %s",
+        "Exported {} records in NEMSIS {} format for agency {}",
         len(calls),
         nemsis_version,
         agency_id,

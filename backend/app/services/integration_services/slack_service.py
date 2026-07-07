@@ -37,7 +37,7 @@ async def send_slack_notification(
         if response.status_code == 200:
             return True
         logger.warning(
-            "Slack webhook returned %d: %s",
+            "Slack webhook returned {}: {}",
             response.status_code,
             response.text[:200],
         )

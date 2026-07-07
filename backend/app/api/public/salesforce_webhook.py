@@ -101,7 +101,7 @@ async def salesforce_inbound_webhook(
     if not webhook_secret:
         logger.warning(
             "Salesforce webhook rejected: no webhook_secret configured for "
-            "integration %s",
+            "integration {}",
             integration_id,
         )
         raise HTTPException(
@@ -112,7 +112,7 @@ async def salesforce_inbound_webhook(
     sig_header = request.headers.get("X-Salesforce-Signature", "")
     if not sig_header or not _verify_signature(body, webhook_secret, sig_header):
         logger.warning(
-            "Salesforce webhook signature mismatch for integration %s",
+            "Salesforce webhook signature mismatch for integration {}",
             integration_id,
         )
         raise HTTPException(
@@ -147,12 +147,12 @@ async def salesforce_inbound_webhook(
     # act on 'deleted' — removing a member because a Salesforce Contact was
     # deleted would be destructive and is out of scope for inbound sync.
     if sobject != "Contact":
-        logger.info("Ignoring unsupported inbound sObject type: %s", sobject)
+        logger.info("Ignoring unsupported inbound sObject type: {}", sobject)
         detail = f"sObject '{sobject}' is not handled by inbound sync."
         counts = {"updated": 0, "unchanged": 0, "unmatched": 0, "failed": 0}
     elif action == "deleted":
         logger.info(
-            "Ignoring Salesforce Contact deletion for integration %s "
+            "Ignoring Salesforce Contact deletion for integration {} "
             "(inbound deletes are not applied).",
             integration_id,
         )
@@ -161,7 +161,7 @@ async def salesforce_inbound_webhook(
     elif not sync_service.inbound_enabled:
         # Push-only org: parse to validate the payload, but do not write.
         logger.info(
-            "Salesforce webhook for integration %s ignored: sync direction "
+            "Salesforce webhook for integration {} ignored: sync direction "
             "is push-only.",
             integration_id,
         )

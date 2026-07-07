@@ -86,7 +86,7 @@ async def _send_security_email(
                 template_type=SECURITY_CATEGORY,
             )
     except Exception as e:
-        logger.warning("Security notification email failed: %s", e)
+        logger.warning("Security notification email failed: {}", e)
 
 
 async def notify_security_event(
@@ -114,7 +114,7 @@ async def notify_security_event(
         )
         await db.flush()
     except Exception as e:  # pragma: no cover - defensive
-        logger.warning("Security in-app notification failed: %s", e)
+        logger.warning("Security in-app notification failed: {}", e)
 
     if not send_email:
         return
@@ -154,4 +154,4 @@ async def notify_security_event(
             template_type=SECURITY_CATEGORY,
         )
     except Exception as e:
-        logger.warning("Security notification email failed: %s", e)
+        logger.warning("Security notification email failed: {}", e)

@@ -61,7 +61,7 @@ async def list_email_templates(
         )
         await db.commit()
     except DataError as e:
-        logger.error("Failed to create default email templates: %s", e)
+        logger.error("Failed to create default email templates: {}", e)
         await db.rollback()
 
     templates = await service.list_templates(current_user.organization_id)
@@ -154,7 +154,7 @@ async def update_email_template(
     await db.commit()
 
     logger.info(
-        "Email template updated id=%s type=%s org=%s by=%s",
+        "Email template updated id={} type={} org={} by={}",
         template_id,
         template.template_type,
         current_user.organization_id,
@@ -191,7 +191,7 @@ async def reset_email_template(
     await db.commit()
 
     logger.info(
-        "Email template reset to default id=%s type=%s org=%s by=%s",
+        "Email template reset to default id={} type={} org={} by={}",
         template_id,
         template.template_type,
         current_user.organization_id,
@@ -405,8 +405,8 @@ async def upload_attachment(
         detected_mime = magic.from_buffer(contents[:2048], mime=True)
         if detected_mime not in ALLOWED_EMAIL_MIME_TYPES:
             logger.warning(
-                "Email attachment rejected: detected MIME '%s' "
-                "(claimed: '%s') for file '%s'",
+                "Email attachment rejected: detected MIME '{}' "
+                "(claimed: '{}') for file '{}'",
                 detected_mime,
                 file.content_type,
                 file.filename,
@@ -456,7 +456,7 @@ async def upload_attachment(
     await db.commit()
     await db.refresh(attachment)
 
-    logger.info("Attachment uploaded: %s for template %s", file.filename, template_id)
+    logger.info("Attachment uploaded: {} for template {}", file.filename, template_id)
     return attachment
 
 
@@ -496,7 +496,7 @@ async def delete_attachment(
     await db.delete(attachment)
     await db.commit()
     logger.info(
-        "Attachment deleted: %s from template %s", attachment.filename, template_id
+        "Attachment deleted: {} from template {}", attachment.filename, template_id
     )
 
 
@@ -558,7 +558,7 @@ async def schedule_email(
     await db.refresh(scheduled)
 
     logger.info(
-        "Scheduled email created id=%s type=%s at=%s",
+        "Scheduled email created id={} type={} at={}",
         scheduled.id,
         body.template_type,
         body.scheduled_at,
@@ -622,7 +622,7 @@ async def update_scheduled_email(
     await db.refresh(scheduled)
 
     logger.info(
-        "Scheduled email updated id=%s actions=[%s] org=%s by=%s",
+        "Scheduled email updated id={} actions=[{}] org={} by={}",
         scheduled_id,
         ",".join(changes),
         current_user.organization_id,
@@ -662,7 +662,7 @@ async def cancel_scheduled_email(
         )
 
     logger.info(
-        "Scheduled email cancelled id=%s org=%s by=%s",
+        "Scheduled email cancelled id={} org={} by={}",
         scheduled_id,
         current_user.organization_id,
         current_user.id,

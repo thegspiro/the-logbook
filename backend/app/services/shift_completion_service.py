@@ -644,7 +644,7 @@ class ShiftCompletionService:
             await self.db.commit()
         except Exception as e:
             logger.error(
-                "Failed to alert training officers for report %s: %s",
+                "Failed to alert training officers for report {}: {}",
                 getattr(report, "id", "?"),
                 e,
             )

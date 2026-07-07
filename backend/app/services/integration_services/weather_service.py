@@ -49,7 +49,7 @@ async def fetch_active_alerts(zone_id: str) -> list[dict[str, Any]]:
             logger.debug("Skipping invalid alert entry")
             continue
 
-    logger.info("Fetched %d active alerts for zone %s", len(alerts), zone_id)
+    logger.info("Fetched {} active alerts for zone {}", len(alerts), zone_id)
     return alerts
 
 

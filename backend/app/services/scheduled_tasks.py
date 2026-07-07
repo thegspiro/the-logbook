@@ -782,7 +782,7 @@ async def run_event_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     org_emails += 1
                             except Exception as e:
                                 logger.error(
-                                    "Failed to send reminder email to %s: %s",
+                                    "Failed to send reminder email to {}: {}",
                                     _redact_email(user.email),
                                     e,
                                 )
@@ -967,7 +967,7 @@ async def run_post_event_validation(db: AsyncSession) -> Dict[str, Any]:
                             org_emails += 1
                     except Exception as e:
                         logger.error(
-                            "Failed to send post-event validation email to %s: %s",
+                            "Failed to send post-event validation email to {}: {}",
                             _redact_email(creator.email),
                             e,
                         )
@@ -1329,7 +1329,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
                             org_emails += 1
                     except Exception as e:
                         logger.error(
-                            "Failed to send post-shift validation email to %s: %s",
+                            "Failed to send post-shift validation email to {}: {}",
                             _redact_email(officer.email),
                             e,
                         )
@@ -1761,13 +1761,13 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                                     org_emails += 1
                             except Exception as email_err:
                                 logger.error(
-                                    "Shift reminder email failed for %s: %s",
+                                    "Shift reminder email failed for {}: {}",
                                     _redact_email(email),
                                     email_err,
                                 )
                     except Exception as e:
                         logger.error(
-                            "Failed to send shift reminder emails for shift %s: %s",
+                            "Failed to send shift reminder emails for shift {}: {}",
                             shift.id,
                             e,
                         )
@@ -1976,7 +1976,7 @@ async def run_end_of_shift_checklist_reminders(
                 except Exception as e:
                     logger.error(
                         "Failed to create EOS checklist "
-                        "reminder for user %s, shift %s: %s",
+                        "reminder for user {}, shift {}: {}",
                         mid,
                         shift.id,
                         e,
@@ -2259,7 +2259,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                     except Exception as e:
                         logger.error(
                             "Failed end-of-shift in-app summary for user "
-                            "%s, shift %s: %s",
+                            "{}, shift {}: {}",
                             uid,
                             shift.id,
                             e,
@@ -2401,7 +2401,7 @@ async def run_end_of_shift_summary(db: AsyncSession) -> Dict[str, Any]:
                                 org_emails += 1
                         except Exception as email_err:
                             logger.error(
-                                "End-of-shift summary email failed for %s: %s",
+                                "End-of-shift summary email failed for {}: {}",
                                 _redact_email(user.email),
                                 email_err,
                             )
@@ -2579,7 +2579,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     org_escalations += 1
                 except Exception as e:
                     logger.error(
-                        "Failed in-app trainee escalation for report %s: %s",
+                        "Failed in-app trainee escalation for report {}: {}",
                         report.id,
                         e,
                     )
@@ -2617,7 +2617,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                             org_emails += 1
                     except Exception as e:
                         logger.error(
-                            "Failed trainee escalation email for %s: %s",
+                            "Failed trainee escalation email for {}: {}",
                             _redact_email(trainee.email),
                             e,
                         )
@@ -2660,7 +2660,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                     except Exception as e:
                         logger.error(
                             "Failed officer escalation notification "
-                            "for report %s, recipient %s: %s",
+                            "for report {}, recipient {}: {}",
                             report.id,
                             rid,
                             e,
@@ -2908,7 +2908,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             org = item.organization
             if not org:
                 logger.warning(
-                    "Scheduled email %s skipped: org %s not found",
+                    "Scheduled email {} skipped: org {} not found",
                     item.id,
                     item.organization_id,
                 )
@@ -2937,7 +2937,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
 
             if not template:
                 logger.warning(
-                    "Scheduled email %s skipped: no template for type %s in org %s",
+                    "Scheduled email {} skipped: no template for type {} in org {}",
                     item.id,
                     item.template_type,
                     item.organization_id,
@@ -2968,7 +2968,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
             ).get("enabled")
             if not _settings.EMAIL_ENABLED and not org_email_enabled:
                 logger.warning(
-                    "Scheduled email %s skipped: email sending "
+                    "Scheduled email {} skipped: email sending "
                     "is disabled (EMAIL_ENABLED=false and no org override)",
                     item.id,
                 )
@@ -3669,7 +3669,7 @@ async def run_series_end_reminders(db: AsyncSession) -> Dict[str, Any]:
                             org_emails += 1
                     except Exception as e:
                         logger.error(
-                            "Failed to send series-end email to %s: %s",
+                            "Failed to send series-end email to {}: {}",
                             _redact_email(creator.email),
                             e,
                         )
@@ -3957,7 +3957,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                         except Exception as e:
                             logger.error(
                                 "Failed to send checkout reminder "
-                                "for user %s shift %s: %s",
+                                "for user {} shift {}: {}",
                                 att.user_id,
                                 shift.id,
                                 e,
@@ -3984,7 +3984,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
                             org_checkouts += 1
                         except Exception as e:
                             logger.error(
-                                "Failed to auto-checkout user %s " "shift %s: %s",
+                                "Failed to auto-checkout user {} " "shift {}: {}",
                                 att.user_id,
                                 shift.id,
                                 e,
@@ -3997,7 +3997,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
 
         except Exception as e:
             logger.error(
-                "shift_auto_checkout error for org %s: %s",
+                "shift_auto_checkout error for org {}: {}",
                 org.id,
                 e,
             )
@@ -4017,7 +4017,7 @@ async def run_shift_auto_checkout(db: AsyncSession) -> Dict[str, Any]:
         await db.commit()
 
     logger.info(
-        "Shift auto-checkout: %d reminders, %d auto-checkouts " "across %d orgs",
+        "Shift auto-checkout: {} reminders, {} auto-checkouts " "across {} orgs",
         total_reminders,
         total_auto_checkouts,
         len(results),
@@ -4065,11 +4065,10 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
             await sync_service.sync_training_records(provider, sync_type="incremental")
             synced += 1
         except Exception:
-            logger.warning(
-                "Auto-sync failed for provider %s (%s)",
+            logger.opt(exception=True).warning(
+                "Auto-sync failed for provider {} ({})",
                 provider.name,
                 provider.id,
-                exc_info=True,
             )
             failed += 1
         finally:
@@ -4112,7 +4111,7 @@ async def run_mark_overdue_dues(db: AsyncSession) -> Dict[str, Any]:
     await db.commit()
     count = result.rowcount or 0
     if count:
-        logger.info("Marked %d dues record(s) overdue", count)
+        logger.info("Marked {} dues record(s) overdue", count)
     return {"task": "mark_overdue_dues", "marked_overdue": count}
 
 
@@ -4149,7 +4148,7 @@ async def run_mark_overdue_maintenance(db: AsyncSession) -> Dict[str, Any]:
         total += result.rowcount or 0
     await db.commit()
     if total:
-        logger.info("Marked %d maintenance record(s) overdue", total)
+        logger.info("Marked {} maintenance record(s) overdue", total)
     return {"task": "mark_overdue_maintenance", "marked_overdue": total}
 
 
@@ -4168,7 +4167,7 @@ async def run_admin_hours_auto_close(db: AsyncSession) -> Dict[str, Any]:
     closed = await service.auto_close_stale_sessions()
     await db.commit()
     if closed:
-        logger.info("Admin-hours auto-close: %d stale session(s)", closed)
+        logger.info("Admin-hours auto-close: {} stale session(s)", closed)
     return {"task": "admin_hours_auto_close", "closed": closed}
 
 
@@ -4242,8 +4241,8 @@ async def run_salesforce_auto_sync(db: AsyncSession) -> Dict[str, Any]:
             synced += 1
         except Exception:
             await db.rollback()
-            logger.warning(
-                "Salesforce auto-sync failed for org %s", org_id, exc_info=True
+            logger.opt(exception=True).warning(
+                "Salesforce auto-sync failed for org {}", org_id
             )
             failed += 1
 

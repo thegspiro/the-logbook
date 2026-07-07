@@ -606,7 +606,7 @@ class OnboardingService:
 
         if not facility_type:
             logger.warning(
-                "No facility types available for org %s — skipping "
+                "No facility types available for org {} — skipping "
                 "headquarters facility creation",
                 org.id,
             )
@@ -642,7 +642,7 @@ class OnboardingService:
 
         if not facility_status:
             logger.warning(
-                "No facility statuses available for org %s — skipping "
+                "No facility statuses available for org {} — skipping "
                 "headquarters facility creation",
                 org.id,
             )

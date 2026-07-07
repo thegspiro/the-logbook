@@ -120,7 +120,7 @@ async def seed_admin_hours_categories(
 
     Returns a mapping of category name -> category id.
     """
-    logger.info("Seeding admin hours categories for organization %s", organization_id)
+    logger.info("Seeding admin hours categories for organization {}", organization_id)
     category_map: Dict[str, str] = {}
 
     for cat_data in DEFAULT_ADMIN_HOURS_CATEGORIES:
@@ -133,7 +133,7 @@ async def seed_admin_hours_categories(
         existing = result.scalar_one_or_none()
 
         if existing:
-            logger.info("Admin hours category already exists: %s", cat_data["name"])
+            logger.info("Admin hours category already exists: {}", cat_data["name"])
             category_map[cat_data["name"]] = existing.id
             continue
 
@@ -153,10 +153,10 @@ async def seed_admin_hours_categories(
         )
         db.add(category)
         category_map[cat_data["name"]] = cat_id
-        logger.info("Created admin hours category: %s", cat_data["name"])
+        logger.info("Created admin hours category: {}", cat_data["name"])
 
     await db.flush()
-    logger.info("Admin hours categories seeded (%d total)", len(category_map))
+    logger.info("Admin hours categories seeded ({} total)", len(category_map))
     return category_map
 
 
@@ -179,7 +179,7 @@ async def seed_event_hour_mappings(
         cat_id = category_map.get(cat_name)
         if not cat_id:
             logger.warning(
-                "Skipping event mapping for '%s' — category '%s' not found",
+                "Skipping event mapping for '{}' — category '{}' not found",
                 mapping_data["event_type"],
                 cat_name,
             )
@@ -194,7 +194,7 @@ async def seed_event_hour_mappings(
         )
         if result.scalar_one_or_none():
             logger.info(
-                "Event mapping already exists: %s -> %s",
+                "Event mapping already exists: {} -> {}",
                 mapping_data["event_type"],
                 cat_name,
             )
@@ -212,7 +212,7 @@ async def seed_event_hour_mappings(
         db.add(mapping)
         created += 1
         logger.info(
-            "Created event mapping: %s -> %s",
+            "Created event mapping: {} -> {}",
             mapping_data["event_type"],
             cat_name,
         )

@@ -166,7 +166,7 @@ async def get_admin_summary(
     try:
         training_pct = await compute_org_compliance_pct(db, org_id)
     except Exception as exc:
-        logger.warning("admin-summary: training compliance query failed: %s", exc)
+        logger.warning("admin-summary: training compliance query failed: {}", exc)
 
     # ── Upcoming events (rolling 30-day window) ──
     upcoming_events = 0
@@ -182,7 +182,7 @@ async def get_admin_summary(
         )
         upcoming_events = result.scalar() or 0
     except Exception as exc:
-        logger.warning("admin-summary: upcoming events query failed: %s", exc)
+        logger.warning("admin-summary: upcoming events query failed: {}", exc)
 
     # ── Action items (overdue + open) from meetings ──
     overdue_meeting = 0
@@ -209,7 +209,7 @@ async def get_admin_summary(
         )
         open_meeting = result.scalar() or 0
     except Exception as exc:
-        logger.warning("admin-summary: meeting action items query failed: %s", exc)
+        logger.warning("admin-summary: meeting action items query failed: {}", exc)
 
     # ── Action items from minutes (scoped to organization via MeetingMinutes) ──
     overdue_minutes = 0
@@ -246,7 +246,7 @@ async def get_admin_summary(
         )
         open_minutes = result.scalar() or 0
     except Exception as exc:
-        logger.warning("admin-summary: minutes action items query failed: %s", exc)
+        logger.warning("admin-summary: minutes action items query failed: {}", exc)
 
     # ── Recent training hours (last 30 days) ──
     recent_hours = 0.0
@@ -261,7 +261,7 @@ async def get_admin_summary(
         )
         recent_hours = float(result.scalar() or 0)
     except Exception as exc:
-        logger.warning("admin-summary: recent training hours query failed: %s", exc)
+        logger.warning("admin-summary: recent training hours query failed: {}", exc)
 
     # ── Admin hours (last 30 days) ──
     recent_admin_hours = 0.0
@@ -287,7 +287,7 @@ async def get_admin_summary(
         )
         pending_admin_approvals = result.scalar() or 0
     except Exception as exc:
-        logger.warning("admin-summary: admin hours query failed: %s", exc)
+        logger.warning("admin-summary: admin hours query failed: {}", exc)
 
     return AdminSummary(
         active_members=active_members,

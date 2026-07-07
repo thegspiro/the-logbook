@@ -217,12 +217,12 @@ class SchedulingService:
                         )
                 except Exception as email_err:
                     logger.warning(
-                        "Notification email failed (category=%s): %s",
+                        "Notification email failed (category={}): {}",
                         category,
                         email_err,
                     )
         except Exception as e:
-            logger.warning("Notification failed (category=%s): %s", category, e)
+            logger.warning("Notification failed (category={}): {}", category, e)
 
     # ============================================
     # Position Helpers
@@ -2237,7 +2237,7 @@ class SchedulingService:
             )
 
         except Exception as e:
-            logger.warning("Shift decline notification failed: %s", e)
+            logger.warning("Shift decline notification failed: {}", e)
 
     async def _notify_shift_assignment(
         self,
@@ -2338,7 +2338,7 @@ class SchedulingService:
             )
 
         except Exception as e:
-            logger.warning("Shift assignment notification failed: %s", e)
+            logger.warning("Shift assignment notification failed: {}", e)
 
     async def _notify_swap_request(
         self,
@@ -2394,7 +2394,7 @@ class SchedulingService:
             )
 
         except Exception as e:
-            logger.warning("Swap request notification failed: %s", e)
+            logger.warning("Swap request notification failed: {}", e)
 
     async def _notify_swap_reviewed(
         self,
@@ -2433,7 +2433,7 @@ class SchedulingService:
             )
 
         except Exception as e:
-            logger.warning("Swap review notification failed: %s", e)
+            logger.warning("Swap review notification failed: {}", e)
 
     async def _notify_shift_confirmed(
         self,
@@ -2483,7 +2483,7 @@ class SchedulingService:
             )
 
         except Exception as e:
-            logger.warning("Shift confirmation notification failed: %s", e)
+            logger.warning("Shift confirmation notification failed: {}", e)
 
     async def _notify_time_off_reviewed(
         self,
@@ -2519,7 +2519,7 @@ class SchedulingService:
             )
 
         except Exception as e:
-            logger.warning("Time-off review notification failed: %s", e)
+            logger.warning("Time-off review notification failed: {}", e)
 
     # ============================================
     # Shift Swap Request Management
@@ -4236,7 +4236,7 @@ class SchedulingService:
                 created_count += 1
             except Exception as e:
                 logger.error(
-                    "Failed to create draft report for " "trainee %s on shift %s: %s",
+                    "Failed to create draft report for " "trainee {} on shift {}: {}",
                     user_id,
                     shift.id,
                     e,
@@ -4357,7 +4357,7 @@ class SchedulingService:
                     )
                 except Exception as e:
                     logger.error(
-                        "Failed to send finalization email " "to officer %s: %s",
+                        "Failed to send finalization email " "to officer {}: {}",
                         officer_id,
                         e,
                     )
@@ -4365,7 +4365,7 @@ class SchedulingService:
             await self.db.commit()
         except Exception as e:
             logger.error(
-                "Failed to send finalization notification " "for shift %s: %s",
+                "Failed to send finalization notification " "for shift {}: {}",
                 shift.id,
                 e,
             )

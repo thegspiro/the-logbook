@@ -71,26 +71,25 @@ async def send_webhook(
                 if 200 <= response.status_code < 300:
                     return True
                 logger.warning(
-                    "Webhook to %s returned %d (attempt %d/%d)",
+                    "Webhook to {} returned {} (attempt {}/{})",
                     url,
                     response.status_code,
                     attempt + 1,
                     MAX_RETRIES,
                 )
         except Exception:
-            logger.warning(
-                "Webhook to %s failed (attempt %d/%d)",
+            logger.opt(exception=True).warning(
+                "Webhook to {} failed (attempt {}/{})",
                 url,
                 attempt + 1,
                 MAX_RETRIES,
-                exc_info=True,
             )
         if attempt < MAX_RETRIES - 1:
             import asyncio
 
             await asyncio.sleep(BACKOFF_SECONDS[attempt])
 
-    logger.error("Webhook to %s failed after %d attempts", url, MAX_RETRIES)
+    logger.error("Webhook to {} failed after {} attempts", url, MAX_RETRIES)
     return False
 
 
