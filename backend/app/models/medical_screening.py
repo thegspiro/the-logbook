@@ -76,7 +76,11 @@ class ScreeningRequirement(Base):
     )
     name = Column(String(255), nullable=False)
     screening_type = Column(
-        Enum(ScreeningType, name="screening_type_enum"),
+        Enum(
+            ScreeningType,
+            name="screening_type_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
     description = Column(Text, nullable=True)
@@ -149,11 +153,19 @@ class ScreeningRecord(Base):
         comment="For prospective members. NULL if this is for an active member.",
     )
     screening_type = Column(
-        Enum(ScreeningType, name="screening_type_enum"),
+        Enum(
+            ScreeningType,
+            name="screening_type_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
     )
     status = Column(
-        Enum(ScreeningStatus, name="screening_status_enum"),
+        Enum(
+            ScreeningStatus,
+            name="screening_status_enum",
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=ScreeningStatus.SCHEDULED,
     )
