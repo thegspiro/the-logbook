@@ -36,6 +36,7 @@ from app.core.security import create_mfa_pending_token, decode_token
 from app.core.security_middleware import (
     get_client_ip,
     rate_limit_login,
+    rate_limit_password_change,
     rate_limit_password_reset,
     rate_limit_register,
     rate_limit_token_refresh,
@@ -1073,7 +1074,7 @@ async def get_session_settings(
     }
 
 
-@router.post("/change-password", dependencies=[rate_limit_login()])
+@router.post("/change-password", dependencies=[rate_limit_password_change()])
 async def change_password(
     password_data: PasswordChange,
     current_user: User = Depends(get_current_active_user),
