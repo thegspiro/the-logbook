@@ -399,6 +399,13 @@ tier exists.
 
 1. **Engine + registry + export** (backend) with the secret-disjointness test —
    shippable and independently useful (admins can pull a template file).
+   **✅ Implemented.** `org_template_registry.py` (59 structural tables),
+   `org_template_service.py` (introspection-driven export: org-scoped selection,
+   automatic user-reference + PII/secret scrubbing, closure expansion, zip +
+   manifest), `GET /organizations/template/export` gated on
+   `organization.template.manage` (System Owner only). Tests: 7 static
+   security-invariant guards (secret-column disjointness, user-FK
+   fail-closed, parent-FK resolution) + DB export/isolation/scrub tests.
 2. **Import + dry-run** (backend) — the risky half; lands with round-trip and
    idempotency tests.
 3. **Frontend** export/import UI with dry-run preview.

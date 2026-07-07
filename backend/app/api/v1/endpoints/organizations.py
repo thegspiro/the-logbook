@@ -4,7 +4,8 @@ Organizations API Endpoints
 Endpoints for organization settings management.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import Role, User
+from app.services.org_template_service import OrgTemplateService
 from app.schemas.organization import (
     AuthSettings,
     ContactInfoSettings,
@@ -977,3 +979,48 @@ async def update_organization_profile(
             "zip": org.physical_zip or "",
         },
     }
+
+
+@router.get("/template/export")
+async def export_department_template(
+    modules: str | None = Query(
+        None,
+        description="Comma-separated module names to export; all when omitted.",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("organization.template.manage")),
+) -> Response:
+    """
+    Export this department's structural template as a downloadable ``.zip``.
+
+    Restricted to the System Owner (``organization.template.manage``). Contains
+    configuration/definitions only — no members, PHI, history, or secrets — and
+    is always scoped to the caller's own organization.
+    """
+    module_names: set[str] | None = None
+    if modules:
+        module_names = {m.strip() for m in modules.split(",") if m.strip()}
+
+    service = OrgTemplateService(db)
+    async with handle_service_errors("Failed to export department template"):
+        zip_bytes, filename, manifest = await service.export_template(
+            str(current_user.organization_id), module_names
+        )
+        await log_audit_event(
+            db=db,
+            event_type="organization_template_exported",
+            event_category="administration",
+            severity="warning",
+            event_data={
+                "modules": manifest.get("modules"),
+                "tables": manifest.get("tables", {}),
+                "data_sha256": manifest.get("data_sha256"),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return Response(
+            content=zip_bytes,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
