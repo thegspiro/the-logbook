@@ -142,6 +142,15 @@ ORGANIZATION_UPDATE_SETTINGS = Permission(
     "Update organization settings",
     PermissionCategory.ORGANIZATION,
 )
+# Department-template export/import. Deliberately NOT granted to any default
+# role — only the ``it_manager`` System Owner (wildcard ``*``) holds it. This is
+# a high-blast-radius capability (bulk read/write across every module), so it is
+# gated to the super user by design (plan §8.1).
+ORGANIZATION_TEMPLATE_MANAGE = Permission(
+    "organization.template.manage",
+    "Export and import department configuration templates",
+    PermissionCategory.ORGANIZATION,
+)
 
 SETTINGS_VIEW = Permission(
     "settings.view", "View settings", PermissionCategory.SETTINGS
@@ -411,7 +420,9 @@ REPORTS_VIEW = Permission(
 # Creating/editing/deleting saved-report definitions (incl. email recipients)
 # is a mutation and must be gated separately from read/generate access.
 REPORTS_MANAGE = Permission(
-    "reports.manage", "Create, edit, and delete saved reports", PermissionCategory.REPORTS
+    "reports.manage",
+    "Create, edit, and delete saved reports",
+    PermissionCategory.REPORTS,
 )
 
 # Members (additional)
@@ -488,6 +499,7 @@ ALL_PERMISSIONS: list[Permission] = [
     ORGANIZATION_VIEW,
     ORGANIZATION_EDIT,
     ORGANIZATION_UPDATE_SETTINGS,
+    ORGANIZATION_TEMPLATE_MANAGE,
     SETTINGS_VIEW,
     SETTINGS_EDIT,
     SETTINGS_MANAGE,
