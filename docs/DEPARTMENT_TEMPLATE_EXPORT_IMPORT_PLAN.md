@@ -112,7 +112,7 @@ named FK. Sourced from a full per-table audit of every model file.
 
 | Table | Natural key / seed | Remap / hazards |
 |---|---|---|
-| `positions` (roles) | `slug` (fresh org seeds `DEFAULT_ROLES`) → **upsert** | `permissions` JSON safe (perm strings); `settings` JSON may embed device ids → scrub; null `created_by` |
+| `positions` (roles) | `slug` (fresh org seeds `DEFAULT_ROLES`) → **create-only**, never overwrite existing/`is_system` (S1) | imported `permissions` must be ⊆ importer's own (S1); `settings` JSON may embed device ids → scrub; null `created_by` |
 | `forms` | — | regenerate `public_slug`; null `created_by` |
 | `form_fields` | parent `form_id` | `condition_field_id` self-ref (undeclared FK, remap) |
 | `form_integrations` | parent `form_id` | `field_mappings` JSON embeds form-field ids → remap |
@@ -236,10 +236,13 @@ export is always self-consistent.
      run the standard fresh-org seed (roles, system folders, system lookups),
      then import — so upsert/seed dedupe attaches to real existing rows.
    - **Existing (empty/seed-only) org** — merge into the caller's org.
-3. Run the 3-phase remap algorithm (§2). Upsert tables (`positions`,
-   `document_folders`, system lookups, one-per-org configs) match on natural key
-   and update rather than duplicate — respecting the unique indexes
-   (`idx_position_org_slug`, etc.).
+3. Run the 3-phase remap algorithm (§2). Natural-key tables match existing rows
+   to avoid duplicating the unique indexes (`idx_position_org_slug`, etc.).
+   **Match semantics differ by sensitivity:** `positions` and security-relevant
+   config (`public_portal_config`, `compliance_configs`, `notification_rules`)
+   are **create-only** — matched rows are skipped, never overwritten (S1/S4);
+   benign lookups/folders (`document_folders`, system `Default*` lookups) may
+   update. Imported permissions are validated ⊆ importer's own (S1).
 4. Everything in **one transaction**; roll back entirely on any failure. Return
    a summary: rows created/updated/skipped per table, and any nulled refs.
 5. `log_audit_event("organization.template.imported", ...)`.
@@ -263,23 +266,52 @@ This is the safety valve for imports into a non-empty org.
 | Global (non-org) tables (`onboarding_checklist`) | special-cased; excluded by default (Q3) |
 | Stateful config that shouldn't carry live state (`fiscal_years.is_locked`, election/report status) | reset-on-export defaults in the spec |
 
-## 8. Security / HIPAA guarantees
+## 8. Security threat model
 
-- **Allowlist, not denylist.** A table is exported **only** if it has an
-  explicit `TableSpec`. A new model added to the codebase is invisible to the
-  exporter until someone deliberately adds a spec — so new PHI/secret tables
-  cannot leak by default.
-- **No secret column is in any INCLUDE table.** Every credential/token/hash
-  lives in an EXCLUDE table (`users`, `sessions`, `integrations`,
-  `public_portal_api_keys`, `external_training_providers`, `voting_tokens`,
-  `password_history`, `onboarding_sessions`, `facility_access_keys`). A
-  unit test asserts the INCLUDE set is disjoint from a hard-coded
-  secret-column blocklist, failing CI if the two ever overlap.
-- **User-reference scrubbing** nulls every `created_by`/`updated_by`/owner FK
-  and the conditional value-column cases, so no member identity rides along.
-- Export/import are **audited** and permission-gated (`settings.manage`).
-- Import validates `alembic_head` and `manifest` checksums before touching the
-  DB, and runs in a single rolled-back-on-error transaction.
+Import is "accept an untrusted file and write it across every table" — a
+high-risk shape. The controls below are **requirements**, not nice-to-haves; a
+code-level `/security-review` must run against the implementation before merge.
+
+### 8.1 Baseline guarantees (foundation)
+
+- **Allowlist export.** A table is exported **only** if it has an explicit
+  `TableSpec`. A new model is invisible to the exporter until someone adds a
+  spec — new PHI/secret tables cannot leak by default.
+- **Secret-column disjointness test.** CI asserts the INCLUDE set shares no
+  column with a hard-coded secret blocklist (`users`, `sessions`,
+  `integrations`, `public_portal_api_keys`, `external_training_providers`,
+  `voting_tokens`, `password_history`, `onboarding_sessions`,
+  `facility_access_keys`).
+- Export/import are **audited** (actor, source org, target org, per-table
+  counts, archive sha256) and run in a **single rolled-back-on-error
+  transaction**. `alembic_head` is validated before any write. The manifest is
+  an integrity hint only — **never** an authorization or trust control (its
+  checksum only detects corruption; an attacker recomputes it).
+
+### 8.2 Threats and required mitigations
+
+| # | Threat | Severity | Required mitigation |
+|---|---|---|---|
+| S1 | **Privilege escalation via `positions` upsert.** A crafted `{slug:"member", permissions:["*"]}` overwrites an existing role → every member becomes system owner. | Critical | Roles are **create-only** on import (never update an existing role's permissions). Never touch `is_system` roles. Validate every imported permission is a **subset of the importer's own effective permissions** ("cannot grant what you don't have"); reject `*` unless importer is a system owner. |
+| S2 | **Cross-tenant write / tenant-creation escalation.** Target org taken from input → write into another dept. New-org creation via org-scoped perm → arbitrary tenant creation. | Critical | Merge-mode target org = `current_user.organization_id`, **never** from request/manifest. New-org mode gated behind a **platform/superadmin** permission, not `settings.manage`. Userless-org bootstrap (first admin) is an explicit, separately-authorized step — never auto-inject an account. |
+| S3 | **Stored XSS / SSRF / invalid-state injection** — bulk insert bypasses Pydantic validators, enum-lowercasing, and HTML sanitization. Vectors: `email_templates.body_html`/`css`, `minutes_templates.header_config.logo_url`, `notification_rules.config` (webhook URLs), portal `allowed_origins`. | Critical | Route **every** imported row through the same schema validation + sanitization as its normal create path. Sanitize all HTML. Allowlist/validate URL fields. Re-validate CORS origins; never trust them. |
+| S4 | **Silent overwrite of security config** via one-per-org upsert — re-enable a disabled public portal, widen `allowed_origins`, slacken rate limits. | High | Security-relevant config (`public_portal_config`, `compliance_configs`, `notification_rules`) is **create-only / never-overwrite**, or requires explicit per-item opt-in in the dry-run confirmation. Never silently enable the portal or broaden origins. |
+| S5 | **Fail-open on unhandled ID columns.** A missed FK / JSON id-path inserts the raw archive id → cross-links to real target-org rows or dangling FKs. | High | **Fail closed.** CI/startup guard reflects each INCLUDE model's FKs and asserts every one is in `fk_remap ∪ self_ref ∪ null_columns ∪ null_if_excluded`. Any id not resolvable in the global remap map → null or reject; **never** pass a raw archive id through. |
+| S6 | **Secrets/PII inside JSON blobs** below the column-level test — notably **`organizations.settings` holds AES-encrypted email/storage credentials** (`encrypt_settings_secrets`). | High | Do **not** export `organizations.settings` secret sub-keys (or org settings at all beyond a vetted allowlist). Deep-JSON scrubbing; extend the disjointness test to scan JSON payloads, not just column names. |
+| S7 | **Untrusted-archive DoS / path traversal** — zip bomb, zip slip, oversized JSON. | Medium | Decompressed-size + entry-count caps; JSON size cap; streaming; **never `extractall`** — sanitize/validate every path in the reserved `files/` stage; bounded import transaction; **rate-limit** both endpoints (export is an exfiltration channel too). |
+| S8 | **PII leak via denylist scrubbing** — one missed `user_id`/email/phone column leaks PII into a file that leaves HIPAA controls. | Medium | Invert to an **allowlist for user/PII columns**: auto-null any column that FKs `users.id` or matches PII name patterns unless explicitly allowlisted. |
+| S9 | **Plaintext archive at rest, outside platform controls** — contains addresses, org identifiers, internal config. | Medium | Optional **passphrase encryption** of the archive; documented handling expectations; audit file creation. |
+| S10 | **CSRF on the state-changing import**; cache exposure. | Low | Multipart import POST carries `X-CSRF-Token` (double-submit); add both endpoints to `UNCACHEABLE_PREFIXES`. |
+| S11 | **Dry-run as a cross-tenant preview oracle.** | Low | Dry-run enforces **identical authz** to the real import. |
+| S12 | **SQL injection** via dynamic per-table queries. | Low | All table/column identifiers are **static** (from the registry); ORM/parameterized only — never interpolate archive-derived identifiers. |
+
+### 8.3 DR-scope caveat (not a vuln, but security-relevant)
+
+Structure-only export carries **no users**, so a "spin up a second instance"
+import yields a **userless org with no way to log in**. Full disaster recovery
+therefore still requires a separate, deliberately-authorized member/credential
+bootstrap. This is intentional (per the structure-only decision) but must be
+stated so operators don't mistake a template import for a complete DR restore.
 
 ## 9. Backend deliverables
 
@@ -292,11 +324,20 @@ This is the safety valve for imports into a non-empty org.
 - Endpoints appended to `app/api/v1/endpoints/organizations.py`:
   `GET  /organizations/template/export`,
   `POST /organizations/template/import` (`?dry_run=`).
-- Permissions: add `organization.template.export` / `.import` to the permission
-  catalog; grant to admin/system roles in `DEFAULT_ROLES`.
-- Tests: round-trip (export org A → import to fresh org B → assert structural
-  parity, id-remap integrity, JSON-ref integrity, no secret/user leakage),
-  dry-run, subset-with-closure, upsert-idempotency (import twice → no dupes).
+- Permissions: add `organization.template.export` / `.import` (org-scoped) plus
+  a separate **platform-level** permission for new-org-creation import (S2).
+- Security controls from §8.2 are backend deliverables, not follow-ups:
+  create-only role import + permission-subset check (S1), server-derived target
+  org (S2), per-row schema revalidation + HTML/URL sanitization (S3),
+  never-overwrite security config (S4), the FK-coverage fail-closed guard (S5),
+  deep-JSON scrubbing + `organizations.settings` exclusion (S6), archive
+  size/entry/path limits + rate limiting (S7).
+- Tests: round-trip parity + id/JSON-ref integrity; **no secret/user/PII
+  leakage** (column *and* JSON scan); FK-coverage guard; **abuse tests** —
+  permission-escalation template rejected (S1), cross-tenant target rejected
+  (S2), XSS/SSRF payloads sanitized (S3), security-config not overwritten (S4),
+  unmapped-id fail-closed (S5), zip bomb/slip rejected (S7); dry-run authz
+  parity; upsert-idempotency (import twice → no dupes).
 
 ## 10. Frontend deliverables
 
@@ -326,12 +367,15 @@ This is the safety valve for imports into a non-empty org.
 
 ## 12. Open questions for stakeholder
 
-- **Q1 — Import target.** Support importing into a brand-new org (create it
-  during import) *and* merging into the current org? Or new-org only for now?
-  (Recommend: both, with new-org as the primary DR path.)
-- **Q2 — Roles/positions.** Confirm positions should travel and **upsert on
-  slug** (a new dept wants the same role set + permissions, merged with the
-  seeded defaults). (Recommend: yes.)
+- **Q1 — Import target.** Merge into the current org (target = session org) is
+  the safe default. New-org-creation import is a **platform-privileged** action
+  (S2) and also yields a userless org (§8.3) — support it, but behind a
+  platform permission and with an explicit admin-bootstrap step. (Recommend:
+  ship merge-into-current-org first; add gated new-org mode in a later phase.)
+- **Q2 — Roles/positions.** Positions travel, but import is **create-only**,
+  never overwriting existing or `is_system` roles, and imported permissions must
+  be a subset of the importer's own (S1). (Recommend: yes, create-only — *not*
+  upsert-overwrite, which was a privilege-escalation vector.)
 - **Q3 — Borderline tables.** Exclude `grant_opportunities` (reference catalog,
   nothing depends on it) and the global `onboarding_checklist` (not
   org-scoped)? (Recommend: exclude both from v1.)
