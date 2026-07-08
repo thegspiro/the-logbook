@@ -70,6 +70,24 @@ async def _save_password_to_history(db: AsyncSession, user_id: str, password_has
     await db.flush()
 
 
+async def _has_password_history(db: AsyncSession, user_id: str) -> bool:
+    """
+    Return True if the user has at least one prior password in history.
+
+    The minimum-password-age control only guards against cycling through the
+    reuse history. Before the first voluntary change there is no history to
+    cycle, so applying the age gate then would only block a brand-new user
+    (e.g. an admin who set their own password at onboarding) from immediately
+    setting a different one.
+    """
+    result = await db.execute(
+        select(PasswordHistory.id)
+        .where(PasswordHistory.user_id == str(user_id))
+        .limit(1)
+    )
+    return result.first() is not None
+
+
 class AuthService:
     """Service for authentication operations"""
 
@@ -544,12 +562,16 @@ class AuthService:
         # (e.g. first login after admin creation, self-registration, or an admin
         # reset): the mandatory change would otherwise be blocked by the very
         # timestamp set when the temporary password was issued, locking the user
-        # out of completing setup.
+        # out of completing setup. Also skip on the first voluntary change (no
+        # password history yet): the age gate only guards against cycling
+        # through the reuse history, so before any history exists it would only
+        # block a just-set-up admin from immediately choosing a new password.
         min_age_days = settings.HIPAA_MINIMUM_PASSWORD_AGE_DAYS
         if (
             min_age_days > 0
             and user.password_changed_at
             and not user.must_change_password
+            and await _has_password_history(self.db, str(user.id))
         ):
             pwd_changed = (
                 user.password_changed_at.replace(tzinfo=timezone.utc)
