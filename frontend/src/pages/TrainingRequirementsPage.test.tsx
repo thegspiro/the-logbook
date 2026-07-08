@@ -1,16 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import toast from 'react-hot-toast';
 import { renderWithRouter } from '../test/utils';
 import TrainingRequirementsPage from './TrainingRequirementsPage';
 
 const mockGetRequirements = vi.fn();
 const mockGetCategories = vi.fn();
+const mockCreateRequirement = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingService: {
     getRequirements: (...args: unknown[]) => mockGetRequirements(...args) as unknown,
     getCategories: (...args: unknown[]) => mockGetCategories(...args) as unknown,
-    createRequirement: vi.fn(),
+    createRequirement: (...args: unknown[]) => mockCreateRequirement(...args) as unknown,
     updateRequirement: vi.fn(),
     deleteRequirement: vi.fn(),
   },
@@ -82,5 +85,35 @@ describe('TrainingRequirementsPage', () => {
       expect(mockGetRequirements).toHaveBeenCalledWith({ active_only: false });
     });
     expect(document.body).toBeInTheDocument();
+  });
+
+  it('opens the create form pre-filled when a template is selected instead of saving immediately', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: /use template/i }));
+    await user.click(screen.getByRole('button', { name: /NREMT EMT Recertification/i }));
+
+    expect(mockCreateRequirement).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText(/^Name/)).toHaveValue('NREMT EMT Recertification');
+    expect(within(dialog).getByLabelText(/Required Hours/)).toHaveValue(40);
+  });
+
+  it('blocks saving a requirement that would apply to nobody', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TrainingRequirementsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Create Requirement' }));
+    const dialog = screen.getByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/^Name/), 'Test Requirement');
+    await user.type(within(dialog).getByLabelText(/Required Hours/), '10');
+    await user.click(within(dialog).getByLabelText(/applies to all members/i));
+    await user.click(within(dialog).getByRole('button', { name: 'Create Requirement' }));
+
+    expect(mockCreateRequirement).not.toHaveBeenCalled();
+    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
+      'Select at least one member category, or check "Applies to all members"'
+    );
   });
 });

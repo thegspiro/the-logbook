@@ -57,6 +57,7 @@ const TrainingRequirementsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateSeed, setTemplateSeed] = useState<TrainingRequirementCreate | null>(null);
   const [selectedRequirement, setSelectedRequirement] = useState<TrainingRequirement | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -109,26 +110,42 @@ const TrainingRequirementsPage: React.FC = () => {
 
   const handleDuplicate = async (requirement: TrainingRequirement) => {
     try {
+      // Copy every quantity field: the create endpoint rejects e.g. a shifts
+      // requirement without required_shifts, so a partial copy 422s or
+      // silently loses data (checklist items, passing scores, etc.)
       const newReq: TrainingRequirementCreate = {
         name: `${requirement.name} (Copy)`,
         description: requirement.description,
         requirement_type: requirement.requirement_type || 'hours',
+        source: requirement.source,
+        registry_name: requirement.registry_name,
+        registry_code: requirement.registry_code,
         training_type: requirement.training_type,
         required_hours: requirement.required_hours,
         required_courses: requirement.required_courses,
+        required_shifts: requirement.required_shifts,
+        required_calls: requirement.required_calls,
+        required_call_types: requirement.required_call_types,
+        required_skills: requirement.required_skills,
+        checklist_items: requirement.checklist_items,
+        passing_score: requirement.passing_score,
+        max_attempts: requirement.max_attempts,
         frequency: requirement.frequency,
         year: requirement.year,
         applies_to_all: requirement.applies_to_all,
         required_roles: requirement.required_roles,
+        required_positions: requirement.required_positions,
         required_membership_types: requirement.required_membership_types,
         start_date: requirement.start_date,
         due_date: requirement.due_date,
+        time_limit_days: requirement.time_limit_days,
         due_date_type: requirement.due_date_type,
         rolling_period_months: requirement.rolling_period_months,
         period_start_month: requirement.period_start_month,
         period_start_day: requirement.period_start_day,
         period_end_month: requirement.period_end_month,
         period_end_day: requirement.period_end_day,
+        include_current_month: requirement.include_current_month,
         category_ids: requirement.category_ids,
       };
 
@@ -168,6 +185,7 @@ const TrainingRequirementsPage: React.FC = () => {
       }
       setShowCreateModal(false);
       setSelectedRequirement(null);
+      setTemplateSeed(null);
     } catch (_error) {
       toast.error('Failed to save requirement');
     }
@@ -311,10 +329,12 @@ const TrainingRequirementsPage: React.FC = () => {
         {showCreateModal && (
           <RequirementModal
             requirement={selectedRequirement}
+            template={templateSeed}
             categories={categories}
             onClose={() => {
               setShowCreateModal(false);
               setSelectedRequirement(null);
+              setTemplateSeed(null);
             }}
             onSave={(...args) => { void handleSave(...args); }}
           />
@@ -325,16 +345,12 @@ const TrainingRequirementsPage: React.FC = () => {
           <TemplateModal
             onClose={() => setShowTemplateModal(false)}
             onSelect={(template) => {
-              void (async () => {
-                try {
-                  const created = await trainingService.createRequirement(template);
-                  setRequirements([...requirements, created]);
-                  toast.success(`Template "${template.name}" added`);
-                  setShowTemplateModal(false);
-                } catch (_error) {
-                  toast.error('Failed to create requirement from template');
-                }
-              })();
+              // Open the create form pre-filled instead of saving immediately,
+              // so officers confirm hours/assignment before the requirement
+              // starts counting against members
+              setTemplateSeed(template);
+              setShowTemplateModal(false);
+              setShowCreateModal(true);
             }}
           />
         )}
@@ -376,6 +392,7 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
       case 'calls': return 'Calls';
       case 'skills_evaluation': return 'Skills Evaluation';
       case 'checklist': return 'Checklist';
+      case 'knowledge_test': return 'Knowledge Test';
       default: return type;
     }
   };
@@ -558,6 +575,21 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
                 {requirement.required_hours && (
                   <DetailRow label="Required Hours" value={`${requirement.required_hours} hours`} />
                 )}
+                {requirement.required_shifts != null && (
+                  <DetailRow label="Required Shifts" value={String(requirement.required_shifts)} />
+                )}
+                {requirement.required_calls != null && (
+                  <DetailRow label="Required Calls" value={String(requirement.required_calls)} />
+                )}
+                {requirement.required_courses && requirement.required_courses.length > 0 && (
+                  <DetailRow label="Required Courses" value={requirement.required_courses.join(', ')} />
+                )}
+                {requirement.checklist_items && requirement.checklist_items.length > 0 && (
+                  <DetailRow label="Checklist Items" value={String(requirement.checklist_items.length)} />
+                )}
+                {requirement.passing_score != null && (
+                  <DetailRow label="Passing Score" value={`${requirement.passing_score}%`} />
+                )}
                 {requirement.year && (
                   <DetailRow label="Year" value={String(requirement.year)} />
                 )}
@@ -627,6 +659,7 @@ const DetailRow: React.FC<{ label: string; value: string }> = ({ label, value })
 // Requirement Modal with Full Form
 interface RequirementModalProps {
   requirement: TrainingRequirement | null;
+  template?: TrainingRequirementCreate | null;
   categories: TrainingCategory[];
   onClose: () => void;
   onSave: (data: TrainingRequirementCreate | TrainingRequirementUpdate, isEdit: boolean, id?: string) => void;
@@ -634,43 +667,89 @@ interface RequirementModalProps {
 
 const RequirementModal: React.FC<RequirementModalProps> = ({
   requirement,
+  template,
   categories,
   onClose,
   onSave,
 }) => {
+  const seed = requirement ?? template;
   const [formData, setFormData] = useState({
-    name: requirement?.name || '',
-    description: requirement?.description || '',
-    requirement_type: (requirement?.requirement_type || 'hours'),
-    training_type: requirement?.training_type || '',
-    required_hours: requirement?.required_hours || undefined,
-    frequency: requirement?.frequency || 'annual' as RequirementFrequency,
-    year: requirement?.year || new Date().getFullYear() as number | undefined,
-    applies_to_all: requirement?.applies_to_all ?? true,
-    required_membership_types: requirement?.required_membership_types || [] as string[],
-    due_date: requirement?.due_date || '',
-    start_date: requirement?.start_date || '',
-    due_date_type: requirement?.due_date_type || 'calendar_period' as DueDateType,
-    rolling_period_months: requirement?.rolling_period_months || 12,
-    period_start_month: requirement?.period_start_month || 1,
-    period_start_day: requirement?.period_start_day || 1,
-    period_end_month: requirement?.period_end_month || undefined as number | undefined,
-    period_end_day: requirement?.period_end_day || undefined as number | undefined,
+    name: seed?.name || '',
+    description: seed?.description || '',
+    requirement_type: (seed?.requirement_type || 'hours'),
+    training_type: seed?.training_type || '',
+    required_hours: seed?.required_hours || undefined,
+    required_courses: (seed?.required_courses || []).join('\n'),
+    required_shifts: seed?.required_shifts || undefined,
+    required_calls: seed?.required_calls || undefined,
+    checklist_items: (seed?.checklist_items || []).join('\n'),
+    passing_score: seed?.passing_score || undefined,
+    max_attempts: seed?.max_attempts || undefined,
+    frequency: seed?.frequency || 'annual' as RequirementFrequency,
+    year: seed?.year || new Date().getFullYear() as number | undefined,
+    applies_to_all: seed?.applies_to_all ?? true,
+    required_membership_types: seed?.required_membership_types || [] as string[],
+    due_date: seed?.due_date || '',
+    start_date: seed?.start_date || '',
+    due_date_type: seed?.due_date_type || 'calendar_period' as DueDateType,
+    rolling_period_months: seed?.rolling_period_months || 12,
+    period_start_month: seed?.period_start_month || 1,
+    period_start_day: seed?.period_start_day || 1,
+    period_end_month: seed?.period_end_month || undefined as number | undefined,
+    period_end_day: seed?.period_end_day || undefined as number | undefined,
     include_current_month_mode:
-      requirement?.include_current_month == null
+      seed?.include_current_month == null
         ? 'inherit'
-        : requirement.include_current_month
+        : seed.include_current_month
           ? 'include'
           : 'exclude',
-    category_ids: requirement?.category_ids || [] as string[],
+    category_ids: seed?.category_ids || [] as string[],
   });
 
   const [saving, setSaving] = useState(false);
+
+  const splitLines = (value: string): string[] =>
+    value.split('\n').map(line => line.trim()).filter(Boolean);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
       toast.error('Name is required');
+      return;
+    }
+
+    // Mirror the backend TrainingRequirementCreate validator so users get a
+    // specific message instead of a generic 422 failure
+    const courses = splitLines(formData.required_courses);
+    const checklistItems = splitLines(formData.checklist_items);
+    if (formData.requirement_type === 'hours' && !formData.required_hours) {
+      toast.error('Required hours must be set for an hours requirement');
+      return;
+    }
+    if (formData.requirement_type === 'courses' && courses.length === 0) {
+      toast.error('List at least one course for a courses requirement');
+      return;
+    }
+    if (formData.requirement_type === 'shifts' && !formData.required_shifts) {
+      toast.error('Required shifts must be set for a shifts requirement');
+      return;
+    }
+    if (formData.requirement_type === 'calls' && !formData.required_calls) {
+      toast.error('Required calls must be set for a calls requirement');
+      return;
+    }
+    if (formData.requirement_type === 'knowledge_test' && !formData.passing_score) {
+      toast.error('Passing score must be set for a knowledge test requirement');
+      return;
+    }
+
+    // A requirement that applies to nobody silently disappears from every
+    // member's compliance view — block it unless the record targets by
+    // role/position (set outside this form)
+    const hasRoleTargeting =
+      (seed?.required_roles?.length || 0) > 0 || (seed?.required_positions?.length || 0) > 0;
+    if (!formData.applies_to_all && formData.required_membership_types.length === 0 && !hasRoleTargeting) {
+      toast.error('Select at least one member category, or check "Applies to all members"');
       return;
     }
 
@@ -682,6 +761,17 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
         requirement_type: formData.requirement_type,
         ...(formData.training_type ? { training_type: formData.training_type as TrainingType } : {}),
         ...(formData.required_hours ? { required_hours: formData.required_hours } : {}),
+        ...(formData.requirement_type === 'courses' ? { required_courses: courses } : {}),
+        ...(formData.requirement_type === 'shifts' && formData.required_shifts
+          ? { required_shifts: formData.required_shifts } : {}),
+        ...(formData.requirement_type === 'calls' && formData.required_calls
+          ? { required_calls: formData.required_calls } : {}),
+        ...(formData.requirement_type === 'checklist' && checklistItems.length > 0
+          ? { checklist_items: checklistItems } : {}),
+        ...(formData.requirement_type === 'knowledge_test' && formData.passing_score
+          ? { passing_score: formData.passing_score } : {}),
+        ...(formData.requirement_type === 'knowledge_test' && formData.max_attempts
+          ? { max_attempts: formData.max_attempts } : {}),
         frequency: formData.frequency,
         ...(formData.year ? { year: formData.year } : {}),
         applies_to_all: formData.applies_to_all,
@@ -699,6 +789,10 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
             ? null
             : formData.include_current_month_mode === 'include',
         category_ids: formData.category_ids.length > 0 ? formData.category_ids : undefined,
+        // Preserve registry attribution when creating from a standards template
+        ...(!requirement && template?.source ? { source: template.source } : {}),
+        ...(!requirement && template?.registry_name ? { registry_name: template.registry_name } : {}),
+        ...(!requirement && template?.registry_code ? { registry_code: template.registry_code } : {}),
       };
 
       onSave(data, !!requirement, requirement?.id);
@@ -808,6 +902,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 <option value="calls">Calls</option>
                 <option value="skills_evaluation">Skills Evaluation</option>
                 <option value="checklist">Checklist</option>
+                <option value="knowledge_test">Knowledge Test</option>
               </select>
             </div>
 
@@ -831,7 +926,11 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
               </div>
 
               <div>
-                <label htmlFor="req-required-hours" className="block text-sm font-medium text-theme-text-secondary mb-2">Required Hours</label>
+                <label htmlFor="req-required-hours" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  Required Hours{formData.requirement_type === 'hours' && (
+                    <span aria-hidden="true" className="text-red-700 dark:text-red-400"> *</span>
+                  )}
+                </label>
                 <input
                   id="req-required-hours"
                   type="number"
@@ -844,6 +943,111 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                 />
               </div>
             </div>
+
+            {/* Per-type quantity fields */}
+            {formData.requirement_type === 'courses' && (
+              <div>
+                <label htmlFor="req-required-courses" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  Required Courses <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+                </label>
+                <textarea
+                  id="req-required-courses"
+                  value={formData.required_courses}
+                  onChange={(e) => setFormData({ ...formData, required_courses: e.target.value })}
+                  className="form-input placeholder-theme-text-muted"
+                  placeholder={'One course per line, e.g.\nICS-100\nICS-200'}
+                  rows={4}
+                />
+                <p className="text-theme-text-muted text-sm mt-1">
+                  Members must complete every course listed (one per line).
+                </p>
+              </div>
+            )}
+
+            {formData.requirement_type === 'shifts' && (
+              <div>
+                <label htmlFor="req-required-shifts" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  Required Shifts <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+                </label>
+                <input
+                  id="req-required-shifts"
+                  type="number"
+                  value={formData.required_shifts || ''}
+                  onChange={(e) => setFormData({ ...formData, required_shifts: e.target.value ? Number(e.target.value) : undefined })}
+                  className="form-input placeholder-theme-text-muted"
+                  placeholder="e.g., 12"
+                  min="1"
+                />
+              </div>
+            )}
+
+            {formData.requirement_type === 'calls' && (
+              <div>
+                <label htmlFor="req-required-calls" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  Required Calls <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+                </label>
+                <input
+                  id="req-required-calls"
+                  type="number"
+                  value={formData.required_calls || ''}
+                  onChange={(e) => setFormData({ ...formData, required_calls: e.target.value ? Number(e.target.value) : undefined })}
+                  className="form-input placeholder-theme-text-muted"
+                  placeholder="e.g., 24"
+                  min="1"
+                />
+              </div>
+            )}
+
+            {formData.requirement_type === 'checklist' && (
+              <div>
+                <label htmlFor="req-checklist-items" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                  Checklist Items
+                </label>
+                <textarea
+                  id="req-checklist-items"
+                  value={formData.checklist_items}
+                  onChange={(e) => setFormData({ ...formData, checklist_items: e.target.value })}
+                  className="form-input placeholder-theme-text-muted"
+                  placeholder={'One item per line, e.g.\nStation tour completed\nSCBA fit test'}
+                  rows={5}
+                />
+                <p className="text-theme-text-muted text-sm mt-1">
+                  Each line becomes an item members must check off.
+                </p>
+              </div>
+            )}
+
+            {formData.requirement_type === 'knowledge_test' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="req-passing-score" className="block text-sm font-medium text-theme-text-secondary mb-2">
+                    Passing Score (%) <span aria-hidden="true" className="text-red-700 dark:text-red-400">*</span>
+                  </label>
+                  <input
+                    id="req-passing-score"
+                    type="number"
+                    value={formData.passing_score || ''}
+                    onChange={(e) => setFormData({ ...formData, passing_score: e.target.value ? Number(e.target.value) : undefined })}
+                    className="form-input placeholder-theme-text-muted"
+                    placeholder="e.g., 80"
+                    min="1"
+                    max="100"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="req-max-attempts" className="block text-sm font-medium text-theme-text-secondary mb-2">Max Attempts</label>
+                  <input
+                    id="req-max-attempts"
+                    type="number"
+                    value={formData.max_attempts || ''}
+                    onChange={(e) => setFormData({ ...formData, max_attempts: e.target.value ? Number(e.target.value) : undefined })}
+                    className="form-input placeholder-theme-text-muted"
+                    placeholder="Unlimited"
+                    min="1"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Due Date Configuration */}
@@ -1180,45 +1384,162 @@ const TemplateModal: React.FC<{
   onClose: () => void;
   onSelect: (template: TrainingRequirementCreate) => void;
 }> = ({ onClose, onSelect }) => {
+  // Templates default to applies_to_all: true (or explicit membership types)
+  // because a requirement with applies_to_all: false and no targeting applies
+  // to nobody and vanishes from every member's compliance view. Selecting a
+  // template opens the create form, where officers can narrow the assignment.
   const templates: TrainingRequirementCreate[] = [
     {
-      name: 'NFPA 1001 Annual Training',
-      description: 'NFPA 1001 requires annual training for firefighters',
+      name: 'NFPA 1001 Firefighter Annual Training',
+      description: 'Annual continuing education for firefighters certified to NFPA 1001 Firefighter I & II',
       requirement_type: 'hours',
+      training_type: 'continuing_education',
       required_hours: 36,
       frequency: 'annual',
-      applies_to_all: false,
+      applies_to_all: true,
       due_date_type: 'calendar_period',
       period_start_month: 1,
       period_start_day: 1,
+      source: 'national',
+      registry_name: 'NFPA',
+      registry_code: 'NFPA 1001',
+    },
+    {
+      name: 'NFPA 1500 Occupational Safety Training',
+      description: 'Annual occupational health and safety training required for all members',
+      requirement_type: 'hours',
+      training_type: 'continuing_education',
+      required_hours: 8,
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'NFPA',
+      registry_code: 'NFPA 1500',
     },
     {
       name: 'NREMT EMT Recertification',
-      description: 'National Registry EMT continuing education requirements',
+      description: '40 hours of continuing education per 2-year National Registry cycle (national, local/state, and individual components)',
       requirement_type: 'hours',
-      required_hours: 24,
+      training_type: 'continuing_education',
+      required_hours: 40,
       frequency: 'biannual',
-      applies_to_all: false,
+      applies_to_all: true,
+      due_date_type: 'rolling',
+      rolling_period_months: 24,
+      source: 'national',
+      registry_name: 'NREMT',
+      registry_code: 'NREMT',
+    },
+    {
+      name: 'CPR/BLS Certification',
+      description: 'Maintain a current CPR/BLS provider certification (2-year certification cycle)',
+      requirement_type: 'certification',
+      frequency: 'biannual',
+      applies_to_all: true,
       due_date_type: 'rolling',
       rolling_period_months: 24,
     },
     {
-      name: 'Annual CPR Certification',
-      description: 'Annual CPR certification renewal requirement',
-      requirement_type: 'certification',
-      required_hours: 4,
-      frequency: 'annual',
-      applies_to_all: true,
-      due_date_type: 'rolling',
-      rolling_period_months: 12,
-    },
-    {
       name: 'Hazmat Operations Refresher',
-      description: 'OSHA-required hazmat operations refresher training',
+      description: 'Annual hazardous materials operations-level refresher required by OSHA 29 CFR 1910.120',
       requirement_type: 'hours',
+      training_type: 'refresher',
       required_hours: 8,
       frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'OSHA',
+      registry_code: '29 CFR 1910.120',
+    },
+    {
+      name: 'Bloodborne Pathogens Annual Refresher',
+      description: 'Annual bloodborne pathogens and exposure control plan training required by OSHA 29 CFR 1910.1030 for members with occupational exposure',
+      requirement_type: 'hours',
+      training_type: 'refresher',
+      required_hours: 2,
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'OSHA',
+      registry_code: '29 CFR 1910.1030',
+    },
+    {
+      name: 'HIPAA Privacy & Security Awareness',
+      description: 'Annual HIPAA privacy and security training for all personnel with access to protected health information (patient care reports, EMS records)',
+      requirement_type: 'hours',
+      training_type: 'continuing_education',
+      required_hours: 1,
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'HIPAA',
+      registry_code: '45 CFR 164.530(b)',
+    },
+    {
+      name: 'SCBA Fit Test & Respiratory Protection',
+      description: 'Annual respirator fit testing and respiratory protection training required by OSHA 29 CFR 1910.134',
+      requirement_type: 'checklist',
+      checklist_items: [
+        'Medical clearance for respirator use current',
+        'Annual quantitative/qualitative fit test passed',
+        'SCBA donning, doffing, and emergency procedures reviewed',
+        'Facepiece seal check and user maintenance reviewed',
+      ],
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'OSHA',
+      registry_code: '29 CFR 1910.134',
+    },
+    {
+      name: 'NIMS/ICS Initial Certification',
+      description: 'One-time incident command system courses required for emergency responders under the National Incident Management System',
+      requirement_type: 'courses',
+      training_type: 'certification',
+      required_courses: [
+        'ICS-100: Introduction to the Incident Command System',
+        'ICS-200: Basic Incident Command System for Initial Response',
+        'IS-700: An Introduction to the National Incident Management System',
+        'IS-800: National Response Framework, An Introduction',
+      ],
+      frequency: 'one_time',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'FEMA',
+      registry_code: 'NIMS',
+    },
+    {
+      name: 'New Member Orientation Checklist',
+      description: 'One-time onboarding checklist for probationary members',
+      requirement_type: 'checklist',
+      checklist_items: [
+        'Station tour and facility safety orientation',
+        'PPE issued and fit checked',
+        'SCBA fit test completed',
+        'Radio and communications procedures reviewed',
+        'Department SOPs/SOGs reviewed',
+      ],
+      frequency: 'one_time',
       applies_to_all: false,
+      required_membership_types: ['probationary'],
       due_date_type: 'calendar_period',
       period_start_month: 1,
       period_start_day: 1,
@@ -1238,7 +1559,7 @@ const TemplateModal: React.FC<{
           <div>
             <h3 id="template-modal-title" className="text-theme-text-primary text-xl font-bold">Select a Template</h3>
             <p className="text-theme-text-muted mt-1">
-              Start with a pre-configured requirement template for common standards
+              Start from a common standard — you can review and adjust everything before saving
             </p>
           </div>
           <button
@@ -1265,10 +1586,21 @@ const TemplateModal: React.FC<{
                 } text-theme-text-primary`}>
                   {template.due_date_type === 'rolling' ? 'Rolling' : 'Calendar Period'}
                 </span>
+                {template.registry_name && (
+                  <span className="text-xs font-semibold px-2 py-1 rounded bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                    {template.registry_name}
+                  </span>
+                )}
                 {template.required_hours && (
                   <span className="text-theme-text-muted text-xs">{template.required_hours} hours</span>
                 )}
-                <span className="text-theme-text-muted text-xs capitalize">{template.frequency}</span>
+                {template.checklist_items && (
+                  <span className="text-theme-text-muted text-xs">{template.checklist_items.length} items</span>
+                )}
+                {template.required_courses && (
+                  <span className="text-theme-text-muted text-xs">{template.required_courses.length} courses</span>
+                )}
+                <span className="text-theme-text-muted text-xs capitalize">{template.frequency.replace('_', ' ')}</span>
               </div>
             </button>
           ))}

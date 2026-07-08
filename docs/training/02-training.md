@@ -148,13 +148,52 @@ Navigate to **Training Admin > Requirements** to manage department-wide training
 
 ### Requirement Types
 
-| Type | Description |
-|------|-------------|
-| **Hours** | Accumulate a number of training hours |
-| **Shifts** | Complete a number of qualifying shifts |
-| **Calls** | Respond to a number of qualifying calls |
-| **Certification** | Obtain or maintain a specific certification |
-| **Course Completion** | Complete a specific course |
+| Type | Description | Required Value |
+|------|-------------|----------------|
+| **Hours** | Accumulate a number of training hours | Required hours |
+| **Courses** | Complete a specific list of courses | Course list (one per line) |
+| **Certification** | Obtain or maintain a specific certification | — |
+| **Shifts** | Complete a number of qualifying shifts | Required shifts |
+| **Calls** | Respond to a number of qualifying calls | Required calls |
+| **Skills Evaluation** | Pass a hands-on skills evaluation | — |
+| **Checklist** | Complete a set of check-off items | Checklist items (one per line) |
+| **Knowledge Test** | Pass a written/knowledge test | Passing score (%), optional max attempts |
+
+The create/edit form shows the matching value field for the selected type and
+validates it before saving, so every requirement carries the quantity the
+compliance engine needs.
+
+> **Note:** A requirement must apply to someone. If **Applies to all members**
+> is unchecked, at least one member category must be selected — the form blocks
+> saving a requirement that would apply to nobody (it would silently disappear
+> from every member's compliance view).
+
+### Requirement Templates
+
+Click **Use Template** on the Requirements page to start from a pre-configured
+requirement based on a common standard. Selecting a template opens the create
+form pre-filled — review the hours, due date configuration, and assignment
+(and narrow it to specific member categories if needed) before saving.
+
+Built-in templates:
+
+| Template | Standard | Default Configuration |
+|----------|----------|----------------------|
+| NFPA 1001 Firefighter Annual Training | NFPA 1001 | 36 hours, annual, calendar period |
+| NFPA 1500 Occupational Safety Training | NFPA 1500 | 8 hours, annual, calendar period |
+| NREMT EMT Recertification | NREMT | 40 hours, 24-month rolling period |
+| CPR/BLS Certification | — | Certification, 24-month rolling period |
+| Hazmat Operations Refresher | OSHA 29 CFR 1910.120 | 8 hours, annual, calendar period |
+| Bloodborne Pathogens Annual Refresher | OSHA 29 CFR 1910.1030 | 2 hours, annual, calendar period |
+| HIPAA Privacy & Security Awareness | 45 CFR 164.530(b) | 1 hour, annual, calendar period |
+| SCBA Fit Test & Respiratory Protection | OSHA 29 CFR 1910.134 | Checklist (4 items), annual |
+| NIMS/ICS Initial Certification | FEMA NIMS | Courses (ICS-100, ICS-200, IS-700, IS-800), one-time |
+| New Member Orientation Checklist | — | Checklist (5 items), one-time, probationary members |
+
+Templates tied to a national standard carry source attribution (NFPA, NREMT,
+OSHA, HIPAA, FEMA) with the standard or CFR citation as the registry code, so
+requirements created from them display a source badge instead of appearing as
+department-defined rules.
 
 ### Frequency and Due Dates
 

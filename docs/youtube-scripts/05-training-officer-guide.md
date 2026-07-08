@@ -138,7 +138,21 @@ Program."]**
 
 **[SCREEN: Navigate to Training Requirements (TrainingRequirementsPage)]**
 
-> "Now let's add the individual requirements. Click 'Add Requirement.'"
+> "Now let's add the individual requirements. The fastest way is 'Use
+> Template' — The Logbook ships with templates for the standards most
+> departments run every year: NFPA annual training, NREMT recertification,
+> CPR/BLS, OSHA bloodborne pathogens, HIPAA awareness, SCBA fit testing,
+> NIMS/ICS courses, and more."
+
+**[SCREEN: Open the template picker, select a template, and show the create
+form pre-filled with its values]**
+
+> "Picking a template doesn't save anything yet — it pre-fills the create form
+> so you can confirm the hours, the due date setup, and who it applies to
+> before it goes live."
+
+> "For anything department-specific, click 'Create Requirement' instead and
+> build it from scratch."
 
 **[SCREEN: Fill in a requirement form]**
 

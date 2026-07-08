@@ -6,7 +6,8 @@ The Training module tracks courses, certifications, training requirements, progr
 
 ## Key Features
 
-- **Training Requirements** — Hours, shifts, calls, course completions, and certifications with annual/quarterly/monthly/rolling frequencies. Requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary) or apply to all members
+- **Training Requirements** — Hours, courses, certifications, shifts, calls, skills evaluations, checklists, and knowledge tests with annual/quarterly/monthly/rolling frequencies. Requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary) or apply to all members. *(2026-07-08)* The create form collects the matching quantity field per type and blocks requirements that would apply to nobody
+- **Requirement Templates** — *(2026-07-08)* Ten built-in templates for common standards (NFPA 1001/1500, NREMT recertification, CPR/BLS, OSHA hazmat/bloodborne pathogens/respiratory protection, HIPAA awareness, NIMS/ICS courses, new-member onboarding checklist). Selecting a template pre-fills the create form for review; standards-based templates carry source attribution with the standard or CFR citation as registry code
 - **Training Programs** — Structured multi-phase curricula (Flexible, Sequential, Phase-based) with milestone tracking
 - **Self-Reported Training** — Members submit training records for officer review and approval
 - **Shift Completion Reports** — Officers file post-shift reports that auto-credit hours/shifts/calls toward program requirements
@@ -938,6 +939,58 @@ Each source page now includes a **Print** button that navigates to the correspon
 | `compliance_configs` | `include_current_month` | Boolean (NOT NULL, server_default `1`) | `20260503_0001` | Org default: count the in-progress month toward compliance |
 | `training_requirements` | `include_current_month` | Boolean (nullable) | `20260503_0002` | Per-requirement override; `NULL` inherits the org default |
 | `training_sessions` | `approval_required` | — (dropped) | `20260502_0004` | Removed dead column; finalize is gated by `require_completion_confirmation` |
+
+---
+
+## Requirement Templates & Per-Type Create Form (2026-07-08)
+
+### Requirement Templates Rework
+
+- **Template selection now pre-fills the create form** instead of saving
+  immediately, so officers confirm hours, due dates, and assignment before a
+  requirement starts counting against members
+- **Broken targeting fixed** — three of the four previous templates set
+  `applies_to_all: false` with no member targeting, which the compliance filter
+  treats as applying to nobody; requirements created from them never appeared
+  in any member's compliance view
+- **Template data corrected** — NREMT EMT recertification is 40 hours per
+  2-year cycle (was 24 hours); CPR/BLS is a 2-year certification cycle (was
+  12 months)
+- **Template list expanded to ten**: NFPA 1001 (36 hrs annual), NFPA 1500
+  (8 hrs annual), NREMT EMT recert (40 hrs / 24-month rolling), CPR/BLS
+  (24-month rolling), Hazmat Operations refresher (OSHA 29 CFR 1910.120),
+  Bloodborne Pathogens refresher (OSHA 29 CFR 1910.1030), HIPAA Privacy &
+  Security awareness (45 CFR 164.530(b)), SCBA Fit Test & Respiratory
+  Protection checklist (OSHA 29 CFR 1910.134), NIMS/ICS initial certification
+  courses (ICS-100/200, IS-700/800), and a New Member Orientation checklist
+  (probationary members)
+- **Registry attribution on templates** — standards-based templates carry
+  `source: national` with the registry name (NFPA, NREMT, OSHA, HIPAA, FEMA)
+  and the standard or CFR citation as `registry_code`, so requirement cards
+  show a source badge and (for loaded registries) a citation link
+
+### Create/Edit Form
+
+- **Per-type quantity fields** — the form now collects `required_courses`,
+  `required_shifts`, `required_calls`, `checklist_items`, and
+  `passing_score`/`max_attempts` for the matching requirement types, with
+  client-side validation mirroring the backend `TrainingRequirementCreate`
+  validator (previously only hours were collected, so other types failed with
+  a generic 422)
+- **`knowledge_test` type added to the UI** — supported by the backend since
+  migration `20260218_0100` but missing from the type dropdown
+- **Applies-to-nobody guard** — saving is blocked when "Applies to all
+  members" is unchecked and no member category is selected (unless the record
+  targets by role/position set elsewhere)
+- **Duplicate copies all fields** — duplicating a requirement previously
+  dropped shifts/calls/skills/checklist/passing-score/registry fields, which
+  either failed validation or silently lost data
+
+### Known Limitation
+
+- Registry imports (Training Programs page) set `required_positions`, but the
+  compliance filter only matches `applies_to_all`, membership types, and
+  roles — position-targeted imported requirements currently apply to nobody
 
 ---
 
