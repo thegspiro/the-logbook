@@ -801,13 +801,22 @@ Categories help organize your training and allow flexible requirement satisfacti
    - Applicability (positions/roles)
 
 #### Option C: Use Requirement Templates
-1. Click "Use Template" when creating a requirement
-2. Choose from common requirement templates:
-   - **Annual Fire Training** (24 hrs, calendar period)
-   - **CPR/BLS Certification** (rolling, 24 months)
-   - **Hazmat Awareness** (one-time certification)
-   - **Monthly Drills** (calendar period, monthly)
-3. Customize the template values as needed
+1. Click "Use Template" on the Requirements page
+2. Choose from the built-in templates for common standards:
+   - **NFPA 1001 Firefighter Annual Training** (36 hrs, annual, calendar period)
+   - **NFPA 1500 Occupational Safety Training** (8 hrs, annual, calendar period)
+   - **NREMT EMT Recertification** (40 hrs, 24-month rolling period)
+   - **CPR/BLS Certification** (certification, 24-month rolling period)
+   - **Hazmat Operations Refresher** (8 hrs, annual — OSHA 29 CFR 1910.120)
+   - **Bloodborne Pathogens Annual Refresher** (2 hrs, annual — OSHA 29 CFR 1910.1030)
+   - **HIPAA Privacy & Security Awareness** (1 hr, annual — 45 CFR 164.530(b))
+   - **SCBA Fit Test & Respiratory Protection** (checklist, annual — OSHA 29 CFR 1910.134)
+   - **NIMS/ICS Initial Certification** (ICS-100/200, IS-700/800 courses, one-time)
+   - **New Member Orientation Checklist** (checklist, one-time, probationary members)
+3. Selecting a template opens the create form pre-filled — review and adjust
+   the hours, due date configuration, and assignment before saving. Templates
+   based on national standards carry NFPA/NREMT/OSHA/HIPAA/FEMA source
+   attribution automatically.
 
 ### 2. Create Training Program
 

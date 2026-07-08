@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Requirement Templates & Create Form (2026-07-08)
+
+- **Fixed templates that applied to nobody**: three of the four built-in
+  requirement templates set `applies_to_all: false` with no member targeting,
+  which the compliance filter treats as matching no one — requirements created
+  from them never appeared in any member's compliance view. The create form
+  now also blocks saving any requirement that would apply to nobody.
+- **Template selection pre-fills the create form** instead of saving
+  immediately, so officers review hours, due dates, and assignment first.
+- **Template data corrected and expanded to ten templates**: NREMT EMT
+  recertification corrected to 40 hours per 2-year cycle, CPR/BLS to a 2-year
+  certification cycle; added NFPA 1500 safety training, OSHA bloodborne
+  pathogens refresher (29 CFR 1910.1030), HIPAA privacy & security awareness
+  (45 CFR 164.530(b)), SCBA fit test/respiratory protection checklist
+  (29 CFR 1910.134), one-time NIMS/ICS certification courses, and a
+  probationary-member onboarding checklist. Standards-based templates carry
+  NFPA/NREMT/OSHA/HIPAA/FEMA source attribution with the standard or CFR
+  citation as registry code.
+- **Create form supports all requirement types**: per-type quantity fields
+  (course list, shifts, calls, checklist items, passing score/max attempts)
+  with client-side validation mirroring the backend validator — previously
+  only hours were collected, so other types failed with a generic 422. The
+  backend-supported `knowledge_test` type was added to the type dropdown.
+- **Duplicate copies all fields**: duplicating a requirement previously
+  dropped shifts/calls/skills/checklist/passing-score/registry fields,
+  failing validation or silently losing data.
+
 ### Dead-Code Cleanup (2026-07-03)
 
 Codebase-wide review for deprecated/unused code (training module excluded — it
