@@ -176,8 +176,11 @@ class AuthService:
             logger.warning("Authentication failed for login attempt")
             return None, "Incorrect username or password"
 
-        # Check if account is locked — use the same generic message as
-        # "user not found" to prevent username enumeration (SEC-14).
+        # Check if account is locked. By default (ACCOUNT_LOCKOUT_REVEAL) tell
+        # the user it's a temporary lock and roughly how long remains, so they
+        # stop retrying a lock that is otherwise disguised as a wrong password.
+        # Set ACCOUNT_LOCKOUT_REVEAL=False for the strict anti-enumeration
+        # behaviour (generic message that never confirms the account exists).
         locked_until = (
             user.locked_until.replace(tzinfo=timezone.utc)
             if user.locked_until and user.locked_until.tzinfo is None
@@ -185,6 +188,18 @@ class AuthService:
         )
         if locked_until and locked_until > datetime.now(timezone.utc):
             logger.warning(f"Authentication failed: account locked - {username}")
+            if settings.ACCOUNT_LOCKOUT_REVEAL:
+                remaining_min = max(
+                    1,
+                    round(
+                        (locked_until - datetime.now(timezone.utc)).total_seconds() / 60
+                    ),
+                )
+                return None, (
+                    "Account temporarily locked due to repeated failed sign-in "
+                    f"attempts. Try again in about {remaining_min} minute(s), or "
+                    "reset your password."
+                )
             return None, "Incorrect username or password"
 
         # Verify password
@@ -193,9 +208,11 @@ class AuthService:
             # Increment failed login attempts
             user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
 
-            # Lock account after 5 failed attempts
-            if user.failed_login_attempts >= 5:
-                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=30)
+            # Lock the account once the configured attempt threshold is hit.
+            if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
+                user.locked_until = datetime.now(timezone.utc) + timedelta(
+                    minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
+                )
                 logger.warning(f"Account locked due to failed attempts - {username}")
 
             # Commit (not flush) so the counter persists even when the

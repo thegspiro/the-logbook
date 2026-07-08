@@ -159,6 +159,19 @@ class Settings(BaseSettings):
     )
     HIPAA_AUDIT_RETENTION_DAYS: int = 2555  # 7-year audit log retention (§164.312(b))
 
+    # Account lockout after repeated failed sign-ins (brute-force protection).
+    # Tunable so small, trusted deployments can run a gentler policy. (These
+    # names were already documented in .env.example.full but not wired up; the
+    # thresholds used to be hardcoded 5/30 in auth_service.)
+    MAX_LOGIN_ATTEMPTS: int = 5  # Consecutive failures before locking
+    ACCOUNT_LOCKOUT_DURATION_MINUTES: int = 15  # How long the account stays locked
+    # When True, a locked-out sign-in is told the account is temporarily locked
+    # (and roughly how much longer) instead of the generic "incorrect username
+    # or password". Friendlier — it stops users hammering a disguised lock — but
+    # it confirms the account exists. Set False for strict anti-enumeration
+    # (SEC-14) on internet-facing deployments.
+    ACCOUNT_LOCKOUT_REVEAL: bool = True
+
     # Vote signing key — used for HMAC-SHA256 vote integrity signatures.
     # Falls back to SECRET_KEY if not set.  A dedicated key is recommended so
     # that rotating SECRET_KEY does not invalidate existing vote signatures.
