@@ -1453,6 +1453,78 @@ const TemplateModal: React.FC<{
       due_date_type: 'calendar_period',
       period_start_month: 1,
       period_start_day: 1,
+      source: 'national',
+      registry_name: 'OSHA',
+      registry_code: '29 CFR 1910.120',
+    },
+    {
+      name: 'Bloodborne Pathogens Annual Refresher',
+      description: 'Annual bloodborne pathogens and exposure control plan training required by OSHA 29 CFR 1910.1030 for members with occupational exposure',
+      requirement_type: 'hours',
+      training_type: 'refresher',
+      required_hours: 2,
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'OSHA',
+      registry_code: '29 CFR 1910.1030',
+    },
+    {
+      name: 'HIPAA Privacy & Security Awareness',
+      description: 'Annual HIPAA privacy and security training for all personnel with access to protected health information (patient care reports, EMS records)',
+      requirement_type: 'hours',
+      training_type: 'continuing_education',
+      required_hours: 1,
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'HIPAA',
+      registry_code: '45 CFR 164.530(b)',
+    },
+    {
+      name: 'SCBA Fit Test & Respiratory Protection',
+      description: 'Annual respirator fit testing and respiratory protection training required by OSHA 29 CFR 1910.134',
+      requirement_type: 'checklist',
+      checklist_items: [
+        'Medical clearance for respirator use current',
+        'Annual quantitative/qualitative fit test passed',
+        'SCBA donning, doffing, and emergency procedures reviewed',
+        'Facepiece seal check and user maintenance reviewed',
+      ],
+      frequency: 'annual',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'OSHA',
+      registry_code: '29 CFR 1910.134',
+    },
+    {
+      name: 'NIMS/ICS Initial Certification',
+      description: 'One-time incident command system courses required for emergency responders under the National Incident Management System',
+      requirement_type: 'courses',
+      training_type: 'certification',
+      required_courses: [
+        'ICS-100: Introduction to the Incident Command System',
+        'ICS-200: Basic Incident Command System for Initial Response',
+        'IS-700: An Introduction to the National Incident Management System',
+        'IS-800: National Response Framework, An Introduction',
+      ],
+      frequency: 'one_time',
+      applies_to_all: true,
+      due_date_type: 'calendar_period',
+      period_start_month: 1,
+      period_start_day: 1,
+      source: 'national',
+      registry_name: 'FEMA',
+      registry_code: 'NIMS',
     },
     {
       name: 'New Member Orientation Checklist',
@@ -1524,6 +1596,9 @@ const TemplateModal: React.FC<{
                 )}
                 {template.checklist_items && (
                   <span className="text-theme-text-muted text-xs">{template.checklist_items.length} items</span>
+                )}
+                {template.required_courses && (
+                  <span className="text-theme-text-muted text-xs">{template.required_courses.length} courses</span>
                 )}
                 <span className="text-theme-text-muted text-xs capitalize">{template.frequency.replace('_', ' ')}</span>
               </div>
