@@ -383,7 +383,9 @@ async def get_or_create_session(
     # Guard: if an organization already exists, block new onboarding sessions
     from app.models.user import Organization
 
-    org_result = await db.execute(select(Organization).limit(1))
+    org_result = await db.execute(
+        select(Organization).order_by(Organization.created_at.asc()).limit(1)
+    )
     if org_result.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
