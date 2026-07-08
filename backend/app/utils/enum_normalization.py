@@ -106,11 +106,15 @@ async def _normalize_one(db: AsyncSession, schema: str, spec: _EnumColumn) -> bo
     tbl = f"`{spec.table.replace('`', '``')}`"
     col = f"`{spec.column.replace('`', '``')}`"
 
-    # 1. Expand to a superset so both the stale names and canonical values fit.
-    superset = list(dict.fromkeys(current + target))
-    await db.execute(
-        text(f"ALTER TABLE {tbl} MODIFY {col} ENUM({_enum_clause(superset)}) NOT NULL")
-    )
+    # MySQL ENUM labels are case-insensitive, so 'PENDING' and 'pending' collide
+    # in a single ENUM definition (error 1291) — a superset of old+new labels is
+    # rejected. Route through VARCHAR instead: converting ENUM→VARCHAR preserves
+    # the current label strings as plain text, which can then be rewritten to
+    # the lowercase values before the column is redefined as the canonical
+    # lowercase ENUM.
+
+    # 1. ENUM → VARCHAR (rows keep their current 'PHYSICAL_EXAM'/'OFFICER' text).
+    await db.execute(text(f"ALTER TABLE {tbl} MODIFY {col} VARCHAR(64) NOT NULL"))
 
     # 2. Rewrite rows from member NAME (UPPERCASE) to member value (lowercase).
     #    Mapping by name is exact and independent of any case relationship.
@@ -121,7 +125,7 @@ async def _normalize_one(db: AsyncSession, schema: str, spec: _EnumColumn) -> bo
                 {"val": member.value, "name": member.name},
             )
 
-    # 3. Shrink to the canonical lowercase set, restoring NOT NULL + default.
+    # 3. VARCHAR → canonical lowercase ENUM, restoring NOT NULL + default.
     default_sql = f" DEFAULT '{spec.default}'" if spec.default is not None else ""
     await db.execute(
         text(

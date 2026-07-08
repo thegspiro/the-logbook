@@ -93,7 +93,6 @@ def upgrade() -> None:
     is_mysql = bind.dialect.name == "mysql"
 
     for table, column, lower, default in _COLUMNS:
-        upper = [v.upper() for v in lower]
         tbl, col = _quote(table), _quote(column)
 
         if not is_mysql:
@@ -101,8 +100,11 @@ def upgrade() -> None:
             op.execute(f"UPDATE {tbl} SET {col} = LOWER({col})")
             continue
 
-        superset = _enum_clause(list(dict.fromkeys(upper + lower)))
-        op.execute(f"ALTER TABLE {tbl} MODIFY {col} ENUM({superset}) NOT NULL")
+        # MySQL ENUM labels are case-insensitive, so old (UPPERCASE) and new
+        # (lowercase) labels cannot share one ENUM (error 1291). Route through
+        # VARCHAR: ENUM→VARCHAR keeps the current label text, which is then
+        # lowercased before the canonical lowercase ENUM is applied.
+        op.execute(f"ALTER TABLE {tbl} MODIFY {col} VARCHAR(64) NOT NULL")
         op.execute(f"UPDATE {tbl} SET {col} = LOWER({col})")
         default_sql = f" DEFAULT '{default}'" if default is not None else ""
         op.execute(
@@ -123,8 +125,7 @@ def downgrade() -> None:
             op.execute(f"UPDATE {tbl} SET {col} = UPPER({col})")
             continue
 
-        superset = _enum_clause(list(dict.fromkeys(upper + lower)))
-        op.execute(f"ALTER TABLE {tbl} MODIFY {col} ENUM({superset}) NOT NULL")
+        op.execute(f"ALTER TABLE {tbl} MODIFY {col} VARCHAR(64) NOT NULL")
         op.execute(f"UPDATE {tbl} SET {col} = UPPER({col})")
         default_sql = f" DEFAULT '{default.upper()}'" if default is not None else ""
         op.execute(
