@@ -89,22 +89,57 @@ class AuthService:
         Returns:
             Tuple of (User, None) on success, or (None, error_message) on failure
         """
-        # Try to find user by username or email, scoped to the single org
-        # to prevent cross-organization auth if multiple orgs ever exist.
-        org_result = await self.db.execute(select(Organization).limit(1))
-        org = org_result.scalar_one_or_none()
+        # Resolve the account by credentials. This is a single-org system, so
+        # the canonical organization is the oldest active one — the same rule
+        # registration uses. The previous lookup scoped to
+        # `select(Organization).limit(1)` which had NO ORDER BY: with more than
+        # one organization row it non-deterministically scoped login to an
+        # arbitrary org and rejected valid users with the generic "incorrect
+        # password" (and could flip between restarts). Prefer the canonical org
+        # but never let an org mismatch hide an otherwise-valid account.
+        canonical_org = (
+            await self.db.execute(
+                select(Organization)
+                .where(Organization.active.is_(True))
+                .order_by(Organization.created_at.asc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
 
-        query = (
-            select(User)
-            .where((User.username == username) | (User.email == username))
-            .where(User.deleted_at.is_(None))
-            .options(selectinload(User.roles))
+        candidates = (
+            (
+                await self.db.execute(
+                    select(User)
+                    .where((User.username == username) | (User.email == username))
+                    .where(User.deleted_at.is_(None))
+                    .order_by(User.created_at.asc())
+                    .options(selectinload(User.roles))
+                )
+            )
+            .scalars()
+            .all()
         )
-        if org:
-            query = query.where(User.organization_id == str(org.id))
 
-        result = await self.db.execute(query)
-        user = result.scalar_one_or_none()
+        user = None
+        if candidates:
+            if canonical_org is not None:
+                user = next(
+                    (
+                        u
+                        for u in candidates
+                        if str(u.organization_id) == str(canonical_org.id)
+                    ),
+                    None,
+                )
+            # Single-org fallback: never hide a valid account behind an org
+            # mismatch — use the earliest-created match.
+            user = user or candidates[0]
+            if len(candidates) > 1:
+                logger.warning(
+                    "Login identifier matched multiple accounts across "
+                    "organizations; resolved deterministically. Investigate "
+                    "duplicate organizations/users."
+                )
 
         if not user:
             # SEC-02: Perform a dummy hash to prevent timing-based username

@@ -1012,7 +1012,9 @@ class OnboardingService:
         normalized = {mid.replace("-", "_") for mid in final_modules}
         modules_dict = {k: k in normalized for k in configurable_keys}
 
-        result = await self.db.execute(select(Organization).limit(1))
+        result = await self.db.execute(
+            select(Organization).order_by(Organization.created_at.asc()).limit(1)
+        )
         org = result.scalar_one_or_none()
         if org:
             settings_dict = copy.deepcopy(org.settings or {})
@@ -1152,7 +1154,9 @@ class OnboardingService:
         are available immediately after setup.
         """
         try:
-            org_result = await self.db.execute(select(Organization).limit(1))
+            org_result = await self.db.execute(
+                select(Organization).order_by(Organization.created_at.asc()).limit(1)
+            )
             org = org_result.scalar_one_or_none()
 
             user_result = await self.db.execute(select(User).limit(1))

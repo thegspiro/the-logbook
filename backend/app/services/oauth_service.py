@@ -48,7 +48,9 @@ async def _link_existing_user(
     sign in with a different provider than the one already linked.
     """
     # Single-org system: scope the lookup to the active organization.
-    org_result = await db.execute(select(Organization).limit(1))
+    org_result = await db.execute(
+        select(Organization).order_by(Organization.created_at.asc()).limit(1)
+    )
     org = org_result.scalar_one_or_none()
 
     query = select(User).where(User.email == email).where(User.deleted_at.is_(None))

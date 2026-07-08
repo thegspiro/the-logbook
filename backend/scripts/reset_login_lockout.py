@@ -43,7 +43,10 @@ from datetime import datetime, timezone  # noqa: E402
 
 from sqlalchemy import or_, select  # noqa: E402
 
-from app.core.database import async_session_factory  # noqa: E402
+from app.core.database import (  # noqa: E402
+    async_session_factory,
+    database_manager,
+)
 from app.core.security import hash_password, verify_password  # noqa: E402
 from app.models.user import Organization, User  # noqa: E402
 
@@ -207,9 +210,19 @@ def main() -> int:
         help="Check whether this password matches the stored hash (no changes)",
     )
     args = parser.parse_args()
-    return asyncio.run(
-        _run(args.identifier, args.unlock, args.new_password, args.verify_password)
-    )
+
+    async def _main() -> int:
+        # Standalone script: initialize the DB engine (the app normally does
+        # this during startup) before using async_session_factory().
+        await database_manager.connect()
+        try:
+            return await _run(
+                args.identifier, args.unlock, args.new_password, args.verify_password
+            )
+        finally:
+            await database_manager.disconnect()
+
+    return asyncio.run(_main())
 
 
 if __name__ == "__main__":
