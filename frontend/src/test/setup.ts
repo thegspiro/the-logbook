@@ -34,6 +34,21 @@ Object.defineProperty(window, 'print', {
   value: vi.fn(),
 });
 
+// jsdom does not implement navigator.mediaDevices. Provide a stub so camera /
+// scanner code treats the test environment as a secure context (the real
+// secure-context guard checks for this API's presence). Individual tests still
+// drive the scanner via the mocked html5-qrcode library.
+if (!('mediaDevices' in navigator)) {
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    writable: true,
+    value: {
+      getUserMedia: vi.fn().mockResolvedValue(null),
+      enumerateDevices: vi.fn().mockResolvedValue([]),
+    },
+  });
+}
+
 // Mock IntersectionObserver
 globalThis.IntersectionObserver = class IntersectionObserver {
   readonly root: Element | null = null;

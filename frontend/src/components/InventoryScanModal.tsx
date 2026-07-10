@@ -33,6 +33,7 @@ import {
   BARCODE_SCAN_CONFIG,
   INVENTORY_BARCODE_FORMATS,
   NATIVE_BARCODE_FORMATS,
+  getCameraUnavailableReason,
 } from '../constants/camera';
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -92,11 +93,15 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
+  // Whether the native BarcodeDetector is present AND supports our formats.
+  // Verified asynchronously on mount; until then we use the html5-qrcode path.
+  const [nativeDetectorReady, setNativeDetectorReady] = useState(false);
 
   // Refs — native BarcodeDetector path only
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const detectorRef = useRef<BarcodeDetector | null>(null);
+  const nativeFormatsRef = useRef<string[]>([]);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -121,6 +126,31 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     formatsToSupport: INVENTORY_BARCODE_FORMATS,
   });
 
+  // Verify the native BarcodeDetector actually supports our formats before
+  // preferring it over html5-qrcode. Some Android builds expose the API but
+  // support only a subset (or none) of our formats, which would otherwise scan
+  // nothing. When unusable we fall back to html5-qrcode (broad support incl.
+  // iOS Safari).
+  useEffect(() => {
+    if (!HAS_BARCODE_DETECTOR) return undefined;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const supported = await BarcodeDetector.getSupportedFormats();
+        const usable = NATIVE_BARCODE_FORMATS.filter((f) => supported.includes(f));
+        if (!cancelled) {
+          nativeFormatsRef.current = usable;
+          setNativeDetectorReady(usable.length > 0);
+        }
+      } catch {
+        if (!cancelled) setNativeDetectorReady(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const stopCamera = useCallback(() => {
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
@@ -130,11 +160,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
-    if (!HAS_BARCODE_DETECTOR) {
+    if (!nativeDetectorReady) {
       void stopHtml5Scanner();
     }
     setCameraActive(false);
-  }, [stopHtml5Scanner]);
+  }, [stopHtml5Scanner, nativeDetectorReady]);
 
   /** Request a camera stream, trying rear first then falling back to front. */
   const acquireCameraStream = async (): Promise<MediaStream> => {
@@ -150,14 +180,22 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   };
 
   const startCamera = useCallback(async () => {
-    if (HAS_BARCODE_DETECTOR) {
+    // Actionable message on insecure origins (HTTP LAN) where the camera APIs
+    // are absent, instead of a misleading "permission denied".
+    const unavailable = getCameraUnavailableReason();
+    if (unavailable) {
+      setLookupError(unavailable);
+      setCameraActive(false);
+      return;
+    }
+
+    if (nativeDetectorReady) {
       try {
         const stream = await acquireCameraStream();
         streamRef.current = stream;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        detectorRef.current = new (window as any).BarcodeDetector({
-          formats: [...NATIVE_BARCODE_FORMATS],
+        detectorRef.current = new BarcodeDetector({
+          formats: nativeFormatsRef.current,
         });
 
         setCameraActive(true);
@@ -174,7 +212,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         setCameraActive(false);
       }
     }
-  }, [startHtml5Scanner]);
+  }, [startHtml5Scanner, nativeDetectorReady]);
 
   // Once cameraActive flips to true the <video> element mounts.
   // Wire the stream to it and start the barcode-polling interval.
@@ -677,7 +715,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
               </div>
 
               {/* Camera preview: native video for BarcodeDetector, div for html5-qrcode */}
-              {HAS_BARCODE_DETECTOR ? (
+              {nativeDetectorReady ? (
                 <div
                   className={`relative rounded-lg overflow-hidden bg-black ${cameraActive ? '' : 'hidden'}`}
                 >

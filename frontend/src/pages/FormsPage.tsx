@@ -1088,7 +1088,9 @@ const FormsPage: React.FC = () => {
                                 <QrCode className="w-4 h-4" aria-hidden="true" />
                                 <span>QR Code</span>
                               </label>
-                              <div className="flex flex-col items-center p-4 bg-theme-surface rounded-lg border border-theme-surface-border">
+                              {/* White background regardless of theme — a QR on
+                                  a dark surface can fail to scan. */}
+                              <div className="flex flex-col items-center p-4 bg-white rounded-lg border border-theme-surface-border">
                                 <QRCodeSVG
                                   id={`qr-${form.public_slug}`}
                                   value={getPublicUrl(form.public_slug)}
@@ -1102,18 +1104,29 @@ const FormsPage: React.FC = () => {
                                   onClick={() => {
                                     const svg = document.getElementById(`qr-${form.public_slug}`);
                                     if (!svg) return;
+                                    const ctx = document.createElement('canvas').getContext('2d');
+                                    if (!ctx) return;
+                                    const canvas = ctx.canvas;
                                     const svgData = new XMLSerializer().serializeToString(svg);
-                                    const canvas = document.createElement('canvas');
-                                    const ctx = canvas.getContext('2d');
                                     const img = new Image();
                                     img.onload = () => {
-                                      canvas.width = img.width;
-                                      canvas.height = img.height;
-                                      ctx?.drawImage(img, 0, 0);
+                                      canvas.width = img.width || 200;
+                                      canvas.height = img.height || 200;
+                                      // Paint a white backdrop first so the PNG is
+                                      // scannable even if the SVG serializes with a
+                                      // transparent background on some browsers.
+                                      ctx.fillStyle = '#ffffff';
+                                      ctx.fillRect(0, 0, canvas.width, canvas.height);
+                                      ctx.drawImage(img, 0, 0);
                                       const a = document.createElement('a');
                                       a.download = `${form.name.replace(/[^a-z0-9]/gi, '_')}_qr.png`;
                                       a.href = canvas.toDataURL('image/png');
                                       a.click();
+                                    };
+                                    img.onerror = () => {
+                                      // SVG→PNG rasterization can fail on some mobile
+                                      // browsers; the adjacent SVG-download button is
+                                      // the fallback, so fail quietly here.
                                     };
                                     img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
                                   }}

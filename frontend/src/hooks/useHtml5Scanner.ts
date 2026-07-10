@@ -1,5 +1,27 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Html5Qrcode, type Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { getCameraUnavailableReason } from '../constants/camera';
+
+/**
+ * Builds a responsive qrbox callback: html5-qrcode invokes it with the live
+ * viewfinder size, letting the scan region fit small phones and large tablets
+ * alike instead of a fixed pixel box that overflows narrow screens or leaves a
+ * tiny target on wide ones. The configured size is treated as the maximum;
+ * aspect ratio is preserved (linear barcodes want a wide box, QR a square one).
+ */
+function makeResponsiveQrbox(target: { width: number; height: number }) {
+  return (viewfinderWidth: number, viewfinderHeight: number) => {
+    const scale = Math.min(
+      1,
+      (viewfinderWidth * 0.8) / target.width,
+      (viewfinderHeight * 0.8) / target.height,
+    );
+    return {
+      width: Math.max(1, Math.round(target.width * scale)),
+      height: Math.max(1, Math.round(target.height * scale)),
+    };
+  };
+}
 
 interface UseHtml5ScannerOptions {
   /** DOM element ID where html5-qrcode renders the camera preview. */
@@ -51,6 +73,11 @@ export function useHtml5Scanner({
     // Stop any existing instance first
     await stopScanner();
 
+    // Fail fast with an actionable message on insecure origins (HTTP LAN),
+    // where the camera APIs are simply absent.
+    const unavailable = getCameraUnavailableReason();
+    if (unavailable) throw new Error(unavailable);
+
     const libConfig: { formatsToSupport?: Html5QrcodeSupportedFormats[]; verbose: boolean } = {
       verbose: false,
     };
@@ -64,25 +91,35 @@ export function useHtml5Scanner({
     const onFailure = () => {};
 
     // Enumerate cameras first — this triggers the browser permission prompt
-    // and gives us device IDs that work reliably across desktop and mobile.
+    // and gives us device IDs across desktop and mobile.
     const cameras = await Html5Qrcode.getCameras();
     if (cameras.length === 0) {
       throw new Error('No cameras found on this device');
     }
 
-    // Prefer a rear/environment camera (mobile); fall back to the first available (desktop).
-    const backCamera = cameras.find(
-      (c) => /back|rear|environment/i.test(c.label),
-    );
-    const cameraId = (backCamera ?? cameras[0])?.id;
-    if (!cameraId) {
-      throw new Error('No cameras found on this device');
-    }
+    // Choose the scan target. Use a back-camera device id only when its label
+    // reliably identifies it, or when there is a single camera (desktop
+    // webcam). Otherwise hand html5-qrcode a facingMode:environment constraint
+    // and let the browser pick the rear camera — matching labels alone is
+    // unreliable on mobile (labels are empty before permission is granted and
+    // localized on many devices), and falling back to cameras[0] frequently
+    // selects the FRONT camera.
+    const backCamera = cameras.find((c) => /back|rear|environment/i.test(c.label));
+    const cameraTarget: string | MediaTrackConstraints =
+      backCamera?.id ??
+      (cameras.length === 1 && cameras[0]
+        ? cameras[0].id
+        : { facingMode: { ideal: 'environment' } });
+
+    const startConfig = {
+      fps: scanConfig.fps,
+      qrbox: makeResponsiveQrbox(scanConfig.qrbox),
+    };
 
     const html5QrCode = new Html5Qrcode(viewportId, libConfig);
     scannerRef.current = html5QrCode;
 
-    await html5QrCode.start(cameraId, scanConfig, onSuccess, onFailure);
+    await html5QrCode.start(cameraTarget, startConfig, onSuccess, onFailure);
     setScanning(true);
   }, [viewportId, scanConfig, formatsToSupport, stopScanner]);
 

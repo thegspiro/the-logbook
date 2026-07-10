@@ -20,6 +20,7 @@ import type { InventoryItem } from '../types';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { getTodayLocalDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { prefersPdfOverBrowserPrint } from '../../../utils/printEnvironment';
 import toast from 'react-hot-toast';
 
 // ── Label size presets ──────────────────────────────────────────
@@ -559,6 +560,12 @@ const InventoryBarcodePrintPage: React.FC = () => {
   const handlePrint = () => {
     if (!barcodesReady) {
       toast.error('Barcodes are still rendering. Please wait a moment.');
+      return;
+    }
+    // On phones/tablets the hidden-iframe print pipeline is unreliable (mobile
+    // Safari prints blank), so hand off to the server-generated PDF instead.
+    if (prefersPdfOverBrowserPrint()) {
+      void handleDownloadPdf();
       return;
     }
     const container = document.querySelector('.barcode-labels-container');
@@ -1169,26 +1176,31 @@ const InventoryBarcodePrintPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-4 pb-6 print:max-w-none print:p-0">
         <div className="card-secondary p-4 print:bg-white print:p-0 print:border-0 print:shadow-none">
           <h3 className="text-sm font-medium text-theme-text-muted mb-3 print:hidden">Preview</h3>
-          <div
-            className="barcode-labels-container"
-            style={{
-              display: isThermal ? 'flex' : 'grid',
-              flexDirection: isThermal ? 'column' : undefined,
-              gridTemplateColumns: isThermal ? undefined : `repeat(${preset.columns}, ${preset.width})`,
-              gap: isThermal ? '8px' : '0',
-              alignItems: isThermal ? 'center' : undefined,
-              justifyContent: isThermal ? undefined : 'center',
-            }}
-          >
-            {labelItems.map((item, index) => (
-              <BarcodeLabel
-                key={`${item.id}-${index}`}
-                item={item}
-                preset={preset}
-                extraLines={extraLines}
-                onRendered={handleLabelRendered}
-              />
-            ))}
+          {/* Fixed inch-width label grid can exceed a phone's viewport — scroll
+              it horizontally on screen. print:overflow-visible keeps a direct
+              browser print from clipping the sheet. */}
+          <div className="overflow-x-auto print:overflow-visible">
+            <div
+              className="barcode-labels-container"
+              style={{
+                display: isThermal ? 'flex' : 'grid',
+                flexDirection: isThermal ? 'column' : undefined,
+                gridTemplateColumns: isThermal ? undefined : `repeat(${preset.columns}, ${preset.width})`,
+                gap: isThermal ? '8px' : '0',
+                alignItems: isThermal ? 'center' : undefined,
+                justifyContent: isThermal ? undefined : 'center',
+              }}
+            >
+              {labelItems.map((item, index) => (
+                <BarcodeLabel
+                  key={`${item.id}-${index}`}
+                  item={item}
+                  preset={preset}
+                  extraLines={extraLines}
+                  onRendered={handleLabelRendered}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </div>

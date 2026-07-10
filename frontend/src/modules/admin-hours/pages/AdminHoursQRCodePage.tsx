@@ -20,7 +20,13 @@ const AdminHoursQRCodePage: React.FC = () => {
   const [qrData, setQrData] = useState<AdminHoursQRData | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!categoryId) return;
+    if (!categoryId) {
+      // Without a category there is nothing to fetch — surface an error rather
+      // than leaving the page stuck on the loading spinner forever.
+      setError('No category specified.');
+      setLoading(false);
+      return;
+    }
     try {
       setError(null);
       const data = await adminHoursCategoryService.getQRData(categoryId);
