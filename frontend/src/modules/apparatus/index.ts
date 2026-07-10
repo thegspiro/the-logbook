@@ -12,11 +12,10 @@
 // Export routes
 export { getApparatusRoutes } from './routes';
 
-// Export pages
-export * from './pages';
-
-// Export components
-export * from './components';
+// NOTE: Pages/components are intentionally NOT re-exported here. App.tsx imports
+// this barrel only for getApparatusRoutes (which lazy-loads pages via
+// routes.tsx). Re-exporting them statically drags their code into the eager
+// entry chunk, defeating the lazy routes. Import from the deep path if needed.
 
 // Export types
 export * from './types';

@@ -608,7 +608,7 @@ export const MemberProfilePage: React.FC = () => {
                     </div>
                   )}
                   {canEdit && (
-                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer">
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -636,7 +636,7 @@ export const MemberProfilePage: React.FC = () => {
                       onClick={() => {
                         void handlePhotoRemove();
                       }}
-                      className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                      className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-red-600"
                       aria-label="Remove photo"
                       title="Remove photo"
                     >

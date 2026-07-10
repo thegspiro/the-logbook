@@ -748,7 +748,7 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
           {kioskUrl && (
             <button onClick={() => setShowQR(prev => !prev)} aria-label="Toggle QR code" className="p-1 text-theme-text-muted hover:text-blue-500 rounded-sm transition-colors" title="Show QR code">
               <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
@@ -770,7 +770,7 @@ function RoomCard({ room, onEdit, onDelete }: { room: Location; onEdit: (r: Loca
         >
           {copied ? <Check className="w-3 h-3 text-green-500" /> : <Monitor className="w-3 h-3" />}
           <span className="font-mono truncate">/display/{room.display_code}</span>
-          {!copied && <Copy className="w-3 h-3 opacity-0 group-hover:opacity-100" />}
+          {!copied && <Copy className="w-3 h-3 sm:opacity-0 sm:group-hover:opacity-100" />}
         </button>
       )}
       {showQR && kioskUrl && (

@@ -1448,6 +1448,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     <img
                       src={url}
                       alt={`Photo ${idx + 1}`}
+                      loading="lazy"
+                      decoding="async"
                       className="w-16 h-16 rounded-lg object-cover border border-theme-surface-border"
                     />
                     <button

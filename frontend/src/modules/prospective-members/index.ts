@@ -14,11 +14,11 @@
 // Export routes
 export { getProspectiveMembersRoutes, getProspectiveMembersPublicRoutes } from './routes';
 
-// Export pages
-export * from './pages';
-
-// Export components
-export * from './components';
+// NOTE: Pages/components are intentionally NOT re-exported here. App.tsx imports
+// this barrel only for the route functions (which lazy-load pages via
+// routes.tsx). Re-exporting pages/components statically pulls their heavy deps
+// (e.g. @dnd-kit in AutomatedEmailConfig) into the eager entry chunk, defeating
+// the lazy routes. Import from the deep path (./pages, ./components) if needed.
 
 // Export types
 export * from './types';

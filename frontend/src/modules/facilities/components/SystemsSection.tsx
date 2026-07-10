@@ -241,7 +241,7 @@ export default function SystemsSection({ facilityId }: Props) {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   <button onClick={() => openEdit(sys)} className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors" aria-label={`Edit ${sys.name}`}>
                     <Pencil className="w-3.5 h-3.5" />
                   </button>

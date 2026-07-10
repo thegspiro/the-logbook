@@ -90,7 +90,7 @@ export default function MaintenanceSection({ facilityId }: Props) {
                     {record.workOrderNumber && <span>WO# {record.workOrderNumber}</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                   {!record.isCompleted && (
                     <button onClick={() => { void handleComplete(record); }} title="Mark completed" aria-label="Mark completed" className="p-1.5 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors">
                       <CheckCircle2 className="w-3.5 h-3.5" />

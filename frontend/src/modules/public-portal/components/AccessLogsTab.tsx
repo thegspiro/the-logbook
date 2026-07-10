@@ -213,7 +213,7 @@ export const AccessLogsTab: React.FC = () => {
         </div>
       ) : (
         <>
-          <div className="bg-theme-surface border border-theme-surface-border rounded-lg overflow-hidden">
+          <div className="bg-theme-surface border border-theme-surface-border rounded-lg overflow-x-auto">
             <table className="min-w-full divide-y divide-theme-surface-border">
               <thead className="bg-theme-surface-secondary">
                 <tr>

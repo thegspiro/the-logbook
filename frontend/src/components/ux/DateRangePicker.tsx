@@ -69,7 +69,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
           {hasValue && (
             <button
               onClick={handleClear}
-              className="p-1.5 text-theme-text-muted hover:text-theme-text-primary"
+              className="p-1.5 max-sm:min-w-[44px] max-sm:min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary"
               aria-label="Clear date range"
             >
               <X className="w-3.5 h-3.5" />

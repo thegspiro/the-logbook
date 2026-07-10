@@ -277,7 +277,7 @@ export default function ApparatusBasicPage() {
                       <p className="text-sm text-theme-text-secondary">{apparatus.unit_number}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                     <button onClick={() => openEdit(apparatus)} title="Edit" aria-label="Edit apparatus"
                       className="p-2 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg transition-colors"
                     >
