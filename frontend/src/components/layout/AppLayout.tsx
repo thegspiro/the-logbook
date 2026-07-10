@@ -10,6 +10,9 @@ import { TopProgressBar, CommandPalette, PageTransition } from '../ux';
 import { useNavigationShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { useNotificationPoller } from '../../hooks/useNotificationCount';
 import { useOfflineSyncEngine } from '../../hooks/useOfflineSyncEngine';
+import { usePullToRefresh } from '../../hooks/usePullToRefresh';
+import { usePullToRefreshContext } from '../../contexts/PullToRefreshContext';
+import { PullToRefreshIndicator } from '../PullToRefreshIndicator';
 
 /** SEC: Validate logo URL protocol to prevent javascript: or data:text/html XSS.
  *  Only safe raster image data URIs are allowed — SVG can contain embedded JS. */
@@ -50,6 +53,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   // Drain the offline write queue when connectivity returns
   useOfflineSyncEngine();
+
+  // Layout-level pull-to-refresh: pages opt in via useRegisterPullToRefresh,
+  // supplying their own data-refresh handler. The gesture stays disabled until
+  // a page registers one, so no spinner appears on pages that don't support it.
+  const ptr = usePullToRefreshContext();
+  const runRefresh = ptr?.runRefresh;
+  const { pulling, refreshing, pullDistance } = usePullToRefresh({
+    onRefresh: runRefresh ?? (() => Promise.resolve()),
+    disabled: !ptr?.hasHandler,
+  });
 
   useEffect(() => {
     // Load branding from localStorage first (persists across sessions/logout)
@@ -126,6 +139,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     return (
       <div className="min-h-screen flex flex-col" style={{ background: 'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))' }}>
         <TopProgressBar />
+        <PullToRefreshIndicator
+          pulling={pulling}
+          refreshing={refreshing}
+          pullDistance={pullDistance}
+        />
         <CommandPalette />
         {/* Skip to main content link for keyboard users */}
         <a

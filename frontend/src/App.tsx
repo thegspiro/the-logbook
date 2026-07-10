@@ -16,6 +16,7 @@ import { UpdateNotification } from './components/UpdateNotification';
 
 // Theme
 import { ThemeProvider } from './contexts/ThemeContext';
+import { PullToRefreshProvider } from './contexts/PullToRefreshContext';
 
 // Protected Route & Layout
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -111,7 +112,9 @@ function App() {
                 <Route
                   element={
                     <ProtectedRoute>
-                      <AppLayout />
+                      <PullToRefreshProvider>
+                        <AppLayout />
+                      </PullToRefreshProvider>
                     </ProtectedRoute>
                   }
                 >
