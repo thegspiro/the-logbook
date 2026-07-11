@@ -271,103 +271,131 @@
    Use these instead of repeating long Tailwind class strings inline.
    To update the look of all inputs/cards/buttons, edit here.
    ================================================================ */
+/* --- Form Controls --- (#7 focus border color, #8 transition on focus, #9 inset shadow on focus) */
 @utility form-input {
-  /* --- Form Controls --- (#7 focus border color, #8 transition on focus, #9 inset shadow on focus) */
   @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden;
 }
+
 @utility form-input-sm {
   @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-sm border px-3 py-1.5 text-sm transition-all duration-150 focus:ring-1 focus:outline-hidden;
 }
+
 @utility form-checkbox {
   @apply bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-blue-700 dark:text-blue-500;
 }
+
 @utility form-label {
   @apply text-theme-text-secondary mb-1 block text-sm font-medium;
 }
+
 @utility form-label-sm {
   @apply text-theme-text-secondary mb-1 block text-xs font-medium;
 }
+
+/* --- Cards & Surfaces --- (#1 shadow depth, #2 hover lift, #3 smooth transitions) */
 @utility card {
-  /* --- Cards & Surfaces --- (#1 shadow depth, #2 hover lift, #3 smooth transitions) */
   @apply bg-theme-surface border-theme-surface-border rounded-lg border shadow-sm backdrop-blur-xs transition-shadow duration-200;
 }
+
 @utility card-hover {
   /* Card with interactive hover state */
   @apply card hover:border-theme-text-muted/20 hover:shadow-md;
 }
+
 @utility card-secondary {
   @apply bg-theme-surface-secondary border-theme-surface-border rounded-lg border shadow-sm transition-shadow duration-200;
 }
+
+/* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
 @utility btn-primary {
-  /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
   @apply focus:ring-theme-focus-ring rounded-lg bg-red-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-red-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
+
 @utility btn-secondary {
   @apply bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border focus:ring-theme-focus-ring rounded-lg border px-4 py-2 shadow-sm transition-all duration-150 ease-out hover:shadow focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
+
 @utility btn-success {
   @apply focus:ring-theme-focus-ring rounded-lg bg-green-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-green-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
+
 @utility btn-info {
   @apply focus:ring-theme-focus-ring rounded-lg bg-blue-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-blue-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
+
 @utility btn-warning {
   @apply focus:ring-theme-focus-ring rounded-lg bg-yellow-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-yellow-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
+
+/* --- Standardized Button Sizes (#79) --- */
 @utility btn-sm {
-  /* --- Standardized Button Sizes (#79) --- */
   @apply rounded-md px-2.5 py-1.5 text-xs;
 }
+
 @utility btn-md {
   @apply rounded-lg px-4 py-2 text-sm;
 }
+
 @utility btn-lg {
   @apply rounded-lg px-6 py-3 text-base;
 }
+
 @utility btn-icon {
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2;
 }
+
 @utility btn-icon-sm {
   @apply inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-1.5;
 }
+
+/* --- Stat Cards --- (#10 stat card shadow + hover) */
 @utility stat-card {
-  /* --- Stat Cards --- (#10 stat card shadow + hover) */
   @apply bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm backdrop-blur-xs transition-all duration-200 hover:shadow-md;
 }
+
+/* --- Alert / Info Boxes --- (#11 left accent border on alerts) */
 @utility alert-info {
-  /* --- Alert / Info Boxes --- (#11 left accent border on alerts) */
   @apply bg-theme-alert-info-bg border-theme-alert-info-border border-l-theme-alert-info-icon rounded-lg border border-l-4 p-4;
 }
+
 @utility alert-success {
   @apply bg-theme-alert-success-bg border-theme-alert-success-border border-l-theme-alert-success-icon rounded-lg border border-l-4 p-4;
 }
+
 @utility alert-warning {
   @apply bg-theme-alert-warning-bg border-theme-alert-warning-border border-l-theme-alert-warning-icon rounded-lg border border-l-4 p-4;
 }
+
 @utility alert-purple {
   @apply bg-theme-alert-purple-bg border-theme-alert-purple-border border-l-theme-alert-purple-icon rounded-lg border border-l-4 p-4;
 }
+
 @utility alert-danger {
   @apply bg-theme-alert-danger-bg border-theme-alert-danger-border border-l-theme-alert-danger-icon rounded-lg border border-l-4 p-4;
 }
+
+/* --- Toggle Switch --- */
 @utility toggle-knob {
-  /* --- Toggle Switch --- */
   /* Standard toggle-switch knob: always a visible light circle */
   @apply pointer-events-none inline-block transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out dark:bg-slate-200;
 }
+
 @utility toggle-knob-sm {
   @apply toggle-knob h-4 w-4;
 }
+
 @utility toggle-knob-md {
   @apply toggle-knob h-5 w-5;
 }
+
+/* --- QR Code Container --- */
 @utility qr-container {
-  /* --- QR Code Container --- */
   /* QR codes require a white background for scanner contrast, regardless of theme */
   @apply border-theme-surface-border rounded-lg border-4 bg-white p-8;
 }
+
+/* --- Dynamic Color Dot/Badge --- */
 @utility color-dot {
-  /* --- Dynamic Color Dot/Badge --- */
   /* For user-selected category colors applied via inline style.
      Add filter: brightness() in dark mode so the dot stays visible. */
   @apply rounded-full;
@@ -376,9 +404,9 @@
     filter: brightness(1.2);
   }
 }
-@utility drawer-panel {
-  /* --- Mobile-Responsive Patterns --- (#12 drawer slide-in animation) */
 
+/* --- Mobile-Responsive Patterns --- (#12 drawer slide-in animation) */
+@utility drawer-panel {
   /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
   @apply fixed top-0 right-0 z-50 flex h-full w-full flex-col shadow-2xl;
   @apply bg-theme-surface-modal border-theme-surface-border border-l;
@@ -388,6 +416,7 @@
     max-width: 32rem; /* ~512px, equivalent to max-w-lg */
   }
 }
+
 @utility action-bar {
   /* Drawer / modal action-button bars — wrap gracefully on small screens */
   @apply flex flex-wrap items-center gap-2;
@@ -398,6 +427,7 @@
     }
   }
 }
+
 @utility action-label {
   @media (max-width: 479px) {
     .action-bar & {
@@ -405,6 +435,7 @@
     }
   }
 }
+
 @utility form-grid-2 {
   /* Responsive form grids: 1-col on mobile, multi-col on sm+ */
   @apply grid grid-cols-1 gap-3;
@@ -412,12 +443,14 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
 @utility form-grid-3 {
   @apply grid grid-cols-1 gap-2;
   @media (min-width: 640px) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
 @utility tab-scroll {
   /* Horizontally-scrollable tab bar with hidden scrollbar */
   @apply border-theme-surface-border flex items-center gap-1 border-b;
@@ -432,6 +465,7 @@
     flex-shrink: 0;
   }
 }
+
 @utility table-col-secondary {
   /* Table column visibility tiers */
   display: none;
@@ -439,6 +473,7 @@
     display: table-cell;
   }
 }
+
 @utility table-col-tertiary {
   display: none;
   @media (min-width: 1024px) {
@@ -486,6 +521,7 @@
     display: none;
   }
 }
+
 @utility modal-body {
   /* Mobile-safe modal body — accounts for on-screen keyboard */
   @apply max-h-[85vh] overflow-y-auto;
@@ -493,16 +529,19 @@
     max-height: 90vh;
   }
 }
+
 @utility shimmer-skeleton {
   /* #13 Shimmer effect skeleton loader */
   background: linear-gradient(90deg, var(--surface-hover) 25%, var(--surface-secondary) 50%, var(--surface-hover) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.8s ease-in-out infinite;
 }
+
 @utility badge {
   /* #14 Polished badge/pill styling */
   @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors duration-150;
 }
+
 @utility link-underline {
   /* #15 Animated underline for links */
   @apply relative;
@@ -514,30 +553,37 @@
     @apply w-full;
   }
 }
+
 @utility nav-item-active {
   /* #16 Active navigation indicator with left border accent */
   @apply border-l-3 border-l-red-600 bg-red-600 text-white;
 }
+
 @utility glass-surface {
   /* #17 Glassmorphism surface for overlays */
   @apply bg-theme-surface/80 border-theme-surface-border/50 border backdrop-blur-md;
 }
+
 @utility text-gradient {
   /* #18 Gradient text for headings/hero elements */
   @apply bg-gradient-to-r from-red-600 to-red-400 bg-clip-text text-transparent;
 }
+
 @utility focus-ring-inset {
   /* #19 Inset focus ring for contained elements */
   @apply focus:ring-theme-focus-ring focus:ring-2 focus:outline-hidden focus:ring-inset;
 }
+
 @utility divider {
   /* #20 Styled section divider */
   @apply border-theme-surface-border my-4 border-t;
 }
+
 @utility mobile-touch-target {
   /* #21 Guaranteed mobile touch target size */
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center;
 }
+
 @utility mobile-stack {
   /* #22 Stack layout on mobile, flex row on desktop */
   @apply flex flex-col gap-2;
@@ -545,6 +591,7 @@
     @apply flex-row items-center;
   }
 }
+
 @utility mobile-full-btn {
   /* #23 Full-width buttons on mobile, auto on desktop */
   @apply w-full;
@@ -552,6 +599,7 @@
     @apply w-auto;
   }
 }
+
 @utility responsive-text-lg {
   /* #24 Responsive heading that scales with viewport */
   @apply text-lg;
@@ -562,6 +610,7 @@
     @apply text-2xl;
   }
 }
+
 @utility responsive-text-base {
   /* #25 Responsive body text */
   @apply text-sm;
@@ -569,6 +618,7 @@
     @apply text-base;
   }
 }
+
 @utility hscroll {
   /* #26 Horizontal scroll strip (hidden scrollbar, non-shrinking children).
      Like tab-scroll but without the flex/border-b, for pill rows and any
@@ -583,12 +633,14 @@
     flex-shrink: 0;
   }
 }
+
 @utility pb-safe {
   /* #27 Bottom padding equal to the device safe-area inset (0 on non-notched
      devices). For fixed/sticky bars whose inner content already provides its
      own visual padding. */
   padding-bottom: env(safe-area-inset-bottom);
 }
+
 @utility action-bar-safe {
   /* #28 Vertical padding for a sticky/fixed bottom action bar: a consistent gap
      on every device that grows to clear the home indicator on notched phones.
