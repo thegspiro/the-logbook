@@ -19,6 +19,7 @@ import toast from 'react-hot-toast';
 import { labelService } from '../../services/labelService';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { getTodayLocalDate } from '../../utils/dateFormatting';
+import { prefersPdfOverBrowserPrint } from '../../utils/printEnvironment';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
   CUSTOM_PRESET_ID, DEFAULT_PRESET_ID, LABEL_PRESETS, LabelPreset,
@@ -80,7 +81,7 @@ const BarcodeLabel: React.FC<{ item: LabelListItem; preset: LabelPreset }> = ({
           {item.subtitle}
         </div>
       ) : null}
-      {value ? <svg ref={svgRef} /> : (
+      {value ? <svg ref={svgRef} style={{ maxWidth: '100%', height: 'auto', display: 'block' }} /> : (
         <div style={{ fontSize: preset.subtitleFontSize, color: '#999' }}>No barcode value</div>
       )}
     </div>
@@ -223,6 +224,12 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({
   };
 
   const handlePrint = () => {
+    // On phones/tablets the hidden-iframe print pipeline is unreliable (mobile
+    // Safari prints blank), so hand off to the server-generated PDF instead.
+    if (prefersPdfOverBrowserPrint()) {
+      void downloadPdf(false);
+      return;
+    }
     const container = document.getElementById(`label-print-container-${module}`);
     if (!container) return;
     const iframe = document.createElement('iframe');
@@ -384,17 +391,22 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({
             </div>
           )}
 
-          {/* On-screen + print preview */}
-          <div
-            id={`label-print-container-${module}`}
-            className="barcode-labels-container"
-            style={isThermal
-              ? { display: 'flex', flexDirection: 'column', gap: '4px' }
-              : { display: 'grid', gridTemplateColumns: `repeat(${preset.columns}, 1fr)`, gap: '2px' }}
-          >
-            {labelItems.map((item, i) => (
-              <BarcodeLabel key={`${item.id}-${i}`} item={item} preset={preset} />
-            ))}
+          {/* On-screen + print preview. Labels have fixed inch widths, so on a
+              narrow phone the grid preview can be wider than the viewport —
+              scroll it horizontally instead of breaking the page layout.
+              (Printing uses a separate iframe, so this wrapper is screen-only.) */}
+          <div className="overflow-x-auto">
+            <div
+              id={`label-print-container-${module}`}
+              className="barcode-labels-container"
+              style={isThermal
+                ? { display: 'flex', flexDirection: 'column', gap: '4px' }
+                : { display: 'grid', gridTemplateColumns: `repeat(${preset.columns}, 1fr)`, gap: '2px' }}
+            >
+              {labelItems.map((item, i) => (
+                <BarcodeLabel key={`${item.id}-${i}`} item={item} preset={preset} />
+              ))}
+            </div>
           </div>
         </div>
       </div>

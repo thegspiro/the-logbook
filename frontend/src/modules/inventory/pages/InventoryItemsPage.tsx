@@ -20,6 +20,7 @@ import { getTodayLocalDate, formatNumber } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { useInventoryWebSocket } from '../../../hooks/useInventoryWebSocket';
+import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { EmptyState } from '../../../components/ux/EmptyState';
 import { Modal } from '../../../components/Modal';
@@ -280,6 +281,10 @@ const InventoryItemsPage: React.FC = () => {
       setCategories(c); setLocations(l); setStorageAreas(a);
     } catch { /* non-critical */ }
   }, []);
+
+  useRegisterPullToRefresh(async () => {
+    await Promise.all([loadItems(true), loadSummary()]);
+  });
 
   useEffect(() => {
     const go = async () => { setLoading(true); await Promise.all([loadItems(true), loadSummary(), loadRef()]); setLoading(false); };

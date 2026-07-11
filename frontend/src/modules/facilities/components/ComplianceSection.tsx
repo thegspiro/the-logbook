@@ -158,7 +158,7 @@ export default function ComplianceSection({ facilityId }: Props) {
                     </div>
                   </div>
                 </div>
-                <button onClick={() => { void handleDelete(checklist); }} className="opacity-0 group-hover:opacity-100 p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all" aria-label={`Delete ${checklist.title}`}>
+                <button onClick={() => { void handleDelete(checklist); }} className="sm:opacity-0 sm:group-hover:opacity-100 p-1.5 text-theme-text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all" aria-label={`Delete ${checklist.title}`}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>

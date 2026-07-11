@@ -1223,7 +1223,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 action-bar-safe">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
@@ -1334,7 +1334,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Action Bar */}
-        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 action-bar-safe">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
@@ -1448,7 +1448,7 @@ export const ActiveSkillTestPage: React.FC = () => {
       </div>
 
       {/* Bottom Navigation Bar */}
-      <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+      <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 action-bar-safe">
         <div className="flex gap-3">
           <button
             onClick={() => setActiveSectionIndex(activeSectionIndex - 1)}

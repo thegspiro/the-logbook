@@ -166,7 +166,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="flex border-b border-theme-surface-border mb-6" role="tablist" aria-label="Checkout views">
+        <div className="tab-scroll mb-6" role="tablist" aria-label="Checkout views">
           <button
             onClick={() => setActiveTab('active')}
             role="tab"

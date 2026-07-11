@@ -391,7 +391,7 @@ export const APIKeysTab: React.FC = () => {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden sm:block bg-theme-surface border border-theme-surface-border rounded-lg overflow-hidden">
+        <div className="hidden sm:block bg-theme-surface border border-theme-surface-border rounded-lg overflow-x-auto">
           <table className="min-w-full divide-y divide-theme-surface-border" aria-label="API keys list">
             <thead className="bg-theme-surface-secondary">
               <tr>

@@ -47,7 +47,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     <div className={`relative ${className}`}>
       {label && <label className="form-label">{label}</label>}
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-1 bg-theme-input-bg border border-theme-input-border rounded-lg">
+        <div className="flex w-full sm:w-auto min-w-0 items-center gap-1 bg-theme-input-bg border border-theme-input-border rounded-lg">
           <div className="flex items-center pl-3">
             <Calendar className="w-4 h-4 text-theme-text-muted" />
           </div>
@@ -55,7 +55,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             type="date"
             value={startDate}
             onChange={(e) => onChange(e.target.value, endDate)}
-            className="px-2 py-1.5 bg-transparent text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm"
+            className="min-w-0 flex-1 sm:flex-none px-2 py-1.5 bg-transparent text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm"
             aria-label="Start date"
           />
           <span className="text-theme-text-muted text-sm">&ndash;</span>
@@ -63,13 +63,13 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
             type="date"
             value={endDate}
             onChange={(e) => onChange(startDate, e.target.value)}
-            className="px-2 py-1.5 bg-transparent text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm"
+            className="min-w-0 flex-1 sm:flex-none px-2 py-1.5 bg-transparent text-sm text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring rounded-sm"
             aria-label="End date"
           />
           {hasValue && (
             <button
               onClick={handleClear}
-              className="p-1.5 text-theme-text-muted hover:text-theme-text-primary"
+              className="p-1.5 max-sm:min-w-[44px] max-sm:min-h-[44px] inline-flex items-center justify-center text-theme-text-muted hover:text-theme-text-primary"
               aria-label="Clear date range"
             >
               <X className="w-3.5 h-3.5" />

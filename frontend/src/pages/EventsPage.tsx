@@ -19,6 +19,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { formatRelativeTime, formatAbsoluteDate } from '../hooks/useRelativeTime';
+import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import { DEFAULT_PAGE_SIZE } from '../constants/config';
 import { EventType as EventTypeEnum } from '../constants/enums';
 import { CalendarView } from '../components/CalendarView';
@@ -218,6 +219,8 @@ export const EventsPage: React.FC = () => {
       setLoading(false);
     }
   }, [showPastEvents, canManage]);
+
+  useRegisterPullToRefresh(fetchEvents);
 
   const handleQuickRSVP = useCallback(async (eventId: string, status: 'going' | 'not_going') => {
     try {

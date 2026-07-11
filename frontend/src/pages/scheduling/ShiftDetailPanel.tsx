@@ -1468,8 +1468,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 <div className="mt-2 p-4 bg-white rounded-lg border border-theme-surface-border inline-block">
                   <QRCodeSVG
                     value={`${window.location.origin}/scheduling/checkin?apparatus=${shift.apparatus_id}`}
-                    size={160}
+                    size={200}
                     level="M"
+                    includeMargin
                   />
                   <p className="text-xs text-center text-gray-500 mt-2">
                     {shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus'} &mdash; permanent code
@@ -1477,7 +1478,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   <button
                     onClick={() => {
                       window.open(
-                        `/scheduling/checkin/print?apparatus=${shift.apparatus_id}&name=${encodeURIComponent(shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus')}`,
+                        `/scheduling/checkin/print?apparatus=${shift.apparatus_id}&name=${encodeURIComponent(shift.apparatus_name || shift.apparatus_unit_number || 'Apparatus')}&autoprint=1`,
                         '_blank',
                       );
                     }}

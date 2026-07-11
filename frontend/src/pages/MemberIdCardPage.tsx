@@ -275,7 +275,15 @@ export const MemberIdCardPage: React.FC = () => {
                   {member.membership_number}
                 </p>
                 <div className="mt-1">
-                  <svg ref={barcodeRef} data-testid="barcode" className="mx-auto" />
+                  {/* Constrain the intrinsic SVG width so long membership
+                      numbers scale down to fit the card on narrow phones
+                      instead of overflowing horizontally. */}
+                  <svg
+                    ref={barcodeRef}
+                    data-testid="barcode"
+                    className="mx-auto"
+                    style={{ maxWidth: '100%', height: 'auto' }}
+                  />
                 </div>
               </div>
             )}
@@ -284,11 +292,14 @@ export const MemberIdCardPage: React.FC = () => {
             {qrValue && (
               <div className="flex flex-col items-center">
                 <div className="bg-white p-4 rounded-lg print:p-2">
+                  {/* includeMargin adds the spec quiet zone — without it the
+                      code is unreliable when scanned off one phone screen by
+                      another device. */}
                   <QRCodeSVG
                     value={qrValue}
-                    size={180}
+                    size={200}
                     level="M"
-                    includeMargin={false}
+                    includeMargin
                   />
                 </div>
                 <p className="text-xs text-theme-text-muted mt-2 print:text-gray-400">

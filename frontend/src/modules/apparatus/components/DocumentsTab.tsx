@@ -95,6 +95,8 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({ id }) => {
                     <img
                       src={photo.filePath}
                       alt={photo.title || photo.fileName}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover"
                     />
                   ) : (

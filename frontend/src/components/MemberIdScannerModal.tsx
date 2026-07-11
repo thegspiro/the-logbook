@@ -22,10 +22,14 @@ import {
   AlertCircle,
   Loader2,
   X,
+  Flashlight,
+  FlashlightOff,
 } from 'lucide-react';
 import { inventoryService, type MemberInventorySummary } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
+import { useScanFeedback } from '../hooks/useScanFeedback';
+import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
 import { isMemberIdPayload } from '../types/scanner';
 import { QR_SCAN_CONFIG } from '../constants/camera';
 
@@ -53,12 +57,14 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
   const [lookingUp, setLookingUp] = useState(false);
   const handledRef = useRef(false);
   const membersRef = useRef<MemberInventorySummary[] | null>(null);
+  const { flashing, signalScanSuccess } = useScanFeedback();
 
   /** Resolve a scanned value to a member. */
   const handleScanResult = useCallback(
     async (decoded: string) => {
       if (handledRef.current) return;
       handledRef.current = true;
+      signalScanSuccess();
 
       setLookingUp(true);
       setError(null);
@@ -116,7 +122,7 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
         setLookingUp(false);
       }
     },
-    [onMemberIdentified],
+    [onMemberIdentified, signalScanSuccess],
   );
 
   const onScan = useCallback(
@@ -126,7 +132,14 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
     [handleScanResult],
   );
 
-  const { scanning, startScanner, stopScanner } = useHtml5Scanner({
+  const {
+    scanning,
+    startScanner,
+    stopScanner,
+    flashlightSupported,
+    flashlightOn,
+    toggleFlashlight,
+  } = useHtml5Scanner({
     viewportId: 'member-scanner-viewport',
     scanConfig: QR_SCAN_CONFIG,
     onScan,
@@ -166,9 +179,9 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div
-        className="relative w-full max-w-md mx-4 bg-theme-surface rounded-xl border border-theme-surface-border shadow-xl overflow-hidden"
+        className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-theme-surface rounded-xl border border-theme-surface-border shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="scanner-modal-title"
@@ -191,15 +204,17 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
           </button>
         </div>
 
-        {/* Scanner viewport */}
-        <div className="bg-black">
+        {/* Scanner viewport. Cap the height so a wide (landscape) phone doesn't
+            make the square preview taller than the screen. */}
+        <div className="relative bg-black">
           <div
             id="member-scanner-viewport"
             data-testid="member-scanner-viewport"
-            className="w-full aspect-square"
+            className="w-full aspect-square max-h-[55vh]"
             role="img"
             aria-label="Camera scanner preview"
           />
+          <ScanSuccessFlash active={flashing} />
         </div>
 
         {/* Controls + status */}
@@ -216,13 +231,30 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
                 Start Camera
               </button>
             ) : (
-              <button
-                onClick={() => { void stopScanner(); }}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400 text-sm font-medium transition-colors"
-              >
-                <CameraOff className="h-4 w-4" />
-                Stop Camera
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { void stopScanner(); }}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400 text-sm font-medium transition-colors"
+                >
+                  <CameraOff className="h-4 w-4" />
+                  Stop Camera
+                </button>
+                {flashlightSupported && (
+                  <button
+                    onClick={() => { void toggleFlashlight(); }}
+                    aria-pressed={flashlightOn}
+                    aria-label={flashlightOn ? 'Turn flashlight off' : 'Turn flashlight on'}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      flashlightOn
+                        ? 'border-amber-400 bg-amber-100 text-amber-900 dark:border-amber-500 dark:bg-amber-500/20 dark:text-amber-300'
+                        : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary'
+                    }`}
+                  >
+                    {flashlightOn ? <FlashlightOff className="h-4 w-4" /> : <Flashlight className="h-4 w-4" />}
+                    {flashlightOn ? 'Off' : 'Flashlight'}
+                  </button>
+                )}
+              </div>
             )}
           </div>
 

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import toast from "react-hot-toast";
 import { formatRelativeTime } from "../hooks/useRelativeTime";
-import { usePullToRefresh } from "../hooks/usePullToRefresh";
-import { PullToRefreshIndicator } from "../components/PullToRefreshIndicator";
+import { useRegisterPullToRefresh } from "../hooks/useRegisterPullToRefresh";
 import DashboardStatCard from "../components/dashboard/DashboardStatCard";
 import DashboardCardHeader from "../components/dashboard/DashboardCardHeader";
 import {
@@ -508,17 +507,10 @@ const Dashboard: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  const { pulling, refreshing, pullDistance } = usePullToRefresh({
-    onRefresh: refreshDashboard,
-  });
+  useRegisterPullToRefresh(refreshDashboard);
 
   return (
     <div className="min-h-screen flex flex-col">
-      <PullToRefreshIndicator
-        pulling={pulling}
-        refreshing={refreshing}
-        pullDistance={pullDistance}
-      />
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {loadingNotifications || loadingMyShifts || loadingHours || loadingTraining
           ? "Loading dashboard content..."

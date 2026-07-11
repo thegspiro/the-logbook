@@ -349,7 +349,7 @@ export const TrainingAdminPage: React.FC = () => {
 
         {/* Top-level sub-page selector */}
         <div
-          className="flex space-x-2 mb-6"
+          className="flex space-x-2 mb-6 hscroll"
           role="tablist"
           aria-label="Training admin sections"
         >
@@ -378,7 +378,7 @@ export const TrainingAdminPage: React.FC = () => {
         {/* Inner tab bar */}
         <div className="border-b border-theme-surface-border">
           <nav
-            className="flex space-x-1"
+            className="flex space-x-1 hscroll"
             aria-label={`${currentPage.label} tabs`}
           >
             {currentPage.tabs.map((tab) => (

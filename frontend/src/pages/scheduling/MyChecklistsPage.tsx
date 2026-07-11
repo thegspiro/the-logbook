@@ -714,7 +714,7 @@ export const MyChecklistsPage: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                        <Play className="h-4 w-4 text-theme-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <Play className="h-4 w-4 text-theme-text-muted sm:opacity-0 sm:group-hover:opacity-100 transition-opacity" />
                       </button>
                     ))}
                   </div>

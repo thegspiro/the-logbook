@@ -19,6 +19,7 @@ import { userService } from '../services/api';
 import { User } from '../types/user';
 import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
+import { useRegisterPullToRefresh } from '../hooks/useRegisterPullToRefresh';
 import { formatDate, getTodayLocalDate } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
 import { DeleteMemberModal } from '../components/DeleteMemberModal';
@@ -92,6 +93,8 @@ const Members: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useRegisterPullToRefresh(loadMembers);
 
   const checkContactInfoSettings = async () => {
     try {

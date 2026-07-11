@@ -430,7 +430,7 @@ const DocumentsPage: React.FC = () => {
                               e.stopPropagation();
                               setDeleteConfirm(doc.id);
                             }}
-                            className="opacity-0 group-hover:opacity-100 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 transition-all p-1"
+                            className="sm:opacity-0 sm:group-hover:opacity-100 text-theme-text-muted hover:text-red-800 dark:hover:text-red-400 transition-all p-1"
                             title="Delete document"
                           >
                             <Trash2 className="w-4 h-4" />

@@ -1047,7 +1047,7 @@ const SchedulingPage: React.FC = () => {
                         {link.description}
                       </p>
                     </div>
-                    <ExternalLink className="w-3.5 h-3.5 text-theme-text-muted opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                    <ExternalLink className="w-3.5 h-3.5 text-theme-text-muted sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0" />
                   </Link>
                 );
               })}

@@ -16,6 +16,7 @@ import { UpdateNotification } from './components/UpdateNotification';
 
 // Theme
 import { ThemeProvider } from './contexts/ThemeContext';
+import { PullToRefreshProvider } from './contexts/PullToRefreshContext';
 
 // Protected Route & Layout
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -111,7 +112,9 @@ function App() {
                 <Route
                   element={
                     <ProtectedRoute>
-                      <AppLayout />
+                      <PullToRefreshProvider>
+                        <AppLayout />
+                      </PullToRefreshProvider>
                     </ProtectedRoute>
                   }
                 >
@@ -183,6 +186,7 @@ function App() {
             {/* Toast notifications */}
             <Toaster
               position="top-right"
+              containerStyle={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
               toastOptions={{
                 duration: 4000,
                 style: {

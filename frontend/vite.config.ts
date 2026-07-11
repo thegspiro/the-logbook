@@ -133,14 +133,24 @@ export default defineConfig({
             if (id.includes('react-router') || id.includes('@remix-run')) {
               return 'vendor-router';
             }
-            if (id.includes('lucide-react') || id.includes('@headlessui')) {
+            if (id.includes('lucide-react')) {
               return 'vendor-ui';
             }
-            if (id.includes('recharts') || id.includes('d3-')) {
-              return 'vendor-charts';
+            // Scanner/barcode/QR libraries are large (html5-qrcode alone is
+            // several hundred KB) and only used by lazy scanner/label/print
+            // pages. Keep them out of the shared 'vendor' chunk — which is
+            // reachable from the eager login graph via axios — so they are
+            // downloaded only when a page that renders them actually loads.
+            if (
+              id.includes('html5-qrcode') ||
+              id.includes('jsbarcode') ||
+              id.includes('qrcode.react')
+            ) {
+              return 'vendor-scanner';
             }
-            if (id.includes('date-fns')) {
-              return 'vendor-date';
+            // Drag-and-drop is only used by kanban/builder pages.
+            if (id.includes('@dnd-kit')) {
+              return 'vendor-dnd';
             }
             if (id.includes('zustand')) {
               return 'vendor-state';

@@ -22,20 +22,36 @@ export const Tooltip: React.FC<TooltipProps> = ({
 }) => {
   const [visible, setVisible] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const autoHideRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const tooltipId = useRef(`tooltip-${Math.random().toString(36).slice(2, 9)}`);
 
+  const clearTimers = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    if (autoHideRef.current) clearTimeout(autoHideRef.current);
+  };
+
   const show = () => {
+    if (autoHideRef.current) clearTimeout(autoHideRef.current);
     timeoutRef.current = setTimeout(() => setVisible(true), delay);
   };
 
   const hide = () => {
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    clearTimers();
     setVisible(false);
+  };
+
+  // Touch devices have no hover: reveal on tap (bypassing the hover delay) and
+  // auto-dismiss shortly after, so the tooltip's content is reachable without
+  // blocking the child's own tap handler.
+  const handleTouch = () => {
+    clearTimers();
+    setVisible(true);
+    autoHideRef.current = setTimeout(() => setVisible(false), 2000);
   };
 
   useEffect(() => {
     return () => {
-      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      clearTimers();
     };
   }, []);
 
@@ -53,6 +69,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
       onMouseLeave={hide}
       onFocus={show}
       onBlur={hide}
+      onTouchStart={handleTouch}
     >
       <div aria-describedby={visible ? tooltipId.current : undefined}>
         {children}

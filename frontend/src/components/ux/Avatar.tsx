@@ -69,6 +69,8 @@ export const Avatar: React.FC<AvatarProps> = ({
       <img
         src={photoUrl}
         alt={altText}
+        loading="lazy"
+        decoding="async"
         className={`${sizeClass} rounded-full object-cover shrink-0 ${className}`}
       />
     );

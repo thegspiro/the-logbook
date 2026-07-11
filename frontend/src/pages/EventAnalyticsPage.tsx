@@ -361,7 +361,8 @@ export const EventAnalyticsPage: React.FC = () => {
             {data.monthlyEventCounts.length === 0 ? (
               <p className="text-sm text-theme-text-muted">No event data available.</p>
             ) : (
-              <div className="flex items-end gap-2 h-48">
+              <div className="overflow-x-auto">
+              <div className="flex items-end gap-2 h-48 min-w-full">
                 {data.monthlyEventCounts.map((m) => {
                   const heightPct = Math.max(
                     Math.round((m.count / maxMonthlyCount) * 100),
@@ -370,7 +371,7 @@ export const EventAnalyticsPage: React.FC = () => {
                   return (
                     <div
                       key={m.month}
-                      className="flex-1 flex flex-col items-center justify-end h-full"
+                      className="flex-1 min-w-[36px] flex flex-col items-center justify-end h-full"
                     >
                       <span className="text-xs text-theme-text-primary font-medium mb-1">
                         {m.count}
@@ -386,6 +387,7 @@ export const EventAnalyticsPage: React.FC = () => {
                     </div>
                   );
                 })}
+              </div>
               </div>
             )}
           </div>

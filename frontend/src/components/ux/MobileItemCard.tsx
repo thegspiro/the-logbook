@@ -192,7 +192,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
           {onEdit && (
             <button
               onClick={onEdit}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-theme-text-secondary hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors"
               title="Edit"
             >
               <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
@@ -202,7 +202,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
           {onDuplicate && (
             <button
               onClick={onDuplicate}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-theme-text-secondary hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
               title="Duplicate"
             >
               <Copy className="w-3.5 h-3.5" aria-hidden="true" />
@@ -212,7 +212,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
           {canIssue && onIssue && (
             <button
               onClick={onIssue}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-theme-text-secondary hover:text-purple-500 hover:bg-purple-500/10 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-purple-500 hover:bg-purple-500/10 rounded-lg transition-colors"
               title="Issue from pool"
             >
               <Send className="w-3.5 h-3.5" aria-hidden="true" />
@@ -222,7 +222,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
           {canRetire && onWriteOff && (
             <button
               onClick={onWriteOff}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-theme-text-secondary hover:text-orange-500 hover:bg-orange-500/10 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-orange-500 hover:bg-orange-500/10 rounded-lg transition-colors"
               title="Write off"
             >
               <FileX className="w-3.5 h-3.5" aria-hidden="true" />
@@ -232,7 +232,7 @@ export const MobileItemCard: React.FC<MobileItemCardProps> = ({
           {canRetire && onRetire && (
             <button
               onClick={onRetire}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs text-theme-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2.5 min-h-[44px] text-xs text-theme-text-secondary hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
               title="Retire"
             >
               <Archive className="w-3.5 h-3.5" aria-hidden="true" />

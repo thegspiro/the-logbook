@@ -62,7 +62,7 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   return (
     <div
       ref={containerRef}
-      className="fixed bottom-6 right-6 z-40 md:hidden"
+      className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1.5rem+env(safe-area-inset-right))] z-40 md:hidden"
     >
       {/* Backdrop */}
       {open && (
@@ -83,7 +83,7 @@ export const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
               style={{ animationDelay: `${index * 50}ms` }}
               aria-label={action.label}
             >
-              <span className="px-3 py-1.5 text-sm font-medium text-theme-text-primary bg-theme-surface-modal rounded-lg shadow-lg border border-theme-surface-border whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150" aria-hidden="true">
+              <span className="px-3 py-1.5 text-sm font-medium text-theme-text-primary bg-theme-surface-modal rounded-lg shadow-lg border border-theme-surface-border whitespace-nowrap" aria-hidden="true">
                 {action.label}
               </span>
               <span className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-white transition-all duration-150 hover:shadow-xl hover:scale-105 active:scale-95 ${action.color ?? 'bg-theme-surface-hover text-theme-text-primary'}`}>

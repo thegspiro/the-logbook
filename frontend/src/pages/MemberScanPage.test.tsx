@@ -142,4 +142,31 @@ describe("MemberScanPage", () => {
       expect(screen.getByText(/No cameras found/i)).toBeInTheDocument();
     });
   });
+
+  it("falls back to a facingMode:environment constraint when no camera label identifies the rear camera", async () => {
+    // Multiple cameras with unlabeled devices (labels are empty before
+    // permission is granted on many phones) — the rear camera can't be
+    // identified by label, so we must let the browser choose via facingMode
+    // rather than defaulting to cameras[0] (typically the front camera).
+    mockGetCameras.mockResolvedValue([
+      { id: "cam-a", label: "" },
+      { id: "cam-b", label: "" },
+    ]);
+
+    const user = userEvent.setup();
+    renderWithRouter(<MemberScanPage />);
+
+    await user.click(
+      screen.getByRole("button", { name: /start scanning/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockStart).toHaveBeenCalledWith(
+        { facingMode: { ideal: "environment" } },
+        expect.any(Object),
+        expect.any(Function),
+        expect.any(Function),
+      );
+    });
+  });
 });

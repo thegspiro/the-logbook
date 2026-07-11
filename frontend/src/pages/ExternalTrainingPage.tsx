@@ -823,7 +823,7 @@ const MappingsModal: React.FC<MappingsModalProps> = ({ isOpen, onClose, provider
           </p>
         </div>
 
-        <div className="flex border-b border-theme-surface-border" role="tablist" aria-label="Mapping types">
+        <div className="tab-scroll" role="tablist" aria-label="Mapping types">
           <button
             onClick={() => setActiveTab('categories')}
             role="tab"
@@ -1083,7 +1083,7 @@ const ExternalTrainingPage: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-theme-surface-border mb-6" role="tablist" aria-label="External training views">
+        <div className="tab-scroll mb-6" role="tablist" aria-label="External training views">
           <button
             onClick={() => setActiveTab('providers')}
             role="tab"

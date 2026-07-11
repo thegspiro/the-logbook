@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Mobile UX, Barcode Scanning & Design-System CSS (2026-07-11)
+
+**Barcode / QR scanning (mobile field use)**
+
+- **Rear-camera selection made reliable**: the scanner now hands html5-qrcode a
+  `facingMode: environment` constraint when no camera label clearly identifies
+  the rear camera, instead of defaulting to the first device — which on phones
+  with empty or localized labels frequently selected the *front* camera.
+- **Flashlight (torch) toggle**: a feature-detected flashlight button appears in
+  the scanner when the camera supports it, for scanning gear in dim apparatus
+  bays. Works on both the native `BarcodeDetector` and html5-qrcode paths.
+- **Scan-success feedback**: a brief green flash plus a haptic pulse
+  (`navigator.vibrate` on Android; the flash carries the cue on iOS) confirms
+  each capture, so users scanning with gloves at arm's length aren't left
+  guessing.
+- **Native BarcodeDetector verified before use**: `getSupportedFormats()` is
+  checked so Android builds that expose the API but support none of our formats
+  fall back to html5-qrcode instead of silently scanning nothing.
+- **Clearer camera errors and a responsive scan box**: an actionable "requires
+  HTTPS" message on insecure origins (where the camera APIs are absent), and a
+  scan region that fits the live viewfinder instead of a fixed 250px box.
+
+**Barcode / QR generation & printing**
+
+- **Digital ID card**: the barcode no longer overflows narrow phones (long
+  membership numbers scale to fit) and the QR gained its quiet zone for reliable
+  phone-to-phone scanning.
+- **Check-in QR card no longer force-prints**: opening it on a phone to view the
+  code no longer throws the user into the OS print dialog; auto-print now only
+  fires from the explicit "Print QR Card" action, and a missing apparatus shows
+  an error instead of a broken code.
+- **Label printing on mobile**: label previews scroll horizontally instead of
+  overflowing, barcode SVGs are width-constrained, and the print action falls
+  back to the server-generated PDF on touch devices (mobile Safari prints blank
+  from a hidden iframe).
+
+**Mobile interface**
+
+- **Overflow fixes**: `viewport-fit=cover` (so safe-area CSS actually applies on
+  notched phones), horizontally-scrollable tab bars, a non-overflowing date
+  range picker, and dense analytics charts that scroll with a legible minimum
+  bar width.
+- **Pull-to-refresh** is now available app-wide via a layout-level gesture that
+  pages opt into (Dashboard, Members, Events, Inventory), replacing the
+  Dashboard-only implementation.
+- **Touch ergonomics**: row/table actions that were revealed only on hover now
+  work on touch; sub-44px tap targets were enlarged; numeric fields trigger a
+  number-pad keyboard; date/time inputs no longer zoom on iOS; and sticky/fixed
+  bottom action bars clear the home indicator.
+- **Tooltips** open on tap and auto-dismiss on touch devices.
+
+**Performance**
+
+- Scanner/barcode/drag-and-drop libraries (~465 KB) no longer load at the login
+  screen — they were being pulled into the eager bundle by unused module-barrel
+  re-exports; they now load on demand with their pages. Non-critical images are
+  lazy-loaded.
+
+**Design-system CSS**
+
+- Recurring mobile patterns are consolidated into shared `@utility` classes
+  (`tab-scroll`, `hscroll`, `pb-safe`, `action-bar-safe`) instead of ad-hoc
+  inline classes, and the stylesheet was formatted with Prettier, grouped with
+  section headers, and documented with usage notes.
+
 ### Training Requirement Templates & Create Form (2026-07-08)
 
 - **Fixed templates that applied to nobody**: three of the four built-in

@@ -310,14 +310,17 @@ const BarChart: React.FC<BarChartProps> = ({ data, color }) => {
   const colors = barColors[color];
 
   return (
-    <div className="flex items-end justify-between gap-1 h-32">
+    <div className="overflow-x-auto">
+    <div className="flex items-end justify-between gap-1 h-32 min-w-full">
       {data.map(({ date, count }) => {
         const heightPercent = (count / maxCount) * 100;
         // Show only day portion of date (DD)
         const dayLabel = date.split('-')[2] ?? date;
 
         return (
-          <div key={date} className="flex-1 flex flex-col items-center min-w-0">
+          // Keep bars at a legible minimum width on phones (the row scrolls
+          // horizontally) while still growing to fill wide screens.
+          <div key={date} className="flex-1 min-w-[20px] flex flex-col items-center">
             <div
               className={`w-full ${colors.bar} ${colors.hover} rounded-t cursor-pointer transition-all`}
               style={{ height: `${Math.max(heightPercent, count > 0 ? 2 : 0)}%` }}
@@ -327,6 +330,7 @@ const BarChart: React.FC<BarChartProps> = ({ data, color }) => {
           </div>
         );
       })}
+    </div>
     </div>
   );
 };

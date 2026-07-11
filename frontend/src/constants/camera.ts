@@ -30,3 +30,22 @@ export const NATIVE_BARCODE_FORMATS = [
 
 export const HAS_BARCODE_DETECTOR =
   typeof window !== 'undefined' && 'BarcodeDetector' in window;
+
+/**
+ * Returns a user-facing reason string when the camera cannot be used, or null
+ * when it should be available. The common mobile failure is an insecure origin
+ * (plain HTTP over a LAN IP): browsers only expose `navigator.mediaDevices` in
+ * a secure context, so `getUserMedia` is simply absent and a bare attempt would
+ * surface as a confusing "permission denied". Detecting it here lets the UI say
+ * something actionable instead.
+ */
+export function getCameraUnavailableReason(): string | null {
+  if (
+    typeof navigator === 'undefined' ||
+    !navigator.mediaDevices ||
+    typeof navigator.mediaDevices.getUserMedia !== 'function'
+  ) {
+    return 'Camera scanning requires a secure (HTTPS) connection. Open this page over HTTPS to scan.';
+  }
+  return null;
+}
