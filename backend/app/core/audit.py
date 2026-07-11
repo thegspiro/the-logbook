@@ -31,10 +31,20 @@ class AuditLogger:
         if isinstance(ts, datetime):
             if ts.tzinfo is None:
                 ts = ts.replace(tzinfo=UTC)
-            # timespec='microseconds' always emits 6 decimal places so the
-            # output is identical whether or not MySQL preserved fractional
-            # seconds (TIMESTAMP without fsp truncates to whole seconds).
-            return ts.astimezone(UTC).isoformat(timespec="microseconds")
+            # The timestamp column is DATETIME with no fractional-second
+            # precision, so MySQL truncates microseconds on store. The old code
+            # only padded the *format* to 6 places (timespec='microseconds') but
+            # kept the real microseconds at write time — so the string hashed at
+            # write (e.g. ...:56.123456) never matched the value read back at
+            # verify (...:56.000000), producing spurious "hash mismatch" errors.
+            # Zero the microseconds so write and verify hash the identical value.
+            # (timestamp_nanos is also in the hash and preserves sub-second
+            # ordering losslessly.)
+            return (
+                ts.astimezone(UTC)
+                .replace(microsecond=0)
+                .isoformat(timespec="microseconds")
+            )
         return str(ts)
 
     @staticmethod
