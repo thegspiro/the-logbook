@@ -76,9 +76,7 @@
   --color-theme-alert-danger-title: var(--alert-danger-title);
   --color-theme-alert-danger-text: var(--alert-danger-text);
 
-  --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
   --animate-fade-in: fadeIn 1s ease-in-out;
   --animate-slide-up: slideUp 0.5s ease-out;
@@ -208,7 +206,8 @@
     }
   }
   @keyframes shake {
-    0%, 100% {
+    0%,
+    100% {
       transform: translateX(0);
     }
     25% {
@@ -259,7 +258,7 @@
   }
 
   &::-webkit-scrollbar-thumb {
-    @apply bg-slate-600 rounded-full;
+    @apply rounded-full bg-slate-600;
   }
 
   &::-webkit-scrollbar-thumb:hover {
@@ -274,114 +273,87 @@
    ================================================================ */
 @utility form-input {
   /* --- Form Controls --- (#7 focus border color, #8 transition on focus, #9 inset shadow on focus) */
-  @apply w-full px-4 py-2 bg-theme-input-bg border border-theme-input-border rounded-lg
-           text-theme-text-primary placeholder:text-theme-text-muted/60
-           transition-all duration-150
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:border-theme-focus-ring;
+  @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-lg border px-4 py-2 transition-all duration-150 focus:ring-2 focus:outline-hidden;
 }
 @utility form-input-sm {
-  @apply w-full px-3 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-sm
-           text-theme-text-primary text-sm placeholder:text-theme-text-muted/60
-           transition-all duration-150
-           focus:outline-hidden focus:ring-1 focus:ring-theme-focus-ring focus:border-theme-focus-ring;
+  @apply bg-theme-input-bg border-theme-input-border text-theme-text-primary placeholder:text-theme-text-muted/60 focus:ring-theme-focus-ring focus:border-theme-focus-ring w-full rounded-sm border px-3 py-1.5 text-sm transition-all duration-150 focus:ring-1 focus:outline-hidden;
 }
 @utility form-checkbox {
-  @apply w-4 h-4 text-blue-700 dark:text-blue-500 bg-theme-input-bg
-           border-theme-input-border rounded-sm focus:ring-theme-focus-ring;
+  @apply bg-theme-input-bg border-theme-input-border focus:ring-theme-focus-ring h-4 w-4 rounded-sm text-blue-700 dark:text-blue-500;
 }
 @utility form-label {
-  @apply block text-sm font-medium text-theme-text-secondary mb-1;
+  @apply text-theme-text-secondary mb-1 block text-sm font-medium;
 }
 @utility form-label-sm {
-  @apply block text-xs font-medium text-theme-text-secondary mb-1;
+  @apply text-theme-text-secondary mb-1 block text-xs font-medium;
 }
 @utility card {
   /* --- Cards & Surfaces --- (#1 shadow depth, #2 hover lift, #3 smooth transitions) */
-  @apply bg-theme-surface backdrop-blur-xs rounded-lg border border-theme-surface-border
-         shadow-sm transition-shadow duration-200;
+  @apply bg-theme-surface border-theme-surface-border rounded-lg border shadow-sm backdrop-blur-xs transition-shadow duration-200;
 }
 @utility card-hover {
   /* Card with interactive hover state */
-  @apply card hover:shadow-md hover:border-theme-text-muted/20;
+  @apply card hover:border-theme-text-muted/20 hover:shadow-md;
 }
 @utility card-secondary {
-  @apply bg-theme-surface-secondary rounded-lg border border-theme-surface-border
-         shadow-sm transition-shadow duration-200;
+  @apply bg-theme-surface-secondary border-theme-surface-border rounded-lg border shadow-sm transition-shadow duration-200;
 }
 @utility btn-primary {
   /* --- Buttons --- (#4 press effect, #5 shadow elevation, #6 smooth multi-property transitions) */
-  @apply px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700
-           shadow-sm hover:shadow-md active:scale-[0.97]
-           transition-all duration-150 ease-out
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
+  @apply focus:ring-theme-focus-ring rounded-lg bg-red-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-red-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
 @utility btn-secondary {
-  @apply px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg
-           hover:bg-theme-surface-hover border border-theme-surface-border
-           shadow-sm hover:shadow active:scale-[0.97]
-           transition-all duration-150 ease-out
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
+  @apply bg-theme-surface text-theme-text-primary hover:bg-theme-surface-hover border-theme-surface-border focus:ring-theme-focus-ring rounded-lg border px-4 py-2 shadow-sm transition-all duration-150 ease-out hover:shadow focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
 @utility btn-success {
-  @apply px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700
-           shadow-sm hover:shadow-md active:scale-[0.97]
-           transition-all duration-150 ease-out
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
+  @apply focus:ring-theme-focus-ring rounded-lg bg-green-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-green-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
 @utility btn-info {
-  @apply px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700
-           shadow-sm hover:shadow-md active:scale-[0.97]
-           transition-all duration-150 ease-out
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
+  @apply focus:ring-theme-focus-ring rounded-lg bg-blue-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-blue-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
 @utility btn-warning {
-  @apply px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700
-           shadow-sm hover:shadow-md active:scale-[0.97]
-           transition-all duration-150 ease-out
-           focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring disabled:opacity-50 disabled:pointer-events-none;
+  @apply focus:ring-theme-focus-ring rounded-lg bg-yellow-600 px-4 py-2 text-white shadow-sm transition-all duration-150 ease-out hover:bg-yellow-700 hover:shadow-md focus:ring-2 focus:outline-hidden active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50;
 }
 @utility btn-sm {
   /* --- Standardized Button Sizes (#79) --- */
-  @apply px-2.5 py-1.5 text-xs rounded-md;
+  @apply rounded-md px-2.5 py-1.5 text-xs;
 }
 @utility btn-md {
-  @apply px-4 py-2 text-sm rounded-lg;
+  @apply rounded-lg px-4 py-2 text-sm;
 }
 @utility btn-lg {
-  @apply px-6 py-3 text-base rounded-lg;
+  @apply rounded-lg px-6 py-3 text-base;
 }
 @utility btn-icon {
-  @apply p-2 rounded-lg min-w-[44px] min-h-[44px] inline-flex items-center justify-center;
+  @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2;
 }
 @utility btn-icon-sm {
-  @apply p-1.5 rounded-md min-w-[36px] min-h-[36px] inline-flex items-center justify-center;
+  @apply inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-1.5;
 }
 @utility stat-card {
   /* --- Stat Cards --- (#10 stat card shadow + hover) */
-  @apply bg-theme-surface backdrop-blur-xs rounded-lg p-5 border border-theme-surface-border
-         shadow-sm hover:shadow-md transition-all duration-200;
+  @apply bg-theme-surface border-theme-surface-border rounded-lg border p-5 shadow-sm backdrop-blur-xs transition-all duration-200 hover:shadow-md;
 }
 @utility alert-info {
   /* --- Alert / Info Boxes --- (#11 left accent border on alerts) */
-  @apply bg-theme-alert-info-bg border border-theme-alert-info-border rounded-lg p-4 border-l-4 border-l-theme-alert-info-icon;
+  @apply bg-theme-alert-info-bg border-theme-alert-info-border border-l-theme-alert-info-icon rounded-lg border border-l-4 p-4;
 }
 @utility alert-success {
-  @apply bg-theme-alert-success-bg border border-theme-alert-success-border rounded-lg p-4 border-l-4 border-l-theme-alert-success-icon;
+  @apply bg-theme-alert-success-bg border-theme-alert-success-border border-l-theme-alert-success-icon rounded-lg border border-l-4 p-4;
 }
 @utility alert-warning {
-  @apply bg-theme-alert-warning-bg border border-theme-alert-warning-border rounded-lg p-4 border-l-4 border-l-theme-alert-warning-icon;
+  @apply bg-theme-alert-warning-bg border-theme-alert-warning-border border-l-theme-alert-warning-icon rounded-lg border border-l-4 p-4;
 }
 @utility alert-purple {
-  @apply bg-theme-alert-purple-bg border border-theme-alert-purple-border rounded-lg p-4 border-l-4 border-l-theme-alert-purple-icon;
+  @apply bg-theme-alert-purple-bg border-theme-alert-purple-border border-l-theme-alert-purple-icon rounded-lg border border-l-4 p-4;
 }
 @utility alert-danger {
-  @apply bg-theme-alert-danger-bg border border-theme-alert-danger-border rounded-lg p-4 border-l-4 border-l-theme-alert-danger-icon;
+  @apply bg-theme-alert-danger-bg border-theme-alert-danger-border border-l-theme-alert-danger-icon rounded-lg border border-l-4 p-4;
 }
 @utility toggle-knob {
   /* --- Toggle Switch --- */
   /* Standard toggle-switch knob: always a visible light circle */
-  @apply pointer-events-none inline-block transform rounded-full
-           bg-white dark:bg-slate-200 shadow-sm ring-0 transition duration-200 ease-in-out;
+  @apply pointer-events-none inline-block transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out dark:bg-slate-200;
 }
 @utility toggle-knob-sm {
   @apply toggle-knob h-4 w-4;
@@ -392,7 +364,7 @@
 @utility qr-container {
   /* --- QR Code Container --- */
   /* QR codes require a white background for scanner contrast, regardless of theme */
-  @apply bg-white p-8 rounded-lg border-4 border-theme-surface-border;
+  @apply border-theme-surface-border rounded-lg border-4 bg-white p-8;
 }
 @utility color-dot {
   /* --- Dynamic Color Dot/Badge --- */
@@ -408,8 +380,8 @@
   /* --- Mobile-Responsive Patterns --- (#12 drawer slide-in animation) */
 
   /* Drawer panel — full-width on mobile, capped at 32rem on sm+ */
-  @apply fixed top-0 right-0 h-full w-full flex flex-col shadow-2xl z-50;
-  @apply bg-theme-surface-modal border-l border-theme-surface-border;
+  @apply fixed top-0 right-0 z-50 flex h-full w-full flex-col shadow-2xl;
+  @apply bg-theme-surface-modal border-theme-surface-border border-l;
   animation: slideInRight 0.25s ease-out;
   max-width: 100%;
   @media (min-width: 640px) {
@@ -418,7 +390,7 @@
 }
 @utility action-bar {
   /* Drawer / modal action-button bars — wrap gracefully on small screens */
-  @apply flex items-center gap-2 flex-wrap;
+  @apply flex flex-wrap items-center gap-2;
   @media (max-width: 479px) {
     @apply gap-1.5;
     & .action-label {
@@ -448,7 +420,7 @@
 }
 @utility tab-scroll {
   /* Horizontally-scrollable tab bar with hidden scrollbar */
-  @apply flex items-center gap-1 border-b border-theme-surface-border;
+  @apply border-theme-surface-border flex items-center gap-1 border-b;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -523,26 +495,20 @@
 }
 @utility shimmer-skeleton {
   /* #13 Shimmer effect skeleton loader */
-  background: linear-gradient(
-    90deg,
-    var(--surface-hover) 25%,
-    var(--surface-secondary) 50%,
-    var(--surface-hover) 75%
-  );
+  background: linear-gradient(90deg, var(--surface-hover) 25%, var(--surface-secondary) 50%, var(--surface-hover) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.8s ease-in-out infinite;
 }
 @utility badge {
   /* #14 Polished badge/pill styling */
-  @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-         transition-colors duration-150;
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors duration-150;
 }
 @utility link-underline {
   /* #15 Animated underline for links */
   @apply relative;
   &::after {
     content: '';
-    @apply absolute bottom-0 left-0 w-0 h-0.5 bg-current transition-all duration-200;
+    @apply absolute bottom-0 left-0 h-0.5 w-0 bg-current transition-all duration-200;
   }
   &:hover::after {
     @apply w-full;
@@ -554,23 +520,23 @@
 }
 @utility glass-surface {
   /* #17 Glassmorphism surface for overlays */
-  @apply bg-theme-surface/80 backdrop-blur-md border border-theme-surface-border/50;
+  @apply bg-theme-surface/80 border-theme-surface-border/50 border backdrop-blur-md;
 }
 @utility text-gradient {
   /* #18 Gradient text for headings/hero elements */
-  @apply bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-red-400;
+  @apply bg-gradient-to-r from-red-600 to-red-400 bg-clip-text text-transparent;
 }
 @utility focus-ring-inset {
   /* #19 Inset focus ring for contained elements */
-  @apply focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-theme-focus-ring;
+  @apply focus:ring-theme-focus-ring focus:ring-2 focus:outline-hidden focus:ring-inset;
 }
 @utility divider {
   /* #20 Styled section divider */
-  @apply border-t border-theme-surface-border my-4;
+  @apply border-theme-surface-border my-4 border-t;
 }
 @utility mobile-touch-target {
   /* #21 Guaranteed mobile touch target size */
-  @apply min-w-[44px] min-h-[44px] inline-flex items-center justify-center;
+  @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center;
 }
 @utility mobile-stack {
   /* #22 Stack layout on mobile, flex row on desktop */
@@ -983,9 +949,9 @@
 /* Body defaults */
 body {
   @apply antialiased;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans',
+    'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   /* Prevent iOS overscroll bounce on body */
@@ -1019,7 +985,12 @@ option {
   }
 
   /* Improve touch responsiveness — remove 300ms tap delay */
-  a, button, [role="button"], input, select, textarea {
+  a,
+  button,
+  [role='button'],
+  input,
+  select,
+  textarea {
     touch-action: manipulation;
   }
 
@@ -1035,29 +1006,34 @@ option {
   }
 
   /* #29 Tighter padding on mobile for more content */
-  .card, .stat-card {
+  .card,
+  .stat-card {
     padding: 0.75rem;
   }
 
   /* #30 Full-width buttons on small mobile screens */
   @media (max-width: 479px) {
-    .btn-primary, .btn-secondary, .btn-success, .btn-info, .btn-warning {
+    .btn-primary,
+    .btn-secondary,
+    .btn-success,
+    .btn-info,
+    .btn-warning {
       width: 100%;
       justify-content: center;
     }
   }
 
   /* #31 Larger font for form inputs on mobile (prevents iOS zoom) */
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="search"],
-  input[type="tel"],
-  input[type="url"],
-  input[type="number"],
-  input[type="date"],
-  input[type="time"],
-  input[type="datetime-local"],
+  input[type='text'],
+  input[type='email'],
+  input[type='password'],
+  input[type='search'],
+  input[type='tel'],
+  input[type='url'],
+  input[type='number'],
+  input[type='date'],
+  input[type='time'],
+  input[type='datetime-local'],
   select,
   textarea {
     font-size: 16px;
@@ -1073,18 +1049,18 @@ option {
 }
 
 *:focus-visible {
-  @apply outline-hidden ring-2 ring-theme-focus-ring ring-offset-2;
+  @apply ring-theme-focus-ring ring-2 ring-offset-2 outline-hidden;
   --tw-ring-offset-color: var(--ring-offset-bg);
 }
 
 /* Skip to main content link for accessibility */
 .skip-to-main {
-  @apply absolute -top-96 left-0 z-50 bg-theme-surface-modal text-theme-text-primary px-4 py-2 rounded-br-lg focus:top-0;
+  @apply bg-theme-surface-modal text-theme-text-primary absolute -top-96 left-0 z-50 rounded-br-lg px-4 py-2 focus:top-0;
 }
 
 /* #32 Smooth backdrop overlay for modals and drawers */
 .backdrop-overlay {
-  @apply fixed inset-0 bg-black/40 z-40;
+  @apply fixed inset-0 z-40 bg-black/40;
   backdrop-filter: blur(4px);
   animation: fadeIn 0.2s ease-out;
 }
@@ -1118,10 +1094,10 @@ table {
   @apply w-full border-collapse;
 }
 thead th {
-  @apply text-left text-xs font-semibold uppercase tracking-wider text-theme-text-muted;
+  @apply text-theme-text-muted text-left text-xs font-semibold tracking-wider uppercase;
 }
 tbody tr {
-  @apply border-b border-theme-surface-border transition-colors duration-100;
+  @apply border-theme-surface-border border-b transition-colors duration-100;
 }
 tbody tr:hover {
   @apply bg-theme-surface-hover/50;
@@ -1133,15 +1109,20 @@ tbody tr:last-child {
 /* Print styles (#94) */
 @media print {
   /* Hide non-content elements */
-  nav, aside, .skip-to-main,
-  [role="navigation"], [role="banner"],
+  nav,
+  aside,
+  .skip-to-main,
+  [role='navigation'],
+  [role='banner'],
   button:not([data-print]),
   .no-print {
     display: none !important;
   }
 
   /* Reset backgrounds for ink savings */
-  body, main, .dark {
+  body,
+  main,
+  .dark {
     background: white !important;
     color: black !important;
   }
@@ -1160,18 +1141,20 @@ tbody tr:last-child {
 
   /* Show link URLs */
   a[href]:after {
-    content: " (" attr(href) ")";
+    content: ' (' attr(href) ')';
     font-size: 0.8em;
     color: #666;
   }
 
-  a[href^="#"]:after,
-  a[href^="javascript"]:after {
-    content: "";
+  a[href^='#']:after,
+  a[href^='javascript']:after {
+    content: '';
   }
 
   /* Prevent page breaks inside cards/tables */
-  tr, .card, article {
+  tr,
+  .card,
+  article {
     page-break-inside: avoid;
   }
 
@@ -1182,7 +1165,7 @@ tbody tr:last-child {
 
   /* ── Member ID Card print layout ── */
   .id-card-printable {
-    width: 3.375in !important;   /* CR-80 card width */
+    width: 3.375in !important; /* CR-80 card width */
     max-width: 3.375in !important;
     margin: 0 auto !important;
     page-break-inside: avoid;
@@ -1196,6 +1179,6 @@ tbody tr:last-child {
 
   /* Suppress the link-URL-after-text rule inside the card */
   .id-card-printable a[href]:after {
-    content: "" !important;
+    content: '' !important;
   }
 }
