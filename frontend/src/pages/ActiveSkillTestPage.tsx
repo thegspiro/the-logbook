@@ -1223,7 +1223,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Bottom bar */}
-        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button
@@ -1334,7 +1334,7 @@ export const ActiveSkillTestPage: React.FC = () => {
         </div>
 
         {/* Action Bar */}
-        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 py-3 safe-area-inset-bottom">
+        <div className="sticky bottom-0 bg-theme-surface-modal border-t border-theme-surface-border px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           {currentTest.is_practice ? (
             <div className="space-y-2">
               <button

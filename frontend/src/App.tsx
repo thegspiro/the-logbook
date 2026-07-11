@@ -186,6 +186,7 @@ function App() {
             {/* Toast notifications */}
             <Toaster
               position="top-right"
+              containerStyle={{ top: 'calc(0.5rem + env(safe-area-inset-top))' }}
               toastOptions={{
                 duration: 4000,
                 style: {
