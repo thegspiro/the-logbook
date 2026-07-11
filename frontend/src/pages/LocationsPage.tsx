@@ -437,7 +437,7 @@ function LocationSetupWizard({
                         </div>
                         <div>
                           <label className={labelCls}>Zip</label>
-                          <input type="text" value={station.zip} onChange={e => updateStation(idx, 'zip', e.target.value)} className={inputCls} disabled={station.saved} />
+                          <input type="text" inputMode="numeric" autoComplete="postal-code" value={station.zip} onChange={e => updateStation(idx, 'zip', e.target.value)} className={inputCls} disabled={station.saved} />
                         </div>
                       </div>
                     </div>
@@ -1281,7 +1281,7 @@ export default function LocationsPage() {
                 </div>
                 <div>
                   <label className={labelCls}>Zip</label>
-                  <input type="text" value={stationForm.zip} onChange={e => setStationForm(p => ({...p, zip: e.target.value}))} className={inputCls} />
+                  <input type="text" inputMode="numeric" autoComplete="postal-code" value={stationForm.zip} onChange={e => setStationForm(p => ({...p, zip: e.target.value}))} className={inputCls} />
                 </div>
               </div>
               <div>

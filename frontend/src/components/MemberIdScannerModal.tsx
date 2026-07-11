@@ -166,9 +166,9 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div
-        className="relative w-full max-w-md mx-4 bg-theme-surface rounded-xl border border-theme-surface-border shadow-xl overflow-hidden"
+        className="relative w-full max-w-md max-h-[90dvh] overflow-y-auto overscroll-contain bg-theme-surface rounded-xl border border-theme-surface-border shadow-xl"
         role="dialog"
         aria-modal="true"
         aria-labelledby="scanner-modal-title"
@@ -191,12 +191,13 @@ export const MemberIdScannerModal: React.FC<MemberIdScannerModalProps> = ({
           </button>
         </div>
 
-        {/* Scanner viewport */}
+        {/* Scanner viewport. Cap the height so a wide (landscape) phone doesn't
+            make the square preview taller than the screen. */}
         <div className="bg-black">
           <div
             id="member-scanner-viewport"
             data-testid="member-scanner-viewport"
-            className="w-full aspect-square"
+            className="w-full aspect-square max-h-[55vh]"
             role="img"
             aria-label="Camera scanner preview"
           />

@@ -34,6 +34,9 @@ export const MemberScanPage: React.FC = () => {
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const handledRef = useRef(false);
+  // Cache the member list so repeated barcode attempts don't refetch the whole
+  // directory each time (costly over a cell connection).
+  const usersRef = useRef<Awaited<ReturnType<typeof userService.getUsers>> | null>(null);
 
   /** Try to resolve the scanned value to a member and navigate. */
   const handleScanResult = useCallback(
@@ -58,8 +61,10 @@ export const MemberScanPage: React.FC = () => {
           return;
         }
 
-        const users = await userService.getUsers();
-        const match = users.find(
+        if (!usersRef.current) {
+          usersRef.current = await userService.getUsers();
+        }
+        const match = usersRef.current.find(
           (u) =>
             u.membership_number?.toLowerCase() === decoded.trim().toLowerCase(),
         );

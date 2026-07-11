@@ -273,7 +273,7 @@ function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditMo
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div><label className={labelCls}>City</label><input type="text" value={ed('city')} onChange={e => setEd('city', e.target.value)} className={inputCls} /></div>
         <div><label className={labelCls}>State</label><input type="text" value={ed('state')} onChange={e => setEd('state', e.target.value)} className={inputCls} /></div>
-        <div><label className={labelCls}>Zip Code</label><input type="text" value={ed('zip_code')} onChange={e => setEd('zip_code', e.target.value)} className={inputCls} /></div>
+        <div><label className={labelCls}>Zip Code</label><input type="text" inputMode="numeric" autoComplete="postal-code" value={ed('zip_code')} onChange={e => setEd('zip_code', e.target.value)} className={inputCls} /></div>
         <div><label className={labelCls}>County</label><input type="text" value={ed('county')} onChange={e => setEd('county', e.target.value)} className={inputCls} /></div>
       </div>
 
