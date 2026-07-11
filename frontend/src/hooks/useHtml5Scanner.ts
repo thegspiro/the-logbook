@@ -38,6 +38,12 @@ interface UseHtml5ScannerReturn {
   scanning: boolean;
   startScanner: () => Promise<void>;
   stopScanner: () => Promise<void>;
+  /** Whether the active camera exposes a controllable flashlight. */
+  flashlightSupported: boolean;
+  /** Whether the flashlight is currently on. */
+  flashlightOn: boolean;
+  /** Toggle the flashlight (no-op when unsupported). */
+  toggleFlashlight: () => Promise<void>;
 }
 
 /**
@@ -52,6 +58,10 @@ export function useHtml5Scanner({
 }: UseHtml5ScannerOptions): UseHtml5ScannerReturn {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [flashlightSupported, setFlashlightSupported] = useState(false);
+  const [flashlightOn, setFlashlightOn] = useState(false);
+  const flashlightOnRef = useRef(false);
+  flashlightOnRef.current = flashlightOn;
   // Keep onScan in a ref so the callback given to html5-qrcode always
   // calls the latest version without restarting the scanner.
   const onScanRef = useRef(onScan);
@@ -67,6 +77,27 @@ export function useHtml5Scanner({
       scannerRef.current = null;
     }
     setScanning(false);
+    setFlashlightOn(false);
+    setFlashlightSupported(false);
+  }, []);
+
+  const toggleFlashlight = useCallback(async () => {
+    const scanner = scannerRef.current;
+    // applyVideoConstraints is absent on older browsers (and on test mocks).
+    if (!scanner || typeof scanner.applyVideoConstraints !== 'function') return;
+    const next = !flashlightOnRef.current;
+    try {
+      // `torch` is the Web API name for the flashlight; not in the standard
+      // MediaTrackConstraints type.
+      await scanner.applyVideoConstraints({
+        advanced: [{ torch: next }],
+      } as unknown as MediaTrackConstraints);
+      setFlashlightOn(next);
+    } catch {
+      // The camera reported torch support but rejected the constraint — hide
+      // the affordance rather than leaving a dead button.
+      setFlashlightSupported(false);
+    }
   }, []);
 
   const startScanner = useCallback(async () => {
@@ -121,6 +152,18 @@ export function useHtml5Scanner({
 
     await html5QrCode.start(cameraTarget, startConfig, onSuccess, onFailure);
     setScanning(true);
+
+    // Detect flashlight capability on the running track (guard: the method is
+    // absent on older browsers and on test mocks).
+    try {
+      const caps =
+        typeof html5QrCode.getRunningTrackCapabilities === 'function'
+          ? (html5QrCode.getRunningTrackCapabilities() as { torch?: boolean })
+          : null;
+      setFlashlightSupported(caps?.torch === true);
+    } catch {
+      setFlashlightSupported(false);
+    }
   }, [viewportId, scanConfig, formatsToSupport, stopScanner]);
 
   // Cleanup on unmount
@@ -132,5 +175,12 @@ export function useHtml5Scanner({
     };
   }, []);
 
-  return { scanning, startScanner, stopScanner };
+  return {
+    scanning,
+    startScanner,
+    stopScanner,
+    flashlightSupported,
+    flashlightOn,
+    toggleFlashlight,
+  };
 }

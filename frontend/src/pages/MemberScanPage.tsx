@@ -20,10 +20,14 @@ import {
   Camera,
   CameraOff,
   AlertCircle,
+  Flashlight,
+  FlashlightOff,
 } from "lucide-react";
 import { userService } from "../services/api";
 import { getErrorMessage } from "../utils/errorHandling";
 import { useHtml5Scanner } from "../hooks/useHtml5Scanner";
+import { useScanFeedback } from "../hooks/useScanFeedback";
+import { ScanSuccessFlash } from "../components/ux/ScanSuccessFlash";
 import { isMemberIdPayload } from "../types/scanner";
 import { QR_SCAN_CONFIG } from "../constants/camera";
 
@@ -37,12 +41,14 @@ export const MemberScanPage: React.FC = () => {
   // Cache the member list so repeated barcode attempts don't refetch the whole
   // directory each time (costly over a cell connection).
   const usersRef = useRef<Awaited<ReturnType<typeof userService.getUsers>> | null>(null);
+  const { flashing, signalScanSuccess } = useScanFeedback();
 
   /** Try to resolve the scanned value to a member and navigate. */
   const handleScanResult = useCallback(
     async (decoded: string) => {
       if (handledRef.current) return;
       handledRef.current = true;
+      signalScanSuccess();
 
       setLastScan(decoded);
       setLookingUp(true);
@@ -82,7 +88,7 @@ export const MemberScanPage: React.FC = () => {
         setLookingUp(false);
       }
     },
-    [navigate],
+    [navigate, signalScanSuccess],
   );
 
   const onScan = useCallback(
@@ -92,7 +98,14 @@ export const MemberScanPage: React.FC = () => {
     [handleScanResult],
   );
 
-  const { scanning, startScanner, stopScanner } = useHtml5Scanner({
+  const {
+    scanning,
+    startScanner,
+    stopScanner,
+    flashlightSupported,
+    flashlightOn,
+    toggleFlashlight,
+  } = useHtml5Scanner({
     viewportId: "scanner-viewport",
     scanConfig: QR_SCAN_CONFIG,
     onScan,
@@ -130,11 +143,14 @@ export const MemberScanPage: React.FC = () => {
 
       {/* Scanner Viewport */}
       <div className="bg-theme-surface rounded-lg border border-theme-surface-border overflow-hidden mb-6">
-        <div
-          id="scanner-viewport"
-          data-testid="scanner-viewport"
-          className="w-full aspect-square bg-black/90"
-        />
+        <div className="relative">
+          <div
+            id="scanner-viewport"
+            data-testid="scanner-viewport"
+            className="w-full aspect-square bg-black/90"
+          />
+          <ScanSuccessFlash active={flashing} />
+        </div>
       </div>
 
       {/* Controls */}
@@ -151,15 +167,31 @@ export const MemberScanPage: React.FC = () => {
             Start Scanning
           </button>
         ) : (
-          <button
-            onClick={() => {
-              void stopScanner();
-            }}
-            className="btn-primary font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
-          >
-            <CameraOff className="h-4 w-4" />
-            Stop Scanning
-          </button>
+          <>
+            <button
+              onClick={() => {
+                void stopScanner();
+              }}
+              className="btn-primary font-medium gap-2 inline-flex items-center px-5 py-2.5 text-sm transition"
+            >
+              <CameraOff className="h-4 w-4" />
+              Stop Scanning
+            </button>
+            {flashlightSupported && (
+              <button
+                onClick={() => { void toggleFlashlight(); }}
+                aria-pressed={flashlightOn}
+                className={`font-medium gap-2 inline-flex items-center rounded-lg border px-5 py-2.5 text-sm transition ${
+                  flashlightOn
+                    ? 'border-amber-400 bg-amber-100 text-amber-900 dark:border-amber-500 dark:bg-amber-500/20 dark:text-amber-300'
+                    : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-secondary'
+                }`}
+              >
+                {flashlightOn ? <FlashlightOff className="h-4 w-4" /> : <Flashlight className="h-4 w-4" />}
+                {flashlightOn ? 'Flashlight Off' : 'Flashlight'}
+              </button>
+            )}
+          </>
         )}
       </div>
 

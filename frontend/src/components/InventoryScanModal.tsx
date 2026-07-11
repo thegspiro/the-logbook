@@ -27,7 +27,11 @@ import {
   BatchReturnResponse,
 } from '../services/api';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
+import { useScanFeedback } from '../hooks/useScanFeedback';
+import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
+import { FlashlightToggle } from './ux/FlashlightToggle';
 import { getErrorMessage } from '../utils/errorHandling';
+import { trackSupportsFlashlight, setTrackFlashlight } from '../utils/cameraTorch';
 import {
   HAS_BARCODE_DETECTOR,
   BARCODE_SCAN_CONFIG,
@@ -119,12 +123,24 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const {
     startScanner: startHtml5Scanner,
     stopScanner: stopHtml5Scanner,
+    flashlightSupported: html5FlashlightSupported,
+    flashlightOn: html5FlashlightOn,
+    toggleFlashlight: toggleHtml5Flashlight,
   } = useHtml5Scanner({
     viewportId: 'inventory-scanner-viewport',
     scanConfig: BARCODE_SCAN_CONFIG,
     onScan: onHtml5Scan,
     formatsToSupport: INVENTORY_BARCODE_FORMATS,
   });
+
+  const { flashing, signalScanSuccess } = useScanFeedback();
+
+  // Flashlight state for the native BarcodeDetector path (the html5-qrcode path
+  // exposes its own via the hook above).
+  const [nativeFlashlightSupported, setNativeFlashlightSupported] = useState(false);
+  const [nativeFlashlightOn, setNativeFlashlightOn] = useState(false);
+  const nativeFlashlightOnRef = useRef(false);
+  nativeFlashlightOnRef.current = nativeFlashlightOn;
 
   // Verify the native BarcodeDetector actually supports our formats before
   // preferring it over html5-qrcode. Some Android builds expose the API but
@@ -163,8 +179,34 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     if (!nativeDetectorReady) {
       void stopHtml5Scanner();
     }
+    setNativeFlashlightSupported(false);
+    setNativeFlashlightOn(false);
     setCameraActive(false);
   }, [stopHtml5Scanner, nativeDetectorReady]);
+
+  // Unified flashlight controls that dispatch to whichever scanning path is
+  // active. The html5-qrcode path is driven by the hook; the native
+  // BarcodeDetector path controls the raw MediaStreamTrack directly.
+  const flashlightSupported = nativeDetectorReady
+    ? nativeFlashlightSupported
+    : html5FlashlightSupported;
+  const flashlightOn = nativeDetectorReady ? nativeFlashlightOn : html5FlashlightOn;
+
+  const toggleNativeFlashlight = useCallback(async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track) return;
+    const next = !nativeFlashlightOnRef.current;
+    try {
+      await setTrackFlashlight(track, next);
+      setNativeFlashlightOn(next);
+    } catch {
+      setNativeFlashlightSupported(false);
+    }
+  }, []);
+
+  const toggleFlashlight = useCallback(() => {
+    return nativeDetectorReady ? toggleNativeFlashlight() : toggleHtml5Flashlight();
+  }, [nativeDetectorReady, toggleNativeFlashlight, toggleHtml5Flashlight]);
 
   /** Request a camera stream, trying rear first then falling back to front. */
   const acquireCameraStream = async (): Promise<MediaStream> => {
@@ -193,6 +235,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       try {
         const stream = await acquireCameraStream();
         streamRef.current = stream;
+        setNativeFlashlightSupported(trackSupportsFlashlight(stream.getVideoTracks()[0]));
 
         detectorRef.current = new BarcodeDetector({
           formats: nativeFormatsRef.current,
@@ -405,7 +448,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
         return;
       }
       const firstResult = response.results[0];
-      if (firstResult) addItemFromResult(firstResult);
+      if (firstResult) {
+        signalScanSuccess();
+        addItemFromResult(firstResult);
+      }
     } catch (err: unknown) {
       const is404 =
         err instanceof Error &&
@@ -729,12 +775,19 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   <p className="absolute bottom-2 left-0 right-0 text-center text-xs text-white/80">
                     Point camera at barcode
                   </p>
+                  {flashlightSupported && (
+                    <FlashlightToggle on={flashlightOn} onToggle={toggleFlashlight} />
+                  )}
+                  <ScanSuccessFlash active={flashing} />
                 </div>
               ) : (
-                <div
-                  id="inventory-scanner-viewport"
-                  className={`rounded-lg overflow-hidden ${cameraActive ? '' : 'hidden'}`}
-                />
+                <div className={`relative rounded-lg overflow-hidden ${cameraActive ? '' : 'hidden'}`}>
+                  <div id="inventory-scanner-viewport" className="w-full" />
+                  {cameraActive && flashlightSupported && (
+                    <FlashlightToggle on={flashlightOn} onToggle={toggleFlashlight} />
+                  )}
+                  <ScanSuccessFlash active={flashing} />
+                </div>
               )}
 
               {/* Lookup error */}
