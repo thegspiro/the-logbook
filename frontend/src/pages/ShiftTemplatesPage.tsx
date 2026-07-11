@@ -226,7 +226,7 @@ export const ShiftTemplatesPage: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-theme-surface-border mb-6 overflow-x-auto [&>button]:shrink-0 [&>button]:whitespace-nowrap" role="tablist" aria-label="Templates and patterns">
+      <div className="tab-scroll mb-6" role="tablist" aria-label="Templates and patterns">
         <button
           onClick={() => setActiveTab('templates')}
           role="tab"

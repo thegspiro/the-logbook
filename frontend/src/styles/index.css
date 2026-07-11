@@ -603,6 +603,33 @@
     @apply text-base;
   }
 }
+@utility hscroll {
+  /* #26 Horizontal scroll strip (hidden scrollbar, non-shrinking children).
+     Like tab-scroll but without the flex/border-b, for pill rows and any
+     row of items that would otherwise overflow a narrow viewport. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+  & > * {
+    flex-shrink: 0;
+  }
+}
+@utility pb-safe {
+  /* #27 Bottom padding equal to the device safe-area inset (0 on non-notched
+     devices). For fixed/sticky bars whose inner content already provides its
+     own visual padding. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@utility action-bar-safe {
+  /* #28 Vertical padding for a sticky/fixed bottom action bar: a consistent gap
+     on every device that grows to clear the home indicator on notched phones.
+     Owns both paddings, so use it instead of py-* (pair with px-4). */
+  padding-top: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
 
 /* Theme CSS Custom Properties */
 :root {
