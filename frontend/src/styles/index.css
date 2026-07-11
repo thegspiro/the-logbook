@@ -270,6 +270,12 @@
    Reusable Component Classes
    Use these instead of repeating long Tailwind class strings inline.
    To update the look of all inputs/cards/buttons, edit here.
+
+   Conventions:
+   - Always reference the theme-* color tokens (never hardcoded hex) so
+     light, dark, and high-contrast themes all follow automatically.
+   - Add new shared patterns as an @utility here rather than repeating
+     inline class strings; keep related ones together under a group header.
    ================================================================ */
 /* --- Form Controls --- (#7 focus border color, #8 transition on focus, #9 inset shadow on focus) */
 @utility form-input {
@@ -303,6 +309,7 @@
 }
 
 @utility card-secondary {
+  /* Lower-emphasis card for nested panels/surfaces inside another card. */
   @apply bg-theme-surface-secondary border-theme-surface-border rounded-lg border shadow-sm transition-shadow duration-200;
 }
 
@@ -341,10 +348,13 @@
 }
 
 @utility btn-icon {
+  /* Icon-only button — guarantees the 44x44px minimum touch target (WCAG 2.5.5). */
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2;
 }
 
 @utility btn-icon-sm {
+  /* Compact 36px icon button for dense desktop toolbars — below the touch-target
+     minimum, so avoid it as a primary control on touch UIs. */
   @apply inline-flex min-h-[36px] min-w-[36px] items-center justify-center rounded-md p-1.5;
 }
 
@@ -429,6 +439,8 @@
 }
 
 @utility action-label {
+  /* Text label inside an .action-bar; collapses to icon-only (screen-reader
+     only) on narrow screens so button rows don't overflow. */
   @media (max-width: 479px) {
     .action-bar & {
       @apply sr-only;
