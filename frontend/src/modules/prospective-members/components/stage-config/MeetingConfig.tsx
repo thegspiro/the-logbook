@@ -12,6 +12,8 @@ interface MeetingConfigProps {
   customCategories: string[];
   getNextEventForType: (eventType: string, category?: string) => EventListItem | undefined;
   renderEventPreview: (eventType: string | undefined, category?: string) => React.ReactNode;
+  /** Whether the org has the Cal.com integration connected. */
+  calcomConnected?: boolean;
 }
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
@@ -46,8 +48,10 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
   customCategories,
   getNextEventForType,
   renderEventPreview,
+  calcomConnected = false,
 }) => {
   const meetingConfig = config as MeetingStageConfig;
+  const schedulingProvider = meetingConfig.scheduling_provider ?? 'manual';
 
   return (
     <div className="space-y-4">
@@ -150,6 +154,51 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
           className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full resize-none rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
         />
       </div>
+      {calcomConnected && (
+        <div className="border-theme-surface-border mt-4 rounded-lg border border-dashed p-3">
+          <label htmlFor="stage-meeting-scheduling" className="text-theme-text-muted mb-2 block text-sm">
+            Scheduling
+          </label>
+          <select
+            id="stage-meeting-scheduling"
+            value={schedulingProvider}
+            onChange={(e) => {
+              const provider = e.target.value as MeetingStageConfig['scheduling_provider'];
+              setConfig({
+                ...meetingConfig,
+                scheduling_provider: provider,
+                // Drop the booking URL when switching back to manual so a stale
+                // link is never surfaced to applicants.
+                calcom_booking_url: provider === 'calcom' ? meetingConfig.calcom_booking_url : undefined,
+              });
+            }}
+            className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+          >
+            <option value="manual">Manual — coordinator arranges the meeting</option>
+            <option value="calcom">Cal.com — applicant self-schedules</option>
+          </select>
+          {schedulingProvider === 'calcom' && (
+            <div className="mt-3">
+              <label htmlFor="stage-meeting-calcom-url" className="text-theme-text-muted mb-2 block text-sm">
+                Cal.com Booking Link
+              </label>
+              <input
+                id="stage-meeting-calcom-url"
+                type="url"
+                value={meetingConfig.calcom_booking_url ?? ''}
+                onChange={(e) =>
+                  setConfig({ ...meetingConfig, calcom_booking_url: e.target.value.trim() || undefined })
+                }
+                placeholder="https://cal.com/your-department/interview"
+                className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+              />
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Applicants see a &quot;Schedule&quot; button linking here on their public status page.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
       <label className="text-theme-text-secondary flex items-center gap-2 text-sm mt-4">
         <input
           type="checkbox"

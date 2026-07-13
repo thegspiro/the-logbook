@@ -107,3 +107,107 @@ async def test_pipeline_not_opted_in_returns_none():
     svc = _svc_for(prospect)
 
     assert await svc.get_prospect_by_token("tok_original") is None
+
+
+def _prospect_with_step(step):
+    """Build a prospect whose single public step is the given SimpleNamespace."""
+    now = datetime.now(timezone.utc)
+    return SimpleNamespace(
+        id="p1",
+        first_name="Jane",
+        last_name="Doe",
+        status=SimpleNamespace(value="active"),
+        created_at=now - timedelta(days=2),
+        status_token="tok_original",
+        status_token_created_at=now,
+        pipeline=SimpleNamespace(
+            name="Recruit", public_status_enabled=True, steps=[step]
+        ),
+        current_step=step,
+        step_progress=[],
+    )
+
+
+async def test_calcom_meeting_stage_surfaces_scheduling_action():
+    step = SimpleNamespace(
+        id="s1",
+        public_visible=True,
+        name="Interview",
+        step_type="meeting",
+        config={
+            "scheduling_provider": "calcom",
+            "calcom_booking_url": "https://cal.com/dept/interview",
+        },
+    )
+    svc = _svc_for(_prospect_with_step(step))
+
+    result = await svc.get_prospect_by_token("tok_original")
+
+    action = result["current_stage_action"]
+    assert action["type"] == "calcom_scheduling"
+    assert action["url"] == "https://cal.com/dept/interview"
+
+
+async def test_calcom_meeting_without_url_has_no_action():
+    step = SimpleNamespace(
+        id="s1",
+        public_visible=True,
+        name="Interview",
+        step_type="meeting",
+        config={"scheduling_provider": "calcom"},
+    )
+    svc = _svc_for(_prospect_with_step(step))
+
+    result = await svc.get_prospect_by_token("tok_original")
+
+    assert result["current_stage_action"] is None
+
+
+async def test_non_http_booking_url_is_rejected():
+    step = SimpleNamespace(
+        id="s1",
+        public_visible=True,
+        name="Interview",
+        step_type="meeting",
+        config={
+            "scheduling_provider": "calcom",
+            "calcom_booking_url": "javascript:alert(1)",
+        },
+    )
+    svc = _svc_for(_prospect_with_step(step))
+
+    result = await svc.get_prospect_by_token("tok_original")
+
+    assert result["current_stage_action"] is None
+
+
+async def test_documenso_document_stage_surfaces_signature_note():
+    step = SimpleNamespace(
+        id="s1",
+        public_visible=True,
+        name="Sign Waiver",
+        step_type="document_upload",
+        config={"signing_provider": "documenso"},
+    )
+    svc = _svc_for(_prospect_with_step(step))
+
+    result = await svc.get_prospect_by_token("tok_original")
+
+    action = result["current_stage_action"]
+    assert action["type"] == "documenso_signature"
+    assert "url" not in action
+
+
+async def test_plain_meeting_stage_has_no_action():
+    step = SimpleNamespace(
+        id="s1",
+        public_visible=True,
+        name="Meet the Chief",
+        step_type="meeting",
+        config={},
+    )
+    svc = _svc_for(_prospect_with_step(step))
+
+    result = await svc.get_prospect_by_token("tok_original")
+
+    assert result["current_stage_action"] is None
