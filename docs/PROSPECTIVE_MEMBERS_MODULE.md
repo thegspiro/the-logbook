@@ -112,12 +112,12 @@ The `ApplicantDetailDrawer` was decomposed into focused sub-components:
 | Type | Icon | Description | Integration |
 |------|------|-------------|-------------|
 | `form_submission` | FileText | Applicant completes a form | Links to Forms module |
-| `document_upload` | Upload | Applicant uploads required documents | File storage |
+| `document_upload` | Upload | Applicant uploads required documents | File storage; optional **Documenso** e-signature |
 | `election_vote` | Vote | Membership votes on applicant | Links to Elections module via election packages |
 | `manual_approval` | CheckCircle | Coordinator manually approves | Internal action |
 | `automated_email` | Mail | Sends configurable email to applicant | Email template selection, variable interpolation, send delay |
 | `form_dropdown` | ListChecks | Links a form from Forms module for data collection | Links to Forms module via dropdown selector |
-| `meeting` | Calendar | Schedule interview or orientation meeting | Links to Events module; auto-links upcoming events |
+| `meeting` | Calendar | Schedule interview or orientation meeting | Links to Events module; auto-links upcoming events; optional **Cal.com** self-scheduling |
 
 ### Quick Presets (StageConfigModal)
 
@@ -147,7 +147,20 @@ Each stage can be configured with:
 - **Email configuration** (automated_email only): Configure email subject, welcome message, FAQ link, next meeting details, custom sections (title + content), and application status tracker. Email is automatically sent when a prospect advances to this stage
 - **Form selection** (form_dropdown only): Choose a form from the Forms module for applicant data collection via dropdown selector
 - **Event linking** (meeting and others): Link a stage to a specific event for scheduling. Meeting stages auto-link the next upcoming event matching the stage configuration
+- **Cal.com scheduling** (meeting only, when the Cal.com integration is connected): Set the stage's scheduling method to *Cal.com* and provide a booking link. Applicants see a **Schedule** button on their public status page; a `BOOKING_CREATED` webhook (with a configured secret) auto-advances the applicant. When Cal.com is not connected, a "Connect Cal.com" hint links to the Integrations page
+- **Documenso e-signature** (document_upload only, when the Documenso integration is connected): Set the stage's collection method to *Documenso e-signature* and optionally store a template ID. Applicants see a "Documents sent for signature" note; a `DOCUMENT_COMPLETED` webhook (with a configured secret) auto-advances the applicant. When Documenso is not connected, a "Connect Documenso" hint links to the Integrations page
 - **Status page visibility**: Toggle whether the stage appears on the public application status page
+
+### Integration Auto-Advance (2026-07-13)
+
+When the **Cal.com** or **Documenso** integrations are connected, meeting and document stages can advance without coordinator action. Public, verified webhook receivers correlate an inbound event to a prospect by the attendee/signer **email** and complete the prospect's current stage only when that stage is configured to use the integration:
+
+| Endpoint | Trigger | Advances |
+|----------|---------|----------|
+| `POST /api/public/v1/webhooks/calcom/{integration_id}` | `BOOKING_CREATED` | A `meeting` stage with `scheduling_provider = calcom` |
+| `POST /api/public/v1/webhooks/documenso/{integration_id}` | `DOCUMENT_COMPLETED` | A `document_upload` stage with `signing_provider = documenso` |
+
+Both endpoints are rate limited and reject any request that fails the per-integration `webhook_secret` verification. See the [Documenso](../wiki/Integration-Documenso.md) and [Cal.com](../wiki/Integration-Calcom.md) integration references for setup.
 
 ---
 

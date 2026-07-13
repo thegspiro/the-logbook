@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documenso & Cal.com Integrations (2026-07-13)
+
+**New integrations**
+
+- **Documenso** (open-source DocuSign alternative) and **Cal.com** (open-source
+  Calendly alternative) added to the integrations catalog. Both connect with an
+  encrypted API token/key, support Documenso Cloud / Cal.com Cloud or a
+  self-hosted instance via an SSRF-validated base URL, and expose a
+  test-connection check.
+
+**Membership pipeline**
+
+- A **Meeting** stage can use a **Cal.com** booking link so applicants
+  self-schedule; a **Document Upload** stage can collect a **Documenso**
+  e-signature instead of a file upload. Both options appear only when the
+  integration is connected (otherwise a "Connect it" deep-link is shown).
+- The public application-status page surfaces the current stage's action — a
+  **Schedule** button (Cal.com) or a signing note (Documenso). Booking URLs are
+  guarded to http(s) on both server and client.
+
+**Close the loop (webhooks + auto-advance)**
+
+- New verified public webhook receivers
+  (`POST /api/public/v1/webhooks/{documenso,calcom}/{integration_id}`, mirroring
+  the Salesforce webhook: per-IP rate limit, mandatory secret/signature
+  verification, audit logging). A completed signature (`DOCUMENT_COMPLETED`) or a
+  new booking (`BOOKING_CREATED`) auto-advances the matching prospect's stage,
+  correlated by signer/attendee email. Cal.com uses an HMAC-SHA256 body
+  signature (`X-Cal-Signature-256`); Documenso accepts a shared-secret header
+  (`X-Documenso-Secret`) or an HMAC signature.
+- The connect dialog gained a Webhook Secret field and displays the callback URL
+  to paste into each provider.
+
+**Beyond membership**
+
+- New `GET /api/v1/integrations/calcom/bookings` endpoint and a **Bookings**
+  panel on the Cal.com card listing upcoming bookings.
+
+**Docs**: new [Documenso](wiki/Integration-Documenso.md) and
+[Cal.com](wiki/Integration-Calcom.md) wiki references; expanded
+[Integrations](docs/training/16-integrations.md) and
+[Prospective Members](docs/training/15-prospective-members.md) training guides.
+
 ### Mobile UX, Barcode Scanning & Design-System CSS (2026-07-11)
 
 **Barcode / QR scanning (mobile field use)**

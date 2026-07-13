@@ -10,14 +10,16 @@ The Integrations module connects The Logbook to external services — calendar s
 2. [Integration Catalog](#integration-catalog)
 3. [Connecting an Integration](#connecting-an-integration)
 4. [Salesforce CRM](#salesforce-crm)
-5. [Calendar Integrations](#calendar-integrations)
-6. [Messaging Integrations](#messaging-integrations)
-7. [Weather Alerts](#weather-alerts)
-8. [EMS & Fire Reporting](#ems--fire-reporting)
-9. [Generic Webhooks](#generic-webhooks)
-10. [Training Provider Integrations](#training-provider-integrations)
-11. [Monitoring Integration Health](#monitoring-integration-health)
-12. [Troubleshooting](#troubleshooting)
+5. [Documenso — Document E-Signatures](#documenso--document-e-signatures)
+6. [Cal.com — Interview Scheduling](#calcom--interview-scheduling)
+7. [Calendar Integrations](#calendar-integrations)
+8. [Messaging Integrations](#messaging-integrations)
+9. [Weather Alerts](#weather-alerts)
+10. [EMS & Fire Reporting](#ems--fire-reporting)
+11. [Generic Webhooks](#generic-webhooks)
+12. [Training Provider Integrations](#training-provider-integrations)
+13. [Monitoring Integration Health](#monitoring-integration-health)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -50,6 +52,8 @@ The integrations page shows:
 | **Messaging** | Discord | Webhook notifications, event reminders |
 | **Messaging** | Microsoft Teams | Adaptive Cards, channel notifications |
 | **CRM** | Salesforce | Contact sync, donor management, bidirectional |
+| **Documents** | Documenso | Send documents for e-signature (open-source DocuSign alternative) |
+| **Scheduling** | Cal.com | Self-scheduling links and booking sync (open-source Calendly alternative) |
 | **Data** | CSV Import/Export | Member import, training/inventory export |
 | **Data** | Generic Webhooks | HMAC-signed event notifications to any URL |
 | **Safety** | NWS Weather Alerts | Tornado, flood, fire weather alerts (free) |
@@ -134,6 +138,76 @@ Salesforce can push contact updates back to The Logbook via a webhook at `POST /
 | Sandbox vs production mismatch | Warning shown; data won't sync to production from sandbox |
 | OAuth token expired | Auto-refreshed transparently |
 | Conflict on bidirectional sync | Last-write-wins with conflict logged |
+
+---
+
+## Documenso — Document E-Signatures
+
+**Documenso** is an open-source DocuSign alternative for sending documents out for electronic signature. Use it to collect signed waivers, membership agreements, or policy acknowledgments. Works with Documenso Cloud (`app.documenso.com`) or a self-hosted instance.
+
+### Configuration
+
+| Field | Description |
+|-------|-------------|
+| **API Token** | Create under **Settings > API** in your Documenso dashboard. Stored encrypted. |
+| **API Base URL** | Leave blank for Documenso Cloud. Self-hosted instances use `https://your-host/api/v1`. |
+| **Webhook Secret** *(optional)* | A shared secret that enables automatic pipeline auto-advance when a document is signed (see below). |
+
+After entering the token, click **Test Connection** to verify it.
+
+### Auto-Advancing a Signing Stage (Webhooks)
+
+When you set a **Webhook Secret**, the connect dialog shows a **callback URL**:
+
+```
+https://your-logbook-host/api/public/v1/webhooks/documenso/{integration_id}
+```
+
+Add this URL as a webhook in Documenso and have it send the secret in the `X-Documenso-Secret` header (or an HMAC-SHA256 body signature in `X-Documenso-Signature`). When a document is **completed** (all recipients signed), The Logbook matches the signer's email to a prospective member whose current stage is a Documenso-backed **Document Upload** stage and **advances them automatically** — no coordinator action needed.
+
+> **Security:** The callback endpoint is rate limited (30 requests/minute per IP) and rejects any request that fails secret/signature verification. An integration with no webhook secret configured rejects all inbound webhooks.
+
+### Using Documenso in the Membership Pipeline
+
+Once Documenso is connected, a **Document Upload** pipeline stage gains a **Collection Method** option — switch it from *Upload* to *Documenso e-signature*. Applicants then see a "Documents sent for signature" note on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the Documenso connect dialog showing the API Token, API Base URL, and Webhook Secret fields with the generated callback URL displayed below the secret field._
+
+---
+
+## Cal.com — Interview Scheduling
+
+**Cal.com** is an open-source Calendly alternative for scheduling. Use it to let applicants self-schedule interviews, ride-alongs, or station tours, and to surface upcoming bookings in The Logbook. Works with Cal.com Cloud (`cal.com`) or a self-hosted instance.
+
+### Configuration
+
+| Field | Description |
+|-------|-------------|
+| **API Key** | Create under **Settings > Developer > API keys** in Cal.com. Stored encrypted. |
+| **API Base URL** | Leave blank for Cal.com Cloud. Self-hosted instances use `https://your-host/api/v1`. |
+| **Webhook Secret** *(optional)* | A signing secret that enables automatic pipeline auto-advance when an applicant books (see below). |
+
+Click **Test Connection** to verify the key.
+
+### Viewing Bookings
+
+On the connected Cal.com card, click **Bookings** to see upcoming bookings pulled from your Cal.com account (title, attendee, time, and status).
+
+### Auto-Advancing a Meeting Stage (Webhooks)
+
+When you set a **Webhook Secret**, the connect dialog shows a **callback URL**:
+
+```
+https://your-logbook-host/api/public/v1/webhooks/calcom/{integration_id}
+```
+
+Add this URL as a Cal.com webhook subscribed to the **BOOKING_CREATED** event, using the same secret. Cal.com signs the body with HMAC-SHA256 and sends the `X-Cal-Signature-256` header. When an applicant books, The Logbook matches the attendee's email to a prospective member whose current stage is a Cal.com-backed **Meeting** stage and **advances them automatically**.
+
+### Using Cal.com in the Membership Pipeline
+
+Once Cal.com is connected, a **Meeting** pipeline stage gains a **Scheduling** option — switch it from *Manual* to *Cal.com* and paste your booking link. Applicants then see a **Schedule** button on their public status page. See [Prospective Members Pipeline → Using Cal.com and Documenso in Stages](./15-prospective-members.md#using-calcom-and-documenso-in-stages).
+
+> **[SCREENSHOT NEEDED]:** _Screenshot of the connected Cal.com card with the "Bookings" button, and the Bookings panel below listing upcoming interviews with attendee, time, and status._
 
 ---
 
@@ -334,6 +408,9 @@ Click any integration to see:
 | ICS feed not updating | Allow up to 1 hour for calendar apps to refresh. Verify the feed URL is correct. |
 | ePCR import fails | Check the file format (CSV or NEMSIS XML). Ensure column headers match expected format. |
 | Slack notifications not appearing | Verify the webhook URL in Slack workspace settings. Check channel permissions. |
+| Documenso "connection failed" | Verify the API token under **Settings > API** and the base URL (self-hosted instances only). |
+| Cal.com "connection failed" | Verify the API key under **Settings > Developer > API keys**. |
+| Signed document or booking didn't advance the applicant | Confirm the Webhook Secret matches on both sides, the callback URL is correct, the signer/attendee email matches the applicant, and the applicant's **current** stage is configured to use that integration. |
 | OAuth token expired | Most integrations auto-refresh tokens. If persistent, disconnect and reconnect. |
 | PHI data in integration | ePCR and medical integrations are flagged as containing PHI. Data is processed and deleted after import per HIPAA requirements. |
 

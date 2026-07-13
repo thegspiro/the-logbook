@@ -102,6 +102,28 @@ Each stage can be configured with:
 | **Email Settings** (automated email stage) | Subject, sections, welcome text, FAQ link, next meeting info, status tracker link |
 | **Form ID** (form stages) | Which form to link |
 | **Event Type** (meeting stage) | Interview, orientation, or ride-along |
+| **Scheduling** (meeting stage) | *Manual* or *Cal.com self-scheduling* — shown only when Cal.com is connected |
+| **Collection Method** (document stage) | *Upload* or *Documenso e-signature* — shown only when Documenso is connected |
+
+### Using Cal.com and Documenso in Stages
+
+If your department has connected the **Cal.com** or **Documenso** integrations (see [Integrations → Cal.com](./16-integrations.md#calcom--interview-scheduling) and [Integrations → Documenso](./16-integrations.md#documenso--document-e-signatures)), two pipeline stage types gain extra options. When the integration is **not** connected, a "Connect Cal.com / Connect Documenso" link appears in the stage editor instead.
+
+**Meeting stage → Cal.com self-scheduling**
+
+1. Edit a **Meeting** stage and set **Scheduling** to *Cal.com*
+2. Paste your Cal.com booking link (e.g., `https://cal.com/your-department/interview`)
+3. Applicants on this stage see a **Schedule** button on their public status page and pick their own time
+4. If a **Webhook Secret** is configured on the Cal.com integration, booking auto-advances the applicant to the next stage — otherwise the coordinator advances them manually after the interview
+
+**Document Upload stage → Documenso e-signature**
+
+1. Edit a **Document Upload** stage and set **Collection Method** to *Documenso e-signature*
+2. Optionally enter a Documenso **Template ID** (stored for automated sending in a later release)
+3. Applicants on this stage see a "Documents sent for signature" note on their public status page
+4. If a **Webhook Secret** is configured on the Documenso integration, a completed signature auto-advances the applicant — otherwise the coordinator advances them manually once signed
+
+> **Note:** Auto-advance matches the signer/attendee **email** to the applicant, so the applicant must book or sign with the same email they applied with. Only the applicant's *current* stage is advanced, and only if that stage is configured to use the integration.
 
 ---
 
@@ -147,6 +169,8 @@ The system automatically checks for existing members or applicants with the same
    - **Automated Email**: Email sent automatically; advances again
    - **Form Submission**: Form link sent to applicant (if auto-advance enabled)
    - **Election Vote**: Election package auto-created
+   - **Meeting (Cal.com)**: Applicant self-schedules; booking can auto-advance them
+   - **Document Upload (Documenso)**: Applicant signs electronically; a completed signature can auto-advance them
    - Other types: Applicant waits for manual action
 
 ### Moving Back (Regression)
