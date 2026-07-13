@@ -20,6 +20,9 @@ from app.services.integration_services.calcom_service import (
     CalcomService,
     format_booking_as_event,
 )
+from app.services.integration_services.calcom_service import (
+    parse_webhook_event as parse_calcom_webhook,
+)
 from app.services.integration_services.discord_service import (
     format_event_embed,
     format_shift_embed,
@@ -28,6 +31,9 @@ from app.services.integration_services.discord_service import (
 from app.services.integration_services.documenso_service import (
     DocumensoService,
     build_create_document_payload,
+)
+from app.services.integration_services.documenso_service import (
+    parse_webhook_event as parse_documenso_webhook,
 )
 from app.services.integration_services.epcr_import_service import (
     parse_csv_file,
@@ -52,7 +58,11 @@ from app.services.integration_services.teams_service import (
     format_shift_card,
     format_training_card,
 )
-from app.services.integration_services.webhook_service import _sign_payload
+from app.services.integration_services.webhook_service import (
+    _sign_payload,
+    verify_hmac_signature,
+    verify_shared_secret,
+)
 
 # ============================================
 # Shared httpx mocking helper
@@ -539,3 +549,93 @@ class TestCalcomBookingMapping:
             events = await service.list_bookings()
         assert len(events) == 1
         assert events[0]["external_id"] == "b1"
+
+
+# ============================================
+# Webhook Signature / Secret Verification
+# ============================================
+
+
+class TestWebhookVerification:
+    def test_hmac_signature_accepts_valid_hex(self):
+        body = b'{"a":1}'
+        secret = "s3cr3t"
+        import hashlib
+        import hmac
+
+        sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        assert verify_hmac_signature(body, secret, sig) is True
+
+    def test_hmac_signature_accepts_scheme_prefix(self):
+        body = b"payload"
+        secret = "k"
+        import hashlib
+        import hmac
+
+        sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        assert verify_hmac_signature(body, secret, f"sha256={sig}") is True
+
+    def test_hmac_signature_rejects_wrong_sig(self):
+        assert verify_hmac_signature(b"payload", "k", "deadbeef") is False
+
+    def test_hmac_signature_rejects_empty(self):
+        assert verify_hmac_signature(b"payload", "", "abc") is False
+        assert verify_hmac_signature(b"payload", "k", "") is False
+
+    def test_shared_secret_constant_time_match(self):
+        assert verify_shared_secret("abc", "abc") is True
+        assert verify_shared_secret("abc", "xyz") is False
+        assert verify_shared_secret("", "abc") is False
+        assert verify_shared_secret("abc", "") is False
+
+
+# ============================================
+# Documenso / Cal.com Webhook Parsing
+# ============================================
+
+
+class TestWebhookParsing:
+    def test_documenso_completed_event(self):
+        parsed = parse_documenso_webhook(
+            {
+                "event": "DOCUMENT_COMPLETED",
+                "payload": {
+                    "externalId": "sp-1",
+                    "title": "Waiver",
+                    "recipients": [{"email": "a@b.com"}, {"email": "c@d.com"}],
+                },
+            }
+        )
+        assert parsed["completed"] is True
+        assert parsed["external_id"] == "sp-1"
+        assert parsed["recipient_emails"] == ["a@b.com", "c@d.com"]
+
+    def test_documenso_non_completion_event(self):
+        parsed = parse_documenso_webhook({"event": "DOCUMENT_OPENED", "payload": {}})
+        assert parsed["completed"] is False
+        assert parsed["recipient_emails"] == []
+
+    def test_documenso_handles_malformed_payload(self):
+        parsed = parse_documenso_webhook(
+            {"event": "DOCUMENT_COMPLETED", "payload": None}
+        )
+        assert parsed["completed"] is True
+        assert parsed["recipient_emails"] == []
+
+    def test_calcom_booking_created(self):
+        parsed = parse_calcom_webhook(
+            {
+                "triggerEvent": "BOOKING_CREATED",
+                "payload": {"uid": "bk-1", "attendees": [{"email": "x@y.com"}]},
+            }
+        )
+        assert parsed["created"] is True
+        assert parsed["booking_uid"] == "bk-1"
+        assert parsed["attendee_emails"] == ["x@y.com"]
+
+    def test_calcom_cancellation_is_not_created(self):
+        parsed = parse_calcom_webhook(
+            {"triggerEvent": "BOOKING_CANCELLED", "payload": {"uid": "bk-2"}}
+        )
+        assert parsed["created"] is False
+        assert parsed["attendee_emails"] == []

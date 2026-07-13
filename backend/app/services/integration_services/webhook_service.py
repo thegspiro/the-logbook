@@ -29,6 +29,33 @@ def _sign_payload(payload_bytes: bytes, secret: str) -> str:
     ).hexdigest()
 
 
+def verify_hmac_signature(body: bytes, secret: str, provided_signature: str) -> bool:
+    """Constant-time verify an HMAC-SHA256 hex signature over the raw body.
+
+    Accepts both bare hex digests and scheme-prefixed forms (e.g. the
+    ``sha256=`` prefix some providers use). Returns False on any missing input
+    so an unconfigured secret can never accidentally authenticate a request.
+    """
+    if not secret or not provided_signature:
+        return False
+    expected = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    provided = provided_signature.strip()
+    if "=" in provided:
+        provided = provided.split("=", 1)[1]
+    return hmac.compare_digest(expected, provided)
+
+
+def verify_shared_secret(provided: str, expected: str) -> bool:
+    """Constant-time compare a shared secret presented in a header/param.
+
+    Used by providers (e.g. Documenso) that authenticate webhooks by echoing a
+    pre-shared secret rather than signing the body.
+    """
+    if not expected or not provided:
+        return False
+    return hmac.compare_digest(provided, expected)
+
+
 async def send_webhook(
     url: str,
     event_type: str,

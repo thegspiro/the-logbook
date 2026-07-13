@@ -27,6 +27,33 @@ def _normalize_base_url(api_base_url: str) -> str:
     return (api_base_url or DEFAULT_API_BASE_URL).rstrip("/")
 
 
+# Cal.com webhook triggers that mean a new booking was made.
+BOOKING_CREATED_EVENTS = frozenset({"BOOKING_CREATED"})
+
+
+def parse_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extract the fields we care about from a Cal.com webhook body.
+
+    Cal.com posts ``{"triggerEvent": "...", "payload": {...}}``. We surface the
+    trigger, whether it represents a new booking, the booking uid, and the
+    attendee emails so a booking can be correlated back to a prospect.
+    """
+    trigger = str(payload.get("triggerEvent") or "")
+    data = payload.get("payload") or {}
+    if not isinstance(data, dict):
+        data = {}
+    attendees = data.get("attendees") or []
+    emails = [
+        a.get("email", "") for a in attendees if isinstance(a, dict) and a.get("email")
+    ]
+    return {
+        "trigger": trigger,
+        "created": trigger.upper() in BOOKING_CREATED_EVENTS,
+        "booking_uid": str(data.get("uid") or ""),
+        "attendee_emails": emails,
+    }
+
+
 def format_booking_as_event(booking: dict[str, Any]) -> dict[str, Any]:
     """
     Map a Cal.com booking to The Logbook's internal event shape.

@@ -23,6 +23,34 @@ DEFAULT_API_BASE_URL = "https://app.documenso.com/api/v1"
 # Documenso recipient roles the API accepts. SIGNER is the common case.
 VALID_RECIPIENT_ROLES = frozenset({"SIGNER", "APPROVER", "CC", "VIEWER"})
 
+# Documenso webhook event names that mean every recipient has finished signing.
+COMPLETION_EVENTS = frozenset({"DOCUMENT_COMPLETED"})
+
+
+def parse_webhook_event(payload: dict[str, Any]) -> dict[str, Any]:
+    """Extract the fields we care about from a Documenso webhook body.
+
+    Documenso posts ``{"event": "...", "payload": {...}}``. We surface the
+    event name, whether it represents completion, the document's externalId
+    (the Logbook identifier we set at send time), and the recipient emails so
+    a completed signature can be correlated back to a prospect.
+    """
+    event = str(payload.get("event") or payload.get("type") or "")
+    data = payload.get("payload") or payload.get("data") or {}
+    if not isinstance(data, dict):
+        data = {}
+    recipients = data.get("recipients") or []
+    emails = [
+        r.get("email", "") for r in recipients if isinstance(r, dict) and r.get("email")
+    ]
+    return {
+        "event": event,
+        "completed": event.upper() in COMPLETION_EVENTS,
+        "external_id": str(data.get("externalId") or ""),
+        "title": str(data.get("title") or ""),
+        "recipient_emails": emails,
+    }
+
 
 def _normalize_base_url(api_base_url: str) -> str:
     """Strip a trailing slash so path joins never double up."""

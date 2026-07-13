@@ -233,6 +233,11 @@ const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'g
 const inputClass = 'form-input';
 const labelClass = 'form-label';
 
+// Public inbound-webhook URL a department pastes into Documenso / Cal.com so
+// signing/booking events auto-advance the matching prospect's pipeline stage.
+const webhookCallbackUrl = (provider: 'documenso' | 'calcom', integrationId: string): string =>
+  `${window.location.origin}/api/public/v1/webhooks/${provider}/${integrationId}`;
+
 const IntegrationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('integrations.manage');
@@ -275,8 +280,10 @@ const IntegrationsPage: React.FC = () => {
   const [sfAutoSync, setSfAutoSync] = useState(false);
   const [documensoBaseUrl, setDocumensoBaseUrl] = useState('');
   const [documensoApiToken, setDocumensoApiToken] = useState('');
+  const [documensoWebhookSecret, setDocumensoWebhookSecret] = useState('');
   const [calcomBaseUrl, setCalcomBaseUrl] = useState('');
   const [calcomApiKey, setCalcomApiKey] = useState('');
+  const [calcomWebhookSecret, setCalcomWebhookSecret] = useState('');
 
   const loadIntegrations = useCallback(async () => {
     try {
@@ -353,8 +360,10 @@ const IntegrationsPage: React.FC = () => {
     setSfAutoSync(false);
     setDocumensoBaseUrl('');
     setDocumensoApiToken('');
+    setDocumensoWebhookSecret('');
     setCalcomBaseUrl('');
     setCalcomApiKey('');
+    setCalcomWebhookSecret('');
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -376,11 +385,13 @@ const IntegrationsPage: React.FC = () => {
         return {
           api_base_url: documensoBaseUrl.trim() || undefined,
           api_token: documensoApiToken.trim() || undefined,
+          webhook_secret: documensoWebhookSecret.trim() || undefined,
         };
       case 'calcom':
         return {
           api_base_url: calcomBaseUrl.trim() || undefined,
           api_key: calcomApiKey.trim() || undefined,
+          webhook_secret: calcomWebhookSecret.trim() || undefined,
         };
       case 'salesforce':
         return {
@@ -832,6 +843,23 @@ const IntegrationsPage: React.FC = () => {
                 Leave blank for Documenso Cloud. Self-hosted instances use https://your-host/api/v1.
               </p>
             </div>
+            <div>
+              <label htmlFor="documenso-webhook-secret" className={labelClass}>Webhook Secret (optional)</label>
+              <input
+                id="documenso-webhook-secret"
+                type="password"
+                value={documensoWebhookSecret}
+                onChange={(e) => setDocumensoWebhookSecret(e.target.value)}
+                placeholder="Shared secret for inbound webhooks"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Set a secret to auto-advance a prospect&apos;s signing stage when they finish signing. Add this Webhook URL in Documenso (send it as the <code>X-Documenso-Secret</code> header):
+              </p>
+              <code className="mt-1 block break-all rounded bg-theme-surface-secondary px-2 py-1 text-xs text-theme-text-secondary">
+                {webhookCallbackUrl('documenso', integration.id)}
+              </code>
+            </div>
           </div>
         );
 
@@ -865,6 +893,23 @@ const IntegrationsPage: React.FC = () => {
               <p className="text-xs text-theme-text-muted mt-1">
                 Leave blank for Cal.com Cloud. Self-hosted instances use https://your-host/api/v1.
               </p>
+            </div>
+            <div>
+              <label htmlFor="calcom-webhook-secret" className={labelClass}>Webhook Secret (optional)</label>
+              <input
+                id="calcom-webhook-secret"
+                type="password"
+                value={calcomWebhookSecret}
+                onChange={(e) => setCalcomWebhookSecret(e.target.value)}
+                placeholder="Signing secret for inbound webhooks"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Set a secret to auto-advance a prospect&apos;s interview stage when they book. Add this URL as a Cal.com webhook (BOOKING_CREATED) using the same secret:
+              </p>
+              <code className="mt-1 block break-all rounded bg-theme-surface-secondary px-2 py-1 text-xs text-theme-text-secondary">
+                {webhookCallbackUrl('calcom', integration.id)}
+              </code>
             </div>
           </div>
         );

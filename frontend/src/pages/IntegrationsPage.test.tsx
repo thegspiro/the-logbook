@@ -397,6 +397,7 @@ describe('IntegrationsPage', () => {
       expect(mockConnectIntegration).toHaveBeenCalledWith('doc-1', {
         api_base_url: undefined,
         api_token: 'api_secret123',
+        webhook_secret: undefined,
       });
     });
 
@@ -417,6 +418,7 @@ describe('IntegrationsPage', () => {
       expect(mockConnectIntegration).toHaveBeenCalledWith('cal-1', {
         api_base_url: 'https://cal.example.com/api/v1',
         api_key: 'cal_key456',
+        webhook_secret: undefined,
       });
     });
   });

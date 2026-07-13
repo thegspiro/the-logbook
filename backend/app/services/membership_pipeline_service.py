@@ -1045,6 +1045,74 @@ class MembershipPipelineService:
         await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
 
+    async def complete_current_step_for_integration_event(
+        self,
+        organization_id: str,
+        emails: List[str],
+        *,
+        step_type: str,
+        provider_key: str,
+        provider_value: str,
+        completed_by: str,
+        action_result: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, str]]:
+        """Auto-advance a prospect when an integration event arrives.
+
+        Finds an active prospect in the org whose email matches one of
+        ``emails`` and whose current step is of ``step_type`` configured with
+        ``config[provider_key] == provider_value`` (e.g. a meeting step using
+        Cal.com when an applicant books, or a document step using Documenso
+        when they finish signing), then completes that step.
+
+        Returns ``{"prospect_id", "step_id"}`` on success, or None when nothing
+        matched (unknown email, wrong current stage, or already advanced) — a
+        no-match is a normal, non-error outcome for a public webhook.
+        """
+        normalized = {e.strip().lower() for e in emails if e and e.strip()}
+        if not normalized:
+            return None
+
+        query = (
+            select(ProspectiveMember)
+            .where(
+                ProspectiveMember.organization_id == organization_id,
+                ProspectiveMember.status == ProspectStatus.ACTIVE,
+                func.lower(ProspectiveMember.email).in_(normalized),
+            )
+            .options(
+                selectinload(ProspectiveMember.current_step),
+                selectinload(ProspectiveMember.pipeline).selectinload(
+                    MembershipPipeline.steps
+                ),
+            )
+        )
+        result = await self.db.execute(query)
+        prospects = result.scalars().all()
+
+        for prospect in prospects:
+            step = prospect.current_step
+            if not step:
+                continue
+            step_type_value = (
+                step.step_type.value
+                if hasattr(step.step_type, "value")
+                else step.step_type
+            )
+            if step_type_value != step_type:
+                continue
+            if (step.config or {}).get(provider_key) != provider_value:
+                continue
+            await self.complete_step(
+                prospect_id=str(prospect.id),
+                organization_id=organization_id,
+                step_id=str(step.id),
+                completed_by=completed_by,
+                action_result=action_result,
+            )
+            return {"prospect_id": str(prospect.id), "step_id": str(step.id)}
+
+        return None
+
     async def advance_prospect(
         self,
         prospect_id: str,
