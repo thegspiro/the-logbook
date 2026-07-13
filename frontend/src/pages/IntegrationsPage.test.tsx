@@ -21,6 +21,11 @@ const mockTestConnection = vi.fn();
 const mockSalesforceReadiness = vi.fn();
 const mockSalesforcePreviewMembers = vi.fn();
 const mockGetSalesforceOAuthUrl = vi.fn().mockReturnValue('/api/v1/integrations/salesforce/oauth/authorize');
+const mockGetCalcomBookings = vi.fn();
+
+vi.mock('../hooks/useTimezone', () => ({
+  useTimezone: () => 'America/New_York',
+}));
 
 vi.mock('../services/api', () => ({
   integrationsService: {
@@ -32,6 +37,7 @@ vi.mock('../services/api', () => ({
     salesforceReadiness: (...args: unknown[]) => mockSalesforceReadiness(...args) as unknown,
     salesforcePreviewMembers: (...args: unknown[]) => mockSalesforcePreviewMembers(...args) as unknown,
     getSalesforceOAuthUrl: (...args: unknown[]) => mockGetSalesforceOAuthUrl(...args) as unknown,
+    getCalcomBookings: (...args: unknown[]) => mockGetCalcomBookings(...args) as unknown,
   },
 }));
 
@@ -420,6 +426,44 @@ describe('IntegrationsPage', () => {
         api_key: 'cal_key456',
         webhook_secret: undefined,
       });
+    });
+
+    it('loads and lists Cal.com bookings when the Bookings panel opens', async () => {
+      const user = userEvent.setup();
+      const calcomConnected = { ...calcomAvailable, status: 'connected' as const, enabled: true };
+      mockGetIntegrations.mockResolvedValue([calcomConnected]);
+      mockGetCalcomBookings.mockResolvedValue([
+        {
+          external_id: 'bk-1',
+          title: 'Interview: J. Doe',
+          description: '',
+          location: 'Station 1',
+          start_time: '2026-05-01T14:00:00Z',
+          end_time: '2026-05-01T14:30:00Z',
+          status: 'accepted',
+          attendee_emails: ['jane@example.com'],
+        },
+      ]);
+
+      renderPage();
+      await screen.findByText('Cal.com');
+      await user.click(screen.getByText('Bookings'));
+
+      expect(await screen.findByText('Interview: J. Doe')).toBeInTheDocument();
+      expect(screen.getByText('jane@example.com')).toBeInTheDocument();
+    });
+
+    it('shows an empty state when there are no Cal.com bookings', async () => {
+      const user = userEvent.setup();
+      const calcomConnected = { ...calcomAvailable, status: 'connected' as const, enabled: true };
+      mockGetIntegrations.mockResolvedValue([calcomConnected]);
+      mockGetCalcomBookings.mockResolvedValue([]);
+
+      renderPage();
+      await screen.findByText('Cal.com');
+      await user.click(screen.getByText('Bookings'));
+
+      expect(await screen.findByText('No upcoming bookings')).toBeInTheDocument();
     });
   });
 });

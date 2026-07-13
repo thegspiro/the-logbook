@@ -46,9 +46,12 @@ import {
   type IntegrationConfig,
   type SalesforceReadiness,
   type SalesforcePreviewResult,
+  type CalcomBooking,
 } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ConnectionStatus } from '../constants/enums';
+import { formatDateTime } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
@@ -243,6 +246,7 @@ const IntegrationsPage: React.FC = () => {
   const canManage = checkPermission('integrations.manage');
   const location = useLocation();
   const navigate = useNavigate();
+  const tz = useTimezone();
 
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,6 +257,9 @@ const IntegrationsPage: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [showSyncPanel, setShowSyncPanel] = useState(false);
+  const [showBookingsPanel, setShowBookingsPanel] = useState(false);
+  const [calcomBookings, setCalcomBookings] = useState<CalcomBooking[] | null>(null);
+  const [loadingBookings, setLoadingBookings] = useState(false);
 
   // Salesforce readiness / preview panel state
   const [readiness, setReadiness] = useState<SalesforceReadiness | null>(null);
@@ -454,6 +461,22 @@ const IntegrationsPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Connection test failed'));
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleToggleBookings = async () => {
+    const next = !showBookingsPanel;
+    setShowBookingsPanel(next);
+    if (next && calcomBookings === null) {
+      setLoadingBookings(true);
+      try {
+        setCalcomBookings(await integrationsService.getCalcomBookings());
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to load Cal.com bookings'));
+        setCalcomBookings([]);
+      } finally {
+        setLoadingBookings(false);
+      }
     }
   };
 
@@ -1051,6 +1074,15 @@ const IntegrationsPage: React.FC = () => {
                           <span>Sync</span>
                         </button>
                       )}
+                      {integration.integration_type === 'calcom' && (
+                        <button
+                          onClick={() => { void handleToggleBookings(); }}
+                          className="px-3 py-1.5 text-sm bg-slate-500/10 text-slate-700 dark:text-slate-300 hover:bg-slate-500/20 rounded-lg transition-colors flex items-center space-x-1"
+                        >
+                          <CalendarClock className="w-3.5 h-3.5" />
+                          <span>Bookings</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => { void handleTestConnection(integration.id); }}
                         disabled={testing}
@@ -1082,6 +1114,64 @@ const IntegrationsPage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Cal.com Bookings Panel */}
+        {showBookingsPanel && integrations.some(i => i.integration_type === 'calcom' && i.status === ConnectionStatus.CONNECTED) && (
+          <div className="card mt-6 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300">
+                  <CalendarClock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">Cal.com Bookings</h3>
+                  <p className="text-theme-text-muted text-xs">Upcoming bookings from your connected Cal.com account</p>
+                </div>
+              </div>
+              <button onClick={() => setShowBookingsPanel(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {loadingBookings ? (
+              <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
+                <Loader2 className="w-6 h-6 text-theme-text-muted animate-spin" />
+                <span className="sr-only">Loading bookings…</span>
+              </div>
+            ) : calcomBookings && calcomBookings.length > 0 ? (
+              <ul className="divide-y divide-theme-surface-border">
+                {calcomBookings.map((b) => (
+                  <li key={b.external_id || `${b.title}-${b.start_time}`} className="py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-theme-text-primary text-sm font-medium truncate">{b.title || 'Booking'}</p>
+                        {b.attendee_emails.length > 0 && (
+                          <p className="text-theme-text-muted text-xs truncate">{b.attendee_emails.join(', ')}</p>
+                        )}
+                        {b.location && (
+                          <p className="text-theme-text-muted text-xs truncate">{b.location}</p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        {b.start_time && (
+                          <p className="text-theme-text-secondary text-xs">{formatDateTime(b.start_time, tz)}</p>
+                        )}
+                        {b.status && (
+                          <span className="text-theme-text-muted text-xs capitalize">{b.status}</span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-center py-8">
+                <CalendarClock className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
+                <p className="text-theme-text-secondary text-sm">No upcoming bookings</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Salesforce Sync Panel */}
         {showSyncPanel && integrations.some(i => i.integration_type === 'salesforce' && i.status === ConnectionStatus.CONNECTED) && (

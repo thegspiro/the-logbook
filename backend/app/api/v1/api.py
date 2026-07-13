@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     apparatus,
     audit_logs,
     auth,
+    calcom_sync,
     compliance_config,
     compliance_officer,
     dashboard,
@@ -158,6 +159,11 @@ api_router.include_router(
     salesforce_sync.router,
     prefix="/integrations/salesforce",
     tags=["salesforce-sync"],
+)
+api_router.include_router(
+    calcom_sync.router,
+    prefix="/integrations/calcom",
+    tags=["calcom"],
 )
 api_router.include_router(
     scheduled.router, prefix="/scheduled", tags=["scheduled-tasks"]
