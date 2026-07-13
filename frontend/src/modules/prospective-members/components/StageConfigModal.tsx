@@ -345,7 +345,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   existingStageCount,
 }) => {
   const tz = useTimezone();
-  const { isConnected: isIntegrationConnected } = useConnectedIntegrations();
+  const { isConnected: isIntegrationConnected, loading: integrationsLoading } =
+    useConnectedIntegrations();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [stageType, setStageType] = useState<StageType>('manual_approval');
@@ -953,6 +954,15 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                     )}
                   </div>
                 )}
+                {!isIntegrationConnected('documenso') && !integrationsLoading && (
+                  <p className="text-theme-text-muted text-xs">
+                    Want documents e-signed instead of uploaded?{' '}
+                    <a href="/integrations" className="text-red-700 underline hover:text-red-600 dark:text-red-400">
+                      Connect Documenso
+                    </a>{' '}
+                    to send them for signature.
+                  </p>
+                )}
               </div>
             )}
 
@@ -965,6 +975,7 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 getNextEventForType={getNextEventForType}
                 renderEventPreview={renderEventPreview}
                 calcomConnected={isIntegrationConnected('calcom')}
+                integrationsReady={!integrationsLoading}
               />
             )}
 

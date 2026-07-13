@@ -7,7 +7,11 @@ const baseConfig: MeetingStageConfig = {
   meeting_type: 'chief_meeting',
 };
 
-const renderConfig = (overrides: Partial<MeetingStageConfig>, calcomConnected: boolean) => {
+const renderConfig = (
+  overrides: Partial<MeetingStageConfig>,
+  calcomConnected: boolean,
+  integrationsReady = true,
+) => {
   const setConfig = vi.fn();
   render(
     <MeetingConfig
@@ -17,6 +21,7 @@ const renderConfig = (overrides: Partial<MeetingStageConfig>, calcomConnected: b
       getNextEventForType={() => undefined}
       renderEventPreview={() => null}
       calcomConnected={calcomConnected}
+      integrationsReady={integrationsReady}
     />,
   );
   return { setConfig };
@@ -26,6 +31,17 @@ describe('MeetingConfig Cal.com scheduling', () => {
   it('hides the scheduling option when Cal.com is not connected', () => {
     renderConfig({}, false);
     expect(screen.queryByLabelText('Scheduling')).not.toBeInTheDocument();
+  });
+
+  it('shows a connect hint when Cal.com is not connected', () => {
+    renderConfig({}, false, true);
+    const hint = screen.getByRole('link', { name: 'Connect Cal.com' });
+    expect(hint).toHaveAttribute('href', '/integrations');
+  });
+
+  it('shows no hint until the integrations list has loaded', () => {
+    renderConfig({}, false, false);
+    expect(screen.queryByRole('link', { name: 'Connect Cal.com' })).not.toBeInTheDocument();
   });
 
   it('shows the scheduling option when Cal.com is connected', () => {

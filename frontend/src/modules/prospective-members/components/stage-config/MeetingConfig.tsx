@@ -14,6 +14,8 @@ interface MeetingConfigProps {
   renderEventPreview: (eventType: string | undefined, category?: string) => React.ReactNode;
   /** Whether the org has the Cal.com integration connected. */
   calcomConnected?: boolean;
+  /** True once the integrations list has loaded (avoids a hint flash). */
+  integrationsReady?: boolean;
 }
 
 const MEETING_TYPE_OPTIONS: { value: MeetingType; label: string; description: string }[] = [
@@ -49,6 +51,7 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
   getNextEventForType,
   renderEventPreview,
   calcomConnected = false,
+  integrationsReady = false,
 }) => {
   const meetingConfig = config as MeetingStageConfig;
   const schedulingProvider = meetingConfig.scheduling_provider ?? 'manual';
@@ -198,6 +201,15 @@ const MeetingConfig: React.FC<MeetingConfigProps> = ({
             </div>
           )}
         </div>
+      )}
+      {!calcomConnected && integrationsReady && (
+        <p className="text-theme-text-muted mt-4 text-xs">
+          Want applicants to self-schedule?{' '}
+          <a href="/integrations" className="text-red-700 underline hover:text-red-600 dark:text-red-400">
+            Connect Cal.com
+          </a>{' '}
+          to add a booking link to this stage.
+        </p>
       )}
       <label className="text-theme-text-secondary flex items-center gap-2 text-sm mt-4">
         <input
