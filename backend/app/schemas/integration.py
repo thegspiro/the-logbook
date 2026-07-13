@@ -164,6 +164,34 @@ class SalesforceConfig(BaseModel):
     auto_sync_enabled: bool = False
 
 
+class DocumensoConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Defaults to Documenso Cloud; self-hosted orgs point this at their own
+    # https://<host>/api/v1. SSRF-validated at the endpoint layer.
+    api_base_url: str = Field(
+        default="https://app.documenso.com/api/v1",
+        pattern=r"^https?://.+",
+    )
+    api_token: str = ""
+    # Optional shared secret used to verify inbound Documenso webhooks.
+    webhook_secret: str = ""
+
+
+class CalcomConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # Defaults to Cal.com Cloud; self-hosted orgs point this at their own
+    # https://<host>/api/v1. SSRF-validated at the endpoint layer.
+    api_base_url: str = Field(
+        default="https://api.cal.com/v1",
+        pattern=r"^https?://.+",
+    )
+    api_key: str = ""
+    # Optional shared secret used to verify inbound Cal.com webhooks.
+    webhook_secret: str = ""
+
+
 # Map integration_type → config schema for strict validation
 INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "slack": SlackConfig,
@@ -179,6 +207,8 @@ INTEGRATION_CONFIG_SCHEMAS: Dict[str, type[BaseModel]] = {
     "ical": ICalConfig,
     "csv-import": CSVImportConfig,
     "salesforce": SalesforceConfig,
+    "documenso": DocumensoConfig,
+    "calcom": CalcomConfig,
 }
 
 # Fields in config that contain secrets and should be stored encrypted
@@ -194,6 +224,8 @@ SECRET_CONFIG_KEYS = frozenset(
         "token",
         "password",
         "access_token",
+        "api_token",
+        "webhook_secret",
     }
 )
 

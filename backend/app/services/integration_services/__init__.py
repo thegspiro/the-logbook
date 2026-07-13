@@ -96,6 +96,24 @@ async def test_integration_connection(integration: Integration) -> str:
         service = SalesforceService(creds)
         return await service.test_connection()
 
+    if itype == "documenso":
+        from app.services.integration_services.documenso_service import DocumensoService
+
+        creds = _get_documenso_credentials(integration)
+        if not creds.get("api_token"):
+            raise Exception("No Documenso API token configured")
+        service = DocumensoService(creds)
+        return await service.test_connection()
+
+    if itype == "calcom":
+        from app.services.integration_services.calcom_service import CalcomService
+
+        creds = _get_calcom_credentials(integration)
+        if not creds.get("api_key"):
+            raise Exception("No Cal.com API key configured")
+        service = CalcomService(creds)
+        return await service.test_connection()
+
     if itype == "ical":
         return "iCal feeds are read-only — no connection test needed"
 
@@ -127,4 +145,28 @@ def _get_salesforce_credentials(integration: Integration) -> dict[str, Any]:
         val = integration.get_secret(key)
         if val:
             creds[key] = val
+    return creds
+
+
+def _get_documenso_credentials(integration: Integration) -> dict[str, Any]:
+    """Extract Documenso credentials (public base URL + encrypted token)."""
+    config = integration.config or {}
+    creds: dict[str, Any] = {
+        "api_base_url": config.get("api_base_url", ""),
+    }
+    token = integration.get_secret("api_token")
+    if token:
+        creds["api_token"] = token
+    return creds
+
+
+def _get_calcom_credentials(integration: Integration) -> dict[str, Any]:
+    """Extract Cal.com credentials (public base URL + encrypted API key)."""
+    config = integration.config or {}
+    creds: dict[str, Any] = {
+        "api_base_url": config.get("api_base_url", ""),
+    }
+    api_key = integration.get_secret("api_key")
+    if api_key:
+        creds["api_key"] = api_key
     return creds

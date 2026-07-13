@@ -356,4 +356,68 @@ describe('IntegrationsPage', () => {
       expect(screen.getByText('matched existing')).toBeInTheDocument();
     });
   });
+
+  describe('Documenso and Cal.com', () => {
+    const documensoAvailable = {
+      id: 'doc-1',
+      organization_id: 'org-1',
+      integration_type: 'documenso',
+      name: 'Documenso',
+      description: 'Send documents for electronic signature',
+      category: 'Documents',
+      status: 'available' as const,
+      config: {},
+      enabled: false,
+      contains_phi: false,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const calcomAvailable = {
+      ...documensoAvailable,
+      id: 'cal-1',
+      integration_type: 'calcom',
+      name: 'Cal.com',
+      description: 'Pull scheduled bookings from Cal.com',
+      category: 'Scheduling',
+    };
+
+    it('connects Documenso with the entered API token', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([documensoAvailable]);
+      mockConnectIntegration.mockResolvedValue({ ...documensoAvailable, status: 'connected', enabled: true });
+
+      renderPage();
+      await screen.findByText('Documenso');
+      const card = screen.getByTestId('integration-card-documenso');
+      await user.click(within(card).getByText('Connect'));
+
+      await user.type(screen.getByLabelText('API Token'), 'api_secret123');
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('doc-1', {
+        api_base_url: undefined,
+        api_token: 'api_secret123',
+      });
+    });
+
+    it('connects Cal.com with the entered API key and optional base URL', async () => {
+      const user = userEvent.setup();
+      mockGetIntegrations.mockResolvedValue([calcomAvailable]);
+      mockConnectIntegration.mockResolvedValue({ ...calcomAvailable, status: 'connected', enabled: true });
+
+      renderPage();
+      await screen.findByText('Cal.com');
+      const card = screen.getByTestId('integration-card-calcom');
+      await user.click(within(card).getByText('Connect'));
+
+      await user.type(screen.getByLabelText('API Key'), 'cal_key456');
+      await user.type(screen.getByLabelText('API Base URL (optional)'), 'https://cal.example.com/api/v1');
+      await user.click(screen.getByTestId('connect-submit'));
+
+      expect(mockConnectIntegration).toHaveBeenCalledWith('cal-1', {
+        api_base_url: 'https://cal.example.com/api/v1',
+        api_key: 'cal_key456',
+      });
+    });
+  });
 });

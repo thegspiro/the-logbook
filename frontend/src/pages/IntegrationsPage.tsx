@@ -36,6 +36,8 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  FileSignature,
+  CalendarClock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -128,6 +130,18 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     bgColor: 'bg-blue-500/10',
     features: ['Contact sync', 'Donor management', 'Event push', 'Bidirectional sync'],
   },
+  'documenso': {
+    icon: <FileSignature className="w-6 h-6" />,
+    color: 'text-yellow-700 dark:text-yellow-400',
+    bgColor: 'bg-yellow-500/10',
+    features: ['E-signatures', 'Self-hostable', 'Open source'],
+  },
+  'calcom': {
+    icon: <CalendarClock className="w-6 h-6" />,
+    color: 'text-slate-700 dark:text-slate-300',
+    bgColor: 'bg-slate-500/10',
+    features: ['Booking sync', 'Interviews', 'Self-hostable'],
+  },
   'active911': {
     icon: <Radio className="w-6 h-6" />,
     color: 'text-red-700 dark:text-red-400',
@@ -203,16 +217,18 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   'Automation': <Zap className="w-3.5 h-3.5" />,
   'Mapping': <MapPin className="w-3.5 h-3.5" />,
   'CRM': <Users className="w-3.5 h-3.5" />,
+  'Documents': <FileSignature className="w-3.5 h-3.5" />,
+  'Scheduling': <CalendarClock className="w-3.5 h-3.5" />,
 };
 
-type CategoryFilter = 'all' | 'Calendar' | 'Messaging' | 'Data' | 'CRM' | 'Safety' | 'Reporting' | 'EMS' | 'Dispatch' | 'Automation' | 'Mapping';
+type CategoryFilter = 'all' | 'Calendar' | 'Messaging' | 'Data' | 'CRM' | 'Safety' | 'Reporting' | 'EMS' | 'Dispatch' | 'Automation' | 'Mapping' | 'Documents' | 'Scheduling';
 
-const ALL_CATEGORIES: CategoryFilter[] = ['all', 'Calendar', 'Messaging', 'Data', 'CRM', 'Safety', 'Reporting', 'EMS', 'Dispatch', 'Automation', 'Mapping'];
+const ALL_CATEGORIES: CategoryFilter[] = ['all', 'Calendar', 'Messaging', 'Data', 'CRM', 'Safety', 'Reporting', 'EMS', 'Dispatch', 'Automation', 'Mapping', 'Documents', 'Scheduling'];
 
 // Integration types that need webhook URL config
 const WEBHOOK_TYPES = new Set(['slack', 'discord', 'microsoft-teams']);
 // Integration types that need specific config forms
-const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import', 'salesforce']);
+const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import', 'salesforce', 'documenso', 'calcom']);
 
 const inputClass = 'form-input';
 const labelClass = 'form-label';
@@ -257,6 +273,10 @@ const IntegrationsPage: React.FC = () => {
   const [sfMatchStrategy, setSfMatchStrategy] = useState('email');
   const [sfGracefulFields, setSfGracefulFields] = useState(true);
   const [sfAutoSync, setSfAutoSync] = useState(false);
+  const [documensoBaseUrl, setDocumensoBaseUrl] = useState('');
+  const [documensoApiToken, setDocumensoApiToken] = useState('');
+  const [calcomBaseUrl, setCalcomBaseUrl] = useState('');
+  const [calcomApiKey, setCalcomApiKey] = useState('');
 
   const loadIntegrations = useCallback(async () => {
     try {
@@ -331,6 +351,10 @@ const IntegrationsPage: React.FC = () => {
     setSfMatchStrategy('email');
     setSfGracefulFields(true);
     setSfAutoSync(false);
+    setDocumensoBaseUrl('');
+    setDocumensoApiToken('');
+    setCalcomBaseUrl('');
+    setCalcomApiKey('');
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -348,6 +372,16 @@ const IntegrationsPage: React.FC = () => {
         return { url: genericWebhookUrl, secret: genericWebhookSecret };
       case 'epcr-import':
         return { import_format: importFormat };
+      case 'documenso':
+        return {
+          api_base_url: documensoBaseUrl.trim() || undefined,
+          api_token: documensoApiToken.trim() || undefined,
+        };
+      case 'calcom':
+        return {
+          api_base_url: calcomBaseUrl.trim() || undefined,
+          api_key: calcomApiKey.trim() || undefined,
+        };
       case 'salesforce':
         return {
           instance_url: sfInstanceUrl,
@@ -767,6 +801,74 @@ const IntegrationsPage: React.FC = () => {
           </div>
         );
 
+      case 'documenso':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="documenso-token" className={labelClass}>API Token</label>
+              <input
+                id="documenso-token"
+                type="password"
+                value={documensoApiToken}
+                onChange={(e) => setDocumensoApiToken(e.target.value)}
+                placeholder="api_..."
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Create an API token in Documenso under Settings &rarr; API.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="documenso-base-url" className={labelClass}>API Base URL (optional)</label>
+              <input
+                id="documenso-base-url"
+                type="url"
+                value={documensoBaseUrl}
+                onChange={(e) => setDocumensoBaseUrl(e.target.value.trim())}
+                placeholder="https://app.documenso.com/api/v1"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Leave blank for Documenso Cloud. Self-hosted instances use https://your-host/api/v1.
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'calcom':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="calcom-key" className={labelClass}>API Key</label>
+              <input
+                id="calcom-key"
+                type="password"
+                value={calcomApiKey}
+                onChange={(e) => setCalcomApiKey(e.target.value)}
+                placeholder="cal_..."
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Create an API key in Cal.com under Settings &rarr; Developer &rarr; API keys.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="calcom-base-url" className={labelClass}>API Base URL (optional)</label>
+              <input
+                id="calcom-base-url"
+                type="url"
+                value={calcomBaseUrl}
+                onChange={(e) => setCalcomBaseUrl(e.target.value.trim())}
+                placeholder="https://api.cal.com/v1"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Leave blank for Cal.com Cloud. Self-hosted instances use https://your-host/api/v1.
+              </p>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -1178,6 +1280,7 @@ const IntegrationsPage: React.FC = () => {
                       Cancel
                     </button>
                     <button
+                      data-testid="connect-submit"
                       onClick={() => { void handleConnect(selectedIntegration.id); }}
                       disabled={connecting}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
