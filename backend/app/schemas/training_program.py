@@ -379,6 +379,9 @@ class RequirementProgressUpdate(BaseModel):
     progress_value: Optional[float] = Field(None, ge=0)
     progress_notes: Optional[Dict[str, Any]] = None
     verified_by: Optional[UUID] = None
+    # Officer-entered knowledge/skills test score (0-100). Pass/fail is derived
+    # from the requirement's passing_score; a pass completes the requirement.
+    test_score: Optional[float] = Field(None, ge=0, le=100)
 
 
 class RequirementProgressResponse(RequirementProgressBase, UTCResponseBase):

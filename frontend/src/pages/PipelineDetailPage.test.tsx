@@ -182,4 +182,45 @@ describe('PipelineDetailPage — enrollment progress management', () => {
 
     await waitFor(() => expect(mockAdvancePhase).toHaveBeenCalledWith('enr-1'));
   });
+
+  it('records a knowledge-test score via the progress modal', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment,
+      program,
+      requirement_progress: [
+        {
+          ...certProgress,
+          id: 'rp-kt',
+          requirement_id: 'req-kt',
+          requirement: {
+            id: 'req-kt',
+            name: 'Written Exam',
+            requirement_type: 'knowledge_test',
+            passing_score: 70,
+          },
+        },
+      ],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+    mockUpdateProgress.mockResolvedValue({ ...certProgress });
+
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('Written Exam')).toBeInTheDocument();
+
+    await userEvent.type(within(dialog).getByRole('spinbutton'), '85');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Record/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateProgress).toHaveBeenCalledWith('rp-kt', { test_score: 85 }),
+    );
+  });
 });

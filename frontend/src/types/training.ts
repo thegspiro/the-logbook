@@ -721,6 +721,23 @@ export interface ProgramEnrollmentCreate {
   notes?: string;
 }
 
+/** Structured notes on a requirement progress row (JSON in the API). */
+export interface RequirementProgressNotes {
+  /** Most recent knowledge/skills test score (0-100) */
+  latest_score?: number;
+  /** Whether the latest recorded score passed */
+  passed?: boolean;
+  /** Passing threshold used for the latest score */
+  passing_score?: number;
+  test_attempts?: Array<{
+    score: number;
+    passed: boolean;
+    recorded_at: string;
+    recorded_by?: string | null;
+  }>;
+  [key: string]: unknown;
+}
+
 export interface RequirementProgressRecord {
   id: string;
   enrollment_id: string;
@@ -728,7 +745,7 @@ export interface RequirementProgressRecord {
   status: RequirementProgressStatus;
   progress_value: number;
   progress_percentage: number;
-  progress_notes?: string | null;
+  progress_notes?: RequirementProgressNotes | null;
   started_at?: string;
   completed_at?: string;
   verified_by?: string;
@@ -741,8 +758,10 @@ export interface RequirementProgressRecord {
 export interface RequirementProgressUpdate {
   status?: RequirementProgressStatus;
   progress_value?: number;
-  progress_notes?: string | null;
+  progress_notes?: RequirementProgressNotes | null;
   verified_by?: string;
+  /** Officer-entered knowledge/skills test score (0-100); pass/fail derived */
+  test_score?: number;
 }
 
 export interface ProgramWithDetails extends TrainingProgram {

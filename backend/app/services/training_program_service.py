@@ -5,6 +5,7 @@ Business logic for training program management, enrollment, and progress trackin
 """
 
 import asyncio
+import copy
 import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -1085,6 +1086,51 @@ class TrainingProgramService:
                 if verified_by:
                     progress.verified_by = verified_by
                     progress.verified_at = datetime.now(timezone.utc)
+
+        # Knowledge/skills test score entry: an officer records a score and
+        # pass/fail is derived from the requirement's passing_score (default 70).
+        # The raw score + attempt history live in progress_notes; a pass completes
+        # the requirement (which then rolls up and can advance the phase). This is
+        # the lightweight groundwork for a fuller test-taking feature later.
+        if updates.test_score is not None:
+            requirement = progress.requirement
+            threshold = (
+                requirement.passing_score
+                if requirement is not None and requirement.passing_score is not None
+                else 70.0
+            )
+            passed = updates.test_score >= threshold
+
+            notes = copy.deepcopy(progress.progress_notes or {})
+            attempts = notes.get("test_attempts", [])
+            attempts.append(
+                {
+                    "score": updates.test_score,
+                    "passed": passed,
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "recorded_by": str(verified_by) if verified_by else None,
+                }
+            )
+            notes["test_attempts"] = attempts
+            notes["latest_score"] = updates.test_score
+            notes["passing_score"] = threshold
+            notes["passed"] = passed
+            progress.progress_notes = notes
+
+            if passed:
+                progress.status = RequirementProgressStatus.COMPLETED
+                progress.progress_percentage = 100.0
+                progress.completed_at = datetime.now(timezone.utc)
+                if verified_by:
+                    progress.verified_by = verified_by
+                    progress.verified_at = datetime.now(timezone.utc)
+            else:
+                # Failed attempt — recorded, but the requirement is not complete.
+                if not progress.started_at:
+                    progress.started_at = datetime.now(timezone.utc)
+                if progress.status != RequirementProgressStatus.IN_PROGRESS:
+                    progress.status = RequirementProgressStatus.IN_PROGRESS
+                progress.completed_at = None
 
         # Update progress value
         if updates.progress_value is not None:

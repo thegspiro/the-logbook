@@ -356,6 +356,11 @@ const EnrollModal: React.FC<{
 // completed by setting status.
 const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls']);
 
+// Requirement types an officer scores by entering a percentage; pass/fail is
+// derived from the requirement's passing_score. Groundwork for a fuller
+// knowledge-test feature later.
+const SCORED_TYPES = new Set(['knowledge_test']);
+
 const STATUS_META: Record<RequirementProgressStatus, { label: string; className: string }> = {
   not_started: { label: 'Not started', className: 'text-theme-text-muted' },
   in_progress: { label: 'In progress', className: 'text-blue-700 dark:text-blue-400' },
@@ -381,8 +386,10 @@ const RequirementProgressRow: React.FC<{
 }> = ({ record, onUpdate, saving }) => {
   const req = record.requirement;
   const numeric = req ? NUMERIC_TYPES.has(req.requirement_type) : false;
+  const scored = req ? SCORED_TYPES.has(req.requirement_type) : false;
   const target = requirementTarget(req);
   const [value, setValue] = useState<string>(record.progress_value ? String(record.progress_value) : '');
+  const [score, setScore] = useState<string>('');
 
   // Re-sync the input when the record is refreshed after a save.
   useEffect(() => {
@@ -391,6 +398,18 @@ const RequirementProgressRow: React.FC<{
 
   const isDone = record.status === 'completed' || record.status === 'verified';
   const statusMeta = STATUS_META[record.status];
+  const passThreshold = req?.passing_score ?? 70;
+  const latestScore = record.progress_notes?.latest_score;
+  const latestPassed = record.progress_notes?.passed;
+
+  const recordScore = () => {
+    const parsed = score ? parseFloat(score) : NaN;
+    if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+      toast.error('Enter a score between 0 and 100');
+      return;
+    }
+    void onUpdate(record.id, { test_score: parsed }).then(() => setScore(''));
+  };
 
   return (
     <div className="bg-theme-surface-secondary rounded-lg p-3">
@@ -437,7 +456,45 @@ const RequirementProgressRow: React.FC<{
         </div>
       )}
 
-      {/* Status quick actions — the completion path for non-numeric types */}
+      {/* Test score entry (knowledge test): officer enters a %, pass/fail derived */}
+      {scored && (
+        <div className="mt-3 space-y-2">
+          {typeof latestScore === 'number' && (
+            <div className="text-xs text-theme-text-muted">
+              Last score:{' '}
+              <span className={latestPassed ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}>
+                {latestScore}% ({latestPassed ? 'pass' : 'fail'})
+              </span>
+            </div>
+          )}
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="block text-xs text-theme-text-muted mb-1">
+                Test score (%) · pass ≥ {passThreshold}%
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={score}
+                onChange={(e) => setScore(e.target.value)}
+                className="form-input-sm"
+                disabled={saving}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={recordScore}
+              disabled={saving}
+              className="btn-primary text-xs flex items-center gap-1 px-3 disabled:opacity-50"
+            >
+              <Save className="w-3.5 h-3.5" /> Record
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Status quick actions — simple pass (Mark complete) / reopen */}
       <div className="flex flex-wrap gap-2 mt-3">
         <button
           type="button"
