@@ -403,6 +403,9 @@ const RequirementProgressRow: React.FC<{
   const passThreshold = req?.passing_score ?? 70;
   const latestScore = record.progress_notes?.latest_score;
   const latestPassed = record.progress_notes?.passed;
+  const attemptsUsed = record.progress_notes?.test_attempts?.length ?? 0;
+  const maxAttempts = req?.max_attempts;
+  const attemptsExhausted = !!maxAttempts && attemptsUsed >= maxAttempts && !isDone;
 
   const recordScore = () => {
     const parsed = score ? parseFloat(score) : NaN;
@@ -469,6 +472,14 @@ const RequirementProgressRow: React.FC<{
               </span>
             </div>
           )}
+          {maxAttempts && (
+            <div className="text-xs text-theme-text-muted">
+              Attempts: {attemptsUsed} / {maxAttempts}
+              {attemptsExhausted && (
+                <span className="text-red-700 dark:text-red-400"> · no attempts remaining</span>
+              )}
+            </div>
+          )}
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <label className="block text-xs text-theme-text-muted mb-1">
@@ -481,13 +492,13 @@ const RequirementProgressRow: React.FC<{
                 value={score}
                 onChange={(e) => setScore(e.target.value)}
                 className="form-input-sm"
-                disabled={saving}
+                disabled={saving || attemptsExhausted}
               />
             </div>
             <button
               type="button"
               onClick={recordScore}
-              disabled={saving}
+              disabled={saving || attemptsExhausted}
               className="btn-primary text-xs flex items-center gap-1 px-3 disabled:opacity-50"
             >
               <Save className="w-3.5 h-3.5" /> Record

@@ -1094,6 +1094,23 @@ class TrainingProgramService:
         # the lightweight groundwork for a fuller test-taking feature later.
         if updates.test_score is not None:
             requirement = progress.requirement
+
+            # Enforce the attempt cap: once all attempts are used and the
+            # requirement isn't already satisfied, no further scores are accepted.
+            prior_attempts = len(
+                (progress.progress_notes or {}).get("test_attempts", [])
+            )
+            already_done = progress.status in (
+                RequirementProgressStatus.COMPLETED,
+                RequirementProgressStatus.VERIFIED,
+            )
+            max_attempts = getattr(requirement, "max_attempts", None)
+            if max_attempts and prior_attempts >= max_attempts and not already_done:
+                return (
+                    None,
+                    f"Maximum attempts ({max_attempts}) reached for this test",
+                )
+
             threshold = (
                 requirement.passing_score
                 if requirement is not None and requirement.passing_score is not None
