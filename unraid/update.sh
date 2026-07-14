@@ -100,11 +100,54 @@ if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
     exit 1
 fi
 
-# A dirty working tree means local edits would be tangled with the pull.
-# Refuse rather than risk a merge conflict or clobbering the user's changes.
-if [ -n "$(git status --porcelain)" ]; then
+# ---- Reconcile the docker-compose.yml deploy artifact --------------------
+# The build-from-source install copies the (git-tracked) build-from-source
+# compose file over the (also git-tracked) root docker-compose.yml. That
+# leaves the working tree permanently "dirty" on docker-compose.yml and would
+# block `git pull`. Handle that expected artifact explicitly:
+#   - identical to the template  -> restore the tracked file for a clean pull,
+#     then re-apply the (possibly updated) template afterwards.
+#   - customized by the user     -> stop, preserve their file, and point them
+#     at docker-compose.override.yml so future updates stay clean.
+COMPOSE_TEMPLATE="unraid/docker-compose-build-from-source.yml"
+REAPPLY_COMPOSE=""
+if [ -f "$COMPOSE_TEMPLATE" ] && ! git diff --quiet -- docker-compose.yml 2>/dev/null; then
+    if diff -q docker-compose.yml "$COMPOSE_TEMPLATE" >/dev/null 2>&1; then
+        REAPPLY_COMPOSE="1"
+        info "docker-compose.yml matches the build-from-source template; will refresh it after pull."
+    else
+        BAK="docker-compose.yml.bak.$(date +%Y%m%d_%H%M%S)"
+        cp docker-compose.yml "$BAK"
+        err "docker-compose.yml differs from the standard build-from-source template."
+        err "A copy was saved to: $BAK"
+        err "  • If you customized it: move your changes into docker-compose.override.yml"
+        err "    (git-ignored) so updates don't conflict, then re-run."
+        err "  • If you did NOT customize it (just a stale copy), reset it and re-run:"
+        err "        cp $COMPOSE_TEMPLATE docker-compose.yml"
+        err "Aborting to protect your changes."
+        exit 1
+    fi
+fi
+
+reapply_compose() {
+    # Re-apply the build-from-source template over docker-compose.yml. Safe to
+    # call repeatedly. Used after a successful pull (refresh) and by the
+    # rollback trap (restore the working deploy file after a failed pull).
+    [ -n "$REAPPLY_COMPOSE" ] || return 0
+    if [ -f "$COMPOSE_TEMPLATE" ]; then
+        cp "$COMPOSE_TEMPLATE" docker-compose.yml
+    else
+        warn "Template $COMPOSE_TEMPLATE missing — leaving docker-compose.yml as-is."
+    fi
+}
+
+# A dirty working tree (other than the expected docker-compose.yml artifact)
+# means real local edits that could tangle with the pull. Refuse those.
+# --untracked-files=no ignores gitignored/created files (.env, *.old, backups).
+DIRTY="$(git status --porcelain --untracked-files=no | grep -vE '[ /]docker-compose\.yml$' || true)"
+if [ -n "$DIRTY" ]; then
     err "Working tree has uncommitted changes. Commit, stash, or revert them first:"
-    git status --short >&2
+    printf '%s\n' "$DIRTY" >&2
     exit 1
 fi
 
@@ -115,6 +158,9 @@ info "Current commit:    ${PREV_COMMIT:0:12}"
 
 BACKUP_FILE=""
 print_rollback() {
+    # Restore the working deploy compose file first (a failed pull may have
+    # left the git-tracked version in place), then print recovery steps.
+    reapply_compose
     echo
     err "Update failed. Your data is intact. To roll back the code:"
     echo -e "    ${YELLOW}cd $INSTALL_DIR && git checkout $PREV_COMMIT${NC}" >&2
@@ -153,7 +199,13 @@ else
     info "Backing up the database (consistent mysqldump)..."
     mkdir -p "$BACKUP_DIR"
 
-    if ! $COMPOSE ps db 2>/dev/null | grep -q .; then
+    # Resolve the db container and confirm it is actually running. `ps -q`
+    # prints the container id (empty if the service has no container); inspect
+    # confirms Running=true. Grepping `ps` text is unreliable — Compose v2
+    # prints a header row even when nothing is up.
+    DB_CID="$($COMPOSE ps -q db 2>/dev/null || true)"
+    if [ -z "$DB_CID" ] || \
+       [ "$(docker inspect -f '{{.State.Running}}' "$DB_CID" 2>/dev/null)" != "true" ]; then
         err "The 'db' service isn't running — cannot take a backup."
         err "Start it first ($COMPOSE up -d db) or re-run with --skip-backup."
         exit 1
@@ -164,7 +216,7 @@ else
     # Dump inside the container using its own MYSQL_* env vars, gzip on the host.
     # `set -o pipefail` (already on) makes a mysqldump failure fail the pipe.
     if $COMPOSE exec -T db sh -c \
-        'exec mysqldump --single-transaction --routines --triggers --events \
+        'exec mysqldump --single-transaction --routines --triggers \
             -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
         2>/dev/null | gzip > "$BACKUP_FILE"; then
         : # dump command succeeded
@@ -207,8 +259,12 @@ if git merge-base --is-ancestor "origin/$BRANCH" HEAD 2>/dev/null; then
     fi
     warn "Rebuilding anyway (--no-cache requested)."
 else
+    # Restore the tracked docker-compose.yml so checkout/pull can't fail on the
+    # locally-modified deploy artifact; we re-apply the template right after.
+    [ -n "$REAPPLY_COMPOSE" ] && git checkout -- docker-compose.yml
     git checkout "$BRANCH"
     git pull --ff-only origin "$BRANCH"
+    reapply_compose
     success "Code updated to $(git rev-parse --short HEAD)."
 fi
 
@@ -225,37 +281,54 @@ $COMPOSE build $NO_CACHE
 info "Recreating containers..."
 $COMPOSE up -d
 
-# ---- Step 5: Wait for the backend to become healthy ----------------------
-# The backend runs Alembic migrations on startup (normal path = incremental
-# `alembic upgrade`, which never drops data). Poll its health endpoint.
+# The database-affecting steps are done. From here a non-zero exit means
+# "watch the logs", not "roll back" — so drop the rollback trap to avoid
+# printing a misleading banner when the backend is merely still migrating.
+trap - ERR
+
+# ---- Step 5: Wait for the backend to report READY ------------------------
+# The backend runs Alembic migrations synchronously during startup (main.py
+# lifespan), and only sets ready=true AFTER migrations + service init finish
+# (main.py:1766). It also serves /health with HTTP 200 while still starting
+# (ready=false), so we must wait for the ready flag, not just a 2xx response.
+# The normal migration path is incremental `alembic upgrade` — it never drops
+# data. The destructive fast-path only runs on an empty/uninitialised DB.
 
 BACKEND_PORT="7881"
 if [ -f "$INSTALL_DIR/.env" ]; then
     _port_line="$(grep -E '^BACKEND_PORT=' "$INSTALL_DIR/.env" 2>/dev/null | tail -n1 || true)"
     [ -n "$_port_line" ] && BACKEND_PORT="${_port_line#BACKEND_PORT=}"
 fi
+# Strip anything that isn't a digit (quotes, spaces, or a stray CR from a
+# .env saved with Windows line endings) so the URL is well-formed.
+BACKEND_PORT="$(printf '%s' "$BACKEND_PORT" | tr -cd '0-9')"
+[ -n "$BACKEND_PORT" ] || BACKEND_PORT="7881"
 
-info "Waiting for the backend to report healthy (http://localhost:$BACKEND_PORT/health)..."
-HEALTHY=""
-for _ in $(seq 1 60); do   # up to ~5 minutes (migrations can take a while)
-    if curl -fsS "http://localhost:$BACKEND_PORT/health" >/dev/null 2>&1; then
-        HEALTHY="1"
+info "Waiting for the backend to report ready (http://localhost:$BACKEND_PORT/health)..."
+READY=""
+for _ in $(seq 1 120); do   # up to ~10 minutes (a large migration can be slow)
+    if curl -sS "http://localhost:$BACKEND_PORT/health" 2>/dev/null \
+        | grep -Eq '"ready"[[:space:]]*:[[:space:]]*true'; then
+        READY="1"
         break
     fi
     sleep 5
 done
 
-if [ -z "$HEALTHY" ]; then
-    err "Backend did not become healthy in time. Check the logs:"
-    echo -e "    ${YELLOW}$COMPOSE logs -f backend${NC}" >&2
+if [ -z "$READY" ]; then
+    echo
+    warn "Backend is not 'ready' yet after ~10 minutes."
+    warn "Migrations may still be running, or startup may have errored. Watch the logs:"
+    echo -e "    ${YELLOW}$COMPOSE logs -f backend${NC}"
+    warn "If startup failed, roll back with:"
+    echo -e "    ${YELLOW}git checkout $PREV_COMMIT && $COMPOSE up -d --build${NC}"
+    [ -n "$BACKUP_FILE" ] && \
+        echo -e "    ${YELLOW}# DB dump for restore: $BACKUP_FILE${NC}"
     exit 1
 fi
 
-# Success — disable the rollback trap so a clean exit stays clean.
-trap - ERR
-
 echo
-success "Update complete."
+success "Update complete — backend reports ready."
 $COMPOSE ps
 echo
 info "Previous commit was ${PREV_COMMIT:0:12} (use it to roll back if needed)."

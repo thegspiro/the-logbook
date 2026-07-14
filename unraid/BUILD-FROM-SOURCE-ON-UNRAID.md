@@ -20,10 +20,15 @@ This guide shows you how to build and run The Logbook directly on Unraid **witho
 
 ## Step 1: Clean Up Previous Attempt
 
+> ⚠️ **This step is for a fresh install only.** The `-v` flag **deletes the
+> database volume and all data**. Never run it on a working instance — to
+> update an existing install, use `./unraid/update.sh` (see
+> [Update The Logbook](#update-the-logbook)).
+
 ```bash
-# Remove any existing setup
+# Remove any existing setup (DESTROYS DATA — fresh install only)
 cd /mnt/user/appdata/the-logbook
-docker-compose down -v  # Stop and remove containers
+docker compose down -v  # -v also DELETES the database volume
 cd /mnt/user/appdata
 rm -rf the-logbook
 ```
