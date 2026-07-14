@@ -26,6 +26,7 @@ import {
 import { trainingProgramService, userService } from '../services/api';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { getErrorMessage } from '../utils/errorHandling';
+import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
 import type { User } from '../types/user';
 import type {
   TrainingProgram,
@@ -37,7 +38,6 @@ import type {
   ProgramStructureType,
   MemberProgramProgress,
   RequirementProgressRecord,
-  RequirementProgressStatus,
   RequirementProgressUpdate,
 } from '../types/training';
 
@@ -361,14 +361,6 @@ const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls', 'courses']);
 // knowledge-test feature later.
 const SCORED_TYPES = new Set(['knowledge_test']);
 
-const STATUS_META: Record<RequirementProgressStatus, { label: string; className: string }> = {
-  not_started: { label: 'Not started', className: 'text-theme-text-muted' },
-  in_progress: { label: 'In progress', className: 'text-blue-700 dark:text-blue-400' },
-  completed: { label: 'Completed', className: 'text-green-700 dark:text-green-400' },
-  verified: { label: 'Verified', className: 'text-green-700 dark:text-green-400' },
-  waived: { label: 'Waived', className: 'text-yellow-700 dark:text-yellow-400' },
-};
-
 function requirementTarget(
   req?: TrainingRequirementEnhanced,
 ): { value: number; label: string } | null {
@@ -540,49 +532,6 @@ const RequirementProgressRow: React.FC<{
   );
 };
 
-interface PhaseGroup {
-  phase: ProgramPhase | null;
-  records: RequirementProgressRecord[];
-}
-
-// Group a member's progress records under their phase, using the program's
-// requirement→phase links. Records not tied to a phase fall into a trailing
-// "Program-level" group. Empty groups are dropped.
-function groupRecordsByPhase(
-  records: RequirementProgressRecord[],
-  phases: ProgramPhase[],
-  programReqs: ProgramRequirement[],
-): PhaseGroup[] {
-  const reqPhase = new Map<string, string | undefined>();
-  programReqs.forEach((pr) => reqPhase.set(pr.requirement_id, pr.phase_id));
-
-  const ordered = [...phases].sort((a, b) => a.phase_number - b.phase_number);
-  const groups: PhaseGroup[] = ordered.map((phase) => ({
-    phase,
-    records: records.filter((r) => reqPhase.get(r.requirement_id) === phase.id),
-  }));
-
-  const programLevel = records.filter((r) => {
-    const pid = reqPhase.get(r.requirement_id);
-    return !pid || !ordered.some((p) => p.id === pid);
-  });
-  if (programLevel.length > 0) groups.push({ phase: null, records: programLevel });
-
-  return groups.filter((g) => g.records.length > 0);
-}
-
-// A phase group is complete when all of its *required* records are at 100%
-// (records with no matching program-requirement default to required).
-function isGroupComplete(
-  records: RequirementProgressRecord[],
-  programReqs: ProgramRequirement[],
-): boolean {
-  const requiredMap = new Map(programReqs.map((pr) => [pr.requirement_id, pr.is_required]));
-  return records
-    .filter((r) => requiredMap.get(r.requirement_id) !== false)
-    .every((r) => r.progress_percentage >= 100);
-}
-
 const EnrollmentProgressModal: React.FC<{
   isOpen: boolean;
   enrollmentId: string | null;
@@ -722,7 +671,7 @@ const EnrollmentProgressModal: React.FC<{
           ) : phased ? (
             groups.map((group) => {
               const isCurrent = !!group.phase && data.enrollment.current_phase_id === group.phase.id;
-              const complete = isGroupComplete(group.records, programReqs);
+              const complete = isPhaseGroupComplete(group.records, programReqs);
               return (
                 <div key={group.phase?.id ?? 'program-level'} className="space-y-2">
                   <div className="flex items-center gap-2 flex-wrap">

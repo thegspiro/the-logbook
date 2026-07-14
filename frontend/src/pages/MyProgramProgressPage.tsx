@@ -22,50 +22,17 @@ import {
 import { trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import {
+  STATUS_META,
+  groupRecordsByPhase,
+  isPhaseGroupComplete,
+} from '../utils/pipelineProgress';
 import type {
   MemberProgramProgress,
   ProgramPhase,
   ProgramRequirement,
   RequirementProgressRecord,
-  RequirementProgressStatus,
 } from '../types/training';
-
-const STATUS_META: Record<RequirementProgressStatus, { label: string; className: string }> = {
-  not_started: { label: 'Not started', className: 'text-theme-text-muted' },
-  in_progress: { label: 'In progress', className: 'text-blue-700 dark:text-blue-400' },
-  completed: { label: 'Completed', className: 'text-green-700 dark:text-green-400' },
-  verified: { label: 'Verified', className: 'text-green-700 dark:text-green-400' },
-  waived: { label: 'Waived', className: 'text-yellow-700 dark:text-yellow-400' },
-};
-
-interface PhaseGroup {
-  phase: ProgramPhase | null;
-  records: RequirementProgressRecord[];
-}
-
-function groupByPhase(
-  records: RequirementProgressRecord[],
-  phases: ProgramPhase[],
-  programReqs: ProgramRequirement[],
-): PhaseGroup[] {
-  const reqPhase = new Map<string, string | undefined>();
-  programReqs.forEach((pr) => reqPhase.set(pr.requirement_id, pr.phase_id));
-  const ordered = [...phases].sort((a, b) => a.phase_number - b.phase_number);
-  const groups: PhaseGroup[] = ordered.map((phase) => ({
-    phase,
-    records: records.filter((r) => reqPhase.get(r.requirement_id) === phase.id),
-  }));
-  const programLevel = records.filter((r) => {
-    const pid = reqPhase.get(r.requirement_id);
-    return !pid || !ordered.some((p) => p.id === pid);
-  });
-  if (programLevel.length > 0) groups.push({ phase: null, records: programLevel });
-  return groups.filter((g) => g.records.length > 0);
-}
-
-function isComplete(records: RequirementProgressRecord[]): boolean {
-  return records.every((r) => r.progress_percentage >= 100);
-}
 
 const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ record }) => {
   const meta = STATUS_META[record.status];
@@ -143,7 +110,7 @@ const MyProgramProgressPage: React.FC = () => {
   }, [enrollmentId, navigate]);
 
   const groups = useMemo(
-    () => (data ? groupByPhase(data.requirement_progress, phases, programReqs) : []),
+    () => (data ? groupRecordsByPhase(data.requirement_progress, phases, programReqs) : []),
     [data, phases, programReqs],
   );
 
@@ -242,7 +209,7 @@ const MyProgramProgressPage: React.FC = () => {
           <div className="space-y-4">
             {groups.map((group) => {
               const isCurrent = !!group.phase && currentPhaseId === group.phase.id;
-              const complete = isComplete(group.records);
+              const complete = isPhaseGroupComplete(group.records, programReqs);
               return (
                 <div key={group.phase?.id ?? 'program-level'} className="bg-theme-surface rounded-lg p-4">
                   <div className="flex items-center gap-2 flex-wrap mb-3">
