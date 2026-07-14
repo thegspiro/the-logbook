@@ -20,6 +20,42 @@ export const STATUS_META: Record<RequirementProgressStatus, { label: string; cla
   waived: { label: 'Waived', className: 'text-yellow-700 dark:text-yellow-400' },
 };
 
+/** Trim a progress value to a clean label (drop the decimal when whole). */
+function fmtValue(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+/**
+ * Short, student-facing description of what a requirement needs and where the
+ * member stands against it — e.g. "12 / 24 hrs", "2 / 3 shifts",
+ * "1 / 4 courses", "Pass ≥ 70%". Returns null for status-only requirement types
+ * (skills evaluation, certification, checklist) where there is no numeric target
+ * to count toward — the status label already tells the whole story there.
+ */
+export function requirementTarget(record: RequirementProgressRecord): string | null {
+  const req = record.requirement;
+  if (!req) return null;
+  const done = fmtValue(record.progress_value ?? 0);
+  switch (req.requirement_type) {
+    case 'hours':
+      return req.required_hours ? `${done} / ${req.required_hours} hrs` : null;
+    case 'shifts':
+      return req.required_shifts ? `${done} / ${req.required_shifts} shifts` : null;
+    case 'calls':
+      return req.required_calls ? `${done} / ${req.required_calls} calls` : null;
+    case 'courses':
+      return req.required_courses?.length
+        ? `${done} / ${req.required_courses.length} courses`
+        : null;
+    case 'knowledge_test': {
+      const pass = req.passing_score ?? record.progress_notes?.passing_score;
+      return pass ? `Pass ≥ ${pass}%` : null;
+    }
+    default:
+      return null;
+  }
+}
+
 export interface PhaseGroup {
   phase: ProgramPhase | null;
   records: RequirementProgressRecord[];

@@ -26,6 +26,7 @@ import {
   STATUS_META,
   groupRecordsByPhase,
   isPhaseGroupComplete,
+  requirementTarget,
 } from '../utils/pipelineProgress';
 import type {
   MemberProgramProgress,
@@ -38,20 +39,29 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
   const meta = STATUS_META[record.status];
   const done = record.status === 'completed' || record.status === 'verified';
   const score = record.progress_notes?.latest_score;
+  const target = requirementTarget(record);
+  const pct = Math.round(record.progress_percentage);
+  // A count-based target ("12 / 24 hrs") gets a mini fill bar; a knowledge-test
+  // target ("Pass ≥ 70%") is a threshold, not something to fill toward.
+  const showBar =
+    !!target && record.requirement?.requirement_type !== 'knowledge_test' && !done;
   return (
     <div className="flex items-start justify-between gap-3 bg-theme-surface-secondary rounded-lg p-3">
-      <div className="flex items-start gap-2 min-w-0">
+      <div className="flex items-start gap-2 min-w-0 flex-1">
         {done ? (
           <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 shrink-0" />
         ) : (
           <div className="w-4 h-4 rounded-full border border-theme-surface-border mt-0.5 shrink-0" />
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-sm text-theme-text-primary truncate">
             {record.requirement?.name || 'Requirement'}
           </p>
-          <div className="flex items-center gap-2 text-xs mt-0.5">
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-xs mt-0.5">
             <span className={meta.className}>{meta.label}</span>
+            {target && (
+              <span className="text-theme-text-secondary tabular-nums font-medium">· {target}</span>
+            )}
             {typeof score === 'number' && (
               <span className="text-theme-text-muted">· score {score}%</span>
             )}
@@ -61,11 +71,17 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
               </span>
             )}
           </div>
+          {showBar && (
+            <div className="w-full bg-theme-surface rounded-full h-1 mt-1.5" aria-hidden="true">
+              <div
+                className="bg-blue-500 h-1 rounded-full transition-all"
+                style={{ width: `${Math.min(100, pct)}%` }}
+              />
+            </div>
+          )}
         </div>
       </div>
-      <span className="text-xs text-theme-text-muted shrink-0">
-        {Math.round(record.progress_percentage)}%
-      </span>
+      <span className="text-xs text-theme-text-muted shrink-0 tabular-nums">{pct}%</span>
     </div>
   );
 };

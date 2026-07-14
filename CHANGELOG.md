@@ -73,7 +73,18 @@ progression.
 
 - **Student progression view** (`/training/my-progress/:enrollmentId`, read-only) —
   current phase ("You are here"), overall completion, time remaining / behind-schedule,
-  next milestones, and every requirement grouped by phase. Linked from *My Training*.
+  next milestones, and every requirement grouped by phase. Linked from *My Training*,
+  and now reachable in one tap from the dashboard's *My Training Progress* widget
+  (the program card deep-links straight to its progression view).
+- **Numeric targets on requirements** — student requirement rows and the dashboard
+  "Next Steps" now show progress against the goal ("12 / 24 hrs", "2 / 3 shifts",
+  "1 / 4 courses", "Pass ≥ 70%"), with a mini fill bar on count-based items, instead
+  of a bare status. Status-only types (skills evaluation, certification, checklist)
+  keep just their status.
+- **Requirement names now reach every progress view** — the program-requirement and
+  requirement-progress API responses carry the nested requirement, so the dashboard
+  widget, officer progress modal, and student progression view show the requirement's
+  real name/type instead of a generic "Requirement" label or a truncated ID.
 
 **Attendance**
 

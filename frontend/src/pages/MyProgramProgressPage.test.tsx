@@ -52,9 +52,10 @@ describe('MyProgramProgressPage', () => {
         {
           id: 'rp-2',
           requirement_id: 'req-2',
-          status: 'not_started',
-          progress_percentage: 0,
-          requirement: { id: 'req-2', name: 'Ladder Ops' },
+          status: 'in_progress',
+          progress_value: 12,
+          progress_percentage: 50,
+          requirement: { id: 'req-2', name: 'Ladder Ops', requirement_type: 'hours', required_hours: 24 },
         },
       ],
       completed_requirements: 1,
@@ -84,5 +85,12 @@ describe('MyProgramProgressPage', () => {
     expect(screen.getByText('Ladder Ops')).toBeInTheDocument();
     // Current-phase marker.
     expect(screen.getByText('You are here')).toBeInTheDocument();
+  });
+
+  it('shows the numeric target for a count-based requirement', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    // "12 / 24 hrs" tells the student exactly what's left, not just a status.
+    expect(await screen.findByText(/12 \/ 24 hrs/)).toBeInTheDocument();
   });
 });
