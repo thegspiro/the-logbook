@@ -129,4 +129,5 @@ export type {
   AnalyticsEventRecord, AnalyticsMetrics,
   TestConnectionResult,
   SalesforceReadiness, SalesforceReadinessObject, SalesforcePreviewResult, SalesforceSyncResult,
+  CalcomBooking,
 } from './adminServices';

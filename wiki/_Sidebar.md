@@ -45,6 +45,8 @@
 - [Compliance](Module-Compliance)
 - [Compliance Config](../docs/COMPLIANCE_CONFIG.md)
 - [Salesforce Integration](Integration-Salesforce)
+- [Documenso Integration](Integration-Documenso)
+- [Cal.com Integration](Integration-Calcom)
 
 ### 🔐 Security
 - [Overview](Security-Overview)

@@ -55,6 +55,7 @@ import type { EventListItem } from '@/types/event';
 import { getEventTypeLabel } from '@/utils/eventHelpers';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useConnectedIntegrations } from '../../../hooks/useConnectedIntegrations';
 import FormSubmissionConfig from './stage-config/FormSubmissionConfig';
 import ElectionVoteConfig from './stage-config/ElectionVoteConfig';
 import MeetingConfig from './stage-config/MeetingConfig';
@@ -344,6 +345,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
   existingStageCount,
 }) => {
   const tz = useTimezone();
+  const { isConnected: isIntegrationConnected, loading: integrationsLoading } =
+    useConnectedIntegrations();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [stageType, setStageType] = useState<StageType>('manual_approval');
@@ -903,6 +906,63 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 <p className="text-theme-text-muted text-xs ml-6">
                   Automatically complete this step and advance the prospect when documents are uploaded.
                 </p>
+                {isIntegrationConnected('documenso') && (
+                  <div className="border-theme-surface-border mt-2 rounded-lg border border-dashed p-3">
+                    <label htmlFor="stage-doc-signing" className="text-theme-text-muted mb-2 block text-sm">
+                      Collection Method
+                    </label>
+                    <select
+                      id="stage-doc-signing"
+                      value={docConfig.signing_provider ?? 'upload'}
+                      onChange={(e) => {
+                        const provider = e.target.value as DocumentStageConfig['signing_provider'];
+                        setConfig({
+                          ...docConfig,
+                          signing_provider: provider,
+                          documenso_template_id:
+                            provider === 'documenso' ? docConfig.documenso_template_id : undefined,
+                        });
+                      }}
+                      className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2.5 focus:ring-2 focus:outline-hidden"
+                    >
+                      <option value="upload">Upload — applicant uploads files</option>
+                      <option value="documenso">Documenso — send for e-signature</option>
+                    </select>
+                    {docConfig.signing_provider === 'documenso' && (
+                      <div className="mt-3">
+                        <label htmlFor="stage-doc-template" className="text-theme-text-muted mb-2 block text-sm">
+                          Documenso Template ID (optional)
+                        </label>
+                        <input
+                          id="stage-doc-template"
+                          type="text"
+                          value={docConfig.documenso_template_id ?? ''}
+                          onChange={(e) =>
+                            setConfig({
+                              ...docConfig,
+                              documenso_template_id: e.target.value.trim() || undefined,
+                            })
+                          }
+                          placeholder="e.g., 1234"
+                          className="bg-theme-surface-hover border-theme-surface-border text-theme-text-primary placeholder-theme-text-muted focus:ring-theme-focus-ring w-full rounded-lg border px-4 py-2 focus:ring-2 focus:outline-hidden"
+                        />
+                        <p className="text-theme-text-muted mt-1 text-xs">
+                          Applicants are told documents will be sent for e-signature. The template ID
+                          is stored for automated sending in a later release.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!isIntegrationConnected('documenso') && !integrationsLoading && (
+                  <p className="text-theme-text-muted text-xs">
+                    Want documents e-signed instead of uploaded?{' '}
+                    <a href="/integrations" className="text-red-700 underline hover:text-red-600 dark:text-red-400">
+                      Connect Documenso
+                    </a>{' '}
+                    to send them for signature.
+                  </p>
+                )}
               </div>
             )}
 
@@ -914,6 +974,8 @@ export const StageConfigModal: React.FC<StageConfigModalProps> = ({
                 customCategories={customCategories}
                 getNextEventForType={getNextEventForType}
                 renderEventPreview={renderEventPreview}
+                calcomConnected={isIntegrationConnected('calcom')}
+                integrationsReady={!integrationsLoading}
               />
             )}
 

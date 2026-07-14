@@ -14,8 +14,11 @@ import {
   AlertTriangle,
   Loader2,
   FileText,
+  CalendarClock,
+  FileSignature,
 } from 'lucide-react';
 import { publicStatusService } from '../services/api';
+import type { CurrentStageAction } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
 
@@ -28,7 +31,11 @@ interface StatusData {
   total_stages: number;
   stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
   applied_at?: string | undefined;
+  current_stage_action?: CurrentStageAction | undefined;
 }
+
+/** Only render links we can trust as external https(s) navigations. */
+const isSafeHttpUrl = (url: string): boolean => /^https?:\/\//i.test(url);
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   active: { label: 'In Progress', color: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/30' },
@@ -129,6 +136,48 @@ export const ApplicationStatusPage: React.FC = () => {
             </p>
           )}
         </div>
+
+        {/* Current stage action (self-scheduling / e-signature) */}
+        {data.current_stage_action && (
+          <div className="bg-theme-surface rounded-xl shadow-xs border border-blue-500/30 p-5 mb-4">
+            {data.current_stage_action.type === 'calcom_scheduling' ? (
+              <div className="flex items-start gap-3">
+                <CalendarClock className="w-6 h-6 text-blue-700 dark:text-blue-400 shrink-0" aria-hidden="true" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-theme-text-primary">
+                    {data.current_stage_action.label}
+                  </p>
+                  {data.current_stage_action.message && (
+                    <p className="text-xs text-theme-text-muted mt-0.5">{data.current_stage_action.message}</p>
+                  )}
+                  {data.current_stage_action.url && isSafeHttpUrl(data.current_stage_action.url) && (
+                    <a
+                      href={data.current_stage_action.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <CalendarClock className="w-4 h-4" aria-hidden="true" />
+                      Schedule
+                    </a>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-3">
+                <FileSignature className="w-6 h-6 text-blue-700 dark:text-blue-400 shrink-0" aria-hidden="true" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-theme-text-primary">
+                    {data.current_stage_action.label}
+                  </p>
+                  {data.current_stage_action.message && (
+                    <p className="text-xs text-theme-text-muted mt-0.5">{data.current_stage_action.message}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Timeline */}
         {data.stage_timeline.length > 0 && (

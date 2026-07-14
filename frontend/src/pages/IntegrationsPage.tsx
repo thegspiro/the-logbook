@@ -36,6 +36,8 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  FileSignature,
+  CalendarClock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../stores/authStore';
@@ -44,9 +46,12 @@ import {
   type IntegrationConfig,
   type SalesforceReadiness,
   type SalesforcePreviewResult,
+  type CalcomBooking,
 } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import { ConnectionStatus } from '../constants/enums';
+import { formatDateTime } from '../utils/dateFormatting';
+import { useTimezone } from '../hooks/useTimezone';
 
 // UI metadata for integration types (icons, colors)
 const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgColor: string; features: string[] }> = {
@@ -128,6 +133,18 @@ const INTEGRATION_UI: Record<string, { icon: React.ReactNode; color: string; bgC
     bgColor: 'bg-blue-500/10',
     features: ['Contact sync', 'Donor management', 'Event push', 'Bidirectional sync'],
   },
+  'documenso': {
+    icon: <FileSignature className="w-6 h-6" />,
+    color: 'text-yellow-700 dark:text-yellow-400',
+    bgColor: 'bg-yellow-500/10',
+    features: ['E-signatures', 'Self-hostable', 'Open source'],
+  },
+  'calcom': {
+    icon: <CalendarClock className="w-6 h-6" />,
+    color: 'text-slate-700 dark:text-slate-300',
+    bgColor: 'bg-slate-500/10',
+    features: ['Booking sync', 'Interviews', 'Self-hostable'],
+  },
   'active911': {
     icon: <Radio className="w-6 h-6" />,
     color: 'text-red-700 dark:text-red-400',
@@ -203,25 +220,33 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   'Automation': <Zap className="w-3.5 h-3.5" />,
   'Mapping': <MapPin className="w-3.5 h-3.5" />,
   'CRM': <Users className="w-3.5 h-3.5" />,
+  'Documents': <FileSignature className="w-3.5 h-3.5" />,
+  'Scheduling': <CalendarClock className="w-3.5 h-3.5" />,
 };
 
-type CategoryFilter = 'all' | 'Calendar' | 'Messaging' | 'Data' | 'CRM' | 'Safety' | 'Reporting' | 'EMS' | 'Dispatch' | 'Automation' | 'Mapping';
+type CategoryFilter = 'all' | 'Calendar' | 'Messaging' | 'Data' | 'CRM' | 'Safety' | 'Reporting' | 'EMS' | 'Dispatch' | 'Automation' | 'Mapping' | 'Documents' | 'Scheduling';
 
-const ALL_CATEGORIES: CategoryFilter[] = ['all', 'Calendar', 'Messaging', 'Data', 'CRM', 'Safety', 'Reporting', 'EMS', 'Dispatch', 'Automation', 'Mapping'];
+const ALL_CATEGORIES: CategoryFilter[] = ['all', 'Calendar', 'Messaging', 'Data', 'CRM', 'Safety', 'Reporting', 'EMS', 'Dispatch', 'Automation', 'Mapping', 'Documents', 'Scheduling'];
 
 // Integration types that need webhook URL config
 const WEBHOOK_TYPES = new Set(['slack', 'discord', 'microsoft-teams']);
 // Integration types that need specific config forms
-const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import', 'salesforce']);
+const CONFIG_TYPES = new Set(['nws-weather', 'nfirs-export', 'nemsis-export', 'generic-webhook', 'epcr-import', 'salesforce', 'documenso', 'calcom']);
 
 const inputClass = 'form-input';
 const labelClass = 'form-label';
+
+// Public inbound-webhook URL a department pastes into Documenso / Cal.com so
+// signing/booking events auto-advance the matching prospect's pipeline stage.
+const webhookCallbackUrl = (provider: 'documenso' | 'calcom', integrationId: string): string =>
+  `${window.location.origin}/api/public/v1/webhooks/${provider}/${integrationId}`;
 
 const IntegrationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('integrations.manage');
   const location = useLocation();
   const navigate = useNavigate();
+  const tz = useTimezone();
 
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,6 +257,9 @@ const IntegrationsPage: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [showSyncPanel, setShowSyncPanel] = useState(false);
+  const [showBookingsPanel, setShowBookingsPanel] = useState(false);
+  const [calcomBookings, setCalcomBookings] = useState<CalcomBooking[] | null>(null);
+  const [loadingBookings, setLoadingBookings] = useState(false);
 
   // Salesforce readiness / preview panel state
   const [readiness, setReadiness] = useState<SalesforceReadiness | null>(null);
@@ -257,6 +285,12 @@ const IntegrationsPage: React.FC = () => {
   const [sfMatchStrategy, setSfMatchStrategy] = useState('email');
   const [sfGracefulFields, setSfGracefulFields] = useState(true);
   const [sfAutoSync, setSfAutoSync] = useState(false);
+  const [documensoBaseUrl, setDocumensoBaseUrl] = useState('');
+  const [documensoApiToken, setDocumensoApiToken] = useState('');
+  const [documensoWebhookSecret, setDocumensoWebhookSecret] = useState('');
+  const [calcomBaseUrl, setCalcomBaseUrl] = useState('');
+  const [calcomApiKey, setCalcomApiKey] = useState('');
+  const [calcomWebhookSecret, setCalcomWebhookSecret] = useState('');
 
   const loadIntegrations = useCallback(async () => {
     try {
@@ -331,6 +365,12 @@ const IntegrationsPage: React.FC = () => {
     setSfMatchStrategy('email');
     setSfGracefulFields(true);
     setSfAutoSync(false);
+    setDocumensoBaseUrl('');
+    setDocumensoApiToken('');
+    setDocumensoWebhookSecret('');
+    setCalcomBaseUrl('');
+    setCalcomApiKey('');
+    setCalcomWebhookSecret('');
   };
 
   const getConfigFromForm = (integrationType: string): Record<string, unknown> => {
@@ -348,6 +388,18 @@ const IntegrationsPage: React.FC = () => {
         return { url: genericWebhookUrl, secret: genericWebhookSecret };
       case 'epcr-import':
         return { import_format: importFormat };
+      case 'documenso':
+        return {
+          api_base_url: documensoBaseUrl.trim() || undefined,
+          api_token: documensoApiToken.trim() || undefined,
+          webhook_secret: documensoWebhookSecret.trim() || undefined,
+        };
+      case 'calcom':
+        return {
+          api_base_url: calcomBaseUrl.trim() || undefined,
+          api_key: calcomApiKey.trim() || undefined,
+          webhook_secret: calcomWebhookSecret.trim() || undefined,
+        };
       case 'salesforce':
         return {
           instance_url: sfInstanceUrl,
@@ -409,6 +461,22 @@ const IntegrationsPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Connection test failed'));
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleToggleBookings = async () => {
+    const next = !showBookingsPanel;
+    setShowBookingsPanel(next);
+    if (next && calcomBookings === null) {
+      setLoadingBookings(true);
+      try {
+        setCalcomBookings(await integrationsService.getCalcomBookings());
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to load Cal.com bookings'));
+        setCalcomBookings([]);
+      } finally {
+        setLoadingBookings(false);
+      }
     }
   };
 
@@ -767,6 +835,108 @@ const IntegrationsPage: React.FC = () => {
           </div>
         );
 
+      case 'documenso':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="documenso-token" className={labelClass}>API Token</label>
+              <input
+                id="documenso-token"
+                type="password"
+                value={documensoApiToken}
+                onChange={(e) => setDocumensoApiToken(e.target.value)}
+                placeholder="api_..."
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Create an API token in Documenso under Settings &rarr; API.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="documenso-base-url" className={labelClass}>API Base URL (optional)</label>
+              <input
+                id="documenso-base-url"
+                type="url"
+                value={documensoBaseUrl}
+                onChange={(e) => setDocumensoBaseUrl(e.target.value.trim())}
+                placeholder="https://app.documenso.com/api/v1"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Leave blank for Documenso Cloud. Self-hosted instances use https://your-host/api/v1.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="documenso-webhook-secret" className={labelClass}>Webhook Secret (optional)</label>
+              <input
+                id="documenso-webhook-secret"
+                type="password"
+                value={documensoWebhookSecret}
+                onChange={(e) => setDocumensoWebhookSecret(e.target.value)}
+                placeholder="Shared secret for inbound webhooks"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Set a secret to auto-advance a prospect&apos;s signing stage when they finish signing. Add this Webhook URL in Documenso (send it as the <code>X-Documenso-Secret</code> header):
+              </p>
+              <code className="mt-1 block break-all rounded bg-theme-surface-secondary px-2 py-1 text-xs text-theme-text-secondary">
+                {webhookCallbackUrl('documenso', integration.id)}
+              </code>
+            </div>
+          </div>
+        );
+
+      case 'calcom':
+        return (
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="calcom-key" className={labelClass}>API Key</label>
+              <input
+                id="calcom-key"
+                type="password"
+                value={calcomApiKey}
+                onChange={(e) => setCalcomApiKey(e.target.value)}
+                placeholder="cal_..."
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Create an API key in Cal.com under Settings &rarr; Developer &rarr; API keys.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="calcom-base-url" className={labelClass}>API Base URL (optional)</label>
+              <input
+                id="calcom-base-url"
+                type="url"
+                value={calcomBaseUrl}
+                onChange={(e) => setCalcomBaseUrl(e.target.value.trim())}
+                placeholder="https://api.cal.com/v1"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Leave blank for Cal.com Cloud. Self-hosted instances use https://your-host/api/v1.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="calcom-webhook-secret" className={labelClass}>Webhook Secret (optional)</label>
+              <input
+                id="calcom-webhook-secret"
+                type="password"
+                value={calcomWebhookSecret}
+                onChange={(e) => setCalcomWebhookSecret(e.target.value)}
+                placeholder="Signing secret for inbound webhooks"
+                className={inputClass}
+              />
+              <p className="text-xs text-theme-text-muted mt-1">
+                Set a secret to auto-advance a prospect&apos;s interview stage when they book. Add this URL as a Cal.com webhook (BOOKING_CREATED) using the same secret:
+              </p>
+              <code className="mt-1 block break-all rounded bg-theme-surface-secondary px-2 py-1 text-xs text-theme-text-secondary">
+                {webhookCallbackUrl('calcom', integration.id)}
+              </code>
+            </div>
+          </div>
+        );
+
       default:
         return null;
     }
@@ -904,6 +1074,15 @@ const IntegrationsPage: React.FC = () => {
                           <span>Sync</span>
                         </button>
                       )}
+                      {integration.integration_type === 'calcom' && (
+                        <button
+                          onClick={() => { void handleToggleBookings(); }}
+                          className="px-3 py-1.5 text-sm bg-slate-500/10 text-slate-700 dark:text-slate-300 hover:bg-slate-500/20 rounded-lg transition-colors flex items-center space-x-1"
+                        >
+                          <CalendarClock className="w-3.5 h-3.5" />
+                          <span>Bookings</span>
+                        </button>
+                      )}
                       <button
                         onClick={() => { void handleTestConnection(integration.id); }}
                         disabled={testing}
@@ -935,6 +1114,64 @@ const IntegrationsPage: React.FC = () => {
             );
           })}
         </div>
+
+        {/* Cal.com Bookings Panel */}
+        {showBookingsPanel && integrations.some(i => i.integration_type === 'calcom' && i.status === ConnectionStatus.CONNECTED) && (
+          <div className="card mt-6 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-slate-500/10 text-slate-700 dark:text-slate-300">
+                  <CalendarClock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-theme-text-primary font-semibold">Cal.com Bookings</h3>
+                  <p className="text-theme-text-muted text-xs">Upcoming bookings from your connected Cal.com account</p>
+                </div>
+              </div>
+              <button onClick={() => setShowBookingsPanel(false)} className="text-theme-text-muted hover:text-theme-text-primary">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {loadingBookings ? (
+              <div className="flex items-center justify-center py-8" role="status" aria-live="polite">
+                <Loader2 className="w-6 h-6 text-theme-text-muted animate-spin" />
+                <span className="sr-only">Loading bookings…</span>
+              </div>
+            ) : calcomBookings && calcomBookings.length > 0 ? (
+              <ul className="divide-y divide-theme-surface-border">
+                {calcomBookings.map((b) => (
+                  <li key={b.external_id || `${b.title}-${b.start_time}`} className="py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-theme-text-primary text-sm font-medium truncate">{b.title || 'Booking'}</p>
+                        {b.attendee_emails.length > 0 && (
+                          <p className="text-theme-text-muted text-xs truncate">{b.attendee_emails.join(', ')}</p>
+                        )}
+                        {b.location && (
+                          <p className="text-theme-text-muted text-xs truncate">{b.location}</p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        {b.start_time && (
+                          <p className="text-theme-text-secondary text-xs">{formatDateTime(b.start_time, tz)}</p>
+                        )}
+                        {b.status && (
+                          <span className="text-theme-text-muted text-xs capitalize">{b.status}</span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-center py-8">
+                <CalendarClock className="w-8 h-8 text-theme-text-muted mx-auto mb-2" />
+                <p className="text-theme-text-secondary text-sm">No upcoming bookings</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Salesforce Sync Panel */}
         {showSyncPanel && integrations.some(i => i.integration_type === 'salesforce' && i.status === ConnectionStatus.CONNECTED) && (
@@ -1178,6 +1415,7 @@ const IntegrationsPage: React.FC = () => {
                       Cancel
                     </button>
                     <button
+                      data-testid="connect-submit"
                       onClick={() => { void handleConnect(selectedIntegration.id); }}
                       disabled={connecting}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"

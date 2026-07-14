@@ -58,6 +58,7 @@ import type {
   ReportStageGroup,
   TargetMembershipType,
   InactivityAlertLevel,
+  CurrentStageAction,
 } from '../types';
 import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
 import { StageType as StageTypeConst, VotingMethod, VictoryCondition } from '../../../constants/enums';
@@ -1031,6 +1032,7 @@ export const publicStatusService = {
     total_stages: number;
     stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
     applied_at?: string | undefined;
+    current_stage_action?: CurrentStageAction | undefined;
   }> {
     const response = await axios.get<{
       first_name: string;
@@ -1041,6 +1043,7 @@ export const publicStatusService = {
       total_stages: number;
       stage_timeline: { stage_name: string; status: string; completed_at?: string | undefined }[];
       applied_at?: string | undefined;
+      current_stage_action?: CurrentStageAction | undefined;
     }>(`/api/public/v1/application-status/${token}`);
     return response.data;
   },

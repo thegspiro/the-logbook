@@ -128,6 +128,20 @@ INTEGRATION_CATALOG = [
         "status": "available",
     },
     {
+        "integration_type": "documenso",
+        "name": "Documenso",
+        "description": "Send documents for electronic signature via Documenso, the open-source DocuSign alternative. Works with Documenso Cloud or a self-hosted instance.",
+        "category": "Documents",
+        "status": "available",
+    },
+    {
+        "integration_type": "calcom",
+        "name": "Cal.com",
+        "description": "Pull scheduled bookings from Cal.com, the open-source Calendly alternative. Surface member interviews, inspections, and appointments as Logbook events.",
+        "category": "Scheduling",
+        "status": "available",
+    },
+    {
         "integration_type": "active911",
         "name": "Active911",
         "description": "Receive dispatch alerts and mapping from Active911 paging platform.",

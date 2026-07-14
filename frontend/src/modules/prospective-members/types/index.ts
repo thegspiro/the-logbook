@@ -100,10 +100,17 @@ export interface FormPipelineValidation {
   suggestions: string[];
 }
 
+/** How a document-upload stage collects its documents. */
+export type DocumentCollectionMethod = 'upload' | 'documenso';
+
 export interface DocumentStageConfig {
   required_document_types: string[];
   allow_multiple: boolean;
   auto_advance?: boolean | undefined;
+  // Optional Documenso e-signature settings. Only usable when the org has the
+  // Documenso integration connected; falls back to plain upload otherwise.
+  signing_provider?: DocumentCollectionMethod | undefined;
+  documenso_template_id?: string | undefined;
 }
 
 export interface ElectionPackageFieldConfig {
@@ -141,6 +148,9 @@ export interface ManualApprovalConfig {
 
 export type MeetingType = 'chief_meeting' | 'president_meeting' | 'informational' | 'business_meeting' | 'other';
 
+/** How a meeting stage is scheduled with the applicant. */
+export type MeetingSchedulingProvider = 'manual' | 'calcom';
+
 export interface MeetingStageConfig {
   meeting_type: MeetingType;
   meeting_description?: string | undefined;
@@ -149,6 +159,10 @@ export interface MeetingStageConfig {
   linked_event_category?: string | undefined;
   linked_event_id?: string | undefined;
   auto_advance?: boolean | undefined;
+  // Optional Cal.com self-scheduling. Only usable when the org has the Cal.com
+  // integration connected; falls back to manual scheduling otherwise.
+  scheduling_provider?: MeetingSchedulingProvider | undefined;
+  calcom_booking_url?: string | undefined;
 }
 
 export interface StatusPageToggleConfig {
@@ -540,6 +554,18 @@ export interface ConvertApplicantResponse {
 }
 
 // Public application status
+/**
+ * An action the applicant can take on their current stage, surfaced on the
+ * public status page (e.g. a Cal.com self-scheduling link, or a note that
+ * documents will be sent for e-signature via Documenso).
+ */
+export interface CurrentStageAction {
+  type: 'calcom_scheduling' | 'documenso_signature';
+  label: string;
+  url?: string | undefined;
+  message?: string | undefined;
+}
+
 export interface ApplicationStatus {
   first_name: string;
   last_name: string;
@@ -553,6 +579,7 @@ export interface ApplicationStatus {
     completed_at?: string | undefined;
   }[];
   applied_at?: string | undefined;
+  current_stage_action?: CurrentStageAction | undefined;
 }
 
 // =============================================================================

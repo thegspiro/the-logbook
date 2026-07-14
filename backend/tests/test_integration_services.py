@@ -12,40 +12,85 @@ Tests cover:
 - ePCR CSV/XML import
 """
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.integration_services.slack_service import (
-    format_event_notification,
-    format_shift_notification,
-    format_training_notification,
+from app.services.integration_services.calcom_service import (
+    CalcomService,
+    format_booking_as_event,
+)
+from app.services.integration_services.calcom_service import (
+    parse_webhook_event as parse_calcom_webhook,
 )
 from app.services.integration_services.discord_service import (
     format_event_embed,
     format_shift_embed,
     format_training_embed,
 )
+from app.services.integration_services.documenso_service import (
+    DocumensoService,
+    build_create_document_payload,
+)
+from app.services.integration_services.documenso_service import (
+    parse_webhook_event as parse_documenso_webhook,
+)
+from app.services.integration_services.epcr_import_service import (
+    parse_csv_file,
+    parse_nemsis_xml,
+)
+from app.services.integration_services.ical_service import (
+    generate_feed_token,
+    generate_ical_feed,
+)
+from app.services.integration_services.nemsis_service import export_nemsis_data
+from app.services.integration_services.nfirs_service import (
+    _map_incident_type,
+    export_nfirs_data,
+)
+from app.services.integration_services.slack_service import (
+    format_event_notification,
+    format_shift_notification,
+    format_training_notification,
+)
 from app.services.integration_services.teams_service import (
     format_event_card,
     format_shift_card,
     format_training_card,
 )
-from app.services.integration_services.webhook_service import _sign_payload
-from app.services.integration_services.ical_service import (
-    generate_ical_feed,
-    generate_feed_token,
+from app.services.integration_services.webhook_service import (
+    _sign_payload,
+    verify_hmac_signature,
+    verify_shared_secret,
 )
-from app.services.integration_services.nfirs_service import (
-    export_nfirs_data,
-    _map_incident_type,
-)
-from app.services.integration_services.nemsis_service import export_nemsis_data
-from app.services.integration_services.epcr_import_service import (
-    parse_csv_file,
-    parse_nemsis_xml,
-)
+
+# ============================================
+# Shared httpx mocking helper
+# ============================================
+
+
+class _FakeResponse:
+    """Minimal stand-in for an httpx.Response."""
+
+    def __init__(self, status_code, json_data=None, text=""):
+        self.status_code = status_code
+        self._json = json_data if json_data is not None else {}
+        self.text = text
+
+    def json(self):
+        return self._json
+
+
+def _mock_client(response):
+    """Build a create_integration_client() replacement yielding a fake client."""
+    client = AsyncMock()
+    client.get = AsyncMock(return_value=response)
+    client.post = AsyncMock(return_value=response)
+
+    cm = AsyncMock()
+    cm.__aenter__ = AsyncMock(return_value=client)
+    cm.__aexit__ = AsyncMock(return_value=False)
+    return cm
 
 
 # ============================================
@@ -55,7 +100,11 @@ from app.services.integration_services.epcr_import_service import (
 
 class TestSlackFormatting:
     def test_format_event_notification(self):
-        event = {"title": "Training Night", "event_type": "training", "start_time": "2026-03-10T19:00"}
+        event = {
+            "title": "Training Night",
+            "event_type": "training",
+            "start_time": "2026-03-10T19:00",
+        }
         result = format_event_notification(event)
         assert result["text"] == "New event: Training Night"
         assert len(result["blocks"]) >= 2
@@ -66,7 +115,12 @@ class TestSlackFormatting:
         assert any("Station 1" in str(b) for b in result["blocks"])
 
     def test_format_shift_notification(self):
-        shift = {"type": "A Shift", "start_time": "08:00", "end_time": "20:00", "crew": ["Alice", "Bob"]}
+        shift = {
+            "type": "A Shift",
+            "start_time": "08:00",
+            "end_time": "20:00",
+            "crew": ["Alice", "Bob"],
+        }
         result = format_shift_notification(shift)
         assert "A Shift" in result["text"]
 
@@ -84,7 +138,11 @@ class TestSlackFormatting:
 
 class TestDiscordFormatting:
     def test_format_event_embed(self):
-        event = {"title": "Fire Drill", "event_type": "training", "start_time": "2026-03-10"}
+        event = {
+            "title": "Fire Drill",
+            "event_type": "training",
+            "start_time": "2026-03-10",
+        }
         embed = format_event_embed(event)
         assert "Fire Drill" in embed["title"]
         assert "color" in embed
@@ -108,7 +166,11 @@ class TestDiscordFormatting:
 
 class TestTeamsFormatting:
     def test_format_event_card(self):
-        event = {"title": "Board Meeting", "event_type": "business_meeting", "start_time": "2026-03-10"}
+        event = {
+            "title": "Board Meeting",
+            "event_type": "business_meeting",
+            "start_time": "2026-03-10",
+        }
         card = format_event_card(event)
         assert "Board Meeting" in card["title"]
 
@@ -330,3 +392,250 @@ class TestEPCRImport:
         assert records[0]["incident_number"] == "2026-EMS-002"
         assert "patient_name" not in records[0]
         assert "blood_pressure" not in records[0]
+
+
+# ============================================
+# Documenso Tests
+# ============================================
+
+
+class TestDocumensoPayload:
+    def test_defaults_role_to_signer(self):
+        payload = build_create_document_payload(
+            "Waiver", [{"name": "Alice", "email": "alice@example.com"}]
+        )
+        assert payload["title"] == "Waiver"
+        assert payload["recipients"][0]["role"] == "SIGNER"
+        assert payload["recipients"][0]["signingOrder"] == 1
+
+    def test_unknown_role_falls_back_to_signer(self):
+        payload = build_create_document_payload(
+            "Doc", [{"name": "Bob", "email": "b@x.com", "role": "bogus"}]
+        )
+        assert payload["recipients"][0]["role"] == "SIGNER"
+
+    def test_role_is_uppercased_and_preserved(self):
+        payload = build_create_document_payload(
+            "Doc", [{"name": "Cara", "email": "c@x.com", "role": "approver"}]
+        )
+        assert payload["recipients"][0]["role"] == "APPROVER"
+
+    def test_sequential_signing_order(self):
+        recipients = [
+            {"name": "A", "email": "a@x.com"},
+            {"name": "B", "email": "b@x.com"},
+        ]
+        payload = build_create_document_payload("Doc", recipients)
+        assert [r["signingOrder"] for r in payload["recipients"]] == [1, 2]
+
+    def test_external_id_included_when_provided(self):
+        payload = build_create_document_payload(
+            "Doc", [{"name": "A", "email": "a@x.com"}], external_id="evt-42"
+        )
+        assert payload["externalId"] == "evt-42"
+
+    def test_external_id_omitted_when_absent(self):
+        payload = build_create_document_payload(
+            "Doc", [{"name": "A", "email": "a@x.com"}]
+        )
+        assert "externalId" not in payload
+
+    def test_base_url_trailing_slash_normalized(self):
+        service = DocumensoService(
+            {"api_base_url": "https://sign.example.com/api/v1/", "api_token": "t"}
+        )
+        assert service.api_base_url == "https://sign.example.com/api/v1"
+
+    async def test_connection_success(self):
+        service = DocumensoService(
+            {"api_base_url": "https://app.documenso.com/api/v1", "api_token": "tok"}
+        )
+        with patch(
+            "app.services.integration_services.documenso_service.create_integration_client",
+            return_value=_mock_client(_FakeResponse(200, {"documents": []})),
+        ):
+            result = await service.test_connection()
+        assert "Connected to Documenso" in result
+
+    async def test_connection_missing_token_raises(self):
+        service = DocumensoService({"api_base_url": "https://app.documenso.com/api/v1"})
+        with pytest.raises(Exception, match="No Documenso API token"):
+            await service.test_connection()
+
+    async def test_connection_unauthorized_raises(self):
+        service = DocumensoService(
+            {"api_base_url": "https://app.documenso.com/api/v1", "api_token": "bad"}
+        )
+        with patch(
+            "app.services.integration_services.documenso_service.create_integration_client",
+            return_value=_mock_client(_FakeResponse(401, text="Unauthorized")),
+        ):
+            with pytest.raises(Exception, match="rejected the API token"):
+                await service.test_connection()
+
+
+# ============================================
+# Cal.com Tests
+# ============================================
+
+
+class TestCalcomBookingMapping:
+    def test_maps_core_fields(self):
+        booking = {
+            "uid": "abc123",
+            "title": "Interview: J. Doe",
+            "description": "Prospective member interview",
+            "location": "Station 1",
+            "startTime": "2026-04-01T14:00:00Z",
+            "endTime": "2026-04-01T14:30:00Z",
+            "status": "accepted",
+            "attendees": [{"name": "Jane", "email": "jane@example.com"}],
+        }
+        event = format_booking_as_event(booking)
+        assert event["external_id"] == "abc123"
+        assert event["title"] == "Interview: J. Doe"
+        assert event["start_time"] == "2026-04-01T14:00:00Z"
+        assert event["attendee_emails"] == ["jane@example.com"]
+
+    def test_falls_back_to_id_when_no_uid(self):
+        event = format_booking_as_event({"id": 77})
+        assert event["external_id"] == "77"
+
+    def test_missing_fields_get_safe_defaults(self):
+        event = format_booking_as_event({})
+        assert event["title"] == "Cal.com Booking"
+        assert event["attendee_emails"] == []
+
+    def test_attendees_without_email_are_skipped(self):
+        event = format_booking_as_event(
+            {"attendees": [{"name": "NoEmail"}, {"email": "y@x.com"}]}
+        )
+        assert event["attendee_emails"] == ["y@x.com"]
+
+    def test_base_url_trailing_slash_normalized(self):
+        service = CalcomService(
+            {"api_base_url": "https://cal.example.com/api/v1/", "api_key": "k"}
+        )
+        assert service.api_base_url == "https://cal.example.com/api/v1"
+
+    async def test_connection_success(self):
+        service = CalcomService(
+            {"api_base_url": "https://api.cal.com/v1", "api_key": "cal_x"}
+        )
+        with patch(
+            "app.services.integration_services.calcom_service.create_integration_client",
+            return_value=_mock_client(
+                _FakeResponse(200, {"user": {"username": "station1"}})
+            ),
+        ):
+            result = await service.test_connection()
+        assert "station1" in result
+
+    async def test_connection_missing_key_raises(self):
+        service = CalcomService({"api_base_url": "https://api.cal.com/v1"})
+        with pytest.raises(Exception, match="No Cal.com API key"):
+            await service.test_connection()
+
+    async def test_list_bookings_maps_results(self):
+        service = CalcomService(
+            {"api_base_url": "https://api.cal.com/v1", "api_key": "cal_x"}
+        )
+        with patch(
+            "app.services.integration_services.calcom_service.create_integration_client",
+            return_value=_mock_client(
+                _FakeResponse(200, {"bookings": [{"uid": "b1", "title": "Booking 1"}]})
+            ),
+        ):
+            events = await service.list_bookings()
+        assert len(events) == 1
+        assert events[0]["external_id"] == "b1"
+
+
+# ============================================
+# Webhook Signature / Secret Verification
+# ============================================
+
+
+class TestWebhookVerification:
+    def test_hmac_signature_accepts_valid_hex(self):
+        body = b'{"a":1}'
+        secret = "s3cr3t"
+        import hashlib
+        import hmac
+
+        sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        assert verify_hmac_signature(body, secret, sig) is True
+
+    def test_hmac_signature_accepts_scheme_prefix(self):
+        body = b"payload"
+        secret = "k"
+        import hashlib
+        import hmac
+
+        sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+        assert verify_hmac_signature(body, secret, f"sha256={sig}") is True
+
+    def test_hmac_signature_rejects_wrong_sig(self):
+        assert verify_hmac_signature(b"payload", "k", "deadbeef") is False
+
+    def test_hmac_signature_rejects_empty(self):
+        assert verify_hmac_signature(b"payload", "", "abc") is False
+        assert verify_hmac_signature(b"payload", "k", "") is False
+
+    def test_shared_secret_constant_time_match(self):
+        assert verify_shared_secret("abc", "abc") is True
+        assert verify_shared_secret("abc", "xyz") is False
+        assert verify_shared_secret("", "abc") is False
+        assert verify_shared_secret("abc", "") is False
+
+
+# ============================================
+# Documenso / Cal.com Webhook Parsing
+# ============================================
+
+
+class TestWebhookParsing:
+    def test_documenso_completed_event(self):
+        parsed = parse_documenso_webhook(
+            {
+                "event": "DOCUMENT_COMPLETED",
+                "payload": {
+                    "externalId": "sp-1",
+                    "title": "Waiver",
+                    "recipients": [{"email": "a@b.com"}, {"email": "c@d.com"}],
+                },
+            }
+        )
+        assert parsed["completed"] is True
+        assert parsed["external_id"] == "sp-1"
+        assert parsed["recipient_emails"] == ["a@b.com", "c@d.com"]
+
+    def test_documenso_non_completion_event(self):
+        parsed = parse_documenso_webhook({"event": "DOCUMENT_OPENED", "payload": {}})
+        assert parsed["completed"] is False
+        assert parsed["recipient_emails"] == []
+
+    def test_documenso_handles_malformed_payload(self):
+        parsed = parse_documenso_webhook(
+            {"event": "DOCUMENT_COMPLETED", "payload": None}
+        )
+        assert parsed["completed"] is True
+        assert parsed["recipient_emails"] == []
+
+    def test_calcom_booking_created(self):
+        parsed = parse_calcom_webhook(
+            {
+                "triggerEvent": "BOOKING_CREATED",
+                "payload": {"uid": "bk-1", "attendees": [{"email": "x@y.com"}]},
+            }
+        )
+        assert parsed["created"] is True
+        assert parsed["booking_uid"] == "bk-1"
+        assert parsed["attendee_emails"] == ["x@y.com"]
+
+    def test_calcom_cancellation_is_not_created(self):
+        parsed = parse_calcom_webhook(
+            {"triggerEvent": "BOOKING_CANCELLED", "payload": {"uid": "bk-2"}}
+        )
+        assert parsed["created"] is False
+        assert parsed["attendee_emails"] == []

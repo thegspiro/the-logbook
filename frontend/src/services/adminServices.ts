@@ -702,6 +702,17 @@ export interface TestConnectionResult {
   message: string;
 }
 
+export interface CalcomBooking {
+  external_id: string;
+  title: string;
+  description: string;
+  location: string;
+  start_time: string;
+  end_time: string;
+  status: string;
+  attendee_emails: string[];
+}
+
 export interface SalesforceSyncStatus {
   connected: boolean;
   last_sync_at: string | null;
@@ -785,6 +796,11 @@ export const integrationsService = {
   async testConnection(integrationId: string): Promise<TestConnectionResult> {
     const response = await api.post<TestConnectionResult>(`/integrations/${integrationId}/test-connection`);
     return response.data;
+  },
+
+  async getCalcomBookings(): Promise<CalcomBooking[]> {
+    const response = await api.get<{ bookings: CalcomBooking[] }>('/integrations/calcom/bookings');
+    return response.data.bookings;
   },
 
   async salesforceSyncStatus(): Promise<SalesforceSyncStatus> {

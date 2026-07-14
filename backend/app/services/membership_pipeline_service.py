@@ -1045,6 +1045,74 @@ class MembershipPipelineService:
         await self.db.commit()
         return await self.get_prospect(prospect_id, organization_id)
 
+    async def complete_current_step_for_integration_event(
+        self,
+        organization_id: str,
+        emails: List[str],
+        *,
+        step_type: str,
+        provider_key: str,
+        provider_value: str,
+        completed_by: str,
+        action_result: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, str]]:
+        """Auto-advance a prospect when an integration event arrives.
+
+        Finds an active prospect in the org whose email matches one of
+        ``emails`` and whose current step is of ``step_type`` configured with
+        ``config[provider_key] == provider_value`` (e.g. a meeting step using
+        Cal.com when an applicant books, or a document step using Documenso
+        when they finish signing), then completes that step.
+
+        Returns ``{"prospect_id", "step_id"}`` on success, or None when nothing
+        matched (unknown email, wrong current stage, or already advanced) — a
+        no-match is a normal, non-error outcome for a public webhook.
+        """
+        normalized = {e.strip().lower() for e in emails if e and e.strip()}
+        if not normalized:
+            return None
+
+        query = (
+            select(ProspectiveMember)
+            .where(
+                ProspectiveMember.organization_id == organization_id,
+                ProspectiveMember.status == ProspectStatus.ACTIVE,
+                func.lower(ProspectiveMember.email).in_(normalized),
+            )
+            .options(
+                selectinload(ProspectiveMember.current_step),
+                selectinload(ProspectiveMember.pipeline).selectinload(
+                    MembershipPipeline.steps
+                ),
+            )
+        )
+        result = await self.db.execute(query)
+        prospects = result.scalars().all()
+
+        for prospect in prospects:
+            step = prospect.current_step
+            if not step:
+                continue
+            step_type_value = (
+                step.step_type.value
+                if hasattr(step.step_type, "value")
+                else step.step_type
+            )
+            if step_type_value != step_type:
+                continue
+            if (step.config or {}).get(provider_key) != provider_value:
+                continue
+            await self.complete_step(
+                prospect_id=str(prospect.id),
+                organization_id=organization_id,
+                step_id=str(step.id),
+                completed_by=completed_by,
+                action_result=action_result,
+            )
+            return {"prospect_id": str(prospect.id), "step_id": str(step.id)}
+
+        return None
+
     async def advance_prospect(
         self,
         prospect_id: str,
@@ -3374,6 +3442,47 @@ class MembershipPipelineService:
     # Status tokens expire after 30 days to limit exposure if leaked.
     _STATUS_TOKEN_TTL_DAYS = 30
 
+    @staticmethod
+    def _build_current_stage_action(step: Any) -> Optional[Dict[str, Any]]:
+        """Derive an applicant-facing action from the current step's config.
+
+        Surfaces integration-backed affordances on the public status page:
+        a Cal.com self-scheduling link for meeting stages, or an e-signature
+        note for document stages configured to use Documenso. Only a
+        coordinator-configured public booking URL is ever echoed — no
+        credentials or internal identifiers.
+        """
+        config = getattr(step, "config", None) or {}
+        raw_type = getattr(step, "step_type", None)
+        step_type = raw_type.value if hasattr(raw_type, "value") else raw_type
+
+        if step_type == "meeting" and config.get("scheduling_provider") == "calcom":
+            url = config.get("calcom_booking_url") or ""
+            # Only surface a link we can trust as an external http(s) URL.
+            if isinstance(url, str) and url.lower().startswith(("http://", "https://")):
+                return {
+                    "type": "calcom_scheduling",
+                    "label": "Schedule Your Meeting",
+                    "url": url,
+                    "message": "Pick a time that works for you.",
+                }
+            return None
+
+        if (
+            step_type == "document_upload"
+            and config.get("signing_provider") == "documenso"
+        ):
+            return {
+                "type": "documenso_signature",
+                "label": "Documents Sent for Signature",
+                "message": (
+                    "The department will send your documents to sign "
+                    "electronically. Watch your email for a signing request."
+                ),
+            }
+
+        return None
+
     async def get_prospect_by_token(self, token: str) -> Optional[Dict[str, Any]]:
         """Look up a prospect by their public status token. Returns limited public-safe fields.
 
@@ -3461,8 +3570,12 @@ class MembershipPipelineService:
 
         # Current stage name — only show if it's public_visible
         current_stage_name = None
+        current_stage_action = None
         if prospect.current_step and str(prospect.current_step.id) in public_step_ids:
             current_stage_name = prospect.current_step.name
+            current_stage_action = self._build_current_stage_action(
+                prospect.current_step
+            )
 
         await self.db.commit()
 
@@ -3475,6 +3588,7 @@ class MembershipPipelineService:
                 else prospect.status
             ),
             "current_stage_name": current_stage_name,
+            "current_stage_action": current_stage_action,
             "pipeline_name": prospect.pipeline.name if prospect.pipeline else None,
             "total_stages": total_public_stages,
             "stage_timeline": completed_stages,
