@@ -42,6 +42,7 @@ Training requirements are individual training items that members must complete. 
 - **Call-based**: Require responding to a number of calls
 - **Skills evaluation**: Require demonstrating specific skills
 - **Checklist**: Require completing a checklist of tasks
+- **Knowledge test**: Require a passing score on a knowledge test (officer-entered score)
 
 ### Training Programs
 
@@ -111,15 +112,21 @@ Members are enrolled in training programs to track their progress toward complet
 #### Phase Management
 - Multi-phase program structures
 - Phase prerequisites
-- Manual vs. automatic advancement
+- Manual vs. automatic advancement (auto-advance stops at any phase flagged `requires_manual_advancement`)
+- Manual advance endpoint with optional `force` override
 - Phase-specific time limits
 
 #### Progress Tracking
 - Real-time progress calculation
-- Completion percentage tracking
-- Requirement-level progress
-- Verification by training officers
+- Completion percentage tracking (any completed/verified/waived requirement counts as 100%, including non-numeric types)
+- Requirement-level progress with officer verification
+- Enrollment rollup = average of required requirements' percentages, auto-completing at 100% (and re-opening if it later drops below 100%)
+- Officer-entered knowledge-test scoring with pass/fail and attempt limits
+- Automatic feeds from shift reports, approved training sessions, and skills tests
 - Progress notes and history
+
+#### Atomic Program Build
+- Create-pipeline wizard builds a program with all phases, requirements, and milestones in one transaction — a failure can't leave a half-built program behind
 
 #### Milestone System
 - Define completion milestones (e.g., 25%, 50%, 75%)
@@ -548,6 +555,24 @@ Require completing a checklist of tasks.
 }
 ```
 
+#### 8. Knowledge Test Requirements
+Require a passing score on a knowledge test. Scoring is lightweight and
+**officer-entered** — an officer records a `test_score` (0-100) via the progress
+endpoint; the system derives pass/fail from `passing_score` (default 70) and
+enforces `max_attempts`.
+
+```json
+{
+  "requirement_type": "knowledge_test",
+  "passing_score": 80,
+  "max_attempts": 3
+}
+```
+
+> There is no built-in test-taking engine (question bank, delivery, auto-grading)
+> yet — see [Remaining Planned Features](#remaining-planned-features). The current
+> support records officer-entered scores and attempt history only.
+
 ### Requirement Sources
 
 - **Department**: Custom requirements created by the training officer
@@ -675,6 +700,10 @@ const enrollment = {
 };
 ```
 
+> The program detail page's **Enrollments tab** lists enrolled members **by name**
+> (via `GET /programs/{program_id}/enrollments`) with their progress, and the
+> single-enroll flow uses a **searchable member picker** rather than raw UUIDs.
+
 #### Bulk Enrollment
 
 ```typescript
@@ -693,12 +722,16 @@ console.log(`Enrolled ${response.success_count} members`);
 console.log(`Errors: ${response.errors}`);
 ```
 
+> Bulk enrollment now correctly **blocks** members that fail the prerequisite or
+> concurrent-enrollment checks (these were previously bypassed on the bulk path);
+> such members are returned in the `errors` list instead of being enrolled.
+
 ### Tracking Progress
 
-Progress is automatically calculated based on:
-- Completed requirements vs. total required
-- Progress percentage for each requirement
-- Phase completion status
+Officers open an enrollment and update each requirement via
+`PATCH /progress/{progress_id}` (`RequirementProgressUpdate`). A single call can:
+set the status, log a numeric `progress_value`, record a `test_score`, and/or
+apply officer verification.
 
 ```typescript
 const progress = {
@@ -714,14 +747,81 @@ const progress = {
 };
 ```
 
-### Manual Phase Advancement
+**How percentages are computed:**
 
-For phases with `requires_manual_advancement: true`, training officers must manually advance members:
+- **Numeric types** (hours, shifts, calls): `progress_value / required × 100`
+  (waiver-adjusted where applicable), auto-completing at 100%.
+- **Courses**: `completed course count / len(required_courses) × 100`,
+  auto-completing at 100%. (Course-count requirements are not waiver-adjusted.)
+- **Non-numeric types** (checklist, skills_evaluation, certification,
+  knowledge_test): marking the requirement `completed`, `verified`, or `waived`
+  sets its `progress_percentage` to 100 directly — so these advance the rollup
+  even though they carry no numeric value. Previously only numeric types could
+  move progress off 0%.
+- **Enrollment rollup**: the enrollment's overall percentage is the **average of
+  its _required_ requirements' percentages**. It auto-completes at 100% and, if a
+  completed enrollment later drops below 100% (e.g. a new required requirement is
+  added or an over-count is corrected down), it **re-opens to `active`**.
 
-1. Officer reviews member's completed requirements
-2. Officer verifies skill competency
-3. Officer approves advancement to next phase
-4. System automatically moves member to next phase
+#### Knowledge-Test Scoring
+
+For `knowledge_test` requirements, an officer submits a `test_score` (0-100):
+
+- Pass/fail is derived from the requirement's `passing_score` (default **70**).
+- The raw score plus attempt history are recorded in `progress_notes`
+  (`test_attempts`, `latest_score`, `passing_score`, `passed`).
+- A **pass** completes the requirement (which then rolls up and can advance the
+  phase); a **fail** is recorded and leaves the requirement `in_progress`.
+- `max_attempts` is enforced: once attempts are exhausted and the requirement is
+  not yet satisfied, further scores are rejected.
+
+```http
+PATCH /api/v1/training/programs/progress/{progressId}
+Content-Type: application/json
+
+{ "test_score": 82 }
+```
+
+### Phase Advancement
+
+After **every** progress update the enrollment auto-advances through any
+**consecutive complete phases** (`_is_phase_complete` = all _required_
+requirements in the phase at 100%), **stopping** at any phase flagged
+`requires_manual_advancement`. This runs as a no-op for non-phased programs and
+enrollments without a current phase. When a phase is advanced, the (previously
+unused) phase-advancement notification is sent to the member.
+
+#### Manual Phase Advancement
+
+For phases with `requires_manual_advancement: true`, a training officer must
+advance the member explicitly:
+
+```http
+POST /api/v1/training/programs/enrollments/{enrollmentId}/advance-phase?force=false
+```
+
+- By default the current phase's required requirements must be complete;
+  `force=true` overrides that gate.
+- Errors if the enrollment is already at the final phase, or the program is not
+  phase-based.
+
+### Automatic Feeds into Pipeline Progress
+
+Every automatic source routes through the same `update_requirement_progress`
+path, so the percentage math, auto-completion, enrollment rollup, and
+phase-advancement all run consistently:
+
+- **Shift completion reports** → shifts / calls / hours / skills_evaluation
+  requirements (see [Shift Completion Reports](#shift-completion-reports)).
+- **Training session approval** → the session's linked requirement (when the
+  session carries `program_id` + `requirement_id`), **or**, when the session is
+  linked to a program and a **category** (`category_id`, no `requirement_id`),
+  it **fans out** to that program's requirements tagged with the category. This
+  is applied **after** the approval + records commit. (This fixes the prior bug
+  where session attendance bumped a raw value but never computed a percentage, so
+  the pipeline still read 0%.)
+- **Skills test pass** → marks the linked `skills_evaluation` requirement
+  complete (see [Skills Testing Module](#skills-testing-module)).
 
 ---
 
@@ -748,6 +848,16 @@ The full progress page shows:
 - Completed vs. pending status
 - Next milestones
 - Behind schedule warnings
+
+### Student Progression View
+
+Members have a read-only progression view at `/training/my-progress/:enrollmentId`
+(linked from the **My Training** page). It reuses `GET /enrollments/{id}` (members
+may read their own enrollment) and shows:
+- Current phase and overall progress percentage
+- Time remaining / behind-schedule status
+- Next milestones
+- Requirements grouped by phase, with a **"You are here"** marker on the current phase
 
 ### Next Steps Logic
 
@@ -921,6 +1031,27 @@ Content-Type: application/json
 }
 ```
 
+#### Build Program (atomic)
+Create a program together with all of its phases, requirements, and milestones in
+a single transaction (backs the create-pipeline wizard). Program `code` and
+`version`, and each phase's `requires_manual_advancement`, are persisted and
+returned (these were previously silently dropped). Requires `training.manage`.
+
+```http
+POST /api/v1/training/programs/programs/build
+Content-Type: application/json
+
+{
+  "name": "Probationary Firefighter Program",
+  "code": "PROBIE",
+  "version": 2,
+  "structure_type": "phases",
+  "phases": [
+    { "phase_number": 1, "name": "Orientation", "requires_manual_advancement": false, "requirements": [], "milestones": [] }
+  ]
+}
+```
+
 #### Get Program Details
 ```http
 GET /api/v1/training/programs/programs/{programId}
@@ -976,14 +1107,31 @@ Content-Type: application/json
 }
 ```
 
+#### List Program Enrollments
+Returns each enrollment with the member's name and progress. Requires
+`training.view_all` OR `training.manage`.
+```http
+GET /api/v1/training/programs/programs/{programId}/enrollments?status=active
+```
+
 #### Get Member Progress
 ```http
 GET /api/v1/training/programs/enrollments/{enrollmentId}
 ```
 
+#### Advance Phase (manual)
+Advances the enrollment to the next phase. Requires the current phase to be
+complete unless `force=true`. Requires `training.manage`.
+```http
+POST /api/v1/training/programs/enrollments/{enrollmentId}/advance-phase?force=false
+```
+
 ### Progress
 
 #### Update Requirement Progress
+Set status, log a numeric `progress_value`, record a knowledge-test `test_score`
+(0-100), and/or apply officer verification. Officers (`training.manage`) may
+update any member's progress; other users may only update their own.
 ```http
 PATCH /api/v1/training/programs/progress/{progressId}
 Content-Type: application/json
@@ -991,6 +1139,7 @@ Content-Type: application/json
 {
   "status": "in_progress",
   "progress_value": 45,
+  "test_score": 82,
   "progress_notes": {"2026-01-22": "Completed training"}
 }
 ```
@@ -1031,6 +1180,8 @@ Content-Type: application/json
 - source (department, state, national)
 - registry_name, registry_code
 - required_hours, required_shifts, required_calls, etc.
+- **passing_score** (for knowledge_test — default 70 when unset)
+- **max_attempts** (for knowledge_test — attempt cap)
 - frequency, time_limit_days
 - applies_to_all, required_positions, required_roles
 - **due_date_type** (calendar_period, rolling, certification_period, fixed_date)
@@ -1480,6 +1631,31 @@ Training sessions can be linked to events via the `training_session.event_id` fo
 > **Screenshot placeholder:**
 > _[Screenshot of the Create Training Session form showing the "Link to Event" dropdown with a list of upcoming events, and the auto-populated attendee list from the event's RSVPs]_
 
+#### Training Session Approval → Pipeline Progress
+
+When a training session is **approved**, its attendance feeds the pipeline via
+`update_requirement_progress` (applied **after** the approval + records commit):
+- If the session carries `program_id` + `requirement_id`, the linked requirement
+  is progressed directly.
+- If the session is linked to a program and a **category** (`category_id`, no
+  `requirement_id`), it **fans out** to the program's requirements tagged with
+  that category.
+
+This fixes the prior bug where session attendance bumped a raw value but never
+computed a percentage, leaving the pipeline showing 0%.
+
+#### Soft Phase Gate on Attendance
+
+RSVP (`POST /events/{event_id}/rsvp?override=`) and self check-in
+(`POST /events/{event_id}/self-check-in?override=`) return **HTTP 409** with
+`detail: {warning_type: "phase_gate", message}` when a member RSVPs to or checks
+into a **program-linked training session whose phase is AHEAD of their current
+enrollment phase**. This is a **soft, overridable** warning — the client confirms
+and retries with `override=true`.
+
+- Non-enrolled members and non-program sessions are **never** gated.
+- **Officer check-in is not gated** (it is itself the override).
+
 ### Scheduling Module
 
 Shift completion reports (`POST /training/shift-reports`) auto-progress program requirements when linked to an enrollment:
@@ -1557,6 +1733,9 @@ When creating a training session linked to a program:
 | Biannual requirement with expired certification | Status shows `expired` regardless of hours completed — certification must be renewed |
 | Requirement changed from annual to quarterly mid-year | Existing progress is recalculated against the new frequency; members may see progress reset |
 | Category-based requirement with deleted category | Records already tagged with the category still count; new records cannot be tagged with the deleted category |
+| Requirement marked completed/verified/waived | Progress percentage is set to 100 directly, so non-numeric types (checklist, skills, certification, knowledge test) advance the enrollment rollup |
+| Completed enrollment drops below 100% | Enrollment re-opens to `active` (e.g. a new required requirement is added, or an over-count is corrected down) |
+| Knowledge test with `max_attempts` exhausted | Further scores are rejected once attempts are used up and the requirement is not yet satisfied |
 
 ### Waiver Interaction Edge Cases
 
@@ -1680,7 +1859,50 @@ record** (matched by `course_name` and `scheduled_date == event_date` OR
   `manual_entry_require_apparatus` were added to the `_BOOL_FIELD_DEFAULTS`
   coercion, so NULL legacy rows no longer 500 on the config response.
 
+### Recently Implemented (July 2026)
+
+#### Training Pipeline: Build, Enrollment, Progress & Phases
+
+- **Atomic program build** — `POST /training/programs/programs/build` creates a
+  program with all phases, requirements, and milestones in one transaction (backs
+  the create-pipeline wizard; no orphaned half-built program on failure). Program
+  `code`/`version` and phase `requires_manual_advancement` are now persisted and
+  returned (previously silently dropped).
+- **Enrollment management** — `GET /programs/{program_id}/enrollments`
+  (`training.view_all` OR `training.manage`) lists members **by name** with
+  progress for the detail page's Enrollments tab; single-enroll uses a searchable
+  member picker; **bulk-enroll now blocks** members failing prerequisite /
+  concurrent-enrollment checks (previously bypassed).
+- **Progress management** — `PATCH /progress/{progress_id}` sets status, logs
+  numeric `progress_value`, records `test_score`, and applies verification. Any
+  completed/verified/waived requirement counts as 100%, so **non-numeric types
+  advance the rollup**. Enrollment % = average of required requirements'
+  percentages; auto-completes at 100% and **re-opens** if it later drops below.
+- **Courses percentage** — `courses` requirements now compute
+  `completed / len(required_courses) × 100`, auto-completing at 100%.
+- **Knowledge-test scoring (lightweight)** — officer-entered `test_score` (0-100)
+  with pass/fail from `passing_score` (default 70), attempt history in
+  `progress_notes`, and `max_attempts` enforcement. Not a full test engine.
+- **Phase advancement** — auto-advance through consecutive complete phases,
+  stopping at `requires_manual_advancement`; manual
+  `POST /enrollments/{enrollment_id}/advance-phase?force=<bool>`; the
+  phase-advancement notification is now sent.
+- **Automatic feeds** — approved training sessions (linked requirement, or
+  category fan-out) and skills-test passes now route through
+  `update_requirement_progress` so percentages/rollup/phase-advance run
+  (fixing the "session attendance never computed %" bug).
+- **Student progression view** — read-only `/training/my-progress/:enrollmentId`
+  with current phase, overall %, time remaining, next milestones, and a
+  "You are here" marker, linked from My Training.
+- **Soft phase gate on attendance** — RSVP / self check-in return **409**
+  `{warning_type: "phase_gate"}` when a member attends a program session whose
+  phase is ahead of their enrollment phase; overridable with `override=true`.
+  Non-enrolled members, non-program sessions, and officer check-in are never gated.
+
 ### Remaining Planned Features
+- **Knowledge-Test Engine**: A full test-taking experience (question bank,
+  delivery, and auto-grading). Current knowledge-test support is officer-entered
+  scores only.
 - **Skill Videos**: Embed training videos for skill requirements
 - **Digital Signatures**: Sign off on checklist items digitally
 - **Offline Test Administration**: Full offline support for skills testing via PWA IndexedDB
@@ -1696,4 +1918,4 @@ For questions or issues with the Training Programs module:
 
 ---
 
-*Last Updated: May 29, 2026*
+*Last Updated: July 14, 2026*

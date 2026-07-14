@@ -54,6 +54,7 @@ The Training module tracks courses, certifications, training requirements, progr
 | `/training/courses` | Course Library | Authenticated |
 | `/training/programs` | Training Programs | Authenticated |
 | `/training/programs/:id` | Program Detail | Authenticated |
+| `/training/my-progress/:enrollmentId` | My Program Progress (read-only student view) | Authenticated |
 | `/training/admin` | Training Admin Hub | `training.manage` |
 | `/training/skills-testing` | Skills Testing Hub | Authenticated |
 | `/training/skills-testing/templates/new` | Template Builder (new) | `training.manage` |
@@ -141,6 +142,8 @@ PATCH  /api/v1/training/programs/requirements/{id}         # Update requirement
 GET    /api/v1/training/programs/programs                  # List programs
 GET    /api/v1/training/programs/programs/{id}             # Get program detail
 POST   /api/v1/training/programs/programs                  # Create program
+POST   /api/v1/training/programs/programs/build            # Build program + phases + requirements + milestones atomically (wizard) (2026-07-14)
+GET    /api/v1/training/programs/programs/{id}/enrollments # List enrolled members with name + progress (Enrollments tab) (2026-07-14)
 GET    /api/v1/training/programs/programs/{id}/phases      # Get program phases
 POST   /api/v1/training/programs/programs/{id}/phases      # Create phase
 GET    /api/v1/training/programs/programs/{id}/requirements # Get program requirements
@@ -149,8 +152,9 @@ POST   /api/v1/training/programs/programs/{id}/milestones  # Create milestone
 POST   /api/v1/training/programs/enrollments               # Enroll member
 GET    /api/v1/training/programs/enrollments/me            # My enrollments
 GET    /api/v1/training/programs/enrollments/user/{user_id} # User enrollments
-GET    /api/v1/training/programs/enrollments/{id}          # Get enrollment detail
-PATCH  /api/v1/training/programs/progress/{id}             # Update progress
+GET    /api/v1/training/programs/enrollments/{id}          # Get enrollment detail (member-readable own; officers need view_all/manage)
+POST   /api/v1/training/programs/enrollments/{id}/advance-phase  # Officer advances member to next phase (force= override) (2026-07-14)
+PATCH  /api/v1/training/programs/progress/{id}             # Update progress (log value, mark complete/in-progress/reopen, verify, record test score)
 POST   /api/v1/training/programs/programs/{id}/duplicate   # Duplicate program
 POST   /api/v1/training/programs/programs/{id}/bulk-enroll # Bulk enroll members
 GET    /api/v1/training/programs/requirements/registries   # List available registries
@@ -478,6 +482,9 @@ A candidate **fails** if ANY of the following are true:
 | Source | Target | Connection | Mechanism |
 |--------|--------|------------|-----------|
 | Events | Training | Event attendance → Training session/records | `training_session.event_id` FK |
+| Events | Training | RSVP / self-check-in to a session in a phase ahead of the member's current phase → soft override warning | Pipeline phase gate |
+| Training Sessions | Training Pipelines | Approved session advances its linked requirement (or the program's requirements in the session's category) | `training_session.program_id` / `requirement_id` / `category_id` |
+| Skills Testing | Training Pipelines | Passing a skills test linked to a requirement completes that pipeline requirement | Requirement linkage |
 | Training | Users | Compliance per member | `GET /training/compliance-summary/{user_id}` |
 | Training | Scheduling | Shift completion reports → Training credit | `POST /training/shift-reports` |
 | Locations | Training | Training session location | `training_session.location` FK |
@@ -508,14 +515,21 @@ Officer reviews → POST /training/submissions/{id}/review
 ### Program Enrollment Flow
 
 ```
-Officer enrolls member → POST /training/programs/enrollments
+Officer enrolls member → POST /training/programs/enrollments (searchable picker)
   → RequirementProgress records created for each program requirement
   → Status: active
-Member completes training → Training records created
-  → Shift reports auto-progress matching requirements
-  → Progress updated in RequirementProgress
-  → Phase completion tracked in ProgramEnrollment
-All requirements met → Status: completed
+Member progresses (any of):
+  → Officer logs hours/shifts/calls/courses, or marks a requirement
+    complete / in progress / reopened / verified (PATCH .../progress/{id})
+  → Shift report submitted (shifts/calls/hours/skills)
+  → Training session approved (advances linked requirement, or the program's
+    requirements in the session's category)
+  → Skills test passed against a linked requirement
+  → Knowledge-test score recorded by an officer
+Each update recalculates overall % (average of required items) and
+  auto-advances any completed phases (unless phase requires officer approval)
+All required items met → Status: completed
+  (falls back to active if progress later drops below 100%)
 ```
 
 ### Skills Testing Flow
@@ -991,6 +1005,123 @@ Each source page now includes a **Print** button that navigates to the correspon
 - Registry imports (Training Programs page) set `required_positions`, but the
   compliance filter only matches `applies_to_all`, membership types, and
   roles — position-targeted imported requirements currently apply to nobody
+
+---
+
+## Training Pipelines: Building, Progress & Phase Gating (2026-07-14)
+
+Training programs run as **pipelines**: a program is broken into ordered
+**phases**, each phase holds **requirements** (hours, courses, shifts, calls,
+skills evaluation, certification, checklist, or knowledge test) and optional
+**milestones**. Members are **enrolled**, and their progress is tracked from
+enrollment through completion. This release makes the full pipeline reliable
+end-to-end — building, enrolling, tracking, and phase gating.
+
+### Building & Enrolling
+
+- **Atomic wizard build** — the create-pipeline wizard now saves the whole
+  program (phases, requirements, milestones) in one request via
+  `POST /training/programs/programs/build`. A failure part-way rolls back, so
+  a half-built program is never left behind. The wizard also now correctly
+  persists the **program code**, the phase **"require officer approval to
+  advance"** flag, and the **version** — all three were previously dropped.
+- **Enrollments tab** — the program detail page lists enrolled members by
+  **name** with their progress percentage (`GET
+  /training/programs/programs/{id}/enrollments`, requires `training.view_all`
+  or `training.manage`).
+- **Searchable member picker** — enroll a member by searching for them by
+  name instead of pasting a user ID.
+- **Guarded bulk enroll** — bulk enrollment now checks prerequisite and
+  concurrent-enrollment rules and blocks members who fail them, returning a
+  per-member error list alongside the successful enrollments.
+
+### Tracking Progress
+
+An officer opens an enrolled member and works one requirement at a time
+(`PATCH /training/programs/progress/{id}`):
+
+- **Log numeric progress** — hours, shifts, calls, or courses accrue toward the
+  requirement's target (waiver-adjusted where applicable).
+- **Set status** — mark a requirement **complete**, **in progress**, **reopen**
+  it, or **verify** it.
+- **Completing any requirement counts fully.** Marking a requirement
+  completed/verified/waived sets it to 100%, including non-numeric types
+  (**checklist, skills evaluation, certification, knowledge test**) that don't
+  accrue a numeric value. Previously only hours/shifts/calls ever moved a
+  member's overall progress off 0%.
+- **Overall %** is the **average of the required items** in the program.
+
+### Phases That Gate
+
+- A **phase is complete** when all of its *required* requirements are at 100%
+  (a phase with no required items is trivially complete).
+- **Auto-advance** — after any progress update, the member automatically moves
+  through each consecutive completed phase.
+- **Officer-approval phases stop auto-advance.** A phase flagged **requires
+  officer approval** (`requires_manual_advancement`) halts the auto-advance and
+  surfaces an **"Advance to next phase"** button for officers
+  (`POST /training/programs/enrollments/{id}/advance-phase`; `force=true`
+  overrides an incomplete phase).
+- **Notifications** — on advancement, the member is notified, and their
+  **mentor** (if the enrollment has one) is notified too.
+- **Reopen on regression** — a completed enrollment that later drops below 100%
+  (e.g. a new required requirement is added, or an over-count is corrected
+  downward) is automatically set back to **active** and its completion cleared.
+
+### Things That Automatically Update Pipeline Progress
+
+Beyond an officer editing progress directly, pipeline progress advances from:
+
+- **Shift completion reports** — an approved (non-draft) report credits
+  shifts / calls / hours / observed skills to matching requirements.
+- **Approved training sessions** — approving a session linked to a program
+  advances the session's **linked requirement**; if the session is linked to a
+  program **and a category** (with no explicit requirement), it advances all of
+  that program's requirements in that category. *(Session attendance previously
+  did not move pipeline progress — now fixed.)*
+- **Passing a linked skills test** — passing a skills test that is linked to a
+  requirement completes that requirement (see **Skills Testing** above).
+
+### Knowledge Tests (officer-entered scores)
+
+For a `knowledge_test` requirement, an officer records either a **pass/fail** or
+a **score percentage** on the progress record:
+
+- Pass/fail is derived from the requirement's **passing score** (default
+  **70%**).
+- A **pass** completes the requirement (which then rolls up and can advance the
+  phase); a fail is recorded and leaves the requirement **in progress**.
+- The requirement's **max attempts** are enforced — once all attempts are used
+  and the requirement isn't already satisfied, further scores are rejected.
+- **Attempt history** (each score, pass/fail, timestamp, and recording officer)
+  and the latest score are kept in the progress record's notes.
+
+> This is deliberately lightweight — officer-entered scores only. A full online
+> test-taking engine is future work.
+
+### Student Progress View
+
+From **My Training**, a member can open **"View full progress"** for an
+enrollment to reach a read-only progression page
+(`/training/my-progress/:enrollmentId`). It shows:
+
+- **Current phase**, badged **"You are here"**
+- **Overall %** and completed / total required items
+- **Time remaining** (or days overdue) and a **behind-schedule** indicator
+- **Next milestones** with their completion thresholds
+- **Every requirement grouped by phase** with its status (not started, in
+  progress, completed, verified, waived) and latest test score where relevant
+
+Members may read their own enrollment; officers need `training.view_all` or
+`training.manage` to view another member's.
+
+### Attendance Phase Warning
+
+When a member **RSVPs to** or **self-checks-into** a training session that
+belongs to a phase **ahead** of their current phase, they get a **soft warning**
+and can **proceed anyway** (override) — the check-in retries with the override
+flag after confirmation. Officers checking members in are **not** warned; the
+gate is a nudge for self-service actions, not a hard block.
 
 ---
 

@@ -45,6 +45,8 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `program_phases` | Phases within a training program |
 | `program_enrollments` | Member enrollments in training programs |
 | `training_waivers` | Training requirement waivers (auto-linked from LOA or manual) |
+| `skill_templates` | Reusable skill-sheet templates (NREMT-style psychomotor sheets). `requirement_id` (String(36), nullable, FK `training_requirements` SET NULL, indexed `idx_skill_template_requirement`) is the default training-pipeline requirement a passing test satisfies *(2026-07-14)* |
+| `skill_tests` | Individual skill-test administrations to a candidate. `requirement_id` (String(36), nullable, FK `training_requirements` SET NULL, indexed `idx_skill_test_requirement`) inherits the template default at creation (overridable per test); a passing non-practice test marks it COMPLETE on the candidate's active enrollment *(2026-07-14)* |
 | `training_submissions` | Self-reported training pending review |
 | `shift_completion_reports` | Post-shift training reports with encrypted evaluation fields, review workflow (`draft`/`pending_review`/`approved`/`flagged`), trainee acknowledgment, skills observed, tasks performed, call type tracking, pipeline progress linkage, and audit trail (`data_sources`) *(updated 2026-03-28)* |
 | `training_module_configs` | Module configuration including trainee visibility settings (`show_*`), report form section toggles (`form_show_*`), per-apparatus-type skills/tasks mappings, rating scale customization, shift review defaults, and manual entry settings (`manual_entry_enabled`, `manual_entry_apparatus_types`) *(updated 2026-04-11)* |
@@ -225,6 +227,24 @@ The `organizations.settings` JSON column stores email platform configuration und
 | `microsoft_client_secret` | string (encrypted) | microsoft | Azure AD Client Secret |
 | `cloudflare_account_id` | string | cloudflare | Cloudflare Account ID (32-char hex) |
 | `cloudflare_api_token` | string (encrypted) | cloudflare | Cloudflare API token with email sending permission |
+
+---
+
+## Recent Schema Changes (2026-07-14)
+
+### New Columns
+
+| Table | Column | Type | Migration | Description |
+|-------|--------|------|-----------|-------------|
+| `skill_templates` | `requirement_id` | String(36), FK `training_requirements` (SET NULL, nullable) | `20260714_0001` | Default training-pipeline requirement this skill sheet satisfies |
+| `skill_tests` | `requirement_id` | String(36), FK `training_requirements` (SET NULL, nullable) | `20260714_0001` | Requirement this test satisfies; inherited from the template at creation, overridable per test |
+
+### New Indexes
+
+| Table | Index | Columns | Migration |
+|-------|-------|---------|-----------|
+| `skill_templates` | `idx_skill_template_requirement` | `(requirement_id)` | `20260714_0001` |
+| `skill_tests` | `idx_skill_test_requirement` | `(requirement_id)` | `20260714_0001` |
 
 ---
 

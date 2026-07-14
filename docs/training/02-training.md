@@ -10,30 +10,31 @@ The Training module tracks courses, certifications, training requirements, progr
 2. [Submitting Training Records](#submitting-training-records)
 3. [Course Library](#course-library)
 4. [Training Programs](#training-programs)
-5. [Training Requirements](#training-requirements)
-6. [Officer Dashboard](#officer-dashboard)
-7. [Reviewing Submissions](#reviewing-submissions)
-8. [Finalizing a Training Session](#finalizing-a-training-session)
-9. [Compliance Matrix](#compliance-matrix)
-10. [Evaluation Period (Current vs. Prior Month)](#evaluation-period-current-vs-prior-month)
-11. [Expiring Certifications](#expiring-certifications)
-12. [Waiver Management](#waiver-management)
-13. [Compliance Summary](#compliance-summary)
-14. [Shift Completion Reports](#shift-completion-reports)
-15. [Manual Shift Report Entry](#manual-shift-report-entry)
-16. [Officer Training Record Exports](#officer-training-record-exports)
-17. [External Training Integrations](#external-training-integrations)
-18. [Historical Import](#historical-import)
-19. [Competency Matrix](#competency-matrix)
-20. [Recertification Tracking](#recertification-tracking)
-21. [Instructor Management](#instructor-management)
-22. [Training Effectiveness Scoring](#training-effectiveness-scoring)
-23. [Multi-Agency Training](#multi-agency-training)
-24. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
-25. [Compliance Officer Dashboard](#compliance-officer-dashboard)
-26. [Training Record Attachments](#training-record-attachments)
-27. [Troubleshooting](#troubleshooting)
-28. [Skills Testing](#skills-testing)
+5. [Training Pipelines](#training-pipelines)
+6. [Training Requirements](#training-requirements)
+7. [Officer Dashboard](#officer-dashboard)
+8. [Reviewing Submissions](#reviewing-submissions)
+9. [Finalizing a Training Session](#finalizing-a-training-session)
+10. [Compliance Matrix](#compliance-matrix)
+11. [Evaluation Period (Current vs. Prior Month)](#evaluation-period-current-vs-prior-month)
+12. [Expiring Certifications](#expiring-certifications)
+13. [Waiver Management](#waiver-management)
+14. [Compliance Summary](#compliance-summary)
+15. [Shift Completion Reports](#shift-completion-reports)
+16. [Manual Shift Report Entry](#manual-shift-report-entry)
+17. [Officer Training Record Exports](#officer-training-record-exports)
+18. [External Training Integrations](#external-training-integrations)
+19. [Historical Import](#historical-import)
+20. [Competency Matrix](#competency-matrix)
+21. [Recertification Tracking](#recertification-tracking)
+22. [Instructor Management](#instructor-management)
+23. [Training Effectiveness Scoring](#training-effectiveness-scoring)
+24. [Multi-Agency Training](#multi-agency-training)
+25. [xAPI (Tin Can) Integration](#xapi-tin-can-integration)
+26. [Compliance Officer Dashboard](#compliance-officer-dashboard)
+27. [Training Record Attachments](#training-record-attachments)
+28. [Troubleshooting](#troubleshooting)
+29. [Skills Testing](#skills-testing)
 
 ---
 
@@ -137,6 +138,112 @@ If you are enrolled in a program, click on it to see:
 > _[Screenshot of a training program detail page showing the program name and description at the top, a progress bar, phases listed as an accordion with requirements inside each phase showing completion status (checkmarks, progress indicators)]_
 
 > **Hint:** Some requirements auto-progress based on shift completion reports. If you work a qualifying shift, your hours or shift count may be automatically credited toward program requirements.
+
+---
+
+## Training Pipelines
+
+A **training pipeline** is a program organized as **program → ordered phases → requirements → milestones**. Members enroll, work through each phase in order, and the system tracks their progress. This section covers building a pipeline, enrolling members, and tracking their progress — the [Training Programs](#training-programs) section above covers the member-facing view.
+
+Every requirement inside a pipeline has a **type** that determines how it is completed: **hours, courses, shifts, calls, skills evaluation, certification, checklist,** or **knowledge test** (see [Requirement Types](#requirement-types) for what each type tracks).
+
+### Building a Training Pipeline
+
+**Required Permission:** `training.manage`
+
+Navigate to **Training > Programs** and click **Create Program** to open the pipeline wizard. The wizard builds the entire program — program info, phases, requirements, and milestones — and **saves everything in one step**.
+
+1. **Program information** — Enter the program **name**, **description**, program **type**, and a **program code** (a short identifier such as `PROB-FF` used to reference the program in reports and imports).
+2. **Add phases** — Add one or more **phases** in the order members will complete them. For each phase, enter a name and, optionally, check **Require officer approval to advance** if an officer must sign off before a member can move to the next phase (see [Phases & Advancing](#phases--advancing)).
+3. **Add requirements to each phase** — Within a phase, click **Add Requirement** and choose the requirement type (hours, courses, shifts, calls, skills evaluation, certification, checklist, or knowledge test). Enter the type's target value — for example, required hours, the course list, or a knowledge-test passing score and maximum attempts.
+4. **Add milestones** — Add **milestone** checkpoints that mark key achievements within the program.
+5. Click **Save**. The program, all its phases, their requirements, and the milestones are created together in a single step.
+
+> **[SCREENSHOT NEEDED]:** _The pipeline wizard showing the program info fields (including the program code) at the top, a list of phases with the "Require officer approval to advance" checkbox, requirements nested under a phase with a type selector, and a milestones section, above a single "Save" button._
+
+> **Hint:** The **program code** must be unique within your department. Use a short, memorable code — it appears on printed program pages and travels with the program when it is exported and shared with other departments.
+
+### Enrolling Members
+
+**Required Permission:** `training.manage`
+
+1. Open the program and select the **Enrollments** tab.
+2. Click **Enroll Members** to open the searchable **member picker**.
+3. Search by name and either select a **single** member, or select **multiple** members for a **bulk** enrollment.
+4. Confirm to enroll.
+
+**Bulk enrollment checks each member first.** The system **skips** any member who:
+
+- has **not met the program's prerequisites**, or
+- is already enrolled in a program that **does not allow concurrent enrollment**.
+
+After a bulk enroll, a summary reports who was enrolled and, for each member who was skipped, **the reason**. Correct the underlying issue (complete the prerequisite, or finish/cancel the conflicting enrollment) and re-run the enrollment for those members.
+
+> **[SCREENSHOT NEEDED]:** _The Enrollments tab with the member picker open, several members selected for bulk enrollment, and a results summary listing enrolled members alongside skipped members with reasons (e.g., "Prerequisite not met", "Already enrolled in a program that disallows concurrent enrollment")._
+
+### Tracking a Member's Progress
+
+**Required Permission:** `training.manage`
+
+From the **Enrollments** tab, click an enrolled member to open their progress detail. From here you can:
+
+- **Log completed activity** — record **hours, shifts, calls,** or **courses completed** toward a requirement.
+- **Change a requirement's status** — mark a requirement **Complete**, set it back to **In Progress**, or **Reopen** one that was previously completed.
+- **Verify a requirement** — as an officer, confirm a completed requirement.
+
+Completing any requirement — of **any** type — counts toward the member's **overall progress percentage**.
+
+> **[SCREENSHOT NEEDED]:** _A member's enrollment progress detail showing requirements grouped by phase, each with a status control (Complete / In Progress / Reopen), an officer "Verify" action, and inputs for logging hours, shifts, calls, or courses._
+
+### Recording a Knowledge Test
+
+For a **knowledge test** requirement, the officer records the result:
+
+1. Open the member's progress detail and find the knowledge-test requirement.
+2. Enter either a **Pass/Fail** result or a **score percentage**.
+3. The system compares the score to the requirement's **passing score** (default **70%**). A score at or above the passing score is a **pass**, and a pass **completes the requirement**.
+4. Each entry counts against the requirement's **maximum attempts**. The current count is shown as **"Attempts: X / N"**. Once the maximum is reached, no further attempts can be recorded.
+
+> **Note:** Knowledge-test scoring is **officer-entered** today. A member-facing, online test-taking feature is planned for a future release.
+
+> **[SCREENSHOT NEEDED]:** _The knowledge-test entry panel showing the Pass/Fail toggle and score percentage field, the passing score (70%), and the "Attempts: 1 / 3" counter._
+
+### Phases & Advancing
+
+A **phase completes** when all of its required items are done. What happens next depends on the phase's approval setting:
+
+- **No approval required** — the member **advances automatically** to the next phase.
+- **Require officer approval to advance** (set when the phase was built) — the phase is held complete until an officer opens the member's progress and clicks **Advance to next phase**.
+
+When a member advances, both the **member** and their **mentor(s)** are notified.
+
+> **[SCREENSHOT NEEDED]:** _A member's progress detail showing a completed phase marked ready to advance, with an officer-only "Advance to next phase" button because the phase requires approval._
+
+### What Automatically Updates Progress
+
+Several actions credit pipeline progress without anyone editing the enrollment directly:
+
+- **Completing a shift report** — a filed and approved shift completion report credits matching hours, shifts, calls, and skills (see [Shift Completion Reports](#shift-completion-reports)).
+- **Approving a linked training session** — approving a training session that is **linked to the program** credits progress, matched either by a specific **requirement** or by training **category**.
+- **Passing a linked skills test** — passing a skills test that is **linked to a requirement** completes that requirement (see the [Skills Testing](./09-skills-testing.md) guide).
+
+### Viewing Your Own Progress (Members)
+
+From **Training > My Training**, find your program under **Active Program Enrollments** and click **View full progress**. The full progress view shows:
+
+- Your **current phase**, marked **"You are here"**
+- Your **overall percentage** complete
+- **Time remaining** in the program
+- Your **next milestones**
+- **Every requirement grouped by phase**, with each requirement's completion status
+
+> **[SCREENSHOT NEEDED]:** _The member's full progress view showing the phase timeline with a "You are here" marker on the current phase, an overall progress bar, time remaining, upcoming milestones, and requirements listed under each phase._
+
+### Attendance Warning for an Unreached Phase
+
+If you RSVP to — or check into — a **training session tied to a phase you have not reached yet**, the system shows a **warning** that the session belongs to a later phase. You can choose to **proceed anyway** if you still want to attend.
+
+> **[SCREENSHOT NEEDED]:** _The attendance warning dialog shown when a member RSVPs to a session for a phase they have not reached, with "Proceed anyway" and "Cancel" options._
 
 ---
 

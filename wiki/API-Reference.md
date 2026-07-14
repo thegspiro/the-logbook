@@ -285,6 +285,64 @@ GET    /api/v1/prospective-members/prospects/{id}/documents/{document_id}/downlo
 
 ---
 
+## Training Programs *(2026-07-14)*
+
+Endpoints live under `/api/v1/training/programs` (note the doubled `programs`
+segment on program-scoped routes: prefix `/training/programs` + path
+`/programs/...`).
+
+```
+POST   /api/v1/training/programs/programs/build                        # Atomically create a program + phases + requirements + milestones (training.manage)
+GET    /api/v1/training/programs/programs/{program_id}/enrollments      # List a program's enrollments with member names (training.view_all OR training.manage)
+POST   /api/v1/training/programs/enrollments/{enrollment_id}/advance-phase?force=<bool>  # Manually advance to the next phase (training.manage); requires the current phase complete unless force=true
+PATCH  /api/v1/training/programs/progress/{progress_id}                 # Update requirement progress (training.manage)
+```
+
+- **`PATCH .../progress/{progress_id}`** — `RequirementProgressUpdate` now also
+  accepts `test_score` (0–100) for officer-entered knowledge/skills scoring.
+  Pass/fail is derived from the requirement's `passing_score`, and `max_attempts`
+  is enforced.
+- **Program create/response** now include `code` and `version`; each program
+  phase includes `requires_manual_advancement`.
+
+### Soft Phase Gate on Attendance *(2026-07-14)*
+
+```
+POST   /api/v1/events/{event_id}/rsvp?override=<bool>                   # RSVP to an event
+POST   /api/v1/events/{event_id}/self-check-in?override=<bool>          # Self check-in to an event
+```
+
+When the member is enrolled in a program and the session's phase is **ahead of**
+their current phase, these endpoints return HTTP **409**:
+
+```json
+{ "detail": { "warning_type": "phase_gate", "message": "..." } }
+```
+
+Pass `override=true` to proceed anyway.
+
+## Skills Testing — Pipeline Requirement Link *(2026-07-14)*
+
+Skills templates and tests can point at the training-pipeline requirement they
+satisfy via a nullable `requirement_id`. Endpoints are under
+`/api/v1/training/skills-testing`.
+
+```
+POST   /api/v1/training/skills-testing/templates                       # Create template (accepts/validates requirement_id — must be a real requirement in the org)
+PUT    /api/v1/training/skills-testing/templates/{id}                   # Update template (accepts/validates requirement_id)
+POST   /api/v1/training/skills-testing/tests                           # Create test (requirement_id from body, else inherited from the template)
+POST   /api/v1/training/skills-testing/tests/{id}/complete             # Complete test; a PASS on a non-practice test with a requirement_id marks it COMPLETE on the candidate's active enrollment(s)
+```
+
+- Template list/detail responses and test responses now include
+  `requirement_id`.
+- On completion, a **pass** routes through the training-program progress updater
+  (percentage, completion, rollup, and phase-advancement all run). A **fail**,
+  a **practice** test, or a test with no `requirement_id` does nothing to the
+  pipeline.
+
+---
+
 ## Common Response Patterns
 
 ### Success (200/201)

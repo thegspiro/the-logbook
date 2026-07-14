@@ -79,6 +79,7 @@ Fill in the basic information:
 | **Passing Percentage** | Minimum score to pass (0–100) | 70 |
 | **Require All Critical** | If enabled, failing any required criterion = automatic fail | Enabled |
 | **Time Limit** | Optional time limit in minutes | 10 |
+| **Linked Training Requirement** | Optional. A training-program requirement that passing a test from this template completes | "Recruit Academy — Phase 3: Trauma Assessment" |
 
 > **Screenshot placeholder:**
 > _[Screenshot of the Create Template form showing the metadata fields: name input, category dropdown, description textarea, passing percentage slider set to 70%, "Require All Critical" toggle switch (on), and time limit input showing 10 minutes]_
@@ -110,6 +111,17 @@ Add sections to organize the evaluation, then add criteria (scored items) within
 
 Click **Save** to save the template as a draft. You can continue editing drafts at any time before publishing.
 
+### Linking a Template to a Training Requirement
+
+When building or editing a template, use the **Linked Training Requirement** field to connect it to a requirement in a training program. Once linked, **passing any test created from this template automatically marks that requirement complete** for the candidate in their program — the officer does not have to record it separately.
+
+- The link is set on the **template**, so it applies to every test created from it. Individual tests can override it (see [Administering a Skills Test](#administering-a-skills-test)).
+- Leave the field blank for templates used only for practice or ad-hoc proficiency checks that do not satisfy a program requirement.
+
+See the [Training Pipelines](./02-training.md#training-pipelines) guide for how requirements and phases fit into a program.
+
+> **[SCREENSHOT NEEDED]:** _The Create/Edit Template form showing the "Linked Training Requirement" dropdown with a program requirement selected, below the passing percentage and critical criteria fields._
+
 ---
 
 ## Publishing Templates
@@ -140,7 +152,8 @@ Navigate to **Training Admin > Skills Testing > Tests** and click **New Test**.
 
 1. **Select Template** — Choose a published skill sheet template from the dropdown.
 2. **Select Candidate** — Choose the member being evaluated from the organization roster.
-3. Click **Start Test**.
+3. **Linked Requirement** *(optional)* — If the template is linked to a training requirement, it is pre-selected here. You can **override it for this test** to point at a **different requirement** — for example, when the same skill satisfies a requirement in another phase or program.
+4. Click **Start Test**.
 
 The system creates a new test session with:
 - The current user as the **examiner**
@@ -218,6 +231,15 @@ A candidate **fails** if ANY of the following are true:
 
 > **Screenshot placeholder:**
 > _[Screenshot of the test completion/results screen showing: a large PASS indicator in green (or FAIL in red), the final score "16/18 (89%)", time elapsed "07:23", a section-by-section breakdown showing scores per section, and a list of any missed criteria highlighted in yellow. For a failing test, also show which critical criteria were triggered in red]_
+
+### Effect on Training Pipeline Progress
+
+When a test that is linked to a training requirement (either through the template or an override set when the test was started) ends in a **PASS**, and the test is **not** in practice mode, the system **completes that requirement on the candidate's active program enrollment**. This advances their pipeline — potentially completing a phase and moving them forward.
+
+- A **FAIL** does not change pipeline progress.
+- **Practice-mode** passes are excluded and never affect enrollment progress (see [Practice Mode](#practice-mode)).
+
+See the [Training Pipelines](./02-training.md#training-pipelines) guide for how requirement completion advances phases.
 
 ---
 
@@ -502,7 +524,7 @@ Training officers with `training.manage` permission can permanently delete test 
 
 Skills tests integrate with the broader training compliance system:
 
-- **Training Requirements:** A requirement with type `SKILLS_EVALUATION` can reference skill sheet templates. When a candidate passes a test, their progress toward that requirement updates.
+- **Training Requirements:** A skill sheet template can be linked to a specific **training requirement** (see [Linking a Template to a Training Requirement](#linking-a-template-to-a-training-requirement)), and the link can be overridden per test. When a candidate passes a non-practice test from a linked template, the requirement is completed on their active enrollment and their program progress advances.
 - **Training Records:** Completed skill tests create training records that count toward hours and completion requirements.
 - **Training Programs:** Skills evaluations can be assigned as phase requirements within structured programs (e.g., "Recruit Academy Phase 3 requires passing Trauma Assessment and Cardiac Arrest Management").
 - **Compliance Matrix:** Skills test completion status feeds into the department-wide compliance matrix view.

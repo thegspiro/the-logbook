@@ -7,6 +7,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Pipelines: end-to-end progression tracking (2026-07-14)
+
+Made training programs ("pipelines") work as a real enroll → progress → advance →
+complete loop, wiring the surrounding subsystems (sessions, skills tests,
+knowledge tests) into pipeline progress and giving members a view of their own
+progression.
+
+**Building & enrolling**
+
+- **Atomic pipeline build** — the create-pipeline wizard now builds a program with
+  all phases, requirements, and milestones in a single transaction
+  (`POST /training/programs/programs/build`); a failure part-way no longer leaves an
+  orphaned, half-built program. Program **code** and **version**, and a phase's
+  **"require officer approval to advance"** flag, are now persisted and returned
+  (they were previously dropped by the schemas).
+- **Enrollments tab** — the program detail page lists enrolled members by name with
+  progress (`GET /training/programs/programs/{id}/enrollments`), enroll via a
+  **searchable member picker** (no more raw user IDs), and **bulk enroll now blocks**
+  members who fail prerequisite or concurrent-enrollment rules (previously the gate
+  was bypassed and they were enrolled anyway).
+
+**Progress tracking**
+
+- **Progress-management UI** — officers open an enrolled member and, per requirement,
+  log numeric progress (hours/shifts/calls/courses), mark complete / in progress /
+  reopen, and verify (`PATCH /training/programs/progress/{id}`).
+- Marking any requirement **completed/verified/waived** now sets it to 100%, so
+  non-numeric types (**checklist, skills evaluation, certification, knowledge test**)
+  advance the rollup — previously only hours/shifts/calls moved progress.
+- **COURSES** requirements now compute progress (completed-course count over
+  required), auto-completing at 100%.
+- **Completion revert** — a completed enrollment reopens to *active* if its progress
+  later drops below 100% (e.g. a new required requirement is added, or a value is
+  corrected down).
+
+**Phases**
+
+- **Phase advancement** — enrollments auto-advance through consecutive complete phases
+  and stop at any phase flagged *requires officer approval*, which exposes a manual
+  **Advance to next phase** action (`POST /training/programs/enrollments/{id}/advance-phase`,
+  `force` to override the completeness check). The previously-unused phase-advancement
+  notification to the member and mentor is now sent.
+
+**Automatic feeds into pipeline progress**
+
+- **Training session attendance** now correctly advances the linked requirement —
+  percentage, completion, enrollment rollup, and phase advancement all run. (Previously
+  approving a program-linked session bumped a raw value but never computed the
+  percentage, so the pipeline showed 0%.) A session may link to a specific
+  **requirement**, or to a program + **category**, in which case it advances the
+  program's requirements tagged with that category.
+- **Skills tests → pipeline** — a skill template carries a default **linked training
+  requirement** (each test inherits it, overridable per test via a new
+  `requirement_id` on `skill_templates`/`skill_tests`, migration
+  `20260714_0001`). Passing a non-practice test marks that requirement complete on the
+  candidate's active enrollment.
+- **Knowledge-test scoring** (lightweight) — an officer records a **pass/fail or score
+  percentage** on a `knowledge_test` requirement (`test_score` on the progress update).
+  Pass/fail is derived from the requirement's `passing_score` (default 70%); a pass
+  completes the requirement; **`max_attempts` is enforced** and attempt history is kept.
+  (A full online test-taking engine remains future work.)
+
+**Member-facing**
+
+- **Student progression view** (`/training/my-progress/:enrollmentId`, read-only) —
+  current phase ("You are here"), overall completion, time remaining / behind-schedule,
+  next milestones, and every requirement grouped by phase. Linked from *My Training*.
+
+**Attendance**
+
+- **Soft phase gate** — RSVP and self check-in warn (and let the member proceed with an
+  override) when they sign up for a program-linked training session whose phase is ahead
+  of their current phase. Endpoints accept `?override=true` and return HTTP 409 with a
+  `{ "warning_type": "phase_gate", "message": … }` detail otherwise. Non-enrolled members
+  and officer-driven check-ins are never gated.
+
 ### Documenso & Cal.com Integrations (2026-07-13)
 
 **New integrations**
