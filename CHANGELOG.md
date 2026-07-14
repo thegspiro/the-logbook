@@ -81,6 +81,11 @@ progression.
   "1 / 4 courses", "Pass ≥ 70%"), with a mini fill bar on count-based items, instead
   of a bare status. Status-only types (skills evaluation, certification, checklist)
   keep just their status.
+- **Actionable "what to do next"** — each incomplete requirement now shows an
+  imperative hint keyed to its type ("Attend training sessions to log hours",
+  "Get signed off by an evaluator", "Pass the written test", …) on the progression
+  view and in the dashboard "Next Steps", so a student sees *how* to advance, not
+  just the requirement's name. Completed requirements omit the hint.
 - **Requirement names now reach every progress view** — the program-requirement and
   requirement-progress API responses carry the nested requirement, so the dashboard
   widget, officer progress modal, and student progression view show the requirement's

@@ -93,4 +93,13 @@ describe('MyProgramProgressPage', () => {
     // "12 / 24 hrs" tells the student exactly what's left, not just a status.
     expect(await screen.findByText(/12 \/ 24 hrs/)).toBeInTheDocument();
   });
+
+  it('shows an action hint on an incomplete requirement but not a completed one', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    // The in-progress hours requirement (Ladder Ops) tells the student what to do.
+    expect(await screen.findByText(/Attend training sessions to log hours/)).toBeInTheDocument();
+    // The completed requirement (Hose Ops) has no action hint.
+    expect(screen.queryByText(/Get signed off/)).not.toBeInTheDocument();
+  });
 });
