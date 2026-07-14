@@ -84,6 +84,8 @@ export interface SkillTemplate {
   passing_percentage?: number;
   /** Whether all required criteria must pass regardless of overall score */
   require_all_critical: boolean;
+  /** Training-pipeline requirement this template's tests satisfy (optional) */
+  requirement_id?: string;
   /** Tags for filtering/searching */
   tags?: string[];
   created_at: string;
@@ -101,6 +103,7 @@ export interface SkillTemplateCreate {
   require_all_critical?: boolean | undefined;
   tags?: string[] | undefined;
   visibility?: TemplateVisibility | undefined;
+  requirement_id?: string | undefined;
 }
 
 export interface SkillTemplateSectionCreate {
@@ -134,6 +137,7 @@ export interface SkillTemplateUpdate {
   passing_percentage?: number | null | undefined;
   require_all_critical?: boolean | undefined;
   tags?: string[] | undefined;
+  requirement_id?: string | null | undefined;
 }
 
 // ==================== Active Test Types ====================
@@ -168,6 +172,8 @@ export interface SkillTest {
   candidate_name: string;
   examiner_id: string;
   examiner_name: string;
+  /** Training-pipeline requirement this test satisfies (inherited/overridable) */
+  requirement_id?: string;
   status: SkillTestStatus;
   result: TestResult;
   is_practice: boolean;
@@ -192,6 +198,8 @@ export interface SkillTestCreate {
   candidate_id: string;
   notes?: string | undefined;
   is_practice?: boolean | undefined;
+  /** Override the requirement this test satisfies; defaults to the template's */
+  requirement_id?: string | undefined;
 }
 
 export interface SkillTestUpdate {
@@ -201,6 +209,7 @@ export interface SkillTestUpdate {
   elapsed_seconds?: number;
   notes?: string;
   result?: TestResult;
+  requirement_id?: string | null;
 }
 
 // ==================== Summary / List Types ====================
@@ -215,6 +224,7 @@ export interface SkillTemplateListItem {
   version: number;
   section_count: number;
   criteria_count: number;
+  requirement_id?: string;
   tags?: string[];
   created_at: string;
   updated_at: string;

@@ -97,6 +97,17 @@ class SkillTemplate(Base):
     passing_percentage = Column(Float, nullable=True)
     require_all_critical = Column(Boolean, default=True)
 
+    # Optional pipeline linkage — the training requirement this template's tests
+    # satisfy. Tests inherit it at creation (overridable per test), and a passing
+    # test marks that requirement complete on the candidate's active enrollment.
+    # SET NULL requires nullable=True.
+    requirement_id = Column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
     # Metadata
     tags = Column(JSON, nullable=True)
 
@@ -152,6 +163,16 @@ class SkillTest(Base):
         String(36),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
+    )
+
+    # Optional pipeline linkage — inherited from the template at creation but
+    # overridable per test. A passing (non-practice) test marks this requirement
+    # complete on the candidate's active enrollment. SET NULL → nullable=True.
+    requirement_id = Column(
+        String(36),
+        ForeignKey("training_requirements.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
 
     # Test State

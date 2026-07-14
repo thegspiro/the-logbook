@@ -1,14 +1,22 @@
 """Skills testing business logic.
 
 Scoring and pass/fail evaluation for skill-test records is kept here, out of
-the HTTP endpoint layer, so it can be unit-tested in isolation. The scoring is
-pure (it reads only the template definition and the recorded section results),
-so it takes no database session and the model imports are type-checking only.
+the HTTP endpoint layer, so it can be unit-tested in isolation. ``calculate_test_result``
+is pure (it reads only the template definition and the recorded section results),
+so it takes no database session and its model imports are type-checking only.
+
+``apply_test_pass_to_pipeline`` is the one DB-touching helper here: it feeds a
+passing test's result into the training pipeline, and uses lazy imports so the
+pure-scoring path stays import-light.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from uuid import UUID
+
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
 if TYPE_CHECKING:
     from app.models.skills_testing import SkillTemplate, SkillTest
@@ -165,3 +173,63 @@ def calculate_test_result(
         test_result = "fail"
 
     return overall_score, test_result
+
+
+async def apply_test_pass_to_pipeline(
+    db: AsyncSession,
+    candidate_id: str,
+    requirement_id: str,
+    organization_id: UUID,
+    verified_by: UUID,
+) -> None:
+    """Mark a passed skills test's linked requirement complete on the
+    candidate's active enrollment(s).
+
+    Routes through ``TrainingProgramService.update_requirement_progress`` — the
+    same path shift completion and session approval use — so the requirement
+    reaches 100%, the enrollment rolls up, and phases auto-advance. Call this
+    AFTER the test has committed (the updater commits internally); failures are
+    logged, never surfaced, since the test result is already saved.
+    """
+    from sqlalchemy import select
+
+    from app.models.training import (
+        EnrollmentStatus,
+        ProgramEnrollment,
+        RequirementProgress,
+    )
+    from app.schemas.training_program import RequirementProgressUpdate
+    from app.services.training_program_service import TrainingProgramService
+
+    try:
+        rows = await db.execute(
+            select(RequirementProgress)
+            .join(
+                ProgramEnrollment,
+                RequirementProgress.enrollment_id == ProgramEnrollment.id,
+            )
+            .where(
+                ProgramEnrollment.user_id == str(candidate_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                RequirementProgress.requirement_id == str(requirement_id),
+            )
+        )
+        progress_rows = rows.scalars().all()
+        if not progress_rows:
+            return
+
+        service = TrainingProgramService(db)
+        for progress in progress_rows:
+            _, error = await service.update_requirement_progress(
+                progress_id=progress.id,
+                organization_id=organization_id,
+                updates=RequirementProgressUpdate(status="completed"),
+                verified_by=verified_by,
+            )
+            if error:
+                logger.error(
+                    f"Skills-test pipeline feed failed: candidate={candidate_id} "
+                    f"requirement={requirement_id}: {error}"
+                )
+    except Exception as e:  # pragma: no cover - defensive
+        logger.error(f"Failed to apply skills-test pipeline progress: {e}")
