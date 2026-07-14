@@ -586,3 +586,24 @@ class ProgramBuildRequest(BaseModel):
 
     program: TrainingProgramCreate
     phases: List[ProgramBuildPhaseInput] = []
+
+
+class SampleTemplateSummary(BaseModel):
+    """Gallery metadata for a built-in sample program template."""
+
+    key: str
+    name: str
+    description: Optional[str] = None
+    code: Optional[str] = None
+    target_position: Optional[str] = None
+    structure_type: str
+    phase_count: int
+    requirement_count: int
+    time_limit_days: Optional[int] = None
+
+
+class SampleTemplateInstantiate(BaseModel):
+    """Options when adding a built-in sample template to the caller's org."""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    is_template: bool = True

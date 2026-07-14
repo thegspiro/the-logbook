@@ -83,6 +83,26 @@ progression.
   `{ "warning_type": "phase_gate", "message": … }` detail otherwise. Non-enrolled members
   and officer-driven check-ins are never gated.
 
+**Editing & starter templates**
+
+- **Editable "Required" toggle** — a program requirement can be switched between
+  **Required** and **Optional** after creation from the program overview
+  (`PATCH /training/programs/programs/{program_id}/requirements/{program_requirement_id}`,
+  `training.manage`). Toggling it recomputes every active member's progress and
+  re-checks phase advancement, since the set of completion-counting items changed.
+  Members without `training.manage` see the label read-only.
+- **Built-in sample templates** — a "Start from a sample template" gallery on the
+  **Templates** tab offers three real-world-aligned starting points a training officer
+  can add with one click (`GET /training/programs/sample-templates`,
+  `POST /training/programs/sample-templates/{key}/instantiate`): a **Firefighter recruit
+  school** (NFPA 1001 Firefighter I & II + Hazmat Awareness/Operations + IFSAC/Pro Board
+  certification), an **EMT recruit school** (NREMT modules + clinical internship +
+  cognitive/psychomotor exams), and a **New-member orientation** (department
+  familiarization + mandatory annual compliance — HIPAA, OSHA Bloodborne Pathogens,
+  Hazard Communication, harassment prevention — + department-specific onboarding).
+  Adding one replays the atomic build into the org as an editable, department-owned
+  template.
+
 ### Documenso & Cal.com Integrations (2026-07-13)
 
 **New integrations**

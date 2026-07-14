@@ -682,6 +682,18 @@ export interface ProgramRequirementUpdate {
   sort_order?: number;
 }
 
+export interface SampleTemplateSummary {
+  key: string;
+  name: string;
+  description?: string | null;
+  code?: string | null;
+  target_position?: string | null;
+  structure_type: string;
+  phase_count: number;
+  requirement_count: number;
+  time_limit_days?: number | null;
+}
+
 export interface ProgramMilestone {
   id: string;
   program_id: string;

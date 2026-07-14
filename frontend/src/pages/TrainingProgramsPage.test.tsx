@@ -1,19 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import TrainingProgramsPage from './TrainingProgramsPage';
 
 const mockGetPrograms = vi.fn();
 const mockGetRequirementsEnhanced = vi.fn();
 const mockGetRegistries = vi.fn();
+const mockGetSampleTemplates = vi.fn();
+const mockInstantiateSampleTemplate = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
     getPrograms: (...args: unknown[]) => mockGetPrograms(...args) as unknown,
     getRequirementsEnhanced: (...args: unknown[]) => mockGetRequirementsEnhanced(...args) as unknown,
     getRegistries: (...args: unknown[]) => mockGetRegistries(...args) as unknown,
+    getSampleTemplates: (...args: unknown[]) => mockGetSampleTemplates(...args) as unknown,
+    instantiateSampleTemplate: (...args: unknown[]) => mockInstantiateSampleTemplate(...args) as unknown,
   },
 }));
+
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => mockNavigate };
+});
 
 vi.mock('../utils/errorHandling', () => ({
   getErrorMessage: (err: unknown) => (err instanceof Error ? err.message : String(err)),
@@ -60,6 +71,27 @@ describe('TrainingProgramsPage', () => {
     ]);
     mockGetRequirementsEnhanced.mockResolvedValue([]);
     mockGetRegistries.mockResolvedValue([]);
+    mockGetSampleTemplates.mockResolvedValue([
+      {
+        key: 'firefighter-recruit-school',
+        name: 'Firefighter Recruit School (NFPA 1001 FF I & II)',
+        description: 'Entry-level structural firefighter academy.',
+        structure_type: 'phases',
+        phase_count: 4,
+        requirement_count: 21,
+        time_limit_days: 180,
+      },
+    ]);
+    mockInstantiateSampleTemplate.mockResolvedValue({
+      id: 'prog-new',
+      name: 'Firefighter Recruit School (NFPA 1001 FF I & II)',
+      structure_type: 'phases',
+      is_template: true,
+      version: 1,
+      active: true,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    });
   });
 
   it('renders the programs page', async () => {
@@ -80,5 +112,34 @@ describe('TrainingProgramsPage', () => {
     mockGetPrograms.mockResolvedValue([]);
     const { container } = renderWithRouter(<TrainingProgramsPage />);
     expect(container).toBeInTheDocument();
+  });
+
+  it('shows the sample-template gallery on the Templates tab', async () => {
+    mockGetPrograms.mockResolvedValue([]);
+    renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Templates/i }));
+
+    // The card only renders after getSampleTemplates resolves, so its presence
+    // proves the gallery loaded.
+    expect(await screen.findByText('Start from a sample template')).toBeInTheDocument();
+    expect(
+      screen.getByText('Firefighter Recruit School (NFPA 1001 FF I & II)'),
+    ).toBeInTheDocument();
+  });
+
+  it('instantiates a sample template and navigates to the new program', async () => {
+    mockGetPrograms.mockResolvedValue([]);
+    renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Templates/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Add Firefighter Recruit School.*to my department/i }),
+    );
+
+    await waitFor(() =>
+      expect(mockInstantiateSampleTemplate).toHaveBeenCalledWith('firefighter-recruit-school'),
+    );
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs/prog-new'));
   });
 });

@@ -98,6 +98,32 @@ Members are enrolled in training programs to track their progress toward complet
 - Independent copies for customization
 - Version numbering (e.g., "Probationary Program v2")
 
+#### Built-in Sample Templates
+The **Templates** tab shows a *"Start from a sample template"* gallery with three
+real-world-aligned starting points a training officer can add with one click:
+
+| Template | Aligned to | Structure |
+|----------|-----------|-----------|
+| **Firefighter Recruit School** | NFPA 1001 Firefighter I & II, Hazmat Awareness/Operations (NFPA 1072), IFSAC/Pro Board certification | 4 phases (Orientation & Safety → Fireground Skills → Fire Attack & Live-Fire → Certification), officer-approved advancement on the safety and certification phases |
+| **EMT Recruit School** | National EMS Education Standards / NREMT (Preparatory, Airway, Medical, Trauma, Operations), clinical/field internship, cognitive & psychomotor exams | 5 phases, officer-approved advancement on the certification phase |
+| **New Member Orientation** | Department familiarization + mandatory annual compliance (HIPAA, OSHA Bloodborne Pathogens, Hazard Communication, harassment prevention) + department-specific onboarding | 3 phases |
+
+These are curated in code (`backend/app/services/sample_program_templates.py`) and are
+deliberately generic — requirements are *named* but do not hard-wire a department's own
+course, category, or skills-test IDs. Adding a template replays the atomic program build
+into your organization as an **editable, department-owned template** (it lands in the
+Templates tab with `is_template=true`). Afterward the officer links its requirements to
+their real sessions/categories/tests, adjusts hours, and enrolls members.
+
+- `GET /training/programs/sample-templates` — gallery metadata
+- `POST /training/programs/sample-templates/{key}/instantiate` — add to the org
+  (optional body `{ "name": "…", "is_template": true }`)
+
+#### Editing Requirements After Creation
+- A requirement's **Required ↔ Optional** state is editable from the program overview
+  (`PATCH /training/programs/programs/{program_id}/requirements/{program_requirement_id}`).
+  Toggling it recomputes affected members' progress and re-checks phase advancement.
+
 #### Program Prerequisites
 - Set prerequisite programs (e.g., must complete "Recruit School" before "Driver Candidate")
 - Automatic validation during enrollment

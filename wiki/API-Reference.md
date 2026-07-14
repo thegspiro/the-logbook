@@ -296,12 +296,21 @@ POST   /api/v1/training/programs/programs/build                        # Atomica
 GET    /api/v1/training/programs/programs/{program_id}/enrollments      # List a program's enrollments with member names (training.view_all OR training.manage)
 POST   /api/v1/training/programs/enrollments/{enrollment_id}/advance-phase?force=<bool>  # Manually advance to the next phase (training.manage); requires the current phase complete unless force=true
 PATCH  /api/v1/training/programs/progress/{progress_id}                 # Update requirement progress (training.manage)
+PATCH  /api/v1/training/programs/programs/{program_id}/requirements/{program_requirement_id}  # Toggle a requirement's is_required / is_prerequisite / sort_order (training.manage)
+GET    /api/v1/training/programs/sample-templates                      # List built-in sample program templates (training.manage)
+POST   /api/v1/training/programs/sample-templates/{key}/instantiate    # Add a sample template to the org (training.manage)
 ```
 
 - **`PATCH .../progress/{progress_id}`** — `RequirementProgressUpdate` now also
   accepts `test_score` (0–100) for officer-entered knowledge/skills scoring.
   Pass/fail is derived from the requirement's `passing_score`, and `max_attempts`
   is enforced.
+- **`PATCH .../requirements/{program_requirement_id}`** — flipping `is_required`
+  recomputes affected members' progress and re-checks phase advancement.
+- **`.../sample-templates`** — three curated starting points (Firefighter recruit
+  school, EMT recruit school, new-member orientation). `instantiate` replays the
+  atomic build into the org as an editable template; optional body
+  `{ "name": "…", "is_template": true }`.
 - **Program create/response** now include `code` and `version`; each program
   phase includes `requires_manual_advancement`.
 

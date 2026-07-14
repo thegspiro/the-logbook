@@ -38,11 +38,17 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     RegistryImportResult,
     RequirementProgressResponse,
     RequirementProgressUpdate,
+    SampleTemplateInstantiate,
+    SampleTemplateSummary,
     TrainingProgramCreate,
     TrainingProgramResponse,
     TrainingRequirementEnhancedCreate,
     TrainingRequirementEnhancedResponse,
     TrainingRequirementEnhancedUpdate,
+)
+from app.services.sample_program_templates import (
+    SAMPLE_TEMPLATES,
+    list_sample_template_summaries,
 )
 from app.services.training_program_service import TrainingProgramService
 
@@ -392,6 +398,86 @@ async def build_training_program(
             "program_id": str(program.id),
             "program_name": program.name,
             "action": "built_via_wizard",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return program
+
+
+@router.get(
+    "/sample-templates",
+    response_model=list[SampleTemplateSummary],
+)
+async def list_sample_templates(
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List the built-in sample program templates (firefighter recruit school,
+    EMT recruit school, new-member orientation) available to add to the
+    department with one click.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    return list_sample_template_summaries()
+
+
+@router.post(
+    "/sample-templates/{template_key}/instantiate",
+    response_model=TrainingProgramResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def instantiate_sample_template(
+    template_key: str,
+    options: SampleTemplateInstantiate | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Add a built-in sample template to the caller's organization. This replays
+    the same atomic build the wizard uses, creating an editable copy the
+    department owns (a template by default, so it lands in the Templates tab).
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    build = SAMPLE_TEMPLATES.get(template_key)
+    if build is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sample template not found",
+        )
+
+    # Never mutate the shared catalog instance — copy and apply overrides.
+    payload = build.model_copy(deep=True)
+    opts = options or SampleTemplateInstantiate()
+    if opts.name:
+        payload.program.name = opts.name
+    payload.program.is_template = opts.is_template
+
+    service = TrainingProgramService(db)
+    program, error = await service.build_program(
+        payload=payload,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+    if error:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_program_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program.id),
+            "program_name": program.name,
+            "action": "instantiated_sample_template",
+            "template_key": template_key,
         },
         user_id=str(current_user.id),
         username=current_user.username,

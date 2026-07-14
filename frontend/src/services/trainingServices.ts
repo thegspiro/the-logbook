@@ -6,7 +6,7 @@ import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import type { SkillTemplate, SkillTemplateCreate, SkillTemplateListItem, SkillTemplateUpdate, SkillTest, SkillTestCreate, SkillTestListItem, SkillTestUpdate, SkillTestingSummary } from '../types/skillsTesting';
-import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramPhase, ProgramPhaseCreate, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
+import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramPhase, ProgramPhaseCreate, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, SampleTemplateSummary, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 import type { TrainingSessionResponse, TrainingSessionCreate, RecurringTrainingSessionCreate } from './adminServices';
 
@@ -552,6 +552,29 @@ export const trainingProgramService = {
    */
   async buildProgram(payload: ProgramBuildRequest): Promise<TrainingProgram> {
     const response = await api.post<TrainingProgram>('/training/programs/programs/build', payload);
+    return response.data;
+  },
+
+  /**
+   * List the built-in sample program templates (firefighter/EMT recruit school,
+   * new-member orientation) available to add to the department.
+   */
+  async getSampleTemplates(): Promise<SampleTemplateSummary[]> {
+    const response = await api.get<SampleTemplateSummary[]>('/training/programs/sample-templates');
+    return response.data;
+  },
+
+  /**
+   * Add a built-in sample template to the org (an editable, department-owned copy).
+   */
+  async instantiateSampleTemplate(
+    templateKey: string,
+    options?: { name?: string; is_template?: boolean },
+  ): Promise<TrainingProgram> {
+    const response = await api.post<TrainingProgram>(
+      `/training/programs/sample-templates/${templateKey}/instantiate`,
+      options ?? {},
+    );
     return response.data;
   },
 
