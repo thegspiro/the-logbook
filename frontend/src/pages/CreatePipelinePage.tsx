@@ -114,6 +114,37 @@ const emptyMilestone = (): MilestoneFormData => ({
   notification_message: '',
 });
 
+// ==================== Help Components ====================
+
+// Small muted hint shown beneath a field.
+const HelpText: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="mt-1 text-xs text-theme-text-muted">{children}</p>
+);
+
+// Highlighted explanatory callout shown at the top of a step.
+const InfoCallout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="flex gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-theme-text-secondary">
+    <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" aria-hidden="true" />
+    <div className="space-y-1">{children}</div>
+  </div>
+);
+
+// Plain-language explanation of each requirement type and how it gets completed —
+// shown under the Type selector so the builder knows what they're choosing.
+const REQUIREMENT_TYPE_HELP: Record<string, string> = {
+  hours:
+    'Training hours. Fill in automatically from linked training sessions and approved shift reports, or an officer can log them.',
+  courses: 'Completion of specific courses — checked off as the member completes them.',
+  skills_evaluation:
+    'A hands-on skill. Completed by passing a linked skills test in the Skills Testing module, or marked by an officer.',
+  knowledge_test:
+    'A written test. An officer records a pass/fail or score; reaching the passing score completes it.',
+  checklist: 'A list of items an officer checks off. Completed when marked done.',
+  certification: 'An external certification — marked complete when the member earns it.',
+  shifts: 'A number of shifts. Accrue automatically from approved shift reports.',
+  calls: 'A number of call responses. Accrue automatically from approved shift reports.',
+};
+
 // ==================== Step Components ====================
 
 const StepInfo: React.FC<{
@@ -134,6 +165,18 @@ const StepInfo: React.FC<{
       <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Program Information</h2>
       <p className="text-theme-text-muted text-sm">Define the basic details for your training pipeline.</p>
     </div>
+
+    <InfoCallout>
+      <p className="text-theme-text-primary font-medium">How a training pipeline works</p>
+      <p>
+        A pipeline tracks a member&apos;s progression through a training program. You&apos;ll build it in
+        four parts: <strong>Phases</strong> (the stages a member moves through), <strong>Requirements</strong>{' '}
+        (what they must complete in each phase), and optional <strong>Milestones</strong> (progress
+        notifications). After you create it, enroll members from the program&apos;s page — their progress
+        then updates automatically from training sessions, shifts, and skills tests, or by an officer.
+      </p>
+      <p>Only a <strong>Program Name</strong> is required; you can add phases and requirements now or later.</p>
+    </InfoCallout>
 
     <div>
       <label htmlFor="prog-name" className="form-label">
@@ -178,6 +221,7 @@ const StepInfo: React.FC<{
           placeholder="e.g., RECRUIT"
           maxLength={50}
         />
+        <HelpText>A short identifier shown on the program and in reports. Optional.</HelpText>
       </div>
 
       <div>
@@ -198,6 +242,7 @@ const StepInfo: React.FC<{
           <option value="officer">Officer</option>
           <option value="aic">AIC (Attendant in Charge)</option>
         </select>
+        <HelpText>Who this program is aimed at. Informational — it does not restrict who you can enroll.</HelpText>
       </div>
     </div>
 
@@ -216,6 +261,11 @@ const StepInfo: React.FC<{
           <option value="sequential">Sequential (strict order)</option>
           <option value="flexible">Flexible (any order)</option>
         </select>
+        <HelpText>
+          <strong>Phases</strong>: members move through ordered stages.{' '}
+          <strong>Sequential</strong>: requirements done in strict order.{' '}
+          <strong>Flexible</strong>: any order. Most recruit programs use Phases.
+        </HelpText>
       </div>
 
       <div>
@@ -231,6 +281,7 @@ const StepInfo: React.FC<{
           placeholder="e.g., 365"
           min={1}
         />
+        <HelpText>Overall deadline from the enrollment date. Leave blank for no deadline.</HelpText>
       </div>
 
       <div>
@@ -246,20 +297,22 @@ const StepInfo: React.FC<{
           placeholder="30"
           min={1}
         />
+        <HelpText>Send the member a reminder this many days before the deadline.</HelpText>
       </div>
     </div>
 
-    <div className="flex items-center space-x-2">
-      <input
-        type="checkbox"
-        id="is-template"
-        checked={data.is_template}
-        onChange={(e) => onChange('is_template', e.target.checked)}
-        className="form-checkbox"
-      />
-      <label htmlFor="is-template" className="text-sm text-theme-text-secondary">
-        Save as template (can be cloned for future use)
+    <div>
+      <label className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          id="is-template"
+          checked={data.is_template}
+          onChange={(e) => onChange('is_template', e.target.checked)}
+          className="form-checkbox"
+        />
+        <span className="text-sm text-theme-text-secondary">Save as template (can be cloned for future use)</span>
       </label>
+      <HelpText>Templates are reusable blueprints — you don&apos;t enroll members directly into a template.</HelpText>
     </div>
   </div>
 );
@@ -285,6 +338,19 @@ const StepPhases: React.FC<{
         <span>Add Phase</span>
       </button>
     </div>
+
+    <InfoCallout>
+      <p>
+        Phases are the stages a member works through, in order (e.g. <em>Orientation → Engine Ops →
+        Truck Ops</em>). A member finishes a phase once every required item in it is complete, and then
+        <strong> advances automatically</strong> to the next one.
+      </p>
+      <p>
+        Tick <strong>&ldquo;Require officer approval to advance&rdquo;</strong> on a phase to hold members
+        there until an officer signs off — even after they finish it. You&apos;ll add the actual requirements
+        in the next step.
+      </p>
+    </InfoCallout>
 
     {phases.length === 0 ? (
       <div className="card-secondary border-dashed py-12 text-center">
@@ -361,9 +427,10 @@ const StepPhases: React.FC<{
                       placeholder="Optional"
                       min={1}
                     />
+                    <HelpText>Target time to finish this phase. Optional.</HelpText>
                   </div>
-                  <div className="flex items-end">
-                    <label className="flex items-center space-x-2 text-sm text-theme-text-secondary pb-2">
+                  <div>
+                    <label className="flex items-center space-x-2 text-sm text-theme-text-secondary">
                       <input
                         type="checkbox"
                         checked={phase.requires_manual_advancement}
@@ -372,6 +439,7 @@ const StepPhases: React.FC<{
                       />
                       <span>Require officer approval to advance</span>
                     </label>
+                    <HelpText>Members won&apos;t auto-advance out of this phase, even when complete, until an officer approves.</HelpText>
                   </div>
                 </div>
               </div>
@@ -394,6 +462,21 @@ const StepRequirements: React.FC<{
       <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Requirements</h2>
       <p className="text-theme-text-muted text-sm">Define the requirements members must complete within each phase.</p>
     </div>
+
+    {phases.length > 0 && (
+      <InfoCallout>
+        <p>
+          Requirements are what a member must complete in each phase. Choose a <strong>type</strong> for
+          each — the help under the selector explains how it&apos;s completed. Some fill in
+          <strong> automatically</strong> (hours, shifts, calls from sessions and shift reports; skills from
+          skills tests); others an <strong>officer marks off</strong> (checklist, certification, knowledge test).
+        </p>
+        <p>
+          A phase is finished when its <strong>required</strong> items are done. Uncheck
+          <strong> &ldquo;Required&rdquo;</strong> for optional items that shouldn&apos;t hold up advancement.
+        </p>
+      </InfoCallout>
+    )}
 
     {phases.length === 0 ? (
       <div className="card-secondary border-dashed py-12 text-center">
@@ -450,6 +533,9 @@ const StepRequirements: React.FC<{
                           <option value="shifts">Shift Hours</option>
                           <option value="calls">Call Responses</option>
                         </select>
+                        {REQUIREMENT_TYPE_HELP[req.requirement_type] && (
+                          <HelpText>{REQUIREMENT_TYPE_HELP[req.requirement_type]}</HelpText>
+                        )}
                       </div>
                     </div>
                     <button
@@ -472,32 +558,33 @@ const StepRequirements: React.FC<{
                     />
                   </div>
 
+                  {/* Required toggle — applies to every requirement type */}
+                  <div>
+                    <label className="flex items-center space-x-2 text-xs text-theme-text-secondary">
+                      <input
+                        type="checkbox"
+                        checked={req.is_required}
+                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
+                        className="w-3 h-3 text-red-500 bg-theme-input-bg border-theme-input-border rounded-sm"
+                      />
+                      <span>Required to complete the phase</span>
+                    </label>
+                    <HelpText>Uncheck for optional or extra-credit items that shouldn&apos;t hold up advancement.</HelpText>
+                  </div>
+
                   {/* Conditional fields based on type */}
                   {req.requirement_type === 'hours' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-theme-text-muted mb-1">Required Hours</label>
-                        <input
-                          type="number"
-                          value={req.required_hours}
-                          onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_hours', e.target.value)}
-                          className="form-input-sm"
-                          placeholder="e.g., 40"
-                          min={0}
-                          step={0.5}
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <label className="flex items-center space-x-2 text-xs text-theme-text-secondary pb-1">
-                          <input
-                            type="checkbox"
-                            checked={req.is_required}
-                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'is_required', e.target.checked)}
-                            className="w-3 h-3 text-red-500 bg-theme-input-bg border-theme-input-border rounded-sm"
-                          />
-                          <span>Required</span>
-                        </label>
-                      </div>
+                    <div>
+                      <label className="block text-xs font-medium text-theme-text-muted mb-1">Required Hours</label>
+                      <input
+                        type="number"
+                        value={req.required_hours}
+                        onChange={(e) => onUpdateRequirement(phase.id, req.id, 'required_hours', e.target.value)}
+                        className="form-input-sm"
+                        placeholder="e.g., 40"
+                        min={0}
+                        step={0.5}
+                      />
                     </div>
                   )}
 
@@ -557,6 +644,7 @@ const StepRequirements: React.FC<{
                           min={0}
                           max={100}
                         />
+                        <HelpText>Minimum score to pass. Defaults to 70% if left blank.</HelpText>
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-theme-text-muted mb-1">Max Attempts</label>
@@ -568,6 +656,7 @@ const StepRequirements: React.FC<{
                           placeholder="Unlimited"
                           min={1}
                         />
+                        <HelpText>How many times a member may take it. Blank = unlimited.</HelpText>
                       </div>
                     </div>
                   )}
@@ -590,9 +679,20 @@ const StepMilestones: React.FC<{
 }> = ({ phases, onAddMilestone, onRemoveMilestone, onUpdateMilestone, onMoveMilestone }) => (
   <div className="space-y-6">
     <div>
-      <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Milestones</h2>
+      <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Milestones <span className="text-theme-text-muted text-sm font-normal">(optional)</span></h2>
       <p className="text-theme-text-muted text-sm">Define milestones to celebrate member progress and trigger notifications. Use the arrows to reorder.</p>
     </div>
+
+    {phases.length > 0 && (
+      <InfoCallout>
+        <p>
+          Milestones are optional check-ins. When a member&apos;s progress in a phase reaches the
+          percentage you set, they (and their mentor) get a notification with your message — a nice way
+          to mark &ldquo;halfway there&rdquo; moments. Milestones <strong>don&apos;t gate advancement</strong>;
+          they&apos;re purely encouragement. Skip this step entirely if you don&apos;t need them.
+        </p>
+      </InfoCallout>
+    )}
 
     {phases.length === 0 ? (
       <div className="card-secondary border-dashed py-12 text-center">
@@ -716,6 +816,15 @@ const StepReview: React.FC<{
         <h2 className="text-xl font-semibold text-theme-text-primary mb-1">Review Your Pipeline</h2>
         <p className="text-theme-text-muted text-sm">Review all details before creating the training pipeline.</p>
       </div>
+
+      <InfoCallout>
+        <p>
+          Everything is created together when you click <strong>Create Pipeline</strong>. Next, open the
+          program and <strong>enroll members</strong> from its Enrollments tab — from there you can track
+          progress, and members can watch their own progression from <em>My Training</em>. You can edit or
+          duplicate the program later.
+        </p>
+      </InfoCallout>
 
       {/* Summary cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
