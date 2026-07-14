@@ -738,6 +738,13 @@ const MyTrainingPage: React.FC = () => {
                         ))}
                       </div>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/training/my-progress/${e.id}`)}
+                      className="mt-3 text-xs text-red-700 dark:text-red-400 hover:underline"
+                    >
+                      View full progress →
+                    </button>
                   </div>
                 ))}
               </div>
