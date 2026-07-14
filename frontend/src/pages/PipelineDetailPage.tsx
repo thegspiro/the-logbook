@@ -24,6 +24,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { trainingProgramService, userService } from '../services/api';
+import { useAuthStore } from '../stores/authStore';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { getErrorMessage } from '../utils/errorHandling';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
@@ -745,6 +746,8 @@ const PipelineDetailPage: React.FC = () => {
   const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [progressEnrollment, setProgressEnrollment] = useState<ProgramEnrollmentWithUser | null>(null);
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [savingReqId, setSavingReqId] = useState<string | null>(null);
+  const canManage = useAuthStore((s) => s.checkPermission('training.manage'));
 
   useEffect(() => {
     if (programId) void loadProgram();
@@ -822,6 +825,26 @@ const PipelineDetailPage: React.FC = () => {
   // Get requirements for a specific phase
   const getPhaseReqs = (phaseId: string) =>
     programReqs.filter((r) => r.phase_id === phaseId).sort((a, b) => a.sort_order - b.sort_order);
+
+  // Toggle whether a linked requirement is required to complete its phase.
+  // Enrolled members' progress is recomputed server-side, so refresh nothing
+  // else here — the overview is structural, not per-member.
+  const handleToggleRequired = async (pr: ProgramRequirement) => {
+    if (!programId) return;
+    const next = !pr.is_required;
+    setSavingReqId(pr.id);
+    try {
+      const updated = await trainingProgramService.updateProgramRequirement(programId, pr.id, {
+        is_required: next,
+      });
+      setProgramReqs((prev) => prev.map((r) => (r.id === pr.id ? { ...r, is_required: updated.is_required } : r)));
+      toast.success(next ? 'Marked as required' : 'Marked as optional');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update requirement'));
+    } finally {
+      setSavingReqId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -1048,8 +1071,31 @@ const PipelineDetailPage: React.FC = () => {
                                         {pr.requirement?.requirement_type && (
                                           <ReqTypeBadge type={pr.requirement.requirement_type} />
                                         )}
-                                        {pr.is_required && (
-                                          <span className="text-red-700 dark:text-red-400 text-xs">Required</span>
+                                        {canManage ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => void handleToggleRequired(pr)}
+                                            disabled={savingReqId === pr.id}
+                                            title={
+                                              pr.is_required
+                                                ? 'Required to complete the phase — click to make optional'
+                                                : 'Optional — click to make it required to complete the phase'
+                                            }
+                                            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                                              pr.is_required
+                                                ? 'bg-red-500/15 text-red-700 hover:bg-red-500/25 dark:text-red-400'
+                                                : 'bg-theme-surface text-theme-text-muted hover:bg-theme-surface-hover'
+                                            }`}
+                                          >
+                                            {savingReqId === pr.id && (
+                                              <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                                            )}
+                                            {pr.is_required ? 'Required' : 'Optional'}
+                                          </button>
+                                        ) : (
+                                          pr.is_required && (
+                                            <span className="text-red-700 dark:text-red-400 text-xs">Required</span>
+                                          )
                                         )}
                                       </div>
                                       {pr.requirement?.description && (

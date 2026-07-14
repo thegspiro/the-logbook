@@ -12,6 +12,7 @@ const mockGetProgramEnrollments = vi.fn();
 const mockGetEnrollmentProgress = vi.fn();
 const mockUpdateProgress = vi.fn();
 const mockAdvancePhase = vi.fn();
+const mockUpdateProgramRequirement = vi.fn();
 const mockGetUsers = vi.fn();
 
 vi.mock('../services/api', () => ({
@@ -23,10 +24,18 @@ vi.mock('../services/api', () => ({
     getEnrollmentProgress: (...a: unknown[]) => mockGetEnrollmentProgress(...a) as unknown,
     updateProgress: (...a: unknown[]) => mockUpdateProgress(...a) as unknown,
     advancePhase: (...a: unknown[]) => mockAdvancePhase(...a) as unknown,
+    updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
   },
   userService: {
     getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
   },
+}));
+
+// Grant training.manage so officer-only controls (the Required toggle) render.
+let mockHasPermission = true;
+vi.mock('../stores/authStore', () => ({
+  useAuthStore: (selector: (s: unknown) => unknown) =>
+    selector({ checkPermission: () => mockHasPermission }),
 }));
 
 const mockNavigate = vi.fn();
@@ -86,6 +95,7 @@ const certProgress = {
 describe('PipelineDetailPage — enrollment progress management', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockHasPermission = true;
     mockGetProgram.mockResolvedValue(program);
     mockGetProgramPhases.mockResolvedValue([]);
     mockGetProgramRequirements.mockResolvedValue([]);
@@ -222,5 +232,65 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     await waitFor(() =>
       expect(mockUpdateProgress).toHaveBeenCalledWith('rp-kt', { test_score: 85 }),
     );
+  });
+
+  it('toggles a requirement between Required and Optional on the overview', async () => {
+    const phase1 = {
+      id: 'ph-1', program_id: 'prog-1', phase_number: 1, name: 'Basics',
+      requires_manual_advancement: false, created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockGetProgramPhases.mockResolvedValue([phase1]);
+    mockGetProgramRequirements.mockResolvedValue([
+      {
+        id: 'pr-1', program_id: 'prog-1', phase_id: 'ph-1', requirement_id: 'req-1',
+        is_required: true, is_prerequisite: false, sort_order: 0,
+        created_at: '2026-01-01T00:00:00Z',
+        requirement: { id: 'req-1', name: 'CPR Certification', requirement_type: 'certification' },
+      },
+    ]);
+    mockUpdateProgramRequirement.mockResolvedValue({
+      id: 'pr-1', program_id: 'prog-1', phase_id: 'ph-1', requirement_id: 'req-1',
+      is_required: false, is_prerequisite: false, sort_order: 0,
+      created_at: '2026-01-01T00:00:00Z',
+    });
+
+    renderWithRouter(<PipelineDetailPage />);
+
+    const toggle = await screen.findByRole('button', { name: 'Required' });
+    await userEvent.click(toggle);
+
+    await waitFor(() =>
+      expect(mockUpdateProgramRequirement).toHaveBeenCalledWith('prog-1', 'pr-1', {
+        is_required: false,
+      }),
+    );
+    // The label flips to reflect the new state.
+    expect(await screen.findByRole('button', { name: 'Optional' })).toBeInTheDocument();
+  });
+
+  it('hides the Required toggle for members without training.manage', async () => {
+    mockHasPermission = false;
+    mockGetProgramPhases.mockResolvedValue([
+      {
+        id: 'ph-1', program_id: 'prog-1', phase_number: 1, name: 'Basics',
+        requires_manual_advancement: false, created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    mockGetProgramRequirements.mockResolvedValue([
+      {
+        id: 'pr-1', program_id: 'prog-1', phase_id: 'ph-1', requirement_id: 'req-1',
+        is_required: true, is_prerequisite: false, sort_order: 0,
+        created_at: '2026-01-01T00:00:00Z',
+        requirement: { id: 'req-1', name: 'CPR Certification', requirement_type: 'certification' },
+      },
+    ]);
+
+    renderWithRouter(<PipelineDetailPage />);
+
+    // Static "Required" text renders, but not as an interactive control.
+    expect(await screen.findByText('Required')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Required' })).not.toBeInTheDocument();
   });
 });

@@ -33,6 +33,7 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     ProgramPhaseResponse,
     ProgramRequirementCreate,
     ProgramRequirementResponse,
+    ProgramRequirementUpdate,
     ProgramWithPhasesAndRequirements,
     RegistryImportResult,
     RequirementProgressResponse,
@@ -588,6 +589,45 @@ async def add_requirement_to_program(
 
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    return program_requirement
+
+
+@router.patch(
+    "/programs/{program_id}/requirements/{program_requirement_id}",
+    response_model=ProgramRequirementResponse,
+)
+async def update_program_requirement(
+    program_id: UUID,
+    program_requirement_id: UUID,
+    updates: ProgramRequirementUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Update a program requirement link — e.g. toggle whether it's **required** to
+    complete the phase, mark it a prerequisite, or reorder it. Toggling
+    ``is_required`` recomputes affected members' progress.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+
+    program_requirement, error = await service.update_program_requirement(
+        program_requirement_id=program_requirement_id,
+        organization_id=current_user.organization_id,
+        updates=updates,
+    )
+
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+
+    if str(program_requirement.program_id) != str(program_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Requirement does not belong to this program",
+        )
 
     return program_requirement
 

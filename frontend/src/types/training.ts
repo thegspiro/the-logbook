@@ -676,6 +676,12 @@ export interface ProgramRequirementCreate {
   notification_message?: string;
 }
 
+export interface ProgramRequirementUpdate {
+  is_required?: boolean;
+  is_prerequisite?: boolean;
+  sort_order?: number;
+}
+
 export interface ProgramMilestone {
   id: string;
   program_id: string;

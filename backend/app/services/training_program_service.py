@@ -42,6 +42,7 @@ from app.schemas.training_program import (
     ProgramMilestoneCreate,
     ProgramPhaseCreate,
     ProgramRequirementCreate,
+    ProgramRequirementUpdate,
     RequirementProgressUpdate,
     TrainingProgramCreate,
     TrainingRequirementEnhancedCreate,
@@ -740,6 +741,63 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(program_requirement)
+
+        return program_requirement, None
+
+    async def update_program_requirement(
+        self,
+        program_requirement_id: UUID,
+        organization_id: UUID,
+        updates: ProgramRequirementUpdate,
+    ) -> Tuple[Optional[ProgramRequirement], Optional[str]]:
+        """
+        Update a program↔requirement link (is_required / is_prerequisite /
+        sort_order). Toggling ``is_required`` changes which items count toward
+        completion, so affected enrollments are recomputed (and re-checked for
+        phase advancement).
+
+        Returns: (program_requirement, error_message)
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement)
+            .join(
+                TrainingProgram,
+                ProgramRequirement.program_id == TrainingProgram.id,
+            )
+            .where(
+                ProgramRequirement.id == str(program_requirement_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        program_requirement = result.scalar_one_or_none()
+        if not program_requirement:
+            return None, "Program requirement not found"
+
+        data = updates.model_dump(exclude_unset=True)
+        required_changed = (
+            "is_required" in data
+            and data["is_required"] != program_requirement.is_required
+        )
+        for field, value in data.items():
+            setattr(program_requirement, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(program_requirement)
+
+        # Recompute enrollments whose completion math just changed.
+        if required_changed:
+            enrollment_rows = await self.db.execute(
+                select(ProgramEnrollment.id).where(
+                    ProgramEnrollment.program_id
+                    == str(program_requirement.program_id),
+                    ProgramEnrollment.status.in_(
+                        [EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD]
+                    ),
+                )
+            )
+            for row in enrollment_rows.all():
+                await self._recalculate_enrollment_progress(UUID(row[0]))
+                await self._maybe_auto_advance_phase(UUID(row[0]))
 
         return program_requirement, None
 
