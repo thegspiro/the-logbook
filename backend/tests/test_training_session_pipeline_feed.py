@@ -39,6 +39,21 @@ class RecordingSession:
         return self._results.pop(0) if self._results else MagicMock()
 
 
+class TestResolveCategoryRequirementIds:
+    async def test_returns_requirement_ids_in_category(self):
+        db = RecordingSession(
+            [MagicMock(all=MagicMock(return_value=[("r1",), ("r2",)]))]
+        )
+        svc = TrainingSessionService(db)
+        ids = await svc._resolve_category_requirement_ids("prog-1", "cat-1")
+        assert ids == ["r1", "r2"]
+
+    async def test_empty_when_no_matches(self):
+        db = RecordingSession([MagicMock(all=MagicMock(return_value=[]))])
+        svc = TrainingSessionService(db)
+        assert await svc._resolve_category_requirement_ids("prog-1", "cat-1") == []
+
+
 class TestApplyPipelineProgress:
     async def test_routes_through_update_requirement_progress(self, monkeypatch):
         enrollment = SimpleNamespace(id="enr-1")

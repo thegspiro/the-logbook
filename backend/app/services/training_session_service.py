@@ -790,6 +790,19 @@ class TrainingSessionService:
         if not event:
             return pipeline_updates
 
+        # When a session is tied to a program + category (but no explicit
+        # requirement), resolve the program's requirements in that category once,
+        # so attendance advances them too. Same for everyone on this session.
+        category_requirement_ids: List[str] = []
+        if (
+            training_session.program_id
+            and training_session.category_id
+            and not training_session.requirement_id
+        ):
+            category_requirement_ids = await self._resolve_category_requirement_ids(
+                training_session.program_id, training_session.category_id
+            )
+
         # Process each attendee
         for attendee in attendees:
             # Calculate final hours
@@ -887,27 +900,56 @@ class TrainingSessionService:
                 )
                 self.db.add(training_record)
 
-            # If the session is linked to a specific program requirement, queue a
-            # pipeline progress update to apply AFTER this transaction commits
-            # (the real updater commits internally). Only positive hours advance.
-            if (
-                training_session.program_id
-                and training_session.requirement_id
-                and hours_completed > 0
-            ):
-                pipeline_updates.append(
-                    (
-                        str(attendee.user_id),
-                        str(training_session.program_id),
-                        str(training_session.requirement_id),
-                        hours_completed,
+            # Queue pipeline progress updates to apply AFTER this transaction
+            # commits (the real updater commits internally). Only positive hours
+            # advance. An explicit requirement link wins; otherwise fan out to the
+            # program's requirements matching the session's category.
+            if training_session.program_id and hours_completed > 0:
+                if training_session.requirement_id:
+                    pipeline_updates.append(
+                        (
+                            str(attendee.user_id),
+                            str(training_session.program_id),
+                            str(training_session.requirement_id),
+                            hours_completed,
+                        )
                     )
-                )
+                else:
+                    for req_id in category_requirement_ids:
+                        pipeline_updates.append(
+                            (
+                                str(attendee.user_id),
+                                str(training_session.program_id),
+                                req_id,
+                                hours_completed,
+                            )
+                        )
 
         # NOTE: Callers are responsible for commit/rollback to keep approval +
         # record creation atomic; they apply the returned pipeline updates only
         # after that commit succeeds.
         return pipeline_updates
+
+    async def _resolve_category_requirement_ids(
+        self, program_id: str, category_id: str
+    ) -> List[str]:
+        """Requirement ids in ``program_id`` whose training requirement is tagged
+        with ``category_id`` — used to advance category-linked (rather than
+        requirement-linked) sessions."""
+        from app.models.training import ProgramRequirement, TrainingRequirement
+
+        result = await self.db.execute(
+            select(ProgramRequirement.requirement_id)
+            .join(
+                TrainingRequirement,
+                ProgramRequirement.requirement_id == TrainingRequirement.id,
+            )
+            .where(
+                ProgramRequirement.program_id == str(program_id),
+                TrainingRequirement.category_ids.contains([str(category_id)]),
+            )
+        )
+        return [row[0] for row in result.all()]
 
     async def _apply_pipeline_updates(
         self,
