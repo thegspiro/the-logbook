@@ -795,6 +795,51 @@ export interface BulkEnrollmentResponse {
   errors: string[];
 }
 
+// Enrollment enriched with the member's display info (program detail view).
+export interface ProgramEnrollmentWithUser extends ProgramEnrollment {
+  user_name: string;
+  user_email?: string;
+}
+
+// Atomic program build (create-pipeline wizard) — one nested payload persisted
+// in a single backend transaction.
+export interface ProgramBuildRequirementInput {
+  name: string;
+  description?: string | undefined;
+  requirement_type: RequirementType;
+  frequency: RequirementFrequency;
+  required_hours?: number | undefined;
+  required_shifts?: number | undefined;
+  required_calls?: number | undefined;
+  passing_score?: number | undefined;
+  max_attempts?: number | undefined;
+  checklist_items?: string[] | undefined;
+  is_required: boolean;
+  sort_order: number;
+}
+
+export interface ProgramBuildMilestoneInput {
+  name: string;
+  description?: string | undefined;
+  completion_percentage_threshold: number;
+  notification_message?: string | undefined;
+}
+
+export interface ProgramBuildPhaseInput {
+  phase_number: number;
+  name: string;
+  description?: string | undefined;
+  time_limit_days?: number | undefined;
+  requires_manual_advancement: boolean;
+  requirements: ProgramBuildRequirementInput[];
+  milestones: ProgramBuildMilestoneInput[];
+}
+
+export interface ProgramBuildRequest {
+  program: TrainingProgramCreate;
+  phases: ProgramBuildPhaseInput[];
+}
+
 // ==================== External Training Integration Types ====================
 
 export type ExternalProviderType =

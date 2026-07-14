@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -15,18 +15,31 @@ import {
   AlertTriangle,
   UserPlus,
   Printer,
+  Search,
+  X,
+  Loader2,
 } from 'lucide-react';
-import { trainingProgramService } from '../services/api';
+import { trainingProgramService, userService } from '../services/api';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
+import { getErrorMessage } from '../utils/errorHandling';
+import type { User } from '../types/user';
 import type {
   TrainingProgram,
   ProgramPhase,
   ProgramRequirement,
   ProgramMilestone,
-  ProgramEnrollment,
+  ProgramEnrollmentWithUser,
   TrainingRequirementEnhanced,
   ProgramStructureType,
 } from '../types/training';
+
+function memberName(u: User): string {
+  return (
+    u.full_name ||
+    `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() ||
+    u.username
+  );
+}
 
 // ==================== Types ====================
 
@@ -107,35 +120,88 @@ const EnrollModal: React.FC<{
   isOpen: boolean;
   programId: string;
   programName: string;
+  enrolledUserIds: Set<string>;
   onClose: () => void;
   onSuccess: () => void;
-}> = ({ isOpen, programId, programName, onClose, onSuccess }) => {
-  const [userIds, setUserIds] = useState('');
+}> = ({ isOpen, programId, programName, enrolledUserIds, onClose, onSuccess }) => {
+  const [members, setMembers] = useState<User[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [targetDate, setTargetDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Load the member roster each time the modal opens; reset transient state.
+  useEffect(() => {
+    if (!isOpen) {
+      setSearch('');
+      setSelected(new Map());
+      setTargetDate('');
+      setMembersError(null);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoadingMembers(true);
+    setMembersError(null);
+    void (async () => {
+      try {
+        const data = await userService.getUsers();
+        if (!cancelled) setMembers(data);
+      } catch (err: unknown) {
+        if (!cancelled) setMembersError(getErrorMessage(err, 'Unable to load members.'));
+      } finally {
+        if (!cancelled) setLoadingMembers(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const sorted = [...members].sort((a, b) => memberName(a).localeCompare(memberName(b)));
+    if (!q) return sorted;
+    return sorted.filter((m) => {
+      const name = memberName(m).toLowerCase();
+      return (
+        name.includes(q) ||
+        m.username.toLowerCase().includes(q) ||
+        (m.membership_number ?? '').toLowerCase().includes(q)
+      );
+    });
+  }, [members, search]);
+
+  const toggle = (m: User) => {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(m.id)) next.delete(m.id);
+      else next.set(m.id, memberName(m));
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (selected.size === 0) {
+      toast.error('Select at least one member');
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const ids = userIds.split('\n').map((id) => id.trim()).filter(Boolean);
-      if (ids.length === 0) {
-        toast.error('Enter at least one user ID');
-        return;
-      }
-
-      await trainingProgramService.bulkEnrollMembers(programId, {
-        user_ids: ids,
+      const result = await trainingProgramService.bulkEnrollMembers(programId, {
+        user_ids: Array.from(selected.keys()),
         target_completion_date: targetDate || undefined,
       });
-      toast.success(`Enrolled ${ids.length} member(s) in ${programName}`);
+      if (result.success_count > 0) {
+        toast.success(`Enrolled ${result.success_count} member(s) in ${programName}`);
+      }
+      // Surface any per-member failures (prerequisites, concurrency, duplicates)
+      // instead of silently dropping them.
+      result.errors.forEach((msg) => toast.error(msg));
       onSuccess();
-      onClose();
+      if (result.success_count > 0) onClose();
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-        'Failed to enroll members';
-      toast.error(msg);
+      toast.error(getErrorMessage(err, 'Failed to enroll members'));
     } finally {
       setIsSubmitting(false);
     }
@@ -150,35 +216,110 @@ const EnrollModal: React.FC<{
       aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
-      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full">
+      <div className="bg-theme-surface-modal rounded-lg max-w-lg w-full max-h-[90vh] flex flex-col">
         <div className="p-6 border-b border-theme-surface-border">
           <h2 className="text-xl font-bold text-theme-text-primary">Enroll Members</h2>
           <p className="text-theme-text-muted text-sm mt-1">Enroll members into {programName}</p>
         </div>
-        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">
-              Member IDs (one per line)
-            </label>
-            <textarea
-              value={userIds}
-              onChange={(e) => setUserIds(e.target.value)}
-              rows={5}
-              className="form-input text-sm"
-              placeholder="Enter member user IDs, one per line..."
-              required
+        <form onSubmit={(e) => { void handleSubmit(e); }} className="p-6 space-y-4 overflow-y-auto">
+          {/* Selected chips */}
+          {selected.size > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {Array.from(selected.entries()).map(([id, name]) => (
+                <span
+                  key={id}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-500/15 text-red-700 dark:text-red-400 rounded-md text-xs"
+                >
+                  {name}
+                  <button
+                    type="button"
+                    onClick={() => setSelected((prev) => { const n = new Map(prev); n.delete(id); return n; })}
+                    aria-label={`Remove ${name}`}
+                    className="hover:text-red-900 dark:hover:text-red-200"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-theme-text-muted" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search members by name, username, or number..."
+              className="form-input pl-9 text-sm"
+              aria-label="Search members"
+              autoComplete="off"
             />
           </div>
+
+          {/* Member list */}
+          <div className="border border-theme-surface-border rounded-lg max-h-64 overflow-y-auto">
+            {loadingMembers ? (
+              <div className="flex items-center justify-center py-8 text-theme-text-muted" role="status" aria-live="polite">
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                <span className="text-sm">Loading members...</span>
+              </div>
+            ) : membersError ? (
+              <div className="p-3 text-sm text-red-600 dark:text-red-400">{membersError}</div>
+            ) : filtered.length === 0 ? (
+              <div className="py-8 text-center text-theme-text-muted text-sm">
+                {search ? 'No members match your search.' : 'No members found.'}
+              </div>
+            ) : (
+              filtered.map((m) => {
+                const already = enrolledUserIds.has(m.id);
+                const isSelected = selected.has(m.id);
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => { if (!already) toggle(m); }}
+                    disabled={already}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm border-b border-theme-surface-border last:border-b-0 transition-colors ${
+                      already
+                        ? 'opacity-50 cursor-not-allowed'
+                        : isSelected
+                        ? 'bg-red-500/10'
+                        : 'hover:bg-theme-surface-hover'
+                    }`}
+                  >
+                    <span className="text-theme-text-primary truncate">
+                      {memberName(m)}
+                      {m.membership_number && (
+                        <span className="text-theme-text-muted ml-2 text-xs">#{m.membership_number}</span>
+                      )}
+                    </span>
+                    {already ? (
+                      <span className="text-xs text-theme-text-muted">Enrolled</span>
+                    ) : isSelected ? (
+                      <CheckCircle2 className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                    ) : null}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
           <div>
-            <label className="block text-sm font-medium text-theme-text-secondary mb-1">Target Completion Date</label>
+            <label htmlFor="enroll-target-date" className="block text-sm font-medium text-theme-text-secondary mb-1">
+              Target Completion Date
+            </label>
             <input
+              id="enroll-target-date"
               type="date"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
               className="form-input text-sm"
             />
           </div>
-          <div className="flex justify-end space-x-3 pt-4">
+
+          <div className="flex justify-end space-x-3 pt-2">
             <button
               type="button"
               onClick={onClose}
@@ -189,9 +330,9 @@ const EnrollModal: React.FC<{
             <button
               type="submit"
               className="btn-primary text-sm"
-              disabled={isSubmitting}
+              disabled={isSubmitting || selected.size === 0}
             >
-              {isSubmitting ? 'Enrolling...' : 'Enroll Members'}
+              {isSubmitting ? 'Enrolling...' : `Enroll ${selected.size || ''} Member${selected.size === 1 ? '' : 's'}`.trim()}
             </button>
           </div>
         </form>
@@ -209,7 +350,7 @@ const PipelineDetailPage: React.FC = () => {
   const [program, setProgram] = useState<ProgramDetails | null>(null);
   const [phases, setPhases] = useState<ProgramPhase[]>([]);
   const [programReqs, setProgramReqs] = useState<ProgramRequirement[]>([]);
-  const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
+  const [enrollments, setEnrollments] = useState<ProgramEnrollmentWithUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
@@ -242,18 +383,24 @@ const PipelineDetailPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
+    // Load enrollments alongside the program so the "Enrolled" stat is accurate.
+    void loadEnrollments();
   };
 
-  const loadEnrollments = () => {
+  const loadEnrollments = async () => {
     if (!programId) return;
-    // The API doesn't have a direct "get enrollments by program" endpoint,
-    // but we can filter through the program data
-    // For now we'll set an empty array
-    setEnrollments([]);
+    try {
+      const data = await trainingProgramService.getProgramEnrollments(programId);
+      setEnrollments(data);
+    } catch {
+      // A plain member viewing this page may lack training.view_all/manage;
+      // degrade quietly rather than surfacing a permission error.
+      setEnrollments([]);
+    }
   };
 
   useEffect(() => {
-    if (activeTab === 'enrollments') loadEnrollments();
+    if (activeTab === 'enrollments') void loadEnrollments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
@@ -569,10 +716,10 @@ const PipelineDetailPage: React.FC = () => {
                 {enrollments.map((enrollment) => (
                   <div key={enrollment.id} className="bg-theme-surface rounded-lg p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-theme-text-primary font-medium">{enrollment.user_id}</p>
+                      <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
                       <div className="flex items-center space-x-3 text-xs text-theme-text-muted mt-1">
                         <span>Status: {enrollment.status}</span>
-                        <span>{enrollment.progress_percentage}% complete</span>
+                        <span>{Math.round(enrollment.progress_percentage)}% complete</span>
                       </div>
                     </div>
                     <div className="w-32 bg-theme-surface-secondary rounded-full h-2">
@@ -593,8 +740,9 @@ const PipelineDetailPage: React.FC = () => {
         isOpen={showEnrollModal}
         programId={programId || ''}
         programName={program.name}
+        enrolledUserIds={new Set(enrollments.map((e) => e.user_id))}
         onClose={() => setShowEnrollModal(false)}
-        onSuccess={() => { void loadProgram(); }}
+        onSuccess={() => { void loadEnrollments(); }}
       />
     </div>
   );

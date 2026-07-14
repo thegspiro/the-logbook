@@ -6,7 +6,7 @@ import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import type { SkillTemplate, SkillTemplateCreate, SkillTemplateListItem, SkillTemplateUpdate, SkillTest, SkillTestCreate, SkillTestListItem, SkillTestUpdate, SkillTestingSummary } from '../types/skillsTesting';
-import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramEnrollment, ProgramEnrollmentCreate, ProgramMilestone, ProgramMilestoneCreate, ProgramPhase, ProgramPhaseCreate, ProgramRequirement, ProgramRequirementCreate, ProgramWithDetails, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
+import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramPhase, ProgramPhaseCreate, ProgramRequirement, ProgramRequirementCreate, ProgramWithDetails, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 import type { TrainingSessionResponse, TrainingSessionCreate, RecurringTrainingSessionCreate } from './adminServices';
 
@@ -545,6 +545,16 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /**
+   * Create a program with all phases, requirements, and milestones atomically.
+   * The whole structure is persisted in one backend transaction, so a failure
+   * part-way can't leave an orphaned, half-built program behind.
+   */
+  async buildProgram(payload: ProgramBuildRequest): Promise<TrainingProgram> {
+    const response = await api.post<TrainingProgram>('/training/programs/programs/build', payload);
+    return response.data;
+  },
+
   // ==================== Program Phases ====================
 
   /**
@@ -620,6 +630,18 @@ export const trainingProgramService = {
     const response = await api.get<ProgramEnrollment[]>(`/training/programs/enrollments/user/${userId}`, {
       params: { status },
     });
+    return response.data;
+  },
+
+  /**
+   * Get all enrollments for a program, each enriched with the member's name.
+   * Powers the program detail view's Enrollments tab.
+   */
+  async getProgramEnrollments(programId: string, status?: string): Promise<ProgramEnrollmentWithUser[]> {
+    const response = await api.get<ProgramEnrollmentWithUser[]>(
+      `/training/programs/programs/${programId}/enrollments`,
+      { params: { status } },
+    );
     return response.data;
   },
 

@@ -23,8 +23,10 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.training_program import (  # Requirements; Programs; Phases; Program Requirements; Milestones; Enrollments; Progress; Registry
     MemberProgramProgress,
+    ProgramBuildRequest,
     ProgramEnrollmentCreate,
     ProgramEnrollmentResponse,
+    ProgramEnrollmentWithUserResponse,
     ProgramMilestoneCreate,
     ProgramMilestoneResponse,
     ProgramPhaseCreate,
@@ -348,6 +350,55 @@ async def create_training_program(
     return program
 
 
+@router.post(
+    "/programs/build",
+    response_model=TrainingProgramResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def build_training_program(
+    payload: ProgramBuildRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Create a training program together with all of its phases, requirements,
+    and milestones in a single atomic transaction.
+
+    This backs the create-pipeline wizard. Building everything in one request
+    means a failure part-way can't leave an orphaned, half-built program.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+
+    program, error = await service.build_program(
+        payload=payload,
+        organization_id=current_user.organization_id,
+        created_by=current_user.id,
+    )
+
+    if error:
+        await db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_program_created",
+        event_category="training",
+        severity="info",
+        event_data={
+            "program_id": str(program.id),
+            "program_name": program.name,
+            "action": "built_via_wizard",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return program
+
+
 @router.get("/programs", response_model=list[TrainingProgramResponse])
 async def get_training_programs(
     target_position: str | None = Query(None, description="Filter by target position"),
@@ -420,6 +471,8 @@ async def get_training_program(
         organization_id=program.organization_id,
         name=program.name,
         description=program.description,
+        code=program.code,
+        version=program.version,
         target_position=program.target_position,
         target_roles=program.target_roles,
         structure_type=program.structure_type.value,
@@ -709,12 +762,12 @@ async def get_enrollment_progress(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enrollment not found"
         )
 
-    # Check permission: user can view their own or needs training.view_all
+    # Check permission: user can view their own or needs training.view_all.
+    # Use the shared permission helpers so wildcard grants (e.g. "training.*")
+    # are honored, matching how the rest of this module checks permissions.
     if enrollment.user_id != current_user.id:
-        user_permissions = set()
-        for role in current_user.roles:
-            user_permissions.update(role.permissions or [])
-        if "*" not in user_permissions and "training.view_all" not in user_permissions:
+        perms = _collect_user_permissions(current_user)
+        if not permission_matches("training.view_all", perms):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this enrollment",
@@ -772,6 +825,44 @@ async def get_enrollment_progress(
         time_remaining_days=time_remaining_days,
         is_behind_schedule=is_behind_schedule,
     )
+
+
+@router.get(
+    "/programs/{program_id}/enrollments",
+    response_model=list[ProgramEnrollmentWithUserResponse],
+)
+async def get_program_enrollments(
+    program_id: UUID,
+    status: str | None = Query(None, description="Filter by enrollment status"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("training.view_all", "training.manage")
+    ),
+):
+    """
+    List members enrolled in a program, each with their name and progress.
+
+    Powers the program detail view's Enrollments tab.
+
+    **Authentication required**
+    **Requires permission: training.view_all or training.manage**
+    """
+    service = TrainingProgramService(db)
+
+    rows = await service.get_program_enrollments(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        status=status,
+    )
+
+    return [
+        ProgramEnrollmentWithUserResponse(
+            **ProgramEnrollmentResponse.model_validate(enrollment).model_dump(),
+            user_name=user.full_name,
+            user_email=user.email,
+        )
+        for enrollment, user in rows
+    ]
 
 
 # ==================== Requirement Progress Endpoints ====================

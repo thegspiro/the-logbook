@@ -22,6 +22,7 @@ import type {
   ProgramStructureType,
   RequirementType,
   RequirementFrequency,
+  ProgramBuildRequest,
 } from '../types/training';
 
 // ==================== Types ====================
@@ -955,37 +956,31 @@ const CreatePipelinePage: React.FC = () => {
     setError('');
 
     try {
-      // 1. Create the program
-      const program = await trainingProgramService.createProgram({
-        name: info.name,
-        description: info.description || undefined,
-        code: info.code || undefined,
-        target_position: info.target_position || undefined,
-        structure_type: info.structure_type,
-        time_limit_days: info.time_limit_days ? parseInt(info.time_limit_days) : undefined,
-        warning_days_before: info.warning_days_before ? parseInt(info.warning_days_before) : undefined,
-        is_template: info.is_template,
-      });
-
-      // 2. Create phases sequentially (they depend on program)
-      for (const phaseData of phases) {
-        const phase = await trainingProgramService.createProgramPhase(program.id, {
-          program_id: program.id,
+      // Build the whole structure (program + phases + requirements +
+      // milestones) as one nested payload. The backend persists it in a single
+      // transaction, so a failure part-way can't leave an orphaned, half-built
+      // program behind — unlike the old one-request-per-entity flow.
+      const payload: ProgramBuildRequest = {
+        program: {
+          name: info.name,
+          description: info.description || undefined,
+          code: info.code || undefined,
+          target_position: info.target_position || undefined,
+          structure_type: info.structure_type,
+          time_limit_days: info.time_limit_days ? parseInt(info.time_limit_days) : undefined,
+          warning_days_before: info.warning_days_before ? parseInt(info.warning_days_before) : undefined,
+          is_template: info.is_template,
+        },
+        phases: phases.map((phaseData) => ({
           phase_number: phaseData.phase_number,
           name: phaseData.name,
           description: phaseData.description || undefined,
           time_limit_days: phaseData.time_limit_days ? parseInt(phaseData.time_limit_days) : undefined,
           requires_manual_advancement: phaseData.requires_manual_advancement,
-        });
-
-        // 3. Create requirements for this phase
-        for (const reqData of phaseData.requirements) {
-          // First create the training requirement
-          const requirement = await trainingProgramService.createRequirementEnhanced({
+          requirements: phaseData.requirements.map((reqData) => ({
             name: reqData.name,
             description: reqData.description || undefined,
             requirement_type: reqData.requirement_type,
-            source: 'department',
             frequency: reqData.frequency,
             required_hours: reqData.required_hours ? parseFloat(reqData.required_hours) : undefined,
             required_shifts: reqData.required_shifts ? parseInt(reqData.required_shifts) : undefined,
@@ -993,34 +988,21 @@ const CreatePipelinePage: React.FC = () => {
             passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
             max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
             checklist_items: reqData.checklist_items.filter((i) => i.trim()),
-            is_editable: true,
-            applies_to_all: false,
-          });
-
-          // Then link it to the program
-          await trainingProgramService.addProgramRequirement(program.id, {
-            program_id: program.id,
-            phase_id: phase.id,
-            requirement_id: requirement.id,
             is_required: reqData.is_required,
             sort_order: reqData.sort_order,
-          });
-        }
-
-        // 4. Create milestones for this phase
-        for (const msData of phaseData.milestones) {
-          await trainingProgramService.createMilestone(program.id, {
-            program_id: program.id,
-            phase_id: phase.id,
+          })),
+          milestones: phaseData.milestones.map((msData) => ({
             name: msData.name,
             description: msData.description || undefined,
             completion_percentage_threshold: msData.completion_percentage_threshold
               ? parseFloat(msData.completion_percentage_threshold)
               : 100,
             notification_message: msData.notification_message || undefined,
-          });
-        }
-      }
+          })),
+        })),
+      };
+
+      const program = await trainingProgramService.buildProgram(payload);
 
       toast.success('Training pipeline created successfully!');
       navigate(`/training/programs/${program.id}`);

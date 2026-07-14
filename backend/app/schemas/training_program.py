@@ -141,6 +141,7 @@ class TrainingProgramBase(BaseModel):
 
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    code: Optional[str] = Field(None, max_length=50)
     target_position: Optional[str] = Field(None, max_length=100)
     target_roles: Optional[List[UUID]] = None
     structure_type: ProgramStructureTypeStr = "flexible"
@@ -172,6 +173,7 @@ class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
 
     id: UUID
     organization_id: UUID
+    version: int = 1
     active: bool
     created_at: datetime
     updated_at: datetime
@@ -191,6 +193,7 @@ class ProgramPhaseBase(BaseModel):
     description: Optional[str] = None
     prerequisite_phase_ids: Optional[List[UUID]] = None
     time_limit_days: Optional[int] = Field(None, ge=0)
+    requires_manual_advancement: bool = False
 
 
 class ProgramPhaseCreate(ProgramPhaseBase):
@@ -340,6 +343,17 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase, UTCResponseBase):
     updated_at: datetime
 
     model_config = _response_config
+
+
+class ProgramEnrollmentWithUserResponse(ProgramEnrollmentResponse):
+    """Enrollment response enriched with the member's display name.
+
+    Used by the program detail view's Enrollments tab so officers see who is
+    enrolled without a second round-trip to resolve each user_id.
+    """
+
+    user_name: str
+    user_email: Optional[str] = None
 
 
 # Requirement Progress Schemas
@@ -515,3 +529,57 @@ class RegistryImportResult(BaseModel):
     errors: List[str] = []
     last_updated: Optional[str] = None
     source_url: Optional[str] = None
+
+
+# Atomic Program Build Schemas
+#
+# The create-pipeline wizard builds a program, its phases, requirements, and
+# milestones in one shot. Sending them as one nested payload lets the backend
+# persist everything in a single transaction, so a failure part-way can't leave
+# an orphaned half-built program behind (the old flow fired one request per
+# entity with no rollback).
+
+
+class ProgramBuildRequirementInput(BaseModel):
+    """A requirement to create and link within a phase during program build."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    requirement_type: RequirementTypeStr = "hours"
+    frequency: str = "one_time"
+    required_hours: Optional[float] = Field(None, ge=0)
+    required_shifts: Optional[int] = Field(None, ge=0)
+    required_calls: Optional[int] = Field(None, ge=0)
+    passing_score: Optional[float] = Field(None, ge=0, le=100)
+    max_attempts: Optional[int] = Field(None, ge=1)
+    checklist_items: Optional[List[str]] = None
+    is_required: bool = True
+    sort_order: int = Field(default=0, ge=0)
+
+
+class ProgramBuildMilestoneInput(BaseModel):
+    """A milestone to create within a phase during program build."""
+
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    completion_percentage_threshold: float = Field(default=100, ge=0, le=100)
+    notification_message: Optional[str] = None
+
+
+class ProgramBuildPhaseInput(BaseModel):
+    """A phase (with its requirements and milestones) during program build."""
+
+    phase_number: int = Field(..., ge=1)
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    time_limit_days: Optional[int] = Field(None, ge=0)
+    requires_manual_advancement: bool = False
+    requirements: List[ProgramBuildRequirementInput] = []
+    milestones: List[ProgramBuildMilestoneInput] = []
+
+
+class ProgramBuildRequest(BaseModel):
+    """Full nested payload for creating a program and its structure atomically."""
+
+    program: TrainingProgramCreate
+    phases: List[ProgramBuildPhaseInput] = []
