@@ -762,12 +762,16 @@ async def get_enrollment_progress(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enrollment not found"
         )
 
-    # Check permission: user can view their own or needs training.view_all.
-    # Use the shared permission helpers so wildcard grants (e.g. "training.*")
-    # are honored, matching how the rest of this module checks permissions.
+    # Check permission: members can view their own; officers need
+    # training.view_all or training.manage (managing a member's progress
+    # implies viewing it). Use the shared helper so wildcard grants
+    # (e.g. "training.*") are honored, matching the rest of this module.
     if enrollment.user_id != current_user.id:
         perms = _collect_user_permissions(current_user)
-        if not permission_matches("training.view_all", perms):
+        if not (
+            permission_matches("training.view_all", perms)
+            or permission_matches("training.manage", perms)
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this enrollment",

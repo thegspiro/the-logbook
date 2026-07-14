@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -18,6 +18,9 @@ import {
   Search,
   X,
   Loader2,
+  Circle,
+  BadgeCheck,
+  Save,
 } from 'lucide-react';
 import { trainingProgramService, userService } from '../services/api';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
@@ -31,6 +34,10 @@ import type {
   ProgramEnrollmentWithUser,
   TrainingRequirementEnhanced,
   ProgramStructureType,
+  MemberProgramProgress,
+  RequirementProgressRecord,
+  RequirementProgressStatus,
+  RequirementProgressUpdate,
 } from '../types/training';
 
 function memberName(u: User): string {
@@ -341,6 +348,240 @@ const EnrollModal: React.FC<{
   );
 };
 
+// ==================== Enrollment Progress Modal ====================
+
+// Requirement types whose progress is a numeric accrual (log a value); all
+// other types (courses, certification, checklist, knowledge test, skills) are
+// completed by setting status.
+const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls']);
+
+const STATUS_META: Record<RequirementProgressStatus, { label: string; className: string }> = {
+  not_started: { label: 'Not started', className: 'text-theme-text-muted' },
+  in_progress: { label: 'In progress', className: 'text-blue-700 dark:text-blue-400' },
+  completed: { label: 'Completed', className: 'text-green-700 dark:text-green-400' },
+  verified: { label: 'Verified', className: 'text-green-700 dark:text-green-400' },
+  waived: { label: 'Waived', className: 'text-yellow-700 dark:text-yellow-400' },
+};
+
+function requirementTarget(
+  req?: TrainingRequirementEnhanced,
+): { value: number; label: string } | null {
+  if (!req) return null;
+  if (req.requirement_type === 'hours' && req.required_hours) return { value: req.required_hours, label: 'hours' };
+  if (req.requirement_type === 'shifts' && req.required_shifts) return { value: req.required_shifts, label: 'shifts' };
+  if (req.requirement_type === 'calls' && req.required_calls) return { value: req.required_calls, label: 'calls' };
+  return null;
+}
+
+const RequirementProgressRow: React.FC<{
+  record: RequirementProgressRecord;
+  onUpdate: (progressId: string, updates: RequirementProgressUpdate) => Promise<void>;
+  saving: boolean;
+}> = ({ record, onUpdate, saving }) => {
+  const req = record.requirement;
+  const numeric = req ? NUMERIC_TYPES.has(req.requirement_type) : false;
+  const target = requirementTarget(req);
+  const [value, setValue] = useState<string>(record.progress_value ? String(record.progress_value) : '');
+
+  // Re-sync the input when the record is refreshed after a save.
+  useEffect(() => {
+    setValue(record.progress_value ? String(record.progress_value) : '');
+  }, [record.progress_value]);
+
+  const isDone = record.status === 'completed' || record.status === 'verified';
+  const statusMeta = STATUS_META[record.status];
+
+  return (
+    <div className="bg-theme-surface-secondary rounded-lg p-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium text-theme-text-primary">{req?.name || 'Requirement'}</span>
+          {req?.requirement_type && <ReqTypeBadge type={req.requirement_type} />}
+          {record.verified_by && (
+            <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-400">
+              <BadgeCheck className="w-3.5 h-3.5" /> Verified
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mt-1 text-xs">
+          <span className={statusMeta.className}>{statusMeta.label}</span>
+          <span className="text-theme-text-muted">· {Math.round(record.progress_percentage)}%</span>
+          {target && <span className="text-theme-text-muted">· target {target.value} {target.label}</span>}
+        </div>
+      </div>
+
+      {/* Numeric value editor (hours / shifts / calls) */}
+      {numeric && (
+        <div className="flex items-end gap-2 mt-3">
+          <div className="flex-1">
+            <label className="block text-xs text-theme-text-muted mb-1">Logged {target?.label ?? 'value'}</label>
+            <input
+              type="number"
+              min={0}
+              step={req?.requirement_type === 'hours' ? 0.5 : 1}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="form-input-sm"
+              disabled={saving}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => { void onUpdate(record.id, { progress_value: value ? parseFloat(value) : 0 }); }}
+            disabled={saving}
+            className="btn-primary text-xs flex items-center gap-1 px-3 disabled:opacity-50"
+          >
+            <Save className="w-3.5 h-3.5" /> Save
+          </button>
+        </div>
+      )}
+
+      {/* Status quick actions — the completion path for non-numeric types */}
+      <div className="flex flex-wrap gap-2 mt-3">
+        <button
+          type="button"
+          onClick={() => { void onUpdate(record.id, { status: 'in_progress' }); }}
+          disabled={saving || record.status === 'in_progress'}
+          className="text-xs px-2 py-1 rounded-md border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-40"
+        >
+          <Clock className="w-3.5 h-3.5 inline mr-1" /> In progress
+        </button>
+        <button
+          type="button"
+          onClick={() => { void onUpdate(record.id, { status: 'completed' }); }}
+          disabled={saving || isDone}
+          className="text-xs px-2 py-1 rounded-md border border-green-600/40 text-green-700 dark:text-green-400 hover:bg-green-500/10 disabled:opacity-40"
+        >
+          <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" /> Mark complete
+        </button>
+        {isDone && (
+          <button
+            type="button"
+            onClick={() => { void onUpdate(record.id, { status: 'not_started' }); }}
+            disabled={saving}
+            className="text-xs px-2 py-1 rounded-md border border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover disabled:opacity-40"
+          >
+            <Circle className="w-3.5 h-3.5 inline mr-1" /> Reopen
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const EnrollmentProgressModal: React.FC<{
+  isOpen: boolean;
+  enrollmentId: string | null;
+  memberName: string;
+  onClose: () => void;
+  onSaved: () => void;
+}> = ({ isOpen, enrollmentId, memberName, onClose, onSaved }) => {
+  const [data, setData] = useState<MemberProgramProgress | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!enrollmentId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await trainingProgramService.getEnrollmentProgress(enrollmentId);
+      setData(result);
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Unable to load progress.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [enrollmentId]);
+
+  useEffect(() => {
+    if (isOpen && enrollmentId) void load();
+    if (!isOpen) { setData(null); setError(null); }
+  }, [isOpen, enrollmentId, load]);
+
+  const handleUpdate = async (progressId: string, updates: RequirementProgressUpdate) => {
+    setSavingId(progressId);
+    try {
+      await trainingProgramService.updateProgress(progressId, updates);
+      await load();  // pull recalculated percentages/status
+      onSaved();     // refresh the outer enrollments list (overall %, completion)
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to update progress'));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const overall = data ? Math.round(data.enrollment.progress_percentage) : 0;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
+      <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col">
+        <div className="p-6 border-b border-theme-surface-border flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-theme-text-primary">Progress — {memberName}</h2>
+            {data && (
+              <p className="text-theme-text-muted text-sm mt-1">
+                {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="p-1 text-theme-text-muted hover:text-theme-text-primary"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 overflow-y-auto space-y-3">
+          {loading ? (
+            <div className="flex items-center justify-center py-10 text-theme-text-muted" role="status" aria-live="polite">
+              <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              <span className="text-sm">Loading progress...</span>
+            </div>
+          ) : error ? (
+            <div className="p-3 text-sm text-red-600 dark:text-red-400">{error}</div>
+          ) : !data || data.requirement_progress.length === 0 ? (
+            <div className="py-10 text-center text-theme-text-muted text-sm">
+              No requirements to track for this enrollment.
+            </div>
+          ) : (
+            data.requirement_progress.map((record) => (
+              <RequirementProgressRow
+                key={record.id}
+                record={record}
+                onUpdate={handleUpdate}
+                saving={savingId === record.id}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="p-4 border-t border-theme-surface-border flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ==================== Main Page ====================
 
 const PipelineDetailPage: React.FC = () => {
@@ -355,6 +596,7 @@ const PipelineDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [progressEnrollment, setProgressEnrollment] = useState<ProgramEnrollmentWithUser | null>(null);
   const [isDuplicating, setIsDuplicating] = useState(false);
 
   useEffect(() => {
@@ -713,8 +955,17 @@ const PipelineDetailPage: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-3">
+                <p className="text-xs text-theme-text-muted">
+                  Select a member to view and update their requirement progress.
+                </p>
                 {enrollments.map((enrollment) => (
-                  <div key={enrollment.id} className="bg-theme-surface rounded-lg p-4 flex items-center justify-between">
+                  <button
+                    key={enrollment.id}
+                    type="button"
+                    onClick={() => setProgressEnrollment(enrollment)}
+                    className="w-full bg-theme-surface rounded-lg p-4 flex items-center justify-between text-left hover:bg-theme-surface-hover transition-colors"
+                    aria-label={`Manage progress for ${enrollment.user_name}`}
+                  >
                     <div>
                       <p className="text-theme-text-primary font-medium">{enrollment.user_name}</p>
                       <div className="flex items-center space-x-3 text-xs text-theme-text-muted mt-1">
@@ -728,7 +979,7 @@ const PipelineDetailPage: React.FC = () => {
                         style={{ width: `${enrollment.progress_percentage}%` }}
                       />
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -743,6 +994,14 @@ const PipelineDetailPage: React.FC = () => {
         enrolledUserIds={new Set(enrollments.map((e) => e.user_id))}
         onClose={() => setShowEnrollModal(false)}
         onSuccess={() => { void loadEnrollments(); }}
+      />
+
+      <EnrollmentProgressModal
+        isOpen={progressEnrollment !== null}
+        enrollmentId={progressEnrollment?.id ?? null}
+        memberName={progressEnrollment?.user_name ?? ''}
+        onClose={() => setProgressEnrollment(null)}
+        onSaved={() => { void loadEnrollments(); }}
       />
     </div>
   );

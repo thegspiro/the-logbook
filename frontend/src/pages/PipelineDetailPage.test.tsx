@@ -1,0 +1,131 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { renderWithRouter } from '../test/utils';
+import PipelineDetailPage from './PipelineDetailPage';
+
+// ---- Service mocks ----
+const mockGetProgram = vi.fn();
+const mockGetProgramPhases = vi.fn();
+const mockGetProgramRequirements = vi.fn();
+const mockGetProgramEnrollments = vi.fn();
+const mockGetEnrollmentProgress = vi.fn();
+const mockUpdateProgress = vi.fn();
+const mockGetUsers = vi.fn();
+
+vi.mock('../services/api', () => ({
+  trainingProgramService: {
+    getProgram: (...a: unknown[]) => mockGetProgram(...a) as unknown,
+    getProgramPhases: (...a: unknown[]) => mockGetProgramPhases(...a) as unknown,
+    getProgramRequirements: (...a: unknown[]) => mockGetProgramRequirements(...a) as unknown,
+    getProgramEnrollments: (...a: unknown[]) => mockGetProgramEnrollments(...a) as unknown,
+    getEnrollmentProgress: (...a: unknown[]) => mockGetEnrollmentProgress(...a) as unknown,
+    updateProgress: (...a: unknown[]) => mockUpdateProgress(...a) as unknown,
+  },
+  userService: {
+    getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
+  },
+}));
+
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useParams: () => ({ programId: 'prog-1' }),
+  };
+});
+
+const program = {
+  id: 'prog-1',
+  organization_id: 'org-1',
+  name: 'Recruit Pipeline',
+  structure_type: 'phases',
+  version: 1,
+  is_template: false,
+  active: true,
+  warning_days_before: 30,
+  allows_concurrent_enrollment: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+};
+
+const enrollment = {
+  id: 'enr-1',
+  user_id: 'user-9',
+  user_name: 'Jane Recruit',
+  program_id: 'prog-1',
+  enrolled_at: '2026-02-01T00:00:00Z',
+  progress_percentage: 0,
+  status: 'active',
+  deadline_warning_sent: false,
+  created_at: '2026-02-01T00:00:00Z',
+  updated_at: '2026-02-01T00:00:00Z',
+};
+
+// A certification requirement — non-numeric, so only a status action completes it.
+const certProgress = {
+  id: 'prog-rec-1',
+  enrollment_id: 'enr-1',
+  requirement_id: 'req-1',
+  status: 'not_started',
+  progress_value: 0,
+  progress_percentage: 0,
+  created_at: '2026-02-01T00:00:00Z',
+  updated_at: '2026-02-01T00:00:00Z',
+  requirement: {
+    id: 'req-1',
+    name: 'CPR Certification',
+    requirement_type: 'certification',
+  },
+};
+
+describe('PipelineDetailPage — enrollment progress management', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetProgram.mockResolvedValue(program);
+    mockGetProgramPhases.mockResolvedValue([]);
+    mockGetProgramRequirements.mockResolvedValue([]);
+    mockGetProgramEnrollments.mockResolvedValue([enrollment]);
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment,
+      program,
+      requirement_progress: [certProgress],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+    mockUpdateProgress.mockResolvedValue({ ...certProgress, status: 'completed' });
+  });
+
+  it('lists enrolled members by name on the Enrollments tab', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+
+    expect(await screen.findByText('Jane Recruit')).toBeInTheDocument();
+  });
+
+  it('marks a non-numeric requirement complete via the progress modal', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }),
+    );
+
+    // Modal loads the member's requirement list.
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('CPR Certification')).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /Mark complete/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateProgress).toHaveBeenCalledWith('prog-rec-1', { status: 'completed' }),
+    );
+    // Progress is re-fetched after the update so the rollup reflects it.
+    await waitFor(() => expect(mockGetEnrollmentProgress).toHaveBeenCalledTimes(2));
+  });
+});
