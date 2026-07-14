@@ -257,6 +257,10 @@ class ProgramRequirementResponse(ProgramRequirementBase, UTCResponseBase):
     program_id: UUID
     phase_id: Optional[UUID] = None
     requirement_id: UUID
+    # Nested so the UI can show the requirement's name/type without a second
+    # lookup. The endpoints eager-load this relationship; from_attributes reads
+    # only declared fields, so without it the name is silently dropped.
+    requirement: Optional[TrainingRequirementEnhancedResponse] = None
     created_at: datetime
 
     model_config = _response_config
@@ -397,6 +401,10 @@ class RequirementProgressResponse(RequirementProgressBase, UTCResponseBase):
     completed_at: Optional[datetime] = None
     verified_by: Optional[UUID] = None
     verified_at: Optional[datetime] = None
+    # Nested so progress views (dashboard widget, officer progress modal, member
+    # "My Progress") can show the requirement's name/type. Eager-loaded by the
+    # callers; from_attributes drops it unless it's declared here.
+    requirement: Optional[TrainingRequirementEnhancedResponse] = None
     created_at: datetime
     updated_at: datetime
 

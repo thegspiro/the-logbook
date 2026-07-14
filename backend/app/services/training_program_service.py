@@ -636,6 +636,22 @@ class TrainingProgramService:
 
     # ==================== Program Requirement Methods ====================
 
+    async def _load_program_requirement(
+        self, program_requirement_id: str
+    ) -> Optional[ProgramRequirement]:
+        """Reload a program↔requirement link with its ``requirement`` eagerly
+        loaded, so responses can include the requirement's name/type. Callers
+        that commit (which expires attributes) must use this instead of a bare
+        refresh — the response schema now declares a nested ``requirement`` and
+        accessing an unloaded relationship on an async session raises.
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement)
+            .options(selectinload(ProgramRequirement.requirement))
+            .where(ProgramRequirement.id == str(program_requirement_id))
+        )
+        return result.scalar_one_or_none()
+
     async def add_requirement_to_program(
         self,
         program_requirement_data: ProgramRequirementCreate,
@@ -742,7 +758,8 @@ class TrainingProgramService:
         await self.db.commit()
         await self.db.refresh(program_requirement)
 
-        return program_requirement, None
+        loaded = await self._load_program_requirement(program_requirement.id)
+        return (loaded or program_requirement), None
 
     async def update_program_requirement(
         self,
@@ -783,13 +800,16 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(program_requirement)
+        # Capture before the recompute below: _recalculate/_maybe_auto_advance
+        # commit internally, which re-expires this instance's attributes.
+        pr_id = program_requirement.id
+        program_id_str = str(program_requirement.program_id)
 
         # Recompute enrollments whose completion math just changed.
         if required_changed:
             enrollment_rows = await self.db.execute(
                 select(ProgramEnrollment.id).where(
-                    ProgramEnrollment.program_id
-                    == str(program_requirement.program_id),
+                    ProgramEnrollment.program_id == program_id_str,
                     ProgramEnrollment.status.in_(
                         [EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD]
                     ),
@@ -799,7 +819,8 @@ class TrainingProgramService:
                 await self._recalculate_enrollment_progress(UUID(row[0]))
                 await self._maybe_auto_advance_phase(UUID(row[0]))
 
-        return program_requirement, None
+        loaded = await self._load_program_requirement(pr_id)
+        return (loaded or program_requirement), None
 
     async def get_program_requirements(
         self,

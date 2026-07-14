@@ -61,6 +61,7 @@ class TestUpdateProgramRequirement:
         svc = TrainingProgramService(db)
         svc._recalculate_enrollment_progress = AsyncMock()
         svc._maybe_auto_advance_phase = AsyncMock()
+        svc._load_program_requirement = AsyncMock(return_value=pr)
 
         result, error = await svc.update_program_requirement(
             uuid4(), uuid4(), ProgramRequirementUpdate(is_required=False)
@@ -81,6 +82,7 @@ class TestUpdateProgramRequirement:
         svc = TrainingProgramService(db)
         svc._recalculate_enrollment_progress = AsyncMock()
         svc._maybe_auto_advance_phase = AsyncMock()
+        svc._load_program_requirement = AsyncMock(return_value=pr)
 
         result, error = await svc.update_program_requirement(
             uuid4(), uuid4(), ProgramRequirementUpdate(sort_order=5)
@@ -98,6 +100,7 @@ class TestUpdateProgramRequirement:
         svc = TrainingProgramService(db)
         svc._recalculate_enrollment_progress = AsyncMock()
         svc._maybe_auto_advance_phase = AsyncMock()
+        svc._load_program_requirement = AsyncMock(return_value=pr)
 
         _, error = await svc.update_program_requirement(
             uuid4(), uuid4(), ProgramRequirementUpdate(is_required=True)
