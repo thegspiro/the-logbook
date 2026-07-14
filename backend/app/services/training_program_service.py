@@ -1211,6 +1211,18 @@ class TrainingProgramService:
                 progress.progress_percentage = min(
                     100.0, (updates.progress_value / adj_required) * 100
                 )
+            elif (
+                requirement.requirement_type == RequirementType.COURSES
+                and requirement.required_courses
+            ):
+                # progress_value is the count of required courses completed;
+                # percentage is that count over the number required. (Course-count
+                # requirements are not waiver-adjusted.)
+                total_required = len(requirement.required_courses)
+                if total_required > 0:
+                    progress.progress_percentage = min(
+                        100.0, (updates.progress_value / total_required) * 100
+                    )
 
             # Auto-complete if reached 100%
             if (

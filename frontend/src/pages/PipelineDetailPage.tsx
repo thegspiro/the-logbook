@@ -354,7 +354,7 @@ const EnrollModal: React.FC<{
 // Requirement types whose progress is a numeric accrual (log a value); all
 // other types (courses, certification, checklist, knowledge test, skills) are
 // completed by setting status.
-const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls']);
+const NUMERIC_TYPES = new Set(['hours', 'shifts', 'calls', 'courses']);
 
 // Requirement types an officer scores by entering a percentage; pass/fail is
 // derived from the requirement's passing_score. Groundwork for a fuller
@@ -376,6 +376,8 @@ function requirementTarget(
   if (req.requirement_type === 'hours' && req.required_hours) return { value: req.required_hours, label: 'hours' };
   if (req.requirement_type === 'shifts' && req.required_shifts) return { value: req.required_shifts, label: 'shifts' };
   if (req.requirement_type === 'calls' && req.required_calls) return { value: req.required_calls, label: 'calls' };
+  if (req.requirement_type === 'courses' && req.required_courses?.length)
+    return { value: req.required_courses.length, label: 'courses' };
   return null;
 }
 
