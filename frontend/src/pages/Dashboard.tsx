@@ -55,7 +55,7 @@ import { schedulingService } from "../modules/scheduling/services/api";
 import { adminHoursEntryService } from "../modules/admin-hours/services/api";
 import { getErrorMessage } from "../utils/errorHandling";
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from "../utils/eventHelpers";
-import { requirementTarget } from "../utils/pipelineProgress";
+import { requirementTarget, requirementAction } from "../utils/pipelineProgress";
 import { useTimezone } from "../hooks/useTimezone";
 import {
   formatDate,
@@ -1528,20 +1528,30 @@ const Dashboard: React.FC = () => {
                             <div className="space-y-1">
                               {nextSteps.map((rp) => {
                                 const target = requirementTarget(rp);
+                                const action = requirementAction(rp);
                                 return (
                                   <div
                                     key={rp.id}
                                     className="flex items-start space-x-2 text-sm"
                                   >
-                                    <TrendingUp className="w-3 h-3 text-blue-700 dark:text-blue-400 mt-0.5 shrink-0" />
-                                    <span className="text-theme-text-secondary min-w-0 truncate">
-                                      {rp.requirement?.name || "Requirement"}
-                                    </span>
-                                    {target && (
-                                      <span className="text-theme-text-muted tabular-nums shrink-0">
-                                        {target}
-                                      </span>
-                                    )}
+                                    <TrendingUp className="w-3 h-3 text-blue-700 dark:text-blue-400 mt-1 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-theme-text-secondary min-w-0 truncate">
+                                          {rp.requirement?.name || "Requirement"}
+                                        </span>
+                                        {target && (
+                                          <span className="text-theme-text-muted tabular-nums shrink-0">
+                                            {target}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {action && (
+                                        <p className="text-theme-text-muted text-xs truncate">
+                                          {action}
+                                        </p>
+                                      )}
+                                    </div>
                                   </div>
                                 );
                               })}

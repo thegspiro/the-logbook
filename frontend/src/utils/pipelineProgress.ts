@@ -9,6 +9,7 @@ import type {
   ProgramRequirement,
   RequirementProgressRecord,
   RequirementProgressStatus,
+  RequirementType,
 } from '../types/training';
 
 /** Label + text colour for each requirement-progress status. */
@@ -54,6 +55,29 @@ export function requirementTarget(record: RequirementProgressRecord): string | n
     default:
       return null;
   }
+}
+
+/**
+ * How a student completes each requirement type — a short imperative hint so an
+ * open requirement reads as an action ("Get signed off by an evaluator"), not
+ * just a name. Keyed by type so the wording stays consistent everywhere it's
+ * shown. Callers surface it only for not-yet-complete requirements.
+ */
+const REQUIREMENT_ACTION: Record<RequirementType, string> = {
+  hours: 'Attend training sessions to log hours',
+  shifts: 'Complete duty shifts',
+  calls: 'Respond to calls',
+  courses: 'Finish the assigned coursework',
+  skills_evaluation: 'Get signed off by an evaluator',
+  certification: 'Earn or record the certification',
+  checklist: 'Work through the checklist with your officer',
+  knowledge_test: 'Pass the written test',
+};
+
+/** Imperative "how to complete this" hint for a requirement, or null if unknown. */
+export function requirementAction(record: RequirementProgressRecord): string | null {
+  const type = record.requirement?.requirement_type;
+  return type ? REQUIREMENT_ACTION[type] : null;
 }
 
 export interface PhaseGroup {

@@ -12,6 +12,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
+  ArrowRight,
   Layers,
   CheckCircle2,
   Clock,
@@ -27,6 +28,7 @@ import {
   groupRecordsByPhase,
   isPhaseGroupComplete,
   requirementTarget,
+  requirementAction,
 } from '../utils/pipelineProgress';
 import type {
   MemberProgramProgress,
@@ -40,6 +42,7 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
   const done = record.status === 'completed' || record.status === 'verified';
   const score = record.progress_notes?.latest_score;
   const target = requirementTarget(record);
+  const action = requirementAction(record);
   const pct = Math.round(record.progress_percentage);
   // A count-based target ("12 / 24 hrs") gets a mini fill bar; a knowledge-test
   // target ("Pass ≥ 70%") is a threshold, not something to fill toward.
@@ -78,6 +81,12 @@ const RequirementRow: React.FC<{ record: RequirementProgressRecord }> = ({ recor
                 style={{ width: `${Math.min(100, pct)}%` }}
               />
             </div>
+          )}
+          {!done && action && (
+            <p className="flex items-center gap-1 text-xs text-theme-text-muted mt-1">
+              <ArrowRight className="w-3 h-3 shrink-0" aria-hidden="true" />
+              <span>{action}</span>
+            </p>
           )}
         </div>
       </div>

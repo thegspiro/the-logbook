@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { requirementTarget } from './pipelineProgress';
+import { requirementTarget, requirementAction } from './pipelineProgress';
 import type { RequirementProgressRecord, TrainingRequirementEnhanced } from '../types/training';
 
 function record(
@@ -59,5 +59,19 @@ describe('requirementTarget', () => {
     expect(requirementTarget(record({ requirement_type: 'checklist' }))).toBeNull();
     expect(requirementTarget(record({ requirement_type: 'hours' }))).toBeNull(); // no required_hours
     expect(requirementTarget(record(undefined))).toBeNull();
+  });
+});
+
+describe('requirementAction', () => {
+  it('gives an imperative hint per requirement type', () => {
+    expect(requirementAction(record({ requirement_type: 'hours' }))).toMatch(/attend/i);
+    expect(requirementAction(record({ requirement_type: 'skills_evaluation' }))).toMatch(/signed off/i);
+    expect(requirementAction(record({ requirement_type: 'certification' }))).toMatch(/certification/i);
+    expect(requirementAction(record({ requirement_type: 'knowledge_test' }))).toMatch(/test/i);
+    expect(requirementAction(record({ requirement_type: 'checklist' }))).toMatch(/checklist/i);
+  });
+
+  it('returns null when the requirement is not loaded', () => {
+    expect(requirementAction(record(undefined))).toBeNull();
   });
 });
