@@ -6,7 +6,7 @@ Business logic for training session management, approval workflows, and notifica
 
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
@@ -22,7 +22,6 @@ from app.models.training import (
     EnrollmentStatus,
     ProgramEnrollment,
     RequirementProgress,
-    RequirementProgressStatus,
     TrainingApproval,
     TrainingCourse,
     TrainingRecord,
@@ -462,12 +461,13 @@ class TrainingSessionService:
         # through the token-based officer approval workflow. (Capture the flag
         # before commit expires the ORM object.)
         requires_confirmation = training_session.require_completion_confirmation
+        pipeline_updates: List[Tuple[str, str, str, float]] = []
         if not requires_confirmation:
             training_approval.status = ApprovalStatus.APPROVED
             training_approval.approved_by = str(finalized_by)
             training_approval.approved_at = now
             attendees = [AttendeeApprovalData(**a) for a in attendee_data]
-            await self._finalize_training_records(
+            pipeline_updates = await self._finalize_training_records(
                 approval=training_approval,
                 attendees=attendees,
                 approved_by=finalized_by,
@@ -480,6 +480,12 @@ class TrainingSessionService:
 
         await self.db.commit()
         await self.db.refresh(training_approval)
+
+        # Feed the pipeline after the approval+records commit — the real updater
+        # commits internally, so it must run outside the transaction above.
+        await self._apply_pipeline_updates(
+            pipeline_updates, organization_id, finalized_by
+        )
 
         # Notify training officers only when their confirmation is required;
         # an auto-approved session has nothing pending to act on.
@@ -728,7 +734,7 @@ class TrainingSessionService:
         # Do this BEFORE committing so that approval + records are atomic.
         # If _finalize_training_records fails, the entire transaction rolls back.
         try:
-            await self._finalize_training_records(
+            pipeline_updates = await self._finalize_training_records(
                 approval=approval,
                 attendees=attendees,
                 approved_by=approved_by,
@@ -738,6 +744,12 @@ class TrainingSessionService:
             await self.db.rollback()
             raise
 
+        # Feed the pipeline after the approval+records commit — the real updater
+        # commits internally, so it must run outside the atomic block above.
+        await self._apply_pipeline_updates(
+            pipeline_updates, organization_id, approved_by
+        )
+
         return True, None
 
     async def _finalize_training_records(
@@ -745,12 +757,19 @@ class TrainingSessionService:
         approval: TrainingApproval,
         attendees: list[AttendeeApprovalData],
         approved_by: UUID,
-    ) -> None:
+    ) -> List[Tuple[str, str, str, float]]:
         """
         Create or update TrainingRecords for all approved attendees.
 
         Calculates final hours from approved durations and marks records as completed.
+
+        Returns a list of ``(user_id, program_id, requirement_id, hours)`` pipeline
+        updates for program-linked sessions. These are NOT applied here — the real
+        progress updater commits internally, so the caller applies them via
+        ``_apply_pipeline_updates`` after its own approval+records commit.
         """
+        pipeline_updates: List[Tuple[str, str, str, float]] = []
+
         # Get training session details
         session_result = await self.db.execute(
             select(TrainingSession)
@@ -760,7 +779,7 @@ class TrainingSessionService:
         training_session = session_result.scalar_one_or_none()
 
         if not training_session:
-            return
+            return pipeline_updates
 
         # Get event details for dates
         event_result = await self.db.execute(
@@ -769,7 +788,7 @@ class TrainingSessionService:
         event = event_result.scalar_one_or_none()
 
         if not event:
-            return
+            return pipeline_updates
 
         # Process each attendee
         for attendee in attendees:
@@ -868,30 +887,69 @@ class TrainingSessionService:
                 )
                 self.db.add(training_record)
 
-            # If session is linked to a program, update the enrollee's progress
-            if training_session.program_id and training_session.requirement_id:
-                await self._update_enrollment_progress(
-                    user_id=str(attendee.user_id),
-                    program_id=training_session.program_id,
-                    requirement_id=training_session.requirement_id,
-                    hours_completed=hours_completed,
+            # If the session is linked to a specific program requirement, queue a
+            # pipeline progress update to apply AFTER this transaction commits
+            # (the real updater commits internally). Only positive hours advance.
+            if (
+                training_session.program_id
+                and training_session.requirement_id
+                and hours_completed > 0
+            ):
+                pipeline_updates.append(
+                    (
+                        str(attendee.user_id),
+                        str(training_session.program_id),
+                        str(training_session.requirement_id),
+                        hours_completed,
+                    )
                 )
 
-        # NOTE: Caller (submit_training_approval) is responsible for commit/rollback
-        # to ensure atomicity of approval + record creation.
+        # NOTE: Callers are responsible for commit/rollback to keep approval +
+        # record creation atomic; they apply the returned pipeline updates only
+        # after that commit succeeds.
+        return pipeline_updates
 
-    async def _update_enrollment_progress(
+    async def _apply_pipeline_updates(
+        self,
+        updates: List[Tuple[str, str, str, float]],
+        organization_id: UUID,
+        verified_by: UUID,
+    ) -> None:
+        """Apply queued session→pipeline progress updates after the approval has
+        committed. Each update commits independently; a failure on one is logged
+        and never blocks the others (the training records are already saved)."""
+        for user_id, program_id, requirement_id, hours in updates:
+            await self._apply_pipeline_progress(
+                user_id=user_id,
+                program_id=program_id,
+                requirement_id=requirement_id,
+                hours_completed=hours,
+                organization_id=organization_id,
+                verified_by=verified_by,
+            )
+
+    async def _apply_pipeline_progress(
         self,
         user_id: str,
         program_id: str,
         requirement_id: str,
         hours_completed: float,
+        organization_id: UUID,
+        verified_by: UUID,
     ) -> None:
         """
-        Update a member's enrollment progress when a training session linked to
-        a program is finalized. Finds the active enrollment and matching
-        requirement progress record, then increments the progress value.
+        Advance a member's linked pipeline requirement when a program-linked
+        training session is approved.
+
+        Routes through ``TrainingProgramService.update_requirement_progress`` —
+        the same path shift completion uses — so the requirement percentage,
+        auto-completion, enrollment rollup, and phase advancement all run. (This
+        previously hand-mutated ``progress_value`` only, leaving the pipeline
+        stuck at 0%.)
         """
+        from app.schemas.training_program import RequirementProgressUpdate
+        from app.services.training_program_service import TrainingProgramService
+
         try:
             # Find the member's active enrollment in this program
             enrollment_result = await self.db.execute(
@@ -901,34 +959,34 @@ class TrainingSessionService:
                 .where(ProgramEnrollment.status == EnrollmentStatus.ACTIVE)
             )
             enrollment = enrollment_result.scalar_one_or_none()
-
             if not enrollment:
                 return
 
-            # Find the requirement progress record for this enrollment
+            # Find the requirement progress row for this enrollment
             progress_result = await self.db.execute(
                 select(RequirementProgress)
                 .where(RequirementProgress.enrollment_id == enrollment.id)
                 .where(RequirementProgress.requirement_id == str(requirement_id))
             )
             progress = progress_result.scalar_one_or_none()
-
             if not progress:
                 return
 
-            # Increment the progress value (hours, count, etc.)
-            current_value = float(progress.progress_value or 0)
-            progress.progress_value = current_value + hours_completed
+            # Accrue hours onto the existing value and let the real updater compute
+            # percentage, auto-complete, roll up the enrollment, and advance phases.
+            new_value = float(progress.progress_value or 0) + hours_completed
 
-            # Update status if not already completed
-            if progress.status == RequirementProgressStatus.NOT_STARTED:
-                progress.status = RequirementProgressStatus.IN_PROGRESS
-
-            logger.info(
-                f"Updated enrollment progress: user={user_id}, "
-                f"program={program_id}, requirement={requirement_id}, "
-                f"added={hours_completed}, total={progress.progress_value}"
+            program_service = TrainingProgramService(self.db)
+            _, error = await program_service.update_requirement_progress(
+                progress_id=progress.id,
+                organization_id=organization_id,
+                updates=RequirementProgressUpdate(progress_value=new_value),
+                verified_by=verified_by,
             )
-
+            if error:
+                logger.error(
+                    f"Session pipeline feed failed: user={user_id} "
+                    f"requirement={requirement_id}: {error}"
+                )
         except Exception as e:
-            logger.error(f"Failed to update enrollment progress: {e}")
+            logger.error(f"Failed to apply session pipeline progress: {e}")
