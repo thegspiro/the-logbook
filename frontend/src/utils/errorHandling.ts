@@ -107,6 +107,33 @@ export function getErrorMessage(error: unknown, fallback = 'An error occurred'):
 }
 
 /**
+ * Detect the soft training-pipeline phase gate (HTTP 409 with a structured
+ * `phase_gate` detail) that RSVP / self check-in return when a session is ahead
+ * of the member's current phase. Returns the warning message the caller should
+ * confirm before retrying with `override`, or null if this isn't that gate.
+ */
+export function getPhaseGateWarning(error: unknown): string | null {
+  const detail = (
+    error as {
+      response?: {
+        status?: number;
+        data?: { detail?: { warning_type?: string; message?: string } };
+      };
+    }
+  )?.response;
+  const body = detail?.data?.detail;
+  if (
+    detail?.status === 409 &&
+    body &&
+    typeof body === 'object' &&
+    body.warning_type === 'phase_gate'
+  ) {
+    return body.message ?? 'This session is ahead of your current phase.';
+  }
+  return null;
+}
+
+/**
  * Type-safe error handler for async operations
  *
  * Usage:

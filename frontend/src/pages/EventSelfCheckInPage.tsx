@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { eventService } from '../services/api';
 import type { QRCheckInData, RSVP } from '../types/event';
-import { toAppError } from '../utils/errorHandling';
+import { toAppError, getPhaseGateWarning } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDateTime, formatTime } from '../utils/dateFormatting';
 import { EventType as EventTypeEnum } from '../constants/enums';
@@ -61,7 +61,19 @@ const EventSelfCheckInPage: React.FC = () => {
       setCheckingIn(true);
       setError(null);
 
-      const rsvp = await eventService.selfCheckIn(eventId);
+      let rsvp: RSVP;
+      try {
+        rsvp = await eventService.selfCheckIn(eventId);
+      } catch (err: unknown) {
+        // Soft pipeline phase gate — confirm, then retry with override.
+        const warning = getPhaseGateWarning(err);
+        if (!warning) throw err;
+        if (!window.confirm(`${warning}\n\nCheck in anyway?`)) {
+          setCheckingIn(false);
+          return;
+        }
+        rsvp = await eventService.selfCheckIn(eventId, false, true);
+      }
       setCheckInData(rsvp);
       setNotice(rsvp.notice ?? null);
       setCheckedIn(true);

@@ -123,7 +123,7 @@ export const eventService = {
    * resolved with an optimistic placeholder; the sync engine flushes
    * it when connectivity returns.
    */
-  async createOrUpdateRSVP(eventId: string, rsvpData: RSVPCreate): Promise<RSVP> {
+  async createOrUpdateRSVP(eventId: string, rsvpData: RSVPCreate, override = false): Promise<RSVP> {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       await enqueueGeneric(
         'event-rsvp',
@@ -143,7 +143,11 @@ export const eventService = {
         offline_pending: true,
       } as unknown as RSVP;
     }
-    const response = await api.post<RSVP>(`/events/${eventId}/rsvp`, rsvpData);
+    const response = await api.post<RSVP>(
+      `/events/${eventId}/rsvp`,
+      rsvpData,
+      override ? { params: { override: true } } : undefined,
+    );
     return response.data;
   },
 
@@ -213,10 +217,11 @@ export const eventService = {
   /**
    * Check in to or out of an event (self-check-in/out via QR code)
    */
-  async selfCheckIn(eventId: string, isCheckout: boolean = false): Promise<import('../types/event').RSVP> {
+  async selfCheckIn(eventId: string, isCheckout: boolean = false, override = false): Promise<import('../types/event').RSVP> {
     const response = await api.post<import('../types/event').RSVP>(
       `/events/${eventId}/self-check-in`,
-      { is_checkout: isCheckout }
+      { is_checkout: isCheckout },
+      override ? { params: { override: true } } : undefined,
     );
     return response.data;
   },
