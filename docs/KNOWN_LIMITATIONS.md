@@ -32,7 +32,9 @@ here.
 |------|--------|--------|
 | **Per-user training endpoints not in `UNCACHEABLE_PREFIXES`** | Open decision (PHI) | `/training/compliance-summary/{id}`, `/requirements/progress/{id}`, `/category-hours/{id}`, and org-wide `/compliance-matrix` / `/expiring-certifications` are cacheable by the SWR client cache. Decide which are PHI-sensitive enough to exclude (see the HIPAA cache rules in CLAUDE.md). |
 | **`BIANNUAL` requirement frequency has no date window** | Verify | `training_compliance.py` sums lifetime totals for hours/shift/call requirements on a `BIANNUAL` cadence instead of a 2-year window. Confirm `BIANNUAL` is only used with expiry-bearing certs; otherwise add a 2-year window. |
-| **`enrolled_count` is a placeholder** | Open (small feature) | `TrainingProgramsPage` shows a hardcoded "0 enrolled" — there is no `enrolled_count` on the program response yet. Wiring it is a small backend + schema addition. |
+| **`enrolled_count` is a placeholder** | Open (small feature) | `TrainingProgramsPage` shows a hardcoded "0 enrolled" — there is no `enrolled_count` on the program response yet. Wiring it is a small backend + schema addition (the per-program enrollments endpoint `GET /training/programs/programs/{id}/enrollments` now exists to source it). |
+| **No knowledge-test engine (officer-entered scores only)** | Open (feature) | `knowledge_test` requirements are satisfied by an officer entering a pass/fail or score % on the requirement (pass/fail derived from `passing_score`, `max_attempts` enforced, attempts recorded). There is no online test-taking flow — question bank, delivery, or auto-grading. That is a deliberate future project; the current support is the lightweight groundwork. |
+| **Skills-test completion does not enforce requirement `max_attempts`** | Open (small) | A passing `SkillTest` marks its linked pipeline requirement complete, but the Skills Testing flow doesn't block creating/completing further tests once the linked requirement's `max_attempts` is reached (only the officer-entered knowledge-test scoring path enforces the cap). |
 
 ## Scheduling Module
 

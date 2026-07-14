@@ -46,6 +46,11 @@ DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
 BULK_ADD_MAX_SIZE = 200
 
+# Sentinel error prefix for the soft training-pipeline phase gate: a
+# program-linked session is ahead of the member's current phase. The endpoint
+# turns this into a 409 the client can override (proceed anyway).
+PHASE_GATE_PREFIX = "PHASE_GATE::"
+
 
 class EventService:
     """Service for event management"""
@@ -623,12 +628,85 @@ class EventService:
 
     # RSVP Methods
 
+    async def _evaluate_session_phase_warning(
+        self, event: Event, user_id: UUID
+    ) -> Optional[str]:
+        """Soft training-pipeline gate: if this event is a program-linked
+        training session belonging to a phase *ahead* of the member's current
+        enrollment phase, return a warning string; otherwise None.
+
+        Only gates members actively enrolled in the session's program — a
+        non-enrolled member (or a session not tied to a program/phase) is never
+        gated. This warns; it never hard-blocks (the caller can override).
+        """
+        from app.models.training import (
+            EnrollmentStatus,
+            ProgramEnrollment,
+            ProgramPhase,
+            TrainingSession,
+        )
+
+        ts_result = await self.db.execute(
+            select(TrainingSession).where(TrainingSession.event_id == str(event.id))
+        )
+        training_session = ts_result.scalar_one_or_none()
+        if not training_session or not training_session.program_id:
+            return None
+        if not training_session.phase_id:
+            return None
+
+        enr_result = await self.db.execute(
+            select(ProgramEnrollment).where(
+                ProgramEnrollment.user_id == str(user_id),
+                ProgramEnrollment.program_id == str(training_session.program_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+            )
+        )
+        enrollment = enr_result.scalar_one_or_none()
+        if not enrollment:
+            return None
+
+        session_phase = (
+            await self.db.execute(
+                select(ProgramPhase).where(
+                    ProgramPhase.id == str(training_session.phase_id)
+                )
+            )
+        ).scalar_one_or_none()
+        if not session_phase:
+            return None
+
+        current_phase = None
+        if enrollment.current_phase_id:
+            current_phase = (
+                await self.db.execute(
+                    select(ProgramPhase).where(
+                        ProgramPhase.id == str(enrollment.current_phase_id)
+                    )
+                )
+            ).scalar_one_or_none()
+
+        current_number = current_phase.phase_number if current_phase else 0
+        if session_phase.phase_number <= current_number:
+            return None
+
+        current_label = (
+            f"Phase {current_phase.phase_number} ({current_phase.name})"
+            if current_phase
+            else "an earlier phase"
+        )
+        return (
+            f"This session is part of Phase {session_phase.phase_number} "
+            f"({session_phase.name}), but you are currently in {current_label}."
+        )
+
     async def create_or_update_rsvp(
         self,
         event_id: UUID,
         user_id: UUID,
         rsvp_data: RSVPCreate,
         organization_id: UUID,
+        override: bool = False,
     ) -> Tuple[Optional[EventRSVP], Optional[str]]:
         """Create or update an RSVP"""
         # Lock the event row to serialize concurrent RSVP capacity checks
@@ -664,6 +742,13 @@ class EventService:
                 f"RSVP status '{rsvp_data.status}' is not allowed. "
                 f"Allowed statuses: {', '.join(allowed_statuses)}",
             )
+
+        # Soft pipeline phase gate — warn (overridable) when RSVPing to a session
+        # ahead of the member's current phase. Only when actually attending.
+        if not override and rsvp_data.status == "going":
+            phase_warning = await self._evaluate_session_phase_warning(event, user_id)
+            if phase_warning:
+                return None, PHASE_GATE_PREFIX + phase_warning
 
         # Check if RSVP already exists
         existing_result = await self.db.execute(
@@ -1770,6 +1855,7 @@ class EventService:
         user_id: UUID,
         organization_id: UUID,
         is_checkout: bool = False,
+        override: bool = False,
     ) -> Tuple[Optional[EventRSVP], Optional[str], Optional[str]]:
         """
         Allow a user to check themselves in or out via QR code
@@ -1808,6 +1894,13 @@ class EventService:
 
         if not user:
             return None, "User not found in organization", None
+
+        # Soft pipeline phase gate — warn (overridable) when checking in to a
+        # session ahead of the member's current phase. Not applied on checkout.
+        if not is_checkout and not override:
+            phase_warning = await self._evaluate_session_phase_warning(event, user_id)
+            if phase_warning:
+                return None, PHASE_GATE_PREFIX + phase_warning, None
 
         # Get organization timezone for user-facing messages
         org_result = await self.db.execute(

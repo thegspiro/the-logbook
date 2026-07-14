@@ -55,6 +55,7 @@ import { schedulingService } from "../modules/scheduling/services/api";
 import { adminHoursEntryService } from "../modules/admin-hours/services/api";
 import { getErrorMessage } from "../utils/errorHandling";
 import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStatusColor } from "../utils/eventHelpers";
+import { requirementTarget } from "../utils/pipelineProgress";
 import { useTimezone } from "../hooks/useTimezone";
 import {
   formatDate,
@@ -1470,7 +1471,7 @@ const Dashboard: React.FC = () => {
                 return (
                   <button
                     key={enrollment.id}
-                    onClick={() => navigate("/training/my-training")}
+                    onClick={() => navigate(`/training/my-progress/${enrollment.id}`)}
                     className="w-full bg-theme-surface-secondary rounded-lg p-4 hover:bg-theme-surface-hover cursor-pointer transition-colors text-left"
                     aria-label={`${enrollment.program?.name || "Program"}: ${Math.round(enrollment.progress_percentage)}% complete`}
                   >
@@ -1525,17 +1526,25 @@ const Dashboard: React.FC = () => {
                               Next Steps:
                             </p>
                             <div className="space-y-1">
-                              {nextSteps.map((rp) => (
-                                <div
-                                  key={rp.id}
-                                  className="flex items-start space-x-2 text-sm"
-                                >
-                                  <TrendingUp className="w-3 h-3 text-blue-700 dark:text-blue-400 mt-0.5 shrink-0" />
-                                  <span className="text-theme-text-secondary">
-                                    {rp.requirement?.name || "Requirement"}
-                                  </span>
-                                </div>
-                              ))}
+                              {nextSteps.map((rp) => {
+                                const target = requirementTarget(rp);
+                                return (
+                                  <div
+                                    key={rp.id}
+                                    className="flex items-start space-x-2 text-sm"
+                                  >
+                                    <TrendingUp className="w-3 h-3 text-blue-700 dark:text-blue-400 mt-0.5 shrink-0" />
+                                    <span className="text-theme-text-secondary min-w-0 truncate">
+                                      {rp.requirement?.name || "Requirement"}
+                                    </span>
+                                    {target && (
+                                      <span className="text-theme-text-muted tabular-nums shrink-0">
+                                        {target}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         ) : (

@@ -20,8 +20,9 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
-import { userService } from '../services/api';
+import { userService, trainingProgramService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
+import type { TrainingRequirementEnhanced } from '../types/training';
 
 interface MemberOption {
   id: string;
@@ -42,6 +43,8 @@ export const StartSkillTestPage: React.FC = () => {
   const [selectedCandidateId, setSelectedCandidateId] = useState('');
   const [notes, setNotes] = useState('');
   const [isPractice, setIsPractice] = useState(false);
+  const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
+  const [overrideRequirementId, setOverrideRequirementId] = useState('');
   const [templateSearch, setTemplateSearch] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
   const [isStarting, setIsStarting] = useState(false);
@@ -50,6 +53,17 @@ export const StartSkillTestPage: React.FC = () => {
     void loadTemplates({ status: 'published' });
     void loadMembers();
   }, [loadTemplates]);
+
+  // Load training requirements for the optional per-test override.
+  useEffect(() => {
+    void (async () => {
+      try {
+        setRequirements(await trainingProgramService.getRequirementsEnhanced());
+      } catch {
+        // Non-fatal — the requirement link is optional.
+      }
+    })();
+  }, []);
 
   const loadMembers = async () => {
     try {
@@ -100,6 +114,11 @@ export const StartSkillTestPage: React.FC = () => {
         template_id: selectedTemplateId,
         candidate_id: selectedCandidateId,
         ...(notes.trim() ? { notes: notes.trim() } : {}),
+        // Only a real (non-practice) test with an explicit override needs to send
+        // a requirement; otherwise the backend inherits the template's default.
+        ...(!isPractice && overrideRequirementId
+          ? { requirement_id: overrideRequirementId }
+          : {}),
         is_practice: isPractice,
       });
       toast.success(isPractice ? 'Practice session started' : 'Test session started');
@@ -309,10 +328,43 @@ export const StartSkillTestPage: React.FC = () => {
           )}
         </div>
 
-        {/* Step 4: Notes (optional) */}
+        {/* Step 4: Pipeline requirement (real tests only) */}
+        {!isPractice && (
+          <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-4">
+            <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
+              4. Counts Toward Requirement (optional)
+            </h2>
+            {(() => {
+              const defaultReq = requirements.find((r) => r.id === selectedTemplate?.requirement_id);
+              return (
+                <>
+                  <p className="text-sm text-theme-text-muted mb-2">
+                    {defaultReq
+                      ? `Passing this test completes "${defaultReq.name}" for the candidate (from the template). Override below if needed.`
+                      : 'This template has no linked requirement. Optionally point this test at one.'}
+                  </p>
+                  <select
+                    value={overrideRequirementId}
+                    onChange={(e) => setOverrideRequirementId(e.target.value)}
+                    className="w-full px-3 py-3 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+                  >
+                    <option value="">
+                      {defaultReq ? `Use template default (${defaultReq.name})` : 'Not linked'}
+                    </option>
+                    {requirements.map((r) => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Step 5: Notes (optional) */}
         <div className="bg-theme-surface rounded-lg p-4 sm:p-6 border border-theme-surface-border mb-6">
           <h2 className="text-lg font-semibold text-theme-text-primary mb-3">
-            4. Notes (optional)
+            5. Notes (optional)
           </h2>
           <textarea
             value={notes}

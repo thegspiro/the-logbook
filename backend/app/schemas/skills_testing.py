@@ -60,6 +60,9 @@ class SkillTemplateCreate(BaseModel):
     require_all_critical: bool = True
     tags: Optional[List[str]] = None
     visibility: str = "all_members"
+    # Optional pipeline requirement this template's tests satisfy (hybrid link:
+    # tests inherit it, overridable per test).
+    requirement_id: Optional[UUID] = None
 
 
 class SkillTemplateUpdate(BaseModel):
@@ -74,6 +77,7 @@ class SkillTemplateUpdate(BaseModel):
     require_all_critical: Optional[bool] = None
     tags: Optional[List[str]] = None
     visibility: Optional[str] = None
+    requirement_id: Optional[UUID] = None
 
 
 class SkillTemplateResponse(UTCResponseBase):
@@ -91,6 +95,7 @@ class SkillTemplateResponse(UTCResponseBase):
     time_limit_seconds: Optional[int] = None
     passing_percentage: Optional[float] = None
     require_all_critical: bool
+    requirement_id: Optional[UUID] = None
     tags: Optional[list] = None
     created_at: datetime
     updated_at: datetime
@@ -111,6 +116,7 @@ class SkillTemplateListResponse(UTCResponseBase):
     version: int
     section_count: int = 0
     criteria_count: int = 0
+    requirement_id: Optional[UUID] = None
     tags: Optional[list] = None
     created_at: datetime
     updated_at: datetime
@@ -158,6 +164,9 @@ class SkillTestCreate(BaseModel):
     candidate_id: UUID
     notes: Optional[str] = None
     is_practice: bool = False
+    # Override the requirement this specific test satisfies; defaults to the
+    # template's requirement when omitted.
+    requirement_id: Optional[UUID] = None
 
 
 class SkillTestUpdate(BaseModel):
@@ -169,6 +178,7 @@ class SkillTestUpdate(BaseModel):
     elapsed_seconds: Optional[int] = Field(None, ge=0)
     notes: Optional[str] = None
     result: Optional[str] = None
+    requirement_id: Optional[UUID] = None
 
 
 class SkillTestResponse(UTCResponseBase):
@@ -179,6 +189,7 @@ class SkillTestResponse(UTCResponseBase):
     template_id: UUID
     candidate_id: UUID
     examiner_id: UUID
+    requirement_id: Optional[UUID] = None
     status: str
     result: str
     is_practice: bool = False

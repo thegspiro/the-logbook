@@ -15,6 +15,9 @@ import {
   Calendar,
   AlertCircle,
   ExternalLink,
+  Sparkles,
+  Layers,
+  Loader2,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { getErrorMessage } from '@/utils/errorHandling';
@@ -22,6 +25,7 @@ import type {
   TrainingProgram,
   TrainingRequirementEnhanced,
   RegistryInfo,
+  SampleTemplateSummary,
 } from '../types/training';
 
 type TabView = 'programs' | 'requirements' | 'templates';
@@ -32,6 +36,8 @@ const TrainingProgramsPage: React.FC = () => {
   const [programs, setPrograms] = useState<TrainingProgram[]>([]);
   const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
   const [registries, setRegistries] = useState<RegistryInfo[]>([]);
+  const [sampleTemplates, setSampleTemplates] = useState<SampleTemplateSummary[]>([]);
+  const [instantiatingKey, setInstantiatingKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [importingRegistry, setImportingRegistry] = useState<string | null>(null);
@@ -78,6 +84,14 @@ const TrainingProgramsPage: React.FC = () => {
           is_template: activeTab === 'templates',
         });
         setPrograms(data);
+        if (activeTab === 'templates') {
+          // Built-in starter templates for the gallery; failure is non-fatal.
+          try {
+            setSampleTemplates(await trainingProgramService.getSampleTemplates());
+          } catch {
+            setSampleTemplates([]);
+          }
+        }
       } else if (activeTab === 'requirements') {
         const [reqs, regs] = await Promise.all([
           trainingProgramService.getRequirementsEnhanced(),
@@ -96,6 +110,19 @@ const TrainingProgramsPage: React.FC = () => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const handleAddSampleTemplate = async (template: SampleTemplateSummary) => {
+    setInstantiatingKey(template.key);
+    try {
+      const program = await trainingProgramService.instantiateSampleTemplate(template.key);
+      toast.success(`Added "${program.name}" to your templates`);
+      navigate(`/training/programs/${program.id}`);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add template'));
+    } finally {
+      setInstantiatingKey(null);
+    }
+  };
 
   const handleImportRegistry = async (registryName: string) => {
     setImportingRegistry(registryName);
@@ -234,7 +261,62 @@ const TrainingProgramsPage: React.FC = () => {
         ) : (
           <>
             {activeTab === 'programs' || activeTab === 'templates' ? (
-              <div className="grid gap-4" id="tab-panel-programs" role="tabpanel">
+              <div id="tab-panel-programs" role="tabpanel">
+                {activeTab === 'templates' && !searchTerm && sampleTemplates.length > 0 && (
+                  <section className="mb-8" aria-label="Sample templates">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <Sparkles className="w-5 h-5 text-red-700 dark:text-red-500" aria-hidden="true" />
+                      <h2 className="text-lg font-semibold text-theme-text-primary">Start from a sample template</h2>
+                    </div>
+                    <p className="text-theme-text-muted text-sm mb-4">
+                      Real-world starting points you can add to your department, then edit and enroll members.
+                    </p>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {sampleTemplates.map((template) => (
+                        <div
+                          key={template.key}
+                          className="flex flex-col bg-theme-surface-secondary rounded-lg p-5 border border-theme-surface-border"
+                        >
+                          <h3 className="text-base font-semibold text-theme-text-primary mb-1">{template.name}</h3>
+                          {template.description && (
+                            <p className="text-theme-text-muted text-sm mb-3 line-clamp-4">{template.description}</p>
+                          )}
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-theme-text-muted mt-auto mb-4">
+                            <span className="flex items-center space-x-1">
+                              <Layers className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span>{template.phase_count} phases</span>
+                            </span>
+                            <span className="flex items-center space-x-1">
+                              <ListChecks className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span>{template.requirement_count} requirements</span>
+                            </span>
+                            {template.time_limit_days && (
+                              <span className="flex items-center space-x-1">
+                                <Calendar className="w-3.5 h-3.5" aria-hidden="true" />
+                                <span>{template.time_limit_days} days</span>
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => { void handleAddSampleTemplate(template); }}
+                            disabled={instantiatingKey !== null}
+                            className="btn-primary flex items-center justify-center space-x-2 disabled:opacity-50"
+                            aria-label={`Add ${template.name} to my department`}
+                          >
+                            {instantiatingKey === template.key ? (
+                              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Plus className="w-4 h-4" aria-hidden="true" />
+                            )}
+                            <span>Add to my department</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+              <div className="grid gap-4">
                 {filteredPrograms.length === 0 ? (
                   <div className="text-center py-12 bg-theme-surface-secondary rounded-lg">
                     <GraduationCap className="w-16 h-16 text-theme-text-secondary mx-auto mb-4" aria-hidden="true" />
@@ -305,6 +387,7 @@ const TrainingProgramsPage: React.FC = () => {
                     </div>
                   ))
                 )}
+              </div>
               </div>
             ) : (
               <div id="tab-panel-requirements" role="tabpanel">

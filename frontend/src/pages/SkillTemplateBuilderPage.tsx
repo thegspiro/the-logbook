@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSkillsTestingStore } from '../stores/skillsTestingStore';
+import { trainingProgramService } from '../services/api';
+import type { TrainingRequirementEnhanced } from '../types/training';
 import type {
   SkillTemplateSectionCreate,
   SkillCriterionCreate,
@@ -361,9 +363,22 @@ export const SkillTemplateBuilderPage: React.FC = () => {
   const [passingPercentage, setPassingPercentage] = useState<number | undefined>();
   const [requireAllCritical, setRequireAllCritical] = useState(true);
   const [tags, setTags] = useState('');
+  const [requirementId, setRequirementId] = useState<string>('');
+  const [requirements, setRequirements] = useState<TrainingRequirementEnhanced[]>([]);
   const [sections, setSections] = useState<LocalSection[]>([createEmptySection(0)]);
   const [isSaving, setIsSaving] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  // Load the org's training requirements for the optional pipeline link.
+  useEffect(() => {
+    void (async () => {
+      try {
+        setRequirements(await trainingProgramService.getRequirementsEnhanced());
+      } catch {
+        // Non-fatal — the requirement link is optional.
+      }
+    })();
+  }, []);
 
   // Load template data for editing
   useEffect(() => {
@@ -383,6 +398,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       setTimeLimitMinutes(currentTemplate.time_limit_seconds != null ? currentTemplate.time_limit_seconds / 60 : undefined);
       setPassingPercentage(currentTemplate.passing_percentage ?? undefined);
       setRequireAllCritical(currentTemplate.require_all_critical);
+      setRequirementId(currentTemplate.requirement_id ?? '');
       setTags((currentTemplate.tags ?? []).join(', '));
       setSections(
         currentTemplate.sections.map((s) => ({
@@ -444,6 +460,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
       time_limit_seconds: timeLimitMinutes != null ? Math.round(timeLimitMinutes * 60) : undefined,
       passing_percentage: passingPercentage,
       require_all_critical: requireAllCritical,
+      requirement_id: requirementId || undefined,
       tags: parsedTags.length > 0 ? parsedTags : undefined,
       sections: sections.map((s, si) => ({
         name: s.name.trim(),
@@ -463,7 +480,7 @@ export const SkillTemplateBuilderPage: React.FC = () => {
         })),
       })),
     };
-  }, [name, description, category, visibility, timeLimitMinutes, passingPercentage, requireAllCritical, tags, sections]);
+  }, [name, description, category, visibility, timeLimitMinutes, passingPercentage, requireAllCritical, requirementId, tags, sections]);
 
   const handleSave = async () => {
     const errors = validate();
@@ -639,6 +656,23 @@ export const SkillTemplateBuilderPage: React.FC = () => {
               </select>
               <p className="text-xs text-theme-text-muted mt-1">
                 Controls who can see this test. Officers always have full access.
+              </p>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-theme-text-muted mb-1">Linked Training Requirement (optional)</label>
+              <select
+                value={requirementId}
+                onChange={(e) => setRequirementId(e.target.value)}
+                className="w-full px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg text-theme-text-primary focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring/50"
+              >
+                <option value="">None — not linked to a pipeline requirement</option>
+                {requirements.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-theme-text-muted mt-1">
+                When a test built from this template passes, this pipeline requirement is
+                marked complete for the candidate. Individual tests can override this.
               </p>
             </div>
             <div className="md:col-span-2">

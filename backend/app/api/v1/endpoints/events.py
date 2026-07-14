@@ -13,7 +13,16 @@ from datetime import timezone as dt_timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
@@ -69,6 +78,7 @@ from app.services.documents_service import DocumentsService
 from app.services.event_service import (
     BULK_ADD_MAX_SIZE,
     DEFAULT_ALLOWED_RSVP_STATUSES,
+    PHASE_GATE_PREFIX,
     EventService,
 )
 from app.services.notifications_service import NotificationsService
@@ -1213,6 +1223,9 @@ async def cancel_event_series(
 async def create_or_update_rsvp(
     event_id: UUID,
     rsvp_data: RSVPCreate,
+    override: bool = Query(
+        False, description="Proceed despite a training-pipeline phase warning"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1227,9 +1240,18 @@ async def create_or_update_rsvp(
         user_id=current_user.id,
         rsvp_data=rsvp_data,
         organization_id=current_user.organization_id,
+        override=override,
     )
 
     if error:
+        if error.startswith(PHASE_GATE_PREFIX):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "warning_type": "phase_gate",
+                    "message": error[len(PHASE_GATE_PREFIX):],
+                },
+            )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return _build_rsvp_response(rsvp, user=current_user)
@@ -1870,6 +1892,9 @@ async def get_qr_check_in_data(
 async def self_check_in(
     event_id: UUID,
     check_in_data: SelfCheckInRequest | None = None,
+    override: bool = Query(
+        False, description="Proceed despite a training-pipeline phase warning"
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1891,9 +1916,19 @@ async def self_check_in(
         user_id=current_user.id,
         organization_id=current_user.organization_id,
         is_checkout=is_checkout,
+        override=override,
     )
 
     if error:
+        # Soft pipeline phase gate — 409 the client can override (proceed anyway)
+        if error.startswith(PHASE_GATE_PREFIX):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "warning_type": "phase_gate",
+                    "message": error[len(PHASE_GATE_PREFIX):],
+                },
+            )
         # Special case: already checked in - return success with message
         if error == "ALREADY_CHECKED_IN":
             response = _build_rsvp_response(rsvp, user=current_user)

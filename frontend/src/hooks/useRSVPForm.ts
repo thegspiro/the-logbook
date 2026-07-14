@@ -10,6 +10,7 @@ import { AxiosError } from 'axios';
 import { eventService } from '../services/api';
 import type { RSVPStatus, Event } from '../types/event';
 import { RSVPStatus as RSVPStatusEnum } from '../constants/enums';
+import { getPhaseGateWarning } from '../utils/errorHandling';
 
 interface UseRSVPFormOptions {
   eventId: string | undefined;
@@ -68,7 +69,18 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
         const result = await eventService.rsvpToSeries(eventId, rsvpPayload);
         toast.success(`RSVP applied to ${result.rsvp_count} events in the series`);
       } else {
-        await eventService.createOrUpdateRSVP(eventId, rsvpPayload);
+        try {
+          await eventService.createOrUpdateRSVP(eventId, rsvpPayload);
+        } catch (err) {
+          // Soft pipeline phase gate — confirm, then retry with override.
+          const warning = getPhaseGateWarning(err);
+          if (!warning) throw err;
+          if (!window.confirm(`${warning}\n\nRSVP anyway?`)) {
+            setSubmitting(false);
+            return;
+          }
+          await eventService.createOrUpdateRSVP(eventId, rsvpPayload, true);
+        }
         toast.success('RSVP submitted successfully');
       }
 

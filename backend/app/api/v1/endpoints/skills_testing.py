@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.models.skills_testing import SkillTemplate, SkillTest
+from app.models.skills_testing import SkillTemplate, SkillTest, SkillTestResult
 from app.models.user import User
 from app.schemas.skills_testing import (
     SkillTemplateCreate,
@@ -29,7 +29,10 @@ from app.schemas.skills_testing import (
     SkillTestResponse,
     SkillTestUpdate,
 )
-from app.services.skills_testing_service import calculate_test_result
+from app.services.skills_testing_service import (
+    apply_test_pass_to_pipeline,
+    calculate_test_result,
+)
 
 router = APIRouter()
 
@@ -123,6 +126,7 @@ async def list_templates(
                 version=t.version,
                 section_count=section_count,
                 criteria_count=criteria_count,
+                requirement_id=t.requirement_id,
                 tags=t.tags,
                 created_at=t.created_at,
                 updated_at=t.updated_at,
@@ -154,6 +158,10 @@ async def create_template(
     # Convert sections to JSON-serializable dicts
     sections_json = [s.model_dump() for s in template_data.sections]
 
+    requirement_id = await _validate_requirement_link(
+        db, template_data.requirement_id, current_user.organization_id
+    )
+
     new_template = SkillTemplate(
         organization_id=current_user.organization_id,
         created_by=current_user.id,
@@ -164,6 +172,7 @@ async def create_template(
         time_limit_seconds=template_data.time_limit_seconds,
         passing_percentage=template_data.passing_percentage,
         require_all_critical=template_data.require_all_critical,
+        requirement_id=requirement_id,
         tags=template_data.tags,
         visibility=template_data.visibility,
     )
@@ -253,6 +262,12 @@ async def update_template(
     # Convert sections to JSON-serializable dicts if provided
     if "sections" in update_data and update_data["sections"] is not None:
         update_data["sections"] = [s.model_dump() for s in template_update.sections]
+
+    # Validate/normalize the requirement link (UUID -> str for the FK column)
+    if "requirement_id" in update_data:
+        update_data["requirement_id"] = await _validate_requirement_link(
+            db, update_data["requirement_id"], current_user.organization_id
+        )
 
     # Increment version if template is published and structural fields change
     structural_fields = {
@@ -627,11 +642,21 @@ async def create_test(
             status_code=status.HTTP_404_NOT_FOUND, detail="Candidate not found"
         )
 
+    # Hybrid link: an explicit per-test requirement overrides the template's
+    # default; otherwise the test inherits the template's requirement.
+    if test_data.requirement_id is not None:
+        requirement_id = await _validate_requirement_link(
+            db, test_data.requirement_id, current_user.organization_id
+        )
+    else:
+        requirement_id = template.requirement_id
+
     new_test = SkillTest(
         organization_id=current_user.organization_id,
         template_id=str(test_data.template_id),
         candidate_id=str(test_data.candidate_id),
         examiner_id=current_user.id,
+        requirement_id=requirement_id,
         status="draft",
         result="incomplete",
         notes=test_data.notes,
@@ -760,6 +785,12 @@ async def update_test(
             sr.model_dump() for sr in test_update.section_results
         ]
 
+    # Validate/normalize the requirement override (UUID -> str for the FK column)
+    if "requirement_id" in update_data:
+        update_data["requirement_id"] = await _validate_requirement_link(
+            db, update_data["requirement_id"], current_user.organization_id
+        )
+
     # Auto-set started_at when transitioning to in_progress
     if update_data.get("status") == "in_progress" and test.started_at is None:
         test.started_at = datetime.now(timezone.utc)
@@ -872,6 +903,22 @@ async def complete_test(
 
     await db.commit()
     await db.refresh(test)
+
+    # A passing, non-practice test linked to a pipeline requirement marks that
+    # requirement complete on the candidate's enrollment. Runs after the commit
+    # above because the progress updater commits internally.
+    if (
+        test.result == SkillTestResult.PASS.value
+        and not test.is_practice
+        and test.requirement_id
+    ):
+        await apply_test_pass_to_pipeline(
+            db=db,
+            candidate_id=test.candidate_id,
+            requirement_id=test.requirement_id,
+            organization_id=current_user.organization_id,
+            verified_by=current_user.id,
+        )
 
     # Fetch participant info for response
     candidate_result = await db.execute(
@@ -1309,6 +1356,29 @@ def _format_user_name(user: User) -> str:
     return user.first_name or user.last_name or user.username or "Unknown"
 
 
+async def _validate_requirement_link(
+    db: AsyncSession, requirement_id, organization_id
+) -> str | None:
+    """Ensure an optional requirement link points to a real requirement in the
+    org. Returns the id as a string, or None when unset."""
+    if requirement_id is None:
+        return None
+    from app.models.training import TrainingRequirement
+
+    result = await db.execute(
+        select(TrainingRequirement).where(
+            TrainingRequirement.id == str(requirement_id),
+            TrainingRequirement.organization_id == str(organization_id),
+        )
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Linked training requirement not found",
+        )
+    return str(requirement_id)
+
+
 def _build_test_response(
     test: SkillTest,
     template: SkillTemplate | None,
@@ -1322,6 +1392,7 @@ def _build_test_response(
         template_id=test.template_id,
         candidate_id=test.candidate_id,
         examiner_id=test.examiner_id,
+        requirement_id=test.requirement_id,
         status=test.status,
         result=test.result,
         is_practice=test.is_practice or False,

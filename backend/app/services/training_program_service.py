@@ -5,6 +5,7 @@ Business logic for training program management, enrollment, and progress trackin
 """
 
 import asyncio
+import copy
 import json
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -41,6 +42,7 @@ from app.schemas.training_program import (
     ProgramMilestoneCreate,
     ProgramPhaseCreate,
     ProgramRequirementCreate,
+    ProgramRequirementUpdate,
     RequirementProgressUpdate,
     TrainingProgramCreate,
     TrainingRequirementEnhancedCreate,
@@ -376,6 +378,7 @@ class TrainingProgramService:
             organization_id=organization_id,
             name=program_data.name,
             description=program_data.description,
+            code=program_data.code,
             target_position=program_data.target_position,
             target_roles=program_data.target_roles,
             structure_type=structure_type,
@@ -386,6 +389,123 @@ class TrainingProgramService:
         )
 
         self.db.add(program)
+        await self.db.commit()
+        await self.db.refresh(program)
+
+        return program, None
+
+    async def build_program(
+        self,
+        payload: Any,
+        organization_id: UUID,
+        created_by: UUID,
+    ) -> Tuple[Optional[TrainingProgram], Optional[str]]:
+        """Create a program and its full structure (phases, requirements,
+        milestones) in a single transaction.
+
+        The create-pipeline wizard used to fire one request per entity with no
+        rollback, so any failure part-way left an orphaned, half-built program.
+        Persisting everything under one commit makes the whole build atomic:
+        it either lands complete or not at all.
+
+        Returns: (program, error_message)
+        """
+        prog = payload.program
+
+        try:
+            structure_type = ProgramStructureType(prog.structure_type)
+        except ValueError:
+            return None, f"Invalid structure type: {prog.structure_type}"
+
+        program = TrainingProgram(
+            organization_id=organization_id,
+            name=prog.name,
+            description=prog.description,
+            code=prog.code,
+            target_position=prog.target_position,
+            target_roles=prog.target_roles,
+            structure_type=structure_type,
+            time_limit_days=prog.time_limit_days,
+            warning_days_before=prog.warning_days_before,
+            is_template=prog.is_template,
+            created_by=created_by,
+        )
+        self.db.add(program)
+        await self.db.flush()
+
+        for phase_input in payload.phases:
+            phase = ProgramPhase(
+                program_id=program.id,
+                phase_number=phase_input.phase_number,
+                name=phase_input.name,
+                description=phase_input.description,
+                time_limit_days=phase_input.time_limit_days,
+                requires_manual_advancement=phase_input.requires_manual_advancement,
+            )
+            self.db.add(phase)
+            await self.db.flush()
+
+            for idx, req_input in enumerate(phase_input.requirements):
+                try:
+                    req_type = RequirementType(req_input.requirement_type)
+                except ValueError:
+                    return (
+                        None,
+                        f"Invalid requirement type: {req_input.requirement_type}",
+                    )
+                try:
+                    frequency = RequirementFrequency(req_input.frequency)
+                except ValueError:
+                    frequency = RequirementFrequency.ONE_TIME
+
+                checklist = [
+                    c for c in (req_input.checklist_items or []) if c.strip()
+                ] or None
+
+                requirement = TrainingRequirement(
+                    organization_id=organization_id,
+                    name=req_input.name,
+                    description=req_input.description,
+                    requirement_type=req_type,
+                    source=RequirementSource.DEPARTMENT,
+                    frequency=frequency,
+                    required_hours=req_input.required_hours,
+                    required_shifts=req_input.required_shifts,
+                    required_calls=req_input.required_calls,
+                    passing_score=req_input.passing_score,
+                    max_attempts=req_input.max_attempts,
+                    checklist_items=checklist,
+                    is_editable=True,
+                    applies_to_all=False,
+                    created_by=created_by,
+                )
+                self.db.add(requirement)
+                await self.db.flush()
+
+                self.db.add(
+                    ProgramRequirement(
+                        program_id=program.id,
+                        phase_id=phase.id,
+                        requirement_id=requirement.id,
+                        is_required=req_input.is_required,
+                        sort_order=req_input.sort_order or idx,
+                    )
+                )
+
+            for ms_input in phase_input.milestones:
+                self.db.add(
+                    ProgramMilestone(
+                        program_id=program.id,
+                        phase_id=phase.id,
+                        name=ms_input.name,
+                        description=ms_input.description,
+                        completion_percentage_threshold=(
+                            ms_input.completion_percentage_threshold
+                        ),
+                        notification_message=ms_input.notification_message,
+                    )
+                )
+
         await self.db.commit()
         await self.db.refresh(program)
 
@@ -478,6 +598,7 @@ class TrainingProgramService:
             description=phase_data.description,
             prerequisite_phase_ids=phase_data.prerequisite_phase_ids,
             time_limit_days=phase_data.time_limit_days,
+            requires_manual_advancement=phase_data.requires_manual_advancement,
         )
 
         self.db.add(phase)
@@ -514,6 +635,22 @@ class TrainingProgramService:
         return result.scalars().all()
 
     # ==================== Program Requirement Methods ====================
+
+    async def _load_program_requirement(
+        self, program_requirement_id: str
+    ) -> Optional[ProgramRequirement]:
+        """Reload a program↔requirement link with its ``requirement`` eagerly
+        loaded, so responses can include the requirement's name/type. Callers
+        that commit (which expires attributes) must use this instead of a bare
+        refresh — the response schema now declares a nested ``requirement`` and
+        accessing an unloaded relationship on an async session raises.
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement)
+            .options(selectinload(ProgramRequirement.requirement))
+            .where(ProgramRequirement.id == str(program_requirement_id))
+        )
+        return result.scalar_one_or_none()
 
     async def add_requirement_to_program(
         self,
@@ -621,7 +758,69 @@ class TrainingProgramService:
         await self.db.commit()
         await self.db.refresh(program_requirement)
 
-        return program_requirement, None
+        loaded = await self._load_program_requirement(program_requirement.id)
+        return (loaded or program_requirement), None
+
+    async def update_program_requirement(
+        self,
+        program_requirement_id: UUID,
+        organization_id: UUID,
+        updates: ProgramRequirementUpdate,
+    ) -> Tuple[Optional[ProgramRequirement], Optional[str]]:
+        """
+        Update a program↔requirement link (is_required / is_prerequisite /
+        sort_order). Toggling ``is_required`` changes which items count toward
+        completion, so affected enrollments are recomputed (and re-checked for
+        phase advancement).
+
+        Returns: (program_requirement, error_message)
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement)
+            .join(
+                TrainingProgram,
+                ProgramRequirement.program_id == TrainingProgram.id,
+            )
+            .where(
+                ProgramRequirement.id == str(program_requirement_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        program_requirement = result.scalar_one_or_none()
+        if not program_requirement:
+            return None, "Program requirement not found"
+
+        data = updates.model_dump(exclude_unset=True)
+        required_changed = (
+            "is_required" in data
+            and data["is_required"] != program_requirement.is_required
+        )
+        for field, value in data.items():
+            setattr(program_requirement, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(program_requirement)
+        # Capture before the recompute below: _recalculate/_maybe_auto_advance
+        # commit internally, which re-expires this instance's attributes.
+        pr_id = program_requirement.id
+        program_id_str = str(program_requirement.program_id)
+
+        # Recompute enrollments whose completion math just changed.
+        if required_changed:
+            enrollment_rows = await self.db.execute(
+                select(ProgramEnrollment.id).where(
+                    ProgramEnrollment.program_id == program_id_str,
+                    ProgramEnrollment.status.in_(
+                        [EnrollmentStatus.ACTIVE, EnrollmentStatus.ON_HOLD]
+                    ),
+                )
+            )
+            for row in enrollment_rows.all():
+                await self._recalculate_enrollment_progress(UUID(row[0]))
+                await self._maybe_auto_advance_phase(UUID(row[0]))
+
+        loaded = await self._load_program_requirement(pr_id)
+        return (loaded or program_requirement), None
 
     async def get_program_requirements(
         self,
@@ -824,6 +1023,38 @@ class TrainingProgramService:
         )
         return result.scalars().all()
 
+    async def get_program_enrollments(
+        self,
+        program_id: UUID,
+        organization_id: UUID,
+        status: Optional[str] = None,
+    ) -> List[Tuple[ProgramEnrollment, User]]:
+        """
+        Get all enrollments for a program paired with the enrolled member.
+
+        Powers the program detail view's Enrollments tab. Returning the User
+        alongside each enrollment lets the API surface member names directly,
+        so the UI doesn't render bare user_ids or make N follow-up lookups.
+        """
+        # Verify the program belongs to the organization
+        program = await self.get_program_by_id(program_id, organization_id)
+        if not program:
+            return []
+
+        query = (
+            select(ProgramEnrollment, User)
+            .join(User, ProgramEnrollment.user_id == User.id)
+            .where(ProgramEnrollment.program_id == str(program_id))
+        )
+
+        if status:
+            query = query.where(ProgramEnrollment.status == status)
+
+        query = query.order_by(ProgramEnrollment.enrolled_at.desc())
+
+        result = await self.db.execute(query)
+        return list(result.all())
+
     async def get_enrollment_by_id(
         self,
         enrollment_id: UUID,
@@ -905,20 +1136,97 @@ class TrainingProgramService:
         if updates.status:
             try:
                 status = RequirementProgressStatus(updates.status)
-                progress.status = status
-
-                if (
-                    status == RequirementProgressStatus.IN_PROGRESS
-                    and not progress.started_at
-                ):
-                    progress.started_at = datetime.now(timezone.utc)
-                elif status == RequirementProgressStatus.COMPLETED:
-                    progress.completed_at = datetime.now(timezone.utc)
-                    if verified_by:
-                        progress.verified_by = verified_by
-                        progress.verified_at = datetime.now(timezone.utc)
             except ValueError:
                 return None, f"Invalid status: {updates.status}"
+
+            progress.status = status
+
+            if status == RequirementProgressStatus.NOT_STARTED:
+                progress.progress_percentage = 0.0
+                progress.completed_at = None
+            elif status == RequirementProgressStatus.IN_PROGRESS:
+                if not progress.started_at:
+                    progress.started_at = datetime.now(timezone.utc)
+                # Reverting from a completed/verified state — no longer done.
+                progress.completed_at = None
+            elif status in (
+                RequirementProgressStatus.COMPLETED,
+                RequirementProgressStatus.VERIFIED,
+                RequirementProgressStatus.WAIVED,
+            ):
+                # Any satisfied state counts fully toward the enrollment rollup.
+                # This is what lets non-numeric requirements (checklist, skills
+                # evaluation, certification, knowledge test) advance progress
+                # when an officer marks them done — previously only
+                # hours/shifts/calls, which accrue a numeric progress_value,
+                # ever moved progress_percentage off 0.
+                progress.progress_percentage = 100.0
+                progress.completed_at = datetime.now(timezone.utc)
+                if verified_by:
+                    progress.verified_by = verified_by
+                    progress.verified_at = datetime.now(timezone.utc)
+
+        # Knowledge/skills test score entry: an officer records a score and
+        # pass/fail is derived from the requirement's passing_score (default 70).
+        # The raw score + attempt history live in progress_notes; a pass completes
+        # the requirement (which then rolls up and can advance the phase). This is
+        # the lightweight groundwork for a fuller test-taking feature later.
+        if updates.test_score is not None:
+            requirement = progress.requirement
+
+            # Enforce the attempt cap: once all attempts are used and the
+            # requirement isn't already satisfied, no further scores are accepted.
+            prior_attempts = len(
+                (progress.progress_notes or {}).get("test_attempts", [])
+            )
+            already_done = progress.status in (
+                RequirementProgressStatus.COMPLETED,
+                RequirementProgressStatus.VERIFIED,
+            )
+            max_attempts = getattr(requirement, "max_attempts", None)
+            if max_attempts and prior_attempts >= max_attempts and not already_done:
+                return (
+                    None,
+                    f"Maximum attempts ({max_attempts}) reached for this test",
+                )
+
+            threshold = (
+                requirement.passing_score
+                if requirement is not None and requirement.passing_score is not None
+                else 70.0
+            )
+            passed = updates.test_score >= threshold
+
+            notes = copy.deepcopy(progress.progress_notes or {})
+            attempts = notes.get("test_attempts", [])
+            attempts.append(
+                {
+                    "score": updates.test_score,
+                    "passed": passed,
+                    "recorded_at": datetime.now(timezone.utc).isoformat(),
+                    "recorded_by": str(verified_by) if verified_by else None,
+                }
+            )
+            notes["test_attempts"] = attempts
+            notes["latest_score"] = updates.test_score
+            notes["passing_score"] = threshold
+            notes["passed"] = passed
+            progress.progress_notes = notes
+
+            if passed:
+                progress.status = RequirementProgressStatus.COMPLETED
+                progress.progress_percentage = 100.0
+                progress.completed_at = datetime.now(timezone.utc)
+                if verified_by:
+                    progress.verified_by = verified_by
+                    progress.verified_at = datetime.now(timezone.utc)
+            else:
+                # Failed attempt — recorded, but the requirement is not complete.
+                if not progress.started_at:
+                    progress.started_at = datetime.now(timezone.utc)
+                if progress.status != RequirementProgressStatus.IN_PROGRESS:
+                    progress.status = RequirementProgressStatus.IN_PROGRESS
+                progress.completed_at = None
 
         # Update progress value
         if updates.progress_value is not None:
@@ -999,6 +1307,18 @@ class TrainingProgramService:
                 progress.progress_percentage = min(
                     100.0, (updates.progress_value / adj_required) * 100
                 )
+            elif (
+                requirement.requirement_type == RequirementType.COURSES
+                and requirement.required_courses
+            ):
+                # progress_value is the count of required courses completed;
+                # percentage is that count over the number required. (Course-count
+                # requirements are not waiver-adjusted.)
+                total_required = len(requirement.required_courses)
+                if total_required > 0:
+                    progress.progress_percentage = min(
+                        100.0, (updates.progress_value / total_required) * 100
+                    )
 
             # Auto-complete if reached 100%
             if (
@@ -1023,6 +1343,10 @@ class TrainingProgramService:
 
         # Recalculate enrollment progress
         await self._recalculate_enrollment_progress(progress.enrollment_id)
+
+        # Auto-advance phases whose requirements are now complete (no-op for
+        # non-phased programs and phases flagged for manual advancement)
+        await self._maybe_auto_advance_phase(progress.enrollment_id)
 
         return progress, None
 
@@ -1082,6 +1406,20 @@ class TrainingProgramService:
                     completed_at=datetime.now(timezone.utc),
                 )
             )
+        elif was_completed:
+            # Progress fell back below 100% for an enrollment that had already
+            # completed — e.g. an officer corrected an over-count downward, or a
+            # new required requirement was added to the program. Reopen it so it
+            # doesn't stay marked complete without actually satisfying every
+            # required item.
+            await self.db.execute(
+                update(ProgramEnrollment)
+                .where(ProgramEnrollment.id == str(enrollment_id))
+                .values(
+                    status=EnrollmentStatus.ACTIVE,
+                    completed_at=None,
+                )
+            )
 
         await self.db.commit()
 
@@ -1110,6 +1448,193 @@ class TrainingProgramService:
                     await self._handle_evoc_completion(program, enrollment)
             except Exception as e:
                 logger.error(f"Failed to send program completion notification: {e}")
+
+    # ==================== Phase Advancement Methods ====================
+
+    async def _is_phase_complete(
+        self,
+        enrollment_id: UUID,
+        phase_id: UUID,
+    ) -> bool:
+        """Whether every *required* requirement in a phase is satisfied for
+        this enrollment. A phase with no required requirements is trivially
+        complete (there is nothing gating advancement out of it)."""
+        result = await self.db.execute(
+            select(RequirementProgress)
+            .join(ProgramRequirement)
+            .where(
+                RequirementProgress.enrollment_id == str(enrollment_id),
+                ProgramRequirement.phase_id == str(phase_id),
+                ProgramRequirement.is_required == True,  # noqa: E712
+            )
+        )
+        rows = result.scalars().all()
+        return all(p.progress_percentage >= 100.0 for p in rows)
+
+    @staticmethod
+    def _next_phase(
+        phases: List[ProgramPhase],
+        current_phase_id: Optional[str],
+    ) -> Optional[ProgramPhase]:
+        """The phase with the smallest phase_number greater than the current
+        one, or the first phase when there is no current phase."""
+        ordered = sorted(phases, key=lambda p: p.phase_number)
+        if not ordered:
+            return None
+        if current_phase_id is None:
+            return ordered[0]
+        current = next(
+            (p for p in ordered if str(p.id) == str(current_phase_id)), None
+        )
+        if current is None:
+            return ordered[0]
+        for phase in ordered:
+            if phase.phase_number > current.phase_number:
+                return phase
+        return None
+
+    async def _notify_phase_for_enrollment(
+        self,
+        enrollment: ProgramEnrollment,
+        program: TrainingProgram,
+        new_phase_name: str,
+    ) -> None:
+        """Fetch the member and send the phase-advancement notification.
+        Notification failures must never abort the advancement itself."""
+        try:
+            user_result = await self.db.execute(
+                select(User).where(User.id == str(enrollment.user_id))
+            )
+            user = user_result.scalar_one_or_none()
+            if user:
+                await self._notify_phase_advancement(
+                    enrollment,
+                    program,
+                    user,
+                    new_phase_name,
+                    UUID(str(program.organization_id)),
+                )
+        except Exception as e:
+            logger.error(f"Failed to send phase advancement notification: {e}")
+
+    async def advance_enrollment_phase(
+        self,
+        enrollment_id: UUID,
+        organization_id: UUID,
+        advanced_by: Optional[UUID] = None,
+        force: bool = False,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
+        """
+        Manually advance an enrollment to the next phase (officer action).
+
+        Requires the current phase's required requirements to be complete
+        unless ``force`` is set. Returns: (enrollment, error_message)
+        """
+        enrollment = await self.get_enrollment_by_id(enrollment_id, organization_id)
+        if not enrollment:
+            return None, "Enrollment not found"
+
+        program = await self.get_program_by_id(
+            UUID(str(enrollment.program_id)), organization_id, include_phases=True
+        )
+        if not program:
+            return None, "Training program not found"
+
+        if program.structure_type != ProgramStructureType.PHASES:
+            return None, "This program is not organized into phases"
+
+        next_phase = self._next_phase(program.phases, enrollment.current_phase_id)
+        if next_phase is None:
+            return None, "Member is already at the final phase"
+
+        if not force and enrollment.current_phase_id:
+            complete = await self._is_phase_complete(
+                enrollment_id, UUID(str(enrollment.current_phase_id))
+            )
+            if not complete:
+                return (
+                    None,
+                    "The current phase's requirements are not yet complete",
+                )
+
+        await self.db.execute(
+            update(ProgramEnrollment)
+            .where(ProgramEnrollment.id == str(enrollment_id))
+            .values(
+                current_phase_id=next_phase.id,
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        await self.db.commit()
+        enrollment.current_phase_id = next_phase.id
+
+        await self._notify_phase_for_enrollment(enrollment, program, next_phase.name)
+
+        return enrollment, None
+
+    async def _maybe_auto_advance_phase(
+        self,
+        enrollment_id: UUID,
+    ) -> None:
+        """Auto-advance an active enrollment through any consecutive phases
+        whose required requirements are complete.
+
+        Stops at a phase flagged ``requires_manual_advancement`` (an officer
+        must advance out of it) or one that isn't complete. Safe to call after
+        every progress update — it no-ops for non-phased programs and
+        enrollments without a current phase.
+        """
+        enroll_result = await self.db.execute(
+            select(ProgramEnrollment).where(
+                ProgramEnrollment.id == str(enrollment_id)
+            )
+        )
+        enrollment = enroll_result.scalar_one_or_none()
+        if not enrollment:
+            return
+        if not getattr(enrollment, "current_phase_id", None):
+            return
+        if getattr(enrollment, "status", None) != EnrollmentStatus.ACTIVE:
+            return
+
+        program_result = await self.db.execute(
+            select(TrainingProgram)
+            .options(selectinload(TrainingProgram.phases))
+            .where(TrainingProgram.id == str(enrollment.program_id))
+        )
+        program = program_result.scalar_one_or_none()
+        if not program or program.structure_type != ProgramStructureType.PHASES:
+            return
+
+        phases = list(program.phases)
+        by_id = {str(p.id): p for p in phases}
+
+        # Bound the loop by the phase count so a data anomaly can't spin forever.
+        for _ in range(len(phases)):
+            current = by_id.get(str(enrollment.current_phase_id))
+            if current is None or current.requires_manual_advancement:
+                return
+            if not await self._is_phase_complete(
+                enrollment_id, UUID(str(current.id))
+            ):
+                return
+            next_phase = self._next_phase(phases, enrollment.current_phase_id)
+            if next_phase is None:
+                return
+
+            await self.db.execute(
+                update(ProgramEnrollment)
+                .where(ProgramEnrollment.id == str(enrollment_id))
+                .values(
+                    current_phase_id=next_phase.id,
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+            await self.db.commit()
+            enrollment.current_phase_id = next_phase.id
+            await self._notify_phase_for_enrollment(
+                enrollment, program, next_phase.name
+            )
 
     # ==================== Program Duplication Methods ====================
 
@@ -1729,6 +2254,13 @@ class TrainingProgramService:
             u = user_map.get(str(uid))
             return f"{u.first_name} {u.last_name}" if u else str(uid)
 
+        # Track which users failed a gate keyed by UUID, so the enrollment loop
+        # below can reliably skip them. (Error strings are name-based for the
+        # UI, so matching the raw user_id against them would never hit — that
+        # bug previously let members who failed prerequisite/concurrency checks
+        # get enrolled anyway.)
+        blocked_user_ids: set[str] = set()
+
         # Check for prerequisite programs (batch query instead of O(U*P) queries)
         prerequisite_errors = []
         if program.prerequisite_program_ids:
@@ -1755,6 +2287,7 @@ class TrainingProgramService:
                         prerequisite_errors.append(
                             f"{_user_name(uid)} has not completed prerequisite program"
                         )
+                        blocked_user_ids.add(str(uid))
                         break  # One missing prereq is enough
 
         # Check for concurrent enrollment restrictions (batch query)
@@ -1775,13 +2308,14 @@ class TrainingProgramService:
                     prerequisite_errors.append(
                         f"{_user_name(uid)} is already enrolled in another program. This program does not allow concurrent enrollment."
                     )
+                    blocked_user_ids.add(str(uid))
 
         enrollments = []
         errors = prerequisite_errors.copy()
 
         for user_id in user_ids:
-            # Skip if user had prerequisite errors
-            if any(str(user_id) in error for error in prerequisite_errors):
+            # Skip users blocked by a prerequisite/concurrency gate above
+            if str(user_id) in blocked_user_ids:
                 continue
 
             # Try to enroll

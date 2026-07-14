@@ -676,6 +676,24 @@ export interface ProgramRequirementCreate {
   notification_message?: string;
 }
 
+export interface ProgramRequirementUpdate {
+  is_required?: boolean;
+  is_prerequisite?: boolean;
+  sort_order?: number;
+}
+
+export interface SampleTemplateSummary {
+  key: string;
+  name: string;
+  description?: string | null;
+  code?: string | null;
+  target_position?: string | null;
+  structure_type: string;
+  phase_count: number;
+  requirement_count: number;
+  time_limit_days?: number | null;
+}
+
 export interface ProgramMilestone {
   id: string;
   program_id: string;
@@ -721,6 +739,23 @@ export interface ProgramEnrollmentCreate {
   notes?: string;
 }
 
+/** Structured notes on a requirement progress row (JSON in the API). */
+export interface RequirementProgressNotes {
+  /** Most recent knowledge/skills test score (0-100) */
+  latest_score?: number;
+  /** Whether the latest recorded score passed */
+  passed?: boolean;
+  /** Passing threshold used for the latest score */
+  passing_score?: number;
+  test_attempts?: Array<{
+    score: number;
+    passed: boolean;
+    recorded_at: string;
+    recorded_by?: string | null;
+  }>;
+  [key: string]: unknown;
+}
+
 export interface RequirementProgressRecord {
   id: string;
   enrollment_id: string;
@@ -728,7 +763,7 @@ export interface RequirementProgressRecord {
   status: RequirementProgressStatus;
   progress_value: number;
   progress_percentage: number;
-  progress_notes?: string | null;
+  progress_notes?: RequirementProgressNotes | null;
   started_at?: string;
   completed_at?: string;
   verified_by?: string;
@@ -741,8 +776,10 @@ export interface RequirementProgressRecord {
 export interface RequirementProgressUpdate {
   status?: RequirementProgressStatus;
   progress_value?: number;
-  progress_notes?: string | null;
+  progress_notes?: RequirementProgressNotes | null;
   verified_by?: string;
+  /** Officer-entered knowledge/skills test score (0-100); pass/fail derived */
+  test_score?: number;
 }
 
 export interface ProgramWithDetails extends TrainingProgram {
@@ -793,6 +830,51 @@ export interface BulkEnrollmentResponse {
   success_count: number;
   enrolled_users: string[];
   errors: string[];
+}
+
+// Enrollment enriched with the member's display info (program detail view).
+export interface ProgramEnrollmentWithUser extends ProgramEnrollment {
+  user_name: string;
+  user_email?: string;
+}
+
+// Atomic program build (create-pipeline wizard) — one nested payload persisted
+// in a single backend transaction.
+export interface ProgramBuildRequirementInput {
+  name: string;
+  description?: string | undefined;
+  requirement_type: RequirementType;
+  frequency: RequirementFrequency;
+  required_hours?: number | undefined;
+  required_shifts?: number | undefined;
+  required_calls?: number | undefined;
+  passing_score?: number | undefined;
+  max_attempts?: number | undefined;
+  checklist_items?: string[] | undefined;
+  is_required: boolean;
+  sort_order: number;
+}
+
+export interface ProgramBuildMilestoneInput {
+  name: string;
+  description?: string | undefined;
+  completion_percentage_threshold: number;
+  notification_message?: string | undefined;
+}
+
+export interface ProgramBuildPhaseInput {
+  phase_number: number;
+  name: string;
+  description?: string | undefined;
+  time_limit_days?: number | undefined;
+  requires_manual_advancement: boolean;
+  requirements: ProgramBuildRequirementInput[];
+  milestones: ProgramBuildMilestoneInput[];
+}
+
+export interface ProgramBuildRequest {
+  program: TrainingProgramCreate;
+  phases: ProgramBuildPhaseInput[];
 }
 
 // ==================== External Training Integration Types ====================

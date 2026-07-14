@@ -223,6 +223,7 @@ SkillSheetTemplate
 ├── registry_code
 ├── certification_level
 ├── category_id (FK → training_categories)
+├── requirement_id (FK → training_requirements, nullable — default pipeline link)
 ├── time_limit_minutes (nullable)
 ├── total_possible_points (calculated)
 ├── passing_score (nullable)
@@ -624,3 +625,67 @@ calculate_test_result(test, template) -> tuple[float | None, str]
 | Statement criteria | `type == "statement"` criteria are informational and **always pass** |
 | Missing required section | A required section with no matching result **fails** the critical check |
 | Final result | `"pass"` only when passing-percentage **AND** critical checks both hold; otherwise `"fail"` |
+
+---
+
+## 14. Training Pipeline Requirement Link *(2026-07-14)*
+
+Skills testing now hooks directly into the training-program pipeline so that
+passing a skill test can automatically complete the requirement it satisfies on
+a candidate's active program enrollment(s). This replaces the older
+`required_skills` JSON lookup described in §4.1 with a concrete foreign-key link.
+
+### 14.1 Schema
+
+A nullable `requirement_id` column (FK → `training_requirements`,
+`ON DELETE SET NULL`, indexed) was added to **both** `skill_templates` and
+`skill_tests`.
+
+- Migration: `20260714_0001_add_requirement_link_to_skills_testing`
+  (indexes `idx_skill_template_requirement`, `idx_skill_test_requirement`).
+- Both columns are nullable — a template or test need not be tied to any
+  pipeline requirement.
+
+### 14.2 Hybrid Link Model
+
+The link uses a **template-default / per-test-override** model:
+
+- A **template** carries a *default* `requirement_id` (the requirement it
+  normally satisfies).
+- Each **test** inherits that requirement at creation time, but the create-test
+  request may override it with an explicit `requirement_id` in the body.
+- `POST /api/v1/training/skills-testing/tests` sets the test's requirement from
+  the explicit body value when provided, otherwise falls back to the template's
+  default.
+
+`requirement_id` on a template or test is validated to be a real
+`TrainingRequirement` in the caller's organization (via
+`_validate_requirement_link`); an unknown ID is rejected.
+
+### 14.3 Endpoints
+
+- `POST /api/v1/training/skills-testing/templates` and
+  `PUT /api/v1/training/skills-testing/templates/{id}` accept and validate
+  `requirement_id`.
+- `POST /api/v1/training/skills-testing/tests` resolves the test's requirement
+  (explicit body value, else inherited template default).
+- Template list/detail responses and test responses now include
+  `requirement_id`.
+
+### 14.4 Pipeline Completion on Pass
+
+`POST /api/v1/training/skills-testing/tests/{id}/complete` marks the linked
+requirement complete when **all** of the following hold:
+
+1. The computed result is **PASS**,
+2. the test is **not** a practice test (`is_practice == False`), and
+3. the test has a non-null `requirement_id`.
+
+When satisfied, completion routes through the training-program progress updater
+(`apply_test_pass_to_pipeline`), marking the requirement **COMPLETE** on the
+candidate's active enrollment(s). Because it goes through the standard progress
+updater, downstream effects run automatically: percentage recalculation,
+requirement/phase completion, program-level rollup, and phase advancement.
+
+A **failing** test (or a practice test, or a test with no `requirement_id`) has
+**no** effect on the pipeline.

@@ -28,6 +28,9 @@ const TrainingProgramsPage = lazyWithRetry(
 const PipelineDetailPage = lazyWithRetry(
   () => import('../../pages/PipelineDetailPage'),
 );
+const MyProgramProgressPage = lazyWithRetry(
+  () => import('../../pages/MyProgramProgressPage'),
+);
 
 // Training Module - Admin
 const TrainingAdminPage = lazyWithRetry(() =>
@@ -85,6 +88,11 @@ export const getTrainingRoutes = () => {
       <Route
         path="/training/programs/:programId"
         element={<PipelineDetailPage />}
+      />
+      {/* Member-facing read-only progression view for one enrollment */}
+      <Route
+        path="/training/my-progress/:enrollmentId"
+        element={<MyProgramProgressPage />}
       />
 
       {/* Training Module - Admin Hub */}
