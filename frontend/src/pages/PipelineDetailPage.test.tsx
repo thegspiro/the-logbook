@@ -11,6 +11,7 @@ const mockGetProgramRequirements = vi.fn();
 const mockGetProgramEnrollments = vi.fn();
 const mockGetEnrollmentProgress = vi.fn();
 const mockUpdateProgress = vi.fn();
+const mockAdvancePhase = vi.fn();
 const mockGetUsers = vi.fn();
 
 vi.mock('../services/api', () => ({
@@ -21,6 +22,7 @@ vi.mock('../services/api', () => ({
     getProgramEnrollments: (...a: unknown[]) => mockGetProgramEnrollments(...a) as unknown,
     getEnrollmentProgress: (...a: unknown[]) => mockGetEnrollmentProgress(...a) as unknown,
     updateProgress: (...a: unknown[]) => mockUpdateProgress(...a) as unknown,
+    advancePhase: (...a: unknown[]) => mockAdvancePhase(...a) as unknown,
   },
   userService: {
     getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
@@ -98,6 +100,7 @@ describe('PipelineDetailPage — enrollment progress management', () => {
       is_behind_schedule: false,
     });
     mockUpdateProgress.mockResolvedValue({ ...certProgress, status: 'completed' });
+    mockAdvancePhase.mockResolvedValue({ ...enrollment, current_phase_id: 'ph-2' });
   });
 
   it('lists enrolled members by name on the Enrollments tab', async () => {
@@ -127,5 +130,56 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     );
     // Progress is re-fetched after the update so the rollup reflects it.
     await waitFor(() => expect(mockGetEnrollmentProgress).toHaveBeenCalledTimes(2));
+  });
+
+  it('groups requirements by phase and advances to the next phase', async () => {
+    const phase1 = {
+      id: 'ph-1', program_id: 'prog-1', phase_number: 1, name: 'Basics',
+      requires_manual_advancement: false, created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    const phase2 = {
+      id: 'ph-2', program_id: 'prog-1', phase_number: 2, name: 'Advanced',
+      requires_manual_advancement: false, created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    };
+    mockGetProgramPhases.mockResolvedValue([phase1, phase2]);
+    mockGetProgramRequirements.mockResolvedValue([
+      { id: 'pr-1', program_id: 'prog-1', phase_id: 'ph-1', requirement_id: 'req-1', is_required: true, is_prerequisite: false, sort_order: 0, created_at: '2026-01-01T00:00:00Z' },
+      { id: 'pr-2', program_id: 'prog-1', phase_id: 'ph-2', requirement_id: 'req-2', is_required: true, is_prerequisite: false, sort_order: 0, created_at: '2026-01-01T00:00:00Z' },
+    ]);
+    const phasedEnrollment = { ...enrollment, current_phase_id: 'ph-1' };
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: phasedEnrollment,
+      program,
+      current_phase: phase1,
+      requirement_progress: [
+        { ...certProgress, id: 'rp-1', requirement_id: 'req-1' },
+        {
+          ...certProgress, id: 'rp-2', requirement_id: 'req-2',
+          requirement: { id: 'req-2', name: 'Pump Ops', requirement_type: 'skills_evaluation' },
+        },
+      ],
+      completed_requirements: 0,
+      total_requirements: 2,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    // Requirements are grouped under their phase headers.
+    expect(await within(dialog).findByText(/Phase 1: Basics/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Phase 2: Advanced/)).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /Advance to next phase/i }));
+
+    await waitFor(() => expect(mockAdvancePhase).toHaveBeenCalledWith('enr-1'));
   });
 });

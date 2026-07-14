@@ -869,6 +869,56 @@ async def get_program_enrollments(
     ]
 
 
+@router.post(
+    "/enrollments/{enrollment_id}/advance-phase",
+    response_model=ProgramEnrollmentResponse,
+)
+async def advance_enrollment_phase(
+    enrollment_id: UUID,
+    force: bool = Query(
+        False, description="Advance even if the current phase is incomplete"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Advance a member to the next phase of a phased training program.
+
+    By default the current phase's required requirements must be complete;
+    pass ``force=true`` to override.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+
+    enrollment, error = await service.advance_enrollment_phase(
+        enrollment_id=enrollment_id,
+        organization_id=current_user.organization_id,
+        advanced_by=current_user.id,
+        force=force,
+    )
+
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_phase_advanced",
+        event_category="training",
+        severity="info",
+        event_data={
+            "enrollment_id": str(enrollment_id),
+            "new_phase_id": str(enrollment.current_phase_id),
+            "forced": force,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return enrollment
+
+
 # ==================== Requirement Progress Endpoints ====================
 
 

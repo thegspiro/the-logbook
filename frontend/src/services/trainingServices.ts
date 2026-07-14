@@ -663,6 +663,19 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /**
+   * Advance an enrollment to the next phase of a phased program.
+   * By default the current phase must be complete; pass force to override.
+   */
+  async advancePhase(enrollmentId: string, force = false): Promise<ProgramEnrollment> {
+    const response = await api.post<ProgramEnrollment>(
+      `/training/programs/enrollments/${enrollmentId}/advance-phase`,
+      null,
+      { params: { force } },
+    );
+    return response.data;
+  },
+
   // ==================== Program Duplication ====================
 
   /**

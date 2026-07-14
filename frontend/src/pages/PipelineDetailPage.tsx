@@ -21,6 +21,7 @@ import {
   Circle,
   BadgeCheck,
   Save,
+  ArrowUpRight,
 } from 'lucide-react';
 import { trainingProgramService, userService } from '../services/api';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
@@ -469,17 +470,64 @@ const RequirementProgressRow: React.FC<{
   );
 };
 
+interface PhaseGroup {
+  phase: ProgramPhase | null;
+  records: RequirementProgressRecord[];
+}
+
+// Group a member's progress records under their phase, using the program's
+// requirement→phase links. Records not tied to a phase fall into a trailing
+// "Program-level" group. Empty groups are dropped.
+function groupRecordsByPhase(
+  records: RequirementProgressRecord[],
+  phases: ProgramPhase[],
+  programReqs: ProgramRequirement[],
+): PhaseGroup[] {
+  const reqPhase = new Map<string, string | undefined>();
+  programReqs.forEach((pr) => reqPhase.set(pr.requirement_id, pr.phase_id));
+
+  const ordered = [...phases].sort((a, b) => a.phase_number - b.phase_number);
+  const groups: PhaseGroup[] = ordered.map((phase) => ({
+    phase,
+    records: records.filter((r) => reqPhase.get(r.requirement_id) === phase.id),
+  }));
+
+  const programLevel = records.filter((r) => {
+    const pid = reqPhase.get(r.requirement_id);
+    return !pid || !ordered.some((p) => p.id === pid);
+  });
+  if (programLevel.length > 0) groups.push({ phase: null, records: programLevel });
+
+  return groups.filter((g) => g.records.length > 0);
+}
+
+// A phase group is complete when all of its *required* records are at 100%
+// (records with no matching program-requirement default to required).
+function isGroupComplete(
+  records: RequirementProgressRecord[],
+  programReqs: ProgramRequirement[],
+): boolean {
+  const requiredMap = new Map(programReqs.map((pr) => [pr.requirement_id, pr.is_required]));
+  return records
+    .filter((r) => requiredMap.get(r.requirement_id) !== false)
+    .every((r) => r.progress_percentage >= 100);
+}
+
 const EnrollmentProgressModal: React.FC<{
   isOpen: boolean;
   enrollmentId: string | null;
   memberName: string;
+  phases: ProgramPhase[];
+  programReqs: ProgramRequirement[];
+  structureType: ProgramStructureType;
   onClose: () => void;
   onSaved: () => void;
-}> = ({ isOpen, enrollmentId, memberName, onClose, onSaved }) => {
+}> = ({ isOpen, enrollmentId, memberName, phases, programReqs, structureType, onClose, onSaved }) => {
   const [data, setData] = useState<MemberProgramProgress | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [advancing, setAdvancing] = useState(false);
 
   const load = useCallback(async () => {
     if (!enrollmentId) return;
@@ -504,7 +552,7 @@ const EnrollmentProgressModal: React.FC<{
     setSavingId(progressId);
     try {
       await trainingProgramService.updateProgress(progressId, updates);
-      await load();  // pull recalculated percentages/status
+      await load();  // pull recalculated percentages/status (may auto-advance the phase)
       onSaved();     // refresh the outer enrollments list (overall %, completion)
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to update progress'));
@@ -513,9 +561,36 @@ const EnrollmentProgressModal: React.FC<{
     }
   };
 
+  const handleAdvance = async () => {
+    if (!enrollmentId) return;
+    setAdvancing(true);
+    try {
+      await trainingProgramService.advancePhase(enrollmentId);
+      toast.success('Advanced to the next phase');
+      await load();
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to advance phase'));
+    } finally {
+      setAdvancing(false);
+    }
+  };
+
   if (!isOpen) return null;
 
+  const phased = structureType === 'phases' && phases.length > 0;
   const overall = data ? Math.round(data.enrollment.progress_percentage) : 0;
+
+  const orderedPhases = [...phases].sort((a, b) => a.phase_number - b.phase_number);
+  const currentIdx = data
+    ? orderedPhases.findIndex((p) => p.id === data.enrollment.current_phase_id)
+    : -1;
+  // No current phase (idx -1) but phases exist → the first phase is still "next".
+  const hasNextPhase = orderedPhases.length > 0 && currentIdx < orderedPhases.length - 1;
+
+  const groups = data && phased
+    ? groupRecordsByPhase(data.requirement_progress, phases, programReqs)
+    : [];
 
   return (
     <div
@@ -525,26 +600,44 @@ const EnrollmentProgressModal: React.FC<{
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
       <div className="bg-theme-surface-modal rounded-lg max-w-2xl w-full max-h-[90vh] flex flex-col">
-        <div className="p-6 border-b border-theme-surface-border flex items-start justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-theme-text-primary">Progress — {memberName}</h2>
-            {data && (
-              <p className="text-theme-text-muted text-sm mt-1">
-                {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
-              </p>
-            )}
+        <div className="p-6 border-b border-theme-surface-border">
+          <div className="flex items-start justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-theme-text-primary">Progress — {memberName}</h2>
+              {data && (
+                <p className="text-theme-text-muted text-sm mt-1">
+                  {data.completed_requirements}/{data.total_requirements} requirements · {overall}% overall
+                </p>
+              )}
+              {phased && data?.current_phase && (
+                <p className="text-xs text-theme-text-muted mt-1">
+                  Current phase: <span className="text-theme-text-secondary">{data.current_phase.name}</span>
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close"
+              className="p-1 text-theme-text-muted hover:text-theme-text-primary"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="p-1 text-theme-text-muted hover:text-theme-text-primary"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          {phased && (
+            <button
+              type="button"
+              onClick={() => { void handleAdvance(); }}
+              disabled={!data || !hasNextPhase || advancing}
+              className="btn-primary text-xs flex items-center gap-1 px-3 mt-3 disabled:opacity-50"
+            >
+              <ArrowUpRight className="w-3.5 h-3.5" />
+              {advancing ? 'Advancing...' : hasNextPhase ? 'Advance to next phase' : 'Final phase reached'}
+            </button>
+          )}
         </div>
 
-        <div className="p-6 overflow-y-auto space-y-3">
+        <div className="p-6 overflow-y-auto space-y-4">
           {loading ? (
             <div className="flex items-center justify-center py-10 text-theme-text-muted" role="status" aria-live="polite">
               <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -556,6 +649,41 @@ const EnrollmentProgressModal: React.FC<{
             <div className="py-10 text-center text-theme-text-muted text-sm">
               No requirements to track for this enrollment.
             </div>
+          ) : phased ? (
+            groups.map((group) => {
+              const isCurrent = !!group.phase && data.enrollment.current_phase_id === group.phase.id;
+              const complete = isGroupComplete(group.records, programReqs);
+              return (
+                <div key={group.phase?.id ?? 'program-level'} className="space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-semibold text-theme-text-primary">
+                      {group.phase ? `Phase ${group.phase.phase_number}: ${group.phase.name}` : 'Program-level'}
+                    </h3>
+                    {isCurrent && (
+                      <span className="px-2 py-0.5 bg-red-500/15 text-red-700 dark:text-red-400 text-xs rounded-sm">Current phase</span>
+                    )}
+                    {complete && (
+                      <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" aria-label="Phase complete" />
+                    )}
+                    {group.phase?.requires_manual_advancement && (
+                      <span className="inline-flex items-center gap-1 text-xs text-yellow-700 dark:text-yellow-400">
+                        <AlertTriangle className="w-3.5 h-3.5" /> Manual advancement
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {group.records.map((record) => (
+                      <RequirementProgressRow
+                        key={record.id}
+                        record={record}
+                        onUpdate={handleUpdate}
+                        saving={savingId === record.id}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })
           ) : (
             data.requirement_progress.map((record) => (
               <RequirementProgressRow
@@ -1000,6 +1128,9 @@ const PipelineDetailPage: React.FC = () => {
         isOpen={progressEnrollment !== null}
         enrollmentId={progressEnrollment?.id ?? null}
         memberName={progressEnrollment?.user_name ?? ''}
+        phases={phases}
+        programReqs={programReqs}
+        structureType={program.structure_type}
         onClose={() => setProgressEnrollment(null)}
         onSaved={() => { void loadEnrollments(); }}
       />

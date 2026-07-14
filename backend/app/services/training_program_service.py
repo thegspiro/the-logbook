@@ -1190,6 +1190,10 @@ class TrainingProgramService:
         # Recalculate enrollment progress
         await self._recalculate_enrollment_progress(progress.enrollment_id)
 
+        # Auto-advance phases whose requirements are now complete (no-op for
+        # non-phased programs and phases flagged for manual advancement)
+        await self._maybe_auto_advance_phase(progress.enrollment_id)
+
         return progress, None
 
     async def _recalculate_enrollment_progress(
@@ -1290,6 +1294,193 @@ class TrainingProgramService:
                     await self._handle_evoc_completion(program, enrollment)
             except Exception as e:
                 logger.error(f"Failed to send program completion notification: {e}")
+
+    # ==================== Phase Advancement Methods ====================
+
+    async def _is_phase_complete(
+        self,
+        enrollment_id: UUID,
+        phase_id: UUID,
+    ) -> bool:
+        """Whether every *required* requirement in a phase is satisfied for
+        this enrollment. A phase with no required requirements is trivially
+        complete (there is nothing gating advancement out of it)."""
+        result = await self.db.execute(
+            select(RequirementProgress)
+            .join(ProgramRequirement)
+            .where(
+                RequirementProgress.enrollment_id == str(enrollment_id),
+                ProgramRequirement.phase_id == str(phase_id),
+                ProgramRequirement.is_required == True,  # noqa: E712
+            )
+        )
+        rows = result.scalars().all()
+        return all(p.progress_percentage >= 100.0 for p in rows)
+
+    @staticmethod
+    def _next_phase(
+        phases: List[ProgramPhase],
+        current_phase_id: Optional[str],
+    ) -> Optional[ProgramPhase]:
+        """The phase with the smallest phase_number greater than the current
+        one, or the first phase when there is no current phase."""
+        ordered = sorted(phases, key=lambda p: p.phase_number)
+        if not ordered:
+            return None
+        if current_phase_id is None:
+            return ordered[0]
+        current = next(
+            (p for p in ordered if str(p.id) == str(current_phase_id)), None
+        )
+        if current is None:
+            return ordered[0]
+        for phase in ordered:
+            if phase.phase_number > current.phase_number:
+                return phase
+        return None
+
+    async def _notify_phase_for_enrollment(
+        self,
+        enrollment: ProgramEnrollment,
+        program: TrainingProgram,
+        new_phase_name: str,
+    ) -> None:
+        """Fetch the member and send the phase-advancement notification.
+        Notification failures must never abort the advancement itself."""
+        try:
+            user_result = await self.db.execute(
+                select(User).where(User.id == str(enrollment.user_id))
+            )
+            user = user_result.scalar_one_or_none()
+            if user:
+                await self._notify_phase_advancement(
+                    enrollment,
+                    program,
+                    user,
+                    new_phase_name,
+                    UUID(str(program.organization_id)),
+                )
+        except Exception as e:
+            logger.error(f"Failed to send phase advancement notification: {e}")
+
+    async def advance_enrollment_phase(
+        self,
+        enrollment_id: UUID,
+        organization_id: UUID,
+        advanced_by: Optional[UUID] = None,
+        force: bool = False,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
+        """
+        Manually advance an enrollment to the next phase (officer action).
+
+        Requires the current phase's required requirements to be complete
+        unless ``force`` is set. Returns: (enrollment, error_message)
+        """
+        enrollment = await self.get_enrollment_by_id(enrollment_id, organization_id)
+        if not enrollment:
+            return None, "Enrollment not found"
+
+        program = await self.get_program_by_id(
+            UUID(str(enrollment.program_id)), organization_id, include_phases=True
+        )
+        if not program:
+            return None, "Training program not found"
+
+        if program.structure_type != ProgramStructureType.PHASES:
+            return None, "This program is not organized into phases"
+
+        next_phase = self._next_phase(program.phases, enrollment.current_phase_id)
+        if next_phase is None:
+            return None, "Member is already at the final phase"
+
+        if not force and enrollment.current_phase_id:
+            complete = await self._is_phase_complete(
+                enrollment_id, UUID(str(enrollment.current_phase_id))
+            )
+            if not complete:
+                return (
+                    None,
+                    "The current phase's requirements are not yet complete",
+                )
+
+        await self.db.execute(
+            update(ProgramEnrollment)
+            .where(ProgramEnrollment.id == str(enrollment_id))
+            .values(
+                current_phase_id=next_phase.id,
+                updated_at=datetime.now(timezone.utc),
+            )
+        )
+        await self.db.commit()
+        enrollment.current_phase_id = next_phase.id
+
+        await self._notify_phase_for_enrollment(enrollment, program, next_phase.name)
+
+        return enrollment, None
+
+    async def _maybe_auto_advance_phase(
+        self,
+        enrollment_id: UUID,
+    ) -> None:
+        """Auto-advance an active enrollment through any consecutive phases
+        whose required requirements are complete.
+
+        Stops at a phase flagged ``requires_manual_advancement`` (an officer
+        must advance out of it) or one that isn't complete. Safe to call after
+        every progress update — it no-ops for non-phased programs and
+        enrollments without a current phase.
+        """
+        enroll_result = await self.db.execute(
+            select(ProgramEnrollment).where(
+                ProgramEnrollment.id == str(enrollment_id)
+            )
+        )
+        enrollment = enroll_result.scalar_one_or_none()
+        if not enrollment:
+            return
+        if not getattr(enrollment, "current_phase_id", None):
+            return
+        if getattr(enrollment, "status", None) != EnrollmentStatus.ACTIVE:
+            return
+
+        program_result = await self.db.execute(
+            select(TrainingProgram)
+            .options(selectinload(TrainingProgram.phases))
+            .where(TrainingProgram.id == str(enrollment.program_id))
+        )
+        program = program_result.scalar_one_or_none()
+        if not program or program.structure_type != ProgramStructureType.PHASES:
+            return
+
+        phases = list(program.phases)
+        by_id = {str(p.id): p for p in phases}
+
+        # Bound the loop by the phase count so a data anomaly can't spin forever.
+        for _ in range(len(phases)):
+            current = by_id.get(str(enrollment.current_phase_id))
+            if current is None or current.requires_manual_advancement:
+                return
+            if not await self._is_phase_complete(
+                enrollment_id, UUID(str(current.id))
+            ):
+                return
+            next_phase = self._next_phase(phases, enrollment.current_phase_id)
+            if next_phase is None:
+                return
+
+            await self.db.execute(
+                update(ProgramEnrollment)
+                .where(ProgramEnrollment.id == str(enrollment_id))
+                .values(
+                    current_phase_id=next_phase.id,
+                    updated_at=datetime.now(timezone.utc),
+                )
+            )
+            await self.db.commit()
+            enrollment.current_phase_id = next_phase.id
+            await self._notify_phase_for_enrollment(
+                enrollment, program, next_phase.name
+            )
 
     # ==================== Program Duplication Methods ====================
 
