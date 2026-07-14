@@ -27,6 +27,13 @@ progression.
   **searchable member picker** (no more raw user IDs), and **bulk enroll now blocks**
   members who fail prerequisite or concurrent-enrollment rules (previously the gate
   was bypassed and they were enrolled anyway).
+- **Eligibility-aware enroll picker** — the picker now prechecks who can actually be
+  enrolled (`GET /training/programs/programs/{id}/eligibility`) and defaults to
+  "Show eligible only". Members who are already enrolled, haven't completed a
+  prerequisite program, or are blocked by the no-concurrent-enrollment rule are shown
+  with the specific reason (and can be revealed by toggling the filter off) instead of
+  only failing on submit. Eligible members sort first. Target position/roles stay
+  advisory and never block.
 
 **Progress tracking**
 

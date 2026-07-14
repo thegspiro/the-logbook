@@ -13,7 +13,8 @@ const mockGetEnrollmentProgress = vi.fn();
 const mockUpdateProgress = vi.fn();
 const mockAdvancePhase = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
-const mockGetUsers = vi.fn();
+const mockGetEnrollmentEligibility = vi.fn();
+const mockBulkEnrollMembers = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -25,9 +26,8 @@ vi.mock('../services/api', () => ({
     updateProgress: (...a: unknown[]) => mockUpdateProgress(...a) as unknown,
     advancePhase: (...a: unknown[]) => mockAdvancePhase(...a) as unknown,
     updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
-  },
-  userService: {
-    getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
+    getEnrollmentEligibility: (...a: unknown[]) => mockGetEnrollmentEligibility(...a) as unknown,
+    bulkEnrollMembers: (...a: unknown[]) => mockBulkEnrollMembers(...a) as unknown,
   },
 }));
 
@@ -111,6 +111,14 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     });
     mockUpdateProgress.mockResolvedValue({ ...certProgress, status: 'completed' });
     mockAdvancePhase.mockResolvedValue({ ...enrollment, current_phase_id: 'ph-2' });
+    mockGetEnrollmentEligibility.mockResolvedValue([
+      { user_id: 'u1', first_name: 'Ava', last_name: 'Recruit', eligible: true, status: 'eligible', reason: null },
+      {
+        user_id: 'u2', first_name: 'Ben', last_name: 'Veteran', eligible: false,
+        status: 'prerequisite', reason: 'Must first complete: Recruit School',
+      },
+    ]);
+    mockBulkEnrollMembers.mockResolvedValue({ success_count: 1, enrolled_users: ['u1'], errors: [] });
   });
 
   it('lists enrolled members by name on the Enrollments tab', async () => {
@@ -292,5 +300,41 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     // Static "Required" text renders, but not as an interactive control.
     expect(await screen.findByText('Required')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Required' })).not.toBeInTheDocument();
+  });
+
+  it('shows only eligible members in the enroll picker, with a reason for the rest', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Enroll$/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(mockGetEnrollmentEligibility).toHaveBeenCalledWith('prog-1');
+
+    // Eligible member is shown; ineligible member is hidden by default.
+    expect(await within(dialog).findByText('Ava Recruit')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Ben Veteran')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('1 of 2 eligible')).toBeInTheDocument();
+
+    // Turning off "eligible only" reveals the blocked member and the reason.
+    await userEvent.click(within(dialog).getByLabelText(/Show eligible only/i));
+    expect(await within(dialog).findByText('Ben Veteran')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Must first complete: Recruit School/)).toBeInTheDocument();
+  });
+
+  it('enrolls the selected eligible member', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Enroll$/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    await userEvent.click(await within(dialog).findByText('Ava Recruit'));
+    await userEvent.click(within(dialog).getByRole('button', { name: /Enroll 1 Member/i }));
+
+    await waitFor(() =>
+      expect(mockBulkEnrollMembers).toHaveBeenCalledWith('prog-1', {
+        user_ids: ['u1'],
+        target_completion_date: undefined,
+      }),
+    );
   });
 });

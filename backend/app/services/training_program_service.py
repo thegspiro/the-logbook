@@ -993,6 +993,131 @@ class TrainingProgramService:
 
         return enrollment, None
 
+    async def get_enrollment_eligibility(
+        self,
+        program_id: UUID,
+        organization_id: UUID,
+    ) -> Optional[List[dict]]:
+        """
+        For every member of the org, decide whether they can be enrolled in this
+        program right now, and if not, why. Mirrors the hard gates enforced by
+        ``bulk_enroll_members`` so the enroll picker can surface eligibility up
+        front instead of failing on submit:
+
+          * ``enrolled``      — already actively enrolled in *this* program
+          * ``prerequisite``  — hasn't completed a required prerequisite program
+          * ``concurrent``    — active in another program and this one forbids
+                                concurrent enrollment
+          * ``eligible``      — none of the above
+
+        The program's target position/roles are intentionally NOT gated here —
+        they remain advisory. Returns None if the program doesn't exist.
+        """
+        program = await self.get_program_by_id(program_id, organization_id)
+        if not program:
+            return None
+
+        users_result = await self.db.execute(
+            select(User).where(
+                User.organization_id == str(organization_id),
+                User.deleted_at.is_(None),
+            )
+        )
+        users = users_result.scalars().all()
+        user_id_strs = [str(u.id) for u in users]
+
+        # Already actively enrolled in THIS program.
+        enrolled_result = await self.db.execute(
+            select(ProgramEnrollment.user_id).where(
+                ProgramEnrollment.program_id == str(program_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+            )
+        )
+        enrolled_ids = {str(row[0]) for row in enrolled_result.all()}
+
+        # Missing prerequisites — per user, the specific programs not yet done.
+        missing_prereqs: dict[str, List[str]] = {}
+        if program.prerequisite_program_ids and user_id_strs:
+            prereq_ids = [str(p) for p in program.prerequisite_program_ids]
+            name_rows = await self.db.execute(
+                select(TrainingProgram.id, TrainingProgram.name).where(
+                    TrainingProgram.id.in_(prereq_ids),
+                    TrainingProgram.organization_id == str(organization_id),
+                )
+            )
+            prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
+            completed_result = await self.db.execute(
+                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id)
+                .where(
+                    ProgramEnrollment.user_id.in_(user_id_strs),
+                    ProgramEnrollment.program_id.in_(prereq_ids),
+                    ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
+                )
+            )
+            completed_pairs = {
+                (str(r[0]), str(r[1])) for r in completed_result.all()
+            }
+            for uid in user_id_strs:
+                missing = [
+                    prereq_names.get(pid, "a prerequisite program")
+                    for pid in prereq_ids
+                    if (uid, pid) not in completed_pairs
+                ]
+                if missing:
+                    missing_prereqs[uid] = missing
+
+        # Concurrent-enrollment block — active in any other program.
+        concurrent_ids: set[str] = set()
+        if not program.allows_concurrent_enrollment and user_id_strs:
+            active_any_result = await self.db.execute(
+                select(ProgramEnrollment.user_id)
+                .join(TrainingProgram)
+                .where(
+                    ProgramEnrollment.user_id.in_(user_id_strs),
+                    ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                    TrainingProgram.organization_id == str(organization_id),
+                )
+            )
+            concurrent_ids = {str(row[0]) for row in active_any_result.all()}
+
+        results: List[dict] = []
+        for user in users:
+            uid = str(user.id)
+            if uid in enrolled_ids:
+                status, reason = "enrolled", "Already enrolled in this program"
+            elif uid in missing_prereqs:
+                names = ", ".join(missing_prereqs[uid])
+                status, reason = "prerequisite", f"Must first complete: {names}"
+            elif uid in concurrent_ids:
+                status, reason = (
+                    "concurrent",
+                    "Already enrolled in another program "
+                    "(concurrent enrollment not allowed)",
+                )
+            else:
+                status, reason = "eligible", None
+            results.append(
+                {
+                    "user_id": user.id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "membership_number": user.membership_number,
+                    "eligible": status == "eligible",
+                    "status": status,
+                    "reason": reason,
+                }
+            )
+
+        # Eligible first, then alphabetical — the order the picker wants.
+        results.sort(
+            key=lambda r: (
+                not r["eligible"],
+                (r["first_name"] or "").lower(),
+                (r["last_name"] or "").lower(),
+            )
+        )
+        return results
+
     async def get_member_enrollments(
         self,
         user_id: UUID,

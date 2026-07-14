@@ -682,6 +682,18 @@ export interface ProgramRequirementUpdate {
   sort_order?: number;
 }
 
+export type EligibilityStatus = 'eligible' | 'enrolled' | 'prerequisite' | 'concurrent';
+
+export interface MemberEligibility {
+  user_id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  membership_number?: string | null;
+  eligible: boolean;
+  status: EligibilityStatus;
+  reason?: string | null;
+}
+
 export interface SampleTemplateSummary {
   key: string;
   name: string;

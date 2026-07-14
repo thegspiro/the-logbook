@@ -23,12 +23,11 @@ import {
   Save,
   ArrowUpRight,
 } from 'lucide-react';
-import { trainingProgramService, userService } from '../services/api';
+import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
 import { getErrorMessage } from '../utils/errorHandling';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
-import type { User } from '../types/user';
 import type {
   TrainingProgram,
   ProgramPhase,
@@ -38,16 +37,22 @@ import type {
   TrainingRequirementEnhanced,
   ProgramStructureType,
   MemberProgramProgress,
+  MemberEligibility,
+  EligibilityStatus,
   RequirementProgressRecord,
   RequirementProgressUpdate,
 } from '../types/training';
 
-function memberName(u: User): string {
-  return (
-    u.full_name ||
-    `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() ||
-    u.username
-  );
+// Label + colour for each eligibility status; drives the picker badges.
+const ELIGIBILITY_META: Record<EligibilityStatus, { label: string; className: string }> = {
+  eligible: { label: 'Eligible', className: 'text-green-700 dark:text-green-400' },
+  enrolled: { label: 'Enrolled', className: 'text-theme-text-muted' },
+  prerequisite: { label: 'Prerequisite', className: 'text-yellow-700 dark:text-yellow-400' },
+  concurrent: { label: 'In another program', className: 'text-yellow-700 dark:text-yellow-400' },
+};
+
+function eligibilityName(m: MemberEligibility): string {
+  return `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || 'Unknown member';
 }
 
 // ==================== Types ====================
@@ -129,25 +134,26 @@ const EnrollModal: React.FC<{
   isOpen: boolean;
   programId: string;
   programName: string;
-  enrolledUserIds: Set<string>;
   onClose: () => void;
   onSuccess: () => void;
-}> = ({ isOpen, programId, programName, enrolledUserIds, onClose, onSuccess }) => {
-  const [members, setMembers] = useState<User[]>([]);
+}> = ({ isOpen, programId, programName, onClose, onSuccess }) => {
+  const [members, setMembers] = useState<MemberEligibility[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [eligibleOnly, setEligibleOnly] = useState(true);
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [targetDate, setTargetDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load the member roster each time the modal opens; reset transient state.
+  // Load eligibility each time the modal opens; reset transient state.
   useEffect(() => {
     if (!isOpen) {
       setSearch('');
       setSelected(new Map());
       setTargetDate('');
       setMembersError(null);
+      setEligibleOnly(true);
       return undefined;
     }
     let cancelled = false;
@@ -155,7 +161,7 @@ const EnrollModal: React.FC<{
     setMembersError(null);
     void (async () => {
       try {
-        const data = await userService.getUsers();
+        const data = await trainingProgramService.getEnrollmentEligibility(programId);
         if (!cancelled) setMembers(data);
       } catch (err: unknown) {
         if (!cancelled) setMembersError(getErrorMessage(err, 'Unable to load members.'));
@@ -164,27 +170,29 @@ const EnrollModal: React.FC<{
       }
     })();
     return () => { cancelled = true; };
-  }, [isOpen]);
+  }, [isOpen, programId]);
 
+  const eligibleCount = useMemo(() => members.filter((m) => m.eligible).length, [members]);
+
+  // The API already returns eligible-first, alphabetical — just filter here.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...members].sort((a, b) => memberName(a).localeCompare(memberName(b)));
-    if (!q) return sorted;
-    return sorted.filter((m) => {
-      const name = memberName(m).toLowerCase();
+    return members.filter((m) => {
+      if (eligibleOnly && !m.eligible) return false;
+      if (!q) return true;
       return (
-        name.includes(q) ||
-        m.username.toLowerCase().includes(q) ||
+        eligibilityName(m).toLowerCase().includes(q) ||
         (m.membership_number ?? '').toLowerCase().includes(q)
       );
     });
-  }, [members, search]);
+  }, [members, search, eligibleOnly]);
 
-  const toggle = (m: User) => {
+  const toggle = (m: MemberEligibility) => {
+    if (!m.eligible) return;
     setSelected((prev) => {
       const next = new Map(prev);
-      if (next.has(m.id)) next.delete(m.id);
-      else next.set(m.id, memberName(m));
+      if (next.has(m.user_id)) next.delete(m.user_id);
+      else next.set(m.user_id, eligibilityName(m));
       return next;
     });
   };
@@ -204,8 +212,8 @@ const EnrollModal: React.FC<{
       if (result.success_count > 0) {
         toast.success(`Enrolled ${result.success_count} member(s) in ${programName}`);
       }
-      // Surface any per-member failures (prerequisites, concurrency, duplicates)
-      // instead of silently dropping them.
+      // Eligibility is prechecked, but surface any residual per-member failures
+      // (e.g. a race where state changed since the picker loaded).
       result.errors.forEach((msg) => toast.error(msg));
       onSuccess();
       if (result.success_count > 0) onClose();
@@ -260,12 +268,30 @@ const EnrollModal: React.FC<{
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search members by name, username, or number..."
+              placeholder="Search members by name or number..."
               className="form-input pl-9 text-sm"
               aria-label="Search members"
               autoComplete="off"
             />
           </div>
+
+          {/* Eligibility filter */}
+          {!loadingMembers && !membersError && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-theme-text-muted">
+                {eligibleCount} of {members.length} eligible
+              </span>
+              <label className="inline-flex items-center gap-2 cursor-pointer select-none text-theme-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={eligibleOnly}
+                  onChange={(e) => setEligibleOnly(e.target.checked)}
+                  className="rounded-sm"
+                />
+                Show eligible only
+              </label>
+            </div>
+          )}
 
           {/* Member list */}
           <div className="border border-theme-surface-border rounded-lg max-h-64 overflow-y-auto">
@@ -277,38 +303,51 @@ const EnrollModal: React.FC<{
             ) : membersError ? (
               <div className="p-3 text-sm text-red-600 dark:text-red-400">{membersError}</div>
             ) : filtered.length === 0 ? (
-              <div className="py-8 text-center text-theme-text-muted text-sm">
-                {search ? 'No members match your search.' : 'No members found.'}
+              <div className="py-8 text-center text-theme-text-muted text-sm px-4">
+                {search
+                  ? 'No members match your search.'
+                  : eligibleOnly && members.length > 0
+                  ? 'No eligible members. Turn off “Show eligible only” to see who’s blocked and why.'
+                  : 'No members found.'}
               </div>
             ) : (
               filtered.map((m) => {
-                const already = enrolledUserIds.has(m.id);
-                const isSelected = selected.has(m.id);
+                const isSelected = selected.has(m.user_id);
+                const meta = ELIGIBILITY_META[m.status];
                 return (
                   <button
-                    key={m.id}
+                    key={m.user_id}
                     type="button"
-                    onClick={() => { if (!already) toggle(m); }}
-                    disabled={already}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm border-b border-theme-surface-border last:border-b-0 transition-colors ${
-                      already
-                        ? 'opacity-50 cursor-not-allowed'
+                    onClick={() => toggle(m)}
+                    disabled={!m.eligible}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-sm border-b border-theme-surface-border last:border-b-0 transition-colors ${
+                      !m.eligible
+                        ? 'cursor-not-allowed'
                         : isSelected
                         ? 'bg-red-500/10'
                         : 'hover:bg-theme-surface-hover'
                     }`}
                   >
-                    <span className="text-theme-text-primary truncate">
-                      {memberName(m)}
-                      {m.membership_number && (
-                        <span className="text-theme-text-muted ml-2 text-xs">#{m.membership_number}</span>
+                    <div className="min-w-0">
+                      <span className={`truncate ${m.eligible ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
+                        {eligibilityName(m)}
+                        {m.membership_number && (
+                          <span className="text-theme-text-muted ml-2 text-xs">#{m.membership_number}</span>
+                        )}
+                      </span>
+                      {!m.eligible && m.reason && (
+                        <p className="text-theme-text-muted text-xs mt-0.5">{m.reason}</p>
                       )}
-                    </span>
-                    {already ? (
-                      <span className="text-xs text-theme-text-muted">Enrolled</span>
-                    ) : isSelected ? (
-                      <CheckCircle2 className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
-                    ) : null}
+                    </div>
+                    {m.eligible ? (
+                      isSelected ? (
+                        <CheckCircle2 className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-theme-text-muted shrink-0" />
+                      )
+                    ) : (
+                      <span className={`text-xs shrink-0 ${meta.className}`}>{meta.label}</span>
+                    )}
                   </button>
                 );
               })
@@ -1184,7 +1223,6 @@ const PipelineDetailPage: React.FC = () => {
         isOpen={showEnrollModal}
         programId={programId || ''}
         programName={program.name}
-        enrolledUserIds={new Set(enrollments.map((e) => e.user_id))}
         onClose={() => setShowEnrollModal(false)}
         onSuccess={() => { void loadEnrollments(); }}
       />

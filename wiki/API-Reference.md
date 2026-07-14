@@ -299,6 +299,7 @@ PATCH  /api/v1/training/programs/progress/{progress_id}                 # Update
 PATCH  /api/v1/training/programs/programs/{program_id}/requirements/{program_requirement_id}  # Toggle a requirement's is_required / is_prerequisite / sort_order (training.manage)
 GET    /api/v1/training/programs/sample-templates                      # List built-in sample program templates (training.manage)
 POST   /api/v1/training/programs/sample-templates/{key}/instantiate    # Add a sample template to the org (training.manage)
+GET    /api/v1/training/programs/programs/{program_id}/eligibility     # Per-member enroll eligibility, eligible first (training.manage)
 ```
 
 - **`PATCH .../progress/{progress_id}`** — `RequirementProgressUpdate` now also
@@ -311,6 +312,10 @@ POST   /api/v1/training/programs/sample-templates/{key}/instantiate    # Add a s
   school, EMT recruit school, new-member orientation). `instantiate` replays the
   atomic build into the org as an editable template; optional body
   `{ "name": "…", "is_template": true }`.
+- **`.../{program_id}/eligibility`** — returns every member with `eligible`, a
+  `status` (`eligible` / `enrolled` / `prerequisite` / `concurrent`), and a `reason`.
+  Mirrors the hard gates in bulk-enroll so the picker can show eligibility up front;
+  target position/roles are not gated.
 - **Program create/response** now include `code` and `version`; each program
   phase includes `requires_manual_advancement`.
 

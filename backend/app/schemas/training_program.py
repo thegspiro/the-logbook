@@ -596,6 +596,21 @@ class ProgramBuildRequest(BaseModel):
     phases: List[ProgramBuildPhaseInput] = []
 
 
+class MemberEligibilityResponse(BaseModel):
+    """Per-member enrollment eligibility for the enroll picker."""
+
+    user_id: UUID
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    membership_number: Optional[str] = None
+    eligible: bool
+    # eligible | enrolled | prerequisite | concurrent
+    status: str
+    reason: Optional[str] = None
+
+    model_config = _response_config
+
+
 class SampleTemplateSummary(BaseModel):
     """Gallery metadata for a built-in sample program template."""
 

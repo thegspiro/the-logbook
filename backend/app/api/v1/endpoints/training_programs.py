@@ -22,6 +22,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.training_program import (  # Requirements; Programs; Phases; Program Requirements; Milestones; Enrollments; Progress; Registry
+    MemberEligibilityResponse,
     MemberProgramProgress,
     ProgramBuildRequest,
     ProgramEnrollmentCreate,
@@ -1272,3 +1273,36 @@ async def bulk_enroll_members(
         enrolled_users=[e.user_id for e in enrollments],
         errors=errors,
     )
+
+
+@router.get(
+    "/programs/{program_id}/eligibility",
+    response_model=list[MemberEligibilityResponse],
+)
+async def get_enrollment_eligibility(
+    program_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List every member with whether they can be enrolled in this program right
+    now (eligible / already enrolled / missing prerequisite / concurrent-block),
+    so the enroll picker can show eligibility up front. Eligible members sort
+    first.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+
+    eligibility = await service.get_enrollment_eligibility(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if eligibility is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Training program not found",
+        )
+
+    return eligibility

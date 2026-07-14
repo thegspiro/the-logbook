@@ -134,6 +134,13 @@ their real sessions/categories/tests, adjusts hours, and enrolls members.
 - Bulk member enrollment with validation
 - Custom target completion dates
 - Enrollment notes
+- **Eligibility-aware enroll picker** — the picker prechecks eligibility
+  (`GET /training/programs/programs/{program_id}/eligibility`) and defaults to
+  "Show eligible only". Members are marked **Eligible / Enrolled / Prerequisite /
+  In another program** with the specific reason, so officers see who can be enrolled
+  up front instead of hitting per-member errors on submit. Eligibility uses the same
+  hard gates as bulk enroll (already-enrolled, prerequisite programs, concurrent
+  enrollment); the program's target position/roles remain advisory and never block.
 
 #### Phase Management
 - Multi-phase program structures
