@@ -69,6 +69,7 @@ export interface TrainingSession {
   expiration_months?: number;
 
   // Auto-completion & approval settings
+  counts_toward_certification?: boolean;
   auto_create_records?: boolean;
   require_completion_confirmation?: boolean;
   approval_deadline_days?: number;
@@ -137,6 +138,7 @@ export interface TrainingSessionCreate {
   materials_required?: string[] | undefined;
 
   // Auto-completion settings
+  counts_toward_certification?: boolean | undefined;  // Feed linked certificate requirements
   auto_create_records?: boolean | undefined;  // Create TrainingRecords on check-in
   require_completion_confirmation?: boolean | undefined;  // Instructor must confirm completion
 }

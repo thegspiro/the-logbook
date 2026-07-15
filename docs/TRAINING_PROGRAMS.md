@@ -213,6 +213,24 @@ The pipeline supports both a manual and an automatic reset:
   coordinator opens the member's progress, and a `POST /training/programs/recert/run-due`
   endpoint sweeps every past-due enrollment for a scheduled job to call.
 
+#### Leaving a Program (Self-Service Withdrawal)
+A member can remove themselves from a program from their progression view via
+**Leave program** — useful when they step down from a level they no longer need to
+maintain (e.g. Paramedic → EMT), so the program stops cluttering their dashboard and
+raising warnings that no longer apply. The withdrawal is soft: the enrollment moves to
+`WITHDRAWN` (kept for history) and drops off the member's active dashboard. Officers
+with `training.manage` can withdraw any member; a withdrawn member can be re-enrolled
+later (`POST /training/programs/enrollments/{id}/withdraw`).
+
+#### Certification-Eligible vs. Credit-Only Sessions
+Training sessions carry a **"Counts toward certification requirements"** toggle (on by
+default). Leave it on for sessions delivered in a way a certifying body (NFPA/NREMT)
+accepts. Turn it off when a session should give members credit but isn't
+certification-grade — for example, an informal recruit-school drill: attendance still
+creates the training record and hours (counting toward general compliance), but the
+session no longer feeds the linked pipeline/certificate requirements, keeping ineligible
+hours off the member's certificate progress.
+
 #### Atomic Program Build
 - Create-pipeline wizard builds a program with all phases, requirements, and milestones in one transaction — a failure can't leave a half-built program behind
 

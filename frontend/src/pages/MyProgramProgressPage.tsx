@@ -19,8 +19,11 @@ import {
   AlertTriangle,
   Flag,
   BadgeCheck,
+  LogOut,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import { ConfirmDialog } from '../components/ux/ConfirmDialog';
+import { getErrorMessage } from '../utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
 import {
@@ -104,6 +107,8 @@ const MyProgramProgressPage: React.FC = () => {
   const [phases, setPhases] = useState<ProgramPhase[]>([]);
   const [programReqs, setProgramReqs] = useState<ProgramRequirement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showLeave, setShowLeave] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     if (!enrollmentId) return;
@@ -139,6 +144,20 @@ const MyProgramProgressPage: React.FC = () => {
     [data, phases, programReqs],
   );
 
+  const handleLeave = async () => {
+    if (!enrollmentId) return;
+    setLeaving(true);
+    try {
+      await trainingProgramService.withdrawEnrollment(enrollmentId);
+      toast.success('You have left this program');
+      navigate('/training');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Unable to leave this program'));
+      setLeaving(false);
+      setShowLeave(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" role="status" aria-live="polite">
@@ -163,7 +182,7 @@ const MyProgramProgressPage: React.FC = () => {
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold text-theme-text-primary">{data.program.name}</h1>
             {data.current_phase && (
               <p className="text-sm text-theme-text-muted mt-1">
@@ -174,6 +193,16 @@ const MyProgramProgressPage: React.FC = () => {
               </p>
             )}
           </div>
+          {(data.enrollment.status === 'active' || data.enrollment.status === 'on_hold') && (
+            <button
+              onClick={() => setShowLeave(true)}
+              className="mt-1 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 rounded-lg border border-theme-surface-border hover:bg-theme-surface-hover"
+              title="Remove yourself from this program"
+            >
+              <LogOut className="w-4 h-4" />
+              Leave program
+            </button>
+          )}
         </div>
 
         {/* Overall progress */}
@@ -260,6 +289,21 @@ const MyProgramProgressPage: React.FC = () => {
           </div>
         )}
       </main>
+
+      <ConfirmDialog
+        isOpen={showLeave}
+        onClose={() => setShowLeave(false)}
+        onConfirm={() => { void handleLeave(); }}
+        title="Leave this program?"
+        message={
+          `You'll be removed from "${data.program.name}" and it will no longer appear on your ` +
+          `dashboard or send you reminders. Your training records are kept. An officer can ` +
+          `re-enroll you later if you need it again.`
+        }
+        confirmLabel="Leave program"
+        variant="warning"
+        loading={leaving}
+      />
     </div>
   );
 };

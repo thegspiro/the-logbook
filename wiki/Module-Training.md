@@ -10,6 +10,8 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Requirement Templates** — *(2026-07-08)* Ten built-in templates for common standards (NFPA 1001/1500, NREMT recertification, CPR/BLS, OSHA hazmat/bloodborne pathogens/respiratory protection, HIPAA awareness, NIMS/ICS courses, new-member onboarding checklist). Selecting a template pre-fills the create form for review; standards-based templates carry source attribution with the standard or CFR citation as registry code
 - **Training Programs** — Structured multi-phase curricula (Flexible, Sequential, Phase-based) with milestone tracking
 - **Pipeline Recert Cycle** — *(2026-07-15)* Training pipelines can reset an enrolled member's accumulated progress for a new certification cycle. Officers reset a single requirement or a whole enrollment manually; a pipeline can also carry a stored recurring deadline (cycle length in months plus an optional fixed anchor date, e.g. NREMT's March 30) that auto-resets each enrollment when it passes — applied lazily on progress load and via a `recert/run-due` sweep endpoint
+- **Self-Service Withdrawal** — *(2026-07-16)* A member can leave a program from their progression view (e.g. after downgrading from Paramedic to EMT); officers can withdraw anyone. Soft withdrawal keeps the record but removes it from the active dashboard and its warnings, and the member can be re-enrolled later
+- **Session Certification Eligibility** — *(2026-07-16)* A training session has a "Counts toward certification requirements" toggle (on by default). When off, attendance still records the member's hours (general credit) but does not feed the linked pipeline/certificate requirements, so hours a certifying body (NFPA/NREMT) wouldn't accept don't inflate a member's certificate
 - **Self-Reported Training** — Members submit training records for officer review and approval
 - **Shift Completion Reports** — Officers file post-shift reports that auto-credit hours/shifts/calls toward program requirements
 - **Compliance Matrix** — Grid view of all members vs. all active requirements (green/yellow/red)
@@ -158,6 +160,7 @@ POST   /api/v1/training/programs/enrollments/{id}/advance-phase  # Officer advan
 PATCH  /api/v1/training/programs/progress/{id}             # Update progress (log value, mark complete/in-progress/reopen, verify, record test score)
 POST   /api/v1/training/programs/progress/{id}/reset       # Reset one requirement's progress for a new recert cycle (2026-07-15)
 POST   /api/v1/training/programs/enrollments/{id}/reset    # Reset a member's whole enrollment for a new recert cycle (2026-07-15)
+POST   /api/v1/training/programs/enrollments/{id}/withdraw # Withdraw from a program (self or officer; soft) (2026-07-16)
 POST   /api/v1/training/programs/recert/run-due            # Auto-reset every enrollment past its stored recert deadline (scheduled sweep) (2026-07-15)
 POST   /api/v1/training/programs/programs/{id}/duplicate   # Duplicate program
 POST   /api/v1/training/programs/programs/{id}/bulk-enroll # Bulk enroll members

@@ -171,6 +171,7 @@ class TrainingSessionService:
             certification_number_prefix=session_data.certification_number_prefix,
             issuing_agency=session_data.issuing_agency,
             expiration_months=session_data.expiration_months,
+            counts_toward_certification=session_data.counts_toward_certification,
             auto_create_records=session_data.auto_create_records,
             require_completion_confirmation=session_data.require_completion_confirmation,
             approval_deadline_days=session_data.approval_deadline_days,
@@ -316,6 +317,7 @@ class TrainingSessionService:
                 certification_number_prefix=session_data.certification_number_prefix,
                 issuing_agency=session_data.issuing_agency,
                 expiration_months=session_data.expiration_months,
+                counts_toward_certification=session_data.counts_toward_certification,
                 auto_create_records=session_data.auto_create_records,
                 require_completion_confirmation=session_data.require_completion_confirmation,
                 approval_deadline_days=session_data.approval_deadline_days,
@@ -790,12 +792,20 @@ class TrainingSessionService:
         if not event:
             return pipeline_updates
 
+        # A session marked ineligible for certification still creates records
+        # (members keep general credit) but never feeds pipeline/certificate
+        # requirements — skip resolving them entirely.
+        feeds_certificate = getattr(
+            training_session, "counts_toward_certification", True
+        )
+
         # When a session is tied to a program + category (but no explicit
         # requirement), resolve the program's requirements in that category once,
         # so attendance advances them too. Same for everyone on this session.
         category_requirement_ids: List[str] = []
         if (
-            training_session.program_id
+            feeds_certificate
+            and training_session.program_id
             and training_session.category_id
             and not training_session.requirement_id
         ):
@@ -902,9 +912,14 @@ class TrainingSessionService:
 
             # Queue pipeline progress updates to apply AFTER this transaction
             # commits (the real updater commits internally). Only positive hours
-            # advance. An explicit requirement link wins; otherwise fan out to the
-            # program's requirements matching the session's category.
-            if training_session.program_id and hours_completed > 0:
+            # advance, and only when the session counts toward certification. An
+            # explicit requirement link wins; otherwise fan out to the program's
+            # requirements matching the session's category.
+            if (
+                feeds_certificate
+                and training_session.program_id
+                and hours_completed > 0
+            ):
                 if training_session.requirement_id:
                     pipeline_updates.append(
                         (

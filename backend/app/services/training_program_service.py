@@ -2155,6 +2155,49 @@ class TrainingProgramService:
         await self.db.refresh(enrollment)
         return enrollment, None
 
+    async def withdraw_enrollment(
+        self,
+        enrollment_id: UUID,
+        organization_id: UUID,
+        acting_user_id: UUID,
+        can_manage: bool,
+        reason: Optional[str] = None,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
+        """
+        Withdraw a member from a program (soft — sets status WITHDRAWN and keeps
+        the record for history). A member may withdraw their own enrollment; an
+        officer with training.manage may withdraw anyone's. Withdrawn enrollments
+        drop off the member's active dashboard and stop generating warnings, and
+        the member can be re-enrolled later. Returns (enrollment, error_message).
+        """
+        result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.id == str(enrollment_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        enrollment = result.scalar_one_or_none()
+        if not enrollment:
+            return None, "Enrollment not found"
+
+        if str(enrollment.user_id) != str(acting_user_id) and not can_manage:
+            return None, "Not authorized to withdraw this enrollment"
+
+        # Idempotent: already withdrawn is not an error.
+        if enrollment.status == EnrollmentStatus.WITHDRAWN:
+            return enrollment, None
+
+        enrollment.status = EnrollmentStatus.WITHDRAWN
+        enrollment.withdrawn_at = datetime.now(timezone.utc)
+        if reason:
+            enrollment.withdrawal_reason = reason
+
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        return enrollment, None
+
     async def auto_reset_if_due(self, enrollment: ProgramEnrollment) -> bool:
         """If this enrollment's recert deadline has passed, reset it in place for
         a new cycle. Returns True when a reset occurred. Safe to call on every

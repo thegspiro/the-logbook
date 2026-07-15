@@ -786,6 +786,19 @@ export const trainingProgramService = {
   },
 
   /**
+   * Withdraw from a program enrollment (soft — kept for history, drops off the
+   * active dashboard). A member can withdraw their own; officers can withdraw
+   * anyone's.
+   */
+  async withdrawEnrollment(enrollmentId: string, reason?: string): Promise<ProgramEnrollment> {
+    const response = await api.post<ProgramEnrollment>(
+      `/training/programs/enrollments/${enrollmentId}/withdraw`,
+      reason ? { reason } : {},
+    );
+    return response.data;
+  },
+
+  /**
    * Advance an enrollment to the next phase of a phased program.
    * By default the current phase must be complete; pass force to override.
    */

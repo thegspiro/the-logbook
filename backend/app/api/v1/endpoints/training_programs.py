@@ -28,6 +28,7 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     ProgramBuildRequest,
     ProgramEnrollmentCreate,
     ProgramEnrollmentResponse,
+    ProgramEnrollmentWithdraw,
     ProgramEnrollmentWithUserResponse,
     ProgramMilestoneCreate,
     ProgramMilestoneResponse,
@@ -1433,6 +1434,42 @@ async def reset_enrollment_progress(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return enrollment
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/withdraw",
+    response_model=ProgramEnrollmentResponse,
+)
+async def withdraw_enrollment(
+    enrollment_id: UUID,
+    payload: ProgramEnrollmentWithdraw | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Withdraw from a program enrollment. A member can withdraw their own
+    enrollment (e.g. they've stepped down from a certification level they no
+    longer need to maintain); officers with training.manage can withdraw anyone.
+    Soft — the record is kept for history but drops off the active dashboard.
+
+    **Authentication required** (own enrollment, or `training.manage`)
+    """
+    service = TrainingProgramService(db)
+    perms = _collect_user_permissions(current_user)
+    can_manage = permission_matches("training.manage", perms)
+
+    enrollment, error = await service.withdraw_enrollment(
+        enrollment_id=enrollment_id,
+        organization_id=current_user.organization_id,
+        acting_user_id=current_user.id,
+        can_manage=can_manage,
+        reason=payload.reason if payload else None,
+    )
+    if error == "Enrollment not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error)
     return enrollment
 
 

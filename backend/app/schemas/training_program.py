@@ -349,6 +349,12 @@ class ProgramEnrollmentCreate(ProgramEnrollmentBase):
     program_id: UUID
 
 
+class ProgramEnrollmentWithdraw(BaseModel):
+    """Schema for withdrawing from a program enrollment"""
+
+    reason: Optional[str] = Field(None, max_length=500)
+
+
 class ProgramEnrollmentUpdate(BaseModel):
     """Schema for updating a program enrollment"""
 

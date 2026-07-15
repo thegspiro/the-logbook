@@ -628,6 +628,13 @@ class TrainingSession(Base):
     issuing_agency = Column(String(255))
     expiration_months = Column(Integer)
 
+    # When False, attendance still creates a TrainingRecord (the member gets
+    # credit toward general training compliance) but does NOT feed the linked
+    # pipeline/certificate requirements. Used for sessions that count toward a
+    # program but aren't delivered in a way the certifying body (NFPA/NREMT)
+    # would accept, so ineligible hours don't inflate a member's certificate.
+    counts_toward_certification = Column(Boolean, default=True, nullable=False)
+
     # Auto-completion Settings
     auto_create_records = Column(
         Boolean, default=True

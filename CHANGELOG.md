@@ -126,6 +126,17 @@ progression.
   `POST /training/programs/recert/run-due` sweeps every past-due enrollment for a
   scheduled job. Fields added by migration `20260715_0001`.
 
+**Leaving a program**
+
+- **Self-service withdrawal** — a member can remove themselves from a program from
+  their progression view ("Leave program"), e.g. after stepping down from a
+  certification level they no longer need to maintain
+  (`POST /training/programs/enrollments/{id}/withdraw`; officers with
+  `training.manage` can withdraw anyone). The withdrawal is soft — the record is kept
+  for history but the enrollment leaves the member's active dashboard and stops
+  generating warnings, and they can be re-enrolled later. Reuses the existing
+  `WITHDRAWN` status (no migration).
+
 **Phases**
 
 - **Phase advancement** — enrollments auto-advance through consecutive complete phases
@@ -142,6 +153,12 @@ progression.
   percentage, so the pipeline showed 0%.) A session may link to a specific
   **requirement**, or to a program + **category**, in which case it advances the
   program's requirements tagged with that category.
+- **Certification-eligibility toggle** — a training session now carries a **"Counts
+  toward certification requirements"** flag (on by default; `counts_toward_certification`,
+  migration `20260716_0001`). Turn it off for a session that a certifying body (NFPA/NREMT)
+  wouldn't accept: attendance still creates the member's training record (they keep the
+  hours toward general compliance) but the session no longer feeds the linked
+  pipeline/certificate requirements, so ineligible hours don't inflate a certificate.
 - **Skills tests → pipeline** — a skill template carries a default **linked training
   requirement** (each test inherits it, overridable per test via a new
   `requirement_id` on `skill_templates`/`skill_tests`, migration
