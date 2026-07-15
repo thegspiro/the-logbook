@@ -20,10 +20,15 @@ This guide shows you how to build and run The Logbook directly on Unraid **witho
 
 ## Step 1: Clean Up Previous Attempt
 
+> ⚠️ **This step is for a fresh install only.** The `-v` flag **deletes the
+> database volume and all data**. Never run it on a working instance — to
+> update an existing install, use `./unraid/update.sh` (see
+> [Update The Logbook](#update-the-logbook)).
+
 ```bash
-# Remove any existing setup
+# Remove any existing setup (DESTROYS DATA — fresh install only)
 cd /mnt/user/appdata/the-logbook
-docker-compose down -v  # Stop and remove containers
+docker compose down -v  # -v also DELETES the database volume
 cd /mnt/user/appdata
 rm -rf the-logbook
 ```
@@ -276,34 +281,51 @@ docker-compose up -d
 
 ### Update The Logbook
 
-When there are code updates:
+When there are code updates, use the safe update script. It takes a
+**consistent database dump first**, pulls the latest code (fast-forward
+only), rebuilds the images, recreates the containers **without touching the
+database volume**, and waits for the backend to report healthy. If anything
+fails, it prints exact rollback instructions.
 
 ```bash
 cd /mnt/user/appdata/the-logbook
 
-# 1. Pull latest code
-git pull origin main
-
-# 2. Rebuild images
-docker-compose build
-
-# 3. Recreate containers with new images
-docker-compose up -d
-
-# 4. Verify
-docker-compose ps
-docker-compose logs -f
+./unraid/update.sh              # safe update from main
+./unraid/update.sh --no-cache   # force a clean rebuild
+./unraid/update.sh -y           # skip the confirmation prompt
 ```
+
+Prefer the script over running the steps by hand — it guards against the two
+ways an update can lose data (a live-directory copy that produces a corrupt
+backup, and accidentally passing `-v` to `docker compose down`).
+
+If you do run the steps manually, note: use `docker compose` (v2, a
+subcommand), preserve the volumes (never `docker compose down -v`), and take
+a `mysqldump` backup first — the database persists in the
+`/mnt/user/appdata/the-logbook/mysql` bind mount and survives `build`, `up`,
+and `down` (without `-v`).
 
 ### Backup
 
+The database lives in a bind mount and is dumped with `mysqldump` (a
+consistent snapshot). Take a manual dump any time:
+
 ```bash
-# Trigger manual backup
-docker-compose exec backend /app/scripts/backup.sh
+cd /mnt/user/appdata/the-logbook
+
+# Consistent dump of the running database, gzipped to the backups share
+docker compose exec -T db sh -c \
+  'mysqldump --single-transaction --routines --triggers \
+     -uroot -p"$MYSQL_ROOT_PASSWORD" "$MYSQL_DATABASE"' \
+  | gzip > /mnt/user/backups/the-logbook/manual_$(date +%Y%m%d_%H%M%S).sql.gz
 
 # View backups
 ls -lh /mnt/user/backups/the-logbook/
 ```
+
+> The backend production image does **not** include `scripts/backup.sh`, so
+> `docker compose exec backend /app/scripts/backup.sh` will not work — use the
+> `mysqldump` command above (or `./unraid/update.sh`, which backs up for you).
 
 ### Database Access
 

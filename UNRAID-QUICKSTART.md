@@ -37,16 +37,16 @@ After installation:
 cd /mnt/user/appdata/the-logbook
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Restart
-docker-compose restart
+docker compose restart
 
-# Update
-cd unraid && ./unraid-setup.sh   # Choose option 2
+# Update (backs up the DB, pulls, rebuilds, recreates — safely)
+./unraid/update.sh
 
 # Fix container conflicts
-docker-compose down --remove-orphans && docker-compose up -d
+docker compose down --remove-orphans && docker compose up -d
 ```
 
 ## Full Documentation
