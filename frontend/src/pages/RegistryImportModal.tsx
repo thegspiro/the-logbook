@@ -88,7 +88,11 @@ const RegistryImportModal: React.FC<Props> = ({ registryKey, registryName, onClo
       } else if (result.imported_count === 0) {
         toast(`Nothing imported from ${registryName}.`);
       } else {
-        toast.success(`Imported ${result.imported_count} requirement${result.imported_count === 1 ? '' : 's'} from ${registryName}`);
+        const cats = result.categories_created ?? 0;
+        const catNote = cats > 0 ? ` (+${cats} section categor${cats === 1 ? 'y' : 'ies'})` : '';
+        toast.success(
+          `Imported ${result.imported_count} requirement${result.imported_count === 1 ? '' : 's'} from ${registryName}${catNote}`,
+        );
       }
       onImported();
       onClose();
@@ -128,6 +132,13 @@ const RegistryImportModal: React.FC<Props> = ({ registryKey, registryName, onClo
             <div className="text-sm text-red-600 dark:text-red-400 py-4">{error}</div>
           ) : (
             <>
+              {items.some((i) => (i.sections?.length ?? 0) > 0) && (
+                <p className="text-xs text-theme-text-muted mb-3 bg-theme-surface-secondary rounded-md p-2.5">
+                  Some requirements track hours by section. Importing creates a training
+                  category per section — tag your courses and sessions with those categories
+                  and their hours will count toward the requirement.
+                </p>
+              )}
               {selectable.length > 0 && (
                 <div className="flex items-center justify-between mb-2 text-xs">
                   <span className="text-theme-text-muted">{selected.size} of {selectable.length} selected</span>
@@ -166,6 +177,11 @@ const RegistryImportModal: React.FC<Props> = ({ registryKey, registryName, onClo
                           )}
                         </div>
                         <p className="text-xs text-theme-text-muted capitalize">{metaLine(item)}</p>
+                        {item.sections && item.sections.length > 0 && (
+                          <p className="text-xs text-theme-text-muted mt-0.5">
+                            Counts hours by section: {item.sections.join(', ')}
+                          </p>
+                        )}
                       </div>
                     </button>
                   );

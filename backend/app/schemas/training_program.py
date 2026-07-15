@@ -552,6 +552,8 @@ class RegistryImportResult(BaseModel):
 
     registry_name: str
     imported_count: int
+    # Section (topic-area) categories auto-created to link the requirements.
+    categories_created: int = 0
     skipped_count: int
     errors: List[str] = []
     last_updated: Optional[str] = None
@@ -568,6 +570,9 @@ class RegistryRequirementPreview(BaseModel):
     required_hours: Optional[float] = None
     frequency: Optional[str] = None
     already_imported: bool = False
+    # Topic-area sections this requirement's hours are distributed across
+    # (e.g. Airway, Cardiology, …) — these become linked training categories.
+    sections: List[str] = []
 
 
 class RegistrySelectiveImport(BaseModel):

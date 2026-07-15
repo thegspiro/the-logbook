@@ -970,6 +970,22 @@ Categories help organize your training and allow flexible requirement satisfacti
 4. Click "Import N" to add just the selected requirements
 5. Customize as needed (including due date types)
 
+**Connecting courses to section-based requirements.** Some registry requirements
+(e.g. the NREMT provider levels) distribute their hours across **topic-area sections**
+— Airway, Cardiology, Trauma, Medical, Operations. Importing one of these:
+
+1. Auto-creates a **training category per section** (deduped by registry code) if the
+   org doesn't already have it, and links the requirement to those categories. The
+   import picker shows each requirement's sections, and the result reports how many
+   categories were created.
+2. To make a course count toward a section, edit the course (Course Library) and tag it
+   with the matching section category. Sessions and training records tagged with that
+   category count too.
+
+The compliance engine sums only the hours whose category matches the requirement's
+linked categories, so tagging your Airway course with the "Airway…" category makes its
+hours count toward that requirement's Airway section.
+
 #### Option B: Create Custom Requirement
 1. Click "Create Requirement"
 2. Fill in details:

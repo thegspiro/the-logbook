@@ -2970,6 +2970,11 @@ class TrainingProgramService:
 
         registry_name = registry_data.get("registry_name")
         requirements_data = registry_data.get("requirements", [])
+        topic_names = {
+            ta.get("code"): ta.get("name")
+            for ta in registry_data.get("nccr_topic_areas", [])
+            if ta.get("code")
+        }
 
         # Which of this registry's codes the org already holds (one query).
         existing_result = await self.db.execute(
@@ -2983,6 +2988,11 @@ class TrainingProgramService:
         items: List[dict] = []
         for req in requirements_data:
             code = req.get("registry_code")
+            sections = [
+                topic_names.get(d.get("registry_code"), d.get("registry_code"))
+                for d in (req.get("category_hour_distributions") or [])
+                if d.get("registry_code")
+            ]
             items.append(
                 {
                     "registry_code": code,
@@ -2992,6 +3002,7 @@ class TrainingProgramService:
                     "required_hours": req.get("required_hours"),
                     "frequency": req.get("frequency"),
                     "already_imported": bool(code and code in existing_codes),
+                    "sections": sections,
                 }
             )
         return items, None
@@ -3003,7 +3014,7 @@ class TrainingProgramService:
         created_by: UUID,
         skip_existing: bool = True,
         selected_codes: Optional[List[str]] = None,
-    ) -> Tuple[int, List[str], Optional[str], Optional[str]]:
+    ) -> Tuple[int, int, List[str], Optional[str], Optional[str]]:
         """
         Import requirements from a registry JSON file.
 
@@ -3011,11 +3022,18 @@ class TrainingProgramService:
         ``registry_code`` is in that list are imported (the "pick and choose"
         path); when it is None, the whole registry is imported.
 
-        Returns: (imported_count, errors, last_updated, source_url)
+        Returns:
+            (imported_count, categories_created, errors, last_updated, source_url)
         """
         file_path = Path(registry_file_path)
         if not file_path.exists():
-            return 0, [f"Registry file not found: {registry_file_path}"], None, None
+            return (
+                0,
+                0,
+                [f"Registry file not found: {registry_file_path}"],
+                None,
+                None,
+            )
 
         def _read_json(path: Path) -> Any:
             with open(path, "r") as f:
@@ -3024,12 +3042,25 @@ class TrainingProgramService:
         try:
             registry_data = await asyncio.to_thread(_read_json, file_path)
         except json.JSONDecodeError as e:
-            return 0, [f"Invalid JSON in registry file: {str(e)}"], None, None
+            return 0, 0, [f"Invalid JSON in registry file: {str(e)}"], None, None
 
         registry_name = registry_data.get("registry_name")
         last_updated = registry_data.get("last_updated")
         source_url = registry_data.get("source_url")
         requirements_data = registry_data.get("requirements", [])
+
+        # Topic-area (section) names keyed by their registry_code, e.g.
+        # "NCCR-AIRWAY" -> "Airway, Respiration & Ventilation". Used to name any
+        # section categories we auto-create so imported requirements actually
+        # link to something the org can tag courses/sessions with.
+        topic_names = {
+            ta.get("code"): ta.get("name")
+            for ta in registry_data.get("nccr_topic_areas", [])
+            if ta.get("code")
+        }
+        # Cache of ensured section categories: registry_code -> category id.
+        ensured_categories: dict = {}
+        categories_created = 0
 
         selected = set(selected_codes) if selected_codes is not None else None
 
@@ -3055,8 +3086,11 @@ class TrainingProgramService:
                     continue
 
             try:
-                # Resolve category_ids from category_hour_distributions
-                # by matching registry_code on TrainingCategory.
+                # Resolve category_ids from category_hour_distributions by
+                # matching registry_code on TrainingCategory. Auto-create the
+                # section category if the org doesn't have it yet, so the
+                # requirement links to real categories (courses/sessions tagged
+                # with a section then count toward it).
                 category_ids = None
                 distributions = req_data.get("category_hour_distributions")
                 if distributions:
@@ -3064,6 +3098,9 @@ class TrainingProgramService:
                     for dist in distributions:
                         rc = dist.get("registry_code")
                         if not rc:
+                            continue
+                        if rc in ensured_categories:
+                            resolved_ids.append(ensured_categories[rc])
                             continue
                         cat_result = await self.db.execute(
                             select(TrainingCategory).where(
@@ -3074,8 +3111,19 @@ class TrainingProgramService:
                             )
                         )
                         cat = cat_result.scalar_one_or_none()
-                        if cat:
-                            resolved_ids.append(cat.id)
+                        if not cat:
+                            cat = TrainingCategory(
+                                organization_id=organization_id,
+                                name=topic_names.get(rc, rc),
+                                registry_code=rc,
+                                created_by=created_by,
+                                active=True,
+                            )
+                            self.db.add(cat)
+                            await self.db.flush()
+                            categories_created += 1
+                        ensured_categories[rc] = cat.id
+                        resolved_ids.append(cat.id)
                     if resolved_ids:
                         category_ids = resolved_ids
 
@@ -3116,4 +3164,4 @@ class TrainingProgramService:
                 )
 
         await self.db.commit()
-        return imported_count, errors, last_updated, source_url
+        return imported_count, categories_created, errors, last_updated, source_url

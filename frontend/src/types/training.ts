@@ -844,6 +844,7 @@ export interface MemberProgramProgress {
 export interface RegistryImportResult {
   registry_name: string;
   imported_count: number;
+  categories_created?: number;
   skipped_count: number;
   errors: string[];
   last_updated?: string;
@@ -867,6 +868,7 @@ export interface RegistryRequirementPreview {
   required_hours?: number | null;
   frequency?: string | null;
   already_imported: boolean;
+  sections?: string[];
 }
 
 // Bulk Enrollment

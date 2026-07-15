@@ -72,6 +72,16 @@ progression.
   carries that level's national recertification component (NCCR hours by topic area)
   plus the appropriate life-support certifications (BLS; ACLS/PALS/PHTLS at the
   advanced levels).
+- **Registry section categories — connect your courses to requirements.** Requirements
+  that distribute hours across topic-area sections (e.g. the NREMT levels' Airway /
+  Cardiology / Trauma / Medical / Operations) now actually link to something. Importing
+  such a requirement auto-creates a **training category per section** (matched by
+  registry code, deduped) and links the requirement to them. Tag a course, session, or
+  record with a section category and its hours count toward that requirement — the
+  compliance engine and the session→pipeline feed already credit category-matched
+  hours. Previously these sections resolved to nothing, so the requirement counted all
+  hours indiscriminately. The import picker now shows each requirement's sections, and
+  the result reports how many categories were created.
 - **Pick-and-choose registry import.** Clicking a registry no longer imports the whole
   thing at once — it opens a picker that previews every requirement
   (`GET …/requirements/registries/{name}/preview`) and lets the officer tick exactly

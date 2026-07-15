@@ -261,7 +261,7 @@ async def import_registry_requirements(
 
     service = TrainingProgramService(db)
 
-    imported_count, errors, last_updated, source_url = (
+    imported_count, categories_created, errors, last_updated, source_url = (
         await service.import_registry_requirements(
             registry_file_path=registry_file,
             organization_id=current_user.organization_id,
@@ -274,6 +274,7 @@ async def import_registry_requirements(
     return RegistryImportResult(
         registry_name=registry_name,
         imported_count=imported_count,
+        categories_created=categories_created,
         skipped_count=0,  # Could be calculated if needed
         errors=errors,
         last_updated=last_updated,
