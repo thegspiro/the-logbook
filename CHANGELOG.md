@@ -72,6 +72,12 @@ progression.
   carries that level's national recertification component (NCCR hours by topic area)
   plus the appropriate life-support certifications (BLS; ACLS/PALS/PHTLS at the
   advanced levels).
+- **Pick-and-choose registry import.** Clicking a registry no longer imports the whole
+  thing at once — it opens a picker that previews every requirement
+  (`GET …/requirements/registries/{name}/preview`) and lets the officer tick exactly
+  which to import (`POST …/import/{name}` with `registry_codes`). Requirements already
+  in the library are shown as "Imported" and locked out; the rest are pre-selected with
+  select-all/clear-all.
 - **Expanded NFPA registry.** Added seven more NFPA professional-qualification
   standards as annual continuing-compliance requirements: Hazmat/WMD Responder (1072),
   Technical Rescuer (1006), Fire Investigator (1033), Fire Inspector (1031), Fire &

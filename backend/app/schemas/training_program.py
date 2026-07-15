@@ -558,6 +558,25 @@ class RegistryImportResult(BaseModel):
     source_url: Optional[str] = None
 
 
+class RegistryRequirementPreview(BaseModel):
+    """One selectable requirement in a registry, for the pick-and-choose import."""
+
+    registry_code: Optional[str] = None
+    name: str
+    description: Optional[str] = None
+    requirement_type: str
+    required_hours: Optional[float] = None
+    frequency: Optional[str] = None
+    already_imported: bool = False
+
+
+class RegistrySelectiveImport(BaseModel):
+    """Import options: which registry codes to import (None/omitted = all)."""
+
+    registry_codes: Optional[List[str]] = None
+    skip_existing: bool = True
+
+
 # Atomic Program Build Schemas
 #
 # The create-pipeline wizard builds a program, its phases, requirements, and

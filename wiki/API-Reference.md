@@ -326,6 +326,11 @@ DELETE /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}
   Hard gates (already enrolled, missing prerequisite) set `eligible: false`.
   **`concurrent`** (active in another program) is a soft advisory: `eligible: true`
   with a `reason` — never a block. Target position/roles are not gated.
+- **Registry pick-and-choose import.** `GET …/requirements/registries/{name}/preview`
+  lists a registry's requirements (each flagged `already_imported`) for a selection UI;
+  `POST …/requirements/import/{name}` accepts a body `{ registry_codes: [...],
+  skip_existing }` to import only those codes (omit the body to import the whole
+  registry, as before).
 - **Editing endpoints** back the inline pipeline editor. `PATCH …requirements/{id}`
   also accepts `phase_id` to move a requirement between phases. `DELETE` on a phase or
   requirement is auto-cleaning: it clears only this program's enrolled members'

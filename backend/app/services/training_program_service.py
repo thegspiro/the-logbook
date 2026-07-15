@@ -2945,15 +2945,71 @@ class TrainingProgramService:
 
     # ==================== Registry Import Methods ====================
 
+    async def preview_registry_requirements(
+        self,
+        registry_file_path: str,
+        organization_id: UUID,
+    ) -> Tuple[Optional[List[dict]], Optional[str]]:
+        """
+        List a registry's requirements for the "pick and choose" import UI, each
+        flagged with whether the org has already imported it (by registry_name +
+        registry_code). Returns (items, error_message).
+        """
+        file_path = Path(registry_file_path)
+        if not file_path.exists():
+            return None, f"Registry file not found: {registry_file_path}"
+
+        def _read_json(path: Path) -> Any:
+            with open(path, "r") as f:
+                return json.load(f)
+
+        try:
+            registry_data = await asyncio.to_thread(_read_json, file_path)
+        except json.JSONDecodeError as e:
+            return None, f"Invalid JSON in registry file: {str(e)}"
+
+        registry_name = registry_data.get("registry_name")
+        requirements_data = registry_data.get("requirements", [])
+
+        # Which of this registry's codes the org already holds (one query).
+        existing_result = await self.db.execute(
+            select(TrainingRequirement.registry_code).where(
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.registry_name == registry_name,
+            )
+        )
+        existing_codes = {row[0] for row in existing_result.all() if row[0]}
+
+        items: List[dict] = []
+        for req in requirements_data:
+            code = req.get("registry_code")
+            items.append(
+                {
+                    "registry_code": code,
+                    "name": req.get("name"),
+                    "description": req.get("description"),
+                    "requirement_type": req.get("requirement_type", "hours"),
+                    "required_hours": req.get("required_hours"),
+                    "frequency": req.get("frequency"),
+                    "already_imported": bool(code and code in existing_codes),
+                }
+            )
+        return items, None
+
     async def import_registry_requirements(
         self,
         registry_file_path: str,
         organization_id: UUID,
         created_by: UUID,
         skip_existing: bool = True,
+        selected_codes: Optional[List[str]] = None,
     ) -> Tuple[int, List[str], Optional[str], Optional[str]]:
         """
-        Import requirements from a registry JSON file
+        Import requirements from a registry JSON file.
+
+        When ``selected_codes`` is provided, only requirements whose
+        ``registry_code`` is in that list are imported (the "pick and choose"
+        path); when it is None, the whole registry is imported.
 
         Returns: (imported_count, errors, last_updated, source_url)
         """
@@ -2975,10 +3031,16 @@ class TrainingProgramService:
         source_url = registry_data.get("source_url")
         requirements_data = registry_data.get("requirements", [])
 
+        selected = set(selected_codes) if selected_codes is not None else None
+
         imported_count = 0
         errors = []
 
         for req_data in requirements_data:
+            # Selective import: skip anything the caller didn't pick.
+            if selected is not None and req_data.get("registry_code") not in selected:
+                continue
+
             # Check if requirement already exists
             if skip_existing and req_data.get("registry_code"):
                 existing = await self.db.execute(

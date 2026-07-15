@@ -6,7 +6,7 @@ import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import type { SkillTemplate, SkillTemplateCreate, SkillTemplateListItem, SkillTemplateUpdate, SkillTest, SkillTestCreate, SkillTestListItem, SkillTestUpdate, SkillTestingSummary } from '../types/skillsTesting';
-import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramMilestoneUpdate, ProgramPhase, ProgramPhaseCreate, ProgramPhaseUpdate, MemberEligibility, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, SampleTemplateSummary, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingProgramUpdate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
+import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramMilestoneUpdate, ProgramPhase, ProgramPhaseCreate, ProgramPhaseUpdate, MemberEligibility, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, SampleTemplateSummary, RegistryImportResult, RegistryInfo, RegistryRequirementPreview, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingProgramUpdate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 import type { TrainingSessionResponse, TrainingSessionCreate, RecurringTrainingSessionCreate } from './adminServices';
 
@@ -836,12 +836,30 @@ export const trainingProgramService = {
   },
 
   /**
-   * Import requirements from a registry
+   * Preview a registry's requirements so the user can pick which to import.
    */
-  async importRegistry(registryName: string, skipExisting: boolean = true): Promise<RegistryImportResult> {
-    const response = await api.post<RegistryImportResult>(`/training/programs/requirements/import/${registryName}`, null, {
-      params: { skip_existing: skipExisting },
-    });
+  async previewRegistry(registryName: string): Promise<RegistryRequirementPreview[]> {
+    const response = await api.get<RegistryRequirementPreview[]>(
+      `/training/programs/requirements/registries/${registryName}/preview`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Import requirements from a registry. Pass `registryCodes` to import only
+   * those; omit it to import the whole registry.
+   */
+  async importRegistry(
+    registryName: string,
+    options?: { registryCodes?: string[]; skipExisting?: boolean },
+  ): Promise<RegistryImportResult> {
+    const response = await api.post<RegistryImportResult>(
+      `/training/programs/requirements/import/${registryName}`,
+      {
+        registry_codes: options?.registryCodes,
+        skip_existing: options?.skipExisting ?? true,
+      },
+    );
     return response.data;
   },
 };

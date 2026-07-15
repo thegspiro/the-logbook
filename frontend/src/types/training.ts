@@ -859,6 +859,16 @@ export interface RegistryInfo {
   requirement_count: number;
 }
 
+export interface RegistryRequirementPreview {
+  registry_code?: string | null;
+  name: string;
+  description?: string | null;
+  requirement_type: string;
+  required_hours?: number | null;
+  frequency?: string | null;
+  already_imported: boolean;
+}
+
 // Bulk Enrollment
 export interface BulkEnrollmentRequest {
   user_ids: string[];

@@ -963,8 +963,12 @@ Categories help organize your training and allow flexible requirement satisfacti
 1. Navigate to Training Programs → Requirements tab
 2. Click a registry button — "Import NFPA", "Import Pro Board", or an NREMT provider
    level ("Import NREMT — EMR / EMT / Advanced EMT (AEMT) / Paramedic")
-3. System imports standard requirements
-4. Customize as needed (including due date types)
+3. A picker opens listing that registry's requirements. **Tick exactly the ones you
+   want** (everything not already in your library is pre-selected; requirements you've
+   already imported are shown as "Imported" and locked out). Use "Select all / Clear
+   all" to bulk-toggle.
+4. Click "Import N" to add just the selected requirements
+5. Customize as needed (including due date types)
 
 #### Option B: Create Custom Requirement
 1. Click "Create Requirement"

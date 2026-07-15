@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import toast from 'react-hot-toast';
@@ -11,6 +11,7 @@ const mockGetRegistries = vi.fn();
 const mockGetSampleTemplates = vi.fn();
 const mockInstantiateSampleTemplate = vi.fn();
 const mockImportRegistry = vi.fn();
+const mockPreviewRegistry = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -20,6 +21,7 @@ vi.mock('../services/api', () => ({
     getSampleTemplates: (...args: unknown[]) => mockGetSampleTemplates(...args) as unknown,
     instantiateSampleTemplate: (...args: unknown[]) => mockInstantiateSampleTemplate(...args) as unknown,
     importRegistry: (...args: unknown[]) => mockImportRegistry(...args) as unknown,
+    previewRegistry: (...args: unknown[]) => mockPreviewRegistry(...args) as unknown,
   },
 }));
 
@@ -147,30 +149,49 @@ describe('TrainingProgramsPage', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs/prog-new'));
   });
 
-  it('does not show a green success when a registry import returns 0', async () => {
-    // One controlled registry so the import button is unambiguous.
+  it('opens a picker and imports only the selected requirements', async () => {
     mockGetRegistries.mockResolvedValue([
       { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 3 },
     ]);
+    mockPreviewRegistry.mockResolvedValue([
+      { registry_code: 'NREMT', name: 'EMT National Component', requirement_type: 'hours', required_hours: 50, frequency: 'biannual', already_imported: false },
+      { registry_code: 'BLS', name: 'CPR/BLS Certification', requirement_type: 'certification', already_imported: false },
+      { registry_code: 'PHTLS', name: 'PHTLS Certification', requirement_type: 'certification', already_imported: true },
+    ]);
     mockImportRegistry.mockResolvedValue({
-      registry_name: 'NREMT — EMT', imported_count: 0, skipped_count: 0, errors: [],
+      registry_name: 'NREMT — EMT', imported_count: 1, skipped_count: 0, errors: [],
     });
     renderWithRouter(<TrainingProgramsPage />);
 
     await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
     await userEvent.click(await screen.findByRole('button', { name: /Import NREMT — EMT/i }));
 
-    await waitFor(() => expect(mockImportRegistry).toHaveBeenCalledWith('emt'));
-    // Neutral toast (not success) with an explanatory message.
+    const dialog = await screen.findByRole('dialog', { name: /Import from NREMT — EMT/i });
+    await waitFor(() => expect(mockPreviewRegistry).toHaveBeenCalledWith('emt'));
+
+    // Two selectable (BLS + national); PHTLS is already imported and locked out.
+    expect(await within(dialog).findByText('2 of 2 selected')).toBeInTheDocument();
+    expect(within(dialog).getByText('Imported')).toBeInTheDocument();
+
+    // Deselect BLS, then import — only the national component's code is sent.
+    await userEvent.click(within(dialog).getByText('CPR/BLS Certification'));
+    expect(within(dialog).getByText('1 of 2 selected')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Import 1$/ }));
+
     await waitFor(() =>
-      expect(toast).toHaveBeenCalledWith(expect.stringMatching(/No new requirements/i)),
+      expect(mockImportRegistry).toHaveBeenCalledWith('emt', { registryCodes: ['NREMT'] }),
     );
-    expect(toast.success).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Imported 1 requirement/i)),
+    );
   });
 
   it('surfaces the error when a registry import reports one', async () => {
     mockGetRegistries.mockResolvedValue([
       { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 5 },
+    ]);
+    mockPreviewRegistry.mockResolvedValue([
+      { registry_code: 'NRP', name: 'Paramedic National Component', requirement_type: 'hours', already_imported: false },
     ]);
     mockImportRegistry.mockResolvedValue({
       registry_name: 'NREMT — Paramedic', imported_count: 0, skipped_count: 0,
@@ -180,6 +201,9 @@ describe('TrainingProgramsPage', () => {
 
     await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
     await userEvent.click(await screen.findByRole('button', { name: /Import NREMT — Paramedic/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Import from NREMT — Paramedic/i });
+    await userEvent.click(await within(dialog).findByRole('button', { name: /^Import 1$/ }));
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Registry file not found/i)),

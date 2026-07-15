@@ -41,6 +41,8 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     ProgramWithPhasesAndRequirements,
     PhaseReorderRequest,
     RegistryImportResult,
+    RegistryRequirementPreview,
+    RegistrySelectiveImport,
     RequirementReorderRequest,
     RequirementProgressResponse,
     RequirementProgressUpdate,
@@ -192,19 +194,54 @@ async def list_available_registries(
     return registries
 
 
+@router.get(
+    "/requirements/registries/{registry_name}/preview",
+    response_model=list[RegistryRequirementPreview],
+)
+async def preview_registry_requirements(
+    registry_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List a registry's requirements so the user can pick which ones to import.
+    Each item is flagged with ``already_imported``.
+
+    **Requires permission: training.manage**
+    """
+    filename = _REGISTRY_FILES.get(registry_name.lower())
+    if not filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown registry: {registry_name}. Available: {', '.join(_REGISTRY_FILES.keys())}",
+        )
+
+    service = TrainingProgramService(db)
+    items, error = await service.preview_registry_requirements(
+        registry_file_path=str(_REGISTRY_DIR / filename),
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return items
+
+
 @router.post(
     "/requirements/import/{registry_name}", response_model=RegistryImportResult
 )
 async def import_registry_requirements(
     registry_name: str,
+    options: RegistrySelectiveImport | None = None,
     skip_existing: bool = Query(
-        True, description="Skip requirements that already exist"
+        True, description="Skip requirements that already exist (when no body)"
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Import requirements from a registry JSON file
+    Import requirements from a registry JSON file. With a body listing
+    ``registry_codes``, only those requirements are imported (pick and choose);
+    with no body, the whole registry is imported.
 
     Available registries: nfpa, proboard, emr, emt, aemt, paramedic
 
@@ -219,6 +256,9 @@ async def import_registry_requirements(
         )
     registry_file = str(_REGISTRY_DIR / filename)
 
+    selected_codes = options.registry_codes if options else None
+    effective_skip = options.skip_existing if options else skip_existing
+
     service = TrainingProgramService(db)
 
     imported_count, errors, last_updated, source_url = (
@@ -226,7 +266,8 @@ async def import_registry_requirements(
             registry_file_path=registry_file,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
-            skip_existing=skip_existing,
+            skip_existing=effective_skip,
+            selected_codes=selected_codes,
         )
     )
 
