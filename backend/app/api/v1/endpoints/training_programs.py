@@ -1183,11 +1183,6 @@ async def get_enrollment_progress(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enrollment not found"
         )
 
-    # If the recert deadline has passed, roll the enrollment into a fresh cycle
-    # before reporting progress so the view reflects the reset immediately (the
-    # scheduled sweep handles members whose progress no one is watching).
-    await service.auto_reset_if_due(enrollment)
-
     # Check permission: members can view their own; officers need
     # training.view_all or training.manage (managing a member's progress
     # implies viewing it). Use the shared helper so wildcard grants
@@ -1202,6 +1197,20 @@ async def get_enrollment_progress(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to view this enrollment",
             )
+
+    # If the recert deadline has passed, roll the enrollment into a fresh cycle
+    # before reporting progress so the view reflects the reset immediately (the
+    # scheduled sweep handles members whose progress no one is watching). Runs
+    # only after the permission check so an unauthorized caller can never trigger
+    # a write. On a reset, re-load the enrollment so its eager-loaded phase and
+    # requirement rows reflect the new cycle rather than the pre-reset state.
+    if await service.auto_reset_if_due(enrollment):
+        refreshed = await service.get_enrollment_by_id(
+            enrollment_id=enrollment_id,
+            organization_id=current_user.organization_id,
+        )
+        if refreshed is not None:
+            enrollment = refreshed
 
     # Calculate time remaining
     time_remaining_days = None

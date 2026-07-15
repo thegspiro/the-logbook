@@ -17,6 +17,10 @@ def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
+def _first(obj):
+    return MagicMock(first=MagicMock(return_value=obj))
+
+
 def _scalars(items):
     r = MagicMock()
     r.scalars.return_value.all.return_value = items
@@ -77,7 +81,7 @@ class TestResetRequirement:
 
 class TestResetEnrollment:
     async def test_missing_returns_error(self):
-        svc = TrainingProgramService(RecordingSession([_one(None)]))
+        svc = TrainingProgramService(RecordingSession([_first(None)]))
         enr, error = await svc.reset_enrollment_progress(uuid4(), uuid4())
         assert enr is None and error == "Enrollment not found"
 
@@ -93,8 +97,9 @@ class TestResetEnrollment:
         program = SimpleNamespace(recert_enabled=False)
         r1, r2 = _progress(), _progress()
         first_phase = str(uuid4())
+        # Enrollment + program come back as one row now; then rows, then phase.
         db = RecordingSession(
-            [_one(enrollment), _one(program), _scalars([r1, r2]), _one(first_phase)]
+            [_first((enrollment, program)), _scalars([r1, r2]), _one(first_phase)]
         )
         svc = TrainingProgramService(db)
 

@@ -26,6 +26,11 @@ def _scalars(items):
     return r
 
 
+def _rows(items):
+    """A result whose .all() yields (enrollment, program) rows for the sweep."""
+    return MagicMock(all=MagicMock(return_value=items))
+
+
 class RecordingSession:
     def __init__(self, results):
         self._results = list(results)
@@ -132,6 +137,20 @@ class TestAutoResetIfDue:
         svc = TrainingProgramService(RecordingSession([]))
         assert await svc.auto_reset_if_due(enrollment) is False
 
+    async def test_withdrawn_member_is_not_resurrected(self):
+        # A member who left the program keeps their stored deadline, but a due
+        # deadline must NOT flip them back to ACTIVE.
+        enrollment = SimpleNamespace(
+            id=str(uuid4()),
+            program_id=str(uuid4()),
+            status=EnrollmentStatus.WITHDRAWN,
+            next_recert_reset_at=date(2000, 1, 1),
+        )
+        svc = TrainingProgramService(RecordingSession([]))
+
+        assert await svc.auto_reset_if_due(enrollment) is False
+        assert enrollment.status == EnrollmentStatus.WITHDRAWN
+
     async def test_past_due_resets_and_reschedules(self):
         enrollment = SimpleNamespace(
             id=str(uuid4()),
@@ -184,13 +203,14 @@ class TestRunDueRecertResets:
             next_recert_reset_at=date(2001, 1, 1),
             last_recert_reset_at=None,
         )
+        prog = _program()
+        # The sweep now selects (enrollment, program) rows in one query, then
+        # per enrollment blanks its rows and looks up the first phase.
         db = RecordingSession(
             [
-                _scalars([e1, e2]),  # due-enrollment sweep
-                _one(_program()),
+                _rows([(e1, prog), (e2, prog)]),  # due-enrollment sweep
                 _scalars([_progress()]),
                 _one("ph-1"),  # e1
-                _one(_program()),
                 _scalars([_progress()]),
                 _one("ph-1"),  # e2
             ]
@@ -204,8 +224,30 @@ class TestRunDueRecertResets:
         assert e2.progress_percentage == 0.0
         db.commit.assert_awaited_once()
 
+    async def test_withdrawn_row_is_skipped(self):
+        # Even if a withdrawn enrollment slips through the WHERE clause, the loop
+        # guard must not reactivate it.
+        withdrawn = SimpleNamespace(
+            id=str(uuid4()),
+            program_id=str(uuid4()),
+            status=EnrollmentStatus.WITHDRAWN,
+            progress_percentage=0.0,
+            completed_at=None,
+            current_phase_id=None,
+            next_recert_reset_at=date(2000, 1, 1),
+            last_recert_reset_at=None,
+        )
+        db = RecordingSession([_rows([(withdrawn, _program())])])
+        svc = TrainingProgramService(db)
+
+        count, error = await svc.run_due_recert_resets(uuid4())
+
+        assert error is None and count == 0
+        assert withdrawn.status == EnrollmentStatus.WITHDRAWN
+        db.commit.assert_not_awaited()
+
     async def test_no_due_enrollments_skips_commit(self):
-        db = RecordingSession([_scalars([])])
+        db = RecordingSession([_rows([])])
         svc = TrainingProgramService(db)
 
         count, error = await svc.run_due_recert_resets(uuid4())

@@ -5,6 +5,7 @@ Business logic for training program management, enrollment, and progress trackin
 """
 
 import asyncio
+import calendar
 import copy
 import json
 from datetime import date, datetime, timedelta, timezone
@@ -60,6 +61,17 @@ from app.services.training_waiver_service import (
 
 class TrainingProgramService:
     """Service for training program management"""
+
+    # Statuses an automatic recert reset may act on. ACTIVE/COMPLETED/EXPIRED are
+    # members still holding (or renewing) the certification; WITHDRAWN and FAILED
+    # left or washed out, and ON_HOLD is deliberately paused — auto-resetting any
+    # of those would silently resurrect them, so the sweep skips them. (A manual
+    # officer reset is not bound by this — it's an explicit choice.)
+    _RECERTABLE_STATUSES = (
+        EnrollmentStatus.ACTIVE,
+        EnrollmentStatus.COMPLETED,
+        EnrollmentStatus.EXPIRED,
+    )
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -1982,8 +1994,6 @@ class TrainingProgramService:
         """Build a date, clamping the day to the month's last valid day so a
         fixed anchor (e.g. day 30 or 31) never raises in a short month, and
         Feb 29 falls back to Feb 28 in a non-leap year."""
-        import calendar
-
         last_day = calendar.monthrange(year, month)[1]
         return date(year, month, min(day, last_day))
 
@@ -2136,19 +2146,21 @@ class TrainingProgramService:
         progress, put the member back to ACTIVE at the first phase, and zero the
         overall percentage. Returns (enrollment, error_message).
         """
+        # Fetch the enrollment and its program together (one query) so the reset
+        # doesn't need a follow-up lookup for the recert config.
         result = await self.db.execute(
-            select(ProgramEnrollment)
-            .join(TrainingProgram)
+            select(ProgramEnrollment, TrainingProgram)
+            .join(TrainingProgram, ProgramEnrollment.program_id == TrainingProgram.id)
             .where(
                 ProgramEnrollment.id == str(enrollment_id),
                 TrainingProgram.organization_id == str(organization_id),
             )
         )
-        enrollment = result.scalar_one_or_none()
-        if not enrollment:
+        row = result.first()
+        if row is None:
             return None, "Enrollment not found"
 
-        program = await self._get_program_for_enrollment(enrollment)
+        enrollment, program = row
         await self._perform_enrollment_reset(enrollment, program)
 
         await self.db.commit()
@@ -2207,6 +2219,11 @@ class TrainingProgramService:
         if not reset_date or reset_date > datetime.now(timezone.utc).date():
             return False
 
+        # Never auto-resurrect a member who has left, failed, or paused the
+        # program (see _RECERTABLE_STATUSES) — that would undo a withdrawal.
+        if enrollment.status not in self._RECERTABLE_STATUSES:
+            return False
+
         program = await self._get_program_for_enrollment(enrollment)
         if not program or not getattr(program, "recert_enabled", False):
             return False
@@ -2223,21 +2240,28 @@ class TrainingProgramService:
         has passed. Intended for a scheduled sweep, but safe to call on demand.
         Returns (reset_count, error_message)."""
         today = datetime.now(timezone.utc).date()
+        # Select the parent program alongside each enrollment so the reset loop
+        # doesn't issue a per-enrollment program lookup (N+1). Only recertable
+        # statuses are eligible so a withdrawn member is never resurrected.
         result = await self.db.execute(
-            select(ProgramEnrollment)
-            .join(TrainingProgram)
+            select(ProgramEnrollment, TrainingProgram)
+            .join(TrainingProgram, ProgramEnrollment.program_id == TrainingProgram.id)
             .where(
                 TrainingProgram.organization_id == str(organization_id),
                 TrainingProgram.recert_enabled.is_(True),
+                ProgramEnrollment.status.in_(self._RECERTABLE_STATUSES),
                 ProgramEnrollment.next_recert_reset_at.isnot(None),
                 ProgramEnrollment.next_recert_reset_at <= today,
             )
         )
-        enrollments = result.scalars().all()
 
         count = 0
-        for enrollment in enrollments:
-            program = await self._get_program_for_enrollment(enrollment)
+        for enrollment, program in result.all():
+            # Defense in depth: the WHERE clause already excludes non-recertable
+            # statuses, but enforce the invariant here too so the sweep can never
+            # reactivate a member who has left the program.
+            if enrollment.status not in self._RECERTABLE_STATUSES:
+                continue
             await self._perform_enrollment_reset(enrollment, program)
             count += 1
 

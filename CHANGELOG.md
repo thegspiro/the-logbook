@@ -122,9 +122,11 @@ progression.
   cycle (Edit dialog): a cycle length in months plus an optional fixed calendar
   anchor (reset month + day, e.g. March 30). Each enrollment tracks its
   `next_recert_reset_at`; once it passes, the enrollment is reset for a new cycle and
-  the deadline advances. Resets apply lazily when the member's progress is opened, and
-  `POST /training/programs/recert/run-due` sweeps every past-due enrollment for a
-  scheduled job. Fields added by migration `20260715_0001`.
+  the deadline advances. Resets apply lazily when the member's progress is opened (after
+  the view's permission check, never before), and `POST /training/programs/recert/run-due`
+  sweeps every past-due enrollment for a scheduled job. Only active/completed/expired
+  members are auto-reset — a withdrawn, failed, or on-hold member is never resurrected.
+  Fields added by migration `20260715_0001`.
 
 **Leaving a program**
 
