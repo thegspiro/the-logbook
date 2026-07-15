@@ -1382,6 +1382,55 @@ async def update_requirement_progress(
     return progress
 
 
+@router.post(
+    "/progress/{progress_id}/reset", response_model=RequirementProgressResponse
+)
+async def reset_requirement_progress(
+    progress_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Reset a member's progress on one requirement to not-started (start a new
+    recert cycle for that item). Officer action.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    progress, error = await service.reset_requirement_progress(
+        progress_id=progress_id,
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return progress
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/reset", response_model=ProgramEnrollmentResponse
+)
+async def reset_enrollment_progress(
+    enrollment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Start a fresh cycle for a member's whole enrollment — resets every
+    requirement's progress and returns them to the first phase. Officer action
+    for when a recert period rolls over.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    enrollment, error = await service.reset_enrollment_progress(
+        enrollment_id=enrollment_id,
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return enrollment
+
+
 # ==================== Program Duplication Endpoints ====================
 
 

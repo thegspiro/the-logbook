@@ -1971,6 +1971,100 @@ class TrainingProgramService:
 
         return progress, None
 
+    @staticmethod
+    def _blank_progress(row: RequirementProgress) -> None:
+        """Zero a progress row back to a fresh, not-started state (for a new
+        recert cycle) — clears the tally, the completion/verification stamps,
+        and any recorded test attempts."""
+        row.status = RequirementProgressStatus.NOT_STARTED
+        row.progress_value = 0.0
+        row.progress_percentage = 0.0
+        row.progress_notes = None
+        row.started_at = None
+        row.completed_at = None
+        row.verified_at = None
+        row.verified_by = None
+        row.verification_notes = None
+
+    async def reset_requirement_progress(
+        self,
+        progress_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
+        """
+        Reset a single member's progress on one requirement to not-started
+        (start a new cycle). Recomputes the enrollment rollup afterward.
+        Returns (progress, error_message).
+        """
+        result = await self.db.execute(
+            select(RequirementProgress)
+            .join(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                RequirementProgress.id == str(progress_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        progress = result.scalar_one_or_none()
+        if not progress:
+            return None, "Requirement progress not found"
+
+        self._blank_progress(progress)
+        await self.db.commit()
+
+        enrollment_id = progress.enrollment_id
+        await self._recalculate_enrollment_progress(UUID(str(enrollment_id)))
+        await self.db.refresh(progress)
+        return progress, None
+
+    async def reset_enrollment_progress(
+        self,
+        enrollment_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
+        """
+        Start a fresh cycle for a whole enrollment: reset every requirement's
+        progress, put the member back to ACTIVE at the first phase, and zero the
+        overall percentage. Returns (enrollment, error_message).
+        """
+        result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.id == str(enrollment_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        enrollment = result.scalar_one_or_none()
+        if not enrollment:
+            return None, "Enrollment not found"
+
+        rows_result = await self.db.execute(
+            select(RequirementProgress).where(
+                RequirementProgress.enrollment_id == str(enrollment_id)
+            )
+        )
+        for row in rows_result.scalars().all():
+            self._blank_progress(row)
+
+        # Re-anchor to the first phase for phased programs.
+        first_phase_result = await self.db.execute(
+            select(ProgramPhase.id)
+            .where(ProgramPhase.program_id == str(enrollment.program_id))
+            .order_by(ProgramPhase.phase_number)
+            .limit(1)
+        )
+        first_phase_id = first_phase_result.scalar_one_or_none()
+
+        enrollment.status = EnrollmentStatus.ACTIVE
+        enrollment.progress_percentage = 0.0
+        enrollment.completed_at = None
+        enrollment.current_phase_id = first_phase_id
+
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        return enrollment, None
+
     async def _recalculate_enrollment_progress(
         self,
         enrollment_id: UUID,

@@ -11,6 +11,8 @@ const mockGetProgramRequirements = vi.fn();
 const mockGetProgramEnrollments = vi.fn();
 const mockGetEnrollmentProgress = vi.fn();
 const mockUpdateProgress = vi.fn();
+const mockResetProgress = vi.fn();
+const mockResetEnrollment = vi.fn();
 const mockAdvancePhase = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
 const mockGetEnrollmentEligibility = vi.fn();
@@ -28,6 +30,8 @@ vi.mock('../services/api', () => ({
     getProgramEnrollments: (...a: unknown[]) => mockGetProgramEnrollments(...a) as unknown,
     getEnrollmentProgress: (...a: unknown[]) => mockGetEnrollmentProgress(...a) as unknown,
     updateProgress: (...a: unknown[]) => mockUpdateProgress(...a) as unknown,
+    resetProgress: (...a: unknown[]) => mockResetProgress(...a) as unknown,
+    resetEnrollment: (...a: unknown[]) => mockResetEnrollment(...a) as unknown,
     advancePhase: (...a: unknown[]) => mockAdvancePhase(...a) as unknown,
     updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
     getEnrollmentEligibility: (...a: unknown[]) => mockGetEnrollmentEligibility(...a) as unknown,
@@ -118,7 +122,10 @@ describe('PipelineDetailPage — enrollment progress management', () => {
       is_behind_schedule: false,
     });
     mockUpdateProgress.mockResolvedValue({ ...certProgress, status: 'completed' });
+    mockResetProgress.mockResolvedValue({ ...certProgress, status: 'not_started' });
+    mockResetEnrollment.mockResolvedValue({ ...enrollment });
     mockAdvancePhase.mockResolvedValue({ ...enrollment, current_phase_id: 'ph-2' });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     mockGetEnrollmentEligibility.mockResolvedValue([
       { user_id: 'u1', first_name: 'Ava', last_name: 'Recruit', eligible: true, status: 'eligible', reason: null },
       {
@@ -433,5 +440,46 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     expect(row).toBeInTheDocument();
     expect(within(dialog).getByText('Also enrolled in another program')).toBeInTheDocument();
     expect(within(dialog).getByText('1 of 1 eligible')).toBeInTheDocument();
+  });
+
+  it('resets a single requirement to start a new cycle', async () => {
+    // A requirement mid-cycle (completed) so the Reset control is offered.
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment,
+      program,
+      requirement_progress: [{ ...certProgress, status: 'completed', progress_percentage: 100 }],
+      completed_requirements: 1,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(await within(dialog).findByText('CPR Certification')).toBeInTheDocument();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Reset$/i }));
+
+    await waitFor(() => expect(mockResetProgress).toHaveBeenCalledWith('prog-rec-1'));
+    // Progress is re-fetched so the row reflects the cleared state.
+    await waitFor(() => expect(mockGetEnrollmentProgress).toHaveBeenCalledTimes(2));
+  });
+
+  it('resets the whole enrollment for a new recert cycle', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Start new cycle/i }));
+
+    await waitFor(() => expect(mockResetEnrollment).toHaveBeenCalledWith('enr-1'));
   });
 });

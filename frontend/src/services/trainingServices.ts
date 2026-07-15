@@ -767,6 +767,18 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /** Reset one requirement's progress to not-started (new recert cycle). */
+  async resetProgress(progressId: string): Promise<RequirementProgressRecord> {
+    const response = await api.post<RequirementProgressRecord>(`/training/programs/progress/${progressId}/reset`);
+    return response.data;
+  },
+
+  /** Reset a member's whole enrollment — new cycle across all requirements. */
+  async resetEnrollment(enrollmentId: string): Promise<ProgramEnrollment> {
+    const response = await api.post<ProgramEnrollment>(`/training/programs/enrollments/${enrollmentId}/reset`);
+    return response.data;
+  },
+
   /**
    * Advance an enrollment to the next phase of a phased program.
    * By default the current phase must be complete; pass force to override.
