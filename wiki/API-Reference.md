@@ -299,6 +299,16 @@ PATCH  /api/v1/training/programs/progress/{progress_id}                 # Update
 PATCH  /api/v1/training/programs/programs/{program_id}/requirements/{program_requirement_id}  # Toggle a requirement's is_required / is_prerequisite / sort_order (training.manage)
 GET    /api/v1/training/programs/sample-templates                      # List built-in sample program templates (training.manage)
 POST   /api/v1/training/programs/sample-templates/{key}/instantiate    # Add a sample template to the org (training.manage)
+GET    /api/v1/training/programs/programs/{program_id}/eligibility     # Per-member enroll eligibility, eligible first (training.manage)
+PATCH  /api/v1/training/programs/programs/{program_id}                 # Edit program details (training.manage)
+DELETE /api/v1/training/programs/programs/{program_id}                 # Delete a program + all children (training.manage)
+PATCH  /api/v1/training/programs/programs/{program_id}/phases/{phase_id}          # Edit a phase (training.manage)
+POST   /api/v1/training/programs/programs/{program_id}/phases/reorder            # Renumber phases (training.manage)
+DELETE /api/v1/training/programs/programs/{program_id}/phases/{phase_id}          # Delete a phase, auto-clean enrollees (training.manage)
+POST   /api/v1/training/programs/programs/{program_id}/requirements/reorder       # Set requirement sort order (training.manage)
+DELETE /api/v1/training/programs/programs/{program_id}/requirements/{prog_req_id} # Remove a requirement, auto-clean (training.manage)
+PATCH  /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}  # Edit a milestone (training.manage)
+DELETE /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}  # Delete a milestone (training.manage)
 ```
 
 - **`PATCH .../progress/{progress_id}`** — `RequirementProgressUpdate` now also
@@ -311,6 +321,16 @@ POST   /api/v1/training/programs/sample-templates/{key}/instantiate    # Add a s
   school, EMT recruit school, new-member orientation). `instantiate` replays the
   atomic build into the org as an editable template; optional body
   `{ "name": "…", "is_template": true }`.
+- **`.../{program_id}/eligibility`** — returns every member with `eligible`, a
+  `status` (`eligible` / `enrolled` / `prerequisite` / `concurrent`), and a `reason`.
+  Hard gates (already enrolled, missing prerequisite) set `eligible: false`.
+  **`concurrent`** (active in another program) is a soft advisory: `eligible: true`
+  with a `reason` — never a block. Target position/roles are not gated.
+- **Editing endpoints** back the inline pipeline editor. `PATCH …requirements/{id}`
+  also accepts `phase_id` to move a requirement between phases. `DELETE` on a phase or
+  requirement is auto-cleaning: it clears only this program's enrolled members'
+  progress for the affected items and re-anchors/recomputes them (see the changelog
+  entry). Reorder endpoints take an ordered id list and renumber in one transaction.
 - **Program create/response** now include `code` and `version`; each program
   phase includes `requires_manual_advancement`.
 

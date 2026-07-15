@@ -159,6 +159,7 @@ class TrainingProgramUpdate(BaseModel):
 
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    code: Optional[str] = Field(None, max_length=50)
     target_position: Optional[str] = Field(None, max_length=100)
     target_roles: Optional[List[UUID]] = None
     structure_type: Optional[ProgramStructureTypeStr] = None
@@ -210,6 +211,7 @@ class ProgramPhaseUpdate(BaseModel):
     description: Optional[str] = None
     prerequisite_phase_ids: Optional[List[UUID]] = None
     time_limit_days: Optional[int] = Field(None, ge=0)
+    requires_manual_advancement: Optional[bool] = None
 
 
 class ProgramPhaseResponse(ProgramPhaseBase, UTCResponseBase):
@@ -248,6 +250,20 @@ class ProgramRequirementUpdate(BaseModel):
     is_required: Optional[bool] = None
     is_prerequisite: Optional[bool] = None
     sort_order: Optional[int] = Field(None, ge=0)
+    # Move the requirement to a different phase (or None for program-level).
+    phase_id: Optional[UUID] = None
+
+
+class PhaseReorderRequest(BaseModel):
+    """Ordered phase IDs; index becomes the new phase_number (1-based)."""
+
+    phase_ids: List[UUID] = Field(..., min_length=1)
+
+
+class RequirementReorderRequest(BaseModel):
+    """Ordered program-requirement IDs; index becomes the new sort_order."""
+
+    program_requirement_ids: List[UUID] = Field(..., min_length=1)
 
 
 class ProgramRequirementResponse(ProgramRequirementBase, UTCResponseBase):
@@ -594,6 +610,21 @@ class ProgramBuildRequest(BaseModel):
 
     program: TrainingProgramCreate
     phases: List[ProgramBuildPhaseInput] = []
+
+
+class MemberEligibilityResponse(BaseModel):
+    """Per-member enrollment eligibility for the enroll picker."""
+
+    user_id: UUID
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    membership_number: Optional[str] = None
+    eligible: bool
+    # eligible | enrolled | prerequisite | concurrent
+    status: str
+    reason: Optional[str] = None
+
+    model_config = _response_config
 
 
 class SampleTemplateSummary(BaseModel):

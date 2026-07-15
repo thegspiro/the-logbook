@@ -86,9 +86,20 @@ Members are enrolled in training programs to track their progress toward complet
 ### ✅ Implemented Features
 
 #### Registry Integration
-- **NFPA Standards**: Firefighter I/II, Driver/Operator, Fire Officer, Instructor, Live Fire, Safety, Medical Fitness
-- **NREMT Certifications**: EMR, EMT, AEMT, Paramedic, CPR/BLS, ACLS, PALS, PHTLS
+- **NFPA Standards**: Firefighter I/II (1001), Driver/Operator (1002), Fire Officer (1021),
+  Instructor (1041), Live Fire (1403), Occupational Safety (1500), Medical Fitness (1582),
+  Hazmat/WMD Responder (1072), Technical Rescuer (1006), Fire Investigator (1033),
+  Fire Inspector (1031), Fire & Life Safety Educator/PIO (1035), Wildland Fire Fighter (1051),
+  and Fire Department Safety Officer (1521)
 - **Pro Board**: Firefighter I/II, Driver/Operator, Fire Officer I/II, HazMat Ops, Instructor
+- **NREMT by provider level** — separate, individually-importable registries so a
+  department imports only the level(s) it staffs, each with the level's national
+  recertification component (NCCR hours by topic area) plus the appropriate
+  life-support certifications:
+  - **EMR** — NREMR national component + CPR/BLS
+  - **EMT** — NREMT national component + CPR/BLS + PHTLS
+  - **Advanced EMT (AEMT / EMT-A)** — NRAEMT national component + BLS/ACLS/PALS/PHTLS
+  - **Paramedic** — NRP national component + BLS/ACLS/PALS/PHTLS
 - One-click import of registry requirements
 - Department can customize imported requirements
 
@@ -119,10 +130,31 @@ their real sessions/categories/tests, adjusts hours, and enrolls members.
 - `POST /training/programs/sample-templates/{key}/instantiate` — add to the org
   (optional body `{ "name": "…", "is_template": true }`)
 
-#### Editing Requirements After Creation
-- A requirement's **Required ↔ Optional** state is editable from the program overview
-  (`PATCH /training/programs/programs/{program_id}/requirements/{program_requirement_id}`).
-  Toggling it recomputes affected members' progress and re-checks phase advancement.
+#### Editing a Pipeline After Creation
+A pipeline is fully editable from the program detail page (Overview tab), gated by
+`training.manage`:
+
+- **Program details** — name, description, code, structure, time limits, target
+  position, template/active (`PATCH /training/programs/programs/{id}`).
+- **Phases** — add, edit (name/description/time limit/manual-advance), reorder, and
+  delete (`…/phases`, `…/phases/reorder`, `…/phases/{phase_id}`).
+- **Requirements** — add, edit content/target, reorder within a phase, move between
+  phases, and remove (`…/requirements`, `…/requirements/reorder`,
+  `…/requirements/{prog_req_id}`). The **Required ↔ Optional** toggle is also inline.
+- **Milestones** — add, edit, and delete (`…/milestones/{milestone_id}`).
+
+**Destructive edits auto-clean enrolled members.** Deleting a phase or removing a
+requirement clears only this program's enrolled members' progress for the affected
+items, re-anchors anyone parked on a deleted phase to the first remaining phase, and
+recomputes/re-advances their progress. Editing a requirement's numeric target
+re-derives enrolled members' progress-row percentages against the new target.
+
+- **Delete the whole pipeline** — a guarded "Delete" action in the program header
+  (`DELETE /training/programs/programs/{id}`) permanently removes the program and all
+  its phases, requirements, milestones, and enrollments. The UI shows a warning
+  dialog (naming the pipeline and its enrolled-member count) first. This is
+  irreversible — to retire a pipeline without losing history, set it **inactive** via
+  the edit modal instead.
 
 #### Program Prerequisites
 - Set prerequisite programs (e.g., must complete "Recruit School" before "Driver Candidate")
@@ -134,6 +166,16 @@ their real sessions/categories/tests, adjusts hours, and enrolls members.
 - Bulk member enrollment with validation
 - Custom target completion dates
 - Enrollment notes
+- **Eligibility-aware enroll picker** — the picker prechecks eligibility
+  (`GET /training/programs/programs/{program_id}/eligibility`) and defaults to
+  "Show eligible only". Members are marked **Eligible / Enrolled / Prerequisite /
+  In another program** with the specific reason, so officers see who can be enrolled
+  up front instead of hitting per-member errors on submit. The **hard gates** are
+  already-enrolled (in this program) and unmet prerequisite programs. Being **active
+  in another program** is a *soft advisory* only — the member stays eligible and
+  selectable (a new member may be in several onboarding courses at once), just flagged
+  "Also enrolled in another program". The program's target position/roles are advisory
+  and never block.
 
 #### Phase Management
 - Multi-phase program structures
@@ -919,7 +961,8 @@ Categories help organize your training and allow flexible requirement satisfacti
 
 #### Option A: Import from Registry
 1. Navigate to Training Programs → Requirements tab
-2. Click "Import NFPA", "Import NREMT", or "Import Pro Board"
+2. Click a registry button — "Import NFPA", "Import Pro Board", or an NREMT provider
+   level ("Import NREMT — EMR / EMT / Advanced EMT (AEMT) / Paramedic")
 3. System imports standard requirements
 4. Customize as needed (including due date types)
 

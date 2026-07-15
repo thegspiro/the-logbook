@@ -6,6 +6,7 @@ Endpoints for managing training programs, enrollments, and member progress track
 
 import asyncio
 from datetime import date
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -22,6 +23,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.training_program import (  # Requirements; Programs; Phases; Program Requirements; Milestones; Enrollments; Progress; Registry
+    MemberEligibilityResponse,
     MemberProgramProgress,
     ProgramBuildRequest,
     ProgramEnrollmentCreate,
@@ -29,19 +31,24 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     ProgramEnrollmentWithUserResponse,
     ProgramMilestoneCreate,
     ProgramMilestoneResponse,
+    ProgramMilestoneUpdate,
     ProgramPhaseCreate,
     ProgramPhaseResponse,
+    ProgramPhaseUpdate,
     ProgramRequirementCreate,
     ProgramRequirementResponse,
     ProgramRequirementUpdate,
     ProgramWithPhasesAndRequirements,
+    PhaseReorderRequest,
     RegistryImportResult,
+    RequirementReorderRequest,
     RequirementProgressResponse,
     RequirementProgressUpdate,
     SampleTemplateInstantiate,
     SampleTemplateSummary,
     TrainingProgramCreate,
     TrainingProgramResponse,
+    TrainingProgramUpdate,
     TrainingRequirementEnhancedCreate,
     TrainingRequirementEnhancedResponse,
     TrainingRequirementEnhancedUpdate,
@@ -53,6 +60,19 @@ from app.services.sample_program_templates import (
 from app.services.training_program_service import TrainingProgramService
 
 router = APIRouter()
+
+# Registry JSON files, resolved relative to the app package (…/backend/app/data)
+# so they load no matter what the process working directory is.
+_REGISTRY_DIR = Path(__file__).resolve().parents[3] / "data" / "registries"
+_REGISTRY_FILES = {
+    "nfpa": "nfpa_requirements.json",
+    "proboard": "proboard_requirements.json",
+    # NREMT split by provider level so a department imports only what it staffs.
+    "emr": "emr_requirements.json",
+    "emt": "emt_requirements.json",
+    "aemt": "aemt_requirements.json",
+    "paramedic": "paramedic_requirements.json",
+}
 
 
 # ==================== Training Requirement Endpoints ====================
@@ -144,21 +164,14 @@ async def list_available_registries(
     **Requires permission: training.manage**
     """
     import json
-    from pathlib import Path
-
-    registry_files = {
-        "nfpa": "backend/app/data/registries/nfpa_requirements.json",
-        "nremt": "backend/app/data/registries/nremt_requirements.json",
-        "proboard": "backend/app/data/registries/proboard_requirements.json",
-    }
 
     def _read_json(p: Path):
         with open(p) as f:
             return json.load(f)
 
     registries = []
-    for key, file_path in registry_files.items():
-        path = Path(file_path)
+    for key, filename in _REGISTRY_FILES.items():
+        path = _REGISTRY_DIR / filename
         if not path.exists():
             continue
         try:
@@ -193,24 +206,18 @@ async def import_registry_requirements(
     """
     Import requirements from a registry JSON file
 
-    Available registries: nfpa, nremt, proboard
+    Available registries: nfpa, proboard, emr, emt, aemt, paramedic
 
     **Authentication required**
     **Requires permission: training.manage**
     """
-    # Map registry names to file paths
-    registry_files = {
-        "nfpa": "backend/app/data/registries/nfpa_requirements.json",
-        "nremt": "backend/app/data/registries/nremt_requirements.json",
-        "proboard": "backend/app/data/registries/proboard_requirements.json",
-    }
-
-    registry_file = registry_files.get(registry_name.lower())
-    if not registry_file:
+    filename = _REGISTRY_FILES.get(registry_name.lower())
+    if not filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown registry: {registry_name}. Available: {', '.join(registry_files.keys())}",
+            detail=f"Unknown registry: {registry_name}. Available: {', '.join(_REGISTRY_FILES.keys())}",
         )
+    registry_file = str(_REGISTRY_DIR / filename)
 
     service = TrainingProgramService(db)
 
@@ -578,6 +585,62 @@ async def get_training_program(
     )
 
 
+@router.patch("/programs/{program_id}", response_model=TrainingProgramResponse)
+async def update_training_program(
+    program_id: UUID,
+    updates: TrainingProgramUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Update a training program's own fields (name, description, code, structure,
+    time limits, target position/roles, template flag, active).
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    program, error = await service.update_training_program(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        updates=updates,
+    )
+    if error:
+        code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=code, detail=error)
+    return program
+
+
+@router.delete(
+    "/programs/{program_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_training_program(
+    program_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Permanently delete a training program and everything under it (phases,
+    requirements, milestones, enrollments, and enrolled members' progress).
+    Irreversible — the UI guards it behind a confirmation.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    ok, error = await service.delete_training_program(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+
+
 # ==================== Program Phase Endpoints ====================
 
 
@@ -637,6 +700,88 @@ async def get_program_phases(
     )
 
     return phases
+
+
+@router.post(
+    "/programs/{program_id}/phases/reorder",
+    response_model=list[ProgramPhaseResponse],
+)
+async def reorder_program_phases(
+    program_id: UUID,
+    payload: PhaseReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Renumber a program's phases to match the given order (1-based).
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    phases, error = await service.reorder_program_phases(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        phase_ids=payload.phase_ids,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return phases
+
+
+@router.patch(
+    "/programs/{program_id}/phases/{phase_id}",
+    response_model=ProgramPhaseResponse,
+)
+async def update_program_phase(
+    program_id: UUID,
+    phase_id: UUID,
+    updates: ProgramPhaseUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Update a phase's name, description, time limit, manual-advance flag, or
+    prerequisites. Use the reorder endpoint to change phase numbers.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    phase, error = await service.update_program_phase(
+        phase_id=phase_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        updates=updates,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return phase
+
+
+@router.delete(
+    "/programs/{program_id}/phases/{phase_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_program_phase(
+    program_id: UUID,
+    phase_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Delete a phase and its requirements/milestones, cleaning up enrolled members
+    (drops their progress for the phase's requirements and re-anchors anyone
+    parked on it).
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    ok, error = await service.delete_program_phase(
+        phase_id=phase_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
 
 
 # ==================== Program Requirement Endpoints ====================
@@ -718,6 +863,60 @@ async def update_program_requirement(
     return program_requirement
 
 
+@router.post(
+    "/programs/{program_id}/requirements/reorder",
+    response_model=list[ProgramRequirementResponse],
+)
+async def reorder_program_requirements(
+    program_id: UUID,
+    payload: RequirementReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Set the display order (``sort_order``) of a program's requirement links to
+    match the given order. Accepts a subset (e.g. one phase's requirements).
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    links, error = await service.reorder_program_requirements(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        program_requirement_ids=payload.program_requirement_ids,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return links
+
+
+@router.delete(
+    "/programs/{program_id}/requirements/{program_requirement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_requirement_from_program(
+    program_id: UUID,
+    program_requirement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Unlink a requirement from the program, cleaning up enrolled members (drops
+    their progress for it and recomputes) and deleting the requirement if it's
+    no longer used anywhere.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    ok, error = await service.remove_requirement_from_program(
+        program_requirement_id=program_requirement_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+
+
 @router.get(
     "/programs/{program_id}/requirements",
     response_model=list[ProgramRequirementResponse],
@@ -782,6 +981,59 @@ async def create_program_milestone(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return milestone
+
+
+@router.patch(
+    "/programs/{program_id}/milestones/{milestone_id}",
+    response_model=ProgramMilestoneResponse,
+)
+async def update_program_milestone(
+    program_id: UUID,
+    milestone_id: UUID,
+    updates: ProgramMilestoneUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Update a milestone's name, description, threshold, or message.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    milestone, error = await service.update_program_milestone(
+        milestone_id=milestone_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        updates=updates,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return milestone
+
+
+@router.delete(
+    "/programs/{program_id}/milestones/{milestone_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_program_milestone(
+    program_id: UUID,
+    milestone_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Delete a program milestone.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    ok, error = await service.delete_program_milestone(
+        milestone_id=milestone_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
 
 
 # ==================== Program Enrollment Endpoints ====================
@@ -1272,3 +1524,36 @@ async def bulk_enroll_members(
         enrolled_users=[e.user_id for e in enrollments],
         errors=errors,
     )
+
+
+@router.get(
+    "/programs/{program_id}/eligibility",
+    response_model=list[MemberEligibilityResponse],
+)
+async def get_enrollment_eligibility(
+    program_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List every member with whether they can be enrolled in this program right
+    now (eligible / already enrolled / missing prerequisite / concurrent-block),
+    so the enroll picker can show eligibility up front. Eligible members sort
+    first.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+
+    eligibility = await service.get_enrollment_eligibility(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if eligibility is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Training program not found",
+        )
+
+    return eligibility

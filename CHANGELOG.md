@@ -27,6 +27,59 @@ progression.
   **searchable member picker** (no more raw user IDs), and **bulk enroll now blocks**
   members who fail prerequisite or concurrent-enrollment rules (previously the gate
   was bypassed and they were enrolled anyway).
+- **Eligibility-aware enroll picker** — the picker now prechecks who can actually be
+  enrolled (`GET /training/programs/programs/{id}/eligibility`) and defaults to
+  "Show eligible only". Members who are already enrolled, haven't completed a
+  prerequisite program, or are blocked by the no-concurrent-enrollment rule are shown
+  with the specific reason (and can be revealed by toggling the filter off) instead of
+  only failing on submit. Eligible members sort first. Target position/roles stay
+  advisory and never block.
+
+**Editing after creation**
+
+- **Inline pipeline editor** — a pipeline is no longer frozen once built. From the
+  program detail page (Overview), officers can edit the program's own details
+  (`PATCH /training/programs/programs/{id}`), and add / edit / reorder / delete
+  **phases** (`PATCH`, `POST …/phases/reorder`, `DELETE …/phases/{phase_id}`),
+  **requirements** (add, edit content, `POST …/requirements/reorder`, move between
+  phases, `DELETE …/requirements/{prog_req_id}`), and **milestones**
+  (`PATCH` / `DELETE …/milestones/{milestone_id}`). All gated by `training.manage`.
+- **Auto-clean on destructive edits** — deleting a phase or removing a requirement
+  clears only this program's enrolled members' progress for the affected items,
+  re-anchors anyone parked on a deleted phase to the first remaining phase, and
+  recomputes/re-advances them. Editing a requirement's numeric target (hours/shifts/
+  calls/course count) re-derives enrolled members' progress against the new target.
+- **Delete a whole pipeline** — a guarded "Delete" action
+  (`DELETE /training/programs/programs/{id}`) permanently removes a program and all
+  of its phases, requirements, milestones, and enrollments. The UI warns first
+  (naming the pipeline and its enrolled-member count) before deleting.
+
+**Enrollment & registry fixes**
+
+- **Concurrent enrollment is now a soft advisory, not a hard filter.** A member
+  already active in another program stays eligible to enroll (they may be in several
+  onboarding courses at once); the enroll picker just flags "Also enrolled in another
+  program". The hard block was removed from bulk-enroll (a duplicate enrollment in the
+  *same* program is still rejected).
+- **Registry import fixed.** Importing from NFPA / NREMT / Pro Board returned
+  "imported 0" because the JSON files were resolved relative to the process working
+  directory; they're now anchored to the app package, so imports find their
+  requirements. The import toast also no longer shows a misleading green success on
+  zero — it reports the error, a neutral "already imported" note, or a real count.
+- **NREMT split into per-provider-level registries.** The single bundled NREMT import
+  is replaced by four individually-importable registries — **EMR, EMT, Advanced EMT
+  (AEMT), and Paramedic** — so a department imports only the level(s) it staffs. Each
+  carries that level's national recertification component (NCCR hours by topic area)
+  plus the appropriate life-support certifications (BLS; ACLS/PALS/PHTLS at the
+  advanced levels).
+- **Expanded NFPA registry.** Added seven more NFPA professional-qualification
+  standards as annual continuing-compliance requirements: Hazmat/WMD Responder (1072),
+  Technical Rescuer (1006), Fire Investigator (1033), Fire Inspector (1031), Fire &
+  Life Safety Educator/PIO (1035), Wildland Fire Fighter (1051), and Fire Department
+  Safety Officer (1521) — alongside the existing 1001/1002/1021/1041/1403/1500/1582.
+  Pro Board is unchanged.
+
+**Progress tracking**
 
 **Progress tracking**
 

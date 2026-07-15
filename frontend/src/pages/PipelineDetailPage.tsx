@@ -22,13 +22,25 @@ import {
   BadgeCheck,
   Save,
   ArrowUpRight,
+  Pencil,
+  Trash2,
+  Plus,
+  ArrowUp,
+  ArrowDown,
+  Flag,
 } from 'lucide-react';
-import { trainingProgramService, userService } from '../services/api';
+import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { Breadcrumbs } from '../components/ux/Breadcrumbs';
+import { ConfirmDialog } from '../components/ux/ConfirmDialog';
+import {
+  EditProgramModal,
+  PhaseFormModal,
+  RequirementFormModal,
+  MilestoneFormModal,
+} from './PipelineEditModals';
 import { getErrorMessage } from '../utils/errorHandling';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
-import type { User } from '../types/user';
 import type {
   TrainingProgram,
   ProgramPhase,
@@ -38,16 +50,22 @@ import type {
   TrainingRequirementEnhanced,
   ProgramStructureType,
   MemberProgramProgress,
+  MemberEligibility,
+  EligibilityStatus,
   RequirementProgressRecord,
   RequirementProgressUpdate,
 } from '../types/training';
 
-function memberName(u: User): string {
-  return (
-    u.full_name ||
-    `${u.first_name ?? ''} ${u.last_name ?? ''}`.trim() ||
-    u.username
-  );
+// Label + colour for each eligibility status; drives the picker badges.
+const ELIGIBILITY_META: Record<EligibilityStatus, { label: string; className: string }> = {
+  eligible: { label: 'Eligible', className: 'text-green-700 dark:text-green-400' },
+  enrolled: { label: 'Enrolled', className: 'text-theme-text-muted' },
+  prerequisite: { label: 'Prerequisite', className: 'text-yellow-700 dark:text-yellow-400' },
+  concurrent: { label: 'In another program', className: 'text-yellow-700 dark:text-yellow-400' },
+};
+
+function eligibilityName(m: MemberEligibility): string {
+  return `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim() || 'Unknown member';
 }
 
 // ==================== Types ====================
@@ -129,25 +147,26 @@ const EnrollModal: React.FC<{
   isOpen: boolean;
   programId: string;
   programName: string;
-  enrolledUserIds: Set<string>;
   onClose: () => void;
   onSuccess: () => void;
-}> = ({ isOpen, programId, programName, enrolledUserIds, onClose, onSuccess }) => {
-  const [members, setMembers] = useState<User[]>([]);
+}> = ({ isOpen, programId, programName, onClose, onSuccess }) => {
+  const [members, setMembers] = useState<MemberEligibility[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [eligibleOnly, setEligibleOnly] = useState(true);
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [targetDate, setTargetDate] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load the member roster each time the modal opens; reset transient state.
+  // Load eligibility each time the modal opens; reset transient state.
   useEffect(() => {
     if (!isOpen) {
       setSearch('');
       setSelected(new Map());
       setTargetDate('');
       setMembersError(null);
+      setEligibleOnly(true);
       return undefined;
     }
     let cancelled = false;
@@ -155,7 +174,7 @@ const EnrollModal: React.FC<{
     setMembersError(null);
     void (async () => {
       try {
-        const data = await userService.getUsers();
+        const data = await trainingProgramService.getEnrollmentEligibility(programId);
         if (!cancelled) setMembers(data);
       } catch (err: unknown) {
         if (!cancelled) setMembersError(getErrorMessage(err, 'Unable to load members.'));
@@ -164,27 +183,29 @@ const EnrollModal: React.FC<{
       }
     })();
     return () => { cancelled = true; };
-  }, [isOpen]);
+  }, [isOpen, programId]);
 
+  const eligibleCount = useMemo(() => members.filter((m) => m.eligible).length, [members]);
+
+  // The API already returns eligible-first, alphabetical — just filter here.
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...members].sort((a, b) => memberName(a).localeCompare(memberName(b)));
-    if (!q) return sorted;
-    return sorted.filter((m) => {
-      const name = memberName(m).toLowerCase();
+    return members.filter((m) => {
+      if (eligibleOnly && !m.eligible) return false;
+      if (!q) return true;
       return (
-        name.includes(q) ||
-        m.username.toLowerCase().includes(q) ||
+        eligibilityName(m).toLowerCase().includes(q) ||
         (m.membership_number ?? '').toLowerCase().includes(q)
       );
     });
-  }, [members, search]);
+  }, [members, search, eligibleOnly]);
 
-  const toggle = (m: User) => {
+  const toggle = (m: MemberEligibility) => {
+    if (!m.eligible) return;
     setSelected((prev) => {
       const next = new Map(prev);
-      if (next.has(m.id)) next.delete(m.id);
-      else next.set(m.id, memberName(m));
+      if (next.has(m.user_id)) next.delete(m.user_id);
+      else next.set(m.user_id, eligibilityName(m));
       return next;
     });
   };
@@ -204,8 +225,8 @@ const EnrollModal: React.FC<{
       if (result.success_count > 0) {
         toast.success(`Enrolled ${result.success_count} member(s) in ${programName}`);
       }
-      // Surface any per-member failures (prerequisites, concurrency, duplicates)
-      // instead of silently dropping them.
+      // Eligibility is prechecked, but surface any residual per-member failures
+      // (e.g. a race where state changed since the picker loaded).
       result.errors.forEach((msg) => toast.error(msg));
       onSuccess();
       if (result.success_count > 0) onClose();
@@ -260,12 +281,30 @@ const EnrollModal: React.FC<{
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search members by name, username, or number..."
+              placeholder="Search members by name or number..."
               className="form-input pl-9 text-sm"
               aria-label="Search members"
               autoComplete="off"
             />
           </div>
+
+          {/* Eligibility filter */}
+          {!loadingMembers && !membersError && (
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-theme-text-muted">
+                {eligibleCount} of {members.length} eligible
+              </span>
+              <label className="inline-flex items-center gap-2 cursor-pointer select-none text-theme-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={eligibleOnly}
+                  onChange={(e) => setEligibleOnly(e.target.checked)}
+                  className="rounded-sm"
+                />
+                Show eligible only
+              </label>
+            </div>
+          )}
 
           {/* Member list */}
           <div className="border border-theme-surface-border rounded-lg max-h-64 overflow-y-auto">
@@ -277,38 +316,55 @@ const EnrollModal: React.FC<{
             ) : membersError ? (
               <div className="p-3 text-sm text-red-600 dark:text-red-400">{membersError}</div>
             ) : filtered.length === 0 ? (
-              <div className="py-8 text-center text-theme-text-muted text-sm">
-                {search ? 'No members match your search.' : 'No members found.'}
+              <div className="py-8 text-center text-theme-text-muted text-sm px-4">
+                {search
+                  ? 'No members match your search.'
+                  : eligibleOnly && members.length > 0
+                  ? 'No eligible members. Turn off “Show eligible only” to see who’s blocked and why.'
+                  : 'No members found.'}
               </div>
             ) : (
               filtered.map((m) => {
-                const already = enrolledUserIds.has(m.id);
-                const isSelected = selected.has(m.id);
+                const isSelected = selected.has(m.user_id);
+                const meta = ELIGIBILITY_META[m.status];
                 return (
                   <button
-                    key={m.id}
+                    key={m.user_id}
                     type="button"
-                    onClick={() => { if (!already) toggle(m); }}
-                    disabled={already}
-                    className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm border-b border-theme-surface-border last:border-b-0 transition-colors ${
-                      already
-                        ? 'opacity-50 cursor-not-allowed'
+                    onClick={() => toggle(m)}
+                    disabled={!m.eligible}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2 text-left text-sm border-b border-theme-surface-border last:border-b-0 transition-colors ${
+                      !m.eligible
+                        ? 'cursor-not-allowed'
                         : isSelected
                         ? 'bg-red-500/10'
                         : 'hover:bg-theme-surface-hover'
                     }`}
                   >
-                    <span className="text-theme-text-primary truncate">
-                      {memberName(m)}
-                      {m.membership_number && (
-                        <span className="text-theme-text-muted ml-2 text-xs">#{m.membership_number}</span>
+                    <div className="min-w-0">
+                      <span className={`truncate ${m.eligible ? 'text-theme-text-primary' : 'text-theme-text-muted'}`}>
+                        {eligibilityName(m)}
+                        {m.membership_number && (
+                          <span className="text-theme-text-muted ml-2 text-xs">#{m.membership_number}</span>
+                        )}
+                      </span>
+                      {m.reason && (
+                        // Advisory (amber) for eligible-but-flagged members,
+                        // muted for hard-ineligible ones.
+                        <p className={`text-xs mt-0.5 ${m.eligible ? 'text-yellow-700 dark:text-yellow-400' : 'text-theme-text-muted'}`}>
+                          {m.reason}
+                        </p>
                       )}
-                    </span>
-                    {already ? (
-                      <span className="text-xs text-theme-text-muted">Enrolled</span>
-                    ) : isSelected ? (
-                      <CheckCircle2 className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
-                    ) : null}
+                    </div>
+                    {m.eligible ? (
+                      isSelected ? (
+                        <CheckCircle2 className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" />
+                      ) : (
+                        <Circle className="w-4 h-4 text-theme-text-muted shrink-0" />
+                      )
+                    ) : (
+                      <span className={`text-xs shrink-0 ${meta.className}`}>{meta.label}</span>
+                    )}
                   </button>
                 );
               })
@@ -747,7 +803,22 @@ const PipelineDetailPage: React.FC = () => {
   const [progressEnrollment, setProgressEnrollment] = useState<ProgramEnrollmentWithUser | null>(null);
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [savingReqId, setSavingReqId] = useState<string | null>(null);
+  const [milestones, setMilestones] = useState<ProgramMilestone[]>([]);
   const canManage = useAuthStore((s) => s.checkPermission('training.manage'));
+
+  // Editor modal + confirm state.
+  const [showEditProgram, setShowEditProgram] = useState(false);
+  const [phaseModal, setPhaseModal] = useState<{ phase?: ProgramPhase } | null>(null);
+  const [reqModal, setReqModal] = useState<{ phaseId: string | null; link?: ProgramRequirement } | null>(null);
+  const [milestoneModal, setMilestoneModal] = useState<{ milestone?: ProgramMilestone } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    message: string;
+    title?: string;
+    confirmLabel?: string;
+    run: () => Promise<void>;
+    after?: () => void;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
     if (programId) void loadProgram();
@@ -766,6 +837,7 @@ const PipelineDetailPage: React.FC = () => {
       setProgram(programData);
       setPhases(phasesData);
       setProgramReqs(reqsData);
+      setMilestones(programData.milestones ?? []);
 
       // Expand all phases by default
       setExpandedPhases(new Set(phasesData.map((p: ProgramPhase) => p.id)));
@@ -825,6 +897,117 @@ const PipelineDetailPage: React.FC = () => {
   // Get requirements for a specific phase
   const getPhaseReqs = (phaseId: string) =>
     programReqs.filter((r) => r.phase_id === phaseId).sort((a, b) => a.sort_order - b.sort_order);
+
+  const afterEdit = () => {
+    setShowEditProgram(false);
+    setPhaseModal(null);
+    setReqModal(null);
+    setMilestoneModal(null);
+    void loadProgram();
+  };
+
+  const runConfirm = async () => {
+    if (!confirm) return;
+    const after = confirm.after;
+    setConfirmLoading(true);
+    try {
+      await confirm.run();
+      setConfirm(null);
+      // A destructive action can navigate away (e.g. delete the whole pipeline);
+      // otherwise just refresh the current view.
+      if (after) after();
+      else void loadProgram();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Action failed'));
+    } finally {
+      setConfirmLoading(false);
+    }
+  };
+
+  // Reorder helpers move an item one slot up/down, then persist the new order.
+  const movePhase = async (phase: ProgramPhase, dir: -1 | 1) => {
+    if (!programId) return;
+    const ordered = [...phases].sort((a, b) => a.phase_number - b.phase_number);
+    const i = ordered.findIndex((p) => p.id === phase.id);
+    const j = i + dir;
+    const a = ordered[i];
+    const b = ordered[j];
+    if (!a || !b) return;
+    ordered[i] = b;
+    ordered[j] = a;
+    try {
+      await trainingProgramService.reorderProgramPhases(programId, ordered.map((p) => p.id));
+      void loadProgram();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reorder phases'));
+    }
+  };
+
+  const moveRequirement = async (link: ProgramRequirement, dir: -1 | 1) => {
+    if (!programId || !link.phase_id) return;
+    const ordered = getPhaseReqs(link.phase_id);
+    const i = ordered.findIndex((r) => r.id === link.id);
+    const j = i + dir;
+    const a = ordered[i];
+    const b = ordered[j];
+    if (!a || !b) return;
+    ordered[i] = b;
+    ordered[j] = a;
+    try {
+      await trainingProgramService.reorderProgramRequirements(programId, ordered.map((r) => r.id));
+      void loadProgram();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reorder requirements'));
+    }
+  };
+
+  const confirmDeletePhase = (phase: ProgramPhase) =>
+    setConfirm({
+      message:
+        `Delete phase "${phase.name}"? Its requirements and milestones are removed, ` +
+        `and enrolled members' progress for them is cleared. This can't be undone.`,
+      run: async () => {
+        if (programId) await trainingProgramService.deleteProgramPhase(programId, phase.id);
+      },
+    });
+
+  const confirmRemoveRequirement = (link: ProgramRequirement) =>
+    setConfirm({
+      message:
+        `Remove "${link.requirement?.name ?? 'this requirement'}" from the pipeline? ` +
+        `Enrolled members' progress for it is cleared. This can't be undone.`,
+      run: async () => {
+        if (programId) await trainingProgramService.removeProgramRequirement(programId, link.id);
+      },
+    });
+
+  const confirmDeleteMilestone = (m: ProgramMilestone) =>
+    setConfirm({
+      message: `Delete milestone "${m.name}"?`,
+      run: async () => {
+        if (programId) await trainingProgramService.deleteMilestone(programId, m.id);
+      },
+    });
+
+  const confirmDeleteProgram = () => {
+    if (!program) return;
+    const enrolledNote =
+      enrollments.length > 0
+        ? ` This pipeline has ${enrollments.length} enrolled member${enrollments.length === 1 ? '' : 's'} — their progress will be permanently deleted.`
+        : '';
+    setConfirm({
+      title: 'Delete pipeline',
+      confirmLabel: 'Delete pipeline',
+      message:
+        `Permanently delete "${program.name}"? Its phases, requirements, milestones, ` +
+        `and all enrollments are removed.${enrolledNote} This can't be undone.`,
+      run: async () => {
+        if (programId) await trainingProgramService.deleteProgram(programId);
+        toast.success('Pipeline deleted');
+      },
+      after: () => navigate('/training/programs'),
+    });
+  };
 
   // Toggle whether a linked requirement is required to complete its phase.
   // Enrolled members' progress is recomputed server-side, so refresh nothing
@@ -912,6 +1095,15 @@ const PipelineDetailPage: React.FC = () => {
               <Printer className="w-4 h-4" />
               <span>Print</span>
             </button>
+            {canManage && (
+              <button
+                onClick={() => setShowEditProgram(true)}
+                className="flex items-center space-x-1 px-3 py-2 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover text-sm"
+              >
+                <Pencil className="w-4 h-4" />
+                <span>Edit</span>
+              </button>
+            )}
             <button
               onClick={() => setShowEnrollModal(true)}
               className="btn-success flex items-center px-3 space-x-1 text-sm"
@@ -927,6 +1119,16 @@ const PipelineDetailPage: React.FC = () => {
               <Copy className="w-4 h-4" />
               <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
             </button>
+            {canManage && (
+              <button
+                onClick={confirmDeleteProgram}
+                title="Delete pipeline"
+                className="flex items-center space-x-1 px-3 py-2 text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded-lg text-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1001,26 +1203,27 @@ const PipelineDetailPage: React.FC = () => {
               </div>
             ) : (
               phases
+                .slice()
                 .sort((a, b) => a.phase_number - b.phase_number)
-                .map((phase) => {
+                .map((phase, phaseIndex) => {
                   const phaseReqs = getPhaseReqs(phase.id);
                   const isExpanded = expandedPhases.has(phase.id);
 
                   return (
                     <div key={phase.id} className="bg-theme-surface rounded-lg border border-theme-surface-border">
                       {/* Phase header */}
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-between p-4 text-left hover:bg-theme-surface-hover transition-colors"
-                        onClick={() => togglePhase(phase.id)}
-                        aria-expanded={isExpanded}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-sm">
+                      <div className="flex items-center justify-between p-4">
+                        <button
+                          type="button"
+                          className="flex items-center space-x-3 text-left flex-1 min-w-0"
+                          onClick={() => togglePhase(phase.id)}
+                          aria-expanded={isExpanded}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-red-600 flex items-center justify-center text-white font-bold text-sm shrink-0">
                             {phase.phase_number}
                           </div>
-                          <div>
-                            <h3 className="text-theme-text-primary font-medium">{phase.name}</h3>
+                          <div className="min-w-0">
+                            <h3 className="text-theme-text-primary font-medium truncate">{phase.name}</h3>
                             <div className="flex items-center space-x-3 text-xs text-theme-text-muted">
                               <span>{phaseReqs.length} requirement{phaseReqs.length !== 1 ? 's' : ''}</span>
                               {phase.time_limit_days && (
@@ -1037,13 +1240,29 @@ const PipelineDetailPage: React.FC = () => {
                               )}
                             </div>
                           </div>
+                        </button>
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          {canManage && (
+                            <>
+                              <button type="button" onClick={() => void movePhase(phase, -1)} disabled={phaseIndex === 0} title="Move phase up" aria-label="Move phase up" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded disabled:opacity-30 disabled:hover:bg-transparent">
+                                <ArrowUp className="w-4 h-4" />
+                              </button>
+                              <button type="button" onClick={() => void movePhase(phase, 1)} disabled={phaseIndex === phases.length - 1} title="Move phase down" aria-label="Move phase down" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded disabled:opacity-30 disabled:hover:bg-transparent">
+                                <ArrowDown className="w-4 h-4" />
+                              </button>
+                              <button type="button" onClick={() => setPhaseModal({ phase })} title="Edit phase" aria-label="Edit phase" className="p-1.5 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded">
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button type="button" onClick={() => confirmDeletePhase(phase)} title="Delete phase" aria-label="Delete phase" className="p-1.5 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-theme-surface-hover rounded">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                          <button type="button" onClick={() => togglePhase(phase.id)} aria-label={isExpanded ? 'Collapse phase' : 'Expand phase'} className="p-1.5 text-theme-text-muted hover:bg-theme-surface-hover rounded">
+                            {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                          </button>
                         </div>
-                        {isExpanded ? (
-                          <ChevronUp className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5 text-theme-text-muted" aria-hidden="true" />
-                        )}
-                      </button>
+                      </div>
 
                       {/* Phase content */}
                       {isExpanded && (
@@ -1056,12 +1275,12 @@ const PipelineDetailPage: React.FC = () => {
                             <p className="text-theme-text-muted text-sm text-center py-4">No requirements assigned to this phase.</p>
                           ) : (
                             <div className="space-y-2">
-                              {phaseReqs.map((pr) => (
+                              {phaseReqs.map((pr, reqIndex) => (
                                 <div
                                   key={pr.id}
-                                  className="bg-theme-surface-secondary rounded-lg p-3 flex items-start justify-between"
+                                  className="bg-theme-surface-secondary rounded-lg p-3 flex items-start justify-between gap-2"
                                 >
-                                  <div className="flex items-start space-x-3">
+                                  <div className="flex items-start space-x-3 min-w-0">
                                     <CheckCircle2 className="w-5 h-5 text-theme-text-muted mt-0.5" />
                                     <div>
                                       <div className="flex items-center space-x-2 mb-1">
@@ -1117,9 +1336,34 @@ const PipelineDetailPage: React.FC = () => {
                                       </div>
                                     </div>
                                   </div>
+                                  {canManage && (
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                      <button type="button" onClick={() => void moveRequirement(pr, -1)} disabled={reqIndex === 0} title="Move up" aria-label="Move requirement up" className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded disabled:opacity-30 disabled:hover:bg-transparent">
+                                        <ArrowUp className="w-4 h-4" />
+                                      </button>
+                                      <button type="button" onClick={() => void moveRequirement(pr, 1)} disabled={reqIndex === phaseReqs.length - 1} title="Move down" aria-label="Move requirement down" className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded disabled:opacity-30 disabled:hover:bg-transparent">
+                                        <ArrowDown className="w-4 h-4" />
+                                      </button>
+                                      <button type="button" onClick={() => setReqModal({ phaseId: phase.id, link: pr })} title="Edit requirement" aria-label="Edit requirement" className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded">
+                                        <Pencil className="w-4 h-4" />
+                                      </button>
+                                      <button type="button" onClick={() => confirmRemoveRequirement(pr)} title="Remove requirement" aria-label="Remove requirement" className="p-1 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-theme-surface rounded">
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               ))}
                             </div>
+                          )}
+                          {canManage && (
+                            <button
+                              type="button"
+                              onClick={() => setReqModal({ phaseId: phase.id })}
+                              className="mt-3 inline-flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:underline"
+                            >
+                              <Plus className="w-4 h-4" /> Add requirement
+                            </button>
                           )}
                         </div>
                       )}
@@ -1127,6 +1371,60 @@ const PipelineDetailPage: React.FC = () => {
                   );
                 })
             )}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setPhaseModal({})}
+                className="w-full flex items-center justify-center gap-1 py-3 border border-dashed border-theme-surface-border rounded-lg text-sm text-theme-text-secondary hover:bg-theme-surface-hover"
+              >
+                <Plus className="w-4 h-4" /> Add phase
+              </button>
+            )}
+
+            {/* Milestones */}
+            <div className="bg-theme-surface rounded-lg border border-theme-surface-border p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-theme-text-primary font-medium flex items-center gap-2">
+                  <Flag className="w-4 h-4 text-yellow-600 dark:text-yellow-400" /> Milestones
+                </h3>
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => setMilestoneModal({})}
+                    className="inline-flex items-center gap-1 text-sm text-red-700 dark:text-red-400 hover:underline"
+                  >
+                    <Plus className="w-4 h-4" /> Add milestone
+                  </button>
+                )}
+              </div>
+              {milestones.length === 0 ? (
+                <p className="text-theme-text-muted text-sm">No milestones defined.</p>
+              ) : (
+                <div className="space-y-2">
+                  {milestones
+                    .slice()
+                    .sort((a, b) => a.completion_percentage_threshold - b.completion_percentage_threshold)
+                    .map((m) => (
+                      <div key={m.id} className="flex items-center justify-between gap-2 bg-theme-surface-secondary rounded-lg p-3">
+                        <div className="min-w-0">
+                          <p className="text-sm text-theme-text-primary truncate">{m.name}</p>
+                          <p className="text-xs text-theme-text-muted">Triggers at {Math.round(m.completion_percentage_threshold)}%</p>
+                        </div>
+                        {canManage && (
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button type="button" onClick={() => setMilestoneModal({ milestone: m })} title="Edit milestone" aria-label="Edit milestone" className="p-1 text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface rounded">
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button type="button" onClick={() => confirmDeleteMilestone(m)} title="Delete milestone" aria-label="Delete milestone" className="p-1 text-theme-text-muted hover:text-red-600 dark:hover:text-red-400 hover:bg-theme-surface rounded">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1184,7 +1482,6 @@ const PipelineDetailPage: React.FC = () => {
         isOpen={showEnrollModal}
         programId={programId || ''}
         programName={program.name}
-        enrolledUserIds={new Set(enrollments.map((e) => e.user_id))}
         onClose={() => setShowEnrollModal(false)}
         onSuccess={() => { void loadEnrollments(); }}
       />
@@ -1198,6 +1495,48 @@ const PipelineDetailPage: React.FC = () => {
         structureType={program.structure_type}
         onClose={() => setProgressEnrollment(null)}
         onSaved={() => { void loadEnrollments(); }}
+      />
+
+      {showEditProgram && (
+        <EditProgramModal program={program} onClose={() => setShowEditProgram(false)} onSaved={afterEdit} />
+      )}
+      {phaseModal && programId && (
+        <PhaseFormModal
+          programId={programId}
+          phase={phaseModal.phase}
+          nextPhaseNumber={phases.reduce((max, p) => Math.max(max, p.phase_number), 0) + 1}
+          onClose={() => setPhaseModal(null)}
+          onSaved={afterEdit}
+        />
+      )}
+      {reqModal && programId && (
+        <RequirementFormModal
+          programId={programId}
+          phaseId={reqModal.phaseId}
+          link={reqModal.link}
+          sortOrder={reqModal.phaseId ? getPhaseReqs(reqModal.phaseId).length : programReqs.length}
+          onClose={() => setReqModal(null)}
+          onSaved={afterEdit}
+        />
+      )}
+      {milestoneModal && programId && (
+        <MilestoneFormModal
+          programId={programId}
+          phases={phases}
+          milestone={milestoneModal.milestone}
+          onClose={() => setMilestoneModal(null)}
+          onSaved={afterEdit}
+        />
+      )}
+      <ConfirmDialog
+        isOpen={confirm !== null}
+        onClose={() => setConfirm(null)}
+        onConfirm={() => void runConfirm()}
+        title={confirm?.title ?? 'Confirm'}
+        message={confirm?.message ?? ''}
+        confirmLabel={confirm?.confirmLabel ?? 'Delete'}
+        variant="danger"
+        loading={confirmLoading}
       />
     </div>
   );

@@ -13,7 +13,12 @@ const mockGetEnrollmentProgress = vi.fn();
 const mockUpdateProgress = vi.fn();
 const mockAdvancePhase = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
-const mockGetUsers = vi.fn();
+const mockGetEnrollmentEligibility = vi.fn();
+const mockBulkEnrollMembers = vi.fn();
+const mockUpdateProgram = vi.fn();
+const mockCreateProgramPhase = vi.fn();
+const mockDeleteProgramPhase = vi.fn();
+const mockDeleteProgram = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -25,9 +30,12 @@ vi.mock('../services/api', () => ({
     updateProgress: (...a: unknown[]) => mockUpdateProgress(...a) as unknown,
     advancePhase: (...a: unknown[]) => mockAdvancePhase(...a) as unknown,
     updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
-  },
-  userService: {
-    getUsers: (...a: unknown[]) => mockGetUsers(...a) as unknown,
+    getEnrollmentEligibility: (...a: unknown[]) => mockGetEnrollmentEligibility(...a) as unknown,
+    bulkEnrollMembers: (...a: unknown[]) => mockBulkEnrollMembers(...a) as unknown,
+    updateProgram: (...a: unknown[]) => mockUpdateProgram(...a) as unknown,
+    createProgramPhase: (...a: unknown[]) => mockCreateProgramPhase(...a) as unknown,
+    deleteProgramPhase: (...a: unknown[]) => mockDeleteProgramPhase(...a) as unknown,
+    deleteProgram: (...a: unknown[]) => mockDeleteProgram(...a) as unknown,
   },
 }));
 
@@ -111,6 +119,18 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     });
     mockUpdateProgress.mockResolvedValue({ ...certProgress, status: 'completed' });
     mockAdvancePhase.mockResolvedValue({ ...enrollment, current_phase_id: 'ph-2' });
+    mockGetEnrollmentEligibility.mockResolvedValue([
+      { user_id: 'u1', first_name: 'Ava', last_name: 'Recruit', eligible: true, status: 'eligible', reason: null },
+      {
+        user_id: 'u2', first_name: 'Ben', last_name: 'Veteran', eligible: false,
+        status: 'prerequisite', reason: 'Must first complete: Recruit School',
+      },
+    ]);
+    mockBulkEnrollMembers.mockResolvedValue({ success_count: 1, enrolled_users: ['u1'], errors: [] });
+    mockUpdateProgram.mockResolvedValue(program);
+    mockCreateProgramPhase.mockResolvedValue({ id: 'ph-new', program_id: 'prog-1', phase_number: 1, name: 'Intro' });
+    mockDeleteProgramPhase.mockResolvedValue(undefined);
+    mockDeleteProgram.mockResolvedValue(undefined);
   });
 
   it('lists enrolled members by name on the Enrollments tab', async () => {
@@ -292,5 +312,126 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     // Static "Required" text renders, but not as an interactive control.
     expect(await screen.findByText('Required')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Required' })).not.toBeInTheDocument();
+  });
+
+  it('shows only eligible members in the enroll picker, with a reason for the rest', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Enroll$/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(mockGetEnrollmentEligibility).toHaveBeenCalledWith('prog-1');
+
+    // Eligible member is shown; ineligible member is hidden by default.
+    expect(await within(dialog).findByText('Ava Recruit')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Ben Veteran')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('1 of 2 eligible')).toBeInTheDocument();
+
+    // Turning off "eligible only" reveals the blocked member and the reason.
+    await userEvent.click(within(dialog).getByLabelText(/Show eligible only/i));
+    expect(await within(dialog).findByText('Ben Veteran')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Must first complete: Recruit School/)).toBeInTheDocument();
+  });
+
+  it('enrolls the selected eligible member', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Enroll$/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    await userEvent.click(await within(dialog).findByText('Ava Recruit'));
+    await userEvent.click(within(dialog).getByRole('button', { name: /Enroll 1 Member/i }));
+
+    await waitFor(() =>
+      expect(mockBulkEnrollMembers).toHaveBeenCalledWith('prog-1', {
+        user_ids: ['u1'],
+        target_completion_date: undefined,
+      }),
+    );
+  });
+
+  it('edits program details via the Edit button', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog', { name: /Edit pipeline details/i });
+
+    const nameInput = within(dialog).getByLabelText('Name');
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'Renamed Pipeline');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ name: 'Renamed Pipeline' }),
+      ),
+    );
+  });
+
+  it('adds a phase from the overview', async () => {
+    mockGetProgramPhases.mockResolvedValue([]);
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Add phase/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Add phase/i });
+    await userEvent.type(within(dialog).getByLabelText('Name'), 'Orientation');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() =>
+      expect(mockCreateProgramPhase).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ name: 'Orientation', phase_number: 1 }),
+      ),
+    );
+  });
+
+  it('deletes a phase after confirmation', async () => {
+    mockGetProgramPhases.mockResolvedValue([
+      {
+        id: 'ph-1', program_id: 'prog-1', phase_number: 1, name: 'Basics',
+        requires_manual_advancement: false, created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete phase' }));
+    // Confirm dialog appears; confirm the deletion (scoped to the dialog).
+    const confirmDialog = await screen.findByRole('dialog');
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: /^Delete$/ }));
+
+    await waitFor(() => expect(mockDeleteProgramPhase).toHaveBeenCalledWith('prog-1', 'ph-1'));
+  });
+
+  it('hard-deletes the pipeline after a warning and navigates away', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Delete$/ }));
+    // A warning dialog appears; confirm the destructive action.
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Delete pipeline/i }));
+
+    await waitFor(() => expect(mockDeleteProgram).toHaveBeenCalledWith('prog-1'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs'));
+  });
+
+  it('shows a member in another program as eligible with an advisory', async () => {
+    mockGetEnrollmentEligibility.mockResolvedValue([
+      {
+        user_id: 'u3', first_name: 'Cy', last_name: 'Onboarding', eligible: true,
+        status: 'concurrent', reason: 'Also enrolled in another program',
+      },
+    ]);
+
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Enroll$/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    // Selectable (eligible) and the advisory is shown; not hidden by the filter.
+    const row = await within(dialog).findByText('Cy Onboarding');
+    expect(row).toBeInTheDocument();
+    expect(within(dialog).getByText('Also enrolled in another program')).toBeInTheDocument();
+    expect(within(dialog).getByText('1 of 1 eligible')).toBeInTheDocument();
   });
 });
