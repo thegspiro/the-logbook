@@ -86,7 +86,11 @@ Members are enrolled in training programs to track their progress toward complet
 ### ✅ Implemented Features
 
 #### Registry Integration
-- **NFPA Standards**: Firefighter I/II, Driver/Operator, Fire Officer, Instructor, Live Fire, Safety, Medical Fitness
+- **NFPA Standards**: Firefighter I/II (1001), Driver/Operator (1002), Fire Officer (1021),
+  Instructor (1041), Live Fire (1403), Occupational Safety (1500), Medical Fitness (1582),
+  Hazmat/WMD Responder (1072), Technical Rescuer (1006), Fire Investigator (1033),
+  Fire Inspector (1031), Fire & Life Safety Educator/PIO (1035), Wildland Fire Fighter (1051),
+  and Fire Department Safety Officer (1521)
 - **Pro Board**: Firefighter I/II, Driver/Operator, Fire Officer I/II, HazMat Ops, Instructor
 - **NREMT by provider level** — separate, individually-importable registries so a
   department imports only the level(s) it staffs, each with the level's national

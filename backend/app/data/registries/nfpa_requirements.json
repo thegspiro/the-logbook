@@ -14,7 +14,11 @@
       "required_hours": 36.0,
       "frequency": "annual",
       "applies_to_all": false,
-      "required_positions": ["firefighter", "driver", "officer"],
+      "required_positions": [
+        "firefighter",
+        "driver",
+        "officer"
+      ],
       "is_editable": true
     },
     {
@@ -26,7 +30,9 @@
       "required_hours": 24.0,
       "frequency": "annual",
       "applies_to_all": false,
-      "required_positions": ["driver"],
+      "required_positions": [
+        "driver"
+      ],
       "is_editable": true
     },
     {
@@ -38,7 +44,9 @@
       "required_hours": 40.0,
       "frequency": "annual",
       "applies_to_all": false,
-      "required_positions": ["officer"],
+      "required_positions": [
+        "officer"
+      ],
       "is_editable": true
     },
     {
@@ -50,7 +58,9 @@
       "required_hours": 20.0,
       "frequency": "annual",
       "applies_to_all": false,
-      "required_positions": ["instructor"],
+      "required_positions": [
+        "instructor"
+      ],
       "is_editable": true
     },
     {
@@ -87,6 +97,108 @@
         "Vision and hearing test",
         "Cardiovascular screening",
         "Respiratory function test"
+      ],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1072 Hazmat Responder Annual Refresher",
+      "description": "Annual hazardous materials/WMD responder refresher for personnel certified to NFPA 1072 (Awareness, Operations, Technician, or Incident Commander levels).",
+      "registry_code": "NFPA 1072",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 8.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": [
+        "firefighter",
+        "driver",
+        "officer"
+      ],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1006 Technical Rescuer Continuing Education",
+      "description": "Annual continuing education to maintain technical rescue proficiency per NFPA 1006 (rope, confined space, vehicle, water, trench, or structural collapse rescue).",
+      "registry_code": "NFPA 1006",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 24.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": [
+        "technical_rescuer"
+      ],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1033 Fire Investigator Continuing Education",
+      "description": "Annual continuing education across the required topic areas to maintain fire investigator competency per NFPA 1033.",
+      "registry_code": "NFPA 1033",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 16.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": [
+        "fire_investigator"
+      ],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1031 Fire Inspector Continuing Education",
+      "description": "Annual continuing education to maintain fire inspector and plan examiner competency per NFPA 1031.",
+      "registry_code": "NFPA 1031",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 16.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": [
+        "fire_inspector"
+      ],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1035 Fire & Life Safety Educator / PIO Continuing Education",
+      "description": "Annual continuing education for fire and life safety educators and public information officers certified to NFPA 1035.",
+      "registry_code": "NFPA 1035",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 12.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": [
+        "fire_life_safety_educator",
+        "public_information_officer"
+      ],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1051 Wildland Fire Fighter Annual Refresher",
+      "description": "Annual wildland fire fighter refresher (e.g., RT-130) and fitness for personnel certified to NFPA 1051.",
+      "registry_code": "NFPA 1051",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 8.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": [
+        "firefighter",
+        "wildland_firefighter"
+      ],
+      "is_editable": true
+    },
+    {
+      "name": "NFPA 1521 Fire Department Safety Officer Continuing Education",
+      "description": "Annual continuing education for incident safety officers and health & safety officers per NFPA 1521.",
+      "registry_code": "NFPA 1521",
+      "requirement_type": "hours",
+      "training_type": "continuing_education",
+      "required_hours": 16.0,
+      "frequency": "annual",
+      "applies_to_all": false,
+      "required_positions": [
+        "safety_officer"
       ],
       "is_editable": true
     }

@@ -73,3 +73,25 @@ def test_each_ems_level_has_its_national_component_scoped_to_that_level():
         assert comp["required_positions"] == [level]
         # Recert is a repeating (biannual) continuing-education requirement.
         assert comp["frequency"] == "biannual"
+
+
+def test_nfpa_registry_covers_the_core_standards():
+    codes = {r.get("registry_code") for r in _load("nfpa")["requirements"]}
+    expected = {
+        "NFPA 1001",  # Firefighter I & II
+        "NFPA 1002",  # Driver/Operator
+        "NFPA 1021",  # Fire Officer
+        "NFPA 1041",  # Instructor
+        "NFPA 1403",  # Live Fire
+        "NFPA 1500",  # Occupational Safety
+        "NFPA 1582",  # Medical
+        "NFPA 1072",  # Hazmat
+        "NFPA 1006",  # Technical Rescuer
+        "NFPA 1033",  # Fire Investigator
+        "NFPA 1031",  # Fire Inspector
+        "NFPA 1035",  # Fire & Life Safety Educator / PIO
+        "NFPA 1051",  # Wildland
+        "NFPA 1521",  # Safety Officer
+    }
+    missing = expected - codes
+    assert not missing, f"NFPA registry missing standards: {sorted(missing)}"

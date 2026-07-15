@@ -71,7 +71,13 @@ progression.
   (AEMT), and Paramedic** — so a department imports only the level(s) it staffs. Each
   carries that level's national recertification component (NCCR hours by topic area)
   plus the appropriate life-support certifications (BLS; ACLS/PALS/PHTLS at the
-  advanced levels). NFPA and Pro Board are unchanged.
+  advanced levels).
+- **Expanded NFPA registry.** Added seven more NFPA professional-qualification
+  standards as annual continuing-compliance requirements: Hazmat/WMD Responder (1072),
+  Technical Rescuer (1006), Fire Investigator (1033), Fire Inspector (1031), Fire &
+  Life Safety Educator/PIO (1035), Wildland Fire Fighter (1051), and Fire Department
+  Safety Officer (1521) — alongside the existing 1001/1002/1021/1041/1403/1500/1582.
+  Pro Board is unchanged.
 
 **Progress tracking**
 
