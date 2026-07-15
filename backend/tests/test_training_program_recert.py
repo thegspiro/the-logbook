@@ -167,10 +167,13 @@ class TestAutoResetIfDue:
         # _get_program_for_enrollment, then blank rows, then first-phase lookup.
         db = RecordingSession([_one(_program()), _scalars([row]), _one(first_phase)])
         svc = TrainingProgramService(db)
+        svc._safe_notify_recert_reset = AsyncMock()
 
         did_reset = await svc.auto_reset_if_due(enrollment)
 
         assert did_reset is True
+        # The member is told their cycle restarted.
+        svc._safe_notify_recert_reset.assert_awaited_once()
         assert row.status == RequirementProgressStatus.NOT_STARTED
         assert enrollment.status == EnrollmentStatus.ACTIVE
         assert enrollment.progress_percentage == 0.0
@@ -216,6 +219,7 @@ class TestRunDueRecertResets:
             ]
         )
         svc = TrainingProgramService(db)
+        svc._safe_notify_recert_reset = AsyncMock()
 
         count, error = await svc.run_due_recert_resets(uuid4())
 
@@ -223,6 +227,8 @@ class TestRunDueRecertResets:
         assert e1.status == EnrollmentStatus.ACTIVE
         assert e2.progress_percentage == 0.0
         db.commit.assert_awaited_once()
+        # Each reset member is notified after the batch commits.
+        assert svc._safe_notify_recert_reset.await_count == 2
 
     async def test_withdrawn_row_is_skipped(self):
         # Even if a withdrawn enrollment slips through the WHERE clause, the loop
@@ -262,3 +268,43 @@ class TestRunDueRecertResets:
         base = datetime.now(timezone.utc).date()
         nxt = TrainingProgramService._compute_next_recert_date(prog, base)
         assert nxt is not None and nxt > base
+
+
+class TestNotifyRecertReset:
+    async def test_notifies_member_with_deadline(self, monkeypatch):
+        from app.services import training_program_service as mod
+
+        user = SimpleNamespace(id="u1", full_name="Jane Recruit")
+        enrollment = SimpleNamespace(
+            organization_id="org-1",
+            user_id="u1",
+            next_recert_reset_at=date(2028, 3, 30),
+            mentor_id=None,
+        )
+        program = SimpleNamespace(id="prog-1", name="NREMT Paramedic")
+        svc = TrainingProgramService(RecordingSession([_one(user)]))
+
+        mock_log = AsyncMock()
+        monkeypatch.setattr(mod.NotificationsService, "log_notification", mock_log)
+
+        await svc._notify_recert_reset(enrollment, program)
+
+        mock_log.assert_awaited_once()
+        log_data = mock_log.await_args.kwargs["log_data"]
+        assert log_data["recipient_id"] == "u1"
+        assert "NREMT Paramedic" in log_data["subject"]
+        assert "2028-03-30" in log_data["message"]
+
+    async def test_noop_when_member_missing(self, monkeypatch):
+        from app.services import training_program_service as mod
+
+        enrollment = SimpleNamespace(organization_id="org-1", user_id="gone")
+        program = SimpleNamespace(id="prog-1", name="NREMT Paramedic")
+        svc = TrainingProgramService(RecordingSession([_one(None)]))
+
+        mock_log = AsyncMock()
+        monkeypatch.setattr(mod.NotificationsService, "log_notification", mock_log)
+
+        await svc._notify_recert_reset(enrollment, program)
+
+        mock_log.assert_not_awaited()

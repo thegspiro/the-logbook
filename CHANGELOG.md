@@ -127,6 +127,13 @@ progression.
   sweeps every past-due enrollment for a scheduled job. Only active/completed/expired
   members are auto-reset — a withdrawn, failed, or on-hold member is never resurrected.
   Fields added by migration `20260715_0001`.
+- **Reset notifications** — whenever a cycle resets (manual, on-view, or the sweep), the
+  member gets an in-app notification that their recertification cycle has started, with
+  the new deadline and a link to their progress; the assigned mentor is notified too.
+- **Audit trail** — resetting a requirement or a whole enrollment, withdrawing a member,
+  and running the recert sweep now write audit-log events (`log_audit_event`), matching
+  the rest of the training module. The withdrawal event records whether it was
+  self-service or officer-initiated.
 
 **Leaving a program**
 

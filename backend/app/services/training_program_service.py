@@ -203,6 +203,78 @@ class TrainingProgramService:
                 },
             )
 
+    async def _notify_recert_reset(
+        self,
+        enrollment: ProgramEnrollment,
+        program: TrainingProgram,
+    ) -> None:
+        """Tell the member (and their mentor) that a new recertification cycle
+        has started and their progress was reset for it. Best-effort — callers
+        wrap this so a notification failure never breaks the reset itself."""
+        organization_id = enrollment.organization_id
+        user_result = await self.db.execute(
+            select(User).where(User.id == str(enrollment.user_id))
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            return
+
+        notif_service = NotificationsService(self.db)
+        deadline = getattr(enrollment, "next_recert_reset_at", None)
+        deadline_clause = (
+            f" Complete the requirements before {deadline}." if deadline else ""
+        )
+        await notif_service.log_notification(
+            organization_id=organization_id,
+            log_data={
+                "recipient_id": str(user.id),
+                "channel": NotificationChannel.IN_APP,
+                "subject": f"Recertification cycle started: {program.name}",
+                "message": (
+                    f"A new recertification cycle for {program.name} has begun and "
+                    f"your progress has been reset for it.{deadline_clause}"
+                ),
+                "category": NotificationCategory.TRAINING,
+                "action_url": f"/training/programs/{program.id}/progress",
+                "delivered": True,
+                "sent_at": datetime.now(timezone.utc),
+            },
+        )
+
+        if getattr(enrollment, "mentor_id", None):
+            await notif_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "recipient_id": str(enrollment.mentor_id),
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": (
+                        f"Recert cycle started: {user.full_name} - {program.name}"
+                    ),
+                    "message": (
+                        f"{user.full_name}'s recertification cycle for {program.name} "
+                        f"has restarted; their progress was reset."
+                    ),
+                    "category": NotificationCategory.TRAINING,
+                    "action_url": f"/training/programs/{program.id}/enrollments",
+                    "delivered": True,
+                    "sent_at": datetime.now(timezone.utc),
+                },
+            )
+
+    async def _safe_notify_recert_reset(
+        self,
+        enrollment: ProgramEnrollment,
+        program: Optional[TrainingProgram],
+    ) -> None:
+        """Send the recert-reset notification, swallowing any failure (the reset
+        is already committed and must not be undone by a notification error)."""
+        if program is None:
+            return
+        try:
+            await self._notify_recert_reset(enrollment, program)
+        except Exception as e:
+            logger.error(f"Failed to send recert-reset notification: {e}")
+
     async def _handle_evoc_completion(
         self,
         program: TrainingProgram,
@@ -2165,6 +2237,7 @@ class TrainingProgramService:
 
         await self.db.commit()
         await self.db.refresh(enrollment)
+        await self._safe_notify_recert_reset(enrollment, program)
         return enrollment, None
 
     async def withdraw_enrollment(
@@ -2231,6 +2304,7 @@ class TrainingProgramService:
         await self._perform_enrollment_reset(enrollment, program)
         await self.db.commit()
         await self.db.refresh(enrollment)
+        await self._safe_notify_recert_reset(enrollment, program)
         return True
 
     async def run_due_recert_resets(
@@ -2256,6 +2330,7 @@ class TrainingProgramService:
         )
 
         count = 0
+        reset_pairs: List[Tuple[ProgramEnrollment, TrainingProgram]] = []
         for enrollment, program in result.all():
             # Defense in depth: the WHERE clause already excludes non-recertable
             # statuses, but enforce the invariant here too so the sweep can never
@@ -2263,10 +2338,14 @@ class TrainingProgramService:
             if enrollment.status not in self._RECERTABLE_STATUSES:
                 continue
             await self._perform_enrollment_reset(enrollment, program)
+            reset_pairs.append((enrollment, program))
             count += 1
 
         if count:
             await self.db.commit()
+            # Notify each member their cycle restarted (after the batch commits).
+            for enrollment, program in reset_pairs:
+                await self._safe_notify_recert_reset(enrollment, program)
         return count, None
 
     async def _recalculate_enrollment_progress(

@@ -102,10 +102,12 @@ class TestResetEnrollment:
             [_first((enrollment, program)), _scalars([r1, r2]), _one(first_phase)]
         )
         svc = TrainingProgramService(db)
+        svc._safe_notify_recert_reset = AsyncMock()
 
         enr, error = await svc.reset_enrollment_progress(uuid4(), uuid4())
 
         assert error is None and enr is enrollment
+        svc._safe_notify_recert_reset.assert_awaited_once()
         # Both rows blanked.
         for r in (r1, r2):
             assert r.status == RequirementProgressStatus.NOT_STARTED

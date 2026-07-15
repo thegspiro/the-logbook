@@ -1418,6 +1418,21 @@ async def reset_requirement_progress(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_requirement_progress_reset",
+        event_category="training",
+        severity="info",
+        event_data={
+            "progress_id": str(progress_id),
+            "enrollment_id": str(progress.enrollment_id),
+            "action": "requirement_progress_reset",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return progress
 
 
@@ -1443,6 +1458,21 @@ async def reset_enrollment_progress(
     )
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_progress_reset",
+        event_category="training",
+        severity="info",
+        event_data={
+            "enrollment_id": str(enrollment_id),
+            "target_user_id": str(enrollment.user_id),
+            "action": "enrollment_cycle_reset",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return enrollment
 
 
@@ -1479,6 +1509,22 @@ async def withdraw_enrollment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
     if error:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_withdrawn",
+        event_category="training",
+        severity="info",
+        event_data={
+            "enrollment_id": str(enrollment_id),
+            "target_user_id": str(enrollment.user_id),
+            "self_withdrawal": str(enrollment.user_id) == str(current_user.id),
+            "action": "enrollment_withdrawn",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return enrollment
 
 
@@ -1503,6 +1549,20 @@ async def run_due_recert_resets(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error
         )
+
+    # Only record the sweep when it actually reset something, to avoid flooding
+    # the audit log with no-op entries from a frequent scheduled run.
+    if count:
+        await log_audit_event(
+            db=db,
+            event_type="training_recert_sweep_run",
+            event_category="training",
+            severity="info",
+            event_data={"reset_count": count, "action": "recert_sweep"},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
     return {"reset_count": count}
 
 
