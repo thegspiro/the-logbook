@@ -1182,6 +1182,11 @@ async def get_enrollment_progress(
             status_code=status.HTTP_404_NOT_FOUND, detail="Enrollment not found"
         )
 
+    # If the recert deadline has passed, roll the enrollment into a fresh cycle
+    # before reporting progress so the view reflects the reset immediately (the
+    # scheduled sweep handles members whose progress no one is watching).
+    await service.auto_reset_if_due(enrollment)
+
     # Check permission: members can view their own; officers need
     # training.view_all or training.manage (managing a member's progress
     # implies viewing it). Use the shared helper so wildcard grants
@@ -1429,6 +1434,30 @@ async def reset_enrollment_progress(
     if error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
     return enrollment
+
+
+@router.post("/recert/run-due")
+async def run_due_recert_resets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Reset every enrollment in the organization whose stored recert deadline has
+    passed, starting each a fresh certification cycle. Meant to be called by a
+    scheduled sweep (e.g. a daily job), but also usable on demand so a
+    coordinator can trigger due resets immediately.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    count, error = await service.run_due_recert_resets(
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error
+        )
+    return {"reset_count": count}
 
 
 # ==================== Program Duplication Endpoints ====================

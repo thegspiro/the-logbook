@@ -1034,6 +1034,17 @@ class TestRegistryData:
 
     REGISTRY_DIR = Path(__file__).parent.parent / "app" / "data" / "registries"
 
+    # The registries the app ships. NREMT is split per certification level
+    # (EMR/EMT/AEMT/Paramedic) so each level imports independently.
+    REGISTRY_FILES = [
+        "nfpa_requirements.json",
+        "emr_requirements.json",
+        "emt_requirements.json",
+        "aemt_requirements.json",
+        "paramedic_requirements.json",
+        "proboard_requirements.json",
+    ]
+
     def _load_registry(self, filename: str) -> dict:
         """Helper to load a registry JSON file"""
         filepath = self.REGISTRY_DIR / filename
@@ -1051,15 +1062,24 @@ class TestRegistryData:
         assert isinstance(data["requirements"], list)
         assert len(data["requirements"]) > 0
 
-    def test_nremt_registry_loads(self):
-        """Load and validate nremt_requirements.json"""
-        data = self._load_registry("nremt_requirements.json")
-        assert "registry_name" in data
-        assert data["registry_name"] == "NREMT"
-        assert "registry_description" in data
-        assert "requirements" in data
-        assert isinstance(data["requirements"], list)
-        assert len(data["requirements"]) > 0
+    def test_nremt_level_registries_load(self):
+        """Load and validate each per-level NREMT registry file"""
+        level_files = [
+            "emr_requirements.json",
+            "emt_requirements.json",
+            "aemt_requirements.json",
+            "paramedic_requirements.json",
+        ]
+        for filename in level_files:
+            data = self._load_registry(filename)
+            assert "registry_name" in data
+            # Each level's name is namespaced under NREMT.
+            assert data["registry_name"].startswith("NREMT"), (
+                f"{filename} registry_name should start with 'NREMT'"
+            )
+            assert "registry_description" in data
+            assert isinstance(data["requirements"], list)
+            assert len(data["requirements"]) > 0
 
     def test_proboard_registry_loads(self):
         """Load and validate proboard_requirements.json"""
@@ -1074,12 +1094,7 @@ class TestRegistryData:
     def test_registry_requirement_fields(self):
         """Verify each requirement in all registries has required fields"""
         required_fields = {"name", "requirement_type", "frequency", "is_editable"}
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             for i, req in enumerate(data["requirements"]):
                 for field in required_fields:
@@ -1090,12 +1105,7 @@ class TestRegistryData:
 
     def test_registry_requirement_names_non_empty(self):
         """Verify all requirement names are non-empty strings"""
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             for req in data["requirements"]:
                 assert isinstance(
@@ -1108,12 +1118,7 @@ class TestRegistryData:
     def test_registry_requirement_types_valid(self):
         """Verify all requirement_types in registry data match RequirementType enum"""
         valid_types = {member.value for member in RequirementType}
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             for req in data["requirements"]:
                 req_type = req["requirement_type"]
@@ -1126,12 +1131,7 @@ class TestRegistryData:
     def test_registry_frequencies_valid(self):
         """Verify all frequencies in registry data match RequirementFrequency enum"""
         valid_frequencies = {member.value for member in RequirementFrequency}
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             for req in data["requirements"]:
                 freq = req["frequency"]
@@ -1144,12 +1144,7 @@ class TestRegistryData:
     def test_registry_training_types_valid(self):
         """Verify all training_types in registry data match TrainingType enum"""
         valid_types = {member.value for member in TrainingType}
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             for req in data["requirements"]:
                 if "training_type" in req:
@@ -1162,12 +1157,7 @@ class TestRegistryData:
 
     def test_registry_hours_requirements_have_hours(self):
         """Verify requirements of type 'hours' have required_hours field"""
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             for req in data["requirements"]:
                 if req["requirement_type"] == "hours":
@@ -1186,12 +1176,7 @@ class TestRegistryData:
 
     def test_registry_checklist_requirements_have_items(self):
         """Verify requirements of type 'checklist' have checklist_items"""
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             for req in data["requirements"]:
                 if req["requirement_type"] == "checklist":
@@ -1210,12 +1195,7 @@ class TestRegistryData:
 
     def test_registry_data_no_duplicate_names(self):
         """Verify no duplicate requirement names within each registry"""
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             names = [req["name"] for req in data["requirements"]]
             assert len(names) == len(set(names)), (
@@ -1225,12 +1205,7 @@ class TestRegistryData:
 
     def test_registry_data_no_duplicate_codes(self):
         """Verify no duplicate registry_code values within each registry"""
-        registry_files = [
-            "nfpa_requirements.json",
-            "nremt_requirements.json",
-            "proboard_requirements.json",
-        ]
-        for filename in registry_files:
+        for filename in self.REGISTRY_FILES:
             data = self._load_registry(filename)
             codes = [
                 req["registry_code"]
@@ -1384,7 +1359,10 @@ class TestSeedTrainingData:
 
         expected_files = [
             "nfpa_requirements.json",
-            "nremt_requirements.json",
+            "emr_requirements.json",
+            "emt_requirements.json",
+            "aemt_requirements.json",
+            "paramedic_requirements.json",
             "proboard_requirements.json",
         ]
         for filename in expected_files:

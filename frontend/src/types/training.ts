@@ -602,6 +602,10 @@ export interface TrainingProgram {
   };
   is_template: boolean;
   active: boolean;
+  recert_enabled: boolean;
+  recert_interval_months?: number;
+  recert_anchor_month?: number;
+  recert_anchor_day?: number;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -624,6 +628,10 @@ export interface TrainingProgramCreate {
     send_if_below_percentage?: number | undefined;
   } | undefined;
   is_template?: boolean | undefined;
+  recert_enabled?: boolean | undefined;
+  recert_interval_months?: number | undefined;
+  recert_anchor_month?: number | undefined;
+  recert_anchor_day?: number | undefined;
 }
 
 export interface ProgramPhase {
@@ -693,6 +701,10 @@ export interface TrainingProgramUpdate {
   warning_days_before?: number | undefined;
   is_template?: boolean | undefined;
   active?: boolean | undefined;
+  recert_enabled?: boolean | undefined;
+  recert_interval_months?: number | undefined;
+  recert_anchor_month?: number | undefined;
+  recert_anchor_day?: number | undefined;
 }
 
 export interface ProgramPhaseUpdate {
@@ -764,6 +776,8 @@ export interface ProgramEnrollment {
   status: EnrollmentStatus;
   completed_at?: string;
   deadline_warning_sent: boolean;
+  next_recert_reset_at?: string;
+  last_recert_reset_at?: string;
   notes?: string;
   created_at: string;
   updated_at: string;

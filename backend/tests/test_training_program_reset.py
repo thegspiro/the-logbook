@@ -90,10 +90,11 @@ class TestResetEnrollment:
             completed_at="x",
             current_phase_id="last",
         )
+        program = SimpleNamespace(recert_enabled=False)
         r1, r2 = _progress(), _progress()
         first_phase = str(uuid4())
         db = RecordingSession(
-            [_one(enrollment), _scalars([r1, r2]), _one(first_phase)]
+            [_one(enrollment), _one(program), _scalars([r1, r2]), _one(first_phase)]
         )
         svc = TrainingProgramService(db)
 

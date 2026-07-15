@@ -41,6 +41,7 @@ import {
   MilestoneFormModal,
 } from './PipelineEditModals';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
 import type {
   TrainingProgram,
@@ -56,6 +57,16 @@ import type {
   RequirementProgressRecord,
   RequirementProgressUpdate,
 } from '../types/training';
+
+// Format a calendar-date-only value (e.g. the recert deadline "2028-03-30")
+// without a timezone shift: build it at local midnight from its Y-M-D parts so
+// it never rolls back a day in western timezones.
+const formatCalendarDate = (isoDate?: string): string => {
+  if (!isoDate) return '';
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return formatDate(new Date(y, m - 1, d));
+};
 
 // Label + colour for each eligibility status; drives the picker badges.
 const ELIGIBILITY_META: Record<EligibilityStatus, { label: string; className: string }> = {
@@ -732,6 +743,15 @@ const EnrollmentProgressModal: React.FC<{
               {phased && data?.current_phase && (
                 <p className="text-xs text-theme-text-muted mt-1">
                   Current phase: <span className="text-theme-text-secondary">{data.current_phase.name}</span>
+                </p>
+              )}
+              {data?.enrollment.next_recert_reset_at && (
+                <p className="text-xs text-theme-text-muted mt-1 inline-flex items-center gap-1">
+                  <RotateCcw className="w-3 h-3" />
+                  Auto-resets{' '}
+                  <span className="text-theme-text-secondary">
+                    {formatCalendarDate(data.enrollment.next_recert_reset_at)}
+                  </span>
                 </p>
               )}
             </div>

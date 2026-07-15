@@ -193,6 +193,26 @@ re-derives enrolled members' progress-row percentages against the new target.
 - Automatic feeds from shift reports, approved training sessions, and skills tests
 - Progress notes and history
 
+#### Recertification Cycle (Progress Reset)
+Certifications that expire — NREMT, for example, requires resubmission every two
+years — need a member's accumulated progress cleared so a fresh cycle can begin.
+The pipeline supports both a manual and an automatic reset:
+
+- **Manual reset (officer):** In a member's progress modal, **Reset** on a single
+  requirement clears just that item; **Start new cycle** resets every requirement
+  and returns the member to the first phase. Both are confirmed before running and
+  require `training.manage`. Use this when a coordinator needs to reset a
+  certificate that is close to or past expiry.
+- **Automatic reset (stored deadline):** Enable **Recertification cycle** in the
+  pipeline's Edit dialog and set a cycle length in months (e.g. 24 for NREMT's
+  biennial recert). Optionally pin a fixed calendar anchor — a reset month and day
+  (e.g. March 30) — so every cycle lands on that date; leave the anchor blank to
+  roll forward from each member's enrollment date. Each enrollment then stores its
+  next reset date. When that date passes, the enrollment is reset for a new cycle
+  and the deadline advances to the following one. Resets apply lazily when a
+  coordinator opens the member's progress, and a `POST /training/programs/recert/run-due`
+  endpoint sweeps every past-due enrollment for a scheduled job to call.
+
 #### Atomic Program Build
 - Create-pipeline wizard builds a program with all phases, requirements, and milestones in one transaction — a failure can't leave a half-built program behind
 

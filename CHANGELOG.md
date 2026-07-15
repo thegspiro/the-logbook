@@ -97,8 +97,6 @@ progression.
 
 **Progress tracking**
 
-**Progress tracking**
-
 - **Progress-management UI** — officers open an enrolled member and, per requirement,
   log numeric progress (hours/shifts/calls/courses), mark complete / in progress /
   reopen, and verify (`PATCH /training/programs/progress/{id}`).
@@ -110,6 +108,23 @@ progression.
 - **Completion revert** — a completed enrollment reopens to *active* if its progress
   later drops below 100% (e.g. a new required requirement is added, or a value is
   corrected down).
+
+**Recertification cycle (progress reset)**
+
+- **Manual reset** — for certifications that expire (e.g. NREMT's biennial recert),
+  an officer can clear accumulated progress and start a new cycle without
+  re-enrolling. In the progress modal, **Reset** on one requirement clears just that
+  item (`POST /training/programs/progress/{id}/reset`); **Start new cycle** resets
+  every requirement and returns the member to the first phase
+  (`POST /training/programs/enrollments/{id}/reset`). Both are confirmed and gated by
+  `training.manage`.
+- **Automatic reset on a stored deadline** — a pipeline can carry a recurring recert
+  cycle (Edit dialog): a cycle length in months plus an optional fixed calendar
+  anchor (reset month + day, e.g. March 30). Each enrollment tracks its
+  `next_recert_reset_at`; once it passes, the enrollment is reset for a new cycle and
+  the deadline advances. Resets apply lazily when the member's progress is opened, and
+  `POST /training/programs/recert/run-due` sweeps every past-due enrollment for a
+  scheduled job. Fields added by migration `20260715_0001`.
 
 **Phases**
 

@@ -148,6 +148,13 @@ class TrainingProgramBase(BaseModel):
     time_limit_days: Optional[int] = Field(None, ge=0)
     warning_days_before: int = Field(default=30, ge=0)
     is_template: bool = False
+    # Recertification cycle: when enabled, enrolled members' progress auto-resets
+    # on a recurring deadline. anchor_month/day optionally pin it to a fixed date
+    # (e.g. NREMT's March 30) rather than rolling from the enrollment date.
+    recert_enabled: bool = False
+    recert_interval_months: Optional[int] = Field(None, ge=1, le=120)
+    recert_anchor_month: Optional[int] = Field(None, ge=1, le=12)
+    recert_anchor_day: Optional[int] = Field(None, ge=1, le=31)
 
 
 class TrainingProgramCreate(TrainingProgramBase):
@@ -167,6 +174,10 @@ class TrainingProgramUpdate(BaseModel):
     warning_days_before: Optional[int] = Field(None, ge=0)
     is_template: Optional[bool] = None
     active: Optional[bool] = None
+    recert_enabled: Optional[bool] = None
+    recert_interval_months: Optional[int] = Field(None, ge=1, le=120)
+    recert_anchor_month: Optional[int] = Field(None, ge=1, le=12)
+    recert_anchor_day: Optional[int] = Field(None, ge=1, le=31)
 
 
 class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
@@ -359,6 +370,8 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase, UTCResponseBase):
     status: EnrollmentStatusStr
     completed_at: Optional[datetime] = None
     deadline_warning_sent: bool
+    next_recert_reset_at: Optional[date] = None
+    last_recert_reset_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

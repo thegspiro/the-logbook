@@ -34,6 +34,15 @@ const STRUCTURE_TYPES: { value: ProgramStructureType; label: string }[] = [
   { value: 'flexible', label: 'Flexible (any order)' },
 ];
 
+const MONTHS: { value: number; label: string }[] = [
+  { value: 1, label: 'January' }, { value: 2, label: 'February' },
+  { value: 3, label: 'March' }, { value: 4, label: 'April' },
+  { value: 5, label: 'May' }, { value: 6, label: 'June' },
+  { value: 7, label: 'July' }, { value: 8, label: 'August' },
+  { value: 9, label: 'September' }, { value: 10, label: 'October' },
+  { value: 11, label: 'November' }, { value: 12, label: 'December' },
+];
+
 // Shared modal shell.
 const ModalShell: React.FC<{
   title: string;
@@ -93,10 +102,26 @@ export const EditProgramModal: React.FC<{
   const [warnDays, setWarnDays] = useState(program.warning_days_before?.toString() ?? '');
   const [isTemplate, setIsTemplate] = useState(!!program.is_template);
   const [active, setActive] = useState(program.active !== false);
+  const [recertEnabled, setRecertEnabled] = useState(!!program.recert_enabled);
+  const [recertInterval, setRecertInterval] = useState(
+    program.recert_interval_months?.toString() ?? '24',
+  );
+  const [recertAnchorMonth, setRecertAnchorMonth] = useState(
+    program.recert_anchor_month?.toString() ?? '',
+  );
+  const [recertAnchorDay, setRecertAnchorDay] = useState(
+    program.recert_anchor_day?.toString() ?? '',
+  );
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
     if (!name.trim()) { toast.error('Name is required'); return; }
+    // A fixed anchor needs both parts; require them together to avoid an
+    // ambiguous "reset in March, day unknown".
+    if (recertEnabled && (!!recertAnchorMonth) !== (!!recertAnchorDay)) {
+      toast.error('Set both the reset month and day, or leave both blank');
+      return;
+    }
     setSubmitting(true);
     try {
       await trainingProgramService.updateProgram(program.id, {
@@ -109,6 +134,13 @@ export const EditProgramModal: React.FC<{
         warning_days_before: warnDays ? Number(warnDays) : undefined,
         is_template: isTemplate,
         active,
+        recert_enabled: recertEnabled,
+        recert_interval_months:
+          recertEnabled && recertInterval ? Number(recertInterval) : undefined,
+        recert_anchor_month:
+          recertEnabled && recertAnchorMonth ? Number(recertAnchorMonth) : undefined,
+        recert_anchor_day:
+          recertEnabled && recertAnchorDay ? Number(recertAnchorDay) : undefined,
       });
       toast.success('Pipeline updated');
       onSaved();
@@ -162,6 +194,78 @@ export const EditProgramModal: React.FC<{
         <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary">
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active
         </label>
+      </div>
+      <div className="rounded-md border border-theme-surface-border p-3 space-y-3">
+        <label className="inline-flex items-center gap-2 text-sm font-medium text-theme-text-primary">
+          <input
+            type="checkbox"
+            checked={recertEnabled}
+            onChange={(e) => setRecertEnabled(e.target.checked)}
+          />
+          Recertification cycle (auto-reset)
+        </label>
+        <p className="text-xs text-theme-text-muted">
+          Clears each member&apos;s progress on a recurring deadline so a fresh
+          certification cycle can begin — e.g. NREMT&apos;s biennial recert due
+          every other March 30.
+        </p>
+        {recertEnabled && (
+          <div className="space-y-3">
+            <div>
+              <label className="form-label" htmlFor="ep-recert-interval">
+                Cycle length (months)
+              </label>
+              <input
+                id="ep-recert-interval"
+                type="number"
+                min={1}
+                max={120}
+                className="form-input"
+                value={recertInterval}
+                onChange={(e) => setRecertInterval(e.target.value)}
+                placeholder="e.g. 24 for a two-year cycle"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="form-label" htmlFor="ep-recert-month">
+                  Reset month <span className="text-theme-text-muted">(optional)</span>
+                </label>
+                <select
+                  id="ep-recert-month"
+                  className="form-input"
+                  value={recertAnchorMonth}
+                  onChange={(e) => setRecertAnchorMonth(e.target.value)}
+                >
+                  <option value="">Roll from enrollment date</option>
+                  {MONTHS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="form-label" htmlFor="ep-recert-day">
+                  Reset day <span className="text-theme-text-muted">(optional)</span>
+                </label>
+                <input
+                  id="ep-recert-day"
+                  type="number"
+                  min={1}
+                  max={31}
+                  className="form-input"
+                  value={recertAnchorDay}
+                  onChange={(e) => setRecertAnchorDay(e.target.value)}
+                  placeholder="e.g. 30"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-theme-text-muted">
+              Set a month and day to pin the reset to a fixed calendar date;
+              leave them blank to reset on a rolling schedule from each
+              member&apos;s enrollment date.
+            </p>
+          </div>
+        )}
       </div>
     </ModalShell>
   );

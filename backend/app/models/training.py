@@ -815,6 +815,17 @@ class TrainingProgram(Base):
     reminder_conditions = Column(JSON)  # Conditional reminder rules
     # Example: {"milestone_threshold": 50, "days_before_deadline": 90, "send_if_below_percentage": 40}
 
+    # Recertification Cycle (auto-reset)
+    # When enabled, an enrolled member's accumulated progress is cleared on a
+    # recurring deadline so a fresh certification cycle can begin — e.g. NREMT's
+    # biennial recert, which is due every other March 30. recert_interval_months
+    # sets the cadence; recert_anchor_month/day optionally pin the reset to a
+    # fixed calendar date rather than rolling from the enrollment date.
+    recert_enabled = Column(Boolean, default=False, nullable=False)
+    recert_interval_months = Column(Integer)  # e.g. 24 for a two-year cycle
+    recert_anchor_month = Column(Integer)  # 1-12, optional fixed reset month
+    recert_anchor_day = Column(Integer)  # 1-31, optional fixed reset day
+
     # Status
     active = Column(Boolean, default=True, index=True)
     is_template = Column(
@@ -1086,6 +1097,12 @@ class ProgramEnrollment(Base):
     # Deadline Tracking
     deadline_warning_sent = Column(Boolean, default=False)
     deadline_warning_sent_at = Column(DateTime(timezone=True))
+
+    # Recertification cycle tracking (see TrainingProgram.recert_enabled).
+    # When today reaches next_recert_reset_at, the enrollment is auto-reset for
+    # a new cycle and the date is advanced to the following deadline.
+    next_recert_reset_at = Column(Date, index=True)
+    last_recert_reset_at = Column(DateTime(timezone=True))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

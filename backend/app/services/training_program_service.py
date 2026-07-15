@@ -406,6 +406,10 @@ class TrainingProgramService:
             time_limit_days=program_data.time_limit_days,
             warning_days_before=program_data.warning_days_before,
             is_template=program_data.is_template,
+            recert_enabled=program_data.recert_enabled,
+            recert_interval_months=program_data.recert_interval_months,
+            recert_anchor_month=program_data.recert_anchor_month,
+            recert_anchor_day=program_data.recert_anchor_day,
             created_by=created_by,
         )
 
@@ -449,6 +453,10 @@ class TrainingProgramService:
             time_limit_days=prog.time_limit_days,
             warning_days_before=prog.warning_days_before,
             is_template=prog.is_template,
+            recert_enabled=getattr(prog, "recert_enabled", False),
+            recert_interval_months=getattr(prog, "recert_interval_months", None),
+            recert_anchor_month=getattr(prog, "recert_anchor_month", None),
+            recert_anchor_day=getattr(prog, "recert_anchor_day", None),
             created_by=created_by,
         )
         self.db.add(program)
@@ -673,14 +681,10 @@ class TrainingProgramService:
             )
             if still_used.scalar_one_or_none() is None:
                 await self.db.execute(
-                    delete(TrainingRequirement).where(
-                        TrainingRequirement.id == req_id
-                    )
+                    delete(TrainingRequirement).where(TrainingRequirement.id == req_id)
                 )
 
-        await self.db.execute(
-            delete(TrainingProgram).where(TrainingProgram.id == pid)
-        )
+        await self.db.execute(delete(TrainingProgram).where(TrainingProgram.id == pid))
         await self.db.commit()
         return True, None
 
@@ -916,9 +920,7 @@ class TrainingProgramService:
         )
         remaining_phases = remaining_result.scalars().all()
         fallback_phase_id = remaining_phases[0].id if remaining_phases else None
-        reanchored_ids = [
-            str(r[0]) for r in enroll_rows if str(r[1]) == str(phase_id)
-        ]
+        reanchored_ids = [str(r[0]) for r in enroll_rows if str(r[1]) == str(phase_id)]
         if reanchored_ids:
             await self.db.execute(
                 update(ProgramEnrollment)
@@ -1436,6 +1438,12 @@ class TrainingProgramService:
             first_phase = min(program.phases, key=lambda p: p.phase_number)
             current_phase_id = first_phase.id
 
+        # Schedule the first recert deadline for recert-enabled programs so the
+        # member's cycle is tracked from day one.
+        next_recert_reset_at = self._compute_next_recert_date(
+            program, datetime.now(timezone.utc).date()
+        )
+
         # Create enrollment
         enrollment = ProgramEnrollment(
             user_id=enrollment_data.user_id,
@@ -1446,6 +1454,7 @@ class TrainingProgramService:
             progress_percentage=0.0,
             status=EnrollmentStatus.ACTIVE,
             notes=enrollment_data.notes,
+            next_recert_reset_at=next_recert_reset_at,
         )
 
         self.db.add(enrollment)
@@ -1530,16 +1539,13 @@ class TrainingProgramService:
             )
             prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
             completed_result = await self.db.execute(
-                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id)
-                .where(
+                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id).where(
                     ProgramEnrollment.user_id.in_(user_id_strs),
                     ProgramEnrollment.program_id.in_(prereq_ids),
                     ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
                 )
             )
-            completed_pairs = {
-                (str(r[0]), str(r[1])) for r in completed_result.all()
-            }
+            completed_pairs = {(str(r[0]), str(r[1])) for r in completed_result.all()}
             for uid in user_id_strs:
                 missing = [
                     prereq_names.get(pid, "a prerequisite program")
@@ -1972,6 +1978,59 @@ class TrainingProgramService:
         return progress, None
 
     @staticmethod
+    def _clamp_day(year: int, month: int, day: int) -> date:
+        """Build a date, clamping the day to the month's last valid day so a
+        fixed anchor (e.g. day 30 or 31) never raises in a short month, and
+        Feb 29 falls back to Feb 28 in a non-leap year."""
+        import calendar
+
+        last_day = calendar.monthrange(year, month)[1]
+        return date(year, month, min(day, last_day))
+
+    @classmethod
+    def _add_months(cls, base: date, months: int) -> date:
+        """Return `base` shifted forward by `months`, clamping the day."""
+        total = (base.year * 12 + (base.month - 1)) + months
+        year, month0 = divmod(total, 12)
+        return cls._clamp_day(year, month0 + 1, base.day)
+
+    @classmethod
+    def _compute_next_recert_date(
+        cls, program: TrainingProgram, base: date
+    ) -> Optional[date]:
+        """Next auto-reset date for an enrollment on this program, strictly
+        after `base` (the enrollment date, or the last reset). Returns None when
+        the program has no usable recert config.
+
+        With a fixed anchor month/day the reset lands on that calendar date
+        (e.g. NREMT's March 30) at the program's cadence; without one it rolls
+        forward by the interval from `base`.
+        """
+        if not getattr(program, "recert_enabled", False):
+            return None
+
+        interval = program.recert_interval_months
+        anchor_month = program.recert_anchor_month
+        anchor_day = program.recert_anchor_day
+
+        if anchor_month and anchor_day:
+            # Number of whole years between resets (a 24-month cycle → every 2nd
+            # anchor date). Defaults to yearly when no interval is set.
+            interval_years = max(1, round((interval or 12) / 12))
+            anchor = cls._clamp_day(base.year, anchor_month, anchor_day)
+            if anchor <= base:
+                anchor = cls._clamp_day(base.year + 1, anchor_month, anchor_day)
+            if interval_years > 1:
+                anchor = cls._clamp_day(
+                    anchor.year + interval_years - 1, anchor_month, anchor_day
+                )
+            return anchor
+
+        if interval:
+            return cls._add_months(base, interval)
+        return None
+
+    @staticmethod
     def _blank_progress(row: RequirementProgress) -> None:
         """Zero a progress row back to a fresh, not-started state (for a new
         recert cycle) — clears the tally, the completion/verification stamps,
@@ -2017,6 +2076,56 @@ class TrainingProgramService:
         await self.db.refresh(progress)
         return progress, None
 
+    async def _get_program_for_enrollment(
+        self, enrollment: ProgramEnrollment
+    ) -> Optional[TrainingProgram]:
+        """Load the parent program for an enrollment (for recert config)."""
+        result = await self.db.execute(
+            select(TrainingProgram).where(
+                TrainingProgram.id == str(enrollment.program_id)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _perform_enrollment_reset(
+        self,
+        enrollment: ProgramEnrollment,
+        program: Optional[TrainingProgram],
+    ) -> None:
+        """Core reset mutation shared by the manual and automatic paths: blank
+        every requirement row, return the member to ACTIVE at the first phase,
+        and — for recert-enabled programs — advance the recert deadline so the
+        next cycle is scheduled. The caller owns the commit."""
+        rows_result = await self.db.execute(
+            select(RequirementProgress).where(
+                RequirementProgress.enrollment_id == str(enrollment.id)
+            )
+        )
+        for row in rows_result.scalars().all():
+            self._blank_progress(row)
+
+        # Re-anchor to the first phase for phased programs.
+        first_phase_result = await self.db.execute(
+            select(ProgramPhase.id)
+            .where(ProgramPhase.program_id == str(enrollment.program_id))
+            .order_by(ProgramPhase.phase_number)
+            .limit(1)
+        )
+        first_phase_id = first_phase_result.scalar_one_or_none()
+
+        enrollment.status = EnrollmentStatus.ACTIVE
+        enrollment.progress_percentage = 0.0
+        enrollment.completed_at = None
+        enrollment.current_phase_id = first_phase_id
+
+        # Schedule the next recert deadline (from today) so the cycle repeats.
+        if program is not None and getattr(program, "recert_enabled", False):
+            now = datetime.now(timezone.utc)
+            enrollment.last_recert_reset_at = now
+            enrollment.next_recert_reset_at = self._compute_next_recert_date(
+                program, now.date()
+            )
+
     async def reset_enrollment_progress(
         self,
         enrollment_id: UUID,
@@ -2039,31 +2148,59 @@ class TrainingProgramService:
         if not enrollment:
             return None, "Enrollment not found"
 
-        rows_result = await self.db.execute(
-            select(RequirementProgress).where(
-                RequirementProgress.enrollment_id == str(enrollment_id)
-            )
-        )
-        for row in rows_result.scalars().all():
-            self._blank_progress(row)
-
-        # Re-anchor to the first phase for phased programs.
-        first_phase_result = await self.db.execute(
-            select(ProgramPhase.id)
-            .where(ProgramPhase.program_id == str(enrollment.program_id))
-            .order_by(ProgramPhase.phase_number)
-            .limit(1)
-        )
-        first_phase_id = first_phase_result.scalar_one_or_none()
-
-        enrollment.status = EnrollmentStatus.ACTIVE
-        enrollment.progress_percentage = 0.0
-        enrollment.completed_at = None
-        enrollment.current_phase_id = first_phase_id
+        program = await self._get_program_for_enrollment(enrollment)
+        await self._perform_enrollment_reset(enrollment, program)
 
         await self.db.commit()
         await self.db.refresh(enrollment)
         return enrollment, None
+
+    async def auto_reset_if_due(self, enrollment: ProgramEnrollment) -> bool:
+        """If this enrollment's recert deadline has passed, reset it in place for
+        a new cycle. Returns True when a reset occurred. Safe to call on every
+        progress load — a no-op when recert is disabled or the date is in the
+        future."""
+        reset_date = getattr(enrollment, "next_recert_reset_at", None)
+        if not reset_date or reset_date > datetime.now(timezone.utc).date():
+            return False
+
+        program = await self._get_program_for_enrollment(enrollment)
+        if not program or not getattr(program, "recert_enabled", False):
+            return False
+
+        await self._perform_enrollment_reset(enrollment, program)
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        return True
+
+    async def run_due_recert_resets(
+        self, organization_id: UUID
+    ) -> Tuple[int, Optional[str]]:
+        """Auto-reset every enrollment in the organization whose recert deadline
+        has passed. Intended for a scheduled sweep, but safe to call on demand.
+        Returns (reset_count, error_message)."""
+        today = datetime.now(timezone.utc).date()
+        result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                TrainingProgram.organization_id == str(organization_id),
+                TrainingProgram.recert_enabled.is_(True),
+                ProgramEnrollment.next_recert_reset_at.isnot(None),
+                ProgramEnrollment.next_recert_reset_at <= today,
+            )
+        )
+        enrollments = result.scalars().all()
+
+        count = 0
+        for enrollment in enrollments:
+            program = await self._get_program_for_enrollment(enrollment)
+            await self._perform_enrollment_reset(enrollment, program)
+            count += 1
+
+        if count:
+            await self.db.commit()
+        return count, None
 
     async def _recalculate_enrollment_progress(
         self,
@@ -2198,9 +2335,7 @@ class TrainingProgramService:
             return None
         if current_phase_id is None:
             return ordered[0]
-        current = next(
-            (p for p in ordered if str(p.id) == str(current_phase_id)), None
-        )
+        current = next((p for p in ordered if str(p.id) == str(current_phase_id)), None)
         if current is None:
             return ordered[0]
         for phase in ordered:
@@ -2300,9 +2435,7 @@ class TrainingProgramService:
         enrollments without a current phase.
         """
         enroll_result = await self.db.execute(
-            select(ProgramEnrollment).where(
-                ProgramEnrollment.id == str(enrollment_id)
-            )
+            select(ProgramEnrollment).where(ProgramEnrollment.id == str(enrollment_id))
         )
         enrollment = enroll_result.scalar_one_or_none()
         if not enrollment:
@@ -2329,9 +2462,7 @@ class TrainingProgramService:
             current = by_id.get(str(enrollment.current_phase_id))
             if current is None or current.requires_manual_advancement:
                 return
-            if not await self._is_phase_complete(
-                enrollment_id, UUID(str(current.id))
-            ):
+            if not await self._is_phase_complete(enrollment_id, UUID(str(current.id))):
                 return
             next_phase = self._next_phase(phases, enrollment.current_phase_id)
             if next_phase is None:
@@ -2885,18 +3016,24 @@ class TrainingProgramService:
                 )
 
         source = _coerce_enum(
-            req_data.get("source"), RequirementSource, "source",
+            req_data.get("source"),
+            RequirementSource,
+            "source",
             RequirementSource.DEPARTMENT,
         )
         requirement_type = _coerce_enum(
-            req_data.get("requirement_type"), RequirementType, "requirement_type",
+            req_data.get("requirement_type"),
+            RequirementType,
+            "requirement_type",
             RequirementType.HOURS,
         )
         training_type = _coerce_enum(
             req_data.get("training_type"), TrainingType, "training_type"
         )
         frequency = _coerce_enum(
-            req_data.get("frequency"), RequirementFrequency, "frequency",
+            req_data.get("frequency"),
+            RequirementFrequency,
+            "frequency",
             RequirementFrequency.ANNUAL,
         )
 

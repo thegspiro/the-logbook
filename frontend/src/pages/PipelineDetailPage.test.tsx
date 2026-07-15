@@ -482,4 +482,54 @@ describe('PipelineDetailPage — enrollment progress management', () => {
 
     await waitFor(() => expect(mockResetEnrollment).toHaveBeenCalledWith('enr-1'));
   });
+
+  it('shows the scheduled auto-reset date in the progress modal', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: { ...enrollment, next_recert_reset_at: '2028-03-30' },
+      program,
+      requirement_progress: [certProgress],
+      completed_requirements: 0,
+      total_requirements: 1,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('tab', { name: /Enrollments/i }));
+    await userEvent.click(
+      await screen.findByRole('button', { name: /Manage progress for Jane Recruit/i }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    // The date renders without a timezone shift (built from Y-M-D at local midnight).
+    expect(await within(dialog).findByText(/Auto-resets/i)).toBeInTheDocument();
+    expect(within(dialog).getByText('3/30/2028')).toBeInTheDocument();
+  });
+
+  it('configures a recertification cycle from the Edit modal', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog', { name: /Edit pipeline details/i });
+
+    await userEvent.click(within(dialog).getByLabelText(/Recertification cycle/i));
+    const interval = within(dialog).getByLabelText(/Cycle length/i);
+    await userEvent.clear(interval);
+    await userEvent.type(interval, '24');
+    await userEvent.selectOptions(within(dialog).getByLabelText(/Reset month/i), '3');
+    await userEvent.type(within(dialog).getByLabelText(/Reset day/i), '30');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({
+          recert_enabled: true,
+          recert_interval_months: 24,
+          recert_anchor_month: 3,
+          recert_anchor_day: 30,
+        }),
+      ),
+    );
+  });
 });

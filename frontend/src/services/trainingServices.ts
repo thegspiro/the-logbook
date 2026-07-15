@@ -779,6 +779,12 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /** Auto-reset every enrollment whose stored recert deadline has passed. */
+  async runDueRecertResets(): Promise<{ reset_count: number }> {
+    const response = await api.post<{ reset_count: number }>('/training/programs/recert/run-due');
+    return response.data;
+  },
+
   /**
    * Advance an enrollment to the next phase of a phased program.
    * By default the current phase must be complete; pass force to override.
