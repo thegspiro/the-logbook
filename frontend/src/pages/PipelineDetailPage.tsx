@@ -348,8 +348,12 @@ const EnrollModal: React.FC<{
                           <span className="text-theme-text-muted ml-2 text-xs">#{m.membership_number}</span>
                         )}
                       </span>
-                      {!m.eligible && m.reason && (
-                        <p className="text-theme-text-muted text-xs mt-0.5">{m.reason}</p>
+                      {m.reason && (
+                        // Advisory (amber) for eligible-but-flagged members,
+                        // muted for hard-ineligible ones.
+                        <p className={`text-xs mt-0.5 ${m.eligible ? 'text-yellow-700 dark:text-yellow-400' : 'text-theme-text-muted'}`}>
+                          {m.reason}
+                        </p>
                       )}
                     </div>
                     {m.eligible ? (
@@ -807,7 +811,13 @@ const PipelineDetailPage: React.FC = () => {
   const [phaseModal, setPhaseModal] = useState<{ phase?: ProgramPhase } | null>(null);
   const [reqModal, setReqModal] = useState<{ phaseId: string | null; link?: ProgramRequirement } | null>(null);
   const [milestoneModal, setMilestoneModal] = useState<{ milestone?: ProgramMilestone } | null>(null);
-  const [confirm, setConfirm] = useState<{ message: string; run: () => Promise<void> } | null>(null);
+  const [confirm, setConfirm] = useState<{
+    message: string;
+    title?: string;
+    confirmLabel?: string;
+    run: () => Promise<void>;
+    after?: () => void;
+  } | null>(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
@@ -898,11 +908,15 @@ const PipelineDetailPage: React.FC = () => {
 
   const runConfirm = async () => {
     if (!confirm) return;
+    const after = confirm.after;
     setConfirmLoading(true);
     try {
       await confirm.run();
       setConfirm(null);
-      void loadProgram();
+      // A destructive action can navigate away (e.g. delete the whole pipeline);
+      // otherwise just refresh the current view.
+      if (after) after();
+      else void loadProgram();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Action failed'));
     } finally {
@@ -974,6 +988,26 @@ const PipelineDetailPage: React.FC = () => {
         if (programId) await trainingProgramService.deleteMilestone(programId, m.id);
       },
     });
+
+  const confirmDeleteProgram = () => {
+    if (!program) return;
+    const enrolledNote =
+      enrollments.length > 0
+        ? ` This pipeline has ${enrollments.length} enrolled member${enrollments.length === 1 ? '' : 's'} — their progress will be permanently deleted.`
+        : '';
+    setConfirm({
+      title: 'Delete pipeline',
+      confirmLabel: 'Delete pipeline',
+      message:
+        `Permanently delete "${program.name}"? Its phases, requirements, milestones, ` +
+        `and all enrollments are removed.${enrolledNote} This can't be undone.`,
+      run: async () => {
+        if (programId) await trainingProgramService.deleteProgram(programId);
+        toast.success('Pipeline deleted');
+      },
+      after: () => navigate('/training/programs'),
+    });
+  };
 
   // Toggle whether a linked requirement is required to complete its phase.
   // Enrolled members' progress is recomputed server-side, so refresh nothing
@@ -1085,6 +1119,16 @@ const PipelineDetailPage: React.FC = () => {
               <Copy className="w-4 h-4" />
               <span>{isDuplicating ? 'Copying...' : 'Duplicate'}</span>
             </button>
+            {canManage && (
+              <button
+                onClick={confirmDeleteProgram}
+                title="Delete pipeline"
+                className="flex items-center space-x-1 px-3 py-2 text-red-700 dark:text-red-400 hover:bg-red-500/10 rounded-lg text-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1488,8 +1532,9 @@ const PipelineDetailPage: React.FC = () => {
         isOpen={confirm !== null}
         onClose={() => setConfirm(null)}
         onConfirm={() => void runConfirm()}
+        title={confirm?.title ?? 'Confirm'}
         message={confirm?.message ?? ''}
-        confirmLabel="Delete"
+        confirmLabel={confirm?.confirmLabel ?? 'Delete'}
         variant="danger"
         loading={confirmLoading}
       />

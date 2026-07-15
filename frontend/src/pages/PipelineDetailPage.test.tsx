@@ -18,6 +18,7 @@ const mockBulkEnrollMembers = vi.fn();
 const mockUpdateProgram = vi.fn();
 const mockCreateProgramPhase = vi.fn();
 const mockDeleteProgramPhase = vi.fn();
+const mockDeleteProgram = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -34,6 +35,7 @@ vi.mock('../services/api', () => ({
     updateProgram: (...a: unknown[]) => mockUpdateProgram(...a) as unknown,
     createProgramPhase: (...a: unknown[]) => mockCreateProgramPhase(...a) as unknown,
     deleteProgramPhase: (...a: unknown[]) => mockDeleteProgramPhase(...a) as unknown,
+    deleteProgram: (...a: unknown[]) => mockDeleteProgram(...a) as unknown,
   },
 }));
 
@@ -128,6 +130,7 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     mockUpdateProgram.mockResolvedValue(program);
     mockCreateProgramPhase.mockResolvedValue({ id: 'ph-new', program_id: 'prog-1', phase_number: 1, name: 'Intro' });
     mockDeleteProgramPhase.mockResolvedValue(undefined);
+    mockDeleteProgram.mockResolvedValue(undefined);
   });
 
   it('lists enrolled members by name on the Enrollments tab', async () => {
@@ -394,9 +397,41 @@ describe('PipelineDetailPage — enrollment progress management', () => {
     renderWithRouter(<PipelineDetailPage />);
 
     await userEvent.click(await screen.findByRole('button', { name: 'Delete phase' }));
-    // Confirm dialog appears; confirm the deletion.
-    await userEvent.click(await screen.findByRole('button', { name: /^Delete$/ }));
+    // Confirm dialog appears; confirm the deletion (scoped to the dialog).
+    const confirmDialog = await screen.findByRole('dialog');
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: /^Delete$/ }));
 
     await waitFor(() => expect(mockDeleteProgramPhase).toHaveBeenCalledWith('prog-1', 'ph-1'));
+  });
+
+  it('hard-deletes the pipeline after a warning and navigates away', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Delete$/ }));
+    // A warning dialog appears; confirm the destructive action.
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Delete pipeline/i }));
+
+    await waitFor(() => expect(mockDeleteProgram).toHaveBeenCalledWith('prog-1'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs'));
+  });
+
+  it('shows a member in another program as eligible with an advisory', async () => {
+    mockGetEnrollmentEligibility.mockResolvedValue([
+      {
+        user_id: 'u3', first_name: 'Cy', last_name: 'Onboarding', eligible: true,
+        status: 'concurrent', reason: 'Also enrolled in another program',
+      },
+    ]);
+
+    renderWithRouter(<PipelineDetailPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Enroll$/i }));
+    const dialog = await screen.findByRole('dialog');
+
+    // Selectable (eligible) and the advisory is shown; not hidden by the filter.
+    const row = await within(dialog).findByText('Cy Onboarding');
+    expect(row).toBeInTheDocument();
+    expect(within(dialog).getByText('Also enrolled in another program')).toBeInTheDocument();
+    expect(within(dialog).getByText('1 of 1 eligible')).toBeInTheDocument();
   });
 });

@@ -128,7 +128,15 @@ const TrainingProgramsPage: React.FC = () => {
     setImportingRegistry(registryName);
     try {
       const result = await trainingProgramService.importRegistry(registryName);
-      toast.success(`Successfully imported ${result.imported_count} requirements from ${result.registry_name}`);
+      const label = result.registry_name || registryName;
+      if (result.errors && result.errors.length > 0) {
+        // Surface the real reason instead of a misleading green "imported 0".
+        toast.error(`Couldn't import ${label}: ${result.errors[0]}`);
+      } else if (result.imported_count === 0) {
+        toast(`No new requirements to import from ${label} — they're already in your library.`);
+      } else {
+        toast.success(`Imported ${result.imported_count} requirement${result.imported_count === 1 ? '' : 's'} from ${label}`);
+      }
       void loadData();
     } catch (error: unknown) {
       toast.error(`Failed to import registry: ${getErrorMessage(error)}`);

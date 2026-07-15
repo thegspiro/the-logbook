@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import toast from 'react-hot-toast';
 import TrainingProgramsPage from './TrainingProgramsPage';
 
 const mockGetPrograms = vi.fn();
@@ -9,6 +10,7 @@ const mockGetRequirementsEnhanced = vi.fn();
 const mockGetRegistries = vi.fn();
 const mockGetSampleTemplates = vi.fn();
 const mockInstantiateSampleTemplate = vi.fn();
+const mockImportRegistry = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -17,6 +19,7 @@ vi.mock('../services/api', () => ({
     getRegistries: (...args: unknown[]) => mockGetRegistries(...args) as unknown,
     getSampleTemplates: (...args: unknown[]) => mockGetSampleTemplates(...args) as unknown,
     instantiateSampleTemplate: (...args: unknown[]) => mockInstantiateSampleTemplate(...args) as unknown,
+    importRegistry: (...args: unknown[]) => mockImportRegistry(...args) as unknown,
   },
 }));
 
@@ -49,7 +52,8 @@ vi.mock('../stores/authStore', () => ({
 }));
 
 vi.mock('react-hot-toast', () => ({
-  default: { success: vi.fn(), error: vi.fn() },
+  // Callable (neutral toasts) with .success/.error helpers.
+  default: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }));
 
 describe('TrainingProgramsPage', () => {
@@ -141,5 +145,40 @@ describe('TrainingProgramsPage', () => {
       expect(mockInstantiateSampleTemplate).toHaveBeenCalledWith('firefighter-recruit-school'),
     );
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training/programs/prog-new'));
+  });
+
+  it('does not show a green success when a registry import returns 0', async () => {
+    mockGetRegistries.mockResolvedValue([]); // fall back to the NFPA/NREMT/Pro Board stubs
+    mockImportRegistry.mockResolvedValue({
+      registry_name: 'nremt', imported_count: 0, skipped_count: 0, errors: [],
+    });
+    renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Import NREMT/i }));
+
+    await waitFor(() => expect(mockImportRegistry).toHaveBeenCalledWith('nremt'));
+    // Neutral toast (not success) with an explanatory message.
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(expect.stringMatching(/No new requirements/i)),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the error when a registry import reports one', async () => {
+    mockGetRegistries.mockResolvedValue([]);
+    mockImportRegistry.mockResolvedValue({
+      registry_name: 'nremt', imported_count: 0, skipped_count: 0,
+      errors: ['Registry file not found'],
+    });
+    renderWithRouter(<TrainingProgramsPage />);
+
+    await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Import NREMT/i }));
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Registry file not found/i)),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
   });
 });

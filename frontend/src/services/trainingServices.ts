@@ -554,6 +554,13 @@ export const trainingProgramService = {
   },
 
   /**
+   * Permanently delete a program and everything under it. Irreversible.
+   */
+  async deleteProgram(programId: string): Promise<void> {
+    await api.delete(`/training/programs/programs/${programId}`);
+  },
+
+  /**
    * Create a program with all phases, requirements, and milestones atomically.
    * The whole structure is persisted in one backend transaction, so a failure
    * part-way can't leave an orphaned, half-built program behind.
