@@ -30,19 +30,24 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     ProgramEnrollmentWithUserResponse,
     ProgramMilestoneCreate,
     ProgramMilestoneResponse,
+    ProgramMilestoneUpdate,
     ProgramPhaseCreate,
     ProgramPhaseResponse,
+    ProgramPhaseUpdate,
     ProgramRequirementCreate,
     ProgramRequirementResponse,
     ProgramRequirementUpdate,
     ProgramWithPhasesAndRequirements,
+    PhaseReorderRequest,
     RegistryImportResult,
+    RequirementReorderRequest,
     RequirementProgressResponse,
     RequirementProgressUpdate,
     SampleTemplateInstantiate,
     SampleTemplateSummary,
     TrainingProgramCreate,
     TrainingProgramResponse,
+    TrainingProgramUpdate,
     TrainingRequirementEnhancedCreate,
     TrainingRequirementEnhancedResponse,
     TrainingRequirementEnhancedUpdate,
@@ -579,6 +584,36 @@ async def get_training_program(
     )
 
 
+@router.patch("/programs/{program_id}", response_model=TrainingProgramResponse)
+async def update_training_program(
+    program_id: UUID,
+    updates: TrainingProgramUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Update a training program's own fields (name, description, code, structure,
+    time limits, target position/roles, template flag, active).
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    program, error = await service.update_training_program(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        updates=updates,
+    )
+    if error:
+        code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=code, detail=error)
+    return program
+
+
 # ==================== Program Phase Endpoints ====================
 
 
@@ -638,6 +673,88 @@ async def get_program_phases(
     )
 
     return phases
+
+
+@router.post(
+    "/programs/{program_id}/phases/reorder",
+    response_model=list[ProgramPhaseResponse],
+)
+async def reorder_program_phases(
+    program_id: UUID,
+    payload: PhaseReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Renumber a program's phases to match the given order (1-based).
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    phases, error = await service.reorder_program_phases(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        phase_ids=payload.phase_ids,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return phases
+
+
+@router.patch(
+    "/programs/{program_id}/phases/{phase_id}",
+    response_model=ProgramPhaseResponse,
+)
+async def update_program_phase(
+    program_id: UUID,
+    phase_id: UUID,
+    updates: ProgramPhaseUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Update a phase's name, description, time limit, manual-advance flag, or
+    prerequisites. Use the reorder endpoint to change phase numbers.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    phase, error = await service.update_program_phase(
+        phase_id=phase_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        updates=updates,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return phase
+
+
+@router.delete(
+    "/programs/{program_id}/phases/{phase_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_program_phase(
+    program_id: UUID,
+    phase_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Delete a phase and its requirements/milestones, cleaning up enrolled members
+    (drops their progress for the phase's requirements and re-anchors anyone
+    parked on it).
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    ok, error = await service.delete_program_phase(
+        phase_id=phase_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
 
 
 # ==================== Program Requirement Endpoints ====================
@@ -719,6 +836,60 @@ async def update_program_requirement(
     return program_requirement
 
 
+@router.post(
+    "/programs/{program_id}/requirements/reorder",
+    response_model=list[ProgramRequirementResponse],
+)
+async def reorder_program_requirements(
+    program_id: UUID,
+    payload: RequirementReorderRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Set the display order (``sort_order``) of a program's requirement links to
+    match the given order. Accepts a subset (e.g. one phase's requirements).
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    links, error = await service.reorder_program_requirements(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        program_requirement_ids=payload.program_requirement_ids,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return links
+
+
+@router.delete(
+    "/programs/{program_id}/requirements/{program_requirement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_requirement_from_program(
+    program_id: UUID,
+    program_requirement_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Unlink a requirement from the program, cleaning up enrolled members (drops
+    their progress for it and recomputes) and deleting the requirement if it's
+    no longer used anywhere.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    ok, error = await service.remove_requirement_from_program(
+        program_requirement_id=program_requirement_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+
+
 @router.get(
     "/programs/{program_id}/requirements",
     response_model=list[ProgramRequirementResponse],
@@ -783,6 +954,59 @@ async def create_program_milestone(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return milestone
+
+
+@router.patch(
+    "/programs/{program_id}/milestones/{milestone_id}",
+    response_model=ProgramMilestoneResponse,
+)
+async def update_program_milestone(
+    program_id: UUID,
+    milestone_id: UUID,
+    updates: ProgramMilestoneUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Update a milestone's name, description, threshold, or message.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    milestone, error = await service.update_program_milestone(
+        milestone_id=milestone_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+        updates=updates,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    return milestone
+
+
+@router.delete(
+    "/programs/{program_id}/milestones/{milestone_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_program_milestone(
+    program_id: UUID,
+    milestone_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Delete a program milestone.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    ok, error = await service.delete_program_milestone(
+        milestone_id=milestone_id,
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
 
 
 # ==================== Program Enrollment Endpoints ====================

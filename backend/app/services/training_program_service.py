@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -40,11 +40,14 @@ from app.models.user import User
 from app.schemas.training_program import (
     ProgramEnrollmentCreate,
     ProgramMilestoneCreate,
+    ProgramMilestoneUpdate,
     ProgramPhaseCreate,
+    ProgramPhaseUpdate,
     ProgramRequirementCreate,
     ProgramRequirementUpdate,
     RequirementProgressUpdate,
     TrainingProgramCreate,
+    TrainingProgramUpdate,
     TrainingRequirementEnhancedCreate,
 )
 from app.services.notifications_service import NotificationsService
@@ -343,6 +346,19 @@ class TrainingProgramService:
         if not requirement.is_editable:
             return None, "This requirement cannot be edited"
 
+        # A changed numeric target changes completion math for enrolled members.
+        target_fields = {
+            "required_hours",
+            "required_shifts",
+            "required_calls",
+            "required_courses",
+        }
+        target_changed = any(
+            field in updates and getattr(requirement, field, None) != value
+            for field, value in updates.items()
+            if field in target_fields
+        )
+
         # Update fields
         for field, value in updates.items():
             if hasattr(requirement, field) and value is not None:
@@ -351,6 +367,11 @@ class TrainingProgramService:
         requirement.updated_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(requirement)
+
+        # Re-derive progress-row percentages so enrolled members' progress isn't
+        # left stale against the new target.
+        if target_changed:
+            await self._recompute_progress_for_requirement(requirement)
 
         return requirement, None
 
@@ -562,6 +583,87 @@ class TrainingProgramService:
 
     # ==================== Program Phase Methods ====================
 
+    async def update_training_program(
+        self,
+        program_id: UUID,
+        organization_id: UUID,
+        updates: TrainingProgramUpdate,
+    ) -> Tuple[Optional[TrainingProgram], Optional[str]]:
+        """
+        Update a program's own fields (name, description, code, structure, time
+        limits, target position/roles, template flag, active). Returns
+        (program, error_message).
+        """
+        program = await self.get_program_by_id(program_id, organization_id)
+        if not program:
+            return None, "Training program not found"
+
+        data = updates.model_dump(exclude_unset=True)
+        if "structure_type" in data and data["structure_type"] is not None:
+            try:
+                data["structure_type"] = ProgramStructureType(data["structure_type"])
+            except ValueError:
+                return None, f"Invalid structure type: {data['structure_type']}"
+
+        for field, value in data.items():
+            setattr(program, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(program)
+        return program, None
+
+    async def _recompute_progress_for_requirement(
+        self, requirement: TrainingRequirement
+    ) -> None:
+        """
+        After a requirement's numeric target changes (hours/shifts/calls/course
+        count), re-derive the stored ``progress_percentage`` on every progress
+        row for it, then roll up each affected enrollment. Without this the row
+        percentages stay stale until the next manual progress update.
+        """
+        numeric_targets = {
+            RequirementType.HOURS: requirement.required_hours,
+            RequirementType.SHIFTS: requirement.required_shifts,
+            RequirementType.CALLS: requirement.required_calls,
+            RequirementType.COURSES: (
+                len(requirement.required_courses)
+                if requirement.required_courses
+                else None
+            ),
+        }
+        target = numeric_targets.get(requirement.requirement_type)
+        if not target:
+            return  # status-based type, or no target set — nothing to recompute
+
+        rows_result = await self.db.execute(
+            select(RequirementProgress).where(
+                RequirementProgress.requirement_id == str(requirement.id)
+            )
+        )
+        rows = rows_result.scalars().all()
+        affected_enrollment_ids = set()
+        for row in rows:
+            # Don't reopen a manually completed/verified/waived requirement.
+            if row.status in (
+                RequirementProgressStatus.COMPLETED,
+                RequirementProgressStatus.VERIFIED,
+                RequirementProgressStatus.WAIVED,
+            ):
+                continue
+            row.progress_percentage = min(
+                100.0, ((row.progress_value or 0) / target) * 100
+            )
+            if row.progress_percentage >= 100.0:
+                row.status = RequirementProgressStatus.COMPLETED
+                row.completed_at = datetime.now(timezone.utc)
+            affected_enrollment_ids.add(row.enrollment_id)
+
+        if affected_enrollment_ids:
+            await self.db.commit()
+            for eid in affected_enrollment_ids:
+                await self._recalculate_enrollment_progress(UUID(str(eid)))
+                await self._maybe_auto_advance_phase(UUID(str(eid)))
+
     async def create_program_phase(
         self,
         phase_data: ProgramPhaseCreate,
@@ -613,6 +715,158 @@ class TrainingProgramService:
         await self.db.refresh(phase)
 
         return phase, None
+
+    async def _get_program_phase(
+        self, phase_id: UUID, program_id: UUID, organization_id: UUID
+    ) -> Optional[ProgramPhase]:
+        result = await self.db.execute(
+            select(ProgramPhase)
+            .join(TrainingProgram, ProgramPhase.program_id == TrainingProgram.id)
+            .where(
+                ProgramPhase.id == str(phase_id),
+                ProgramPhase.program_id == str(program_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def update_program_phase(
+        self,
+        phase_id: UUID,
+        program_id: UUID,
+        organization_id: UUID,
+        updates: ProgramPhaseUpdate,
+    ) -> Tuple[Optional[ProgramPhase], Optional[str]]:
+        """
+        Update a phase's fields (name, description, time limit, manual-advance
+        flag, prerequisites). ``phase_number`` is NOT changed here — use
+        ``reorder_program_phases`` so numbering stays contiguous and collision-
+        free. Returns (phase, error_message).
+        """
+        phase = await self._get_program_phase(phase_id, program_id, organization_id)
+        if not phase:
+            return None, "Program phase not found"
+
+        data = updates.model_dump(exclude_unset=True)
+        data.pop("phase_number", None)  # reordering is a separate operation
+        for field, value in data.items():
+            setattr(phase, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(phase)
+        return phase, None
+
+    async def reorder_program_phases(
+        self,
+        program_id: UUID,
+        organization_id: UUID,
+        phase_ids: List[UUID],
+    ) -> Tuple[Optional[List[ProgramPhase]], Optional[str]]:
+        """
+        Renumber phases to match the given order (1-based). The list must be
+        exactly the program's current phases. Because (program_id, phase_number)
+        is unique, we park everything on temporary negative numbers first, then
+        assign the finals — avoiding mid-update collisions.
+        """
+        result = await self.db.execute(
+            select(ProgramPhase)
+            .join(TrainingProgram, ProgramPhase.program_id == TrainingProgram.id)
+            .where(
+                ProgramPhase.program_id == str(program_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        phases = {str(p.id): p for p in result.scalars().all()}
+        ordered_ids = [str(pid) for pid in phase_ids]
+        if set(ordered_ids) != set(phases) or len(ordered_ids) != len(phases):
+            return None, "The phase list must include every phase exactly once"
+
+        for offset, pid in enumerate(ordered_ids):
+            phases[pid].phase_number = -(offset + 1)
+        await self.db.flush()
+        for index, pid in enumerate(ordered_ids):
+            phases[pid].phase_number = index + 1
+        await self.db.commit()
+
+        return [phases[pid] for pid in ordered_ids], None
+
+    async def delete_program_phase(
+        self,
+        phase_id: UUID,
+        program_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Delete a phase and everything anchored to it, cleaning up enrolled
+        members (auto-clean): drop the phase's requirement links and their
+        progress rows, delete the phase's milestones, re-anchor any enrollee
+        parked on this phase to the first remaining phase, then recompute /
+        re-advance those enrollments. Returns (ok, error_message).
+        """
+        phase = await self._get_program_phase(phase_id, program_id, organization_id)
+        if not phase:
+            return False, "Program phase not found"
+
+        # Requirement links on this phase, and the enrollments of this program.
+        link_result = await self.db.execute(
+            select(ProgramRequirement.id, ProgramRequirement.requirement_id).where(
+                ProgramRequirement.phase_id == str(phase_id)
+            )
+        )
+        link_rows = link_result.all()
+        requirement_ids = [str(r[1]) for r in link_rows]
+
+        enroll_result = await self.db.execute(
+            select(ProgramEnrollment.id, ProgramEnrollment.current_phase_id).where(
+                ProgramEnrollment.program_id == str(program_id)
+            )
+        )
+        enroll_rows = enroll_result.all()
+        program_enrollment_ids = [str(r[0]) for r in enroll_rows]
+
+        # Drop progress rows for the phase's requirements (this program only).
+        if requirement_ids and program_enrollment_ids:
+            await self.db.execute(
+                delete(RequirementProgress).where(
+                    RequirementProgress.requirement_id.in_(requirement_ids),
+                    RequirementProgress.enrollment_id.in_(program_enrollment_ids),
+                )
+            )
+
+        # Re-anchor enrollees parked on this phase to the first remaining phase.
+        remaining_result = await self.db.execute(
+            select(ProgramPhase)
+            .where(
+                ProgramPhase.program_id == str(program_id),
+                ProgramPhase.id != str(phase_id),
+            )
+            .order_by(ProgramPhase.phase_number)
+        )
+        remaining_phases = remaining_result.scalars().all()
+        fallback_phase_id = remaining_phases[0].id if remaining_phases else None
+        reanchored_ids = [
+            str(r[0]) for r in enroll_rows if str(r[1]) == str(phase_id)
+        ]
+        if reanchored_ids:
+            await self.db.execute(
+                update(ProgramEnrollment)
+                .where(ProgramEnrollment.id.in_(reanchored_ids))
+                .values(current_phase_id=fallback_phase_id)
+            )
+
+        # Delete the phase (cascades its ProgramRequirement links + milestones).
+        await self.db.delete(phase)
+        await self.db.commit()
+
+        # Recompute the whole program's enrollments (removed requirements change
+        # the denominator); re-advance the re-anchored ones through any phases
+        # they've already completed.
+        for eid in program_enrollment_ids:
+            await self._recalculate_enrollment_progress(UUID(eid))
+        for eid in reanchored_ids:
+            await self._maybe_auto_advance_phase(UUID(eid))
+
+        return True, None
 
     async def get_program_phases(
         self,
@@ -795,6 +1049,15 @@ class TrainingProgramService:
             "is_required" in data
             and data["is_required"] != program_requirement.is_required
         )
+
+        # Moving to a different phase: the target must belong to this program.
+        if data.get("phase_id") is not None:
+            target_phase = await self._get_program_phase(
+                data["phase_id"], program_requirement.program_id, organization_id
+            )
+            if not target_phase:
+                return None, "Target phase not found in this program"
+
         for field, value in data.items():
             setattr(program_requirement, field, value)
 
@@ -821,6 +1084,102 @@ class TrainingProgramService:
 
         loaded = await self._load_program_requirement(pr_id)
         return (loaded or program_requirement), None
+
+    async def remove_requirement_from_program(
+        self,
+        program_requirement_id: UUID,
+        program_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Unlink a requirement from the program (auto-clean): delete its progress
+        rows for this program's enrollments, drop the link, delete the now-
+        orphaned requirement if nothing else references it, then recompute the
+        affected enrollments. Returns (ok, error_message).
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement)
+            .join(TrainingProgram, ProgramRequirement.program_id == TrainingProgram.id)
+            .where(
+                ProgramRequirement.id == str(program_requirement_id),
+                ProgramRequirement.program_id == str(program_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        link = result.scalar_one_or_none()
+        if not link:
+            return False, "Program requirement not found"
+
+        requirement_id = str(link.requirement_id)
+
+        enroll_result = await self.db.execute(
+            select(ProgramEnrollment.id).where(
+                ProgramEnrollment.program_id == str(program_id)
+            )
+        )
+        enrollment_ids = [str(r[0]) for r in enroll_result.all()]
+        if enrollment_ids:
+            await self.db.execute(
+                delete(RequirementProgress).where(
+                    RequirementProgress.requirement_id == requirement_id,
+                    RequirementProgress.enrollment_id.in_(enrollment_ids),
+                )
+            )
+
+        await self.db.delete(link)
+        await self.db.flush()
+
+        # If no other program links this requirement, remove the orphan so it
+        # doesn't linger in the requirements library.
+        others = await self.db.execute(
+            select(ProgramRequirement.id)
+            .where(ProgramRequirement.requirement_id == requirement_id)
+            .limit(1)
+        )
+        if others.scalar_one_or_none() is None:
+            await self.db.execute(
+                delete(TrainingRequirement).where(
+                    TrainingRequirement.id == requirement_id
+                )
+            )
+
+        await self.db.commit()
+
+        for eid in enrollment_ids:
+            await self._recalculate_enrollment_progress(UUID(eid))
+            await self._maybe_auto_advance_phase(UUID(eid))
+
+        return True, None
+
+    async def reorder_program_requirements(
+        self,
+        program_id: UUID,
+        organization_id: UUID,
+        program_requirement_ids: List[UUID],
+    ) -> Tuple[Optional[List[ProgramRequirement]], Optional[str]]:
+        """
+        Set ``sort_order`` on the given links to match their order (0-based).
+        The list may be a subset (e.g. one phase's requirements). Every id must
+        belong to this program. Returns (links, error_message).
+        """
+        result = await self.db.execute(
+            select(ProgramRequirement)
+            .join(TrainingProgram, ProgramRequirement.program_id == TrainingProgram.id)
+            .where(
+                ProgramRequirement.program_id == str(program_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        links = {str(link.id): link for link in result.scalars().all()}
+        ordered_ids = [str(i) for i in program_requirement_ids]
+        if any(pid not in links for pid in ordered_ids):
+            return None, "A requirement does not belong to this program"
+
+        for index, pid in enumerate(ordered_ids):
+            links[pid].sort_order = index
+        await self.db.commit()
+
+        return [links[pid] for pid in ordered_ids], None
 
     async def get_program_requirements(
         self,
@@ -894,6 +1253,58 @@ class TrainingProgramService:
         await self.db.refresh(milestone)
 
         return milestone, None
+
+    async def _get_program_milestone(
+        self, milestone_id: UUID, program_id: UUID, organization_id: UUID
+    ) -> Optional[ProgramMilestone]:
+        result = await self.db.execute(
+            select(ProgramMilestone)
+            .join(TrainingProgram, ProgramMilestone.program_id == TrainingProgram.id)
+            .where(
+                ProgramMilestone.id == str(milestone_id),
+                ProgramMilestone.program_id == str(program_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def update_program_milestone(
+        self,
+        milestone_id: UUID,
+        program_id: UUID,
+        organization_id: UUID,
+        updates: ProgramMilestoneUpdate,
+    ) -> Tuple[Optional[ProgramMilestone], Optional[str]]:
+        """Update a milestone's name/description/threshold/message."""
+        milestone = await self._get_program_milestone(
+            milestone_id, program_id, organization_id
+        )
+        if not milestone:
+            return None, "Program milestone not found"
+
+        for field, value in updates.model_dump(exclude_unset=True).items():
+            setattr(milestone, field, value)
+
+        await self.db.commit()
+        await self.db.refresh(milestone)
+        return milestone, None
+
+    async def delete_program_milestone(
+        self,
+        milestone_id: UUID,
+        program_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[bool, Optional[str]]:
+        """Delete a milestone (no enrollment side-effects — it's a notify hook)."""
+        milestone = await self._get_program_milestone(
+            milestone_id, program_id, organization_id
+        )
+        if not milestone:
+            return False, "Program milestone not found"
+
+        await self.db.delete(milestone)
+        await self.db.commit()
+        return True, None
 
     # ==================== Program Enrollment Methods ====================
 
