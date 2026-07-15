@@ -124,9 +124,12 @@ progression.
   `next_recert_reset_at`; once it passes, the enrollment is reset for a new cycle and
   the deadline advances. Resets apply lazily when the member's progress is opened (after
   the view's permission check, never before), and `POST /training/programs/recert/run-due`
-  sweeps every past-due enrollment for a scheduled job. Only active/completed/expired
-  members are auto-reset — a withdrawn, failed, or on-hold member is never resurrected.
-  Fields added by migration `20260715_0001`.
+  sweeps every past-due enrollment. That sweep now runs **daily at 5 AM** as a
+  registered scheduled task (`recert_resets` in `scheduled_tasks.py` — picked up by the
+  in-process scheduler and the documented crontab), so a member no one is watching still
+  resets on time. Only active/completed/expired members are auto-reset — a withdrawn,
+  failed, or on-hold member is never resurrected. Fields added by migration
+  `20260715_0001`.
 - **Reset notifications** — whenever a cycle resets (manual, on-view, or the sweep), the
   member gets an in-app notification that their recertification cycle has started, with
   the new deadline and a link to their progress; the assigned mentor is notified too.

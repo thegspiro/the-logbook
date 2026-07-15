@@ -210,8 +210,10 @@ The pipeline supports both a manual and an automatic reset:
   roll forward from each member's enrollment date. Each enrollment then stores its
   next reset date. When that date passes, the enrollment is reset for a new cycle
   and the deadline advances to the following one. Resets apply lazily when a
-  coordinator opens the member's progress, and a `POST /training/programs/recert/run-due`
-  endpoint sweeps every past-due enrollment for a scheduled job to call.
+  coordinator opens the member's progress, and a daily 5 AM scheduled sweep
+  (`recert_resets`, or `POST /training/programs/recert/run-due` on demand) resets every
+  past-due enrollment across the organization so members no one is actively watching still
+  reset on time.
 
 #### Leaving a Program (Self-Service Withdrawal)
 A member can remove themselves from a program from their progression view via
