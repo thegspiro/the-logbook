@@ -84,6 +84,41 @@ class TestUpdateProgram:
         assert program is None and "Invalid structure type" in error
 
 
+class TestDeleteProgram:
+    async def test_missing_returns_error(self):
+        svc = TrainingProgramService(RecordingSession([]))
+        svc.get_program_by_id = AsyncMock(return_value=None)
+        ok, error = await svc.delete_training_program(uuid4(), uuid4())
+        assert ok is False and error == "Training program not found"
+
+    async def test_deletes_everything_and_orphan_requirement(self):
+        req_id = str(uuid4())
+        db = RecordingSession(
+            [
+                _rows([(str(uuid4()),)]),   # enrollment ids
+                _rows([(req_id,)]),         # requirement ids on links
+                MagicMock(),                # delete RequirementProgress
+                MagicMock(),                # delete ProgramEnrollment
+                MagicMock(),                # delete ProgramMilestone
+                MagicMock(),                # delete ProgramRequirement
+                MagicMock(),                # delete ProgramPhase
+                _one(None),                 # orphan check -> unused
+                MagicMock(),                # delete TrainingRequirement
+                MagicMock(),                # delete TrainingProgram
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc.get_program_by_id = AsyncMock(return_value=SimpleNamespace(id="p"))
+
+        ok, error = await svc.delete_training_program(uuid4(), uuid4())
+
+        assert ok is True and error is None
+        # RequirementProgress, Enrollment, Milestone, ProgramRequirement, Phase,
+        # orphan TrainingRequirement, Program = 7 deletes.
+        assert db.stmt_types().count("Delete") == 7
+        db.commit.assert_awaited_once()
+
+
 class TestUpdatePhase:
     async def test_missing_returns_error(self):
         svc = TrainingProgramService(RecordingSession([]))

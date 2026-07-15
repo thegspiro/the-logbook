@@ -6,6 +6,7 @@ Endpoints for managing training programs, enrollments, and member progress track
 
 import asyncio
 from datetime import date
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -59,6 +60,15 @@ from app.services.sample_program_templates import (
 from app.services.training_program_service import TrainingProgramService
 
 router = APIRouter()
+
+# Registry JSON files, resolved relative to the app package (…/backend/app/data)
+# so they load no matter what the process working directory is.
+_REGISTRY_DIR = Path(__file__).resolve().parents[3] / "data" / "registries"
+_REGISTRY_FILES = {
+    "nfpa": "nfpa_requirements.json",
+    "nremt": "nremt_requirements.json",
+    "proboard": "proboard_requirements.json",
+}
 
 
 # ==================== Training Requirement Endpoints ====================
@@ -150,21 +160,14 @@ async def list_available_registries(
     **Requires permission: training.manage**
     """
     import json
-    from pathlib import Path
-
-    registry_files = {
-        "nfpa": "backend/app/data/registries/nfpa_requirements.json",
-        "nremt": "backend/app/data/registries/nremt_requirements.json",
-        "proboard": "backend/app/data/registries/proboard_requirements.json",
-    }
 
     def _read_json(p: Path):
         with open(p) as f:
             return json.load(f)
 
     registries = []
-    for key, file_path in registry_files.items():
-        path = Path(file_path)
+    for key, filename in _REGISTRY_FILES.items():
+        path = _REGISTRY_DIR / filename
         if not path.exists():
             continue
         try:
@@ -204,19 +207,13 @@ async def import_registry_requirements(
     **Authentication required**
     **Requires permission: training.manage**
     """
-    # Map registry names to file paths
-    registry_files = {
-        "nfpa": "backend/app/data/registries/nfpa_requirements.json",
-        "nremt": "backend/app/data/registries/nremt_requirements.json",
-        "proboard": "backend/app/data/registries/proboard_requirements.json",
-    }
-
-    registry_file = registry_files.get(registry_name.lower())
-    if not registry_file:
+    filename = _REGISTRY_FILES.get(registry_name.lower())
+    if not filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unknown registry: {registry_name}. Available: {', '.join(registry_files.keys())}",
+            detail=f"Unknown registry: {registry_name}. Available: {', '.join(_REGISTRY_FILES.keys())}",
         )
+    registry_file = str(_REGISTRY_DIR / filename)
 
     service = TrainingProgramService(db)
 
@@ -612,6 +609,32 @@ async def update_training_program(
         )
         raise HTTPException(status_code=code, detail=error)
     return program
+
+
+@router.delete(
+    "/programs/{program_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_training_program(
+    program_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Permanently delete a training program and everything under it (phases,
+    requirements, milestones, enrollments, and enrolled members' progress).
+    Irreversible — the UI guards it behind a confirmation.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    ok, error = await service.delete_training_program(
+        program_id=program_id,
+        organization_id=current_user.organization_id,
+    )
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
 
 
 # ==================== Program Phase Endpoints ====================

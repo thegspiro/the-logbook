@@ -104,7 +104,9 @@ class TestEnrollmentEligibility:
         assert by_id[u2.id]["status"] == "prerequisite"
         assert "Recruit School" in by_id[u2.id]["reason"]
 
-    async def test_marks_concurrent_block(self):
+    async def test_concurrent_is_advisory_not_a_block(self):
+        # Active in another program is a soft advisory: still eligible to enroll,
+        # just flagged so the officer knows.
         u1, u2 = _user("Al"), _user("Bo")
         program = _program(concurrent=False, prereqs=None)
         # queries: users, enrolled(none), active-anywhere (u1)
@@ -114,7 +116,8 @@ class TestEnrollmentEligibility:
 
         by_id = _by_id(results)
         assert by_id[u1.id]["status"] == "concurrent"
-        assert by_id[u1.id]["eligible"] is False
+        assert by_id[u1.id]["eligible"] is True
+        assert "another program" in by_id[u1.id]["reason"]
         assert by_id[u2.id]["status"] == "eligible"
 
     async def test_enrolled_takes_precedence_over_concurrent(self):

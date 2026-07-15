@@ -612,6 +612,78 @@ class TrainingProgramService:
         await self.db.refresh(program)
         return program, None
 
+    async def delete_training_program(
+        self,
+        program_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Permanently delete a program and everything under it — phases,
+        requirement links, milestones, enrollments, and enrolled members'
+        progress. Also removes the program-specific requirements it owns once
+        they're no longer referenced anywhere. Explicit ordered deletes (rather
+        than ORM cascade) keep this deterministic on the async session.
+
+        This is irreversible; the UI guards it behind a typed/confirmed warning.
+        Returns (ok, error_message).
+        """
+        program = await self.get_program_by_id(program_id, organization_id)
+        if not program:
+            return False, "Training program not found"
+
+        pid = str(program_id)
+
+        enroll_rows = await self.db.execute(
+            select(ProgramEnrollment.id).where(ProgramEnrollment.program_id == pid)
+        )
+        enrollment_ids = [str(r[0]) for r in enroll_rows.all()]
+
+        link_rows = await self.db.execute(
+            select(ProgramRequirement.requirement_id).where(
+                ProgramRequirement.program_id == pid
+            )
+        )
+        requirement_ids = [str(r[0]) for r in link_rows.all()]
+
+        if enrollment_ids:
+            await self.db.execute(
+                delete(RequirementProgress).where(
+                    RequirementProgress.enrollment_id.in_(enrollment_ids)
+                )
+            )
+        await self.db.execute(
+            delete(ProgramEnrollment).where(ProgramEnrollment.program_id == pid)
+        )
+        await self.db.execute(
+            delete(ProgramMilestone).where(ProgramMilestone.program_id == pid)
+        )
+        await self.db.execute(
+            delete(ProgramRequirement).where(ProgramRequirement.program_id == pid)
+        )
+        await self.db.execute(
+            delete(ProgramPhase).where(ProgramPhase.program_id == pid)
+        )
+
+        # Drop program-specific requirements no longer referenced by any program.
+        for req_id in set(requirement_ids):
+            still_used = await self.db.execute(
+                select(ProgramRequirement.id)
+                .where(ProgramRequirement.requirement_id == req_id)
+                .limit(1)
+            )
+            if still_used.scalar_one_or_none() is None:
+                await self.db.execute(
+                    delete(TrainingRequirement).where(
+                        TrainingRequirement.id == req_id
+                    )
+                )
+
+        await self.db.execute(
+            delete(TrainingProgram).where(TrainingProgram.id == pid)
+        )
+        await self.db.commit()
+        return True, None
+
     async def _recompute_progress_for_requirement(
         self, requirement: TrainingRequirement
     ) -> None:
@@ -1477,7 +1549,10 @@ class TrainingProgramService:
                 if missing:
                     missing_prereqs[uid] = missing
 
-        # Concurrent-enrollment block — active in any other program.
+        # Active in another program — a soft advisory, NOT a block. A member can
+        # be in several programs at once (e.g. onboarding courses); we only note
+        # it when this program prefers one-at-a-time so the officer has a
+        # heads-up, and they can enroll anyway.
         concurrent_ids: set[str] = set()
         if not program.allows_concurrent_enrollment and user_id_strs:
             active_any_result = await self.db.execute(
@@ -1494,26 +1569,36 @@ class TrainingProgramService:
         results: List[dict] = []
         for user in users:
             uid = str(user.id)
+            # Hard gates first: already in this program, or missing a prereq.
             if uid in enrolled_ids:
-                status, reason = "enrolled", "Already enrolled in this program"
+                status, reason, eligible = (
+                    "enrolled",
+                    "Already enrolled in this program",
+                    False,
+                )
             elif uid in missing_prereqs:
                 names = ", ".join(missing_prereqs[uid])
-                status, reason = "prerequisite", f"Must first complete: {names}"
+                status, reason, eligible = (
+                    "prerequisite",
+                    f"Must first complete: {names}",
+                    False,
+                )
             elif uid in concurrent_ids:
-                status, reason = (
+                # Advisory only — still eligible to enroll.
+                status, reason, eligible = (
                     "concurrent",
-                    "Already enrolled in another program "
-                    "(concurrent enrollment not allowed)",
+                    "Also enrolled in another program",
+                    True,
                 )
             else:
-                status, reason = "eligible", None
+                status, reason, eligible = "eligible", None, True
             results.append(
                 {
                     "user_id": user.id,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
                     "membership_number": user.membership_number,
-                    "eligible": status == "eligible",
+                    "eligible": eligible,
                     "status": status,
                     "reason": reason,
                 }
@@ -2826,25 +2911,11 @@ class TrainingProgramService:
                         blocked_user_ids.add(str(uid))
                         break  # One missing prereq is enough
 
-        # Check for concurrent enrollment restrictions (batch query)
-        if not program.allows_concurrent_enrollment:
-            active_enrollments_result = await self.db.execute(
-                select(ProgramEnrollment.user_id)
-                .join(TrainingProgram)
-                .where(
-                    ProgramEnrollment.user_id.in_(user_id_strs),
-                    ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
-                    TrainingProgram.organization_id == str(organization_id),
-                )
-            )
-            users_with_active = {str(row[0]) for row in active_enrollments_result.all()}
-
-            for uid in user_ids:
-                if str(uid) in users_with_active:
-                    prerequisite_errors.append(
-                        f"{_user_name(uid)} is already enrolled in another program. This program does not allow concurrent enrollment."
-                    )
-                    blocked_user_ids.add(str(uid))
+        # Concurrent enrollment is a soft advisory, not a block — a member can be
+        # in several programs at once (onboarding courses, etc.). The picker
+        # surfaces it; enrollment is never prevented on that basis. (A duplicate
+        # active enrollment in *this same* program is still rejected by
+        # enroll_member below.)
 
         enrollments = []
         errors = prerequisite_errors.copy()
