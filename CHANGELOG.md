@@ -35,6 +35,21 @@ progression.
   only failing on submit. Eligible members sort first. Target position/roles stay
   advisory and never block.
 
+**Editing after creation**
+
+- **Inline pipeline editor** — a pipeline is no longer frozen once built. From the
+  program detail page (Overview), officers can edit the program's own details
+  (`PATCH /training/programs/programs/{id}`), and add / edit / reorder / delete
+  **phases** (`PATCH`, `POST …/phases/reorder`, `DELETE …/phases/{phase_id}`),
+  **requirements** (add, edit content, `POST …/requirements/reorder`, move between
+  phases, `DELETE …/requirements/{prog_req_id}`), and **milestones**
+  (`PATCH` / `DELETE …/milestones/{milestone_id}`). All gated by `training.manage`.
+- **Auto-clean on destructive edits** — deleting a phase or removing a requirement
+  clears only this program's enrolled members' progress for the affected items,
+  re-anchors anyone parked on a deleted phase to the first remaining phase, and
+  recomputes/re-advances them. Editing a requirement's numeric target (hours/shifts/
+  calls/course count) re-derives enrolled members' progress against the new target.
+
 **Progress tracking**
 
 - **Progress-management UI** — officers open an enrolled member and, per requirement,

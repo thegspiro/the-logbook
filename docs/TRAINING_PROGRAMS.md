@@ -119,10 +119,24 @@ their real sessions/categories/tests, adjusts hours, and enrolls members.
 - `POST /training/programs/sample-templates/{key}/instantiate` — add to the org
   (optional body `{ "name": "…", "is_template": true }`)
 
-#### Editing Requirements After Creation
-- A requirement's **Required ↔ Optional** state is editable from the program overview
-  (`PATCH /training/programs/programs/{program_id}/requirements/{program_requirement_id}`).
-  Toggling it recomputes affected members' progress and re-checks phase advancement.
+#### Editing a Pipeline After Creation
+A pipeline is fully editable from the program detail page (Overview tab), gated by
+`training.manage`:
+
+- **Program details** — name, description, code, structure, time limits, target
+  position, template/active (`PATCH /training/programs/programs/{id}`).
+- **Phases** — add, edit (name/description/time limit/manual-advance), reorder, and
+  delete (`…/phases`, `…/phases/reorder`, `…/phases/{phase_id}`).
+- **Requirements** — add, edit content/target, reorder within a phase, move between
+  phases, and remove (`…/requirements`, `…/requirements/reorder`,
+  `…/requirements/{prog_req_id}`). The **Required ↔ Optional** toggle is also inline.
+- **Milestones** — add, edit, and delete (`…/milestones/{milestone_id}`).
+
+**Destructive edits auto-clean enrolled members.** Deleting a phase or removing a
+requirement clears only this program's enrolled members' progress for the affected
+items, re-anchors anyone parked on a deleted phase to the first remaining phase, and
+recomputes/re-advances their progress. Editing a requirement's numeric target
+re-derives enrolled members' progress-row percentages against the new target.
 
 #### Program Prerequisites
 - Set prerequisite programs (e.g., must complete "Recruit School" before "Driver Candidate")
