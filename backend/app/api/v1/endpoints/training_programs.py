@@ -66,8 +66,12 @@ router = APIRouter()
 _REGISTRY_DIR = Path(__file__).resolve().parents[3] / "data" / "registries"
 _REGISTRY_FILES = {
     "nfpa": "nfpa_requirements.json",
-    "nremt": "nremt_requirements.json",
     "proboard": "proboard_requirements.json",
+    # NREMT split by provider level so a department imports only what it staffs.
+    "emr": "emr_requirements.json",
+    "emt": "emt_requirements.json",
+    "aemt": "aemt_requirements.json",
+    "paramedic": "paramedic_requirements.json",
 }
 
 
@@ -202,7 +206,7 @@ async def import_registry_requirements(
     """
     Import requirements from a registry JSON file
 
-    Available registries: nfpa, nremt, proboard
+    Available registries: nfpa, proboard, emr, emt, aemt, paramedic
 
     **Authentication required**
     **Requires permission: training.manage**

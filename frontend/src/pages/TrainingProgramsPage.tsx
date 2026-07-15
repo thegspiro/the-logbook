@@ -405,8 +405,11 @@ const TrainingProgramsPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {(registries.length > 0 ? registries : [
                       { key: 'nfpa', name: 'NFPA', description: '', requirement_count: 0 },
-                      { key: 'nremt', name: 'NREMT', description: '', requirement_count: 0 },
                       { key: 'proboard', name: 'Pro Board', description: '', requirement_count: 0 },
+                      { key: 'emr', name: 'NREMT — EMR', description: '', requirement_count: 0 },
+                      { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 0 },
+                      { key: 'aemt', name: 'NREMT — Advanced EMT (AEMT)', description: '', requirement_count: 0 },
+                      { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 0 },
                     ]).map((registry) => (
                       <button
                         key={registry.key}

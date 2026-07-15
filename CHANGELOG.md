@@ -66,6 +66,12 @@ progression.
   directory; they're now anchored to the app package, so imports find their
   requirements. The import toast also no longer shows a misleading green success on
   zero — it reports the error, a neutral "already imported" note, or a real count.
+- **NREMT split into per-provider-level registries.** The single bundled NREMT import
+  is replaced by four individually-importable registries — **EMR, EMT, Advanced EMT
+  (AEMT), and Paramedic** — so a department imports only the level(s) it staffs. Each
+  carries that level's national recertification component (NCCR hours by topic area)
+  plus the appropriate life-support certifications (BLS; ACLS/PALS/PHTLS at the
+  advanced levels). NFPA and Pro Board are unchanged.
 
 **Progress tracking**
 

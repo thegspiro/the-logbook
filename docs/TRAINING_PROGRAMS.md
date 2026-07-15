@@ -87,8 +87,15 @@ Members are enrolled in training programs to track their progress toward complet
 
 #### Registry Integration
 - **NFPA Standards**: Firefighter I/II, Driver/Operator, Fire Officer, Instructor, Live Fire, Safety, Medical Fitness
-- **NREMT Certifications**: EMR, EMT, AEMT, Paramedic, CPR/BLS, ACLS, PALS, PHTLS
 - **Pro Board**: Firefighter I/II, Driver/Operator, Fire Officer I/II, HazMat Ops, Instructor
+- **NREMT by provider level** — separate, individually-importable registries so a
+  department imports only the level(s) it staffs, each with the level's national
+  recertification component (NCCR hours by topic area) plus the appropriate
+  life-support certifications:
+  - **EMR** — NREMR national component + CPR/BLS
+  - **EMT** — NREMT national component + CPR/BLS + PHTLS
+  - **Advanced EMT (AEMT / EMT-A)** — NRAEMT national component + BLS/ACLS/PALS/PHTLS
+  - **Paramedic** — NRP national component + BLS/ACLS/PALS/PHTLS
 - One-click import of registry requirements
 - Department can customize imported requirements
 
@@ -950,7 +957,8 @@ Categories help organize your training and allow flexible requirement satisfacti
 
 #### Option A: Import from Registry
 1. Navigate to Training Programs → Requirements tab
-2. Click "Import NFPA", "Import NREMT", or "Import Pro Board"
+2. Click a registry button — "Import NFPA", "Import Pro Board", or an NREMT provider
+   level ("Import NREMT — EMR / EMT / Advanced EMT (AEMT) / Paramedic")
 3. System imports standard requirements
 4. Customize as needed (including due date types)
 

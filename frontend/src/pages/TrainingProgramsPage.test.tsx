@@ -148,16 +148,19 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('does not show a green success when a registry import returns 0', async () => {
-    mockGetRegistries.mockResolvedValue([]); // fall back to the NFPA/NREMT/Pro Board stubs
+    // One controlled registry so the import button is unambiguous.
+    mockGetRegistries.mockResolvedValue([
+      { key: 'emt', name: 'NREMT — EMT', description: '', requirement_count: 3 },
+    ]);
     mockImportRegistry.mockResolvedValue({
-      registry_name: 'nremt', imported_count: 0, skipped_count: 0, errors: [],
+      registry_name: 'NREMT — EMT', imported_count: 0, skipped_count: 0, errors: [],
     });
     renderWithRouter(<TrainingProgramsPage />);
 
     await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
-    await userEvent.click(await screen.findByRole('button', { name: /Import NREMT/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Import NREMT — EMT/i }));
 
-    await waitFor(() => expect(mockImportRegistry).toHaveBeenCalledWith('nremt'));
+    await waitFor(() => expect(mockImportRegistry).toHaveBeenCalledWith('emt'));
     // Neutral toast (not success) with an explanatory message.
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith(expect.stringMatching(/No new requirements/i)),
@@ -166,15 +169,17 @@ describe('TrainingProgramsPage', () => {
   });
 
   it('surfaces the error when a registry import reports one', async () => {
-    mockGetRegistries.mockResolvedValue([]);
+    mockGetRegistries.mockResolvedValue([
+      { key: 'paramedic', name: 'NREMT — Paramedic', description: '', requirement_count: 5 },
+    ]);
     mockImportRegistry.mockResolvedValue({
-      registry_name: 'nremt', imported_count: 0, skipped_count: 0,
+      registry_name: 'NREMT — Paramedic', imported_count: 0, skipped_count: 0,
       errors: ['Registry file not found'],
     });
     renderWithRouter(<TrainingProgramsPage />);
 
     await userEvent.click(await screen.findByRole('tab', { name: /Requirements/i }));
-    await userEvent.click(await screen.findByRole('button', { name: /Import NREMT/i }));
+    await userEvent.click(await screen.findByRole('button', { name: /Import NREMT — Paramedic/i }));
 
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/Registry file not found/i)),
