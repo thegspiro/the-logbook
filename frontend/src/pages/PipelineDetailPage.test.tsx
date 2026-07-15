@@ -15,6 +15,9 @@ const mockAdvancePhase = vi.fn();
 const mockUpdateProgramRequirement = vi.fn();
 const mockGetEnrollmentEligibility = vi.fn();
 const mockBulkEnrollMembers = vi.fn();
+const mockUpdateProgram = vi.fn();
+const mockCreateProgramPhase = vi.fn();
+const mockDeleteProgramPhase = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
@@ -28,6 +31,9 @@ vi.mock('../services/api', () => ({
     updateProgramRequirement: (...a: unknown[]) => mockUpdateProgramRequirement(...a) as unknown,
     getEnrollmentEligibility: (...a: unknown[]) => mockGetEnrollmentEligibility(...a) as unknown,
     bulkEnrollMembers: (...a: unknown[]) => mockBulkEnrollMembers(...a) as unknown,
+    updateProgram: (...a: unknown[]) => mockUpdateProgram(...a) as unknown,
+    createProgramPhase: (...a: unknown[]) => mockCreateProgramPhase(...a) as unknown,
+    deleteProgramPhase: (...a: unknown[]) => mockDeleteProgramPhase(...a) as unknown,
   },
 }));
 
@@ -119,6 +125,9 @@ describe('PipelineDetailPage — enrollment progress management', () => {
       },
     ]);
     mockBulkEnrollMembers.mockResolvedValue({ success_count: 1, enrolled_users: ['u1'], errors: [] });
+    mockUpdateProgram.mockResolvedValue(program);
+    mockCreateProgramPhase.mockResolvedValue({ id: 'ph-new', program_id: 'prog-1', phase_number: 1, name: 'Intro' });
+    mockDeleteProgramPhase.mockResolvedValue(undefined);
   });
 
   it('lists enrolled members by name on the Enrollments tab', async () => {
@@ -336,5 +345,58 @@ describe('PipelineDetailPage — enrollment progress management', () => {
         target_completion_date: undefined,
       }),
     );
+  });
+
+  it('edits program details via the Edit button', async () => {
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    const dialog = await screen.findByRole('dialog', { name: /Edit pipeline details/i });
+
+    const nameInput = within(dialog).getByLabelText('Name');
+    await userEvent.clear(nameInput);
+    await userEvent.type(nameInput, 'Renamed Pipeline');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateProgram).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ name: 'Renamed Pipeline' }),
+      ),
+    );
+  });
+
+  it('adds a phase from the overview', async () => {
+    mockGetProgramPhases.mockResolvedValue([]);
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Add phase/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Add phase/i });
+    await userEvent.type(within(dialog).getByLabelText('Name'), 'Orientation');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^Save$/i }));
+
+    await waitFor(() =>
+      expect(mockCreateProgramPhase).toHaveBeenCalledWith(
+        'prog-1',
+        expect.objectContaining({ name: 'Orientation', phase_number: 1 }),
+      ),
+    );
+  });
+
+  it('deletes a phase after confirmation', async () => {
+    mockGetProgramPhases.mockResolvedValue([
+      {
+        id: 'ph-1', program_id: 'prog-1', phase_number: 1, name: 'Basics',
+        requires_manual_advancement: false, created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    ]);
+    renderWithRouter(<PipelineDetailPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete phase' }));
+    // Confirm dialog appears; confirm the deletion.
+    await userEvent.click(await screen.findByRole('button', { name: /^Delete$/ }));
+
+    await waitFor(() => expect(mockDeleteProgramPhase).toHaveBeenCalledWith('prog-1', 'ph-1'));
   });
 });

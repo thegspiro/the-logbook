@@ -666,7 +666,7 @@ export interface ProgramRequirement {
 
 export interface ProgramRequirementCreate {
   program_id: string;
-  phase_id?: string;
+  phase_id?: string | undefined;
   requirement_id: string;
   is_required?: boolean;
   is_prerequisite?: boolean;
@@ -680,6 +680,33 @@ export interface ProgramRequirementUpdate {
   is_required?: boolean;
   is_prerequisite?: boolean;
   sort_order?: number;
+  phase_id?: string | null;
+}
+
+export interface TrainingProgramUpdate {
+  name?: string | undefined;
+  description?: string | undefined;
+  code?: string | undefined;
+  target_position?: string | undefined;
+  structure_type?: ProgramStructureType | undefined;
+  time_limit_days?: number | undefined;
+  warning_days_before?: number | undefined;
+  is_template?: boolean | undefined;
+  active?: boolean | undefined;
+}
+
+export interface ProgramPhaseUpdate {
+  name?: string | undefined;
+  description?: string | undefined;
+  time_limit_days?: number | undefined;
+  requires_manual_advancement?: boolean | undefined;
+}
+
+export interface ProgramMilestoneUpdate {
+  name?: string | undefined;
+  description?: string | undefined;
+  completion_percentage_threshold?: number | undefined;
+  notification_message?: string | undefined;
 }
 
 export type EligibilityStatus = 'eligible' | 'enrolled' | 'prerequisite' | 'concurrent';

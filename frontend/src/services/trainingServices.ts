@@ -6,7 +6,7 @@ import api from './apiClient';
 import { enqueueGeneric } from '../utils/genericOfflineQueue';
 import { usePendingSyncStore } from '../stores/pendingSyncStore';
 import type { SkillTemplate, SkillTemplateCreate, SkillTemplateListItem, SkillTemplateUpdate, SkillTest, SkillTestCreate, SkillTestListItem, SkillTestUpdate, SkillTestingSummary } from '../types/skillsTesting';
-import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramPhase, ProgramPhaseCreate, MemberEligibility, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, SampleTemplateSummary, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
+import type { BulkEnrollmentRequest, BulkEnrollmentResponse, BulkImportRequest, BulkImportResponse, BulkTrainingRecordCreate, BulkTrainingRecordResult, ComplianceSummary, ExternalCategoryMapping, ExternalCategoryMappingUpdate, ExternalTrainingImport, ExternalTrainingProvider, ExternalTrainingProviderCreate, ExternalTrainingProviderUpdate, ExternalTrainingSyncLog, ExternalUserMapping, ExternalUserMappingUpdate, HistoricalImportConfirmRequest, HistoricalImportParseResponse, HistoricalImportResult, ImportRecordRequest, MemberProgramProgress, ProgramBuildRequest, ProgramEnrollment, ProgramEnrollmentCreate, ProgramEnrollmentWithUser, ProgramMilestone, ProgramMilestoneCreate, ProgramMilestoneUpdate, ProgramPhase, ProgramPhaseCreate, ProgramPhaseUpdate, MemberEligibility, ProgramRequirement, ProgramRequirementCreate, ProgramRequirementUpdate, ProgramWithDetails, SampleTemplateSummary, RegistryImportResult, RegistryInfo, RequirementProgress, RequirementProgressRecord, RequirementProgressUpdate, SyncRequest, SyncResponse, TestConnectionResponse, TrainingCategory, TrainingCategoryCreate, TrainingCategoryUpdate, TrainingCourse, TrainingCourseCreate, TrainingCourseUpdate, TrainingProgram, TrainingProgramCreate, TrainingProgramUpdate, TrainingRecord, TrainingRecordCreate, TrainingRecordUpdate, TrainingReport, TrainingRequirement, TrainingRequirementCreate, TrainingRequirementEnhanced, TrainingRequirementEnhancedCreate, TrainingRequirementUpdate, UserTrainingStats } from '../types/training';
 import type { ComplianceMatrix, ExpiringCertification } from './communicationsServices';
 import type { TrainingSessionResponse, TrainingSessionCreate, RecurringTrainingSessionCreate } from './adminServices';
 
@@ -546,6 +546,14 @@ export const trainingProgramService = {
   },
 
   /**
+   * Update a program's own fields (name, description, structure, limits, active…).
+   */
+  async updateProgram(programId: string, updates: TrainingProgramUpdate): Promise<TrainingProgram> {
+    const response = await api.patch<TrainingProgram>(`/training/programs/programs/${programId}`, updates);
+    return response.data;
+  },
+
+  /**
    * Create a program with all phases, requirements, and milestones atomically.
    * The whole structure is persisted in one backend transaction, so a failure
    * part-way can't leave an orphaned, half-built program behind.
@@ -596,6 +604,29 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /** Update a phase's name / description / time limit / manual-advance flag. */
+  async updateProgramPhase(programId: string, phaseId: string, updates: ProgramPhaseUpdate): Promise<ProgramPhase> {
+    const response = await api.patch<ProgramPhase>(
+      `/training/programs/programs/${programId}/phases/${phaseId}`,
+      updates,
+    );
+    return response.data;
+  },
+
+  /** Delete a phase (auto-cleans enrolled members' progress for it). */
+  async deleteProgramPhase(programId: string, phaseId: string): Promise<void> {
+    await api.delete(`/training/programs/programs/${programId}/phases/${phaseId}`);
+  },
+
+  /** Renumber phases to match the given order (1-based). */
+  async reorderProgramPhases(programId: string, phaseIds: string[]): Promise<ProgramPhase[]> {
+    const response = await api.post<ProgramPhase[]>(
+      `/training/programs/programs/${programId}/phases/reorder`,
+      { phase_ids: phaseIds },
+    );
+    return response.data;
+  },
+
   // ==================== Program Requirements ====================
 
   /**
@@ -631,6 +662,20 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /** Remove a requirement from a program (auto-cleans enrolled members' progress). */
+  async removeProgramRequirement(programId: string, programRequirementId: string): Promise<void> {
+    await api.delete(`/training/programs/programs/${programId}/requirements/${programRequirementId}`);
+  },
+
+  /** Set the display order of a program's requirement links. */
+  async reorderProgramRequirements(programId: string, programRequirementIds: string[]): Promise<ProgramRequirement[]> {
+    const response = await api.post<ProgramRequirement[]>(
+      `/training/programs/programs/${programId}/requirements/reorder`,
+      { program_requirement_ids: programRequirementIds },
+    );
+    return response.data;
+  },
+
   // ==================== Program Milestones ====================
 
   /**
@@ -639,6 +684,20 @@ export const trainingProgramService = {
   async createMilestone(programId: string, milestone: ProgramMilestoneCreate): Promise<ProgramMilestone> {
     const response = await api.post<ProgramMilestone>(`/training/programs/programs/${programId}/milestones`, milestone);
     return response.data;
+  },
+
+  /** Update a milestone's name / description / threshold / message. */
+  async updateMilestone(programId: string, milestoneId: string, updates: ProgramMilestoneUpdate): Promise<ProgramMilestone> {
+    const response = await api.patch<ProgramMilestone>(
+      `/training/programs/programs/${programId}/milestones/${milestoneId}`,
+      updates,
+    );
+    return response.data;
+  },
+
+  /** Delete a milestone. */
+  async deleteMilestone(programId: string, milestoneId: string): Promise<void> {
+    await api.delete(`/training/programs/programs/${programId}/milestones/${milestoneId}`);
   },
 
   // ==================== Program Enrollments ====================
