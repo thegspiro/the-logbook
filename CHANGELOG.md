@@ -49,6 +49,25 @@ progression.
   re-anchors anyone parked on a deleted phase to the first remaining phase, and
   recomputes/re-advances them. Editing a requirement's numeric target (hours/shifts/
   calls/course count) re-derives enrolled members' progress against the new target.
+- **Delete a whole pipeline** — a guarded "Delete" action
+  (`DELETE /training/programs/programs/{id}`) permanently removes a program and all
+  of its phases, requirements, milestones, and enrollments. The UI warns first
+  (naming the pipeline and its enrolled-member count) before deleting.
+
+**Enrollment & registry fixes**
+
+- **Concurrent enrollment is now a soft advisory, not a hard filter.** A member
+  already active in another program stays eligible to enroll (they may be in several
+  onboarding courses at once); the enroll picker just flags "Also enrolled in another
+  program". The hard block was removed from bulk-enroll (a duplicate enrollment in the
+  *same* program is still rejected).
+- **Registry import fixed.** Importing from NFPA / NREMT / Pro Board returned
+  "imported 0" because the JSON files were resolved relative to the process working
+  directory; they're now anchored to the app package, so imports find their
+  requirements. The import toast also no longer shows a misleading green success on
+  zero — it reports the error, a neutral "already imported" note, or a real count.
+
+**Progress tracking**
 
 **Progress tracking**
 

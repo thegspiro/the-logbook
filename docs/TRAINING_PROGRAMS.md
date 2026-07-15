@@ -138,6 +138,13 @@ items, re-anchors anyone parked on a deleted phase to the first remaining phase,
 recomputes/re-advances their progress. Editing a requirement's numeric target
 re-derives enrolled members' progress-row percentages against the new target.
 
+- **Delete the whole pipeline** — a guarded "Delete" action in the program header
+  (`DELETE /training/programs/programs/{id}`) permanently removes the program and all
+  its phases, requirements, milestones, and enrollments. The UI shows a warning
+  dialog (naming the pipeline and its enrolled-member count) first. This is
+  irreversible — to retire a pipeline without losing history, set it **inactive** via
+  the edit modal instead.
+
 #### Program Prerequisites
 - Set prerequisite programs (e.g., must complete "Recruit School" before "Driver Candidate")
 - Automatic validation during enrollment
@@ -152,9 +159,12 @@ re-derives enrolled members' progress-row percentages against the new target.
   (`GET /training/programs/programs/{program_id}/eligibility`) and defaults to
   "Show eligible only". Members are marked **Eligible / Enrolled / Prerequisite /
   In another program** with the specific reason, so officers see who can be enrolled
-  up front instead of hitting per-member errors on submit. Eligibility uses the same
-  hard gates as bulk enroll (already-enrolled, prerequisite programs, concurrent
-  enrollment); the program's target position/roles remain advisory and never block.
+  up front instead of hitting per-member errors on submit. The **hard gates** are
+  already-enrolled (in this program) and unmet prerequisite programs. Being **active
+  in another program** is a *soft advisory* only — the member stays eligible and
+  selectable (a new member may be in several onboarding courses at once), just flagged
+  "Also enrolled in another program". The program's target position/roles are advisory
+  and never block.
 
 #### Phase Management
 - Multi-phase program structures

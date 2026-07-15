@@ -301,6 +301,7 @@ GET    /api/v1/training/programs/sample-templates                      # List bu
 POST   /api/v1/training/programs/sample-templates/{key}/instantiate    # Add a sample template to the org (training.manage)
 GET    /api/v1/training/programs/programs/{program_id}/eligibility     # Per-member enroll eligibility, eligible first (training.manage)
 PATCH  /api/v1/training/programs/programs/{program_id}                 # Edit program details (training.manage)
+DELETE /api/v1/training/programs/programs/{program_id}                 # Delete a program + all children (training.manage)
 PATCH  /api/v1/training/programs/programs/{program_id}/phases/{phase_id}          # Edit a phase (training.manage)
 POST   /api/v1/training/programs/programs/{program_id}/phases/reorder            # Renumber phases (training.manage)
 DELETE /api/v1/training/programs/programs/{program_id}/phases/{phase_id}          # Delete a phase, auto-clean enrollees (training.manage)
@@ -322,8 +323,9 @@ DELETE /api/v1/training/programs/programs/{program_id}/milestones/{milestone_id}
   `{ "name": "…", "is_template": true }`.
 - **`.../{program_id}/eligibility`** — returns every member with `eligible`, a
   `status` (`eligible` / `enrolled` / `prerequisite` / `concurrent`), and a `reason`.
-  Mirrors the hard gates in bulk-enroll so the picker can show eligibility up front;
-  target position/roles are not gated.
+  Hard gates (already enrolled, missing prerequisite) set `eligible: false`.
+  **`concurrent`** (active in another program) is a soft advisory: `eligible: true`
+  with a `reason` — never a block. Target position/roles are not gated.
 - **Editing endpoints** back the inline pipeline editor. `PATCH …requirements/{id}`
   also accepts `phase_id` to move a requirement between phases. `DELETE` on a phase or
   requirement is auto-cleaning: it clears only this program's enrolled members'
