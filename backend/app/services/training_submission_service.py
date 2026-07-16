@@ -137,8 +137,16 @@ class TrainingSubmissionService:
             f"({hours_completed}h, status={status.value})"
         )
 
-        # If auto-approved, create the training record immediately
+        # If auto-approved, create the training record immediately. Run the same
+        # duplicate check the manual-review path uses so an auto-approved submission
+        # can't silently spawn a duplicate record without any warning.
         if status == SubmissionStatus.APPROVED:
+            duplicate_info = await self._check_duplicate(submission)
+            if duplicate_info:
+                logger.warning(
+                    f"Duplicate detected on auto-approve: submission={submission.id} "
+                    f"existing_record={duplicate_info['existing_record_id']}"
+                )
             await self._create_record_from_submission(submission)
 
         return submission
@@ -269,6 +277,16 @@ class TrainingSubmissionService:
         ):
             raise ValueError(
                 f"Cannot review a submission with status '{submission.status.value}'"
+            )
+
+        # Separation of duties: a training officer cannot approve their own
+        # self-reported training. A second officer must sign it off, so an
+        # officer can't grant themselves hours/credit unchecked. (Rejecting or
+        # requesting revision on one's own submission is harmless and allowed.)
+        if action == "approve" and str(submission.submitted_by) == str(reviewer_id):
+            raise ValueError(
+                "You cannot approve your own training submission — "
+                "another training officer must review it"
             )
 
         if action == "approve":

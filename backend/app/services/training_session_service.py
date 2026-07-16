@@ -948,10 +948,20 @@ class TrainingSessionService:
     async def _resolve_category_requirement_ids(
         self, program_id: str, category_id: str
     ) -> List[str]:
-        """Requirement ids in ``program_id`` whose training requirement is tagged
-        with ``category_id`` — used to advance category-linked (rather than
-        requirement-linked) sessions."""
-        from app.models.training import ProgramRequirement, TrainingRequirement
+        """HOURS requirement ids in ``program_id`` whose training requirement is
+        tagged with ``category_id`` — used to advance category-linked (rather than
+        requirement-linked) sessions.
+
+        Restricted to HOURS requirements on purpose: a session credits *hours*,
+        so fanning those hours out to a COURSES/SHIFTS/CALLS requirement would
+        misread e.g. 3.5 hours as 3.5 courses. Non-hours requirements must be
+        satisfied by an explicit requirement link on the session, a skills test,
+        or officer sign-off — never by a category-matched hours feed."""
+        from app.models.training import (
+            ProgramRequirement,
+            RequirementType,
+            TrainingRequirement,
+        )
 
         result = await self.db.execute(
             select(ProgramRequirement.requirement_id)
@@ -962,6 +972,7 @@ class TrainingSessionService:
             .where(
                 ProgramRequirement.program_id == str(program_id),
                 TrainingRequirement.category_ids.contains([str(category_id)]),
+                TrainingRequirement.requirement_type == RequirementType.HOURS,
             )
         )
         return [row[0] for row in result.all()]

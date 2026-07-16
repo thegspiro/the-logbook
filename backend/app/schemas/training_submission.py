@@ -102,6 +102,18 @@ class TrainingSubmissionCreate(BaseModel):
     def _validate_training_type(cls, v: str) -> str:
         return validate_enum_value(v, ModelTrainingType, "training_type")
 
+    @field_validator("completion_date")
+    @classmethod
+    def _validate_completion_date(cls, v: date) -> date:
+        # Self-report is for COMPLETED training, so the completion date cannot be
+        # in the future. Allow a 1-day grace so a member in a timezone ahead of
+        # the server isn't rejected for logging today's training.
+        from datetime import timedelta
+
+        if v > date.today() + timedelta(days=1):
+            raise ValueError("completion_date cannot be in the future")
+        return v
+
 
 class TrainingSubmissionUpdate(BaseModel):
     """Schema for updating a submission (before approval)"""
