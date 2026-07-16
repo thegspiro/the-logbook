@@ -346,6 +346,68 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               )}
             </div>
           )}
+
+          {feature && (
+            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5 space-y-4">
+              <h3 className="text-base font-semibold text-theme-text-primary">
+                Shift close-out rules
+              </h3>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-theme-text-primary">
+                    Require end-of-shift equipment checks
+                  </p>
+                  <p className="text-sm text-theme-text-muted mt-0.5">
+                    Block finalizing a shift while any end-of-shift check is
+                    outstanding. Officers can still override with a logged reason.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={feature.require_end_of_shift_checks}
+                  disabled={savingFeature}
+                  onClick={() => { void saveFeature({ require_end_of_shift_checks: !feature.require_end_of_shift_checks }); }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                    feature.require_end_of_shift_checks ? "bg-violet-600" : "bg-theme-surface-border"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      feature.require_end_of_shift_checks ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+              <div className="flex items-center justify-between gap-4 border-t border-theme-surface-border/60 pt-4">
+                <div>
+                  <p className="text-sm font-medium text-theme-text-primary">
+                    Restrict check-in to assigned members
+                  </p>
+                  <p className="text-sm text-theme-text-muted mt-0.5">
+                    Only members rostered on a shift can check in (open shifts
+                    are exempt), so attendance matches the crew.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={feature.restrict_checkin_to_assigned}
+                  disabled={savingFeature}
+                  onClick={() => { void saveFeature({ restrict_checkin_to_assigned: !feature.restrict_checkin_to_assigned }); }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                    feature.restrict_checkin_to_assigned ? "bg-violet-600" : "bg-theme-surface-border"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      feature.restrict_checkin_to_assigned ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
           <TemplatesOverviewCard
             templates={templates}
             onNavigateToTemplates={onNavigateToTemplates}

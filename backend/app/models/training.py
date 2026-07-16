@@ -2449,6 +2449,10 @@ class Shift(Base):
     # Notes
     notes = Column(Text)
     activities = Column(JSON)  # Training, station duties, etc.
+    # Crew-to-crew handoff / pass-down captured at finalization and surfaced to
+    # the next crew on the same apparatus (staffing changes, apparatus issues,
+    # ongoing incidents, etc.).
+    pass_down_notes = Column(Text, nullable=True)
 
     # When True, all members (including non-operational types) can self-signup.
     # Copied from ShiftTemplate when a shift is created from a template.

@@ -1337,6 +1337,37 @@ class SchedulingService:
         if shift.is_finalized:
             return None, "Shift is already finalized"
 
+        # Optionally restrict check-in to members actually rostered on the
+        # shift, so attendance reflects the real crew. Open shifts (self-signup
+        # to all members) are exempt.
+        org = (
+            await self.db.execute(
+                select(Organization).where(
+                    Organization.id == str(organization_id)
+                )
+            )
+        ).scalar_one_or_none()
+        restrict = bool(
+            ((org.settings or {}) if org else {})
+            .get("scheduling", {})
+            .get("restrict_checkin_to_assigned", False)
+        )
+        if restrict and not shift.open_to_all_members:
+            assigned = (
+                await self.db.execute(
+                    select(ShiftAssignment.id)
+                    .where(ShiftAssignment.shift_id == str(shift_id))
+                    .where(ShiftAssignment.user_id == user_id)
+                    .where(
+                        ShiftAssignment.assignment_status.notin_(
+                            self.INACTIVE_ASSIGNMENT_STATUSES
+                        )
+                    )
+                )
+            ).scalar_one_or_none()
+            if not assigned:
+                return None, "You are not assigned to this shift."
+
         existing = (
             await self.db.execute(
                 select(ShiftAttendance).where(
@@ -4452,12 +4483,34 @@ class SchedulingService:
     # Shift Finalization
     # ============================================
 
+    async def _count_incomplete_end_checks(
+        self, shift_id: UUID, organization_id: UUID
+    ) -> int:
+        """Count end-of-shift equipment checks that are missing or incomplete."""
+        from app.services.equipment_check_service import EquipmentCheckService
+
+        svc = EquipmentCheckService(self.db)
+        summaries = await svc.get_shift_check_status(
+            str(shift_id), str(organization_id)
+        )
+        return sum(
+            1
+            for s in summaries
+            if s.get("check_timing") == "end_of_shift"
+            and (
+                not s.get("is_completed")
+                or s.get("overall_status") == "incomplete"
+            )
+        )
+
     async def finalize_shift(
         self,
         shift_id: UUID,
         organization_id: UUID,
         finalized_by_user_id: str,
         manual_hours: Optional[List[Dict[str, Any]]] = None,
+        override_incomplete_checks: bool = False,
+        pass_down_notes: Optional[str] = None,
     ) -> Tuple[Optional[Shift], Optional[str]]:
         """Mark a shift as finalized after officer review.
 
@@ -4468,6 +4521,11 @@ class SchedulingService:
         ``manual_hours`` is an optional list of
         ``{"user_id": str, "hours": float}`` dicts that create attendance
         records for members who did not check in/out.
+
+        When the org enables ``require_end_of_shift_checks``, finalization is
+        rejected while any end-of-shift equipment check is outstanding, unless
+        ``override_incomplete_checks`` is set (the caller audit-logs the
+        override). ``pass_down_notes`` records the crew handoff.
         """
         try:
             shift = await self.get_shift_by_id(shift_id, organization_id)
@@ -4480,6 +4538,31 @@ class SchedulingService:
             now = datetime.now(timezone.utc)
             if shift.end_time and shift.end_time > now:
                 return None, "Cannot finalize a shift that has not ended"
+
+            # Enforce end-of-shift equipment checks when the org requires it.
+            if not override_incomplete_checks:
+                org = (
+                    await self.db.execute(
+                        select(Organization).where(
+                            Organization.id == str(organization_id)
+                        )
+                    )
+                ).scalar_one_or_none()
+                require_checks = bool(
+                    ((org.settings or {}) if org else {})
+                    .get("scheduling", {})
+                    .get("require_end_of_shift_checks", False)
+                )
+                if require_checks:
+                    outstanding = await self._count_incomplete_end_checks(
+                        shift_id, organization_id
+                    )
+                    if outstanding > 0:
+                        return None, (
+                            f"{outstanding} end-of-shift equipment check(s) "
+                            "are incomplete. Complete them, or finalize with "
+                            "an override."
+                        )
 
             # Create attendance records for manually-entered hours
             if manual_hours:
@@ -4549,6 +4632,8 @@ class SchedulingService:
             shift.is_finalized = True
             shift.finalized_at = now
             shift.finalized_by = finalized_by_user_id
+            if pass_down_notes is not None:
+                shift.pass_down_notes = pass_down_notes.strip() or None
 
             # Auto-create draft shift completion reports for trainees
             # (members with active program enrollments) on this shift
@@ -4574,6 +4659,64 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return None, str(e)
+
+    async def reopen_shift(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[Optional[Shift], Optional[str]]:
+        """Reopen a finalized shift for corrections.
+
+        Clears the finalized flag so attendance/assignments can be edited and
+        the shift re-finalized. Snapshots (call_count/total_hours) and any
+        draft completion reports are left intact — re-finalizing re-snapshots
+        them. The caller is responsible for audit-logging the reason.
+        """
+        try:
+            shift = await self.get_shift_by_id(shift_id, organization_id)
+            if not shift:
+                return None, "Shift not found"
+            if not shift.is_finalized:
+                return None, "Shift is not finalized"
+
+            shift.is_finalized = False
+            shift.finalized_at = None
+            shift.finalized_by = None
+            await self.db.commit()
+            await self.db.refresh(shift)
+            return shift, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
+
+    async def get_previous_pass_down(
+        self, shift_id: UUID, organization_id: UUID
+    ) -> Optional[Dict[str, Any]]:
+        """The most recent prior shift's pass-down handoff, preferring the same
+        apparatus, so the incoming crew sees what the last crew left them."""
+        shift = await self.get_shift_by_id(shift_id, organization_id)
+        if not shift or not shift.start_time:
+            return None
+        query = (
+            select(Shift)
+            .where(Shift.organization_id == str(organization_id))
+            .where(Shift.id != str(shift_id))
+            .where(Shift.pass_down_notes.isnot(None))
+            .where(Shift.start_time < shift.start_time)
+        )
+        if shift.apparatus_id:
+            query = query.where(Shift.apparatus_id == shift.apparatus_id)
+        query = query.order_by(Shift.start_time.desc()).limit(1)
+        prev = (await self.db.execute(query)).scalar_one_or_none()
+        if not prev or not prev.pass_down_notes:
+            return None
+        return {
+            "shift_id": prev.id,
+            "shift_date": (
+                prev.shift_date.isoformat() if prev.shift_date else None
+            ),
+            "pass_down_notes": prev.pass_down_notes,
+        }
 
     async def _create_draft_reports_for_trainees(
         self,

@@ -59,6 +59,7 @@ from app.schemas.scheduling import (
     CalendarFeedResponse,
     ShiftCancelRequest,
     ShiftFinalizeRequest,
+    ShiftReopenRequest,
     ShiftPatternCreate,
     ShiftPatternResponse,
     ShiftPatternUpdate,
@@ -467,14 +468,85 @@ async def finalize_shift(
         current_user.organization_id,
         finalized_by_user_id=str(current_user.id),
         manual_hours=manual,
+        override_incomplete_checks=body.override_incomplete_checks,
+        pass_down_notes=body.pass_down_notes,
     )
     if not shift:
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to finalize shift.", error),
         )
+    if body.override_incomplete_checks:
+        await log_audit_event(
+            db=db,
+            event_type="shift_finalized_check_override",
+            event_category="scheduling",
+            severity="WARNING",
+            event_data={
+                "organization_id": str(current_user.organization_id),
+                "shift_id": str(shift_id),
+                "reason": (body.override_reason or "").strip() or None,
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
+
+
+@router.post("/shifts/{shift_id}/reopen", response_model=ShiftResponse)
+async def reopen_shift(
+    shift_id: UUID,
+    body: ShiftReopenRequest = ShiftReopenRequest(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Reopen a finalized shift for corrections, then it can be re-finalized.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    shift, error = await service.reopen_shift(
+        shift_id, current_user.organization_id
+    )
+    if not shift:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to reopen shift.", error),
+        )
+    await log_audit_event(
+        db=db,
+        event_type="shift_reopened",
+        event_category="scheduling",
+        severity="WARNING",
+        event_data={
+            "organization_id": str(current_user.organization_id),
+            "shift_id": str(shift_id),
+            "reason": (body.reason or "").strip() or None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
+    return enriched[0]
+
+
+@router.get("/shifts/{shift_id}/handoff")
+async def get_shift_handoff(
+    shift_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("scheduling.view")),
+):
+    """Return the previous crew's pass-down for this shift (same apparatus),
+    or null when there is none."""
+    service = SchedulingService(db)
+    return await service.get_previous_pass_down(
+        shift_id, current_user.organization_id
+    )
 
 
 @router.post("/shifts/{shift_id}/cancel", response_model=ShiftResponse)
@@ -2139,12 +2211,19 @@ async def get_scheduling_feature_settings(
         raise HTTPException(status_code=404, detail="Organization not found")
     overtime = service.get_overtime_settings(org)
     autogen = service.get_auto_generate_settings(org)
+    lifecycle = service.get_lifecycle_settings(org)
     return SchedulingFeatureSettings(
         platoons_enabled=service.get_platoons_enabled(org),
         max_hours_per_window=overtime.get("max_hours_per_window"),
         hours_window_days=int(overtime.get("hours_window_days", 7) or 7),
         auto_generate_enabled=bool(autogen.get("auto_generate_enabled", False)),
         auto_generate_weeks=int(autogen.get("auto_generate_weeks", 4) or 4),
+        require_end_of_shift_checks=bool(
+            lifecycle.get("require_end_of_shift_checks", False)
+        ),
+        restrict_checkin_to_assigned=bool(
+            lifecycle.get("restrict_checkin_to_assigned", False)
+        ),
     )
 
 
@@ -2183,6 +2262,16 @@ async def update_scheduling_feature_settings(
                 if "auto_generate_weeks" in fields_set
                 else None
             ),
+            require_end_of_shift_checks=(
+                data.require_end_of_shift_checks
+                if "require_end_of_shift_checks" in fields_set
+                else None
+            ),
+            restrict_checkin_to_assigned=(
+                data.restrict_checkin_to_assigned
+                if "restrict_checkin_to_assigned" in fields_set
+                else None
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
@@ -2192,6 +2281,12 @@ async def update_scheduling_feature_settings(
         hours_window_days=int(result.get("hours_window_days", 7) or 7),
         auto_generate_enabled=bool(result.get("auto_generate_enabled", False)),
         auto_generate_weeks=int(result.get("auto_generate_weeks", 4) or 4),
+        require_end_of_shift_checks=bool(
+            result.get("require_end_of_shift_checks", False)
+        ),
+        restrict_checkin_to_assigned=bool(
+            result.get("restrict_checkin_to_assigned", False)
+        ),
     )
 
 

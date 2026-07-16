@@ -384,6 +384,71 @@ class TestShiftCRUD:
         assert await svc.get_user_by_calendar_token(token1) is None
 
     @pytest.mark.asyncio
+    async def test_reopen_requires_finalized_shift(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        # A shift that was never finalized cannot be reopened.
+        result, err = await svc.reopen_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
+        assert result is None
+        assert "not finalized" in err.lower()
+
+    @pytest.mark.asyncio
+    async def test_restrict_checkin_to_assigned(
+        self, db_session, setup_org_and_users
+    ):
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+        await ShiftEligibilityService(db_session).update_scheduling_settings(
+            org_id, restrict_checkin_to_assigned=True
+        )
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+
+        # An unrostered member is blocked from checking in.
+        result, err = await svc.member_check_in(
+            shift.id, user2_id, uuid.UUID(org_id)
+        )
+        assert result is None
+        assert "not assigned" in err.lower()
+
+        # After being assigned, the member can check in.
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        result2, err2 = await svc.member_check_in(
+            shift.id, user2_id, uuid.UUID(org_id)
+        )
+        assert err2 is None
+        assert result2 is not None
+
+    @pytest.mark.asyncio
     async def test_protected_fields_not_updated(self, db_session, setup_org_and_users):
         org_id, user_id, _ = await setup_org_and_users
         svc = SchedulingService(db_session)

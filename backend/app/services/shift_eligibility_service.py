@@ -312,6 +312,18 @@ class ShiftEligibilityService:
             "auto_generate_weeks": sched.get("auto_generate_weeks", 4),
         }
 
+    def get_lifecycle_settings(self, org: Organization) -> Dict[str, Any]:
+        """Return the org's shift-lifecycle enforcement toggles."""
+        sched = self._get_scheduling_settings(org)
+        return {
+            "require_end_of_shift_checks": bool(
+                sched.get("require_end_of_shift_checks", False)
+            ),
+            "restrict_checkin_to_assigned": bool(
+                sched.get("restrict_checkin_to_assigned", False)
+            ),
+        }
+
     async def update_scheduling_settings(
         self,
         organization_id: str,
@@ -322,6 +334,8 @@ class ShiftEligibilityService:
         hours_window_days: Optional[int] = None,
         auto_generate_enabled: Optional[bool] = None,
         auto_generate_weeks: Optional[int] = None,
+        require_end_of_shift_checks: Optional[bool] = None,
+        restrict_checkin_to_assigned: Optional[bool] = None,
     ) -> dict:
         """Update scheduling eligibility settings on the organization."""
         org = await self._get_org(organization_id)
@@ -348,6 +362,10 @@ class ShiftEligibilityService:
             scheduling["auto_generate_enabled"] = auto_generate_enabled
         if auto_generate_weeks is not None:
             scheduling["auto_generate_weeks"] = auto_generate_weeks
+        if require_end_of_shift_checks is not None:
+            scheduling["require_end_of_shift_checks"] = require_end_of_shift_checks
+        if restrict_checkin_to_assigned is not None:
+            scheduling["restrict_checkin_to_assigned"] = restrict_checkin_to_assigned
 
         settings["scheduling"] = scheduling
         org.settings = settings

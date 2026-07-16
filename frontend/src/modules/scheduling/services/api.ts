@@ -101,6 +101,7 @@ export interface ShiftRecord {
   color?: string | null;
   notes?: string;
   activities?: unknown;
+  pass_down_notes?: string | null;
   open_to_all_members?: boolean;
   attendee_count: number;
   call_count: number;
@@ -131,6 +132,8 @@ export interface SchedulingFeatureSettings {
   hours_window_days: number;
   auto_generate_enabled: boolean;
   auto_generate_weeks: number;
+  require_end_of_shift_checks: boolean;
+  restrict_checkin_to_assigned: boolean;
 }
 
 export interface PlatoonMember {
@@ -374,12 +377,40 @@ export const schedulingService = {
   async finalizeShift(
     shiftId: string,
     manualHours?: { user_id: string; hours: number }[],
+    opts?: {
+      override_incomplete_checks?: boolean;
+      override_reason?: string;
+      pass_down_notes?: string;
+    },
   ): Promise<ShiftRecord> {
-    const body = manualHours?.length ? { manual_hours: manualHours } : {};
+    const body: Record<string, unknown> = {};
+    if (manualHours?.length) body.manual_hours = manualHours;
+    if (opts?.override_incomplete_checks) {
+      body.override_incomplete_checks = true;
+      if (opts.override_reason) body.override_reason = opts.override_reason;
+    }
+    if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
     const response = await api.post<ShiftRecord>(
       `/scheduling/shifts/${shiftId}/finalize`,
       body,
     );
+    return response.data;
+  },
+
+  async reopenShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
+    const response = await api.post<ShiftRecord>(
+      `/scheduling/shifts/${shiftId}/reopen`,
+      reason ? { reason } : {},
+    );
+    return response.data;
+  },
+
+  async getShiftHandoff(
+    shiftId: string,
+  ): Promise<{ shift_id: string; shift_date: string | null; pass_down_notes: string } | null> {
+    const response = await api.get<
+      { shift_id: string; shift_date: string | null; pass_down_notes: string } | null
+    >(`/scheduling/shifts/${shiftId}/handoff`);
     return response.data;
   },
 

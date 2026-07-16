@@ -107,6 +107,7 @@ class ShiftResponse(UTCResponseBase):
     color: Optional[str] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
+    pass_down_notes: Optional[str] = None
     attendee_count: Optional[int] = 0
     call_count: int = 0
     total_hours: Optional[float] = None
@@ -156,10 +157,22 @@ class ShiftFinalizeRequest(BaseModel):
     """Optional request body for finalizing a shift."""
 
     manual_hours: Optional[List[ManualHoursEntry]] = None
+    # Finalize despite outstanding end-of-shift checks (org enforcement on).
+    # The reason is recorded in the audit log.
+    override_incomplete_checks: bool = False
+    override_reason: Optional[str] = None
+    # Crew-to-crew handoff captured at finalize.
+    pass_down_notes: Optional[str] = None
 
 
 class ShiftCancelRequest(BaseModel):
     """Optional request body for cancelling a shift."""
+
+    reason: Optional[str] = None
+
+
+class ShiftReopenRequest(BaseModel):
+    """Request body for reopening a finalized shift for corrections."""
 
     reason: Optional[str] = None
 
@@ -748,6 +761,9 @@ class SchedulingFeatureSettings(BaseModel):
     # generating shifts this many weeks ahead.
     auto_generate_enabled: bool = False
     auto_generate_weeks: int = Field(default=4, ge=1, le=52)
+    # Lifecycle enforcement
+    require_end_of_shift_checks: bool = False
+    restrict_checkin_to_assigned: bool = False
 
 
 # ============================================

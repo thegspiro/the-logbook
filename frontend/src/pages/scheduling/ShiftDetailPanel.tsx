@@ -152,6 +152,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Manual hours for members without attendance (used during finalization)
   const [manualHours, setManualHours] = useState<Record<string, string>>({});
 
+  // Close-out state — pass-down handoff and the incomplete-checks override.
+  const [passDownNotes, setPassDownNotes] = useState('');
+  const [overrideChecks, setOverrideChecks] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [handoff, setHandoff] = useState<{ shift_date: string | null; pass_down_notes: string } | null>(null);
+  const [showReopenConfirm, setShowReopenConfirm] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
+
   // UI visibility toggles
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFinalizeChecklist, setShowFinalizeChecklist] = useState(false);
@@ -214,12 +222,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const load = async () => {
       setLoading(true);
       try {
-        const [assignData, checkData, attendanceData, allAttData, detail] = await Promise.all([
+        const [assignData, checkData, attendanceData, allAttData, detail, handoffData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
           schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
           schedulingService.getMyAttendance(shift.id),
           schedulingService.getShiftAttendance(shift.id).catch(() => []),
           schedulingService.getShift(shift.id).catch(() => null),
+          schedulingService.getShiftHandoff(shift.id).catch(() => null),
         ]);
         if (!cancelled) {
           setAssignments(assignData);
@@ -227,6 +236,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           setMyAttendance(attendanceData);
           setAllAttendance(allAttData);
           setPlatoonRoster(detail?.platoon_roster ?? []);
+          setHandoff(handoffData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -608,17 +618,43 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       const entries = Object.entries(manualHours)
         .map(([uid, val]) => ({ user_id: uid, hours: parseFloat(val) }))
         .filter(e => e.hours > 0 && !isNaN(e.hours));
+      const opts: { override_incomplete_checks?: boolean; override_reason?: string; pass_down_notes?: string } = {};
+      if (overrideChecks) {
+        opts.override_incomplete_checks = true;
+        if (overrideReason.trim()) opts.override_reason = overrideReason.trim();
+      }
+      if (passDownNotes.trim()) opts.pass_down_notes = passDownNotes.trim();
       const updated = await schedulingService.finalizeShift(
         shift.id,
         entries.length > 0 ? entries : undefined,
+        opts,
       );
       setShift(updated);
       setManualHours({});
+      setPassDownNotes('');
+      setOverrideChecks(false);
+      setOverrideReason('');
       toast.success('Shift finalized');
       setShowFinalizeChecklist(false);
       onRefresh?.();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to finalize shift'));
+    } finally {
+      setPendingFlag('finalizing', false);
+    }
+  };
+
+  const handleReopen = async () => {
+    setPendingFlag('finalizing', true);
+    try {
+      const updated = await schedulingService.reopenShift(shift.id, reopenReason.trim() || undefined);
+      setShift(updated);
+      setShowReopenConfirm(false);
+      setReopenReason('');
+      toast.success('Shift reopened');
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to reopen shift'));
     } finally {
       setPendingFlag('finalizing', false);
     }
@@ -856,6 +892,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         </div>
 
         <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
+          {/* Handoff from the previous crew on this apparatus */}
+          {handoff?.pass_down_notes && (
+            <div className="px-3 py-2 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+              <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 mb-0.5">
+                Handoff from previous shift{handoff.shift_date ? ` (${handoff.shift_date})` : ''}
+              </p>
+              <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{handoff.pass_down_notes}</p>
+            </div>
+          )}
+
+          {/* Readiness — present vs assigned, staffing, outstanding start checks */}
+          {!shift.is_finalized && !isCancelled && activeAssignments.length > 0 && (() => {
+            const checkedInIds = new Set(allAttendance.filter(a => a.checked_in_at).map(a => a.user_id));
+            const presentCount = activeAssignments.filter(a => checkedInIds.has(a.user_id)).length;
+            const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
+            const understaffed = target > 0 && activeAssignments.length < target;
+            const outstandingStartChecks = equipmentCheckSummaries.filter(
+              c => c.checkTiming === 'start_of_shift' && !c.isCompleted,
+            ).length;
+            return (
+              <div className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                <span className="font-semibold text-theme-text-secondary">Readiness</span>
+                <span className="text-theme-text-primary">
+                  {presentCount}/{activeAssignments.length} present
+                </span>
+                {target > 0 && (
+                  <span className={understaffed ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-theme-text-muted'}>
+                    {activeAssignments.length}/{target} staffed{understaffed ? ' — understaffed' : ''}
+                  </span>
+                )}
+                {outstandingStartChecks > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400">
+                    {outstandingStartChecks} start-of-shift check{outstandingStartChecks > 1 ? 's' : ''} pending
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Delete Confirmation */}
           {showDeleteConfirm && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg space-y-3">
@@ -1020,10 +1095,48 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 )}
               </div>
 
+              {/* Pass-down handoff for the next crew */}
+              <div>
+                <label htmlFor="pass-down" className="block text-xs font-medium text-theme-text-secondary mb-1">
+                  Pass-down to next crew (optional)
+                </label>
+                <textarea
+                  id="pass-down"
+                  rows={2}
+                  value={passDownNotes}
+                  onChange={e => setPassDownNotes(e.target.value)}
+                  placeholder="Apparatus issues, ongoing incidents, staffing notes…"
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Incomplete end-of-shift checks: block, or override with a reason */}
               {hasIncompleteEquipmentChecks && (
-                <p className="text-xs text-red-600 dark:text-red-300">
-                  Complete all equipment checks before finalizing this shift.
-                </p>
+                <div className="p-2 rounded-md border border-red-500/20 bg-red-500/5 space-y-2">
+                  <label className="flex items-center gap-2 text-xs font-medium text-red-700 dark:text-red-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={overrideChecks}
+                      onChange={e => setOverrideChecks(e.target.checked)}
+                      className="rounded border-theme-surface-border"
+                    />
+                    Finalize anyway, with equipment checks outstanding
+                  </label>
+                  {overrideChecks && (
+                    <input
+                      type="text"
+                      value={overrideReason}
+                      onChange={e => setOverrideReason(e.target.value)}
+                      placeholder="Reason for override (logged)"
+                      className={inputCls}
+                    />
+                  )}
+                  {!overrideChecks && (
+                    <p className="text-xs text-red-600 dark:text-red-300">
+                      Complete the outstanding checks, or check the box above to override.
+                    </p>
+                  )}
+                </div>
               )}
 
               <div className="flex items-center gap-2 justify-end pt-1">
@@ -1035,7 +1148,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 </button>
                 <button
                   onClick={() => { void handleFinalize(); }}
-                  disabled={pending.finalizing || hasIncompleteEquipmentChecks}
+                  disabled={pending.finalizing || (hasIncompleteEquipmentChecks && !overrideChecks)}
                   className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition-colors"
                 >
                   {pending.finalizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -1047,11 +1160,47 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
           {/* Finalized badge */}
           {shift.is_finalized && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
-              <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-              <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                Shift finalized{shift.finalized_at ? ` on ${formatDateCustom(new Date(shift.finalized_at), { month: 'short', day: 'numeric', year: 'numeric' }, tz)}` : ''}
-              </span>
+            <div className="px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                  Shift finalized{shift.finalized_at ? ` on ${formatDateCustom(new Date(shift.finalized_at), { month: 'short', day: 'numeric', year: 'numeric' }, tz)}` : ''}
+                </span>
+                {canManageShift && !showReopenConfirm && (
+                  <button
+                    onClick={() => setShowReopenConfirm(true)}
+                    className="ml-auto text-xs text-theme-text-muted hover:text-theme-text-primary underline"
+                  >
+                    Reopen
+                  </button>
+                )}
+              </div>
+              {showReopenConfirm && (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={reopenReason}
+                    onChange={e => setReopenReason(e.target.value)}
+                    placeholder="Reason for reopening (logged)"
+                    className={inputCls}
+                  />
+                  <div className="flex items-center gap-2 justify-end">
+                    <button onClick={() => { setShowReopenConfirm(false); setReopenReason(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
+                    <button onClick={() => { void handleReopen(); }} disabled={pending.finalizing}
+                      className="px-3 py-1.5 text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50">
+                      Reopen shift
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pass-down from this shift */}
+          {shift.pass_down_notes && (
+            <div className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg">
+              <p className="text-xs font-semibold text-theme-text-secondary mb-0.5">Pass-down for next crew</p>
+              <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{shift.pass_down_notes}</p>
             </div>
           )}
 
