@@ -780,6 +780,148 @@ class SchedulingService:
         )
         return result.scalar_one_or_none()
 
+    # ============================================
+    # Personal calendar (ICS) feed
+    # ============================================
+
+    async def ensure_calendar_token(
+        self, user_id: UUID, organization_id: UUID
+    ) -> Optional[str]:
+        """Return the member's calendar-feed token, generating one on first
+        use. Scoped to the org so a caller can only touch their own record."""
+        from app.services.integration_services.ical_service import (
+            generate_feed_token,
+        )
+
+        user = (
+            await self.db.execute(
+                select(User)
+                .where(User.id == str(user_id))
+                .where(User.organization_id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        if not user:
+            return None
+        if not user.calendar_feed_token:
+            user.calendar_feed_token = generate_feed_token()[:64]
+            await self.db.commit()
+            await self.db.refresh(user)
+        return user.calendar_feed_token
+
+    async def rotate_calendar_token(
+        self, user_id: UUID, organization_id: UUID
+    ) -> Optional[str]:
+        """Issue a new calendar-feed token, invalidating any existing feed URL."""
+        from app.services.integration_services.ical_service import (
+            generate_feed_token,
+        )
+
+        user = (
+            await self.db.execute(
+                select(User)
+                .where(User.id == str(user_id))
+                .where(User.organization_id == str(organization_id))
+            )
+        ).scalar_one_or_none()
+        if not user:
+            return None
+        user.calendar_feed_token = generate_feed_token()[:64]
+        await self.db.commit()
+        await self.db.refresh(user)
+        return user.calendar_feed_token
+
+    async def get_user_by_calendar_token(self, token: str) -> Optional[User]:
+        """Resolve the member owning a calendar-feed token (public, unauth)."""
+        if not token:
+            return None
+        result = await self.db.execute(
+            select(User)
+            .where(User.calendar_feed_token == token)
+            .where(User.deleted_at.is_(None))
+        )
+        return result.scalar_one_or_none()
+
+    async def auto_generate_shifts_for_org(
+        self,
+        organization_id: UUID,
+        horizon_weeks: int = 4,
+        reference_date: Optional[date] = None,
+    ) -> int:
+        """Generate upcoming shifts for all active patterns up to the horizon.
+
+        Idempotent — ``generate_shifts_from_pattern`` skips shifts that already
+        exist — so this is safe to run daily to keep the leading edge filled.
+        Each pattern is clamped to its own active window. Returns the total
+        number of shifts created this run.
+        """
+        today = reference_date or date.today()
+        try:
+            weeks = max(int(horizon_weeks), 1)
+        except (TypeError, ValueError):
+            weeks = 4
+        horizon_end = today + timedelta(weeks=weeks)
+
+        patterns = (
+            await self.db.execute(
+                select(ShiftPattern)
+                .where(ShiftPattern.organization_id == str(organization_id))
+                .where(ShiftPattern.is_active.is_(True))
+            )
+        ).scalars().all()
+
+        total = 0
+        for pattern in patterns:
+            start = today
+            if pattern.start_date and pattern.start_date > start:
+                start = pattern.start_date
+            end = horizon_end
+            if pattern.end_date and pattern.end_date < end:
+                end = pattern.end_date
+            if start > end:
+                continue
+            try:
+                created, err = await self.generate_shifts_from_pattern(
+                    pattern.id,
+                    organization_id,
+                    start,
+                    end,
+                    None,
+                )
+                if err:
+                    logger.warning(
+                        "Auto-generation for pattern {} failed: {}",
+                        pattern.id,
+                        err,
+                    )
+                    continue
+                total += len(created)
+            except Exception as e:
+                logger.warning(
+                    "Auto-generation for pattern {} errored: {}", pattern.id, e
+                )
+        return total
+
+    async def get_shifts_for_user_feed(
+        self, user: User, start_date: date, end_date: date
+    ) -> List[Shift]:
+        """Active (non-cancelled) shifts the member is assigned to in a window,
+        for the personal ICS feed."""
+        result = await self.db.execute(
+            select(Shift)
+            .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
+            .where(ShiftAssignment.user_id == str(user.id))
+            .where(
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                )
+            )
+            .where(Shift.organization_id == str(user.organization_id))
+            .where(Shift.shift_date.between(start_date, end_date))
+            .where(Shift.status != ShiftStatus.CANCELLED)
+            .order_by(Shift.start_time.asc())
+        )
+        return list(result.scalars().all())
+
     async def _user_in_org(self, user_id: UUID, organization_id: UUID) -> bool:
         """Return True if user_id belongs to the given organization.
 
@@ -2165,6 +2307,79 @@ class SchedulingService:
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def get_overtime_warnings(
+        self,
+        user_id: str,
+        shift: Shift,
+        organization_id: UUID,
+    ) -> List[str]:
+        """Soft warnings when a member's scheduled hours in a rolling window
+        exceed the org's configured limit.
+
+        Reads ``org.settings["scheduling"]``: ``max_hours_per_window`` (the
+        cap) and ``hours_window_days`` (window length, default 7). Returns an
+        empty list when the org hasn't set a cap — the feature is opt-in.
+        These are advisory only and never block an assignment (mirrors the
+        EVOC driver-warning pattern). Best-effort: never raises.
+        """
+        try:
+            if not shift.start_time or not shift.shift_date:
+                return []
+            org = (
+                await self.db.execute(
+                    select(Organization).where(
+                        Organization.id == str(organization_id)
+                    )
+                )
+            ).scalar_one_or_none()
+            if not org:
+                return []
+            cfg = (org.settings or {}).get("scheduling", {})
+            max_hours = cfg.get("max_hours_per_window")
+            try:
+                max_hours = float(max_hours) if max_hours is not None else 0.0
+            except (TypeError, ValueError):
+                return []
+            if max_hours <= 0:
+                return []
+            window_days = cfg.get("hours_window_days", 7)
+            try:
+                window_days = max(int(window_days), 1)
+            except (TypeError, ValueError):
+                window_days = 7
+
+            # Trailing window ending at the new shift's date.
+            window_start = shift.shift_date - timedelta(days=window_days - 1)
+            window_end = shift.shift_date
+            rows = (
+                await self.db.execute(
+                    select(Shift.start_time, Shift.end_time)
+                    .join(ShiftAssignment, ShiftAssignment.shift_id == Shift.id)
+                    .where(ShiftAssignment.user_id == str(user_id))
+                    .where(
+                        ShiftAssignment.assignment_status.notin_(
+                            self.INACTIVE_ASSIGNMENT_STATUSES
+                        )
+                    )
+                    .where(Shift.organization_id == str(organization_id))
+                    .where(Shift.shift_date.between(window_start, window_end))
+                )
+            ).all()
+            total_hours = 0.0
+            for st, et in rows:
+                if st and et:
+                    total_hours += (et - st).total_seconds() / 3600.0
+            if total_hours > max_hours:
+                return [
+                    f"This brings the member's scheduled hours to "
+                    f"{round(total_hours, 1)}h within {window_days} day(s), "
+                    f"over the {round(max_hours, 1)}h limit."
+                ]
+            return []
+        except Exception as e:
+            logger.warning("Overtime warning check failed: {}", e)
+            return []
+
     async def get_assignment_by_id(
         self, assignment_id: UUID, organization_id: UUID
     ) -> Optional[ShiftAssignment]:
@@ -2195,6 +2410,28 @@ class SchedulingService:
             )
             if training_error:
                 return None, training_error
+
+            # Confirmation is a member's own affirmation that they will work the
+            # shift, so it must go through the self-only confirm flow
+            # (confirm_assignment). Block a manager from force-confirming on a
+            # member's behalf via a general update. Other status transitions
+            # (decline, cancel, no-show) remain manageable here.
+            requested_status = update_data.get("assignment_status")
+            if requested_status is not None:
+                requested_value = (
+                    requested_status.value
+                    if isinstance(requested_status, AssignmentStatus)
+                    else requested_status
+                )
+                if (
+                    requested_value == AssignmentStatus.CONFIRMED.value
+                    and assignment.assignment_status != AssignmentStatus.CONFIRMED
+                ):
+                    return (
+                        None,
+                        "Confirmation must be done by the member; "
+                        "it cannot be set on their behalf.",
+                    )
 
             old_status = assignment.assignment_status
             position = assignment.position

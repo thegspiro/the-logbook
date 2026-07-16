@@ -365,6 +365,9 @@ class User(Base):
     locked_until = Column(DateTime(timezone=True))
     password_reset_token = Column(String(128), index=True)
     password_reset_expires_at = Column(DateTime(timezone=True))
+    # Unguessable token for the member's personal read-only ICS calendar feed
+    # (subscribed from Google/Apple Calendar, which can't do cookie auth).
+    calendar_feed_token = Column(String(64), index=True, nullable=True)
 
     # Timestamps
     last_login_at = Column(DateTime(timezone=True))

@@ -316,6 +316,74 @@ class TestShiftCRUD:
         assert "training program not found" in err.lower()
 
     @pytest.mark.asyncio
+    async def test_update_assignment_blocks_force_confirm(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assignment, _ = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        # A manager cannot force-confirm on a member's behalf (S4).
+        result, err = await svc.update_assignment(
+            uuid.UUID(assignment.id),
+            uuid.UUID(org_id),
+            {"assignment_status": AssignmentStatus.CONFIRMED},
+        )
+        assert result is None
+        assert "confirmation" in err.lower()
+
+        # Other status transitions (e.g. decline) are still allowed.
+        result2, err2 = await svc.update_assignment(
+            uuid.UUID(assignment.id),
+            uuid.UUID(org_id),
+            {"assignment_status": AssignmentStatus.DECLINED},
+        )
+        assert err2 is None
+        assert result2.assignment_status == AssignmentStatus.DECLINED
+
+    @pytest.mark.asyncio
+    async def test_calendar_token_ensure_and_rotate(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        token1 = await svc.ensure_calendar_token(
+            uuid.UUID(user_id), uuid.UUID(org_id)
+        )
+        assert token1
+        # Idempotent — a second call returns the same token.
+        token1b = await svc.ensure_calendar_token(
+            uuid.UUID(user_id), uuid.UUID(org_id)
+        )
+        assert token1b == token1
+
+        token2 = await svc.rotate_calendar_token(
+            uuid.UUID(user_id), uuid.UUID(org_id)
+        )
+        assert token2 and token2 != token1
+
+        # The new token resolves to the owning member; the old one no longer does.
+        owner = await svc.get_user_by_calendar_token(token2)
+        assert owner is not None and str(owner.id) == user_id
+        assert await svc.get_user_by_calendar_token(token1) is None
+
+    @pytest.mark.asyncio
     async def test_protected_fields_not_updated(self, db_session, setup_org_and_users):
         org_id, user_id, _ = await setup_org_and_users
         svc = SchedulingService(db_session)

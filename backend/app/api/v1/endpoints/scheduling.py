@@ -56,6 +56,7 @@ from app.schemas.scheduling import (
     ShiftComplianceResponse,
     ShiftCreate,
     ShiftDetailResponse,
+    CalendarFeedResponse,
     ShiftCancelRequest,
     ShiftFinalizeRequest,
     ShiftPatternCreate,
@@ -1215,6 +1216,17 @@ async def create_assignment(
         if evoc_warnings:
             response["evoc_warnings"] = evoc_warnings
 
+    # Soft overtime warning when the org has configured an hours cap.
+    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
+    if shift is not None:
+        overtime_warnings = await service.get_overtime_warnings(
+            user_id=str(assignment_data.get("user_id", "")),
+            shift=shift,
+            organization_id=current_user.organization_id,
+        )
+        if overtime_warnings:
+            response["overtime_warnings"] = overtime_warnings
+
     return response
 
 
@@ -2125,8 +2137,14 @@ async def get_scheduling_feature_settings(
     org = await service._get_org(current_user.organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    overtime = service.get_overtime_settings(org)
+    autogen = service.get_auto_generate_settings(org)
     return SchedulingFeatureSettings(
         platoons_enabled=service.get_platoons_enabled(org),
+        max_hours_per_window=overtime.get("max_hours_per_window"),
+        hours_window_days=int(overtime.get("hours_window_days", 7) or 7),
+        auto_generate_enabled=bool(autogen.get("auto_generate_enabled", False)),
+        auto_generate_weeks=int(autogen.get("auto_generate_weeks", 4) or 4),
     )
 
 
@@ -2139,14 +2157,76 @@ async def update_scheduling_feature_settings(
     """Update department-wide scheduling feature toggles."""
     service = ShiftEligibilityService(db)
     try:
+        # Only touch the overtime fields when the caller actually sent them,
+        # so a partial save (e.g. the platoon toggle) can't wipe the cap.
+        fields_set = data.model_fields_set
         result = await service.update_scheduling_settings(
             organization_id=current_user.organization_id,
             platoons_enabled=data.platoons_enabled,
+            max_hours_per_window=(
+                (data.max_hours_per_window or 0.0)
+                if "max_hours_per_window" in fields_set
+                else None
+            ),
+            hours_window_days=(
+                data.hours_window_days
+                if "hours_window_days" in fields_set
+                else None
+            ),
+            auto_generate_enabled=(
+                data.auto_generate_enabled
+                if "auto_generate_enabled" in fields_set
+                else None
+            ),
+            auto_generate_weeks=(
+                data.auto_generate_weeks
+                if "auto_generate_weeks" in fields_set
+                else None
+            ),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     return SchedulingFeatureSettings(
         platoons_enabled=bool(result.get("platoons_enabled", False)),
+        max_hours_per_window=result.get("max_hours_per_window"),
+        hours_window_days=int(result.get("hours_window_days", 7) or 7),
+        auto_generate_enabled=bool(result.get("auto_generate_enabled", False)),
+        auto_generate_weeks=int(result.get("auto_generate_weeks", 4) or 4),
+    )
+
+
+@router.get("/calendar-feed", response_model=CalendarFeedResponse)
+async def get_calendar_feed(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the member's personal ICS calendar-feed token/path, creating the
+    token on first use. Subscribe by prepending the site origin to feed_path."""
+    service = SchedulingService(db)
+    token = await service.ensure_calendar_token(
+        current_user.id, current_user.organization_id
+    )
+    if not token:
+        raise HTTPException(status_code=404, detail="User not found")
+    return CalendarFeedResponse(
+        token=token, feed_path=f"/api/public/v1/calendar/{token}.ics"
+    )
+
+
+@router.post("/calendar-feed/rotate", response_model=CalendarFeedResponse)
+async def rotate_calendar_feed(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Issue a new calendar-feed token, invalidating the previous feed URL."""
+    service = SchedulingService(db)
+    token = await service.rotate_calendar_token(
+        current_user.id, current_user.organization_id
+    )
+    if not token:
+        raise HTTPException(status_code=404, detail="User not found")
+    return CalendarFeedResponse(
+        token=token, feed_path=f"/api/public/v1/calendar/{token}.ics"
     )
 
 

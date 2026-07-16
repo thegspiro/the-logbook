@@ -324,6 +324,15 @@ FORMS_MANAGE = Permission(
 ADMIN_ACCESS = Permission(
     "admin.access", "Full administrative access", PermissionCategory.ADMIN
 )
+# Triggering a background task runs it for EVERY organization (all-org sweep),
+# so this is intentionally granted to no default role — only the wildcard
+# "System Owner" (it_manager) matches it. Keeps a single-org admin from firing
+# platform-wide side effects.
+SYSTEM_RUN_TASKS = Permission(
+    "system.run_tasks",
+    "Trigger platform-wide background tasks",
+    PermissionCategory.ADMIN,
+)
 
 # Minutes
 MINUTES_VIEW = Permission(
@@ -548,6 +557,7 @@ ALL_PERMISSIONS: list[Permission] = [
     FORMS_MANAGE,
     # Admin
     ADMIN_ACCESS,
+    SYSTEM_RUN_TASKS,
     # Minutes
     MINUTES_VIEW,
     MINUTES_MANAGE,
@@ -1551,6 +1561,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
+            SCHEDULING_SWAP.name,
+            SCHEDULING_REPORT.name,
             EQUIPMENT_CHECK_VIEW.name,
             EQUIPMENT_CHECK_MANAGE.name,
             EQUIPMENT_CHECK_SUBMIT.name,

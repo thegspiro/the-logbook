@@ -125,6 +125,14 @@ export interface PlatoonRosterEntry {
   status: 'assigned' | 'on_leave' | 'available';
 }
 
+export interface SchedulingFeatureSettings {
+  platoons_enabled: boolean;
+  max_hours_per_window?: number | null;
+  hours_window_days: number;
+  auto_generate_enabled: boolean;
+  auto_generate_weeks: number;
+}
+
 export interface PlatoonMember {
   user_id: string;
   user_name: string;
@@ -341,6 +349,20 @@ export const schedulingService = {
     await api.delete(`/scheduling/shifts/${shiftId}`);
   },
 
+  async getCalendarFeed(): Promise<{ token: string; feed_path: string }> {
+    const response = await api.get<{ token: string; feed_path: string }>(
+      '/scheduling/calendar-feed',
+    );
+    return response.data;
+  },
+
+  async rotateCalendarFeed(): Promise<{ token: string; feed_path: string }> {
+    const response = await api.post<{ token: string; feed_path: string }>(
+      '/scheduling/calendar-feed/rotate',
+    );
+    return response.data;
+  },
+
   async cancelShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
     const response = await api.post<ShiftRecord>(
       `/scheduling/shifts/${shiftId}/cancel`,
@@ -410,8 +432,8 @@ export const schedulingService = {
       status: a.assignment_status ?? a.status ?? 'assigned',
     }));
   },
-  async createAssignment(shiftId: string, data: AssignmentCreate): Promise<Assignment & { evoc_warnings?: EvocWarning[] }> {
-    const response = await api.post<Assignment & { evoc_warnings?: EvocWarning[] }>(
+  async createAssignment(shiftId: string, data: AssignmentCreate): Promise<Assignment & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }> {
+    const response = await api.post<Assignment & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }>(
       `/scheduling/shifts/${shiftId}/assignments`,
       data,
     );
@@ -640,12 +662,12 @@ export const schedulingService = {
   },
 
   // --- Department feature toggles ---
-  async getFeatureSettings(): Promise<{ platoons_enabled: boolean }> {
-    const response = await api.get<{ platoons_enabled: boolean }>('/scheduling/settings');
+  async getFeatureSettings(): Promise<SchedulingFeatureSettings> {
+    const response = await api.get<SchedulingFeatureSettings>('/scheduling/settings');
     return response.data;
   },
-  async updateFeatureSettings(data: { platoons_enabled: boolean }): Promise<{ platoons_enabled: boolean }> {
-    const response = await api.put<{ platoons_enabled: boolean }>('/scheduling/settings', data);
+  async updateFeatureSettings(data: Partial<SchedulingFeatureSettings>): Promise<SchedulingFeatureSettings> {
+    const response = await api.put<SchedulingFeatureSettings>('/scheduling/settings', data);
     return response.data;
   },
 

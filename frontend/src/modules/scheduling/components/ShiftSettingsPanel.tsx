@@ -21,7 +21,7 @@ import {
   FileBarChart,
   Users,
 } from "lucide-react";
-import type { ShiftTemplateRecord } from "../services/api";
+import type { ShiftTemplateRecord, SchedulingFeatureSettings } from "../services/api";
 import { schedulingService } from "../services/api";
 import { useSchedulingStore } from "../store/schedulingStore";
 import type { ShiftSettings } from "../types/shiftSettings";
@@ -108,6 +108,35 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       toast.error("Failed to update platoon setting");
     } finally {
       setSavingPlatoonToggle(false);
+    }
+  };
+
+  // Department feature settings (overtime advisory + auto-generation).
+  const [feature, setFeature] = useState<SchedulingFeatureSettings | null>(null);
+  const [savingFeature, setSavingFeature] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const fs = await schedulingService.getFeatureSettings();
+        if (!cancelled) setFeature(fs);
+      } catch {
+        // Non-critical — the panel still renders the local template settings.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const saveFeature = async (patch: Partial<SchedulingFeatureSettings>) => {
+    setSavingFeature(true);
+    try {
+      const updated = await schedulingService.updateFeatureSettings(patch);
+      setFeature(updated);
+      toast.success("Settings saved");
+    } catch {
+      toast.error("Failed to save settings");
+    } finally {
+      setSavingFeature(false);
     }
   };
 
@@ -223,6 +252,100 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               </button>
             </div>
           </div>
+
+          {feature && (
+            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+              <h3 className="text-base font-semibold text-theme-text-primary">
+                Overtime advisory
+              </h3>
+              <p className="text-sm text-theme-text-muted mt-1">
+                Warn (without blocking) when assigning a member whose scheduled
+                hours in a trailing window exceed a limit. Set the limit to 0 to
+                turn this off.
+              </p>
+              <div className="mt-3 flex flex-wrap items-end gap-4">
+                <label className="text-sm">
+                  <span className="block text-xs font-medium text-theme-text-secondary mb-1">Hours limit</span>
+                  <input
+                    type="number" min="0" max="336" step="1"
+                    value={feature.max_hours_per_window ?? 0}
+                    onChange={(e) => setFeature({ ...feature, max_hours_per_window: Number(e.target.value) })}
+                    className="form-input w-28"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="block text-xs font-medium text-theme-text-secondary mb-1">Window (days)</span>
+                  <input
+                    type="number" min="1" max="31" step="1"
+                    value={feature.hours_window_days}
+                    onChange={(e) => setFeature({ ...feature, hours_window_days: Number(e.target.value) })}
+                    className="form-input w-28"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={savingFeature}
+                  onClick={() => { void saveFeature({ max_hours_per_window: feature.max_hours_per_window ?? 0, hours_window_days: feature.hours_window_days }); }}
+                  className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
+
+          {feature && (
+            <div className="bg-theme-surface border border-theme-surface-border rounded-xl p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-semibold text-theme-text-primary">
+                    Automatic shift generation
+                  </h3>
+                  <p className="text-sm text-theme-text-muted mt-1">
+                    Keep active patterns generating shifts ahead automatically,
+                    so upcoming shifts appear without pressing “generate”.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={feature.auto_generate_enabled}
+                  disabled={savingFeature}
+                  onClick={() => { void saveFeature({ auto_generate_enabled: !feature.auto_generate_enabled }); }}
+                  className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                    feature.auto_generate_enabled ? "bg-violet-600" : "bg-theme-surface-border"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      feature.auto_generate_enabled ? "translate-x-6" : "translate-x-1"
+                    }`}
+                  />
+                </button>
+              </div>
+              {feature.auto_generate_enabled && (
+                <div className="mt-3 flex flex-wrap items-end gap-4">
+                  <label className="text-sm">
+                    <span className="block text-xs font-medium text-theme-text-secondary mb-1">Weeks ahead</span>
+                    <input
+                      type="number" min="1" max="52" step="1"
+                      value={feature.auto_generate_weeks}
+                      onChange={(e) => setFeature({ ...feature, auto_generate_weeks: Number(e.target.value) })}
+                      className="form-input w-28"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={savingFeature}
+                    onClick={() => { void saveFeature({ auto_generate_weeks: feature.auto_generate_weeks }); }}
+                    className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <TemplatesOverviewCard
             templates={templates}
             onNavigateToTemplates={onNavigateToTemplates}

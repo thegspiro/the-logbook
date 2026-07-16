@@ -728,10 +728,26 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
     open_positions: List[str]
 
 
+class CalendarFeedResponse(BaseModel):
+    """The member's personal ICS calendar-feed token and relative path."""
+
+    token: str
+    feed_path: str
+
+
 class SchedulingFeatureSettings(BaseModel):
     """Department-wide scheduling feature toggles (readable by any member)."""
 
     platoons_enabled: bool = False
+    # Overtime advisory: when max_hours_per_window > 0, assigning a member is
+    # flagged (soft, non-blocking) if their scheduled hours in the trailing
+    # window exceed the cap. 0/None disables the check.
+    max_hours_per_window: Optional[float] = Field(default=None, ge=0, le=336)
+    hours_window_days: int = Field(default=7, ge=1, le=31)
+    # Auto-generation: when enabled, a daily task keeps active patterns
+    # generating shifts this many weeks ahead.
+    auto_generate_enabled: bool = False
+    auto_generate_weeks: int = Field(default=4, ge=1, le=52)
 
 
 # ============================================

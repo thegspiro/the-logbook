@@ -22,6 +22,7 @@ import { getErrorMessage } from '../../utils/errorHandling';
 import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { useAuthStore } from '../../stores/authStore';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
+import { CalendarSubscribeCard } from './CalendarSubscribeCard';
 
 interface MyShiftsTabProps {
   onViewShift?: (shift: ShiftRecord) => void;
@@ -317,6 +318,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
 
   return (
     <div className="space-y-6">
+      <CalendarSubscribeCard />
       {/* Actions Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">

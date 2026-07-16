@@ -114,6 +114,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     notes: shift.notes || '',
     shift_officer_id: shift.shift_officer_id || '',
     positions: shift.positions ?? [],
+    min_staffing: shift.min_staffing != null ? String(shift.min_staffing) : '',
   });
   // Async operation flags — grouped to reduce useState count
   const [pending, setPending] = useState({
@@ -309,14 +310,28 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // One-click fill-in / hold-over: assign an available platoon member to the
   // shift straight from the roster. Position defaults to firefighter and can
   // be adjusted afterward in the crew board.
+  // Surface soft (non-blocking) warnings returned when creating an assignment
+  // — EVOC driver eligibility and overtime/hours limits.
+  const surfaceAssignmentWarnings = (res: {
+    evoc_warnings?: { message: string }[];
+    overtime_warnings?: string[];
+  }) => {
+    const messages = [
+      ...(res.evoc_warnings ?? []).map(w => w.message),
+      ...(res.overtime_warnings ?? []),
+    ];
+    if (messages.length > 0) toast(messages.join(' '), { icon: '⚠️' });
+  };
+
   const handleAssignFromRoster = async (userId: string) => {
     setPendingFlag('assigningRoster', true);
     try {
-      await schedulingService.createAssignment(shift.id, {
+      const res = await schedulingService.createAssignment(shift.id, {
         user_id: userId,
         position: 'firefighter',
       });
       toast.success('Member assigned to shift');
+      surfaceAssignmentWarnings(res);
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
@@ -487,7 +502,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     if (!assignForm.user_id) { toast.error('Select a member'); return; }
     setPendingFlag('assigning', true);
     try {
-      await schedulingService.createAssignment(shift.id, {
+      const res = await schedulingService.createAssignment(shift.id, {
         user_id: assignForm.user_id,
         position: assignForm.position,
         is_training: assignForm.is_training,
@@ -495,6 +510,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         training_evaluator_id: assignForm.is_training ? (assignForm.training_evaluator_id || undefined) : undefined,
       });
       toast.success('Member assigned');
+      surfaceAssignmentWarnings(res);
       setShowAssignForm(false);
       setAssignForm({
         user_id: '',
@@ -535,6 +551,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const handleSaveEdit = async () => {
     setPendingFlag('saving', true);
     try {
+      const trimmedStaffing = editForm.min_staffing.trim();
       const payload: Record<string, unknown> = {
         shift_date: editForm.shift_date,
         notes: editForm.notes || null,
@@ -542,12 +559,21 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         apparatus_id: editForm.apparatus_id || null,
         color: editForm.color || null,
         positions: editForm.positions.length > 0 ? editForm.positions : null,
+        min_staffing: trimmedStaffing ? Number(trimmedStaffing) : null,
       };
       if (editForm.start_time) {
         payload.start_time = localToUTC(`${editForm.shift_date}T${editForm.start_time}`, tz);
       }
       if (editForm.end_time) {
-        payload.end_time = localToUTC(`${editForm.shift_date}T${editForm.end_time}`, tz);
+        let end = localToUTC(`${editForm.shift_date}T${editForm.end_time}`, tz);
+        // Overnight guard: roll the end to the next day when it falls on/before
+        // the start (e.g. 19:00 → 07:00), so the backend accepts it.
+        if (payload.start_time && new Date(end) <= new Date(payload.start_time as string)) {
+          const rolled = new Date(end);
+          rolled.setUTCDate(rolled.getUTCDate() + 1);
+          end = rolled.toISOString();
+        }
+        payload.end_time = end;
       }
       const updated = await schedulingService.updateShift(shift.id, payload);
       setShift(updated);
@@ -793,7 +819,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
             <div className="flex items-center gap-1 shrink-0">
               {canManage && !isPast && !shift.is_finalized && !isCancelled && (
                 <>
-                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '', positions: shift.positions ?? [] }); setIsEditing(!isEditing); }}
+                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '', positions: shift.positions ?? [], min_staffing: shift.min_staffing != null ? String(shift.min_staffing) : '' }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
                   >
                     <Pencil className="w-4 h-4" />
@@ -1075,6 +1101,18 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </select>
                 </div>
               )}
+              <div>
+                <label htmlFor="edit-min-staffing" className="block text-xs font-medium text-theme-text-secondary mb-1">
+                  <span className="flex items-center gap-1"><Users className="w-3 h-3" /> Minimum staffing</span>
+                </label>
+                <input id="edit-min-staffing" type="number" min="0" max="99"
+                  value={editForm.min_staffing}
+                  onChange={e => setEditForm(p => ({...p, min_staffing: e.target.value}))}
+                  placeholder="Target crew size"
+                  className={inputCls}
+                />
+                <p className="mt-1 text-xs text-theme-text-muted">Overrides the template/apparatus target for this shift.</p>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-theme-text-secondary mb-1">
                   <span className="flex items-center gap-1"><Palette className="w-3 h-3" /> Color</span>
