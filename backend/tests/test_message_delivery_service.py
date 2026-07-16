@@ -79,6 +79,19 @@ class TestInAppFanOut:
             await svc.deliver(_msg(posted_by="author"))
         db.add.assert_not_called()
 
+    async def test_deliver_never_raises_on_targeting_failure(self):
+        # A message that errors mid-fan-out must not propagate: in the publish
+        # task it would otherwise halt delivery of the other due messages.
+        db = _db()
+        svc = MessageDeliveryService(db)
+        with patch.object(
+            MessagingService,
+            "_targeted_users",
+            new=AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            # Must not raise.
+            await svc.deliver(_msg())
+
 
 class TestChannelRouting:
     async def _route(self, message):

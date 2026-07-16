@@ -61,41 +61,50 @@ class MessageDeliveryService:
     async def deliver(self, message: DepartmentMessage) -> None:
         """Deliver ``message`` to its targeted audience across channels.
 
-        Never raises — every channel is best-effort and independently guarded so
-        a failure in one does not suppress the others.
+        Never raises — the whole fan-out is guarded so that one message that
+        errors (bad data, a transient DB/query failure) can't propagate out and
+        halt a batch of other messages being published, and each channel is
+        additionally best-effort so a failure in one doesn't suppress the rest.
         """
-        # Reuse the exact targeting the inbox uses so escalation and in-app
-        # visibility never disagree about who the audience is.
-        from app.services.messaging_service import MessagingService
+        try:
+            # Reuse the exact targeting the inbox uses so escalation and in-app
+            # visibility never disagree about who the audience is.
+            from app.services.messaging_service import MessagingService
 
-        recipients = await MessagingService(self.db)._targeted_users(
-            message, str(message.organization_id)
-        )
-        # Don't notify the author about their own post.
-        recipients = [u for u in recipients if str(u.id) != str(message.posted_by)]
-        if not recipients:
-            return
-
-        priority = _priority_value(message)
-        is_urgent = priority == "urgent"
-        escalate_email = is_urgent or bool(message.requires_acknowledgment)
-
-        await self._create_in_app(message, recipients)
-
-        org = None
-        if escalate_email or is_urgent:
-            org_result = await self.db.execute(
-                select(Organization).where(
-                    Organization.id == str(message.organization_id)
-                )
+            recipients = await MessagingService(self.db)._targeted_users(
+                message, str(message.organization_id)
             )
-            org = org_result.scalar_one_or_none()
+            # Don't notify the author about their own post.
+            recipients = [u for u in recipients if str(u.id) != str(message.posted_by)]
+            if not recipients:
+                return
 
-        if escalate_email:
-            await self._send_email(message, recipients, org)
+            priority = _priority_value(message)
+            is_urgent = priority == "urgent"
+            escalate_email = is_urgent or bool(message.requires_acknowledgment)
 
-        if is_urgent:
-            await self._send_sms(message, recipients, org)
+            await self._create_in_app(message, recipients)
+
+            org = None
+            if escalate_email or is_urgent:
+                org_result = await self.db.execute(
+                    select(Organization).where(
+                        Organization.id == str(message.organization_id)
+                    )
+                )
+                org = org_result.scalar_one_or_none()
+
+            if escalate_email:
+                await self._send_email(message, recipients, org)
+
+            if is_urgent:
+                await self._send_sms(message, recipients, org)
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(
+                "Department message delivery failed for {}: {}",
+                getattr(message, "id", "?"),
+                e,
+            )
 
     async def _create_in_app(
         self, message: DepartmentMessage, recipients: List[User]
@@ -212,10 +221,14 @@ async def deliver_department_message(message_id: str, organization_id: str) -> N
 
     try:
         async for session in database_manager.get_session():
+            # Only deliver a message that is still live — an admin may have
+            # deleted or deactivated it between the POST and this background run.
             result = await session.execute(
                 select(DepartmentMessage).where(
                     DepartmentMessage.id == str(message_id),
                     DepartmentMessage.organization_id == str(organization_id),
+                    DepartmentMessage.is_active == True,  # noqa: E712
+                    DepartmentMessage.deleted_at.is_(None),
                 )
             )
             message = result.scalar_one_or_none()
