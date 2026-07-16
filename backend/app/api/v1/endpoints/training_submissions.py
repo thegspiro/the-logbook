@@ -287,3 +287,37 @@ async def review_submission(
             )
 
         return submission
+
+
+@router.post(
+    "/{submission_id}/reverse-approval",
+    response_model=TrainingSubmissionResponse,
+)
+async def reverse_submission_approval(
+    submission_id: str,
+    reason: str | None = Query(
+        default=None, description="Why the approval is being reversed (audit trail)"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Reverse a mistaken approval: void the spawned record, un-apply any
+    pipeline credit, and return the submission to pending review."""
+    service = TrainingSubmissionService(db)
+    async with handle_service_errors("Failed to reverse submission approval"):
+        submission = await service.reverse_approval(
+            submission_id=submission_id,
+            reviewer_id=current_user.id,
+            organization_id=current_user.organization_id,
+            reason=reason,
+        )
+        await log_audit_event(
+            db=db,
+            event_type="training_submission_approval_reversed",
+            event_category="training",
+            severity="warning",
+            event_data={"submission_id": str(submission_id), "reason": reason},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        return submission

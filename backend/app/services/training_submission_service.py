@@ -8,6 +8,7 @@ and self-report configuration management.
 import calendar
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
+from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import and_
@@ -342,6 +343,80 @@ class TrainingSubmissionService:
 
         await self.db.refresh(submission)
         logger.info(f"Submission {submission_id} reviewed: {action} by {reviewer_id}")
+        return submission
+
+    async def reverse_approval(
+        self,
+        submission_id: str,
+        reviewer_id: str,
+        organization_id: str,
+        reason: Optional[str] = None,
+    ) -> TrainingSubmission:
+        """Undo a mistaken approval: void the record it spawned, un-apply any
+        pipeline credit, and send the submission back to pending review.
+
+        This is the correction path for "approved by accident" or "approved the
+        wrong thing" — an officer shouldn't have to hunt down the spawned record
+        and manually unwind progress. The submission returns to PENDING_REVIEW so
+        it can be re-decided (rejected, or re-approved with corrected values).
+        """
+        from app.services.training_program_service import TrainingProgramService
+
+        submission = await self.get_submission(submission_id, organization_id)
+        if not submission:
+            raise ValueError("Submission not found")
+        if submission.status != SubmissionStatus.APPROVED:
+            raise ValueError(
+                f"Only an approved submission can be reversed "
+                f"(status is '{submission.status.value}')"
+            )
+
+        program_service = TrainingProgramService(self.db)
+        record_id = submission.training_record_id
+
+        # Un-apply pipeline credit keyed on the submission itself (officer-apply)
+        # and on the spawned record (any feed), across every requirement it hit.
+        await program_service.reverse_credits_for_source(
+            organization_id=UUID(str(organization_id)),
+            source_id=str(submission_id),
+            verified_by=UUID(str(reviewer_id)),
+        )
+        if record_id:
+            await program_service.reverse_credits_for_source(
+                organization_id=UUID(str(organization_id)),
+                source_id=str(record_id),
+                verified_by=UUID(str(reviewer_id)),
+            )
+            # Void the spawned record (kept for audit, no longer counts).
+            record_result = await self.db.execute(
+                select(TrainingRecord).where(
+                    TrainingRecord.id == str(record_id),
+                    TrainingRecord.organization_id == organization_id,
+                )
+            )
+            record = record_result.scalar_one_or_none()
+            if record and record.status != TrainingStatus.CANCELLED:
+                record.status = TrainingStatus.CANCELLED
+                void_note = f"[VOIDED via approval reversal by {reviewer_id}"
+                if reason:
+                    void_note += f": {reason}"
+                void_note += "]"
+                record.notes = (
+                    f"{record.notes}\n{void_note}" if record.notes else void_note
+                )
+
+        submission.status = SubmissionStatus.PENDING_REVIEW
+        submission.training_record_id = None
+        submission.reviewed_by = None
+        submission.reviewed_at = None
+        note = f"Approval reversed by {reviewer_id}"
+        if reason:
+            note += f": {reason}"
+        submission.reviewer_notes = note
+
+        await self.db.commit()
+        await self.db.refresh(submission)
+        logger.info(f"Submission {submission_id} approval reversed by {reviewer_id}")
         return submission
 
     async def get_pending_count(self, organization_id: str) -> int:

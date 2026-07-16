@@ -2235,6 +2235,64 @@ class TrainingProgramService:
             verified_by=verified_by,
         )
 
+    async def reverse_credits_for_source(
+        self,
+        organization_id: UUID,
+        source_id: str,
+        source_type: Optional[ProgressCreditSource] = None,
+        verified_by: Optional[UUID] = None,
+    ) -> int:
+        """Un-apply every pipeline credit that a given source record produced.
+
+        A single training record or submission can have fanned out credit to
+        several requirements (e.g. an imported course that matched two programs).
+        When an officer voids that record or reverses its approval, all of those
+        credits must come back off — this finds each ledger row keyed on
+        ``source_id`` (scoped to the org, optionally narrowed to one source type)
+        and reverses it through ``revoke_requirement_credit``. Returns the number
+        of credits reversed.
+        """
+        filters = [
+            RequirementProgressCredit.source_id == str(source_id),
+            TrainingProgram.organization_id == str(organization_id),
+        ]
+        if source_type is not None:
+            filters.append(RequirementProgressCredit.source_type == source_type)
+
+        result = await self.db.execute(
+            select(
+                RequirementProgressCredit.progress_id,
+                RequirementProgressCredit.source_type,
+            )
+            .join(
+                RequirementProgress,
+                RequirementProgressCredit.progress_id == RequirementProgress.id,
+            )
+            .join(
+                ProgramEnrollment,
+                RequirementProgress.enrollment_id == ProgramEnrollment.id,
+            )
+            .join(
+                TrainingProgram,
+                ProgramEnrollment.program_id == TrainingProgram.id,
+            )
+            .where(*filters)
+        )
+        rows = result.all()
+
+        reversed_count = 0
+        for progress_id, credit_source_type in rows:
+            _, error = await self.revoke_requirement_credit(
+                progress_id=progress_id,
+                organization_id=organization_id,
+                source_type=credit_source_type,
+                source_id=str(source_id),
+                verified_by=verified_by,
+            )
+            if not error:
+                reversed_count += 1
+        return reversed_count
+
     async def credit_category_progress(
         self,
         user_id: Any,
