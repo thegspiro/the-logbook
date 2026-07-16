@@ -38,8 +38,12 @@ def _prog(value):
     return SimpleNamespace(id=str(uuid4()), progress_value=value)
 
 
-def _req(rtype):
-    return SimpleNamespace(id=str(uuid4()), requirement_type=rtype)
+def _req(rtype, allows_external_credit=True):
+    return SimpleNamespace(
+        id=str(uuid4()),
+        requirement_type=rtype,
+        allows_external_credit=allows_external_credit,
+    )
 
 
 class TestCreditCategoryProgress:
@@ -91,6 +95,32 @@ class TestCreditCategoryProgress:
         )
 
         assert advanced == 2  # same completion credited to both programs
+
+    async def test_requirement_without_external_credit_is_skipped(self):
+        # An in-house-only requirement (allows_external_credit=False) matching the
+        # category must NOT be advanced by an imported course.
+        enrollment = SimpleNamespace(id="enr-1")
+        p_open, r_open = _prog(0.0), _req(RequirementType.HOURS)
+        p_inhouse, r_inhouse = _prog(0.0), _req(
+            RequirementType.HOURS, allows_external_credit=False
+        )
+        db = RecordingSession(
+            [
+                _scalars([enrollment]),
+                _rows([(p_open, r_open), (p_inhouse, r_inhouse)]),
+            ]
+        )
+        svc = TrainingProgramService(db)
+        svc.update_requirement_progress = AsyncMock(return_value=(MagicMock(), None))
+
+        advanced = await svc.credit_category_progress(
+            user_id="u1", organization_id=uuid4(), category_id="cat-1", hours=4.0
+        )
+
+        assert advanced == 1  # only the opted-in requirement
+        assert svc.update_requirement_progress.await_args.kwargs["progress_id"] == (
+            p_open.id
+        )
 
     async def test_no_active_enrollment_is_noop(self):
         db = RecordingSession([_scalars([])])

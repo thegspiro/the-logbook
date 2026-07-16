@@ -171,15 +171,19 @@ progression.
   wouldn't accept: attendance still creates the member's training record (they keep the
   hours toward general compliance) but the session no longer feeds the linked
   pipeline/certificate requirements, so ineligible hours don't inflate a certificate.
-- **External / synced courses → pipeline** — importing a training record from an
-  external provider (Vector Solutions, etc.) now advances any pipeline requirement it
+- **External / synced courses → pipeline (opt-in)** — importing a training record from an
+  external provider (Vector Solutions, etc.) can advance the pipeline requirements it
   satisfies by category, not just the compliance matrix. On import, for the member's
   **active** enrollments, an HOURS requirement tagged with the record's category accrues
   the record's hours and a COURSES requirement accrues one completion — routed through the
   same updater as sessions, so percentage, auto-completion, rollup, and phase advancement
   all run (`TrainingProgramService.credit_category_progress`, applied post-commit in
-  `bulk_import_records`). The same completion counts toward every active program that
-  requires the category; other requirement types are left for explicit sign-off.
+  `bulk_import_records`). **A requirement only accepts imported credit when an officer opts
+  it in** via a new per-requirement `allows_external_credit` flag (off by default; migration
+  `20260717_0001`) — so a Vector "mobile radios" course never checks off a requirement the
+  department wants delivered in-house. When enabled, the same completion counts toward every
+  active program that requires the category; other requirement types are left for explicit
+  sign-off.
 - **Skills tests → pipeline** — a skill template carries a default **linked training
   requirement** (each test inherits it, overridable per test via a new
   `requirement_id` on `skill_templates`/`skill_tests`, migration

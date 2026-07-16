@@ -364,6 +364,7 @@ export const RequirementFormModal: React.FC<{
   const [attempts, setAttempts] = useState(req?.max_attempts?.toString() ?? '');
   const [checklist, setChecklist] = useState((req?.checklist_items ?? []).join('\n'));
   const [isRequired, setIsRequired] = useState(link?.is_required !== false);
+  const [allowsExternal, setAllowsExternal] = useState(req?.allows_external_credit === true);
   const [submitting, setSubmitting] = useState(false);
 
   const submit = async () => {
@@ -383,6 +384,7 @@ export const RequirementFormModal: React.FC<{
           type === 'checklist'
             ? checklist.split('\n').map((s) => s.trim()).filter(Boolean)
             : undefined,
+        allows_external_credit: allowsExternal,
       };
       if (link) {
         await trainingProgramService.updateRequirementEnhanced(link.requirement_id, payload);
@@ -464,6 +466,24 @@ export const RequirementFormModal: React.FC<{
           <label className="form-label" htmlFor="rq-check">Checklist items (one per line)</label>
           <textarea id="rq-check" className="form-input" rows={4} value={checklist} onChange={(e) => setChecklist(e.target.value)} />
         </div>
+      )}
+      {(type === 'hours' || type === 'courses') && (
+        <label className="inline-flex items-start gap-2 text-sm text-theme-text-secondary">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={allowsExternal}
+            onChange={(e) => setAllowsExternal(e.target.checked)}
+          />
+          <span>
+            Accept external / imported training credit
+            <span className="block text-xs text-theme-text-muted">
+              Off by default: only in-house sessions, skills tests, or manual sign-off satisfy this.
+              Turn on to let imported courses (e.g. Vector Solutions) in a matching category count
+              toward it.
+            </span>
+          </span>
+        </label>
       )}
       <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary">
         <input type="checkbox" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />

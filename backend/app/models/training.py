@@ -447,6 +447,14 @@ class TrainingRequirement(Base):
         Boolean, default=True
     )  # Department can override registry requirements
 
+    # When False (the default), imported/external training records (e.g. Vector
+    # Solutions syncs) never auto-credit this requirement by category — it must be
+    # satisfied by an in-house session, a skills test, or manual officer sign-off.
+    # Officers opt a requirement in when online/third-party delivery is acceptable
+    # (e.g. HIPAA CE), and leave it off for in-house-only competencies (e.g. a
+    # hands-on radios drill that a Vector course must not check off).
+    allows_external_credit = Column(Boolean, default=False, nullable=False)
+
     # Requirement Quantities (based on requirement_type)
     required_hours = Column(Float)  # For HOURS type
     required_courses = Column(JSON)  # For COURSES type - list of course IDs

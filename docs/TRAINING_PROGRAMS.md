@@ -361,17 +361,21 @@ The External Training Integration feature allows organizations to connect to ext
 └─────────────────────────────────────────────────────────────┘
 ```
 
-> **Imported courses also feed training pipelines.** When a record is imported,
-> for each of the member's **active** enrollments any requirement tagged with the
-> record's category is advanced — an HOURS requirement by the record's hours, a
-> COURSES requirement by one completion — through the same machinery as an in-app
-> training session (so percentage, auto-completion, rollup, and phase advancement
-> all run). This means a course completed in Vector Solutions counts toward a
-> member's recruit-school / certification progress, not just the compliance matrix.
-> Requirement types that need human sign-off (skills evaluations, certifications,
-> checklists, knowledge tests) are left for an officer to complete. Correct
-> **category mapping** is what makes this work, so map external categories to the
-> internal categories your requirements use.
+> **Imported courses can feed training pipelines — when you opt a requirement in.**
+> Each requirement has an **"Accept external / imported training credit"** toggle
+> (off by default). Leave it off for competencies the department wants delivered
+> in-house (e.g. a hands-on radios drill), and a matching Vector Solutions course
+> will *not* check it off — only an in-house session, a skills test, or manual
+> sign-off will. Turn it on for requirements where online/third-party delivery is
+> acceptable (e.g. HIPAA CE): then, when a record is imported, for each of the
+> member's **active** enrollments a matching HOURS requirement is advanced by the
+> record's hours and a COURSES requirement by one completion — through the same
+> machinery as an in-app session (percentage, auto-completion, rollup, and phase
+> advancement all run). The toggle is offered for hours- and course-type
+> requirements; types that need human sign-off (skills evaluations, certifications,
+> checklists, knowledge tests) are always left for an officer. Correct **category
+> mapping** is what routes an imported course to the right requirement, so map
+> external categories to the internal categories your requirements use.
 
 ### Managing Mappings
 

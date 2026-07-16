@@ -282,6 +282,9 @@ class TrainingRequirementBase(BaseModel):
     registry_name: Optional[str] = None
     registry_code: Optional[str] = Field(None, max_length=50)
     is_editable: bool = True
+    # Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
+    # this requirement by category? Off by default — in-house delivery only.
+    allows_external_credit: bool = False
     training_type: Optional[str] = None
     # Requirement quantities (field used depends on requirement_type)
     required_hours: Optional[float] = Field(None, ge=0)
@@ -358,6 +361,7 @@ class TrainingRequirementUpdate(BaseModel):
     registry_name: Optional[str] = None
     registry_code: Optional[str] = Field(None, max_length=50)
     is_editable: Optional[bool] = None
+    allows_external_credit: Optional[bool] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None

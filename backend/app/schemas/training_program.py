@@ -40,6 +40,9 @@ class TrainingRequirementEnhancedBase(BaseModel):
     registry_name: Optional[str] = Field(None, max_length=100)
     registry_code: Optional[str] = Field(None, max_length=50)
     is_editable: bool = True
+    # Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
+    # this requirement by category? Off by default — in-house delivery only.
+    allows_external_credit: bool = False
 
     # Different requirement quantities.
     # required_courses / required_skills / required_roles are stored as JSON
@@ -90,6 +93,7 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     description: Optional[str] = None
     requirement_type: Optional[RequirementTypeStr] = None
     is_editable: Optional[bool] = None
+    allows_external_credit: Optional[bool] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None

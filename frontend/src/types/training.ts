@@ -400,6 +400,9 @@ export interface TrainingRequirement {
   registry_name?: string;
   registry_code?: string;
   is_editable?: boolean;
+  // Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
+  // this requirement by category? Off by default — in-house delivery only.
+  allows_external_credit?: boolean;
   training_type?: TrainingType;
   // Requirement quantities (field used depends on requirement_type)
   required_hours?: number;
@@ -445,6 +448,7 @@ export interface TrainingRequirementCreate {
   registry_name?: string | undefined;
   registry_code?: string | undefined;
   is_editable?: boolean | undefined;
+  allows_external_credit?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | undefined;
   required_courses?: string[] | undefined;
@@ -483,6 +487,7 @@ export interface TrainingRequirementUpdate {
   registry_name?: string | undefined;
   registry_code?: string | undefined;
   is_editable?: boolean | undefined;
+  allows_external_credit?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | undefined;
   required_courses?: string[] | undefined;

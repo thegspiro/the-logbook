@@ -348,6 +348,9 @@ class TrainingProgramService:
             registry_name=requirement_data.registry_name,
             registry_code=requirement_data.registry_code,
             is_editable=requirement_data.is_editable,
+            allows_external_credit=getattr(
+                requirement_data, "allows_external_credit", False
+            ),
             training_type=requirement_data.training_type,
             required_hours=requirement_data.required_hours,
             required_courses=requirement_data.required_courses,
@@ -589,6 +592,9 @@ class TrainingProgramService:
                     max_attempts=req_input.max_attempts,
                     checklist_items=checklist,
                     is_editable=True,
+                    allows_external_credit=getattr(
+                        req_input, "allows_external_credit", False
+                    ),
                     applies_to_all=False,
                     created_by=created_by,
                 )
@@ -2114,6 +2120,11 @@ class TrainingProgramService:
                 )
             )
             for progress, requirement in rows_result.all():
+                # Only requirements an officer has opted into external credit for
+                # may be auto-satisfied by an import; the rest need in-house
+                # delivery (a linked session, a skills test, or manual sign-off).
+                if not getattr(requirement, "allows_external_credit", False):
+                    continue
                 if requirement.requirement_type == RequirementType.HOURS:
                     increment = float(hours)
                 elif (
