@@ -4,9 +4,9 @@
  * Create a department message/announcement with audience targeting.
  *
  * Targeting contract: the backend's _is_targeted matches target_roles against
- * the member's role *names* and target_statuses against the member's status
- * value, so this form submits role names (not slugs) and status values. Getting
- * this wrong would silently deliver a role-targeted message to nobody.
+ * the member's role *ids* (rename-safe) and target_statuses against the
+ * member's status value, so this form submits role ids and status values.
+ * Getting this wrong would silently deliver a role-targeted message to nobody.
  */
 
 import React, { useEffect, useState } from 'react';
@@ -238,12 +238,12 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
           <legend className="text-theme-text-secondary px-1 text-sm font-medium">Roles</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {roles.map((r) => (
-              <label key={r.slug} className="flex items-center gap-2 text-sm">
+              <label key={r.id} className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className={checkboxClass}
-                  checked={targetRoles.includes(r.name)}
-                  onChange={() => setTargetRoles((prev) => toggle(prev, r.name))}
+                  checked={targetRoles.includes(r.id)}
+                  onChange={() => setTargetRoles((prev) => toggle(prev, r.id))}
                 />
                 {r.name}
               </label>

@@ -33,10 +33,14 @@ const PRIORITY_BADGE: Record<string, string> = {
   urgent: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
 };
 
-function audienceLabel(m: DepartmentMessageRecord): string {
+function audienceLabel(m: DepartmentMessageRecord, roleNames: Record<string, string>): string {
   switch (m.target_type) {
-    case 'roles':
-      return `Roles: ${(m.target_roles ?? []).join(', ') || '—'}`;
+    case 'roles': {
+      // target_roles holds role ids; resolve to names, falling back to the raw
+      // value for legacy name-based entries that predate role-id targeting.
+      const names = (m.target_roles ?? []).map((r) => roleNames[r] ?? r);
+      return `Roles: ${names.join(', ') || '—'}`;
+    }
     case 'statuses':
       return `Statuses: ${(m.target_statuses ?? []).join(', ') || '—'}`;
     case 'members':
@@ -56,6 +60,8 @@ const MessagesAdminPage: React.FC = () => {
   const [pendingDelete, setPendingDelete] = useState<DepartmentMessageRecord | null>(null);
   const [reportFor, setReportFor] = useState<string | null>(null);
   const [report, setReport] = useState<AcknowledgmentReport | null>(null);
+  // id -> name, so role-targeted messages show role names instead of raw ids.
+  const [roleNames, setRoleNames] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -73,6 +79,17 @@ const MessagesAdminPage: React.FC = () => {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const roles = await messagesService.getAvailableRoles();
+        setRoleNames(Object.fromEntries(roles.map((r) => [r.id, r.name])));
+      } catch {
+        // Non-fatal: labels fall back to raw ids if roles can't be loaded.
+      }
+    })();
+  }, []);
 
   const handleDelete = async () => {
     if (!pendingDelete) return;
@@ -197,7 +214,7 @@ const MessagesAdminPage: React.FC = () => {
                     )}
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
-                    {audienceLabel(m)} · {formatDateTime(m.created_at, tz)}
+                    {audienceLabel(m, roleNames)} · {formatDateTime(m.created_at, tz)}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">

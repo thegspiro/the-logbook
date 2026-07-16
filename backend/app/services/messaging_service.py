@@ -217,10 +217,7 @@ class MessagingService:
         if not user:
             return []
 
-        user_role_names = [r.name for r in user.roles]
-        user_status = (
-            user.status.value if hasattr(user.status, "value") else str(user.status)
-        )
+        user_role_ids, user_role_names, user_status = self._user_targeting_context(user)
 
         # Get all active, non-expired, non-deleted messages for this org
         query = select(DepartmentMessage).where(
@@ -246,7 +243,9 @@ class MessagingService:
         # Filter by targeting
         visible_messages = []
         for msg in all_messages:
-            if self._is_targeted(msg, user_id, user_role_names, user_status):
+            if self._is_targeted(
+                msg, user_id, user_role_ids, user_role_names, user_status
+            ):
                 visible_messages.append(msg)
 
         # Get read statuses for this user
@@ -361,10 +360,7 @@ class MessagingService:
         if not user:
             return 0
 
-        user_role_names = [r.name for r in user.roles]
-        user_status = (
-            user.status.value if hasattr(user.status, "value") else str(user.status)
-        )
+        user_role_ids, user_role_names, user_status = self._user_targeting_context(user)
 
         # Load only the columns needed to evaluate targeting/resolution —
         # crucially NOT the body — for active, non-expired, non-deleted rows.
@@ -395,7 +391,9 @@ class MessagingService:
         visible = [
             row
             for row in rows
-            if self._is_targeted(row, user_id, user_role_names, user_status)
+            if self._is_targeted(
+                row, user_id, user_role_ids, user_role_names, user_status
+            )
         ]
         if not visible:
             return 0
@@ -426,14 +424,31 @@ class MessagingService:
 
         return pending
 
+    @staticmethod
+    def _user_targeting_context(user) -> Tuple[List[str], List[str], str]:
+        """Extract the (role_ids, role_names, status) a user is matched on."""
+        role_ids = [str(r.id) for r in user.roles]
+        role_names = [r.name for r in user.roles]
+        status = (
+            user.status.value if hasattr(user.status, "value") else str(user.status)
+        )
+        return role_ids, role_names, status
+
     def _is_targeted(
         self,
         message: DepartmentMessage,
         user_id: str,
+        user_role_ids: List[str],
         user_role_names: List[str],
         user_status: str,
     ) -> bool:
-        """Check if a message targets the given user"""
+        """Check if a message targets the given user.
+
+        Role targeting matches on role *id* (rename-safe). A role-name fallback
+        is retained so messages authored before role-id targeting — or entries
+        that could not be backfilled because the role was since deleted — still
+        reach the right members.
+        """
         tt = (
             message.target_type.value
             if hasattr(message.target_type, "value")
@@ -444,7 +459,9 @@ class MessagingService:
             return True
         elif tt == "roles":
             target_roles = message.target_roles or []
-            return any(r in target_roles for r in user_role_names)
+            return any(rid in target_roles for rid in user_role_ids) or any(
+                rname in target_roles for rname in user_role_names
+            )
         elif tt == "statuses":
             target_statuses = message.target_statuses or []
             return user_status in target_statuses
@@ -474,11 +491,8 @@ class MessagingService:
         user = user_result.scalar_one_or_none()
         if not user:
             return None
-        role_names = [r.name for r in user.roles]
-        status = (
-            user.status.value if hasattr(user.status, "value") else str(user.status)
-        )
-        if not self._is_targeted(message, str(user_id), role_names, status):
+        role_ids, role_names, status = self._user_targeting_context(user)
+        if not self._is_targeted(message, str(user_id), role_ids, role_names, status):
             return None
         return message
 
@@ -569,9 +583,8 @@ class MessagingService:
         users = users_result.scalars().all()
         targeted = []
         for u in users:
-            role_names = [r.name for r in u.roles]
-            status = u.status.value if hasattr(u.status, "value") else str(u.status)
-            if self._is_targeted(message, str(u.id), role_names, status):
+            role_ids, role_names, status = self._user_targeting_context(u)
+            if self._is_targeted(message, str(u.id), role_ids, role_names, status):
                 targeted.append(u)
         return targeted
 
@@ -679,10 +692,14 @@ class MessagingService:
         }
 
     async def get_available_roles(self, organization_id: str) -> List[Dict[str, str]]:
-        """Get list of roles for targeting dropdown"""
+        """Get list of roles for targeting dropdown.
+
+        Includes the role id, which is what role-targeted messages store (the
+        id is stable across renames, unlike the name).
+        """
         result = await self.db.execute(
-            select(Role.name, Role.slug)
+            select(Role.id, Role.name, Role.slug)
             .where(Role.organization_id == organization_id)
             .order_by(Role.priority.desc())
         )
-        return [{"name": r.name, "slug": r.slug} for r in result.all()]
+        return [{"id": r.id, "name": r.name, "slug": r.slug} for r in result.all()]

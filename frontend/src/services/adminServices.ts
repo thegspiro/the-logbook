@@ -607,6 +607,7 @@ export interface AcknowledgmentReport {
 }
 
 export interface RoleOption {
+  id: string;
   name: string;
   slug: string;
 }

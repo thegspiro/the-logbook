@@ -37,24 +37,33 @@ def _svc():
     return MessagingService(MagicMock())
 
 
-def _targeted(message, user_id="u1", roles=None, status="active"):
-    return _svc()._is_targeted(message, user_id, roles or [], status)
+def _targeted(message, user_id="u1", role_ids=None, roles=None, status="active"):
+    return _svc()._is_targeted(message, user_id, role_ids or [], roles or [], status)
 
 
 class TestIsTargeted:
     def test_all_reaches_everyone(self):
         assert _targeted(_msg(target_type="all")) is True
 
-    def test_roles_match(self):
+    def test_roles_match_by_id(self):
+        # Primary path: target_roles holds role ids.
+        msg = _msg(target_type="roles", roles=["role-officer", "role-chief"])
+        assert _targeted(msg, role_ids=["role-ff", "role-officer"]) is True
+
+    def test_roles_match_by_name_fallback(self):
+        # Legacy/un-backfillable entries stored as names still match.
         msg = _msg(target_type="roles", roles=["officer", "chief"])
         assert _targeted(msg, roles=["firefighter", "officer"]) is True
 
     def test_roles_no_match(self):
-        msg = _msg(target_type="roles", roles=["chief"])
-        assert _targeted(msg, roles=["firefighter"]) is False
+        msg = _msg(target_type="roles", roles=["role-chief"])
+        assert _targeted(msg, role_ids=["role-ff"], roles=["firefighter"]) is False
 
     def test_roles_empty_target_denies(self):
-        assert _targeted(_msg(target_type="roles", roles=[]), roles=["chief"]) is False
+        assert (
+            _targeted(_msg(target_type="roles", roles=[]), role_ids=["role-chief"])
+            is False
+        )
 
     def test_statuses_match(self):
         msg = _msg(target_type="statuses", statuses=["active", "probationary"])
@@ -83,16 +92,14 @@ class TestIsTargeted:
 class TestUnreadCount:
     def _user(self, roles=("officer",), status="active"):
         return SimpleNamespace(
-            roles=[SimpleNamespace(name=r) for r in roles],
+            roles=[SimpleNamespace(id=r, name=r) for r in roles],
             status=SimpleNamespace(value=status),
         )
 
     def _read(self, message_id, acknowledged_at=None):
         # Mirrors the (message_id, acknowledged_at) row the lightweight unread
         # query now selects.
-        return SimpleNamespace(
-            message_id=message_id, acknowledged_at=acknowledged_at
-        )
+        return SimpleNamespace(message_id=message_id, acknowledged_at=acknowledged_at)
 
     def _db(self, user, messages, reads):
         db = MagicMock()
@@ -159,7 +166,7 @@ class TestReadAckVisibilityGate:
 
     def _user(self, roles=(), status="active"):
         return SimpleNamespace(
-            roles=[SimpleNamespace(name=r) for r in roles],
+            roles=[SimpleNamespace(id=r, name=r) for r in roles],
             status=SimpleNamespace(value=status),
         )
 
@@ -233,9 +240,7 @@ class TestSoftDelete:
         message = SimpleNamespace(deleted_at=None, is_active=True)
         db = MagicMock()
         db.execute = AsyncMock(
-            return_value=MagicMock(
-                scalar_one_or_none=MagicMock(return_value=message)
-            )
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=message))
         )
         db.commit = AsyncMock()
         db.delete = MagicMock()
@@ -255,9 +260,7 @@ class TestSoftDelete:
         )
         db = MagicMock()
         db.execute = AsyncMock(
-            return_value=MagicMock(
-                scalar_one_or_none=MagicMock(return_value=message)
-            )
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=message))
         )
         db.commit = AsyncMock()
 
@@ -277,7 +280,7 @@ class TestAcknowledgmentReport:
             first_name=first,
             last_name="",
             username=first.lower(),
-            roles=[SimpleNamespace(name=r) for r in roles],
+            roles=[SimpleNamespace(id=r, name=r) for r in roles],
             status=SimpleNamespace(value=status),
         )
 
@@ -295,9 +298,7 @@ class TestAcknowledgmentReport:
         reads_res.scalars.return_value.all.return_value = [read_u1]
         db.execute = AsyncMock(side_effect=[msg_res, users_res, reads_res])
 
-        report = await MessagingService(db).get_acknowledgment_report(
-            "m1", "org-1"
-        )
+        report = await MessagingService(db).get_acknowledgment_report("m1", "org-1")
 
         assert report is not None
         assert report["total_targeted"] == 2

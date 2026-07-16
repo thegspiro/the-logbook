@@ -27,13 +27,13 @@ import MessageComposeForm from './MessageComposeForm';
 describe('MessageComposeForm', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetRoles.mockResolvedValue([{ name: 'Officer', slug: 'officer' }]);
+    mockGetRoles.mockResolvedValue([{ id: 'role-officer', name: 'Officer', slug: 'officer' }]);
     mockGetUsers.mockResolvedValue([]);
     mockCreate.mockResolvedValue({ id: 'm1' });
     mockUpdate.mockResolvedValue({ id: 'm1' });
   });
 
-  it('targets roles by name, not slug, matching the backend contract', async () => {
+  it('targets roles by id, matching the backend contract', async () => {
     const user = userEvent.setup();
     const onSaved = vi.fn();
     render(<MessageComposeForm onSaved={onSaved} onCancel={vi.fn()} />);
@@ -42,7 +42,7 @@ describe('MessageComposeForm', () => {
     await user.type(screen.getByLabelText('Message'), 'Please review.');
     await user.selectOptions(screen.getByLabelText('Audience'), 'roles');
 
-    // Role checkbox appears once getAvailableRoles resolves.
+    // Role checkbox (labeled by name) appears once getAvailableRoles resolves.
     const officer = await screen.findByLabelText('Officer');
     await user.click(officer);
     await user.click(screen.getByRole('button', { name: /post message/i }));
@@ -50,8 +50,8 @@ describe('MessageComposeForm', () => {
     await waitFor(() => expect(mockCreate.mock.calls.length).toBe(1));
     const payload = mockCreate.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(payload.target_type).toBe('roles');
-    // The role *name* is sent, not the slug — _is_targeted matches on name.
-    expect(payload.target_roles).toEqual(['Officer']);
+    // The role *id* is sent (rename-safe), not the name or slug.
+    expect(payload.target_roles).toEqual(['role-officer']);
     expect(onSaved.mock.calls.length).toBe(1);
   });
 
@@ -96,7 +96,7 @@ describe('MessageComposeForm', () => {
           body: 'Original body',
           priority: 'normal',
           target_type: 'roles',
-          target_roles: ['Officer'],
+          target_roles: ['role-officer'],
           is_pinned: false,
           is_active: true,
           is_persistent: false,

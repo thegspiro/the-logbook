@@ -7,7 +7,14 @@ communications. Visible on member dashboards.
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,6 +24,7 @@ from app.core.database import get_db
 from app.core.utils import ensure_found
 from app.models.notification import MessagePriority, MessageTargetType
 from app.models.user import User
+from app.services.message_delivery_service import deliver_department_message
 from app.services.messaging_service import MessagingService
 
 router = APIRouter()
@@ -128,6 +136,7 @@ class AckReportResponse(BaseModel):
 
 
 class RoleOption(BaseModel):
+    id: str
     name: str
     slug: str
 
@@ -190,6 +199,7 @@ async def list_messages(
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=MessageResponse)
 async def create_message(
     data: MessageCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.manage")),
 ):
@@ -224,6 +234,12 @@ async def create_message(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+    # Fan the message out to the channels members actually watch (bell inbox,
+    # plus email/SMS escalation for urgent/ack-required). Deferred so the POST
+    # returns immediately; failures there never affect the created message.
+    background_tasks.add_task(
+        deliver_department_message, message.id, current_user.organization_id
     )
     return _serialize_message(message)
 
