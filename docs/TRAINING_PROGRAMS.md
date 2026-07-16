@@ -192,6 +192,14 @@ re-derives enrolled members' progress-row percentages against the new target.
 - Officer-entered knowledge-test scoring with pass/fail and attempt limits
 - Automatic feeds from shift reports, approved training sessions, and skills tests
 - Progress notes and history
+- **Officer-gated completion:** members can mark a requirement in-progress, but
+  only a training officer can set a numeric progress value, record a test score,
+  or mark a requirement complete/verified/waived. Members log training through the
+  self-report submission flow instead of writing their own requirement to 100%.
+- **No double-crediting:** every automatic feed records each accrual in a per-source
+  credit ledger keyed on (requirement, source type, source id). Replaying the same
+  shift report, re-syncing the same external course, re-finalizing a session, or
+  re-approving a submission is a no-op — one real training is never counted twice.
 
 #### Recertification Cycle (Progress Reset)
 Certifications that expire — NREMT, for example, requires resubmission every two
@@ -259,6 +267,9 @@ hours off the member's certificate progress.
 - Customizable form fields (visible, required, label per field)
 - Status tracking: draft, pending review, approved, rejected, revision requested
 - Approved submissions automatically create TrainingRecords
+- **Separation of duties:** an officer cannot approve their own self-reported
+  training — a second officer must review it, so hours/credit can't be granted
+  unchecked. (Rejecting or requesting revision on one's own submission is allowed.)
 - **Apply to a pipeline requirement (make-up sessions):** when approving a submission —
   or later, from an already-approved submission's card — the officer can credit the
   training toward a specific requirement in one of the member's active enrollments. This
@@ -268,6 +279,22 @@ hours off the member's certificate progress.
   the normal progress updater (so rollup and phase advancement fire) and, being an explicit
   officer sign-off, is **not** subject to the requirement's `allows_external_credit` opt-in
   (that flag only governs *automatic* crediting from provider syncs).
+
+#### Correcting Mistakes (Void & Reverse)
+Entries made in error can be undone without hand-editing progress:
+
+- **Void a training record** (`DELETE /training/records/{id}`, `training.manage`)
+  marks the record cancelled — kept for audit, never hard-deleted — and un-applies
+  any pipeline credit it produced. The compliance engine only counts completed
+  records, so a voided one stops counting immediately.
+- **Reverse an approval**
+  (`POST /training/submissions/{id}/reverse-approval`, `training.manage`) voids the
+  record the approval spawned, un-applies the credit keyed on both the submission
+  and the record, and returns the submission to **pending review** so it can be
+  re-decided (rejected, or re-approved with corrected values).
+
+Both build on the credit ledger, so requirement percentages, the enrollment
+rollup, and phase state unwind automatically. Both are audit-logged.
 
 #### Shift Completion Reports
 - Shift officers file reports on trainee experiences

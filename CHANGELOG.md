@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Pipelines: abuse safeguards, working alerts, and fixability (2026-07-16)
+
+A review of the whole training-program module, hardening how its many progress
+feeds work together and making mistakes easy to correct.
+
+**Abuse safeguards**
+
+- **Members can't self-complete their own requirements** — a member may still
+  mark a requirement in-progress, but only a training officer can set a numeric
+  progress value, record a test score, or mark a requirement complete/verified/
+  waived. Members log training through the self-report submission flow, which
+  routes to an officer. Previously a member could PATCH their own requirement to
+  100% and bypass review entirely.
+- **No self-approval of self-reported training** — a training officer can no
+  longer approve their own submission; a second officer must sign it off, so an
+  officer can't grant themselves hours or credit unchecked.
+- **Withdrawn/failed enrollments are never auto-resurrected** — the enrollment
+  rollup only auto-completes an enrollment that is still active, so a
+  withdrawn/failed member reaching 100% isn't silently flipped back to completed.
+- **Future-dated submissions rejected** and program-linked sessions only fan out
+  to hours-type requirements, closing two ways bogus credit could slip in.
+
+**Idempotency ledger — a training can't be double-credited**
+
+- The six pipeline feeds now record each accrual in a per-source credit ledger
+  keyed uniquely on (requirement progress, source type, source id). Re-processing
+  the same shift report, re-syncing the same external course, re-finalizing a
+  session, or re-approving a submission is an idempotent no-op — the same real
+  training can never be counted twice. The ledger also records the units each
+  source contributed, which is what makes clean reversal possible.
+
+**Alerts that actually fire**
+
+- **Struggling-member and deadline alerts are delivered** — these previously
+  computed who was behind but sent the notification to a mentor field that didn't
+  exist, so no one was ever told. Alerts now reach the member and their training
+  officers (resolved by role), throttled so a persistently-behind recruit isn't
+  re-alerted every weekly run. Pace/behind-schedule checks measure from the
+  current cycle, so a member fresh off a recert reset isn't flagged overdue on
+  day one.
+
+**Fixability — undo mistakes cleanly**
+
+- **Void a training record** (`DELETE /training/records/{id}`) — marks a
+  mistaken or duplicate record cancelled (kept for audit, never hard-deleted) and
+  un-applies any pipeline credit it produced.
+- **Reverse an approval**
+  (`POST /training/submissions/{id}/reverse-approval`) — voids the record the
+  approval spawned, un-applies the credit keyed on both the submission and the
+  record, and returns the submission to pending review to be re-decided.
+- Both are training.manage-gated and audit-logged, and build on the ledger so
+  the requirement math unwinds automatically instead of by hand.
+
 ### Training Pipelines: end-to-end progression tracking (2026-07-14)
 
 Made training programs ("pipelines") work as a real enroll → progress → advance →

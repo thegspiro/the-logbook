@@ -111,6 +111,7 @@ POST   /api/v1/training/records                            # Create a training r
 POST   /api/v1/training/records/bulk                       # Bulk create (up to 500, with duplicate detection)
 POST   /api/v1/training/records/import-csv                 # CSV import with parse and preview
 PATCH  /api/v1/training/records/{id}                       # Update a training record
+DELETE /api/v1/training/records/{id}                       # Void a record (cancels + un-applies pipeline credit)
 GET    /api/v1/training/compliance-summary/{user_id}       # Member compliance card (green/yellow/red)
 GET    /api/v1/training/compliance-matrix                  # All members x requirements grid
 GET    /api/v1/training/competency-matrix                  # Department readiness heat-map
@@ -193,7 +194,14 @@ GET    /api/v1/training/submissions/pending                # Pending submissions
 GET    /api/v1/training/submissions/pending/count          # Pending count
 GET    /api/v1/training/submissions/all                    # All submissions (officer)
 POST   /api/v1/training/submissions/{id}/review            # Review submission (approve/reject)
+POST   /api/v1/training/submissions/{id}/reverse-approval  # Undo an approval (voids record, un-applies credit, reopens)
 ```
+
+**Integrity safeguards.** An officer cannot approve their own submission (a
+second officer must sign it off). On approval, credit applied to a pipeline
+requirement is recorded in an idempotency ledger keyed on the submission, so a
+re-approval can't double-credit. Reversing an approval un-applies that credit and
+voids the spawned record.
 
 ### Training Waivers
 
@@ -389,6 +397,7 @@ GET    /api/v1/compliance/incomplete-records                # List incomplete re
 | `program_milestones` | ProgramMilestone | Key checkpoints in program progression |
 | `program_enrollments` | ProgramEnrollment | Member enrollment in programs with status tracking |
 | `requirement_progress` | RequirementProgress | Per-member progress toward program requirements |
+| `requirement_progress_credits` | RequirementProgressCredit | Idempotency ledger — one row per automated accrual, unique on (progress, source type, source id), so a training is never double-credited and a credit can be cleanly reversed *(2026-07-16)* |
 | `skill_evaluations` | SkillEvaluation | Skills evaluation records |
 | `skill_checkoffs` | SkillCheckoff | Individual skill check-off completions |
 | `skill_templates` | SkillTemplate | Skills testing template definitions (sections, criteria, scoring) |
@@ -437,6 +446,7 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 | `ProgramStructureType` | sequential, phases, flexible |
 | `EnrollmentStatus` | active, completed, expired, on_hold, withdrawn, failed |
 | `RequirementProgressStatus` | not_started, in_progress, completed, verified, waived |
+| `ProgressCreditSource` | training_session, shift_report, external_import, officer_apply |
 | `SubmissionStatus` | draft, pending_review, approved, rejected, revision_requested |
 | `ExternalProviderType` | vector_solutions, target_solutions, lexipol, i_am_responding, custom_api |
 | `SyncStatus` | pending, in_progress, completed, failed, partial |
