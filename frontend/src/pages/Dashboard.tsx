@@ -4,6 +4,7 @@ import { formatRelativeTime } from "../hooks/useRelativeTime";
 import { useRegisterPullToRefresh } from "../hooks/useRegisterPullToRefresh";
 import DashboardStatCard from "../components/dashboard/DashboardStatCard";
 import DashboardCardHeader from "../components/dashboard/DashboardCardHeader";
+import { LinkifiedText } from "../components/ux";
 import {
   Bell,
   Calendar,
@@ -954,7 +955,7 @@ const Dashboard: React.FC = () => {
                           )}
                         </div>
                         <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">
-                          {msg.body}
+                          <LinkifiedText text={msg.body} />
                         </p>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-2">
                           <div className="flex items-center gap-3 text-xs text-theme-text-muted">

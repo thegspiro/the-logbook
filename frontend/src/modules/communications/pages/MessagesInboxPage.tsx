@@ -9,7 +9,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Megaphone, Pin, Check, CheckCheck, Loader2, AlertCircle } from 'lucide-react';
-import { Breadcrumbs, EmptyState, SkeletonPage } from '../../../components/ux';
+import { Breadcrumbs, EmptyState, LinkifiedText, SkeletonPage } from '../../../components/ux';
 import { messagesService } from '../../../services/api';
 import type { InboxMessage } from '../../../services/adminServices';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -167,7 +167,9 @@ const MessagesInboxPage: React.FC = () => {
 
                 {expanded && (
                   <div className="border-theme-surface-border border-t px-4 py-3">
-                    <p className="text-theme-text-secondary text-sm whitespace-pre-wrap">{msg.body}</p>
+                    <p className="text-theme-text-secondary text-sm whitespace-pre-wrap">
+                      <LinkifiedText text={msg.body} />
+                    </p>
                     {msg.requires_acknowledgment && !msg.is_acknowledged && (
                       <button
                         type="button"

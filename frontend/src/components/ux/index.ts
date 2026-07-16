@@ -44,3 +44,4 @@ export { default as DateTimeQuarterHour } from './DateTimeQuarterHour';
 
 // Information
 export { WhatsNew } from './WhatsNew';
+export { LinkifiedText } from './LinkifiedText';
