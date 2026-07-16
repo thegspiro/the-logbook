@@ -1535,10 +1535,12 @@ class TrainingProgramService:
         )
 
         # Create enrollment
+        enrolled_now = datetime.now(timezone.utc)
         enrollment = ProgramEnrollment(
             user_id=enrollment_data.user_id,
             program_id=enrollment_data.program_id,
-            enrolled_at=datetime.now(timezone.utc),
+            enrolled_at=enrolled_now,
+            cycle_started_at=enrolled_now,
             target_completion_date=target_completion_date,
             current_phase_id=current_phase_id,
             progress_percentage=0.0,
@@ -2427,18 +2429,25 @@ class TrainingProgramService:
         )
         first_phase_id = first_phase_result.scalar_one_or_none()
 
+        now = datetime.now(timezone.utc)
         enrollment.status = EnrollmentStatus.ACTIVE
         enrollment.progress_percentage = 0.0
         enrollment.completed_at = None
         enrollment.current_phase_id = first_phase_id
+        # Anchor pace/behind-schedule heuristics to the fresh cycle and clear the
+        # prior deadline-warning bookkeeping so warnings can fire for the new one.
+        enrollment.cycle_started_at = now
+        enrollment.deadline_warning_sent = False
+        enrollment.deadline_warning_sent_at = None
 
-        # Schedule the next recert deadline (from today) so the cycle repeats.
+        # Schedule the next recert deadline (from today) so the cycle repeats, and
+        # move the completion target to it so the member isn't instantly "overdue".
         if program is not None and getattr(program, "recert_enabled", False):
-            now = datetime.now(timezone.utc)
             enrollment.last_recert_reset_at = now
-            enrollment.next_recert_reset_at = self._compute_next_recert_date(
-                program, now.date()
-            )
+            next_reset = self._compute_next_recert_date(program, now.date())
+            enrollment.next_recert_reset_at = next_reset
+            if next_reset is not None:
+                enrollment.target_completion_date = next_reset
 
     async def reset_enrollment_progress(
         self,

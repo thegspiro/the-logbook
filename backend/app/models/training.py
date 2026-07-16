@@ -1112,6 +1112,16 @@ class ProgramEnrollment(Base):
     # Deadline Tracking
     deadline_warning_sent = Column(Boolean, default=False)
     deadline_warning_sent_at = Column(DateTime(timezone=True))
+    # Throttle for "falling behind" alerts so the weekly sweep doesn't re-notify
+    # the same struggling member every run.
+    struggling_alert_sent_at = Column(DateTime(timezone=True))
+
+    # Start of the CURRENT cycle. Equal to enrolled_at until a recert reset, then
+    # advanced to the reset time so pace/behind-schedule heuristics measure the
+    # fresh cycle rather than the original enrollment (which would flag a member
+    # as instantly overdue the moment their new cycle begins). Falls back to
+    # enrolled_at when null (pre-existing enrollments).
+    cycle_started_at = Column(DateTime(timezone=True))
 
     # Recertification cycle tracking (see TrainingProgram.recert_enabled).
     # When today reaches next_recert_reset_at, the enrollment is auto-reset for

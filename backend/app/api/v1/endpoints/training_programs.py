@@ -1222,12 +1222,13 @@ async def get_enrollment_progress(
         days_remaining = (enrollment.target_completion_date - date.today()).days
         time_remaining_days = days_remaining
 
-        # Simple heuristic: behind schedule if less than 50% time and less than 50% progress
+        # Simple heuristic: behind schedule if less than 50% time and less than 50% progress.
+        # Measure from the current cycle start (cycle_started_at), not the original
+        # enrollment, so a fresh recert cycle isn't instantly flagged "behind".
+        cycle_start = (enrollment.cycle_started_at or enrollment.enrolled_at).date()
         if enrollment.target_completion_date and time_remaining_days is not None:
-            time_elapsed = (date.today() - enrollment.enrolled_at.date()).days
-            total_time = (
-                enrollment.target_completion_date - enrollment.enrolled_at.date()
-            ).days
+            time_elapsed = (date.today() - cycle_start).days
+            total_time = (enrollment.target_completion_date - cycle_start).days
             if total_time > 0:
                 time_progress = (time_elapsed / total_time) * 100
                 is_behind_schedule = time_progress > enrollment.progress_percentage + 20

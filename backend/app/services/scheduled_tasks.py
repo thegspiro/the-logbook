@@ -303,6 +303,13 @@ async def _for_each_org(
         except Exception as e:
             logger.error(f"{task_name} failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # The orgs share one session; roll back the failed unit of work so a
+            # broken commit doesn't leave the session in a failed state that
+            # cascades into every later org's callback.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
     return {"task": task_name, "total": total, "errors": results}
 
 
