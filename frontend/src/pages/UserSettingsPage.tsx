@@ -53,6 +53,7 @@ export const UserSettingsPage: React.FC = () => {
 
   // Notification preferences state
   const [emailNotifications, setEmailNotifications] = useState(true);
+  const [smsNotifications, setSmsNotifications] = useState(true);
   const [eventReminders, setEventReminders] = useState(true);
   const [trainingReminders, setTrainingReminders] = useState(true);
   const [savingPreferences, setSavingPreferences] = useState(false);
@@ -108,6 +109,7 @@ export const UserSettingsPage: React.FC = () => {
       try {
         const prefs = await userService.getNotificationPreferences(user.id);
         setEmailNotifications(prefs.email_notifications ?? true);
+        setSmsNotifications(prefs.sms_notifications ?? true);
         setEventReminders(prefs.event_reminders ?? true);
         setTrainingReminders(prefs.training_reminders ?? true);
       } catch {
@@ -191,6 +193,7 @@ export const UserSettingsPage: React.FC = () => {
     try {
       await userService.updateNotificationPreferences(user.id, {
         email_notifications: emailNotifications,
+        sms_notifications: smsNotifications,
         event_reminders: eventReminders,
         training_reminders: trainingReminders,
       });
@@ -954,6 +957,34 @@ export const UserSettingsPage: React.FC = () => {
                   <span
                     className={`${
                       emailNotifications ? 'translate-x-5' : 'translate-x-0'
+                    } toggle-knob-md`}
+                  />
+                </button>
+              </div>
+
+              {/* SMS Notifications Toggle */}
+              <div className="flex items-center justify-between py-4 border-b border-theme-surface-border">
+                <div>
+                  <label htmlFor="smsNotifications" className="text-sm font-medium text-theme-text-primary">
+                    Urgent Text Messages
+                  </label>
+                  <p className="text-sm text-theme-text-secondary">
+                    Receive a text for messages marked urgent (requires a mobile number on file)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  id="smsNotifications"
+                  onClick={() => setSmsNotifications(!smsNotifications)}
+                  className={`${
+                    smsNotifications ? 'bg-red-600' : 'bg-theme-surface-border'
+                  } relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-theme-focus-ring focus:ring-offset-2 focus:ring-offset-theme-bg`}
+                  role="switch"
+                  aria-checked={smsNotifications}
+                >
+                  <span
+                    className={`${
+                      smsNotifications ? 'translate-x-5' : 'translate-x-0'
                     } toggle-knob-md`}
                   />
                 </button>

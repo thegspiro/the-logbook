@@ -238,6 +238,9 @@ class NotificationPreferences(BaseModel):
 
     email: bool = True
     email_notifications: bool = True
+    # Opt-in (default on) to SMS for urgent department messages. Only takes
+    # effect when Twilio is configured and the member has a mobile/phone.
+    sms_notifications: bool = True
     event_reminders: bool = True
     training_reminders: bool = True
 

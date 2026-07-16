@@ -99,6 +99,7 @@ export const MemberProfilePage: React.FC = () => {
     notification_preferences: {
       email: true,
       email_notifications: true,
+      sms_notifications: true,
       event_reminders: true,
       training_reminders: true,
     },
@@ -316,6 +317,7 @@ export const MemberProfilePage: React.FC = () => {
       notification_preferences: user?.notification_preferences || {
         email: true,
         email_notifications: true,
+        sms_notifications: true,
         event_reminders: true,
         training_reminders: true,
       },
@@ -370,6 +372,7 @@ export const MemberProfilePage: React.FC = () => {
       const currentPrefs = prev.notification_preferences ?? {
         email: true,
         email_notifications: true,
+        sms_notifications: true,
         event_reminders: true,
         training_reminders: true,
       };

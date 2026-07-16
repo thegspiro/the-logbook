@@ -127,6 +127,7 @@ export interface AuthSettings {
 export interface NotificationPreferences {
   email: boolean;
   email_notifications: boolean;
+  sms_notifications: boolean;
   event_reminders: boolean;
   training_reminders: boolean;
 }

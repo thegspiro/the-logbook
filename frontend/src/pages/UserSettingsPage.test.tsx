@@ -97,6 +97,7 @@ describe("UserSettingsPage", () => {
     vi.mocked(userService.getNotificationPreferences).mockResolvedValue({
       email: true,
       email_notifications: true,
+      sms_notifications: true,
       event_reminders: true,
       training_reminders: true,
     });
@@ -122,6 +123,32 @@ describe("UserSettingsPage", () => {
     renderWithRouter(<UserSettingsPage />);
 
     expect(screen.getByText("Account Information")).toBeInTheDocument();
+  });
+
+  describe("Notifications Tab", () => {
+    it("saves the SMS-notifications toggle for urgent messages", async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<UserSettingsPage />);
+
+      await user.click(screen.getByText("Notifications"));
+
+      const smsToggle = await screen.findByRole("switch", {
+        name: /urgent text messages/i,
+      });
+      // Loaded as opted-in; turn it off.
+      expect(smsToggle).toHaveAttribute("aria-checked", "true");
+      await user.click(smsToggle);
+      await user.click(
+        screen.getByRole("button", { name: /save preferences/i }),
+      );
+
+      await waitFor(() =>
+        expect(userService.updateNotificationPreferences).toHaveBeenCalledWith(
+          "user-123",
+          expect.objectContaining({ sms_notifications: false }),
+        ),
+      );
+    });
   });
 
   describe("Emergency Contacts Tab", () => {
