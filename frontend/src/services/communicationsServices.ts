@@ -376,6 +376,7 @@ export const messagesService = {
     is_persistent?: boolean;
     requires_acknowledgment?: boolean;
     expires_at?: string;
+    scheduled_at?: string;
   }): Promise<DepartmentMessageRecord> {
     const response = await api.post<DepartmentMessageRecord>('/messages', data);
     return response.data;

@@ -557,6 +557,7 @@ export interface DepartmentMessageRecord {
   requires_acknowledgment: boolean;
   posted_by?: string;
   expires_at?: string;
+  scheduled_at?: string;
   created_at?: string;
   updated_at?: string;
 }

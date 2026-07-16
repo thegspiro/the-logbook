@@ -47,9 +47,19 @@ class MessagingService:
         is_persistent: bool = False,
         requires_acknowledgment: bool = False,
         expires_at: Optional[datetime] = None,
+        scheduled_at: Optional[datetime] = None,
     ) -> Tuple[Optional[DepartmentMessage], Optional[str]]:
-        """Create a new department message"""
+        """Create a new department message.
+
+        Only a *future* scheduled_at defers the message; a missing or past value
+        means "publish now" and is stored as NULL, so callers can treat
+        scheduled_at is None as "live immediately".
+        """
         try:
+            now = datetime.now(timezone.utc)
+            effective_scheduled = (
+                scheduled_at if (scheduled_at and scheduled_at > now) else None
+            )
             message = DepartmentMessage(
                 id=generate_uuid(),
                 organization_id=organization_id,
@@ -66,6 +76,7 @@ class MessagingService:
                 requires_acknowledgment=requires_acknowledgment,
                 posted_by=posted_by,
                 expires_at=expires_at,
+                scheduled_at=effective_scheduled,
             )
             self.db.add(message)
             await self.db.commit()
@@ -170,6 +181,7 @@ class MessagingService:
                 "is_persistent",
                 "requires_acknowledgment",
                 "expires_at",
+                "scheduled_at",
             }
             for key, value in updates.items():
                 if key in allowed_fields:
@@ -247,6 +259,13 @@ class MessagingService:
             or_(
                 DepartmentMessage.expires_at.is_(None),
                 DepartmentMessage.expires_at > now,
+            )
+        )
+        # Exclude messages scheduled to publish in the future
+        query = query.where(
+            or_(
+                DepartmentMessage.scheduled_at.is_(None),
+                DepartmentMessage.scheduled_at <= now,
             )
         )
         query = query.order_by(
@@ -399,6 +418,12 @@ class MessagingService:
                 or_(
                     DepartmentMessage.expires_at.is_(None),
                     DepartmentMessage.expires_at > now,
+                )
+            )
+            .where(
+                or_(
+                    DepartmentMessage.scheduled_at.is_(None),
+                    DepartmentMessage.scheduled_at <= now,
                 )
             )
         )

@@ -7,7 +7,7 @@ explicit member id) and the unread-count flow that builds on it. DB mocked;
 no MySQL.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -336,6 +336,39 @@ class TestGetMessages:
         assert [m.id for m in messages] == ["m1"]
         # A count query and a page query were both issued.
         assert db.execute.await_count == 2
+
+
+class TestCreateScheduling:
+    """create_message only defers on a *future* scheduled_at; a past or absent
+    value means publish-now (stored as NULL)."""
+
+    def _db(self):
+        db = MagicMock()
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        return db
+
+    async def test_future_scheduled_at_is_stored(self):
+        future = datetime.now(timezone.utc) + timedelta(hours=2)
+        message, err = await MessagingService(self._db()).create_message(
+            "org-1", "author", "Drill", "Body", scheduled_at=future
+        )
+        assert err is None
+        assert message.scheduled_at == future
+
+    async def test_past_scheduled_at_becomes_immediate(self):
+        past = datetime.now(timezone.utc) - timedelta(hours=2)
+        message, _ = await MessagingService(self._db()).create_message(
+            "org-1", "author", "Drill", "Body", scheduled_at=past
+        )
+        assert message.scheduled_at is None
+
+    async def test_no_schedule_is_immediate(self):
+        message, _ = await MessagingService(self._db()).create_message(
+            "org-1", "author", "Drill", "Body"
+        )
+        assert message.scheduled_at is None
 
 
 if __name__ == "__main__":  # pragma: no cover

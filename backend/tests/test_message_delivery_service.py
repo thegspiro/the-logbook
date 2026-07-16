@@ -5,6 +5,7 @@ Covers channel routing by priority/ack and the in-app fan-out. DB and the
 email/SMS services are mocked; no MySQL, no network.
 """
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -169,6 +170,36 @@ class TestSmsGating:
         fake_sms.send_bulk_sms.assert_awaited_once()
         numbers = fake_sms.send_bulk_sms.await_args.args[0]
         assert numbers == ["+1555mobile", "+1555phone"]
+
+
+class TestPublishScheduledMessages:
+    """The publish task marks due messages live (clears scheduled_at) and then
+    delivers them via the shared escalation path."""
+
+    async def test_publishes_due_messages_and_clears_schedule(self):
+        from app.services.scheduled_tasks import run_publish_scheduled_messages
+
+        due = SimpleNamespace(
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            is_active=True,
+            deleted_at=None,
+        )
+        db = MagicMock()
+        db.commit = AsyncMock()
+        exec_result = MagicMock()
+        exec_result.scalars.return_value.all.return_value = [due]
+        db.execute = AsyncMock(return_value=exec_result)
+
+        with patch.object(
+            MessageDeliveryService, "deliver", new=AsyncMock()
+        ) as deliver:
+            result = await run_publish_scheduled_messages(db)
+
+        assert result["published"] == 1
+        # Marked live before delivery so a failure can't cause a re-escalation.
+        assert due.scheduled_at is None
+        deliver.assert_awaited_once()
+        db.commit.assert_awaited()
 
 
 if __name__ == "__main__":  # pragma: no cover

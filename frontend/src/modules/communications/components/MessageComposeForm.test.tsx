@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockCreate = vi.fn();
@@ -82,6 +82,24 @@ describe('MessageComposeForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/at least one role/i);
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('sends scheduled_at (as a UTC instant) when a schedule time is set', async () => {
+    const user = userEvent.setup();
+    render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText('Title'), 'Drill reminder');
+    await user.type(screen.getByLabelText('Message'), 'Tower drill tomorrow.');
+    // datetime-local is set directly; typing char-by-char is unreliable in jsdom.
+    fireEvent.change(screen.getByLabelText('Schedule for later (optional)'), {
+      target: { value: '2099-01-01T09:00' },
+    });
+    await user.click(screen.getByRole('button', { name: /schedule message/i }));
+
+    await waitFor(() => expect(mockCreate.mock.calls.length).toBe(1));
+    const payload = mockCreate.mock.calls[0]?.[0] as Record<string, unknown>;
+    // A UTC ISO instant is sent, not the raw local input value.
+    expect(payload.scheduled_at).toEqual(expect.stringContaining('Z'));
   });
 
   it('edits an existing message via updateMessage, clearing stale targeting', async () => {

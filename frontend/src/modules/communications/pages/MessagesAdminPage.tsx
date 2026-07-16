@@ -282,6 +282,12 @@ const MessagesAdminPage: React.FC = () => {
                         Inactive
                       </span>
                     )}
+                    {m.scheduled_at && new Date(m.scheduled_at).getTime() > Date.now() && (
+                      <span className="bg-theme-info/15 text-theme-info inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs">
+                        <Clock className="h-3 w-3" aria-hidden="true" />
+                        Scheduled · {formatDateTime(m.scheduled_at, tz)}
+                      </span>
+                    )}
                   </div>
                   <p className="text-theme-text-muted mt-1 text-xs">
                     {audienceLabel(m, roleNames)} · {formatDateTime(m.created_at, tz)}

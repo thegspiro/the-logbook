@@ -57,6 +57,9 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
   const [expiresAt, setExpiresAt] = useState(
     message?.expires_at ? formatForDateTimeInput(message.expires_at, tz) : '',
   );
+  const [scheduledAt, setScheduledAt] = useState(
+    message?.scheduled_at ? formatForDateTimeInput(message.scheduled_at, tz) : '',
+  );
 
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [members, setMembers] = useState<User[]>([]);
@@ -117,6 +120,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
           is_persistent: isPersistent,
           requires_acknowledgment: requiresAck,
           expires_at: expiresAt ? localToUTC(expiresAt, tz) : null,
+          scheduled_at: scheduledAt ? localToUTC(scheduledAt, tz) : null,
         });
         toast.success('Message updated');
         onSaved();
@@ -140,9 +144,10 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
       if (targetType === 'members') payload.target_member_ids = targetMembers;
       // datetime-local is interpreted in the org timezone; send a UTC instant.
       if (expiresAt) payload.expires_at = localToUTC(expiresAt, tz);
+      if (scheduledAt) payload.scheduled_at = localToUTC(scheduledAt, tz);
 
       await messagesService.createMessage(payload);
-      toast.success('Message posted');
+      toast.success(scheduledAt ? 'Message scheduled' : 'Message posted');
       onSaved();
     } catch {
       setError(
@@ -329,17 +334,34 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
         </label>
       </div>
 
-      <div>
-        <label htmlFor="msg-expires" className={labelClass}>
-          Expires (optional)
-        </label>
-        <input
-          id="msg-expires"
-          type="datetime-local"
-          className={inputClass}
-          value={expiresAt}
-          onChange={(e) => setExpiresAt(e.target.value)}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="msg-schedule" className={labelClass}>
+            Schedule for later (optional)
+          </label>
+          <input
+            id="msg-schedule"
+            type="datetime-local"
+            className={inputClass}
+            value={scheduledAt}
+            onChange={(e) => setScheduledAt(e.target.value)}
+          />
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Leave blank to publish immediately.
+          </p>
+        </div>
+        <div>
+          <label htmlFor="msg-expires" className={labelClass}>
+            Expires (optional)
+          </label>
+          <input
+            id="msg-expires"
+            type="datetime-local"
+            className={inputClass}
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
@@ -357,7 +379,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSave
           className="btn-info inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          {isEditing ? 'Save changes' : 'Post message'}
+          {isEditing ? 'Save changes' : scheduledAt ? 'Schedule message' : 'Post message'}
         </button>
       </div>
     </form>

@@ -50,6 +50,8 @@ class MessageCreate(BaseModel):
     is_persistent: bool = False
     requires_acknowledgment: bool = False
     expires_at: datetime | None = None
+    # A future value defers publishing (and escalation) until that time.
+    scheduled_at: datetime | None = None
 
 
 class MessageUpdate(BaseModel):
@@ -65,6 +67,7 @@ class MessageUpdate(BaseModel):
     is_persistent: bool | None = None
     requires_acknowledgment: bool | None = None
     expires_at: datetime | None = None
+    scheduled_at: datetime | None = None
 
 
 class MessageResponse(BaseModel):
@@ -83,6 +86,7 @@ class MessageResponse(BaseModel):
     requires_acknowledgment: bool
     posted_by: str | None = None
     expires_at: str | None = None
+    scheduled_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -165,6 +169,7 @@ def _serialize_message(msg) -> dict:
         "requires_acknowledgment": msg.requires_acknowledgment,
         "posted_by": msg.posted_by,
         "expires_at": msg.expires_at.isoformat() if msg.expires_at else None,
+        "scheduled_at": msg.scheduled_at.isoformat() if msg.scheduled_at else None,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
         "updated_at": msg.updated_at.isoformat() if msg.updated_at else None,
     }
@@ -223,6 +228,7 @@ async def create_message(
         is_persistent=data.is_persistent,
         requires_acknowledgment=data.requires_acknowledgment,
         expires_at=data.expires_at,
+        scheduled_at=data.scheduled_at,
     )
     if error:
         raise HTTPException(status_code=400, detail=error)
@@ -242,9 +248,12 @@ async def create_message(
     # Fan the message out to the channels members actually watch (bell inbox,
     # plus email/SMS escalation for urgent/ack-required). Deferred so the POST
     # returns immediately; failures there never affect the created message.
-    background_tasks.add_task(
-        deliver_department_message, message.id, current_user.organization_id
-    )
+    # Messages scheduled for a future time (scheduled_at still set) are escalated
+    # later by the publish task, not now.
+    if message.scheduled_at is None:
+        background_tasks.add_task(
+            deliver_department_message, message.id, current_user.organization_id
+        )
     return _serialize_message(message)
 
 
