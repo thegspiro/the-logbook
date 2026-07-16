@@ -138,3 +138,49 @@ class TestApplyTrainingToRequirement:
         assert applied is False
         assert error == "That requirement is not part of this member's enrollment"
         svc.update_requirement_progress.assert_not_awaited()
+
+
+class TestValidateApplyTarget:
+    async def test_valid_target_passes(self):
+        prog, req = _prog(0.0), _req(RequirementType.HOURS)
+        db = RecordingSession([_one(_enrollment()), _first((prog, req))])
+        svc = TrainingProgramService(db)
+
+        ok, error = await svc.validate_apply_target(
+            user_id="u1",
+            organization_id=uuid4(),
+            program_id="prog-1",
+            requirement_id=req.id,
+        )
+
+        assert ok is True and error is None
+
+    async def test_not_enrolled_fails_without_side_effects(self):
+        # Pre-flight check the review endpoint runs BEFORE approving, so an
+        # invalid target is rejected up front (never "approved but couldn't apply").
+        db = RecordingSession([_one(None)])
+        svc = TrainingProgramService(db)
+
+        ok, error = await svc.validate_apply_target(
+            user_id="u1",
+            organization_id=uuid4(),
+            program_id="prog-1",
+            requirement_id="req-1",
+        )
+
+        assert ok is False
+        assert error == "Member is not actively enrolled in this program"
+
+    async def test_requirement_not_in_enrollment_fails(self):
+        db = RecordingSession([_one(_enrollment()), _first(None)])
+        svc = TrainingProgramService(db)
+
+        ok, error = await svc.validate_apply_target(
+            user_id="u1",
+            organization_id=uuid4(),
+            program_id="prog-1",
+            requirement_id="req-x",
+        )
+
+        assert ok is False
+        assert error == "That requirement is not part of this member's enrollment"

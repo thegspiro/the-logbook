@@ -216,7 +216,39 @@ async def review_submission(
 ):
     """Review a submission: approve, reject, or request revision."""
     service = TrainingSubmissionService(db)
+    wants_apply = bool(
+        review.action == "approve"
+        and review.apply_to_program_id
+        and review.apply_to_requirement_id
+    )
+
     async with handle_service_errors("Failed to review submission"):
+        from app.services.training_program_service import TrainingProgramService
+
+        program_service = TrainingProgramService(db)
+
+        # Validate the pipeline target BEFORE approving, so an invalid choice is
+        # rejected up front with nothing changed — never "approved but couldn't
+        # apply". get_submission gives us the member without mutating anything.
+        if wants_apply:
+            preview = await service.get_submission(
+                submission_id, current_user.organization_id
+            )
+            if not preview:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Submission not found"
+                )
+            ok, apply_error = await program_service.validate_apply_target(
+                user_id=preview.submitted_by,
+                organization_id=current_user.organization_id,
+                program_id=review.apply_to_program_id,
+                requirement_id=review.apply_to_requirement_id,
+            )
+            if not ok:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=apply_error
+                )
+
         submission = await service.review_submission(
             submission_id=submission_id,
             reviewer_id=current_user.id,
@@ -228,19 +260,9 @@ async def review_submission(
             override_training_type=review.override_training_type,
         )
 
-        # Optionally credit the approved training toward a pipeline requirement
-        # (e.g. a make-up session the officer is signing off). Best-effort — the
-        # submission is already approved and committed, so a mis-targeted apply
-        # is surfaced as a 400 without undoing the approval.
-        if (
-            review.action == "approve"
-            and review.apply_to_program_id
-            and review.apply_to_requirement_id
-        ):
-            from app.services.training_program_service import TrainingProgramService
-
-            program_service = TrainingProgramService(db)
-            applied, apply_error = await program_service.apply_training_to_requirement(
+        # Target already validated above, so this applies cleanly.
+        if wants_apply:
+            await program_service.apply_training_to_requirement(
                 user_id=submission.submitted_by,
                 organization_id=current_user.organization_id,
                 program_id=review.apply_to_program_id,
@@ -248,25 +270,19 @@ async def review_submission(
                 hours=float(submission.hours_completed or 0),
                 verified_by=current_user.id,
             )
-            if applied:
-                await log_audit_event(
-                    db=db,
-                    event_type="training_submission_applied_to_requirement",
-                    event_category="training",
-                    severity="info",
-                    event_data={
-                        "submission_id": str(submission_id),
-                        "target_user_id": str(submission.submitted_by),
-                        "program_id": str(review.apply_to_program_id),
-                        "requirement_id": str(review.apply_to_requirement_id),
-                    },
-                    user_id=str(current_user.id),
-                    username=current_user.username,
-                )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Approved, but could not apply to the requirement: {apply_error}",
-                )
+            await log_audit_event(
+                db=db,
+                event_type="training_submission_applied_to_requirement",
+                event_category="training",
+                severity="info",
+                event_data={
+                    "submission_id": str(submission_id),
+                    "target_user_id": str(submission.submitted_by),
+                    "program_id": str(review.apply_to_program_id),
+                    "requirement_id": str(review.apply_to_requirement_id),
+                },
+                user_id=str(current_user.id),
+                username=current_user.username,
+            )
 
         return submission

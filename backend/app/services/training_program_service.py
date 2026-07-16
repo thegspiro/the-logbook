@@ -2152,6 +2152,63 @@ class TrainingProgramService:
                     advanced += 1
         return advanced
 
+    async def _resolve_apply_target(
+        self,
+        user_id: Any,
+        organization_id: UUID,
+        program_id: Any,
+        requirement_id: Any,
+    ) -> Tuple[Optional[Any], Optional[str]]:
+        """Resolve the (progress, requirement) row an officer would apply training
+        to, or an error explaining why it can't be applied. Shared by the
+        pre-flight validator and the apply itself so both judge eligibility the
+        same way. Returns (row, None) or (None, error_message)."""
+        enrollment_result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.user_id == str(user_id),
+                ProgramEnrollment.program_id == str(program_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        enrollment = enrollment_result.scalar_one_or_none()
+        if not enrollment:
+            return None, "Member is not actively enrolled in this program"
+
+        row_result = await self.db.execute(
+            select(RequirementProgress, TrainingRequirement)
+            .join(
+                TrainingRequirement,
+                RequirementProgress.requirement_id == TrainingRequirement.id,
+            )
+            .where(
+                RequirementProgress.enrollment_id == enrollment.id,
+                RequirementProgress.requirement_id == str(requirement_id),
+            )
+        )
+        row = row_result.first()
+        if row is None:
+            return None, "That requirement is not part of this member's enrollment"
+        return row, None
+
+    async def validate_apply_target(
+        self,
+        user_id: Any,
+        organization_id: UUID,
+        program_id: Any,
+        requirement_id: Any,
+    ) -> Tuple[bool, Optional[str]]:
+        """Pre-flight check: can this training be applied to this requirement?
+        Lets a caller reject an invalid target BEFORE committing a side effect
+        (e.g. approving a submission), so we never half-apply. Returns
+        (ok, error_message)."""
+        _, error = await self._resolve_apply_target(
+            user_id, organization_id, program_id, requirement_id
+        )
+        return error is None, error
+
     async def apply_training_to_requirement(
         self,
         user_id: Any,
@@ -2174,34 +2231,11 @@ class TrainingProgramService:
         percentage, auto-completion, rollup, and phase advancement all fire.
         Returns ``(applied, error_message)``.
         """
-        enrollment_result = await self.db.execute(
-            select(ProgramEnrollment)
-            .join(TrainingProgram)
-            .where(
-                ProgramEnrollment.user_id == str(user_id),
-                ProgramEnrollment.program_id == str(program_id),
-                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
-                TrainingProgram.organization_id == str(organization_id),
-            )
+        row, error = await self._resolve_apply_target(
+            user_id, organization_id, program_id, requirement_id
         )
-        enrollment = enrollment_result.scalar_one_or_none()
-        if not enrollment:
-            return False, "Member is not actively enrolled in this program"
-
-        row_result = await self.db.execute(
-            select(RequirementProgress, TrainingRequirement)
-            .join(
-                TrainingRequirement,
-                RequirementProgress.requirement_id == TrainingRequirement.id,
-            )
-            .where(
-                RequirementProgress.enrollment_id == enrollment.id,
-                RequirementProgress.requirement_id == str(requirement_id),
-            )
-        )
-        row = row_result.first()
-        if row is None:
-            return False, "That requirement is not part of this member's enrollment"
+        if error:
+            return False, error
 
         progress, requirement = row
         rtype = requirement.requirement_type
