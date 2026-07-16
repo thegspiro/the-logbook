@@ -22,6 +22,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment } from '../../types/scheduling';
@@ -54,7 +55,6 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
-  const canAssign = checkPermission('scheduling.assign') || canManage;
   const {
     apparatus: apparatusList,
     loadApparatus,
@@ -66,6 +66,16 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   useEffect(() => { void loadSettings(); }, [loadSettings]);
 
   const [shift, setShift] = useState(initialShift);
+  // The named on-duty officer of this shift may manage its crew, attendance,
+  // calls, and closeout even without a department-wide scheduling grant
+  // (mirrors the backend's per-shift authority). Editing/deleting the shift
+  // record itself still requires scheduling.manage.
+  const isShiftOfficer = !!(
+    shift.shift_officer_id && user?.id && String(shift.shift_officer_id) === String(user.id)
+  );
+  const canAssign = checkPermission('scheduling.assign') || canManage || isShiftOfficer;
+  const canManageShift = canManage || isShiftOfficer;
+  const isCancelled = shift.status === 'cancelled';
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEquipmentChecks, setShowEquipmentChecks] = useState(false);
@@ -155,9 +165,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [editingNotesValue, setEditingNotesValue] = useState('');
 
   // Assign state (admin) — position-first flow with member search
-  const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
+  const [assignForm, setAssignForm] = useState({
+    user_id: '',
+    position: '',
+    is_training: false,
+    training_program_id: '',
+    training_evaluator_id: '',
+  });
   const [memberSearch, setMemberSearch] = useState('');
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
+
+  // Cancel-shift state
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+
+  // Training programs for the training-slot dropdown (loaded lazily when the
+  // assign form is opened with the training option in view).
+  const [trainingPrograms, setTrainingPrograms] = useState<{ id: string; name: string }[]>([]);
 
   // Bulk assignment state — maps position name to selected user_id
   const [bulkAssignments, setBulkAssignments] = useState<Record<string, string>>({});
@@ -243,6 +267,25 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   useEffect(() => {
     if (isEditing) void loadApparatus();
   }, [isEditing, loadApparatus]);
+
+  // Load active training programs once, when the assign form is first opened,
+  // for the training-slot program dropdown.
+  useEffect(() => {
+    if (!showAssignForm || trainingPrograms.length > 0) return;
+    const loadPrograms = async () => {
+      try {
+        const programs = await trainingProgramService.getPrograms();
+        setTrainingPrograms(
+          programs
+            .filter(p => p.active && !p.is_template)
+            .map(p => ({ id: p.id, name: p.name })),
+        );
+      } catch {
+        // Non-critical — training-slot program link is optional.
+      }
+    };
+    void loadPrograms();
+  }, [showAssignForm, trainingPrograms.length]);
 
   const filteredMembers = useMemo(() => {
     const available = memberOptions.filter(m => !unavailableIds.has(m.id));
@@ -402,7 +445,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   };
 
   const openAssignFormForPosition = (position: string) => {
-    setAssignForm({ user_id: '', position });
+    setAssignForm({ user_id: '', position, is_training: false, training_program_id: '', training_evaluator_id: '' });
     setMemberSearch('');
     setShowBulkAssign(false);
     setShowAssignForm(true);
@@ -447,10 +490,19 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       await schedulingService.createAssignment(shift.id, {
         user_id: assignForm.user_id,
         position: assignForm.position,
+        is_training: assignForm.is_training,
+        training_program_id: assignForm.is_training ? (assignForm.training_program_id || undefined) : undefined,
+        training_evaluator_id: assignForm.is_training ? (assignForm.training_evaluator_id || undefined) : undefined,
       });
       toast.success('Member assigned');
       setShowAssignForm(false);
-      setAssignForm({ user_id: '', position: openPositions[0] ?? positionOptions[0]?.[0] ?? 'firefighter' });
+      setAssignForm({
+        user_id: '',
+        position: openPositions[0] ?? positionOptions[0]?.[0] ?? 'firefighter',
+        is_training: false,
+        training_program_id: '',
+        training_evaluator_id: '',
+      });
       setMemberSearch('');
       await refreshAssignments();
       onRefresh?.();
@@ -458,6 +510,24 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       toast.error(getErrorMessage(err, 'Failed to assign member'));
     } finally {
       setPendingFlag('assigning', false);
+    }
+  };
+
+  // Cancel (not delete) the shift — preserves history and notifies crew.
+  const handleCancel = async () => {
+    setPendingFlag('deleting', true);
+    try {
+      const updated = await schedulingService.cancelShift(shift.id, cancelReason.trim() || undefined);
+      setShift(updated);
+      setShowCancelConfirm(false);
+      setCancelReason('');
+      toast.success('Shift cancelled');
+      await refreshAssignments();
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to cancel shift'));
+    } finally {
+      setPendingFlag('deleting', false);
     }
   };
 
@@ -639,6 +709,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               editable={canAssign && !isPast}
               updatingPosition={pending.updatingPosition}
             />
+            {assignment.is_training && (
+              <span
+                className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20"
+                title={assignment.training_program_name ? `Training slot — ${assignment.training_program_name}` : 'Training slot'}
+              >
+                Training
+              </span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1 sm:gap-2 shrink-0">
@@ -713,7 +791,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {canManage && !isPast && !shift.is_finalized && (
+              {canManage && !isPast && !shift.is_finalized && !isCancelled && (
                 <>
                   <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '', positions: shift.positions ?? [] }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
@@ -727,7 +805,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </button>
                 </>
               )}
-              {canManage && isPast && !shift.is_finalized && (
+              {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
+                <button onClick={() => setShowCancelConfirm(true)}
+                  className="p-2 text-theme-text-muted hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Cancel shift"
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
+              )}
+              {canManageShift && isPast && !shift.is_finalized && !isCancelled && (
                 <button
                   onClick={() => setShowFinalizeChecklist(true)}
                   className="px-3 py-1.5 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors inline-flex items-center gap-1.5"
@@ -759,6 +844,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   {pending.deleting && <Loader2 className="w-3 h-3 animate-spin" />}
                   Delete Shift
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Cancel Confirmation */}
+          {showCancelConfirm && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-3">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Cancel this shift? The record is kept, all assignments are marked cancelled, and the assigned crew is notified.
+              </p>
+              <div>
+                <label htmlFor="cancel-reason" className="block text-xs font-medium text-theme-text-secondary mb-1">Reason (optional)</label>
+                <input id="cancel-reason" type="text" value={cancelReason}
+                  onChange={e => setCancelReason(e.target.value)}
+                  placeholder="e.g. station closed for weather"
+                  className={inputCls}
+                />
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <button onClick={() => { setShowCancelConfirm(false); setCancelReason(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Keep Shift</button>
+                <button onClick={() => { void handleCancel(); }} disabled={pending.deleting}
+                  className="px-3 py-1.5 text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {pending.deleting && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Cancel Shift
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Cancelled banner */}
+          {isCancelled && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
+              <XCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <span className="font-medium text-amber-700 dark:text-amber-300">This shift is cancelled.</span>
+                {shift.cancellation_reason && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">{shift.cancellation_reason}</p>
+                )}
               </div>
             </div>
           )}
@@ -1243,6 +1367,49 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       </select>
                     )}
                   </div>
+                  {/* Step 3: Training slot (optional) */}
+                  <div className="pt-1 border-t border-theme-surface-border/60">
+                    <label className="flex items-center gap-2 text-xs font-medium text-theme-text-secondary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={assignForm.is_training}
+                        onChange={e => setAssignForm(p => ({ ...p, is_training: e.target.checked }))}
+                        className="rounded border-theme-surface-border"
+                      />
+                      Training position (supervised rider)
+                    </label>
+                    {assignForm.is_training && (
+                      <div className="mt-2 space-y-2 pl-6">
+                        <div>
+                          <label htmlFor="assign-training-program" className="block text-xs text-theme-text-muted mb-1">Program (optional)</label>
+                          <select id="assign-training-program" value={assignForm.training_program_id}
+                            onChange={e => setAssignForm(p => ({ ...p, training_program_id: e.target.value }))}
+                            className={inputCls}
+                          >
+                            <option value="">— No program link —</option>
+                            {trainingPrograms.map(prog => (
+                              <option key={prog.id} value={prog.id}>{prog.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="assign-training-evaluator" className="block text-xs text-theme-text-muted mb-1">Evaluating officer (optional)</label>
+                          <select id="assign-training-evaluator" value={assignForm.training_evaluator_id}
+                            onChange={e => setAssignForm(p => ({ ...p, training_evaluator_id: e.target.value }))}
+                            className={inputCls}
+                          >
+                            <option value="">— Finalizing officer —</option>
+                            {memberOptions.map(m => (
+                              <option key={m.id} value={m.id}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <p className="text-xs text-theme-text-muted">
+                          A draft training report is created for this member when the shift is finalized.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => { setShowAssignForm(false); setMemberSearch(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
                     <button onClick={() => { void handleAssign(); }} disabled={pending.assigning || !assignForm.user_id}
@@ -1448,7 +1615,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           <div className="pt-1">
             <ShiftCallsSection
               shiftId={shift.id}
-              canManage={canManage && !shift.is_finalized}
+              canManage={canManageShift && !shift.is_finalized}
               tz={tz}
               onChange={() => { void refreshAssignments(); onRefresh?.(); }}
             />

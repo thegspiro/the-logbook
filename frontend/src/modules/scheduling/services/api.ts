@@ -108,6 +108,10 @@ export interface ShiftRecord {
   is_finalized: boolean;
   finalized_at?: string;
   finalized_by?: string;
+  status?: 'scheduled' | 'cancelled';
+  cancelled_at?: string;
+  cancelled_by?: string;
+  cancellation_reason?: string | null;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -335,6 +339,14 @@ export const schedulingService = {
 
   async deleteShift(shiftId: string): Promise<void> {
     await api.delete(`/scheduling/shifts/${shiftId}`);
+  },
+
+  async cancelShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
+    const response = await api.post<ShiftRecord>(
+      `/scheduling/shifts/${shiftId}/cancel`,
+      reason ? { reason } : {},
+    );
+    return response.data;
   },
 
   async finalizeShift(

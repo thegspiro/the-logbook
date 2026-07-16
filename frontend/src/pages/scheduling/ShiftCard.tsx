@@ -134,6 +134,7 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
   const v = VARIANT_STYLES[variant];
   const platoonsEnabled = useSchedulingStore((s) => s.platoonsEnabled);
   const showPlatoon = platoonsEnabled && !!shift.platoon;
+  const isCancelled = shift.status === "cancelled";
   const hoverRing = touchOnly
     ? "active:ring-2 active:ring-violet-500/50"
     : "hover:ring-2 hover:ring-violet-500/50";
@@ -143,10 +144,10 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
     return (
       <button
         onClick={() => onClick?.(shift)}
-        className={`${v.button} w-full text-left cursor-pointer ${hoverRing} transition-all ${selectedRing} ${card.className}`}
+        className={`${v.button} w-full text-left cursor-pointer ${hoverRing} transition-all ${selectedRing} ${card.className} ${isCancelled ? "opacity-50" : ""}`}
         style={card.style}
       >
-        <p className="font-medium truncate">
+        <p className={`font-medium truncate ${isCancelled ? "line-through" : ""}`}>
           {isUnderstaffed(shift) ? (
             <AlertTriangle className="w-3 h-3 inline text-amber-600 dark:text-amber-400 mr-0.5" />
           ) : isFullyStaffed(shift) ? (
@@ -173,10 +174,15 @@ const ShiftCard: React.FC<ShiftCardProps> = ({
   return (
     <button
       onClick={() => onClick?.(shift)}
-      className={`${v.button} w-full text-left cursor-pointer ${hoverRing} transition-all ${selectedRing} ${card.className}`}
+      className={`${v.button} w-full text-left cursor-pointer ${hoverRing} transition-all ${selectedRing} ${card.className} ${isCancelled ? "opacity-50" : ""}`}
       style={card.style}
     >
-      <p className={`font-medium ${variant === "desktop-week" ? "truncate" : ""}`}>
+      {isCancelled && (
+        <span className="inline-block mb-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-300">
+          Cancelled
+        </span>
+      )}
+      <p className={`font-medium ${variant === "desktop-week" ? "truncate" : ""} ${isCancelled ? "line-through" : ""}`}>
         {formatTime(shift.start_time, timezone)}
         {v.showEndTime && shift.end_time
           ? ` - ${formatTime(shift.end_time, timezone)}`

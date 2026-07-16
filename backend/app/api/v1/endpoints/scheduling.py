@@ -13,7 +13,12 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
@@ -51,6 +56,7 @@ from app.schemas.scheduling import (
     ShiftComplianceResponse,
     ShiftCreate,
     ShiftDetailResponse,
+    ShiftCancelRequest,
     ShiftFinalizeRequest,
     ShiftPatternCreate,
     ShiftPatternResponse,
@@ -86,6 +92,65 @@ def _safe_detail(prefix: str, error: str | None) -> str:
     if not error:
         return f"{prefix} An unexpected error occurred."
     return f"{prefix} {safe_error_detail(ValueError(error))}"
+
+
+def _is_shift_officer(shift, user: User) -> bool:
+    """True if ``user`` is the named on-duty officer of ``shift``."""
+    return bool(
+        shift.shift_officer_id and str(shift.shift_officer_id) == str(user.id)
+    )
+
+
+async def _authorize_shift_management(
+    service: SchedulingService,
+    current_user: User,
+    shift_id: UUID,
+    permission: str,
+):
+    """Resolve a shift and authorize a roster/day-of-shift action on it.
+
+    The action is allowed when the caller holds ``permission`` org-wide **or**
+    is the shift's named on-duty officer (per-shift authority — the officer
+    running a shift can manage its crew, attendance, calls, and closeout
+    without a department-wide scheduling grant). Raises 404 if the shift is not
+    in the caller's org, 403 if neither condition is met. Returns the shift.
+    """
+    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
+    if shift is None:
+        raise HTTPException(status_code=404, detail="Shift not found")
+    if user_has_permission(current_user, permission) or _is_shift_officer(
+        shift, current_user
+    ):
+        return shift
+    raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+
+async def _authorize_assignment_management(
+    service: SchedulingService,
+    current_user: User,
+    assignment_id: UUID,
+):
+    """Authorize editing/removing an existing assignment (keyed by its id).
+
+    Allowed with ``scheduling.assign`` org-wide or when the caller is the
+    officer of the assignment's shift. Returns the assignment.
+    """
+    assignment = await service.get_assignment_by_id(
+        assignment_id, current_user.organization_id
+    )
+    if assignment is None:
+        raise HTTPException(
+            status_code=404, detail="Shift assignment not found"
+        )
+    if not user_has_permission(current_user, "scheduling.assign"):
+        shift = await service.get_shift_by_id(
+            assignment.shift_id, current_user.organization_id
+        )
+        if not (shift and _is_shift_officer(shift, current_user)):
+            raise HTTPException(
+                status_code=403, detail="Insufficient permissions"
+            )
+    return assignment
 
 
 # ============================================
@@ -374,7 +439,7 @@ async def finalize_shift(
     shift_id: UUID,
     body: ShiftFinalizeRequest = ShiftFinalizeRequest(),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.manage")),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Finalize a shift after the officer has reviewed attendance and checklists.
@@ -384,15 +449,18 @@ async def finalize_shift(
 
     Once finalized the shift is considered closed and attendance is locked.
 
-    **Permissions required:** scheduling.manage
+    **Permissions required:** scheduling.manage, or being the shift's officer.
     """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
     manual = None
     if body.manual_hours:
         manual = [
             {"user_id": str(entry.user_id), "hours": entry.hours}
             for entry in body.manual_hours
         ]
-    service = SchedulingService(db)
     shift, error = await service.finalize_shift(
         shift_id,
         current_user.organization_id,
@@ -403,6 +471,41 @@ async def finalize_shift(
         raise HTTPException(
             status_code=400,
             detail=_safe_detail("Unable to finalize shift.", error),
+        )
+    enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
+    return enriched[0]
+
+
+@router.post("/shifts/{shift_id}/cancel", response_model=ShiftResponse)
+async def cancel_shift(
+    shift_id: UUID,
+    body: ShiftCancelRequest = ShiftCancelRequest(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Cancel a shift without deleting it.
+
+    Preserves the shift record and its history, marks all active assignments
+    cancelled, and notifies the assigned crew. A finalized shift cannot be
+    cancelled.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
+    service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
+    shift, error = await service.cancel_shift(
+        shift_id,
+        current_user.organization_id,
+        cancelled_by_user_id=str(current_user.id),
+        reason=(body.reason or None) if body else None,
+    )
+    if not shift:
+        raise HTTPException(
+            status_code=400,
+            detail=_safe_detail("Unable to cancel shift.", error),
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, [shift])
     return enriched[0]
@@ -422,10 +525,16 @@ async def add_attendance(
     shift_id: UUID,
     attendance: ShiftAttendanceCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.manage")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Add an attendance record to a shift"""
+    """Add an attendance record to a shift.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
     service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
     result, error = await service.add_attendance(
         shift_id, current_user.organization_id, attendance.model_dump(exclude_none=True)
     )
@@ -725,10 +834,16 @@ async def create_call(
     shift_id: UUID,
     call: ShiftCallCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.manage")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Create a call record for a shift"""
+    """Create a call record for a shift.
+
+    **Permissions required:** scheduling.manage, or being the shift's officer.
+    """
     service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.manage"
+    )
     call_data = call.model_dump(exclude_none=True)
     call_data.pop("shift_id", None)
     result, error = await service.create_shift_call(
@@ -1061,15 +1176,20 @@ async def create_assignment(
     shift_id: UUID,
     assignment: ShiftAssignmentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.assign")),
+    current_user: User = Depends(get_current_user),
 ):
     """Create a shift assignment.
 
     When assigning a driver position, EVOC eligibility is checked and
     any warnings are returned in the ``evoc_warnings`` field. These are
     soft warnings — they do not block the assignment.
+
+    **Permissions required:** scheduling.assign, or being the shift's officer.
     """
     service = SchedulingService(db)
+    await _authorize_shift_management(
+        service, current_user, shift_id, "scheduling.assign"
+    )
     assignment_data = assignment.model_dump(exclude_none=True)
     result, error = await service.create_assignment(
         current_user.organization_id, shift_id, assignment_data, current_user.id
@@ -1103,10 +1223,14 @@ async def update_assignment(
     assignment_id: UUID,
     assignment: ShiftAssignmentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.assign")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Update a shift assignment"""
+    """Update a shift assignment.
+
+    **Permissions required:** scheduling.assign, or being the shift's officer.
+    """
     service = SchedulingService(db)
+    await _authorize_assignment_management(service, current_user, assignment_id)
     update_data = assignment.model_dump(exclude_unset=True)
     result, error = await service.update_assignment(
         assignment_id, current_user.organization_id, update_data
@@ -1123,10 +1247,14 @@ async def update_assignment(
 async def delete_assignment(
     assignment_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.assign")),
+    current_user: User = Depends(get_current_user),
 ):
-    """Delete a shift assignment"""
+    """Delete a shift assignment.
+
+    **Permissions required:** scheduling.assign, or being the shift's officer.
+    """
     service = SchedulingService(db)
+    await _authorize_assignment_management(service, current_user, assignment_id)
     success, error = await service.delete_assignment(
         assignment_id, current_user.organization_id
     )

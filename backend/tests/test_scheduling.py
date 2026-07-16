@@ -24,7 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = [pytest.mark.integration]
 
-from app.models.training import AssignmentStatus, PatternType, SwapRequestStatus, TimeOffStatus
+from app.models.training import (
+    AssignmentStatus,
+    PatternType,
+    ShiftStatus,
+    SwapRequestStatus,
+    TimeOffStatus,
+)
 from app.services.scheduling_service import SchedulingService
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -213,6 +219,101 @@ class TestShiftCRUD:
         success, err = await svc.delete_shift(uuid.uuid4(), uuid.UUID(org_id))
         assert success is False
         assert "not found" in err.lower()
+
+    @pytest.mark.asyncio
+    async def test_cancel_shift(self, db_session, setup_org_and_users):
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assignment, _ = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        cancelled, err = await svc.cancel_shift(
+            uuid.UUID(shift.id),
+            uuid.UUID(org_id),
+            cancelled_by_user_id=user_id,
+            reason="station closed for weather",
+        )
+        assert err is None
+        assert cancelled.status == ShiftStatus.CANCELLED
+        assert cancelled.cancellation_reason == "station closed for weather"
+
+        # The record is preserved (not hard-deleted) and its active assignment
+        # is marked cancelled.
+        fetched = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        assert fetched is not None
+        refreshed = await svc.get_assignment_by_id(
+            uuid.UUID(assignment.id), uuid.UUID(org_id)
+        )
+        assert refreshed.assignment_status == AssignmentStatus.CANCELLED
+
+    @pytest.mark.asyncio
+    async def test_cancel_shift_twice_blocked(self, db_session, setup_org_and_users):
+        org_id, user_id, _ = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        _, err1 = await svc.cancel_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id), cancelled_by_user_id=user_id
+        )
+        assert err1 is None
+        _, err2 = await svc.cancel_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id), cancelled_by_user_id=user_id
+        )
+        assert err2 is not None
+        assert "already cancelled" in err2.lower()
+
+    @pytest.mark.asyncio
+    async def test_create_training_assignment_rejects_foreign_program(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        # A training_program_id that is not in the caller's org must be rejected.
+        result, err = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {
+                "user_id": user2_id,
+                "position": "firefighter",
+                "is_training": True,
+                "training_program_id": _uid(),
+            },
+            uuid.UUID(user_id),
+        )
+        assert result is None
+        assert "training program not found" in err.lower()
 
     @pytest.mark.asyncio
     async def test_protected_fields_not_updated(self, db_session, setup_org_and_users):

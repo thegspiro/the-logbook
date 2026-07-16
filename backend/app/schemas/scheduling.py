@@ -113,6 +113,10 @@ class ShiftResponse(UTCResponseBase):
     is_finalized: bool = False
     finalized_at: Optional[datetime] = None
     finalized_by: Optional[UUID] = None
+    status: str = "scheduled"
+    cancelled_at: Optional[datetime] = None
+    cancelled_by: Optional[UUID] = None
+    cancellation_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
@@ -152,6 +156,12 @@ class ShiftFinalizeRequest(BaseModel):
     """Optional request body for finalizing a shift."""
 
     manual_hours: Optional[List[ManualHoursEntry]] = None
+
+
+class ShiftCancelRequest(BaseModel):
+    """Optional request body for cancelling a shift."""
+
+    reason: Optional[str] = None
 
 
 class ShiftAttendanceResponse(UTCResponseBase):
@@ -532,6 +542,11 @@ class ShiftAssignmentCreate(BaseModel):
     user_id: UUID
     position: ShiftPosition = ShiftPosition.FIREFIGHTER
     notes: Optional[str] = None
+    # Training slot: mark this seat as a supervised training/rider position and
+    # optionally link the trainee's program and the evaluating officer.
+    is_training: bool = False
+    training_program_id: Optional[str] = None
+    training_evaluator_id: Optional[str] = None
 
 
 class ShiftAssignmentUpdate(BaseModel):
@@ -540,6 +555,9 @@ class ShiftAssignmentUpdate(BaseModel):
     position: Optional[ShiftPosition] = None
     assignment_status: Optional[AssignmentStatus] = None
     notes: Optional[str] = None
+    is_training: Optional[bool] = None
+    training_program_id: Optional[str] = None
+    training_evaluator_id: Optional[str] = None
 
 
 class EmbeddedShiftInfo(BaseModel):
@@ -568,6 +586,11 @@ class ShiftAssignmentResponse(UTCResponseBase):
     assigned_by: Optional[UUID] = None
     confirmed_at: Optional[datetime] = None
     notes: Optional[str] = None
+    is_training: bool = False
+    training_program_id: Optional[str] = None
+    training_program_name: Optional[str] = None
+    training_evaluator_id: Optional[str] = None
+    training_evaluator_name: Optional[str] = None
     shift: Optional[EmbeddedShiftInfo] = None
     created_at: datetime
     updated_at: datetime

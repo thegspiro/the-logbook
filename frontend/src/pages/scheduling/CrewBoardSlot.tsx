@@ -89,6 +89,18 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
                 editable={canAssign && !isPast}
                 updatingPosition={pendingStates.updatingPosition}
               />
+              {assignment.is_training && (
+                <span
+                  className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20"
+                  title={
+                    assignment.training_program_name
+                      ? `Training slot — ${assignment.training_program_name}`
+                      : 'Training slot'
+                  }
+                >
+                  Training
+                </span>
+              )}
             </div>
           </>
         ) : (

@@ -34,11 +34,13 @@ from app.models.training import (
     ShiftCompletionReport,
     ShiftPattern,
     ShiftPosition,
+    ShiftStatus,
     ShiftSwapRequest,
     ShiftTemplate,
     ShiftTimeOff,
     SwapRequestStatus,
     TimeOffStatus,
+    TrainingProgram,
     TrainingRequirement,
 )
 from app.models.user import (
@@ -356,6 +358,43 @@ class SchedulingService:
 
         return shift_dict
 
+    async def _attach_training_labels(
+        self, dicts: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Populate training_program_name / training_evaluator_name on
+        assignment dicts so the crew board can label training slots without
+        a second round-trip.
+        """
+        program_ids = {
+            str(d["training_program_id"])
+            for d in dicts
+            if d.get("training_program_id")
+        }
+        evaluator_ids = [
+            str(d["training_evaluator_id"])
+            for d in dicts
+            if d.get("training_evaluator_id")
+        ]
+        prog_map: Dict[str, str] = {}
+        if program_ids:
+            rows = await self.db.execute(
+                select(TrainingProgram.id, TrainingProgram.name).where(
+                    TrainingProgram.id.in_(program_ids)
+                )
+            )
+            prog_map = {str(r[0]): r[1] for r in rows.all()}
+        eval_map = (
+            await self._get_user_name_map(list(set(evaluator_ids)))
+            if evaluator_ids
+            else {}
+        )
+        for d in dicts:
+            pid = d.get("training_program_id")
+            d["training_program_name"] = prog_map.get(str(pid)) if pid else None
+            eid = d.get("training_evaluator_id")
+            d["training_evaluator_name"] = eval_map.get(str(eid)) if eid else None
+        return dicts
+
     async def enrich_assignments(
         self, assignments: List[ShiftAssignment]
     ) -> List[Dict[str, Any]]:
@@ -364,7 +403,8 @@ class SchedulingService:
             return []
         user_ids = list({a.user_id for a in assignments if a.user_id})
         name_map = await self._get_user_name_map(user_ids)
-        return [self._orm_to_dict(a, name_map) for a in assignments]
+        dicts = [self._orm_to_dict(a, name_map) for a in assignments]
+        return await self._attach_training_labels(dicts)
 
     async def enrich_assignments_with_shifts(
         self, assignments: List[ShiftAssignment], organization_id: UUID
@@ -400,7 +440,7 @@ class SchedulingService:
             d = self._orm_to_dict(a, name_map)
             d["shift"] = shift_map.get(str(a.shift_id))
             result.append(d)
-        return result
+        return await self._attach_training_labels(result)
 
     async def enrich_swap_requests(
         self, swap_requests: List[ShiftSwapRequest]
@@ -716,6 +756,7 @@ class SchedulingService:
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
             .where(Shift.is_finalized.is_(False))
+            .where(Shift.status != ShiftStatus.CANCELLED)
         )
         if apparatus_id:
             query = query.where(Shift.apparatus_id == apparatus_id)
@@ -753,6 +794,43 @@ class SchedulingService:
             .where(User.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none() is not None
+
+    async def _program_in_org(
+        self, program_id: str, organization_id: UUID
+    ) -> bool:
+        """Return True if training_program_id belongs to the given org."""
+        if not program_id:
+            return False
+        result = await self.db.execute(
+            select(TrainingProgram.id)
+            .where(TrainingProgram.id == str(program_id))
+            .where(TrainingProgram.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def _validate_training_slot_fields(
+        self, data: Dict[str, Any], organization_id: UUID
+    ) -> Optional[str]:
+        """Validate optional training-slot fields on an assignment payload.
+
+        Returns an error string if a supplied program/evaluator id is not in
+        the caller's organization, else None. Blank values are treated as
+        "not set" and stripped from ``data`` so they don't persist empties.
+        """
+        program_id = data.get("training_program_id")
+        if program_id:
+            if not await self._program_in_org(program_id, organization_id):
+                return "Training program not found"
+        elif "training_program_id" in data:
+            data["training_program_id"] = None
+
+        evaluator_id = data.get("training_evaluator_id")
+        if evaluator_id:
+            if not await self._user_in_org(evaluator_id, organization_id):
+                return "Training evaluator not found"
+        elif "training_evaluator_id" in data:
+            data["training_evaluator_id"] = None
+        return None
 
     async def get_active_shift_for_apparatus(
         self,
@@ -950,6 +1028,79 @@ class SchedulingService:
         except Exception as e:
             await self.db.rollback()
             return False, str(e)
+
+    async def cancel_shift(
+        self,
+        shift_id: UUID,
+        organization_id: UUID,
+        cancelled_by_user_id: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> Tuple[Optional[Shift], Optional[str]]:
+        """Cancel a shift without deleting it.
+
+        Preserves the shift record and its history (unlike ``delete_shift``),
+        marks all active assignments cancelled, and notifies the assigned
+        crew. A finalized shift cannot be cancelled — its data is locked for
+        training-requirement tracking.
+        """
+        try:
+            shift = await self.get_shift_by_id(shift_id, organization_id)
+            if not shift:
+                return None, "Shift not found"
+
+            if shift.is_finalized:
+                return None, "Cannot cancel a finalized shift."
+
+            if shift.status == ShiftStatus.CANCELLED:
+                return None, "Shift is already cancelled."
+
+            # Collect currently-active assignees so we can notify them and
+            # mark their assignments cancelled.
+            assign_result = await self.db.execute(
+                select(ShiftAssignment).where(
+                    ShiftAssignment.shift_id == str(shift_id),
+                    ShiftAssignment.assignment_status.notin_(
+                        self.INACTIVE_ASSIGNMENT_STATUSES
+                    ),
+                )
+            )
+            assignments = assign_result.scalars().all()
+            recipient_ids = {str(a.user_id) for a in assignments if a.user_id}
+            for a in assignments:
+                a.assignment_status = AssignmentStatus.CANCELLED
+
+            shift.status = ShiftStatus.CANCELLED
+            shift.cancelled_at = datetime.now(timezone.utc)
+            shift.cancelled_by = (
+                str(cancelled_by_user_id) if cancelled_by_user_id else None
+            )
+            shift.cancellation_reason = reason or None
+
+            if recipient_ids:
+                shift_date_str = (
+                    shift.shift_date.isoformat()
+                    if shift.shift_date
+                    else "the scheduled date"
+                )
+                message = f"Your shift on {shift_date_str} has been cancelled."
+                if reason:
+                    message += f" Reason: {reason}"
+                await self._send_notification(
+                    recipient_ids=recipient_ids,
+                    subject="Shift Cancelled",
+                    message=message,
+                    category="shift_cancelled",
+                    organization_id=organization_id,
+                    action_url="/scheduling",
+                    notification_metadata={"shift_id": str(shift_id)},
+                )
+
+            await self.db.commit()
+            await self.db.refresh(shift)
+            return shift, None
+        except Exception as e:
+            await self.db.rollback()
+            return None, str(e)
 
     # ============================================
     # Attendance Management
@@ -1839,6 +1990,12 @@ class SchedulingService:
             if user_id and not await self._user_in_org(user_id, organization_id):
                 return None, "User not found"
 
+            training_error = await self._validate_training_slot_fields(
+                assignment_data, organization_id
+            )
+            if training_error:
+                return None, training_error
+
             # Prevent duplicate assignment to the same shift
             if user_id:
                 dup_result = await self.db.execute(
@@ -2008,6 +2165,17 @@ class SchedulingService:
         result = await self.db.execute(query)
         return result.scalars().all()
 
+    async def get_assignment_by_id(
+        self, assignment_id: UUID, organization_id: UUID
+    ) -> Optional[ShiftAssignment]:
+        """Get a shift assignment by ID, scoped to the organization."""
+        result = await self.db.execute(
+            select(ShiftAssignment)
+            .where(ShiftAssignment.id == str(assignment_id))
+            .where(ShiftAssignment.organization_id == str(organization_id))
+        )
+        return result.scalar_one_or_none()
+
     async def update_assignment(
         self, assignment_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
@@ -2021,6 +2189,12 @@ class SchedulingService:
             assignment = result.scalar_one_or_none()
             if not assignment:
                 return None, "Shift assignment not found"
+
+            training_error = await self._validate_training_slot_fields(
+                update_data, organization_id
+            )
+            if training_error:
+                return None, training_error
 
             old_status = assignment.assignment_status
             position = assignment.position
@@ -4170,12 +4344,18 @@ class SchedulingService:
         organization_id: UUID,
         finalized_by_user_id: str,
     ) -> int:
-        """Create draft ShiftCompletionReports for shift attendees who
-        have active training program enrollments.
+        """Create draft ShiftCompletionReports for this shift's trainees.
 
-        Called during finalization so the officer only needs to add
-        narrative and ratings to complete each report.
-        Returns the number of drafts created.
+        A member is a trainee if they have an active program enrollment
+        (attendee-based, preserves prior behavior) **or** they hold an
+        explicit training-slot assignment on the shift. For a training slot
+        the report is drafted against the slot's linked program (falling back
+        to any active enrollment) and attributed to the slot's evaluator
+        (falling back to the finalizing officer).
+
+        Called during finalization so the reviewer only needs to add narrative
+        and ratings to complete each report. Returns the number of drafts
+        created.
         """
         from app.services.shift_completion_service import ShiftCompletionService
 
@@ -4183,34 +4363,86 @@ class SchedulingService:
             select(ShiftAttendance).where(ShiftAttendance.shift_id == str(shift.id))
         )
         attendees = att_result.scalars().all()
-        if not attendees:
-            return 0
+        attendee_by_user = {str(a.user_id): a for a in attendees}
 
-        attendee_ids = [str(a.user_id) for a in attendees]
+        # Explicit training-slot assignments on this shift.
+        train_result = await self.db.execute(
+            select(
+                ShiftAssignment.user_id,
+                ShiftAssignment.training_program_id,
+                ShiftAssignment.training_evaluator_id,
+            ).where(
+                ShiftAssignment.shift_id == str(shift.id),
+                ShiftAssignment.is_training.is_(True),
+                ShiftAssignment.assignment_status.notin_(
+                    self.INACTIVE_ASSIGNMENT_STATUSES
+                ),
+            )
+        )
+        training_map = {
+            str(uid): {"program_id": pid, "evaluator_id": eid}
+            for uid, pid, eid in train_result.all()
+        }
+
+        candidate_ids = set(attendee_by_user.keys()) | set(training_map.keys())
+        if not candidate_ids:
+            return 0
 
         enrollment_result = await self.db.execute(
             select(
                 ProgramEnrollment.user_id,
                 ProgramEnrollment.id,
+                ProgramEnrollment.program_id,
             ).where(
                 ProgramEnrollment.organization_id == str(organization_id),
-                ProgramEnrollment.user_id.in_(attendee_ids),
+                ProgramEnrollment.user_id.in_(list(candidate_ids)),
                 ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
             )
         )
-        trainee_enrollments = enrollment_result.all()
-        if not trainee_enrollments:
+        enrollments_by_user: Dict[str, list] = {}
+        for uid, eid, pid in enrollment_result.all():
+            enrollments_by_user.setdefault(str(uid), []).append(
+                (str(eid), str(pid))
+            )
+
+        # A member gets a draft if they hold a training slot or have an active
+        # enrollment. Deduped so a member who is both is reported once.
+        trainee_ids = set(enrollments_by_user.keys()) | set(training_map.keys())
+        if not trainee_ids:
             return 0
 
         svc = ShiftCompletionService(self.db)
         created_count = 0
 
-        for user_id, enrollment_id in trainee_enrollments:
+        for user_id in trainee_ids:
             try:
-                att = next(
-                    (a for a in attendees if str(a.user_id) == str(user_id)),
-                    None,
-                )
+                slot = training_map.get(user_id)
+                enrollments = enrollments_by_user.get(user_id, [])
+
+                enrollment_id: Optional[str] = None
+                if slot and slot.get("program_id"):
+                    enrollment_id = next(
+                        (
+                            eid
+                            for eid, pid in enrollments
+                            if pid == str(slot["program_id"])
+                        ),
+                        None,
+                    )
+                if enrollment_id is None and enrollments:
+                    enrollment_id = enrollments[0][0]
+
+                # A non-flagged member with no active enrollment is not a
+                # trainee; skip. A training slot with no enrollment still gets
+                # a report so the evaluator's observation is recorded.
+                if enrollment_id is None and not slot:
+                    continue
+
+                officer_id = finalized_by_user_id
+                if slot and slot.get("evaluator_id"):
+                    officer_id = str(slot["evaluator_id"])
+
+                att = attendee_by_user.get(user_id)
                 hours = 0.0
                 if att and att.duration_minutes:
                     hours = round(float(att.duration_minutes) / 60.0, 2)
@@ -4224,12 +4456,12 @@ class SchedulingService:
 
                 await svc.create_report(
                     organization_id=organization_id,
-                    officer_id=UUID(finalized_by_user_id),
+                    officer_id=UUID(officer_id),
                     trainee_id=str(user_id),
                     shift_date=shift.shift_date,
                     hours_on_shift=hours,
                     shift_id=str(shift.id),
-                    enrollment_id=str(enrollment_id),
+                    enrollment_id=enrollment_id,
                     review_status="draft",
                     commit=False,
                 )
