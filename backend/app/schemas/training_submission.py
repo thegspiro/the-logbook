@@ -181,6 +181,11 @@ class SubmissionReviewRequest(BaseModel):
     override_credit_hours: Optional[float] = Field(None, ge=0)
     override_training_type: Optional[str] = None
 
+    # Optionally apply the approved training toward a pipeline requirement
+    # (e.g. crediting a make-up session). Both must be set together.
+    apply_to_program_id: Optional[UUID] = None
+    apply_to_requirement_id: Optional[UUID] = None
+
     @field_validator("override_training_type")
     @classmethod
     def _validate_override_training_type(cls, v: Optional[str]) -> Optional[str]:

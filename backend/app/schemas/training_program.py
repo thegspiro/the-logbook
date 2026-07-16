@@ -359,6 +359,14 @@ class ProgramEnrollmentWithdraw(BaseModel):
     reason: Optional[str] = Field(None, max_length=500)
 
 
+class ApplyTrainingRecordRequest(BaseModel):
+    """Officer applies an existing training record toward a pipeline requirement."""
+
+    record_id: UUID
+    program_id: UUID
+    requirement_id: UUID
+
+
 class ProgramEnrollmentUpdate(BaseModel):
     """Schema for updating a program enrollment"""
 

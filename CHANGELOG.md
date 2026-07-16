@@ -187,6 +187,18 @@ progression.
   edited** — the Requirements page, the create-pipeline wizard, and the pipeline requirement
   editor each show a flagged callout (for hours/course requirements) that spells out the
   current behavior and the toggle, so it's a deliberate decision rather than a hidden default.
+- **Officer applies self-reported training → pipeline** — a training officer can now credit
+  approved self-reported training toward a specific pipeline requirement, which is ideal for
+  **make-up sessions that had no scheduled training date**. It works two ways: when approving
+  a submission, the officer can pick a target program + requirement from the member's active
+  enrollments (`apply_to_program_id`/`apply_to_requirement_id` on the review), and an approved
+  submission can be applied **retroactively** from its card
+  (`POST /training/programs/apply-training-record`). Hours requirements gain the approved
+  hours, a course counts as one completion, and status-based requirements (certification /
+  skills / checklist / knowledge test) are marked complete — all through the real updater
+  (`TrainingProgramService.apply_training_to_requirement`), so rollup and phase advancement
+  run. Because it's an explicit officer sign-off, it bypasses the `allows_external_credit`
+  opt-in (which only gates the *automatic* import feed). Audit-logged.
 - **Skills tests → pipeline** — a skill template carries a default **linked training
   requirement** (each test inherits it, overridable per test via a new
   `requirement_id` on `skill_templates`/`skill_tests`, migration

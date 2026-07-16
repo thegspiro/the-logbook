@@ -785,6 +785,16 @@ export const trainingProgramService = {
     return response.data;
   },
 
+  /** Apply an approved training record toward a specific pipeline requirement. */
+  async applyTrainingRecord(recordId: string, programId: string, requirementId: string): Promise<{ applied: boolean }> {
+    const response = await api.post<{ applied: boolean }>('/training/programs/apply-training-record', {
+      record_id: recordId,
+      program_id: programId,
+      requirement_id: requirementId,
+    });
+    return response.data;
+  },
+
   /**
    * Withdraw from a program enrollment (soft — kept for history, drops off the
    * active dashboard). A member can withdraw their own; officers can withdraw

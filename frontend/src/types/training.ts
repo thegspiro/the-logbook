@@ -1284,6 +1284,9 @@ export interface SubmissionReviewRequest {
   override_hours?: number | undefined;
   override_credit_hours?: number | undefined;
   override_training_type?: TrainingType | undefined;
+  // Optionally apply the approved training toward a pipeline requirement.
+  apply_to_program_id?: string | undefined;
+  apply_to_requirement_id?: string | undefined;
 }
 
 // ==================== Shift Completion Reports ====================

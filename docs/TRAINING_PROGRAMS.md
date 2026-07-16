@@ -259,6 +259,15 @@ hours off the member's certificate progress.
 - Customizable form fields (visible, required, label per field)
 - Status tracking: draft, pending review, approved, rejected, revision requested
 - Approved submissions automatically create TrainingRecords
+- **Apply to a pipeline requirement (make-up sessions):** when approving a submission —
+  or later, from an already-approved submission's card — the officer can credit the
+  training toward a specific requirement in one of the member's active enrollments. This
+  covers make-up sessions that never had a scheduled training date. Hours requirements gain
+  the approved hours, a course counts as one completion, and status-based requirements
+  (certification / skills / checklist / knowledge test) are marked complete. It runs through
+  the normal progress updater (so rollup and phase advancement fire) and, being an explicit
+  officer sign-off, is **not** subject to the requirement's `allows_external_credit` opt-in
+  (that flag only governs *automatic* crediting from provider syncs).
 
 #### Shift Completion Reports
 - Shift officers file reports on trainee experiences

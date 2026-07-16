@@ -2152,6 +2152,86 @@ class TrainingProgramService:
                     advanced += 1
         return advanced
 
+    async def apply_training_to_requirement(
+        self,
+        user_id: Any,
+        organization_id: UUID,
+        program_id: Any,
+        requirement_id: Any,
+        hours: float,
+        verified_by: Optional[UUID] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """Apply a completed training toward one specific pipeline requirement for
+        a member's ACTIVE enrollment — an explicit officer action (e.g. crediting a
+        make-up session that had no scheduled training date, or a self-reported
+        completion).
+
+        Unlike the automatic import feed, this is a deliberate sign-off, so it is
+        NOT gated by the requirement's ``allows_external_credit`` flag. Numeric
+        requirements accrue the hours (HOURS) or one unit (COURSES/SHIFTS/CALLS);
+        status-based requirements (certification, skills, checklist, knowledge
+        test) are marked complete. Runs through ``update_requirement_progress`` so
+        percentage, auto-completion, rollup, and phase advancement all fire.
+        Returns ``(applied, error_message)``.
+        """
+        enrollment_result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.user_id == str(user_id),
+                ProgramEnrollment.program_id == str(program_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        enrollment = enrollment_result.scalar_one_or_none()
+        if not enrollment:
+            return False, "Member is not actively enrolled in this program"
+
+        row_result = await self.db.execute(
+            select(RequirementProgress, TrainingRequirement)
+            .join(
+                TrainingRequirement,
+                RequirementProgress.requirement_id == TrainingRequirement.id,
+            )
+            .where(
+                RequirementProgress.enrollment_id == enrollment.id,
+                RequirementProgress.requirement_id == str(requirement_id),
+            )
+        )
+        row = row_result.first()
+        if row is None:
+            return False, "That requirement is not part of this member's enrollment"
+
+        progress, requirement = row
+        rtype = requirement.requirement_type
+        if rtype == RequirementType.HOURS:
+            updates = RequirementProgressUpdate(
+                progress_value=float(progress.progress_value or 0) + float(hours)
+            )
+        elif rtype in (
+            RequirementType.COURSES,
+            RequirementType.SHIFTS,
+            RequirementType.CALLS,
+        ):
+            updates = RequirementProgressUpdate(
+                progress_value=float(progress.progress_value or 0) + 1.0
+            )
+        else:
+            # Certification / skills / checklist / knowledge-test: the officer is
+            # signing off that this training satisfies the requirement.
+            updates = RequirementProgressUpdate(status="completed")
+
+        _, error = await self.update_requirement_progress(
+            progress_id=progress.id,
+            organization_id=organization_id,
+            updates=updates,
+            verified_by=verified_by,
+        )
+        if error:
+            return False, error
+        return True, None
+
     @staticmethod
     def _clamp_day(year: int, month: int, day: int) -> date:
         """Build a date, clamping the day to the month's last valid day so a

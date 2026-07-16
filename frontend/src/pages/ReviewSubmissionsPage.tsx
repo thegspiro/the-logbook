@@ -22,9 +22,10 @@ import {
   Info,
   Edit2,
 } from 'lucide-react';
-import { trainingSubmissionService, trainingService } from '../services/api';
+import { trainingSubmissionService, trainingService, trainingProgramService } from '../services/api';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatDate } from '../utils/dateFormatting';
+import { getErrorMessage } from '../utils/errorHandling';
 import { SubmissionStatus } from '../constants/enums';
 import { EmptyState } from '../components/ux';
 import type {
@@ -35,6 +36,8 @@ import type {
   TrainingType,
   TrainingRecordUpdate,
   FieldConfig,
+  ProgramEnrollment,
+  RequirementProgressRecord,
 } from '../types/training';
 
 // ==================== Helpers ====================
@@ -67,6 +70,184 @@ const StatusBadge: React.FC<{ status: SubmissionStatus }> = ({ status }) => {
   );
 };
 
+// ==================== Apply-to-pipeline picker ====================
+
+// Lets the officer credit the approved training toward a requirement in one of
+// the member's active enrollments — e.g. a make-up session with no scheduled
+// date. Emits the chosen program + requirement to the parent.
+const ApplyToPipelinePicker: React.FC<{
+  userId: string;
+  onChange: (programId?: string, requirementId?: string) => void;
+  alwaysOpen?: boolean;
+}> = ({ userId, onChange, alwaysOpen = false }) => {
+  const [enabled, setEnabled] = useState(alwaysOpen);
+  const [enrollments, setEnrollments] = useState<ProgramEnrollment[]>([]);
+  const [programNames, setProgramNames] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [enrollmentId, setEnrollmentId] = useState('');
+  const [requirements, setRequirements] = useState<RequirementProgressRecord[]>([]);
+  const [requirementId, setRequirementId] = useState('');
+
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      try {
+        const [enrs, programs] = await Promise.all([
+          trainingProgramService.getUserEnrollments(userId, 'active'),
+          trainingProgramService.getPrograms(),
+        ]);
+        if (cancelled) return;
+        setEnrollments(enrs);
+        setProgramNames(Object.fromEntries(programs.map((p) => [p.id, p.name])));
+      } catch {
+        if (!cancelled) setEnrollments([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [enabled, userId]);
+
+  const selectEnrollment = (id: string) => {
+    setEnrollmentId(id);
+    setRequirementId('');
+    onChange(undefined, undefined);
+    if (!id) { setRequirements([]); return; }
+    void (async () => {
+      try {
+        const progress = await trainingProgramService.getEnrollmentProgress(id);
+        setRequirements(progress.requirement_progress);
+      } catch {
+        setRequirements([]);
+      }
+    })();
+  };
+
+  const selectRequirement = (reqId: string) => {
+    setRequirementId(reqId);
+    const enrollment = enrollments.find((e) => e.id === enrollmentId);
+    onChange(enrollment && reqId ? enrollment.program_id : undefined, reqId || undefined);
+  };
+
+  const toggle = (on: boolean) => {
+    setEnabled(on);
+    if (!on) {
+      setEnrollmentId('');
+      setRequirementId('');
+      onChange(undefined, undefined);
+    }
+  };
+
+  return (
+    <div className="mb-3">
+      {!alwaysOpen && (
+        <label className="inline-flex items-center gap-2 text-xs text-theme-text-secondary cursor-pointer">
+          <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} />
+          <span>Apply this training toward a pipeline requirement</span>
+        </label>
+      )}
+      {enabled && (
+        <div className="mt-2 space-y-2 rounded-lg border border-theme-surface-border p-3">
+          {loading ? (
+            <p className="text-xs text-theme-text-muted">Loading the member&apos;s programs…</p>
+          ) : enrollments.length === 0 ? (
+            <p className="text-xs text-theme-text-muted">
+              This member isn&apos;t enrolled in any active training program.
+            </p>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs text-theme-text-muted">Program</label>
+                <select
+                  value={enrollmentId}
+                  onChange={(e) => selectEnrollment(e.target.value)}
+                  className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-sm text-theme-text-primary text-sm"
+                >
+                  <option value="">Select a program…</option>
+                  {enrollments.map((enr) => (
+                    <option key={enr.id} value={enr.id}>
+                      {programNames[enr.program_id] ?? 'Program'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {enrollmentId && (
+                <div>
+                  <label className="text-xs text-theme-text-muted">Requirement</label>
+                  <select
+                    value={requirementId}
+                    onChange={(e) => selectRequirement(e.target.value)}
+                    className="w-full px-2 py-1.5 bg-theme-input-bg border border-theme-input-border rounded-sm text-theme-text-primary text-sm"
+                  >
+                    <option value="">Select a requirement…</option>
+                    {requirements.map((rp) => (
+                      <option key={rp.id} value={rp.requirement_id}>
+                        {rp.requirement?.name ?? 'Requirement'}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-theme-text-muted mt-1">
+                    Hours requirements gain the approved hours; a course counts as one completion;
+                    other types are marked complete.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Retroactively apply an already-approved submission's record toward a pipeline
+// requirement (e.g. training approved before the member enrolled, or approved
+// automatically). Reuses the picker; commits via the record apply endpoint.
+const ApplyRecordToPipelinePanel: React.FC<{
+  recordId: string;
+  userId: string;
+}> = ({ recordId, userId }) => {
+  const [programId, setProgramId] = useState<string | undefined>();
+  const [requirementId, setRequirementId] = useState<string | undefined>();
+  const [applying, setApplying] = useState(false);
+
+  const handleChange = useCallback((p?: string, r?: string) => {
+    setProgramId(p);
+    setRequirementId(r);
+  }, []);
+
+  const apply = async () => {
+    if (!programId || !requirementId) return;
+    setApplying(true);
+    try {
+      await trainingProgramService.applyTrainingRecord(recordId, programId, requirementId);
+      toast.success('Applied to the pipeline requirement');
+      setProgramId(undefined);
+      setRequirementId(undefined);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to apply to the requirement'));
+    } finally {
+      setApplying(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-theme-surface-border pt-4 mt-4">
+      <h4 className="text-sm font-semibold text-theme-text-primary mb-2">Apply to a training pipeline</h4>
+      <ApplyToPipelinePicker userId={userId} onChange={handleChange} alwaysOpen />
+      <button
+        onClick={() => { void apply(); }}
+        disabled={applying || !programId || !requirementId}
+        className="btn-primary text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {applying ? 'Applying…' : 'Apply to requirement'}
+      </button>
+    </div>
+  );
+};
+
 // ==================== Review Panel ====================
 
 const ReviewPanel: React.FC<{
@@ -79,7 +260,14 @@ const ReviewPanel: React.FC<{
   const [overrideCreditHours, _setOverrideCreditHours] = useState<number | undefined>();
   const [overrideType, setOverrideType] = useState<TrainingType | undefined>();
   const [showOverrides, setShowOverrides] = useState(false);
+  const [applyProgramId, setApplyProgramId] = useState<string | undefined>();
+  const [applyRequirementId, setApplyRequirementId] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
+
+  const handleApplyTarget = useCallback((programId?: string, requirementId?: string) => {
+    setApplyProgramId(programId);
+    setApplyRequirementId(requirementId);
+  }, []);
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -90,6 +278,9 @@ const ReviewPanel: React.FC<{
         override_hours: overrideHours,
         override_credit_hours: overrideHours || overrideCreditHours,
         override_training_type: overrideType,
+        ...(action === 'approve' && applyProgramId && applyRequirementId
+          ? { apply_to_program_id: applyProgramId, apply_to_requirement_id: applyRequirementId }
+          : {}),
       });
     } finally {
       setSubmitting(false);
@@ -190,6 +381,11 @@ const ReviewPanel: React.FC<{
             </div>
           )}
         </div>
+      )}
+
+      {/* Apply to a pipeline requirement (approval only) */}
+      {action === 'approve' && (
+        <ApplyToPipelinePicker userId={submission.submitted_by} onChange={handleApplyTarget} />
       )}
 
       {/* Submit */}
@@ -510,6 +706,14 @@ const SubmissionCard: React.FC<{
               recordId={submission.training_record_id ?? ''}
               submission={submission}
               onSaved={onRecordUpdated}
+            />
+          )}
+
+          {/* Retroactively apply an approved submission toward a pipeline */}
+          {isApproved && submission.training_record_id && (
+            <ApplyRecordToPipelinePanel
+              recordId={submission.training_record_id}
+              userId={submission.submitted_by}
             />
           )}
         </div>

@@ -12,7 +12,7 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Pipeline Recert Cycle** — *(2026-07-15)* Training pipelines can reset an enrolled member's accumulated progress for a new certification cycle. Officers reset a single requirement or a whole enrollment manually; a pipeline can also carry a stored recurring deadline (cycle length in months plus an optional fixed anchor date, e.g. NREMT's March 30) that auto-resets each enrollment when it passes — applied lazily on progress load and via a daily 5 AM scheduled sweep (`recert_resets`, also exposed as the `recert/run-due` endpoint)
 - **Self-Service Withdrawal** — *(2026-07-16)* A member can leave a program from their progression view (e.g. after downgrading from Paramedic to EMT); officers can withdraw anyone. Soft withdrawal keeps the record but removes it from the active dashboard and its warnings, and the member can be re-enrolled later
 - **Session Certification Eligibility** — *(2026-07-16)* A training session has a "Counts toward certification requirements" toggle (on by default). When off, attendance still records the member's hours (general credit) but does not feed the linked pipeline/certificate requirements, so hours a certifying body (NFPA/NREMT) wouldn't accept don't inflate a member's certificate
-- **Self-Reported Training** — Members submit training records for officer review and approval
+- **Self-Reported Training** — Members submit training records for officer review and approval. *(2026-07-16)* On approval (or retroactively from an approved submission), the officer can apply the training toward a specific pipeline requirement in one of the member's active enrollments — ideal for make-up sessions with no scheduled date. Hours accrue, a course counts as one completion, and status-based requirements are marked complete; it's an explicit sign-off, so it bypasses the `allows_external_credit` opt-in
 - **Shift Completion Reports** — Officers file post-shift reports that auto-credit hours/shifts/calls toward program requirements
 - **Compliance Matrix** — Grid view of all members vs. all active requirements (green/yellow/red)
 - **Competency Matrix** — Department readiness heat-map with color-coded proficiency levels
@@ -162,6 +162,7 @@ POST   /api/v1/training/programs/progress/{id}/reset       # Reset one requireme
 POST   /api/v1/training/programs/enrollments/{id}/reset    # Reset a member's whole enrollment for a new recert cycle (2026-07-15)
 POST   /api/v1/training/programs/enrollments/{id}/withdraw # Withdraw from a program (self or officer; soft) (2026-07-16)
 POST   /api/v1/training/programs/recert/run-due            # Auto-reset every enrollment past its stored recert deadline (scheduled sweep) (2026-07-15)
+POST   /api/v1/training/programs/apply-training-record     # Officer applies an approved training record toward a pipeline requirement (2026-07-16)
 POST   /api/v1/training/programs/programs/{id}/duplicate   # Duplicate program
 POST   /api/v1/training/programs/programs/{id}/bulk-enroll # Bulk enroll members
 GET    /api/v1/training/programs/requirements/registries   # List available registries

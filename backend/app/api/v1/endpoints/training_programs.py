@@ -23,6 +23,7 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.training_program import (  # Requirements; Programs; Phases; Program Requirements; Milestones; Enrollments; Progress; Registry
+    ApplyTrainingRecordRequest,
     MemberEligibilityResponse,
     MemberProgramProgress,
     ProgramBuildRequest,
@@ -1526,6 +1527,66 @@ async def withdraw_enrollment(
     )
 
     return enrollment
+
+
+@router.post("/apply-training-record")
+async def apply_training_record(
+    payload: ApplyTrainingRecordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Apply an existing (approved) training record toward a specific pipeline
+    requirement for the member — an officer sign-off, e.g. crediting a make-up
+    session that had no scheduled training date. Advances the requirement through
+    the real updater (percentage, auto-completion, rollup, phase advancement).
+
+    **Requires permission: training.manage**
+    """
+    from sqlalchemy import select
+
+    from app.models.training import TrainingRecord
+
+    record_result = await db.execute(
+        select(TrainingRecord).where(
+            TrainingRecord.id == str(payload.record_id),
+            TrainingRecord.organization_id == str(current_user.organization_id),
+        )
+    )
+    record = record_result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Training record not found"
+        )
+
+    service = TrainingProgramService(db)
+    applied, error = await service.apply_training_to_requirement(
+        user_id=record.user_id,
+        organization_id=current_user.organization_id,
+        program_id=payload.program_id,
+        requirement_id=payload.requirement_id,
+        hours=float(record.hours_completed or 0),
+        verified_by=current_user.id,
+    )
+    if not applied:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_record_applied_to_requirement",
+        event_category="training",
+        severity="info",
+        event_data={
+            "record_id": str(payload.record_id),
+            "target_user_id": str(record.user_id),
+            "program_id": str(payload.program_id),
+            "requirement_id": str(payload.requirement_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {"applied": True}
 
 
 @router.post("/recert/run-due")
