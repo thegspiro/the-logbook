@@ -605,6 +605,11 @@ class ShiftAssignmentResponse(UTCResponseBase):
     training_evaluator_id: Optional[str] = None
     training_evaluator_name: Optional[str] = None
     shift: Optional[EmbeddedShiftInfo] = None
+    # Soft, non-blocking advisories attached by the endpoint (EVOC driver
+    # eligibility, overtime/hours). Declared here so response_model does not
+    # strip them from the assign/signup responses.
+    evoc_warnings: Optional[List[Any]] = None
+    overtime_warnings: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 

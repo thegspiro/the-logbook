@@ -127,6 +127,44 @@ async def _authorize_shift_management(
     raise HTTPException(status_code=403, detail="Insufficient permissions")
 
 
+async def _attach_assignment_warnings(
+    db: AsyncSession,
+    service: SchedulingService,
+    response: dict,
+    shift_id: UUID,
+    organization_id,
+    user_id: str,
+    position: str,
+) -> dict:
+    """Attach soft, non-blocking advisories to an assignment response — EVOC
+    driver eligibility and overtime/hours. Shared by admin-assign and member
+    self-signup so both surface the same warnings.
+    """
+    if position == "driver":
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        evoc_warnings = await ShiftEligibilityService(
+            db
+        ).get_driver_assignment_warnings(
+            user_id=str(user_id),
+            shift_id=str(shift_id),
+            organization_id=str(organization_id),
+        )
+        if evoc_warnings:
+            response["evoc_warnings"] = evoc_warnings
+
+    shift = await service.get_shift_by_id(shift_id, organization_id)
+    if shift is not None:
+        overtime_warnings = await service.get_overtime_warnings(
+            user_id=str(user_id),
+            shift=shift,
+            organization_id=organization_id,
+        )
+        if overtime_warnings:
+            response["overtime_warnings"] = overtime_warnings
+    return response
+
+
 async def _authorize_assignment_management(
     service: SchedulingService,
     current_user: User,
@@ -1274,30 +1312,16 @@ async def create_assignment(
     enriched = await service.enrich_assignments([result])
     response = enriched[0]
 
-    # Soft EVOC warning for driver assignments
-    position = assignment_data.get("position", "")
-    if position == "driver":
-        from app.services.shift_eligibility_service import ShiftEligibilityService
-
-        eligibility_svc = ShiftEligibilityService(db)
-        evoc_warnings = await eligibility_svc.get_driver_assignment_warnings(
-            user_id=str(assignment_data.get("user_id", "")),
-            shift_id=str(shift_id),
-            organization_id=str(current_user.organization_id),
-        )
-        if evoc_warnings:
-            response["evoc_warnings"] = evoc_warnings
-
-    # Soft overtime warning when the org has configured an hours cap.
-    shift = await service.get_shift_by_id(shift_id, current_user.organization_id)
-    if shift is not None:
-        overtime_warnings = await service.get_overtime_warnings(
-            user_id=str(assignment_data.get("user_id", "")),
-            shift=shift,
-            organization_id=current_user.organization_id,
-        )
-        if overtime_warnings:
-            response["overtime_warnings"] = overtime_warnings
+    # Soft, non-blocking advisories (EVOC driver eligibility, overtime).
+    response = await _attach_assignment_warnings(
+        db,
+        service,
+        response,
+        shift_id,
+        current_user.organization_id,
+        str(assignment_data.get("user_id", "")),
+        assignment_data.get("position", ""),
+    )
 
     return response
 
@@ -1871,7 +1895,18 @@ async def signup_for_shift(
             status_code=400, detail=_safe_detail("Unable to sign up for shift.", error)
         )
     enriched = await service.enrich_assignments([result])
-    return enriched[0]
+    response = enriched[0]
+    # Same soft advisories a member would get if an officer assigned them.
+    response = await _attach_assignment_warnings(
+        db,
+        service,
+        response,
+        shift_id,
+        current_user.organization_id,
+        str(current_user.id),
+        signup.position.value,
+    )
+    return response
 
 
 @router.delete("/shifts/{shift_id}/signup", status_code=status.HTTP_204_NO_CONTENT)

@@ -356,8 +356,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const pos = position || signupPosition;
     setPendingFlag('signingUp', true);
     try {
-      await schedulingService.signupForShift(shift.id, { position: pos });
+      const res = await schedulingService.signupForShift(shift.id, { position: pos });
       toast.success('Signed up for shift');
+      surfaceAssignmentWarnings(res);
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
@@ -1094,6 +1095,20 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <span className="text-theme-text-secondary">{shift.call_count} call(s) recorded</span>
                   </div>
                 )}
+
+                {/* Staffing advisory — noted so an understaffed shift is on the record */}
+                {(() => {
+                  const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
+                  if (!(target > 0 && activeAssignments.length < target)) return null;
+                  return (
+                    <div className="flex items-start gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                      <span className="text-amber-700 dark:text-amber-400">
+                        Ran understaffed — {activeAssignments.length} of {target} positions filled.
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Pass-down handoff for the next crew */}
