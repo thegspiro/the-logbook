@@ -1849,6 +1849,33 @@ class TrainingProgramService:
         ):
             return None, "You are not authorized to update this training progress"
 
+        # A member may not self-verify their own pipeline requirements: only a
+        # training officer (can_manage) may mark one complete/verified/waived,
+        # record a test score, or set a numeric progress value. Otherwise a
+        # member could PATCH their own row to 100% and bypass officer review
+        # entirely. Members log training through the self-report submission flow,
+        # which routes to an officer. System callers (acting_user_id is None) and
+        # officers are unaffected.
+        if acting_user_id is not None and not can_manage:
+            if updates.test_score is not None:
+                return None, "Only a training officer can record a test score"
+            if updates.progress_value is not None:
+                return (
+                    None,
+                    "Only a training officer can set requirement progress. "
+                    "Submit your training for review instead.",
+                )
+            if updates.status in (
+                RequirementProgressStatus.COMPLETED.value,
+                RequirementProgressStatus.VERIFIED.value,
+                RequirementProgressStatus.WAIVED.value,
+            ):
+                return (
+                    None,
+                    "Only a training officer can mark a requirement "
+                    "complete or verified",
+                )
+
         # Update status
         if updates.status:
             try:
@@ -2570,6 +2597,7 @@ class TrainingProgramService:
             return
 
         was_completed = enrollment.status == EnrollmentStatus.COMPLETED
+        was_active = enrollment.status == EnrollmentStatus.ACTIVE
 
         # Get all requirement progress for this enrollment
         result = await self.db.execute(
@@ -2599,8 +2627,12 @@ class TrainingProgramService:
             )
         )
 
-        # Check if enrollment is complete
-        if avg_percentage >= 100.0:
+        # Only an ACTIVE enrollment may auto-complete. A WITHDRAWN, FAILED,
+        # EXPIRED, or ON_HOLD enrollment retains its progress rows, so without
+        # this guard a progress edit that reaches 100% would silently flip it to
+        # COMPLETED — reversing a withdrawal or overriding a terminal state.
+        newly_completed = avg_percentage >= 100.0 and was_active
+        if newly_completed:
             await self.db.execute(
                 update(ProgramEnrollment)
                 .where(ProgramEnrollment.id == str(enrollment_id))
@@ -2609,7 +2641,7 @@ class TrainingProgramService:
                     completed_at=datetime.now(timezone.utc),
                 )
             )
-        elif was_completed:
+        elif avg_percentage < 100.0 and was_completed:
             # Progress fell back below 100% for an enrollment that had already
             # completed — e.g. an officer corrected an over-count downward, or a
             # new required requirement was added to the program. Reopen it so it
@@ -2627,7 +2659,7 @@ class TrainingProgramService:
         await self.db.commit()
 
         # Send completion notification if newly completed
-        if avg_percentage >= 100.0 and not was_completed:
+        if newly_completed:
             try:
                 # Re-fetch enrollment for notification
                 await self.db.refresh(enrollment)
