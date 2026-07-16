@@ -2061,6 +2061,86 @@ class TrainingProgramService:
 
         return progress, None
 
+    async def credit_category_progress(
+        self,
+        user_id: Any,
+        organization_id: UUID,
+        category_id: str,
+        hours: float,
+        is_course_completion: bool = True,
+    ) -> int:
+        """Advance a member's ACTIVE pipeline requirements that are tagged with
+        ``category_id`` from an out-of-band completion — e.g. a course synced from
+        an external provider (Vector Solutions, etc.), which lands as a
+        ``TrainingRecord`` and would otherwise never touch pipeline progress.
+
+        HOURS requirements accrue ``hours``; COURSES requirements accrue one
+        completion. Other requirement types (skills, certification, checklist,
+        knowledge test) are left for explicit sign-off. The same completion counts
+        toward every active program that requires the category — mirroring how the
+        compliance engine credits category-matched hours everywhere.
+
+        Routes each accrual through ``update_requirement_progress`` so percentage,
+        auto-completion, enrollment rollup, and phase advancement all run. Returns
+        the number of requirement rows advanced.
+        """
+        if hours <= 0 and not is_course_completion:
+            return 0
+
+        enrollments_result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.user_id == str(user_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        enrollments = enrollments_result.scalars().all()
+        if not enrollments:
+            return 0
+
+        advanced = 0
+        for enrollment in enrollments:
+            rows_result = await self.db.execute(
+                select(RequirementProgress, TrainingRequirement)
+                .join(
+                    TrainingRequirement,
+                    RequirementProgress.requirement_id == TrainingRequirement.id,
+                )
+                .where(
+                    RequirementProgress.enrollment_id == enrollment.id,
+                    TrainingRequirement.category_ids.contains([str(category_id)]),
+                )
+            )
+            for progress, requirement in rows_result.all():
+                if requirement.requirement_type == RequirementType.HOURS:
+                    increment = float(hours)
+                elif (
+                    requirement.requirement_type == RequirementType.COURSES
+                    and is_course_completion
+                ):
+                    increment = 1.0
+                else:
+                    continue
+                if increment <= 0:
+                    continue
+
+                new_value = float(progress.progress_value or 0) + increment
+                _, error = await self.update_requirement_progress(
+                    progress_id=progress.id,
+                    organization_id=organization_id,
+                    updates=RequirementProgressUpdate(progress_value=new_value),
+                )
+                if error:
+                    logger.error(
+                        f"External pipeline feed failed: user={user_id} "
+                        f"requirement={requirement.id}: {error}"
+                    )
+                else:
+                    advanced += 1
+        return advanced
+
     @staticmethod
     def _clamp_day(year: int, month: int, day: int) -> date:
         """Build a date, clamping the day to the month's last valid day so a

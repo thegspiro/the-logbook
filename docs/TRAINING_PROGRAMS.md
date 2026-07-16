@@ -357,8 +357,21 @@ The External Training Integration feature allows organizations to connect to ext
 │  7. Import records as Training Records                      │
 │     - Creates official training history                     │
 │     - Links to mapped user and category                     │
+│     - Advances matching pipeline requirements (by category) │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **Imported courses also feed training pipelines.** When a record is imported,
+> for each of the member's **active** enrollments any requirement tagged with the
+> record's category is advanced — an HOURS requirement by the record's hours, a
+> COURSES requirement by one completion — through the same machinery as an in-app
+> training session (so percentage, auto-completion, rollup, and phase advancement
+> all run). This means a course completed in Vector Solutions counts toward a
+> member's recruit-school / certification progress, not just the compliance matrix.
+> Requirement types that need human sign-off (skills evaluations, certifications,
+> checklists, knowledge tests) are left for an officer to complete. Correct
+> **category mapping** is what makes this work, so map external categories to the
+> internal categories your requirements use.
 
 ### Managing Mappings
 
