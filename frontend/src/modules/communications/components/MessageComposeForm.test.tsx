@@ -3,12 +3,14 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockCreate = vi.fn();
+const mockUpdate = vi.fn();
 const mockGetRoles = vi.fn();
 const mockGetUsers = vi.fn();
 
 vi.mock('../../../services/api', () => ({
   messagesService: {
     createMessage: (...args: unknown[]) => mockCreate(...args) as unknown,
+    updateMessage: (...args: unknown[]) => mockUpdate(...args) as unknown,
     getAvailableRoles: (...args: unknown[]) => mockGetRoles(...args) as unknown,
   },
   userService: {
@@ -28,12 +30,13 @@ describe('MessageComposeForm', () => {
     mockGetRoles.mockResolvedValue([{ name: 'Officer', slug: 'officer' }]);
     mockGetUsers.mockResolvedValue([]);
     mockCreate.mockResolvedValue({ id: 'm1' });
+    mockUpdate.mockResolvedValue({ id: 'm1' });
   });
 
   it('targets roles by name, not slug, matching the backend contract', async () => {
     const user = userEvent.setup();
-    const onCreated = vi.fn();
-    render(<MessageComposeForm onCreated={onCreated} onCancel={vi.fn()} />);
+    const onSaved = vi.fn();
+    render(<MessageComposeForm onSaved={onSaved} onCancel={vi.fn()} />);
 
     await user.type(screen.getByLabelText('Title'), 'Safety bulletin');
     await user.type(screen.getByLabelText('Message'), 'Please review.');
@@ -49,12 +52,12 @@ describe('MessageComposeForm', () => {
     expect(payload.target_type).toBe('roles');
     // The role *name* is sent, not the slug — _is_targeted matches on name.
     expect(payload.target_roles).toEqual(['Officer']);
-    expect(onCreated.mock.calls.length).toBe(1);
+    expect(onSaved.mock.calls.length).toBe(1);
   });
 
   it('omits target lists when audience is everyone', async () => {
     const user = userEvent.setup();
-    render(<MessageComposeForm onCreated={vi.fn()} onCancel={vi.fn()} />);
+    render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
 
     await user.type(screen.getByLabelText('Title'), 'All hands');
     await user.type(screen.getByLabelText('Message'), 'Body');
@@ -70,7 +73,7 @@ describe('MessageComposeForm', () => {
 
   it('blocks submit when a role audience has no selection', async () => {
     const user = userEvent.setup();
-    render(<MessageComposeForm onCreated={vi.fn()} onCancel={vi.fn()} />);
+    render(<MessageComposeForm onSaved={vi.fn()} onCancel={vi.fn()} />);
 
     await user.type(screen.getByLabelText('Title'), 'Untargeted');
     await user.type(screen.getByLabelText('Message'), 'Body');
@@ -79,5 +82,44 @@ describe('MessageComposeForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/at least one role/i);
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('edits an existing message via updateMessage, clearing stale targeting', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    render(
+      <MessageComposeForm
+        message={{
+          id: 'm1',
+          organization_id: 'org1',
+          title: 'Original',
+          body: 'Original body',
+          priority: 'normal',
+          target_type: 'roles',
+          target_roles: ['Officer'],
+          is_pinned: false,
+          is_active: true,
+          is_persistent: false,
+          requires_acknowledgment: false,
+        }}
+        onSaved={onSaved}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    // Pre-filled from the message being edited.
+    expect(screen.getByLabelText('Title')).toHaveValue('Original');
+    // Switch audience back to everyone.
+    await user.selectOptions(screen.getByLabelText('Audience'), 'all');
+    await user.click(screen.getByRole('button', { name: /save changes/i }));
+
+    await waitFor(() => expect(mockUpdate.mock.calls.length).toBe(1));
+    expect(mockCreate).not.toHaveBeenCalled();
+    const [id, payload] = mockUpdate.mock.calls[0] as [string, Record<string, unknown>];
+    expect(id).toBe('m1');
+    expect(payload.target_type).toBe('all');
+    // Stale role targeting is explicitly cleared, not left behind.
+    expect(payload.target_roles).toBeNull();
+    expect(onSaved.mock.calls.length).toBe(1);
   });
 });

@@ -12,13 +12,17 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { messagesService, userService } from '../../../services/api';
-import type { RoleOption } from '../../../services/adminServices';
+import type { RoleOption, DepartmentMessageRecord } from '../../../services/adminServices';
 import type { User } from '../../../types/user';
 import { UserStatus } from '../../../constants/enums';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import toast from 'react-hot-toast';
 
 interface MessageComposeFormProps {
-  onCreated: () => void;
+  /** When provided, the form edits this message instead of creating a new one. */
+  message?: DepartmentMessageRecord;
+  onSaved: () => void;
   onCancel: () => void;
 }
 
@@ -37,18 +41,22 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: UserStatus.RETIRED, label: 'Retired' },
 ];
 
-const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCancel }) => {
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [priority, setPriority] = useState('normal');
-  const [targetType, setTargetType] = useState<TargetType>('all');
-  const [targetRoles, setTargetRoles] = useState<string[]>([]);
-  const [targetStatuses, setTargetStatuses] = useState<string[]>([]);
-  const [targetMembers, setTargetMembers] = useState<string[]>([]);
-  const [isPinned, setIsPinned] = useState(false);
-  const [isPersistent, setIsPersistent] = useState(false);
-  const [requiresAck, setRequiresAck] = useState(false);
-  const [expiresAt, setExpiresAt] = useState('');
+const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSaved, onCancel }) => {
+  const tz = useTimezone();
+  const isEditing = Boolean(message);
+  const [title, setTitle] = useState(message?.title ?? '');
+  const [body, setBody] = useState(message?.body ?? '');
+  const [priority, setPriority] = useState<string>(message?.priority ?? 'normal');
+  const [targetType, setTargetType] = useState<TargetType>(message?.target_type ?? 'all');
+  const [targetRoles, setTargetRoles] = useState<string[]>(message?.target_roles ?? []);
+  const [targetStatuses, setTargetStatuses] = useState<string[]>(message?.target_statuses ?? []);
+  const [targetMembers, setTargetMembers] = useState<string[]>(message?.target_member_ids ?? []);
+  const [isPinned, setIsPinned] = useState(message?.is_pinned ?? false);
+  const [isPersistent, setIsPersistent] = useState(message?.is_persistent ?? false);
+  const [requiresAck, setRequiresAck] = useState(message?.requires_acknowledgment ?? false);
+  const [expiresAt, setExpiresAt] = useState(
+    message?.expires_at ? formatForDateTimeInput(message.expires_at, tz) : '',
+  );
 
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [members, setMembers] = useState<User[]>([]);
@@ -93,9 +101,31 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCa
     setSubmitting(true);
     setError(null);
     try {
-      // Build the payload conditionally — omitting optional keys rather than
-      // sending undefined (exactOptionalPropertyTypes) and only attaching the
-      // audience list relevant to the chosen target type.
+      if (isEditing && message) {
+        // On edit, send every target list explicitly (null when not applicable)
+        // so switching the audience type clears the now-irrelevant targeting
+        // instead of leaving stale role/status/member arrays behind.
+        await messagesService.updateMessage(message.id, {
+          title: title.trim(),
+          body: body.trim(),
+          priority,
+          target_type: targetType,
+          target_roles: targetType === 'roles' ? targetRoles : null,
+          target_statuses: targetType === 'statuses' ? targetStatuses : null,
+          target_member_ids: targetType === 'members' ? targetMembers : null,
+          is_pinned: isPinned,
+          is_persistent: isPersistent,
+          requires_acknowledgment: requiresAck,
+          expires_at: expiresAt ? localToUTC(expiresAt, tz) : null,
+        });
+        toast.success('Message updated');
+        onSaved();
+        return;
+      }
+
+      // Build the create payload conditionally — omitting optional keys rather
+      // than sending undefined (exactOptionalPropertyTypes) and only attaching
+      // the audience list relevant to the chosen target type.
       const payload: Parameters<typeof messagesService.createMessage>[0] = {
         title: title.trim(),
         body: body.trim(),
@@ -108,14 +138,18 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCa
       if (targetType === 'roles') payload.target_roles = targetRoles;
       if (targetType === 'statuses') payload.target_statuses = targetStatuses;
       if (targetType === 'members') payload.target_member_ids = targetMembers;
-      // datetime-local is local time; send a UTC ISO instant when provided.
-      if (expiresAt) payload.expires_at = new Date(expiresAt).toISOString();
+      // datetime-local is interpreted in the org timezone; send a UTC instant.
+      if (expiresAt) payload.expires_at = localToUTC(expiresAt, tz);
 
       await messagesService.createMessage(payload);
       toast.success('Message posted');
-      onCreated();
+      onSaved();
     } catch {
-      setError('Unable to post the message. Please try again.');
+      setError(
+        isEditing
+          ? 'Unable to save your changes. Please try again.'
+          : 'Unable to post the message. Please try again.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -323,7 +357,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCa
           className="btn-info inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          Post message
+          {isEditing ? 'Save changes' : 'Post message'}
         </button>
       </div>
     </form>

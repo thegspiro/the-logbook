@@ -15,6 +15,7 @@ from app.api.dependencies import PaginationParams, get_current_user, require_per
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found
+from app.models.notification import MessagePriority, MessageTargetType
 from app.models.user import User
 from app.services.messaging_service import MessagingService
 
@@ -28,9 +29,12 @@ router = APIRouter()
 
 class MessageCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
-    body: str = Field(..., min_length=1)
-    priority: str = Field(default="normal")
-    target_type: str = Field(default="all")
+    body: str = Field(..., min_length=1, max_length=20000)
+    # Typed as enums so an invalid priority/target_type is rejected with a 422
+    # at the schema layer rather than surfacing as a raw ValueError from the
+    # service.
+    priority: MessagePriority = MessagePriority.NORMAL
+    target_type: MessageTargetType = MessageTargetType.ALL
     target_roles: list[str] | None = None
     target_statuses: list[str] | None = None
     target_member_ids: list[str] | None = None
@@ -41,10 +45,10 @@ class MessageCreate(BaseModel):
 
 
 class MessageUpdate(BaseModel):
-    title: str | None = None
-    body: str | None = None
-    priority: str | None = None
-    target_type: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    body: str | None = Field(default=None, min_length=1, max_length=20000)
+    priority: MessagePriority | None = None
+    target_type: MessageTargetType | None = None
     target_roles: list[str] | None = None
     target_statuses: list[str] | None = None
     target_member_ids: list[str] | None = None
@@ -99,8 +103,28 @@ class InboxMessage(BaseModel):
 
 class MessageStatsResponse(BaseModel):
     message_id: str
+    total_targeted: int
     total_reads: int
     total_acknowledged: int
+
+
+class AckReportRecipient(BaseModel):
+    user_id: str
+    name: str
+    status: str | None = None
+    is_read: bool
+    read_at: str | None = None
+    is_acknowledged: bool
+    acknowledged_at: str | None = None
+
+
+class AckReportResponse(BaseModel):
+    message_id: str
+    requires_acknowledgment: bool
+    total_targeted: int
+    total_read: int
+    total_acknowledged: int
+    recipients: list[AckReportRecipient]
 
 
 class RoleOption(BaseModel):
@@ -195,8 +219,8 @@ async def create_message(
         severity="info",
         event_data={
             "message_title": data.title,
-            "target_type": data.target_type,
-            "priority": data.priority,
+            "target_type": data.target_type.value,
+            "priority": data.priority.value,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -276,6 +300,18 @@ async def update_message(
     )
     if error:
         raise HTTPException(status_code=400, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="message_updated",
+        event_category="messages",
+        severity="info",
+        event_data={
+            "message_id": message_id,
+            "fields": sorted(updates.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return _serialize_message(message)
 
 
@@ -332,6 +368,17 @@ async def acknowledge_message(
     )
     if not success:
         raise HTTPException(status_code=400, detail=error)
+    # Acknowledgments are treated as compliance evidence, so record who
+    # acknowledged what and when in the audit trail.
+    await log_audit_event(
+        db=db,
+        event_type="message_acknowledged",
+        event_category="messages",
+        severity="info",
+        event_data={"message_id": message_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return {"status": "ok"}
 
 
@@ -347,3 +394,23 @@ async def get_message_stats(
     if "error" in stats:
         raise HTTPException(status_code=404, detail=stats["error"])
     return stats
+
+
+@router.get("/{message_id}/acknowledgments", response_model=AckReportResponse)
+async def get_acknowledgment_report(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("notifications.manage")),
+):
+    """Per-recipient read/acknowledgment breakdown for a message.
+
+    Lets leadership see exactly who has and has not acknowledged an
+    acknowledgment-required notice (e.g. an SOP change).
+    """
+    service = MessagingService(db)
+    report = await service.get_acknowledgment_report(
+        message_id, current_user.organization_id
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return report

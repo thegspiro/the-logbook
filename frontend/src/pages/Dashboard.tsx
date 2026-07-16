@@ -276,9 +276,15 @@ const Dashboard: React.FC = () => {
 
   const loadDeptMessages = async () => {
     try {
-      const data = await messagesService.getInbox({ limit: 10 });
+      // The badge uses the dedicated unread-count endpoint (which counts
+      // across ALL messages and treats ack-required messages as pending until
+      // acknowledged) rather than the length of this capped 10-item preview.
+      const [data, unread] = await Promise.all([
+        messagesService.getInbox({ limit: 10 }),
+        messagesService.getUnreadCount(),
+      ]);
       setDeptMessages(data);
-      setDeptMsgUnread(data.filter((m) => !m.is_read).length);
+      setDeptMsgUnread(unread.unread_count);
     } catch {
       // Messages are non-critical
     } finally {
@@ -289,10 +295,15 @@ const Dashboard: React.FC = () => {
   const markMessageRead = async (msgId: string) => {
     try {
       await messagesService.markAsRead(msgId);
+      // A message that requires acknowledgment stays "pending" until it is
+      // acknowledged, so reading it must not drop the unread count.
+      const msg = deptMessages.find((m) => m.id === msgId);
       setDeptMessages((prev) =>
         prev.map((m) => (m.id === msgId ? { ...m, is_read: true } : m)),
       );
-      setDeptMsgUnread((prev) => Math.max(0, prev - 1));
+      if (msg && !msg.requires_acknowledgment) {
+        setDeptMsgUnread((prev) => Math.max(0, prev - 1));
+      }
     } catch {
       toast.error("Failed to mark message as read");
     }

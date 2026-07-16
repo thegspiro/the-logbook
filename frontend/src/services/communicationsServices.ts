@@ -5,7 +5,7 @@
 import api from './apiClient';
 import type {
   NotificationRuleRecord, NotificationLogRecord, NotificationsSummary,
-  DepartmentMessageRecord, InboxMessage, MessageStats, RoleOption,
+  DepartmentMessageRecord, InboxMessage, MessageStats, AcknowledgmentReport, RoleOption,
   EmailTemplate, EmailAttachment, EmailTemplateUpdate, EmailTemplatePreview,
 } from './adminServices';
 
@@ -397,6 +397,10 @@ export const messagesService = {
   },
   async getMessageStats(messageId: string): Promise<MessageStats> {
     const response = await api.get<MessageStats>(`/messages/${messageId}/stats`);
+    return response.data;
+  },
+  async getAcknowledgmentReport(messageId: string): Promise<AcknowledgmentReport> {
+    const response = await api.get<AcknowledgmentReport>(`/messages/${messageId}/acknowledgments`);
     return response.data;
   },
 

@@ -6,10 +6,22 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Megaphone, Plus, Trash2, BarChart3, Pin, Loader2, AlertCircle } from 'lucide-react';
+import {
+  Megaphone,
+  Plus,
+  Trash2,
+  BarChart3,
+  Pencil,
+  Pin,
+  Loader2,
+  AlertCircle,
+  Check,
+  Eye,
+  Clock,
+} from 'lucide-react';
 import { Breadcrumbs, ConfirmDialog, EmptyState, SkeletonPage } from '../../../components/ux';
 import { messagesService } from '../../../services/api';
-import type { DepartmentMessageRecord, MessageStats } from '../../../services/adminServices';
+import type { DepartmentMessageRecord, AcknowledgmentReport } from '../../../services/adminServices';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
 import MessageComposeForm from '../components/MessageComposeForm';
@@ -40,9 +52,10 @@ const MessagesAdminPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
+  const [editing, setEditing] = useState<DepartmentMessageRecord | null>(null);
   const [pendingDelete, setPendingDelete] = useState<DepartmentMessageRecord | null>(null);
-  const [statsFor, setStatsFor] = useState<string | null>(null);
-  const [stats, setStats] = useState<MessageStats | null>(null);
+  const [reportFor, setReportFor] = useState<string | null>(null);
+  const [report, setReport] = useState<AcknowledgmentReport | null>(null);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -73,20 +86,25 @@ const MessagesAdminPage: React.FC = () => {
     }
   };
 
-  const handleShowStats = async (id: string) => {
-    if (statsFor === id) {
-      setStatsFor(null);
-      setStats(null);
+  const handleShowReport = async (id: string) => {
+    if (reportFor === id) {
+      setReportFor(null);
+      setReport(null);
       return;
     }
-    setStatsFor(id);
-    setStats(null);
+    setReportFor(id);
+    setReport(null);
     try {
-      setStats(await messagesService.getMessageStats(id));
+      setReport(await messagesService.getAcknowledgmentReport(id));
     } catch {
-      toast.error('Unable to load stats.');
-      setStatsFor(null);
+      toast.error('Unable to load the acknowledgment report.');
+      setReportFor(null);
     }
+  };
+
+  const startEdit = (m: DepartmentMessageRecord) => {
+    setComposing(false);
+    setEditing(m);
   };
 
   if (isLoading) {
@@ -101,7 +119,7 @@ const MessagesAdminPage: React.FC = () => {
           <Megaphone className="h-6 w-6" aria-hidden="true" />
           Department Messages
         </h1>
-        {!composing && (
+        {!composing && !editing && (
           <button
             type="button"
             onClick={() => setComposing(true)}
@@ -123,20 +141,28 @@ const MessagesAdminPage: React.FC = () => {
         </div>
       )}
 
-      {composing && (
+      {(composing || editing) && (
         <div className="border-theme-surface-border bg-theme-surface mb-6 rounded-lg border p-4">
-          <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">New message</h2>
+          <h2 className="text-theme-text-primary mb-3 text-lg font-semibold">
+            {editing ? 'Edit message' : 'New message'}
+          </h2>
           <MessageComposeForm
-            onCreated={() => {
+            key={editing?.id ?? 'new'}
+            {...(editing ? { message: editing } : {})}
+            onSaved={() => {
               setComposing(false);
+              setEditing(null);
               void load();
             }}
-            onCancel={() => setComposing(false)}
+            onCancel={() => {
+              setComposing(false);
+              setEditing(null);
+            }}
           />
         </div>
       )}
 
-      {messages.length === 0 && !composing ? (
+      {messages.length === 0 && !composing && !editing ? (
         <EmptyState
           icon={Megaphone}
           title="No messages yet"
@@ -177,11 +203,19 @@ const MessagesAdminPage: React.FC = () => {
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => void handleShowStats(m.id)}
-                    aria-label="View stats"
+                    onClick={() => void handleShowReport(m.id)}
+                    aria-label="View acknowledgments"
                     className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md p-2"
                   >
                     <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(m)}
+                    aria-label="Edit message"
+                    className="text-theme-text-secondary hover:bg-theme-surface-secondary rounded-md p-2"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden="true" />
                   </button>
                   <button
                     type="button"
@@ -194,17 +228,65 @@ const MessagesAdminPage: React.FC = () => {
                 </div>
               </div>
 
-              {statsFor === m.id && (
+              {reportFor === m.id && (
                 <div className="border-theme-surface-border text-theme-text-secondary mt-3 border-t pt-3 text-sm">
-                  {stats ? (
-                    <div className="flex gap-6">
-                      <span>
-                        Reads: <strong className="text-theme-text-primary">{stats.total_reads}</strong>
-                      </span>
-                      <span>
-                        Acknowledged: <strong className="text-theme-text-primary">{stats.total_acknowledged}</strong>
-                      </span>
-                    </div>
+                  {report ? (
+                    <>
+                      <div className="mb-3 flex flex-wrap gap-x-6 gap-y-1">
+                        <span>
+                          Read:{' '}
+                          <strong className="text-theme-text-primary">
+                            {report.total_read}/{report.total_targeted}
+                          </strong>
+                        </span>
+                        {report.requires_acknowledgment && (
+                          <span>
+                            Acknowledged:{' '}
+                            <strong className="text-theme-text-primary">
+                              {report.total_acknowledged}/{report.total_targeted}
+                            </strong>
+                          </span>
+                        )}
+                      </div>
+                      {report.recipients.length === 0 ? (
+                        <p className="text-theme-text-muted">This message is not targeted at anyone.</p>
+                      ) : (
+                        <ul className="max-h-60 divide-y divide-theme-surface-border overflow-y-auto">
+                          {report.recipients.map((r) => {
+                            const state = r.is_acknowledged
+                              ? {
+                                  icon: Check,
+                                  label: 'Acknowledged',
+                                  cls: 'text-theme-success',
+                                }
+                              : r.is_read
+                                ? { icon: Eye, label: 'Read', cls: 'text-theme-text-muted' }
+                                : {
+                                    icon: Clock,
+                                    label: report.requires_acknowledgment
+                                      ? 'Not acknowledged'
+                                      : 'Unread',
+                                    cls: 'text-amber-600 dark:text-amber-400',
+                                  };
+                            const StateIcon = state.icon;
+                            return (
+                              <li key={r.user_id} className="flex items-center justify-between gap-3 py-1.5">
+                                <span className="text-theme-text-primary min-w-0 truncate">
+                                  {r.name}
+                                  {r.status ? (
+                                    <span className="text-theme-text-muted ml-2 text-xs capitalize">{r.status}</span>
+                                  ) : null}
+                                </span>
+                                <span className={`flex shrink-0 items-center gap-1 text-xs ${state.cls}`}>
+                                  <StateIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                  {state.label}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </>
                   ) : (
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   )}
@@ -218,7 +300,7 @@ const MessagesAdminPage: React.FC = () => {
       <ConfirmDialog
         isOpen={pendingDelete !== null}
         title="Delete message"
-        message={`Delete "${pendingDelete?.title ?? ''}"? This cannot be undone.`}
+        message={`Delete "${pendingDelete?.title ?? ''}"? Members will no longer see it. Read and acknowledgment records are kept for compliance.`}
         confirmLabel="Delete"
         variant="danger"
         onConfirm={() => void handleDelete()}
