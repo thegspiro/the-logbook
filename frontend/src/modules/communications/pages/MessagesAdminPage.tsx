@@ -18,12 +18,14 @@ import {
   Check,
   Eye,
   Clock,
+  Search,
 } from 'lucide-react';
-import { Breadcrumbs, ConfirmDialog, EmptyState, SkeletonPage } from '../../../components/ux';
+import { Breadcrumbs, ConfirmDialog, EmptyState, Pagination, SkeletonPage } from '../../../components/ux';
 import { messagesService } from '../../../services/api';
 import type { DepartmentMessageRecord, AcknowledgmentReport } from '../../../services/adminServices';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDateTime } from '../../../utils/dateFormatting';
+import { DEFAULT_PAGE_SIZE } from '../../../constants/config';
 import MessageComposeForm from '../components/MessageComposeForm';
 import toast from 'react-hot-toast';
 
@@ -54,6 +56,9 @@ const MessagesAdminPage: React.FC = () => {
   const tz = useTimezone();
   const [messages, setMessages] = useState<DepartmentMessageRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Distinguishes the very first load (full skeleton) from filter/page reloads
+  // (which must keep the filter bar mounted so the search input holds focus).
+  const [initialLoad, setInitialLoad] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [editing, setEditing] = useState<DepartmentMessageRecord | null>(null);
@@ -62,19 +67,47 @@ const MessagesAdminPage: React.FC = () => {
   const [report, setReport] = useState<AcknowledgmentReport | null>(null);
   // id -> name, so role-targeted messages show role names instead of raw ids.
   const [roleNames, setRoleNames] = useState<Record<string, string>>({});
+  // Filters + pagination.
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [total, setTotal] = useState(0);
+  const hasFilters = debouncedSearch.trim() !== '' || priorityFilter !== '';
+
+  // Debounce the free-text search so we don't fire a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Any filter change resets to the first page so results aren't hidden on a
+  // now-out-of-range page.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, priorityFilter, pageSize]);
 
   const load = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await messagesService.getMessages({ include_inactive: true });
+      const data = await messagesService.getMessages({
+        include_inactive: true,
+        skip: (page - 1) * pageSize,
+        limit: pageSize,
+        ...(debouncedSearch.trim() ? { search: debouncedSearch.trim() } : {}),
+        ...(priorityFilter ? { priority: priorityFilter } : {}),
+      });
       setMessages(data.messages);
+      setTotal(data.total);
     } catch {
       setError('Unable to load messages. Please try again.');
     } finally {
       setIsLoading(false);
+      setInitialLoad(false);
     }
-  }, []);
+  }, [page, pageSize, debouncedSearch, priorityFilter]);
 
   useEffect(() => {
     void load();
@@ -124,7 +157,7 @@ const MessagesAdminPage: React.FC = () => {
     setEditing(m);
   };
 
-  if (isLoading) {
+  if (initialLoad) {
     return <SkeletonPage />;
   }
 
@@ -179,13 +212,50 @@ const MessagesAdminPage: React.FC = () => {
         </div>
       )}
 
+      <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+        <div className="relative flex-1">
+          <Search
+            className="text-theme-text-muted pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2"
+            aria-hidden="true"
+          />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search messages…"
+            aria-label="Search messages"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring w-full rounded-md border py-2 pr-3 pl-9 text-sm focus:ring-2 focus:outline-none"
+          />
+        </div>
+        <select
+          value={priorityFilter}
+          onChange={(e) => setPriorityFilter(e.target.value)}
+          aria-label="Filter by priority"
+          className="border-theme-surface-border bg-theme-surface text-theme-text-primary focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+        >
+          <option value="">All priorities</option>
+          <option value="normal">Normal</option>
+          <option value="important">Important</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+
+      <div aria-busy={isLoading} className={isLoading ? 'opacity-60 transition-opacity' : undefined}>
       {messages.length === 0 && !composing && !editing ? (
-        <EmptyState
-          icon={Megaphone}
-          title="No messages yet"
-          description="Post a department announcement to reach your members."
-          actions={[{ label: 'New message', onClick: () => setComposing(true) }]}
-        />
+        hasFilters ? (
+          <EmptyState
+            icon={Search}
+            title="No matching messages"
+            description="No messages match your search or filters."
+          />
+        ) : (
+          <EmptyState
+            icon={Megaphone}
+            title="No messages yet"
+            description="Post a department announcement to reach your members."
+            actions={[{ label: 'New message', onClick: () => setComposing(true) }]}
+          />
+        )
       ) : (
         <ul className="space-y-3">
           {messages.map((m) => (
@@ -312,6 +382,18 @@ const MessagesAdminPage: React.FC = () => {
             </li>
           ))}
         </ul>
+      )}
+      </div>
+
+      {total > pageSize && (
+        <Pagination
+          currentPage={page}
+          totalItems={total}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          className="mt-4"
+        />
       )}
 
       <ConfirmDialog

@@ -178,6 +178,8 @@ def _serialize_message(msg) -> dict:
 @router.get("", response_model=dict)
 async def list_messages(
     include_inactive: bool = Query(False),
+    search: str | None = Query(None),
+    priority: MessagePriority | None = Query(None),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.manage")),
@@ -187,6 +189,8 @@ async def list_messages(
     messages, total = await service.get_messages(
         organization_id=current_user.organization_id,
         include_inactive=include_inactive,
+        search=search,
+        priority=priority.value if priority else None,
         skip=pagination.skip,
         limit=pagination.limit,
     )

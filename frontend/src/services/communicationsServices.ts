@@ -360,7 +360,7 @@ export interface LocationCreate {
 
 export const messagesService = {
   // Admin CRUD
-  async getMessages(params?: { include_inactive?: boolean; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
+  async getMessages(params?: { include_inactive?: boolean; search?: string; priority?: string; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
     const response = await api.get<{ messages: DepartmentMessageRecord[]; total: number }>('/messages', { params });
     return response.data;
   },

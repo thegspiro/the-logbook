@@ -320,6 +320,24 @@ class TestAcknowledgmentReport:
         assert report is None
 
 
+class TestGetMessages:
+    async def test_returns_page_and_total_with_search_and_priority(self):
+        db = MagicMock()
+        count_res = MagicMock(scalar=MagicMock(return_value=3))
+        page_res = MagicMock()
+        page_res.scalars.return_value.all.return_value = [_msg("m1")]
+        db.execute = AsyncMock(side_effect=[count_res, page_res])
+
+        messages, total = await MessagingService(db).get_messages(
+            "org-1", search="drill", priority="urgent", skip=0, limit=25
+        )
+
+        assert total == 3
+        assert [m.id for m in messages] == ["m1"]
+        # A count query and a page query were both issued.
+        assert db.execute.await_count == 2
+
+
 if __name__ == "__main__":  # pragma: no cover
     import pytest
 

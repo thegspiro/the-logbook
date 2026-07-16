@@ -80,6 +80,8 @@ class MessagingService:
         organization_id: str,
         include_inactive: bool = False,
         include_deleted: bool = False,
+        search: Optional[str] = None,
+        priority: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> Tuple[List[DepartmentMessage], int]:
@@ -87,23 +89,38 @@ class MessagingService:
 
         Soft-deleted messages (deleted_at set) are hidden by default so a
         "deleted" message does not reappear in the admin list, while its
-        read/acknowledgment records are preserved in the database.
+        read/acknowledgment records are preserved in the database. Supports a
+        title/body search and a priority filter, applied to both the page and
+        its total count.
         """
-        query = select(DepartmentMessage).where(
-            DepartmentMessage.organization_id == organization_id
-        )
-        if not include_inactive:
-            query = query.where(DepartmentMessage.is_active == True)  # noqa: E712
-        if not include_deleted:
-            query = query.where(DepartmentMessage.deleted_at.is_(None))
 
-        count_q = select(func.count(DepartmentMessage.id)).where(
-            DepartmentMessage.organization_id == organization_id
+        def _apply_filters(q):
+            if not include_inactive:
+                q = q.where(DepartmentMessage.is_active == True)  # noqa: E712
+            if not include_deleted:
+                q = q.where(DepartmentMessage.deleted_at.is_(None))
+            if search and search.strip():
+                pattern = f"%{search.strip()}%"
+                q = q.where(
+                    or_(
+                        DepartmentMessage.title.ilike(pattern),
+                        DepartmentMessage.body.ilike(pattern),
+                    )
+                )
+            if priority:
+                q = q.where(DepartmentMessage.priority == MessagePriority(priority))
+            return q
+
+        query = _apply_filters(
+            select(DepartmentMessage).where(
+                DepartmentMessage.organization_id == organization_id
+            )
         )
-        if not include_inactive:
-            count_q = count_q.where(DepartmentMessage.is_active == True)  # noqa: E712
-        if not include_deleted:
-            count_q = count_q.where(DepartmentMessage.deleted_at.is_(None))
+        count_q = _apply_filters(
+            select(func.count(DepartmentMessage.id)).where(
+                DepartmentMessage.organization_id == organization_id
+            )
+        )
 
         total_result = await self.db.execute(count_q)
         total = total_result.scalar() or 0
