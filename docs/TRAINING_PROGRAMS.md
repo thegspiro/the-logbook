@@ -192,6 +192,54 @@ re-derives enrolled members' progress-row percentages against the new target.
 - Officer-entered knowledge-test scoring with pass/fail and attempt limits
 - Automatic feeds from shift reports, approved training sessions, and skills tests
 - Progress notes and history
+- **Officer-gated completion:** members can mark a requirement in-progress, but
+  only a training officer can set a numeric progress value, record a test score,
+  or mark a requirement complete/verified/waived. Members log training through the
+  self-report submission flow instead of writing their own requirement to 100%.
+- **No double-crediting:** every automatic feed records each accrual in a per-source
+  credit ledger keyed on (requirement, source type, source id). Replaying the same
+  shift report, re-syncing the same external course, re-finalizing a session, or
+  re-approving a submission is a no-op — one real training is never counted twice.
+
+#### Recertification Cycle (Progress Reset)
+Certifications that expire — NREMT, for example, requires resubmission every two
+years — need a member's accumulated progress cleared so a fresh cycle can begin.
+The pipeline supports both a manual and an automatic reset:
+
+- **Manual reset (officer):** In a member's progress modal, **Reset** on a single
+  requirement clears just that item; **Start new cycle** resets every requirement
+  and returns the member to the first phase. Both are confirmed before running and
+  require `training.manage`. Use this when a coordinator needs to reset a
+  certificate that is close to or past expiry.
+- **Automatic reset (stored deadline):** Enable **Recertification cycle** in the
+  pipeline's Edit dialog and set a cycle length in months (e.g. 24 for NREMT's
+  biennial recert). Optionally pin a fixed calendar anchor — a reset month and day
+  (e.g. March 30) — so every cycle lands on that date; leave the anchor blank to
+  roll forward from each member's enrollment date. Each enrollment then stores its
+  next reset date. When that date passes, the enrollment is reset for a new cycle
+  and the deadline advances to the following one. Resets apply lazily when a
+  coordinator opens the member's progress, and a daily 5 AM scheduled sweep
+  (`recert_resets`, or `POST /training/programs/recert/run-due` on demand) resets every
+  past-due enrollment across the organization so members no one is actively watching still
+  reset on time.
+
+#### Leaving a Program (Self-Service Withdrawal)
+A member can remove themselves from a program from their progression view via
+**Leave program** — useful when they step down from a level they no longer need to
+maintain (e.g. Paramedic → EMT), so the program stops cluttering their dashboard and
+raising warnings that no longer apply. The withdrawal is soft: the enrollment moves to
+`WITHDRAWN` (kept for history) and drops off the member's active dashboard. Officers
+with `training.manage` can withdraw any member; a withdrawn member can be re-enrolled
+later (`POST /training/programs/enrollments/{id}/withdraw`).
+
+#### Certification-Eligible vs. Credit-Only Sessions
+Training sessions carry a **"Counts toward certification requirements"** toggle (on by
+default). Leave it on for sessions delivered in a way a certifying body (NFPA/NREMT)
+accepts. Turn it off when a session should give members credit but isn't
+certification-grade — for example, an informal recruit-school drill: attendance still
+creates the training record and hours (counting toward general compliance), but the
+session no longer feeds the linked pipeline/certificate requirements, keeping ineligible
+hours off the member's certificate progress.
 
 #### Atomic Program Build
 - Create-pipeline wizard builds a program with all phases, requirements, and milestones in one transaction — a failure can't leave a half-built program behind
@@ -219,6 +267,34 @@ re-derives enrolled members' progress-row percentages against the new target.
 - Customizable form fields (visible, required, label per field)
 - Status tracking: draft, pending review, approved, rejected, revision requested
 - Approved submissions automatically create TrainingRecords
+- **Separation of duties:** an officer cannot approve their own self-reported
+  training — a second officer must review it, so hours/credit can't be granted
+  unchecked. (Rejecting or requesting revision on one's own submission is allowed.)
+- **Apply to a pipeline requirement (make-up sessions):** when approving a submission —
+  or later, from an already-approved submission's card — the officer can credit the
+  training toward a specific requirement in one of the member's active enrollments. This
+  covers make-up sessions that never had a scheduled training date. Hours requirements gain
+  the approved hours, a course counts as one completion, and status-based requirements
+  (certification / skills / checklist / knowledge test) are marked complete. It runs through
+  the normal progress updater (so rollup and phase advancement fire) and, being an explicit
+  officer sign-off, is **not** subject to the requirement's `allows_external_credit` opt-in
+  (that flag only governs *automatic* crediting from provider syncs).
+
+#### Correcting Mistakes (Void & Reverse)
+Entries made in error can be undone without hand-editing progress:
+
+- **Void a training record** (`DELETE /training/records/{id}`, `training.manage`)
+  marks the record cancelled — kept for audit, never hard-deleted — and un-applies
+  any pipeline credit it produced. The compliance engine only counts completed
+  records, so a voided one stops counting immediately.
+- **Reverse an approval**
+  (`POST /training/submissions/{id}/reverse-approval`, `training.manage`) voids the
+  record the approval spawned, un-applies the credit keyed on both the submission
+  and the record, and returns the submission to **pending review** so it can be
+  re-decided (rejected, or re-approved with corrected values).
+
+Both build on the credit ledger, so requirement percentages, the enrollment
+rollup, and phase state unwind automatically. Both are audit-logged.
 
 #### Shift Completion Reports
 - Shift officers file reports on trainee experiences
@@ -317,8 +393,25 @@ The External Training Integration feature allows organizations to connect to ext
 │  7. Import records as Training Records                      │
 │     - Creates official training history                     │
 │     - Links to mapped user and category                     │
+│     - Advances matching pipeline requirements (by category) │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+> **Imported courses can feed training pipelines — when you opt a requirement in.**
+> Each requirement has an **"Accept external / imported training credit"** toggle
+> (off by default). Leave it off for competencies the department wants delivered
+> in-house (e.g. a hands-on radios drill), and a matching Vector Solutions course
+> will *not* check it off — only an in-house session, a skills test, or manual
+> sign-off will. Turn it on for requirements where online/third-party delivery is
+> acceptable (e.g. HIPAA CE): then, when a record is imported, for each of the
+> member's **active** enrollments a matching HOURS requirement is advanced by the
+> record's hours and a COURSES requirement by one completion — through the same
+> machinery as an in-app session (percentage, auto-completion, rollup, and phase
+> advancement all run). The toggle is offered for hours- and course-type
+> requirements; types that need human sign-off (skills evaluations, certifications,
+> checklists, knowledge tests) are always left for an officer. Correct **category
+> mapping** is what routes an imported course to the right requirement, so map
+> external categories to the internal categories your requirements use.
 
 ### Managing Mappings
 
@@ -963,8 +1056,28 @@ Categories help organize your training and allow flexible requirement satisfacti
 1. Navigate to Training Programs → Requirements tab
 2. Click a registry button — "Import NFPA", "Import Pro Board", or an NREMT provider
    level ("Import NREMT — EMR / EMT / Advanced EMT (AEMT) / Paramedic")
-3. System imports standard requirements
-4. Customize as needed (including due date types)
+3. A picker opens listing that registry's requirements. **Tick exactly the ones you
+   want** (everything not already in your library is pre-selected; requirements you've
+   already imported are shown as "Imported" and locked out). Use "Select all / Clear
+   all" to bulk-toggle.
+4. Click "Import N" to add just the selected requirements
+5. Customize as needed (including due date types)
+
+**Connecting courses to section-based requirements.** Some registry requirements
+(e.g. the NREMT provider levels) distribute their hours across **topic-area sections**
+— Airway, Cardiology, Trauma, Medical, Operations. Importing one of these:
+
+1. Auto-creates a **training category per section** (deduped by registry code) if the
+   org doesn't already have it, and links the requirement to those categories. The
+   import picker shows each requirement's sections, and the result reports how many
+   categories were created.
+2. To make a course count toward a section, edit the course (Course Library) and tag it
+   with the matching section category. Sessions and training records tagged with that
+   category count too.
+
+The compliance engine sums only the hours whose category matches the requirement's
+linked categories, so tagging your Airway course with the "Airway…" category makes its
+hours count toward that requirement's Airway section.
 
 #### Option B: Create Custom Requirement
 1. Click "Create Requirement"

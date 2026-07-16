@@ -1,17 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import MyProgramProgressPage from './MyProgramProgressPage';
 
 const mockGetEnrollmentProgress = vi.fn();
 const mockGetProgramPhases = vi.fn();
 const mockGetProgramRequirements = vi.fn();
+const mockWithdrawEnrollment = vi.fn();
 
 vi.mock('../services/api', () => ({
   trainingProgramService: {
     getEnrollmentProgress: (...a: unknown[]) => mockGetEnrollmentProgress(...a) as unknown,
     getProgramPhases: (...a: unknown[]) => mockGetProgramPhases(...a) as unknown,
     getProgramRequirements: (...a: unknown[]) => mockGetProgramRequirements(...a) as unknown,
+    withdrawEnrollment: (...a: unknown[]) => mockWithdrawEnrollment(...a) as unknown,
   },
 }));
 
@@ -71,6 +74,7 @@ describe('MyProgramProgressPage', () => {
       { id: 'pr-1', program_id: 'prog-1', phase_id: 'ph-1', requirement_id: 'req-1', is_required: true, is_prerequisite: false, sort_order: 0, created_at: '' },
       { id: 'pr-2', program_id: 'prog-1', phase_id: 'ph-2', requirement_id: 'req-2', is_required: true, is_prerequisite: false, sort_order: 0, created_at: '' },
     ]);
+    mockWithdrawEnrollment.mockResolvedValue({ id: 'enr-1', status: 'withdrawn' });
   });
 
   it('shows the program, current phase, and requirements grouped by phase', async () => {
@@ -101,5 +105,38 @@ describe('MyProgramProgressPage', () => {
     expect(await screen.findByText(/Attend training sessions to log hours/)).toBeInTheDocument();
     // The completed requirement (Hose Ops) has no action hint.
     expect(screen.queryByText(/Get signed off/)).not.toBeInTheDocument();
+  });
+
+  it('lets a member leave the program after confirming', async () => {
+    renderWithRouter(<MyProgramProgressPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /Leave program/i }));
+    // Confirm dialog appears; confirm the withdrawal.
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Leave program/i }));
+
+    await waitFor(() => expect(mockWithdrawEnrollment).toHaveBeenCalledWith('enr-1'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/training'));
+  });
+
+  it('hides the Leave button when the enrollment is not active', async () => {
+    mockGetEnrollmentProgress.mockResolvedValue({
+      enrollment: {
+        id: 'enr-1', current_phase_id: 'ph-1', progress_percentage: 100,
+        enrolled_at: '2026-02-01T00:00:00Z', status: 'completed',
+      },
+      program: { id: 'prog-1', name: 'Recruit School' },
+      current_phase: { id: 'ph-1', phase_number: 1, name: 'Basics' },
+      requirement_progress: [],
+      completed_requirements: 0,
+      total_requirements: 0,
+      next_milestones: [],
+      is_behind_schedule: false,
+    });
+
+    renderWithRouter(<MyProgramProgressPage />);
+
+    expect(await screen.findByRole('heading', { name: 'Recruit School' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Leave program/i })).not.toBeInTheDocument();
   });
 });

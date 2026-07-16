@@ -109,6 +109,7 @@ const CreateTrainingSessionPage: React.FC = () => {
     expiration_months: undefined,
     prerequisites: [],
     materials_required: [],
+    counts_toward_certification: true,
     auto_create_records: true,
     require_completion_confirmation: false,
   });
@@ -933,6 +934,28 @@ const CreateTrainingSessionPage: React.FC = () => {
                 <div className="flex items-start space-x-3">
                   <input
                     type="checkbox"
+                    id="counts_toward_certification"
+                    checked={formData.counts_toward_certification}
+                    onChange={(e) => updateField('counts_toward_certification', e.target.checked)}
+                    className="form-checkbox mt-1"
+                  />
+                  <div>
+                    <label htmlFor="counts_toward_certification" className="text-theme-text-primary font-semibold block">
+                      Counts toward certification requirements
+                    </label>
+                    <p className="text-theme-text-muted text-sm mt-1">
+                      When on, attendance advances any linked certificate/pipeline requirements
+                      (NFPA, NREMT, recruit school). Turn it off for sessions that give members
+                      credit but aren't delivered in a way a certifying body would accept — members
+                      still get the training record and hours, but the hours won't count toward
+                      their certificate.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3">
+                  <input
+                    type="checkbox"
                     id="auto_create_records"
                     checked={formData.auto_create_records}
                     onChange={(e) => updateField('auto_create_records', e.target.checked)}
@@ -1033,6 +1056,10 @@ const CreateTrainingSessionPage: React.FC = () => {
 
                 <ReviewSection title="Attendance Settings">
                   <ReviewItem label="QR Code Check-In" value="Enabled" />
+                  <ReviewItem
+                    label="Counts Toward Certification"
+                    value={formData.counts_toward_certification ? 'Yes' : 'No'}
+                  />
                   <ReviewItem
                     label="Auto-create Records"
                     value={formData.auto_create_records ? 'Yes' : 'No'}

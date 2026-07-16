@@ -1378,6 +1378,7 @@ class ExternalTrainingSyncService:
         imported = 0
         failed = 0
         skipped = 0
+        created_records = []
 
         for import_record in imports:
             if import_record.import_status == "imported":
@@ -1391,7 +1392,9 @@ class ExternalTrainingSyncService:
                 continue
 
             try:
-                await self.import_single_record(import_record)
+                record = await self.import_single_record(import_record)
+                if record is not None:
+                    created_records.append(record)
                 imported += 1
             except Exception as e:
                 import_record.import_status = "failed"
@@ -1400,11 +1403,43 @@ class ExternalTrainingSyncService:
 
         await self.db.commit()
 
+        # Feed the newly-imported records into any pipeline requirement they
+        # satisfy by category, so a synced course (e.g. from Vector Solutions)
+        # advances a member's active training-program progress the same way an
+        # in-app training session would. Best-effort and post-commit: the records
+        # are already saved, and the pipeline updater commits independently.
+        await self._feed_imported_records_to_pipelines(created_records)
+
         return {
             "imported": imported,
             "failed": failed,
             "skipped": skipped,
         }
+
+    async def _feed_imported_records_to_pipelines(self, records: list) -> None:
+        """Advance category-linked pipeline requirements for each imported record.
+        A failure on one record is logged and never blocks the rest."""
+        if not records:
+            return
+        from app.services.training_program_service import TrainingProgramService
+
+        program_service = TrainingProgramService(self.db)
+        for record in records:
+            if not getattr(record, "category_id", None):
+                continue
+            try:
+                await program_service.credit_category_progress(
+                    user_id=record.user_id,
+                    organization_id=record.organization_id,
+                    category_id=record.category_id,
+                    hours=float(record.hours_completed or 0),
+                    is_course_completion=True,
+                    source_id=str(record.id),
+                )
+            except Exception as e:
+                logger.error(
+                    f"External→pipeline feed failed for record {record.id}: {e}"
+                )
 
     # ==========================================
     # Mapping Management

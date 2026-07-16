@@ -9,7 +9,10 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Training Requirements** — Hours, courses, certifications, shifts, calls, skills evaluations, checklists, and knowledge tests with annual/quarterly/monthly/rolling frequencies. Requirements can target specific member categories (Active, Administrative, Probationary, Life, Retired, Honorary) or apply to all members. *(2026-07-08)* The create form collects the matching quantity field per type and blocks requirements that would apply to nobody
 - **Requirement Templates** — *(2026-07-08)* Ten built-in templates for common standards (NFPA 1001/1500, NREMT recertification, CPR/BLS, OSHA hazmat/bloodborne pathogens/respiratory protection, HIPAA awareness, NIMS/ICS courses, new-member onboarding checklist). Selecting a template pre-fills the create form for review; standards-based templates carry source attribution with the standard or CFR citation as registry code
 - **Training Programs** — Structured multi-phase curricula (Flexible, Sequential, Phase-based) with milestone tracking
-- **Self-Reported Training** — Members submit training records for officer review and approval
+- **Pipeline Recert Cycle** — *(2026-07-15)* Training pipelines can reset an enrolled member's accumulated progress for a new certification cycle. Officers reset a single requirement or a whole enrollment manually; a pipeline can also carry a stored recurring deadline (cycle length in months plus an optional fixed anchor date, e.g. NREMT's March 30) that auto-resets each enrollment when it passes — applied lazily on progress load and via a daily 5 AM scheduled sweep (`recert_resets`, also exposed as the `recert/run-due` endpoint)
+- **Self-Service Withdrawal** — *(2026-07-16)* A member can leave a program from their progression view (e.g. after downgrading from Paramedic to EMT); officers can withdraw anyone. Soft withdrawal keeps the record but removes it from the active dashboard and its warnings, and the member can be re-enrolled later
+- **Session Certification Eligibility** — *(2026-07-16)* A training session has a "Counts toward certification requirements" toggle (on by default). When off, attendance still records the member's hours (general credit) but does not feed the linked pipeline/certificate requirements, so hours a certifying body (NFPA/NREMT) wouldn't accept don't inflate a member's certificate
+- **Self-Reported Training** — Members submit training records for officer review and approval. *(2026-07-16)* On approval (or retroactively from an approved submission), the officer can apply the training toward a specific pipeline requirement in one of the member's active enrollments — ideal for make-up sessions with no scheduled date. Hours accrue, a course counts as one completion, and status-based requirements are marked complete; it's an explicit sign-off, so it bypasses the `allows_external_credit` opt-in
 - **Shift Completion Reports** — Officers file post-shift reports that auto-credit hours/shifts/calls toward program requirements
 - **Compliance Matrix** — Grid view of all members vs. all active requirements (green/yellow/red)
 - **Competency Matrix** — Department readiness heat-map with color-coded proficiency levels
@@ -18,7 +21,7 @@ The Training module tracks courses, certifications, training requirements, progr
 - **Training Waivers** — Leave of Absence auto-linking, waiver management, proportional requirement adjustment. Supports permanent waivers (no end date), New Member waiver type, and multi-select "Applies To" (Training + Meetings + Shifts can be combined)
 - **Bulk Record Creation** — Up to 500 records per request with duplicate detection (same member + course name + completion date within ±1 day)
 - **Rank & Station Snapshots** — `rank_at_completion` and `station_at_completion` captured on every record
-- **External Integrations** — Connect external training providers (Vector Solutions, Target Solutions, Lexipol, iAmResponding, Custom API) with category and user mapping. *(2026-04-11)* Vector Solutions integration now includes upfront category catalog fetch, credit hours preservation, and improved type mapping with auto-sync
+- **External Integrations** — Connect external training providers (Vector Solutions, Target Solutions, Lexipol, iAmResponding, Custom API) with category and user mapping. *(2026-04-11)* Vector Solutions integration now includes upfront category catalog fetch, credit hours preservation, and improved type mapping with auto-sync. *(2026-07-16)* Imported courses can also feed **pipeline** progress, but only for requirements an officer has opted in via the per-requirement `allows_external_credit` toggle (off by default): a synced course then advances a matching active-enrollment requirement (HOURS accrues hours, COURSES accrues one completion), while in-house-only requirements are never checked off by an import
 - **Historical Import** — CSV import with preview and validation
 - **Registry Integration** — NFPA Standards, NREMT Certifications, Pro Board one-click import with source URL citations and last-updated timestamps. *(2026-04-11)* NREMT NCCR hour distributions corrected to match official requirements; "Cardiovascular" renamed to "Cardiology" per NREMT terminology
 - **National Registry Standard Linkage** — *(2026-04-11)* Training categories can be linked to NREMT NCCR codes via the `registry_code` column, enabling automatic compliance tracking against national continued competency requirements
@@ -108,6 +111,7 @@ POST   /api/v1/training/records                            # Create a training r
 POST   /api/v1/training/records/bulk                       # Bulk create (up to 500, with duplicate detection)
 POST   /api/v1/training/records/import-csv                 # CSV import with parse and preview
 PATCH  /api/v1/training/records/{id}                       # Update a training record
+DELETE /api/v1/training/records/{id}                       # Void a record (cancels + un-applies pipeline credit)
 GET    /api/v1/training/compliance-summary/{user_id}       # Member compliance card (green/yellow/red)
 GET    /api/v1/training/compliance-matrix                  # All members x requirements grid
 GET    /api/v1/training/competency-matrix                  # Department readiness heat-map
@@ -155,6 +159,11 @@ GET    /api/v1/training/programs/enrollments/user/{user_id} # User enrollments
 GET    /api/v1/training/programs/enrollments/{id}          # Get enrollment detail (member-readable own; officers need view_all/manage)
 POST   /api/v1/training/programs/enrollments/{id}/advance-phase  # Officer advances member to next phase (force= override) (2026-07-14)
 PATCH  /api/v1/training/programs/progress/{id}             # Update progress (log value, mark complete/in-progress/reopen, verify, record test score)
+POST   /api/v1/training/programs/progress/{id}/reset       # Reset one requirement's progress for a new recert cycle (2026-07-15)
+POST   /api/v1/training/programs/enrollments/{id}/reset    # Reset a member's whole enrollment for a new recert cycle (2026-07-15)
+POST   /api/v1/training/programs/enrollments/{id}/withdraw # Withdraw from a program (self or officer; soft) (2026-07-16)
+POST   /api/v1/training/programs/recert/run-due            # Auto-reset every enrollment past its stored recert deadline (scheduled sweep) (2026-07-15)
+POST   /api/v1/training/programs/apply-training-record     # Officer applies an approved training record toward a pipeline requirement (2026-07-16)
 POST   /api/v1/training/programs/programs/{id}/duplicate   # Duplicate program
 POST   /api/v1/training/programs/programs/{id}/bulk-enroll # Bulk enroll members
 GET    /api/v1/training/programs/requirements/registries   # List available registries
@@ -185,7 +194,14 @@ GET    /api/v1/training/submissions/pending                # Pending submissions
 GET    /api/v1/training/submissions/pending/count          # Pending count
 GET    /api/v1/training/submissions/all                    # All submissions (officer)
 POST   /api/v1/training/submissions/{id}/review            # Review submission (approve/reject)
+POST   /api/v1/training/submissions/{id}/reverse-approval  # Undo an approval (voids record, un-applies credit, reopens)
 ```
+
+**Integrity safeguards.** An officer cannot approve their own submission (a
+second officer must sign it off). On approval, credit applied to a pipeline
+requirement is recorded in an idempotency ledger keyed on the submission, so a
+re-approval can't double-credit. Reversing an approval un-applies that credit and
+voids the spawned record.
 
 ### Training Waivers
 
@@ -381,6 +397,7 @@ GET    /api/v1/compliance/incomplete-records                # List incomplete re
 | `program_milestones` | ProgramMilestone | Key checkpoints in program progression |
 | `program_enrollments` | ProgramEnrollment | Member enrollment in programs with status tracking |
 | `requirement_progress` | RequirementProgress | Per-member progress toward program requirements |
+| `requirement_progress_credits` | RequirementProgressCredit | Idempotency ledger — one row per automated accrual, unique on (progress, source type, source id), so a training is never double-credited and a credit can be cleanly reversed *(2026-07-16)* |
 | `skill_evaluations` | SkillEvaluation | Skills evaluation records |
 | `skill_checkoffs` | SkillCheckoff | Individual skill check-off completions |
 | `skill_templates` | SkillTemplate | Skills testing template definitions (sections, criteria, scoring) |
@@ -429,6 +446,7 @@ MemberLeaveOfAbsence ──auto-link──> TrainingWaiver (unless exempt_from_t
 | `ProgramStructureType` | sequential, phases, flexible |
 | `EnrollmentStatus` | active, completed, expired, on_hold, withdrawn, failed |
 | `RequirementProgressStatus` | not_started, in_progress, completed, verified, waived |
+| `ProgressCreditSource` | training_session, shift_report, external_import, officer_apply |
 | `SubmissionStatus` | draft, pending_review, approved, rejected, revision_requested |
 | `ExternalProviderType` | vector_solutions, target_solutions, lexipol, i_am_responding, custom_api |
 | `SyncStatus` | pending, in_progress, completed, failed, partial |

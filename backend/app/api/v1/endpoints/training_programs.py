@@ -23,11 +23,13 @@ from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.training_program import (  # Requirements; Programs; Phases; Program Requirements; Milestones; Enrollments; Progress; Registry
+    ApplyTrainingRecordRequest,
     MemberEligibilityResponse,
     MemberProgramProgress,
     ProgramBuildRequest,
     ProgramEnrollmentCreate,
     ProgramEnrollmentResponse,
+    ProgramEnrollmentWithdraw,
     ProgramEnrollmentWithUserResponse,
     ProgramMilestoneCreate,
     ProgramMilestoneResponse,
@@ -41,6 +43,8 @@ from app.schemas.training_program import (  # Requirements; Programs; Phases; Pr
     ProgramWithPhasesAndRequirements,
     PhaseReorderRequest,
     RegistryImportResult,
+    RegistryRequirementPreview,
+    RegistrySelectiveImport,
     RequirementReorderRequest,
     RequirementProgressResponse,
     RequirementProgressUpdate,
@@ -192,19 +196,54 @@ async def list_available_registries(
     return registries
 
 
+@router.get(
+    "/requirements/registries/{registry_name}/preview",
+    response_model=list[RegistryRequirementPreview],
+)
+async def preview_registry_requirements(
+    registry_name: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    List a registry's requirements so the user can pick which ones to import.
+    Each item is flagged with ``already_imported``.
+
+    **Requires permission: training.manage**
+    """
+    filename = _REGISTRY_FILES.get(registry_name.lower())
+    if not filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown registry: {registry_name}. Available: {', '.join(_REGISTRY_FILES.keys())}",
+        )
+
+    service = TrainingProgramService(db)
+    items, error = await service.preview_registry_requirements(
+        registry_file_path=str(_REGISTRY_DIR / filename),
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    return items
+
+
 @router.post(
     "/requirements/import/{registry_name}", response_model=RegistryImportResult
 )
 async def import_registry_requirements(
     registry_name: str,
+    options: RegistrySelectiveImport | None = None,
     skip_existing: bool = Query(
-        True, description="Skip requirements that already exist"
+        True, description="Skip requirements that already exist (when no body)"
     ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
     """
-    Import requirements from a registry JSON file
+    Import requirements from a registry JSON file. With a body listing
+    ``registry_codes``, only those requirements are imported (pick and choose);
+    with no body, the whole registry is imported.
 
     Available registries: nfpa, proboard, emr, emt, aemt, paramedic
 
@@ -219,20 +258,25 @@ async def import_registry_requirements(
         )
     registry_file = str(_REGISTRY_DIR / filename)
 
+    selected_codes = options.registry_codes if options else None
+    effective_skip = options.skip_existing if options else skip_existing
+
     service = TrainingProgramService(db)
 
-    imported_count, errors, last_updated, source_url = (
+    imported_count, categories_created, errors, last_updated, source_url = (
         await service.import_registry_requirements(
             registry_file_path=registry_file,
             organization_id=current_user.organization_id,
             created_by=current_user.id,
-            skip_existing=skip_existing,
+            skip_existing=effective_skip,
+            selected_codes=selected_codes,
         )
     )
 
     return RegistryImportResult(
         registry_name=registry_name,
         imported_count=imported_count,
+        categories_created=categories_created,
         skipped_count=0,  # Could be calculated if needed
         errors=errors,
         last_updated=last_updated,
@@ -1155,6 +1199,20 @@ async def get_enrollment_progress(
                 detail="Not authorized to view this enrollment",
             )
 
+    # If the recert deadline has passed, roll the enrollment into a fresh cycle
+    # before reporting progress so the view reflects the reset immediately (the
+    # scheduled sweep handles members whose progress no one is watching). Runs
+    # only after the permission check so an unauthorized caller can never trigger
+    # a write. On a reset, re-load the enrollment so its eager-loaded phase and
+    # requirement rows reflect the new cycle rather than the pre-reset state.
+    if await service.auto_reset_if_due(enrollment):
+        refreshed = await service.get_enrollment_by_id(
+            enrollment_id=enrollment_id,
+            organization_id=current_user.organization_id,
+        )
+        if refreshed is not None:
+            enrollment = refreshed
+
     # Calculate time remaining
     time_remaining_days = None
     is_behind_schedule = False
@@ -1164,12 +1222,13 @@ async def get_enrollment_progress(
         days_remaining = (enrollment.target_completion_date - date.today()).days
         time_remaining_days = days_remaining
 
-        # Simple heuristic: behind schedule if less than 50% time and less than 50% progress
+        # Simple heuristic: behind schedule if less than 50% time and less than 50% progress.
+        # Measure from the current cycle start (cycle_started_at), not the original
+        # enrollment, so a fresh recert cycle isn't instantly flagged "behind".
+        cycle_start = (enrollment.cycle_started_at or enrollment.enrolled_at).date()
         if enrollment.target_completion_date and time_remaining_days is not None:
-            time_elapsed = (date.today() - enrollment.enrolled_at.date()).days
-            total_time = (
-                enrollment.target_completion_date - enrollment.enrolled_at.date()
-            ).days
+            time_elapsed = (date.today() - cycle_start).days
+            total_time = (enrollment.target_completion_date - cycle_start).days
             if total_time > 0:
                 time_progress = (time_elapsed / total_time) * 100
                 is_behind_schedule = time_progress > enrollment.progress_percentage + 20
@@ -1338,6 +1397,236 @@ async def update_requirement_progress(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     return progress
+
+
+@router.post(
+    "/progress/{progress_id}/reset", response_model=RequirementProgressResponse
+)
+async def reset_requirement_progress(
+    progress_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Reset a member's progress on one requirement to not-started (start a new
+    recert cycle for that item). Officer action.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    progress, error = await service.reset_requirement_progress(
+        progress_id=progress_id,
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_requirement_progress_reset",
+        event_category="training",
+        severity="info",
+        event_data={
+            "progress_id": str(progress_id),
+            "enrollment_id": str(progress.enrollment_id),
+            "action": "requirement_progress_reset",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return progress
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/reset", response_model=ProgramEnrollmentResponse
+)
+async def reset_enrollment_progress(
+    enrollment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Start a fresh cycle for a member's whole enrollment — resets every
+    requirement's progress and returns them to the first phase. Officer action
+    for when a recert period rolls over.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    enrollment, error = await service.reset_enrollment_progress(
+        enrollment_id=enrollment_id,
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_progress_reset",
+        event_category="training",
+        severity="info",
+        event_data={
+            "enrollment_id": str(enrollment_id),
+            "target_user_id": str(enrollment.user_id),
+            "action": "enrollment_cycle_reset",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return enrollment
+
+
+@router.post(
+    "/enrollments/{enrollment_id}/withdraw",
+    response_model=ProgramEnrollmentResponse,
+)
+async def withdraw_enrollment(
+    enrollment_id: UUID,
+    payload: ProgramEnrollmentWithdraw | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Withdraw from a program enrollment. A member can withdraw their own
+    enrollment (e.g. they've stepped down from a certification level they no
+    longer need to maintain); officers with training.manage can withdraw anyone.
+    Soft — the record is kept for history but drops off the active dashboard.
+
+    **Authentication required** (own enrollment, or `training.manage`)
+    """
+    service = TrainingProgramService(db)
+    perms = _collect_user_permissions(current_user)
+    can_manage = permission_matches("training.manage", perms)
+
+    enrollment, error = await service.withdraw_enrollment(
+        enrollment_id=enrollment_id,
+        organization_id=current_user.organization_id,
+        acting_user_id=current_user.id,
+        can_manage=can_manage,
+        reason=payload.reason if payload else None,
+    )
+    if error == "Enrollment not found":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
+    if error:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_enrollment_withdrawn",
+        event_category="training",
+        severity="info",
+        event_data={
+            "enrollment_id": str(enrollment_id),
+            "target_user_id": str(enrollment.user_id),
+            "self_withdrawal": str(enrollment.user_id) == str(current_user.id),
+            "action": "enrollment_withdrawn",
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return enrollment
+
+
+@router.post("/apply-training-record")
+async def apply_training_record(
+    payload: ApplyTrainingRecordRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Apply an existing (approved) training record toward a specific pipeline
+    requirement for the member — an officer sign-off, e.g. crediting a make-up
+    session that had no scheduled training date. Advances the requirement through
+    the real updater (percentage, auto-completion, rollup, phase advancement).
+
+    **Requires permission: training.manage**
+    """
+    from sqlalchemy import select
+
+    from app.models.training import TrainingRecord
+
+    record_result = await db.execute(
+        select(TrainingRecord).where(
+            TrainingRecord.id == str(payload.record_id),
+            TrainingRecord.organization_id == str(current_user.organization_id),
+        )
+    )
+    record = record_result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Training record not found"
+        )
+
+    service = TrainingProgramService(db)
+    applied, error = await service.apply_training_to_requirement(
+        user_id=record.user_id,
+        organization_id=current_user.organization_id,
+        program_id=payload.program_id,
+        requirement_id=payload.requirement_id,
+        hours=float(record.hours_completed or 0),
+        verified_by=current_user.id,
+        source_id=str(payload.record_id),
+    )
+    if not applied:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+    await log_audit_event(
+        db=db,
+        event_type="training_record_applied_to_requirement",
+        event_category="training",
+        severity="info",
+        event_data={
+            "record_id": str(payload.record_id),
+            "target_user_id": str(record.user_id),
+            "program_id": str(payload.program_id),
+            "requirement_id": str(payload.requirement_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+    return {"applied": True}
+
+
+@router.post("/recert/run-due")
+async def run_due_recert_resets(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Reset every enrollment in the organization whose stored recert deadline has
+    passed, starting each a fresh certification cycle. Meant to be called by a
+    scheduled sweep (e.g. a daily job), but also usable on demand so a
+    coordinator can trigger due resets immediately.
+
+    **Requires permission: training.manage**
+    """
+    service = TrainingProgramService(db)
+    count, error = await service.run_due_recert_resets(
+        organization_id=current_user.organization_id,
+    )
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=error
+        )
+
+    # Only record the sweep when it actually reset something, to avoid flooding
+    # the audit log with no-op entries from a frequent scheduled run.
+    if count:
+        await log_audit_event(
+            db=db,
+            event_type="training_recert_sweep_run",
+            event_category="training",
+            severity="info",
+            event_data={"reset_count": count, "action": "recert_sweep"},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+
+    return {"reset_count": count}
 
 
 # ==================== Program Duplication Endpoints ====================

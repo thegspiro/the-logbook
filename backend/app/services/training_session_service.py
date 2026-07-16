@@ -171,6 +171,7 @@ class TrainingSessionService:
             certification_number_prefix=session_data.certification_number_prefix,
             issuing_agency=session_data.issuing_agency,
             expiration_months=session_data.expiration_months,
+            counts_toward_certification=session_data.counts_toward_certification,
             auto_create_records=session_data.auto_create_records,
             require_completion_confirmation=session_data.require_completion_confirmation,
             approval_deadline_days=session_data.approval_deadline_days,
@@ -316,6 +317,7 @@ class TrainingSessionService:
                 certification_number_prefix=session_data.certification_number_prefix,
                 issuing_agency=session_data.issuing_agency,
                 expiration_months=session_data.expiration_months,
+                counts_toward_certification=session_data.counts_toward_certification,
                 auto_create_records=session_data.auto_create_records,
                 require_completion_confirmation=session_data.require_completion_confirmation,
                 approval_deadline_days=session_data.approval_deadline_days,
@@ -461,7 +463,7 @@ class TrainingSessionService:
         # through the token-based officer approval workflow. (Capture the flag
         # before commit expires the ORM object.)
         requires_confirmation = training_session.require_completion_confirmation
-        pipeline_updates: List[Tuple[str, str, str, float]] = []
+        pipeline_updates: List[Tuple[str, str, str, float, str]] = []
         if not requires_confirmation:
             training_approval.status = ApprovalStatus.APPROVED
             training_approval.approved_by = str(finalized_by)
@@ -757,7 +759,7 @@ class TrainingSessionService:
         approval: TrainingApproval,
         attendees: list[AttendeeApprovalData],
         approved_by: UUID,
-    ) -> List[Tuple[str, str, str, float]]:
+    ) -> List[Tuple[str, str, str, float, str]]:
         """
         Create or update TrainingRecords for all approved attendees.
 
@@ -768,7 +770,7 @@ class TrainingSessionService:
         progress updater commits internally, so the caller applies them via
         ``_apply_pipeline_updates`` after its own approval+records commit.
         """
-        pipeline_updates: List[Tuple[str, str, str, float]] = []
+        pipeline_updates: List[Tuple[str, str, str, float, str]] = []
 
         # Get training session details
         session_result = await self.db.execute(
@@ -790,12 +792,20 @@ class TrainingSessionService:
         if not event:
             return pipeline_updates
 
+        # A session marked ineligible for certification still creates records
+        # (members keep general credit) but never feeds pipeline/certificate
+        # requirements — skip resolving them entirely.
+        feeds_certificate = getattr(
+            training_session, "counts_toward_certification", True
+        )
+
         # When a session is tied to a program + category (but no explicit
         # requirement), resolve the program's requirements in that category once,
         # so attendance advances them too. Same for everyone on this session.
         category_requirement_ids: List[str] = []
         if (
-            training_session.program_id
+            feeds_certificate
+            and training_session.program_id
             and training_session.category_id
             and not training_session.requirement_id
         ):
@@ -902,9 +912,14 @@ class TrainingSessionService:
 
             # Queue pipeline progress updates to apply AFTER this transaction
             # commits (the real updater commits internally). Only positive hours
-            # advance. An explicit requirement link wins; otherwise fan out to the
-            # program's requirements matching the session's category.
-            if training_session.program_id and hours_completed > 0:
+            # advance, and only when the session counts toward certification. An
+            # explicit requirement link wins; otherwise fan out to the program's
+            # requirements matching the session's category.
+            if (
+                feeds_certificate
+                and training_session.program_id
+                and hours_completed > 0
+            ):
                 if training_session.requirement_id:
                     pipeline_updates.append(
                         (
@@ -912,6 +927,7 @@ class TrainingSessionService:
                             str(training_session.program_id),
                             str(training_session.requirement_id),
                             hours_completed,
+                            str(training_session.id),
                         )
                     )
                 else:
@@ -922,6 +938,7 @@ class TrainingSessionService:
                                 str(training_session.program_id),
                                 req_id,
                                 hours_completed,
+                                str(training_session.id),
                             )
                         )
 
@@ -933,10 +950,20 @@ class TrainingSessionService:
     async def _resolve_category_requirement_ids(
         self, program_id: str, category_id: str
     ) -> List[str]:
-        """Requirement ids in ``program_id`` whose training requirement is tagged
-        with ``category_id`` — used to advance category-linked (rather than
-        requirement-linked) sessions."""
-        from app.models.training import ProgramRequirement, TrainingRequirement
+        """HOURS requirement ids in ``program_id`` whose training requirement is
+        tagged with ``category_id`` — used to advance category-linked (rather than
+        requirement-linked) sessions.
+
+        Restricted to HOURS requirements on purpose: a session credits *hours*,
+        so fanning those hours out to a COURSES/SHIFTS/CALLS requirement would
+        misread e.g. 3.5 hours as 3.5 courses. Non-hours requirements must be
+        satisfied by an explicit requirement link on the session, a skills test,
+        or officer sign-off — never by a category-matched hours feed."""
+        from app.models.training import (
+            ProgramRequirement,
+            RequirementType,
+            TrainingRequirement,
+        )
 
         result = await self.db.execute(
             select(ProgramRequirement.requirement_id)
@@ -947,20 +974,21 @@ class TrainingSessionService:
             .where(
                 ProgramRequirement.program_id == str(program_id),
                 TrainingRequirement.category_ids.contains([str(category_id)]),
+                TrainingRequirement.requirement_type == RequirementType.HOURS,
             )
         )
         return [row[0] for row in result.all()]
 
     async def _apply_pipeline_updates(
         self,
-        updates: List[Tuple[str, str, str, float]],
+        updates: List[Tuple[str, str, str, float, str]],
         organization_id: UUID,
         verified_by: UUID,
     ) -> None:
         """Apply queued session→pipeline progress updates after the approval has
         committed. Each update commits independently; a failure on one is logged
         and never blocks the others (the training records are already saved)."""
-        for user_id, program_id, requirement_id, hours in updates:
+        for user_id, program_id, requirement_id, hours, session_id in updates:
             await self._apply_pipeline_progress(
                 user_id=user_id,
                 program_id=program_id,
@@ -968,6 +996,7 @@ class TrainingSessionService:
                 hours_completed=hours,
                 organization_id=organization_id,
                 verified_by=verified_by,
+                session_id=session_id,
             )
 
     async def _apply_pipeline_progress(
@@ -978,18 +1007,21 @@ class TrainingSessionService:
         hours_completed: float,
         organization_id: UUID,
         verified_by: UUID,
+        session_id: str,
     ) -> None:
         """
         Advance a member's linked pipeline requirement when a program-linked
         training session is approved.
 
-        Routes through ``TrainingProgramService.update_requirement_progress`` —
-        the same path shift completion uses — so the requirement percentage,
-        auto-completion, enrollment rollup, and phase advancement all run. (This
-        previously hand-mutated ``progress_value`` only, leaving the pipeline
-        stuck at 0%.)
+        Routes through ``TrainingProgramService.apply_requirement_credit`` — the
+        same real updater shift completion uses, wrapped in the idempotency
+        ledger keyed on this session — so the requirement percentage,
+        auto-completion, enrollment rollup, and phase advancement all run, and
+        re-approving/re-finalizing the same session cannot double-credit the
+        member's hours. (This previously hand-mutated ``progress_value`` only,
+        leaving the pipeline stuck at 0%.)
         """
-        from app.schemas.training_program import RequirementProgressUpdate
+        from app.models.training import ProgressCreditSource
         from app.services.training_program_service import TrainingProgramService
 
         try:
@@ -1014,16 +1046,15 @@ class TrainingSessionService:
             if not progress:
                 return
 
-            # Accrue hours onto the existing value and let the real updater compute
-            # percentage, auto-complete, roll up the enrollment, and advance phases.
-            new_value = float(progress.progress_value or 0) + hours_completed
-
             program_service = TrainingProgramService(self.db)
-            _, error = await program_service.update_requirement_progress(
+            _, error = await program_service.apply_requirement_credit(
                 progress_id=progress.id,
                 organization_id=organization_id,
-                updates=RequirementProgressUpdate(progress_value=new_value),
+                source_type=ProgressCreditSource.TRAINING_SESSION,
+                source_id=str(session_id),
+                units=float(hours_completed),
                 verified_by=verified_by,
+                applied_by=verified_by,
             )
             if error:
                 logger.error(

@@ -87,6 +87,14 @@ class TrainingSessionCreate(BaseModel):
     issuing_agency: Optional[str] = Field(None, max_length=255)
     expiration_months: Optional[int] = Field(None, ge=1)
 
+    # When False, attendance still credits the member but the session does not
+    # advance the linked pipeline/certificate requirements (hours a certifying
+    # body wouldn't accept stay off the member's certificate).
+    counts_toward_certification: bool = Field(
+        default=True,
+        description="Whether this session's hours advance linked certificate requirements",
+    )
+
     # Auto-completion settings
     auto_create_records: bool = Field(
         default=True, description="Auto-create training records on check-in"
@@ -186,6 +194,7 @@ class TrainingSessionResponse(UTCResponseBase):
     issuing_agency: Optional[str]
     expiration_months: Optional[int]
 
+    counts_toward_certification: bool = True
     auto_create_records: bool
     require_completion_confirmation: bool
     approval_deadline_days: int

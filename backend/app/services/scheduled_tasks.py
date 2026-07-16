@@ -19,6 +19,9 @@ Recommended crontab (add to host or container cron):
 # Weekly on Mondays at 7:30 AM — enrollment deadline warnings
 30 7 * * 1 curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=enrollment_deadline_warnings
 
+# Daily at 5:00 AM — reset training-program enrollments past their recert deadline
+0 5 * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=recert_resets
+
 # Monthly on the 1st at 8:00 AM — membership tier auto-advancement
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
 
@@ -108,6 +111,12 @@ SCHEDULE = {
         "frequency": "weekly",
         "recommended_time": "Monday 07:30",
         "cron": "30 7 * * 1",
+    },
+    "recert_resets": {
+        "description": "Reset training-program enrollments whose recertification deadline has passed, starting each a fresh certification cycle",
+        "frequency": "daily",
+        "recommended_time": "05:00",
+        "cron": "0 5 * * *",
     },
     "membership_tier_advance": {
         "description": "Auto-advance members to higher membership tiers based on years of service",
@@ -294,6 +303,13 @@ async def _for_each_org(
         except Exception as e:
             logger.error(f"{task_name} failed for org {org.id}: {e}")
             results.append({"org_id": str(org.id), "error": str(e)})
+            # The orgs share one session; roll back the failed unit of work so a
+            # broken commit doesn't leave the session in a failed state that
+            # cascades into every later org's callback.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
     return {"task": task_name, "total": total, "errors": results}
 
 
@@ -387,6 +403,23 @@ async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
         return result.get("warnings_sent", 0)
 
     return await _for_each_org(db, "enrollment_deadline_warnings", _process)
+
+
+async def run_recert_resets(db: AsyncSession) -> Dict[str, Any]:
+    """Auto-reset every enrollment whose recertification deadline has passed.
+
+    Without this scheduled sweep, a recert-enabled program's cycle only reset
+    when someone happened to open a member's progress; a member no one looks at
+    would stay past-due indefinitely.
+    """
+    from app.services.training_program_service import TrainingProgramService
+
+    async def _process(db_session, org):
+        service = TrainingProgramService(db_session)
+        count, _ = await service.run_due_recert_resets(org.id)
+        return count
+
+    return await _for_each_org(db, "recert_resets", _process)
 
 
 async def run_membership_tier_advance(db: AsyncSession) -> Dict[str, Any]:
@@ -4259,6 +4292,7 @@ TASK_RUNNERS = {
     "cert_expiration_alerts": run_cert_expiration_alerts,
     "struggling_member_check": run_struggling_member_check,
     "enrollment_deadline_warnings": run_enrollment_deadline_warnings,
+    "recert_resets": run_recert_resets,
     "membership_tier_advance": run_membership_tier_advance,
     "action_item_reminders": run_action_item_reminders,
     "inventory_notifications": run_inventory_notifications,
@@ -4326,6 +4360,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "admin_hours_auto_close": 1800,
     "expire_ip_exceptions": 86400,
     "membership_inactivity_warnings": 86400,
+    "recert_resets": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

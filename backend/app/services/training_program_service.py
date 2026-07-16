@@ -5,6 +5,7 @@ Business logic for training program management, enrollment, and progress trackin
 """
 
 import asyncio
+import calendar
 import copy
 import json
 from datetime import date, datetime, timedelta, timezone
@@ -26,7 +27,9 @@ from app.models.training import (
     ProgramPhase,
     ProgramRequirement,
     ProgramStructureType,
+    ProgressCreditSource,
     RequirementProgress,
+    RequirementProgressCredit,
     RequirementFrequency,
     RequirementProgressStatus,
     RequirementSource,
@@ -60,6 +63,17 @@ from app.services.training_waiver_service import (
 
 class TrainingProgramService:
     """Service for training program management"""
+
+    # Statuses an automatic recert reset may act on. ACTIVE/COMPLETED/EXPIRED are
+    # members still holding (or renewing) the certification; WITHDRAWN and FAILED
+    # left or washed out, and ON_HOLD is deliberately paused — auto-resetting any
+    # of those would silently resurrect them, so the sweep skips them. (A manual
+    # officer reset is not bound by this — it's an explicit choice.)
+    _RECERTABLE_STATUSES = (
+        EnrollmentStatus.ACTIVE,
+        EnrollmentStatus.COMPLETED,
+        EnrollmentStatus.EXPIRED,
+    )
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -191,6 +205,78 @@ class TrainingProgramService:
                 },
             )
 
+    async def _notify_recert_reset(
+        self,
+        enrollment: ProgramEnrollment,
+        program: TrainingProgram,
+    ) -> None:
+        """Tell the member (and their mentor) that a new recertification cycle
+        has started and their progress was reset for it. Best-effort — callers
+        wrap this so a notification failure never breaks the reset itself."""
+        organization_id = enrollment.organization_id
+        user_result = await self.db.execute(
+            select(User).where(User.id == str(enrollment.user_id))
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            return
+
+        notif_service = NotificationsService(self.db)
+        deadline = getattr(enrollment, "next_recert_reset_at", None)
+        deadline_clause = (
+            f" Complete the requirements before {deadline}." if deadline else ""
+        )
+        await notif_service.log_notification(
+            organization_id=organization_id,
+            log_data={
+                "recipient_id": str(user.id),
+                "channel": NotificationChannel.IN_APP,
+                "subject": f"Recertification cycle started: {program.name}",
+                "message": (
+                    f"A new recertification cycle for {program.name} has begun and "
+                    f"your progress has been reset for it.{deadline_clause}"
+                ),
+                "category": NotificationCategory.TRAINING,
+                "action_url": f"/training/programs/{program.id}/progress",
+                "delivered": True,
+                "sent_at": datetime.now(timezone.utc),
+            },
+        )
+
+        if getattr(enrollment, "mentor_id", None):
+            await notif_service.log_notification(
+                organization_id=organization_id,
+                log_data={
+                    "recipient_id": str(enrollment.mentor_id),
+                    "channel": NotificationChannel.IN_APP,
+                    "subject": (
+                        f"Recert cycle started: {user.full_name} - {program.name}"
+                    ),
+                    "message": (
+                        f"{user.full_name}'s recertification cycle for {program.name} "
+                        f"has restarted; their progress was reset."
+                    ),
+                    "category": NotificationCategory.TRAINING,
+                    "action_url": f"/training/programs/{program.id}/enrollments",
+                    "delivered": True,
+                    "sent_at": datetime.now(timezone.utc),
+                },
+            )
+
+    async def _safe_notify_recert_reset(
+        self,
+        enrollment: ProgramEnrollment,
+        program: Optional[TrainingProgram],
+    ) -> None:
+        """Send the recert-reset notification, swallowing any failure (the reset
+        is already committed and must not be undone by a notification error)."""
+        if program is None:
+            return
+        try:
+            await self._notify_recert_reset(enrollment, program)
+        except Exception as e:
+            logger.error(f"Failed to send recert-reset notification: {e}")
+
     async def _handle_evoc_completion(
         self,
         program: TrainingProgram,
@@ -264,6 +350,9 @@ class TrainingProgramService:
             registry_name=requirement_data.registry_name,
             registry_code=requirement_data.registry_code,
             is_editable=requirement_data.is_editable,
+            allows_external_credit=getattr(
+                requirement_data, "allows_external_credit", False
+            ),
             training_type=requirement_data.training_type,
             required_hours=requirement_data.required_hours,
             required_courses=requirement_data.required_courses,
@@ -406,6 +495,10 @@ class TrainingProgramService:
             time_limit_days=program_data.time_limit_days,
             warning_days_before=program_data.warning_days_before,
             is_template=program_data.is_template,
+            recert_enabled=program_data.recert_enabled,
+            recert_interval_months=program_data.recert_interval_months,
+            recert_anchor_month=program_data.recert_anchor_month,
+            recert_anchor_day=program_data.recert_anchor_day,
             created_by=created_by,
         )
 
@@ -449,6 +542,10 @@ class TrainingProgramService:
             time_limit_days=prog.time_limit_days,
             warning_days_before=prog.warning_days_before,
             is_template=prog.is_template,
+            recert_enabled=getattr(prog, "recert_enabled", False),
+            recert_interval_months=getattr(prog, "recert_interval_months", None),
+            recert_anchor_month=getattr(prog, "recert_anchor_month", None),
+            recert_anchor_day=getattr(prog, "recert_anchor_day", None),
             created_by=created_by,
         )
         self.db.add(program)
@@ -497,6 +594,9 @@ class TrainingProgramService:
                     max_attempts=req_input.max_attempts,
                     checklist_items=checklist,
                     is_editable=True,
+                    allows_external_credit=getattr(
+                        req_input, "allows_external_credit", False
+                    ),
                     applies_to_all=False,
                     created_by=created_by,
                 )
@@ -673,14 +773,10 @@ class TrainingProgramService:
             )
             if still_used.scalar_one_or_none() is None:
                 await self.db.execute(
-                    delete(TrainingRequirement).where(
-                        TrainingRequirement.id == req_id
-                    )
+                    delete(TrainingRequirement).where(TrainingRequirement.id == req_id)
                 )
 
-        await self.db.execute(
-            delete(TrainingProgram).where(TrainingProgram.id == pid)
-        )
+        await self.db.execute(delete(TrainingProgram).where(TrainingProgram.id == pid))
         await self.db.commit()
         return True, None
 
@@ -916,9 +1012,7 @@ class TrainingProgramService:
         )
         remaining_phases = remaining_result.scalars().all()
         fallback_phase_id = remaining_phases[0].id if remaining_phases else None
-        reanchored_ids = [
-            str(r[0]) for r in enroll_rows if str(r[1]) == str(phase_id)
-        ]
+        reanchored_ids = [str(r[0]) for r in enroll_rows if str(r[1]) == str(phase_id)]
         if reanchored_ids:
             await self.db.execute(
                 update(ProgramEnrollment)
@@ -1436,16 +1530,25 @@ class TrainingProgramService:
             first_phase = min(program.phases, key=lambda p: p.phase_number)
             current_phase_id = first_phase.id
 
+        # Schedule the first recert deadline for recert-enabled programs so the
+        # member's cycle is tracked from day one.
+        next_recert_reset_at = self._compute_next_recert_date(
+            program, datetime.now(timezone.utc).date()
+        )
+
         # Create enrollment
+        enrolled_now = datetime.now(timezone.utc)
         enrollment = ProgramEnrollment(
             user_id=enrollment_data.user_id,
             program_id=enrollment_data.program_id,
-            enrolled_at=datetime.now(timezone.utc),
+            enrolled_at=enrolled_now,
+            cycle_started_at=enrolled_now,
             target_completion_date=target_completion_date,
             current_phase_id=current_phase_id,
             progress_percentage=0.0,
             status=EnrollmentStatus.ACTIVE,
             notes=enrollment_data.notes,
+            next_recert_reset_at=next_recert_reset_at,
         )
 
         self.db.add(enrollment)
@@ -1530,16 +1633,13 @@ class TrainingProgramService:
             )
             prereq_names = {str(r[0]): r[1] for r in name_rows.all()}
             completed_result = await self.db.execute(
-                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id)
-                .where(
+                select(ProgramEnrollment.user_id, ProgramEnrollment.program_id).where(
                     ProgramEnrollment.user_id.in_(user_id_strs),
                     ProgramEnrollment.program_id.in_(prereq_ids),
                     ProgramEnrollment.status == EnrollmentStatus.COMPLETED,
                 )
             )
-            completed_pairs = {
-                (str(r[0]), str(r[1])) for r in completed_result.all()
-            }
+            completed_pairs = {(str(r[0]), str(r[1])) for r in completed_result.all()}
             for uid in user_id_strs:
                 missing = [
                     prereq_names.get(pid, "a prerequisite program")
@@ -1752,6 +1852,33 @@ class TrainingProgramService:
             and str(progress.enrollment.user_id) != str(acting_user_id)
         ):
             return None, "You are not authorized to update this training progress"
+
+        # A member may not self-verify their own pipeline requirements: only a
+        # training officer (can_manage) may mark one complete/verified/waived,
+        # record a test score, or set a numeric progress value. Otherwise a
+        # member could PATCH their own row to 100% and bypass officer review
+        # entirely. Members log training through the self-report submission flow,
+        # which routes to an officer. System callers (acting_user_id is None) and
+        # officers are unaffected.
+        if acting_user_id is not None and not can_manage:
+            if updates.test_score is not None:
+                return None, "Only a training officer can record a test score"
+            if updates.progress_value is not None:
+                return (
+                    None,
+                    "Only a training officer can set requirement progress. "
+                    "Submit your training for review instead.",
+                )
+            if updates.status in (
+                RequirementProgressStatus.COMPLETED.value,
+                RequirementProgressStatus.VERIFIED.value,
+                RequirementProgressStatus.WAIVED.value,
+            ):
+                return (
+                    None,
+                    "Only a training officer can mark a requirement "
+                    "complete or verified",
+                )
 
         # Update status
         if updates.status:
@@ -1971,6 +2098,734 @@ class TrainingProgramService:
 
         return progress, None
 
+    async def _get_org_scoped_progress(
+        self, progress_id: Any, organization_id: UUID
+    ) -> Optional[RequirementProgress]:
+        """Fetch a requirement-progress row, scoped to the org via its program."""
+        result = await self.db.execute(
+            select(RequirementProgress)
+            .join(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                RequirementProgress.id == str(progress_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def apply_requirement_credit(
+        self,
+        progress_id: Any,
+        organization_id: UUID,
+        source_type: ProgressCreditSource,
+        source_id: str,
+        units: float,
+        verified_by: Optional[UUID] = None,
+        applied_by: Optional[UUID] = None,
+        progress_notes: Optional[Dict] = None,
+        mark_in_progress: bool = False,
+    ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
+        """Idempotently accrue ``units`` of numeric progress onto a requirement,
+        recording the originating record in the credit ledger.
+
+        The ledger's unique key is (progress_id, source_type, source_id). If that
+        source has already been credited to this requirement, the call is a no-op
+        that returns the current progress — a retry, an external re-sync, or a
+        re-finalized session lands here and changes nothing, so a single real
+        training can never be counted twice. Otherwise the ledger row is written
+        and the accrual is applied through ``update_requirement_progress`` (so
+        percentage, auto-completion, enrollment rollup, and phase advancement all
+        run exactly as for any other feed).
+
+        ``progress_notes`` and ``mark_in_progress`` pass through to the updater so
+        richer feeds (shift completion tracks call-type history and forces the
+        row to IN_PROGRESS) keep their behavior while gaining idempotency.
+
+        Returns (progress, error). All feed callers should route their numeric
+        accruals through here rather than mutating ``progress_value`` directly.
+        """
+        if units is None or units <= 0:
+            return None, None
+
+        progress = await self._get_org_scoped_progress(progress_id, organization_id)
+        if progress is None:
+            return None, "Requirement progress not found"
+
+        existing = await self.db.execute(
+            select(RequirementProgressCredit).where(
+                RequirementProgressCredit.progress_id == str(progress_id),
+                RequirementProgressCredit.source_type == source_type,
+                RequirementProgressCredit.source_id == str(source_id),
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            # Already credited from this source — the idempotent no-op that makes
+            # the feeds safe to replay.
+            return progress, None
+
+        # Insert the ledger row first: the DB unique constraint — not the check
+        # above — is the real guard, catching a duplicate that races in from a
+        # concurrent request on a separate session.
+        ledger = RequirementProgressCredit(
+            progress_id=str(progress_id),
+            source_type=source_type,
+            source_id=str(source_id),
+            units=float(units),
+            applied_by=str(applied_by) if applied_by else None,
+        )
+        self.db.add(ledger)
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            await self.db.rollback()
+            return progress, None
+
+        new_value = float(progress.progress_value or 0) + float(units)
+        update_kwargs: Dict[str, Any] = {"progress_value": new_value}
+        if mark_in_progress:
+            update_kwargs["status"] = RequirementProgressStatus.IN_PROGRESS.value
+        if progress_notes is not None:
+            update_kwargs["progress_notes"] = progress_notes
+        return await self.update_requirement_progress(
+            progress_id=progress.id,
+            organization_id=organization_id,
+            updates=RequirementProgressUpdate(**update_kwargs),
+            verified_by=verified_by,
+        )
+
+    async def revoke_requirement_credit(
+        self,
+        progress_id: Any,
+        organization_id: UUID,
+        source_type: ProgressCreditSource,
+        source_id: str,
+        verified_by: Optional[UUID] = None,
+    ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
+        """Reverse a single previously-applied credit: drop its ledger row and
+        subtract its units back off the requirement (floored at 0), re-running
+        the normal recompute so the enrollment rollup and phase state follow.
+
+        Idempotent — reversing a credit that was never recorded is a no-op. This
+        is the primitive an officer's "un-apply" action builds on.
+        """
+        progress = await self._get_org_scoped_progress(progress_id, organization_id)
+        if progress is None:
+            return None, "Requirement progress not found"
+
+        credit_result = await self.db.execute(
+            select(RequirementProgressCredit).where(
+                RequirementProgressCredit.progress_id == str(progress_id),
+                RequirementProgressCredit.source_type == source_type,
+                RequirementProgressCredit.source_id == str(source_id),
+            )
+        )
+        credit = credit_result.scalar_one_or_none()
+        if credit is None:
+            return progress, None
+
+        units = float(credit.units or 0)
+        await self.db.delete(credit)
+        await self.db.flush()
+
+        new_value = max(0.0, float(progress.progress_value or 0) - units)
+        return await self.update_requirement_progress(
+            progress_id=progress.id,
+            organization_id=organization_id,
+            updates=RequirementProgressUpdate(progress_value=new_value),
+            verified_by=verified_by,
+        )
+
+    async def reverse_credits_for_source(
+        self,
+        organization_id: UUID,
+        source_id: str,
+        source_type: Optional[ProgressCreditSource] = None,
+        verified_by: Optional[UUID] = None,
+    ) -> int:
+        """Un-apply every pipeline credit that a given source record produced.
+
+        A single training record or submission can have fanned out credit to
+        several requirements (e.g. an imported course that matched two programs).
+        When an officer voids that record or reverses its approval, all of those
+        credits must come back off — this finds each ledger row keyed on
+        ``source_id`` (scoped to the org, optionally narrowed to one source type)
+        and reverses it through ``revoke_requirement_credit``. Returns the number
+        of credits reversed.
+        """
+        filters = [
+            RequirementProgressCredit.source_id == str(source_id),
+            TrainingProgram.organization_id == str(organization_id),
+        ]
+        if source_type is not None:
+            filters.append(RequirementProgressCredit.source_type == source_type)
+
+        result = await self.db.execute(
+            select(
+                RequirementProgressCredit.progress_id,
+                RequirementProgressCredit.source_type,
+            )
+            .join(
+                RequirementProgress,
+                RequirementProgressCredit.progress_id == RequirementProgress.id,
+            )
+            .join(
+                ProgramEnrollment,
+                RequirementProgress.enrollment_id == ProgramEnrollment.id,
+            )
+            .join(
+                TrainingProgram,
+                ProgramEnrollment.program_id == TrainingProgram.id,
+            )
+            .where(*filters)
+        )
+        rows = result.all()
+
+        reversed_count = 0
+        for progress_id, credit_source_type in rows:
+            _, error = await self.revoke_requirement_credit(
+                progress_id=progress_id,
+                organization_id=organization_id,
+                source_type=credit_source_type,
+                source_id=str(source_id),
+                verified_by=verified_by,
+            )
+            if not error:
+                reversed_count += 1
+        return reversed_count
+
+    async def credit_category_progress(
+        self,
+        user_id: Any,
+        organization_id: UUID,
+        category_id: str,
+        hours: float,
+        is_course_completion: bool = True,
+        source_id: Optional[str] = None,
+    ) -> int:
+        """Advance a member's ACTIVE pipeline requirements that are tagged with
+        ``category_id`` from an out-of-band completion — e.g. a course synced from
+        an external provider (Vector Solutions, etc.), which lands as a
+        ``TrainingRecord`` and would otherwise never touch pipeline progress.
+
+        HOURS requirements accrue ``hours``; COURSES requirements accrue one
+        completion. Other requirement types (skills, certification, checklist,
+        knowledge test) are left for explicit sign-off. The same completion counts
+        toward every active program that requires the category — mirroring how the
+        compliance engine credits category-matched hours everywhere.
+
+        Routes each accrual through ``apply_requirement_credit`` (keyed on the
+        originating record via ``source_id``) so percentage, auto-completion,
+        enrollment rollup, and phase advancement all run — and, crucially, a
+        re-synced record cannot double-credit. Returns the number of requirement
+        rows advanced.
+        """
+        if hours <= 0 and not is_course_completion:
+            return 0
+
+        enrollments_result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.user_id == str(user_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        enrollments = enrollments_result.scalars().all()
+        if not enrollments:
+            return 0
+
+        advanced = 0
+        for enrollment in enrollments:
+            rows_result = await self.db.execute(
+                select(RequirementProgress, TrainingRequirement)
+                .join(
+                    TrainingRequirement,
+                    RequirementProgress.requirement_id == TrainingRequirement.id,
+                )
+                .where(
+                    RequirementProgress.enrollment_id == enrollment.id,
+                    TrainingRequirement.category_ids.contains([str(category_id)]),
+                )
+            )
+            for progress, requirement in rows_result.all():
+                # Only requirements an officer has opted into external credit for
+                # may be auto-satisfied by an import; the rest need in-house
+                # delivery (a linked session, a skills test, or manual sign-off).
+                if not getattr(requirement, "allows_external_credit", False):
+                    continue
+                if requirement.requirement_type == RequirementType.HOURS:
+                    increment = float(hours)
+                elif (
+                    requirement.requirement_type == RequirementType.COURSES
+                    and is_course_completion
+                ):
+                    increment = 1.0
+                else:
+                    continue
+                if increment <= 0:
+                    continue
+
+                if source_id:
+                    # Key the credit on the imported record so re-syncing the
+                    # same record is an idempotent no-op — cannot double-credit.
+                    _, error = await self.apply_requirement_credit(
+                        progress_id=progress.id,
+                        organization_id=organization_id,
+                        source_type=ProgressCreditSource.EXTERNAL_IMPORT,
+                        source_id=str(source_id),
+                        units=increment,
+                    )
+                else:
+                    # No source record to key on (defensive; the import feed
+                    # always passes one). Accrue directly without a ledger entry
+                    # rather than invent a colliding key that would silently drop
+                    # legitimate later accruals.
+                    new_value = float(progress.progress_value or 0) + increment
+                    _, error = await self.update_requirement_progress(
+                        progress_id=progress.id,
+                        organization_id=organization_id,
+                        updates=RequirementProgressUpdate(progress_value=new_value),
+                    )
+                if error:
+                    logger.error(
+                        f"External pipeline feed failed: user={user_id} "
+                        f"requirement={requirement.id}: {error}"
+                    )
+                else:
+                    advanced += 1
+        return advanced
+
+    async def _resolve_apply_target(
+        self,
+        user_id: Any,
+        organization_id: UUID,
+        program_id: Any,
+        requirement_id: Any,
+    ) -> Tuple[Optional[Any], Optional[str]]:
+        """Resolve the (progress, requirement) row an officer would apply training
+        to, or an error explaining why it can't be applied. Shared by the
+        pre-flight validator and the apply itself so both judge eligibility the
+        same way. Returns (row, None) or (None, error_message)."""
+        enrollment_result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.user_id == str(user_id),
+                ProgramEnrollment.program_id == str(program_id),
+                ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        enrollment = enrollment_result.scalar_one_or_none()
+        if not enrollment:
+            return None, "Member is not actively enrolled in this program"
+
+        row_result = await self.db.execute(
+            select(RequirementProgress, TrainingRequirement)
+            .join(
+                TrainingRequirement,
+                RequirementProgress.requirement_id == TrainingRequirement.id,
+            )
+            .where(
+                RequirementProgress.enrollment_id == enrollment.id,
+                RequirementProgress.requirement_id == str(requirement_id),
+            )
+        )
+        row = row_result.first()
+        if row is None:
+            return None, "That requirement is not part of this member's enrollment"
+        return row, None
+
+    async def validate_apply_target(
+        self,
+        user_id: Any,
+        organization_id: UUID,
+        program_id: Any,
+        requirement_id: Any,
+    ) -> Tuple[bool, Optional[str]]:
+        """Pre-flight check: can this training be applied to this requirement?
+        Lets a caller reject an invalid target BEFORE committing a side effect
+        (e.g. approving a submission), so we never half-apply. Returns
+        (ok, error_message)."""
+        _, error = await self._resolve_apply_target(
+            user_id, organization_id, program_id, requirement_id
+        )
+        return error is None, error
+
+    async def apply_training_to_requirement(
+        self,
+        user_id: Any,
+        organization_id: UUID,
+        program_id: Any,
+        requirement_id: Any,
+        hours: float,
+        verified_by: Optional[UUID] = None,
+        source_id: Optional[str] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """Apply a completed training toward one specific pipeline requirement for
+        a member's ACTIVE enrollment — an explicit officer action (e.g. crediting a
+        make-up session that had no scheduled training date, or a self-reported
+        completion).
+
+        Unlike the automatic import feed, this is a deliberate sign-off, so it is
+        NOT gated by the requirement's ``allows_external_credit`` flag. Numeric
+        requirements accrue the hours (HOURS) or one unit (COURSES/SHIFTS/CALLS);
+        status-based requirements (certification, skills, checklist, knowledge
+        test) are marked complete. Runs through ``update_requirement_progress`` so
+        percentage, auto-completion, rollup, and phase advancement all fire.
+        Returns ``(applied, error_message)``.
+        """
+        row, error = await self._resolve_apply_target(
+            user_id, organization_id, program_id, requirement_id
+        )
+        if error:
+            return False, error
+
+        progress, requirement = row
+        rtype = requirement.requirement_type
+        if rtype == RequirementType.HOURS:
+            units: Optional[float] = float(hours)
+        elif rtype in (
+            RequirementType.COURSES,
+            RequirementType.SHIFTS,
+            RequirementType.CALLS,
+        ):
+            units = 1.0
+        else:
+            units = None
+
+        if units is not None:
+            # Numeric accrual — route through the credit ledger, keyed on the
+            # originating record/submission, so applying the same source twice
+            # (e.g. re-approving a submission) cannot double-count. When no
+            # source id is supplied, accrue directly.
+            if source_id:
+                _, error = await self.apply_requirement_credit(
+                    progress_id=progress.id,
+                    organization_id=organization_id,
+                    source_type=ProgressCreditSource.OFFICER_APPLY,
+                    source_id=str(source_id),
+                    units=units,
+                    verified_by=verified_by,
+                    applied_by=verified_by,
+                )
+            else:
+                new_value = float(progress.progress_value or 0) + units
+                _, error = await self.update_requirement_progress(
+                    progress_id=progress.id,
+                    organization_id=organization_id,
+                    updates=RequirementProgressUpdate(progress_value=new_value),
+                    verified_by=verified_by,
+                )
+        else:
+            # Certification / skills / checklist / knowledge-test: the officer is
+            # signing off that this training satisfies the requirement. Marking a
+            # requirement complete is naturally idempotent, so no ledger entry.
+            _, error = await self.update_requirement_progress(
+                progress_id=progress.id,
+                organization_id=organization_id,
+                updates=RequirementProgressUpdate(status="completed"),
+                verified_by=verified_by,
+            )
+        if error:
+            return False, error
+        return True, None
+
+    @staticmethod
+    def _clamp_day(year: int, month: int, day: int) -> date:
+        """Build a date, clamping the day to the month's last valid day so a
+        fixed anchor (e.g. day 30 or 31) never raises in a short month, and
+        Feb 29 falls back to Feb 28 in a non-leap year."""
+        last_day = calendar.monthrange(year, month)[1]
+        return date(year, month, min(day, last_day))
+
+    @classmethod
+    def _add_months(cls, base: date, months: int) -> date:
+        """Return `base` shifted forward by `months`, clamping the day."""
+        total = (base.year * 12 + (base.month - 1)) + months
+        year, month0 = divmod(total, 12)
+        return cls._clamp_day(year, month0 + 1, base.day)
+
+    @classmethod
+    def _compute_next_recert_date(
+        cls, program: TrainingProgram, base: date
+    ) -> Optional[date]:
+        """Next auto-reset date for an enrollment on this program, strictly
+        after `base` (the enrollment date, or the last reset). Returns None when
+        the program has no usable recert config.
+
+        With a fixed anchor month/day the reset lands on that calendar date
+        (e.g. NREMT's March 30) at the program's cadence; without one it rolls
+        forward by the interval from `base`.
+        """
+        if not getattr(program, "recert_enabled", False):
+            return None
+
+        interval = program.recert_interval_months
+        anchor_month = program.recert_anchor_month
+        anchor_day = program.recert_anchor_day
+
+        if anchor_month and anchor_day:
+            # Number of whole years between resets (a 24-month cycle → every 2nd
+            # anchor date). Defaults to yearly when no interval is set.
+            interval_years = max(1, round((interval or 12) / 12))
+            anchor = cls._clamp_day(base.year, anchor_month, anchor_day)
+            if anchor <= base:
+                anchor = cls._clamp_day(base.year + 1, anchor_month, anchor_day)
+            if interval_years > 1:
+                anchor = cls._clamp_day(
+                    anchor.year + interval_years - 1, anchor_month, anchor_day
+                )
+            return anchor
+
+        if interval:
+            return cls._add_months(base, interval)
+        return None
+
+    @staticmethod
+    def _blank_progress(row: RequirementProgress) -> None:
+        """Zero a progress row back to a fresh, not-started state (for a new
+        recert cycle) — clears the tally, the completion/verification stamps,
+        and any recorded test attempts."""
+        row.status = RequirementProgressStatus.NOT_STARTED
+        row.progress_value = 0.0
+        row.progress_percentage = 0.0
+        row.progress_notes = None
+        row.started_at = None
+        row.completed_at = None
+        row.verified_at = None
+        row.verified_by = None
+        row.verification_notes = None
+
+    async def reset_requirement_progress(
+        self,
+        progress_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
+        """
+        Reset a single member's progress on one requirement to not-started
+        (start a new cycle). Recomputes the enrollment rollup afterward.
+        Returns (progress, error_message).
+        """
+        result = await self.db.execute(
+            select(RequirementProgress)
+            .join(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                RequirementProgress.id == str(progress_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        progress = result.scalar_one_or_none()
+        if not progress:
+            return None, "Requirement progress not found"
+
+        self._blank_progress(progress)
+        await self.db.commit()
+
+        enrollment_id = progress.enrollment_id
+        await self._recalculate_enrollment_progress(UUID(str(enrollment_id)))
+        await self.db.refresh(progress)
+        return progress, None
+
+    async def _get_program_for_enrollment(
+        self, enrollment: ProgramEnrollment
+    ) -> Optional[TrainingProgram]:
+        """Load the parent program for an enrollment (for recert config)."""
+        result = await self.db.execute(
+            select(TrainingProgram).where(
+                TrainingProgram.id == str(enrollment.program_id)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def _perform_enrollment_reset(
+        self,
+        enrollment: ProgramEnrollment,
+        program: Optional[TrainingProgram],
+    ) -> None:
+        """Core reset mutation shared by the manual and automatic paths: blank
+        every requirement row, return the member to ACTIVE at the first phase,
+        and — for recert-enabled programs — advance the recert deadline so the
+        next cycle is scheduled. The caller owns the commit."""
+        rows_result = await self.db.execute(
+            select(RequirementProgress).where(
+                RequirementProgress.enrollment_id == str(enrollment.id)
+            )
+        )
+        for row in rows_result.scalars().all():
+            self._blank_progress(row)
+
+        # Re-anchor to the first phase for phased programs.
+        first_phase_result = await self.db.execute(
+            select(ProgramPhase.id)
+            .where(ProgramPhase.program_id == str(enrollment.program_id))
+            .order_by(ProgramPhase.phase_number)
+            .limit(1)
+        )
+        first_phase_id = first_phase_result.scalar_one_or_none()
+
+        now = datetime.now(timezone.utc)
+        enrollment.status = EnrollmentStatus.ACTIVE
+        enrollment.progress_percentage = 0.0
+        enrollment.completed_at = None
+        enrollment.current_phase_id = first_phase_id
+        # Anchor pace/behind-schedule heuristics to the fresh cycle and clear the
+        # prior deadline-warning bookkeeping so warnings can fire for the new one.
+        enrollment.cycle_started_at = now
+        enrollment.deadline_warning_sent = False
+        enrollment.deadline_warning_sent_at = None
+
+        # Schedule the next recert deadline (from today) so the cycle repeats, and
+        # move the completion target to it so the member isn't instantly "overdue".
+        if program is not None and getattr(program, "recert_enabled", False):
+            enrollment.last_recert_reset_at = now
+            next_reset = self._compute_next_recert_date(program, now.date())
+            enrollment.next_recert_reset_at = next_reset
+            if next_reset is not None:
+                enrollment.target_completion_date = next_reset
+
+    async def reset_enrollment_progress(
+        self,
+        enrollment_id: UUID,
+        organization_id: UUID,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
+        """
+        Start a fresh cycle for a whole enrollment: reset every requirement's
+        progress, put the member back to ACTIVE at the first phase, and zero the
+        overall percentage. Returns (enrollment, error_message).
+        """
+        # Fetch the enrollment and its program together (one query) so the reset
+        # doesn't need a follow-up lookup for the recert config.
+        result = await self.db.execute(
+            select(ProgramEnrollment, TrainingProgram)
+            .join(TrainingProgram, ProgramEnrollment.program_id == TrainingProgram.id)
+            .where(
+                ProgramEnrollment.id == str(enrollment_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        row = result.first()
+        if row is None:
+            return None, "Enrollment not found"
+
+        enrollment, program = row
+        await self._perform_enrollment_reset(enrollment, program)
+
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        await self._safe_notify_recert_reset(enrollment, program)
+        return enrollment, None
+
+    async def withdraw_enrollment(
+        self,
+        enrollment_id: UUID,
+        organization_id: UUID,
+        acting_user_id: UUID,
+        can_manage: bool,
+        reason: Optional[str] = None,
+    ) -> Tuple[Optional[ProgramEnrollment], Optional[str]]:
+        """
+        Withdraw a member from a program (soft — sets status WITHDRAWN and keeps
+        the record for history). A member may withdraw their own enrollment; an
+        officer with training.manage may withdraw anyone's. Withdrawn enrollments
+        drop off the member's active dashboard and stop generating warnings, and
+        the member can be re-enrolled later. Returns (enrollment, error_message).
+        """
+        result = await self.db.execute(
+            select(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                ProgramEnrollment.id == str(enrollment_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        enrollment = result.scalar_one_or_none()
+        if not enrollment:
+            return None, "Enrollment not found"
+
+        if str(enrollment.user_id) != str(acting_user_id) and not can_manage:
+            return None, "Not authorized to withdraw this enrollment"
+
+        # Idempotent: already withdrawn is not an error.
+        if enrollment.status == EnrollmentStatus.WITHDRAWN:
+            return enrollment, None
+
+        enrollment.status = EnrollmentStatus.WITHDRAWN
+        enrollment.withdrawn_at = datetime.now(timezone.utc)
+        if reason:
+            enrollment.withdrawal_reason = reason
+
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        return enrollment, None
+
+    async def auto_reset_if_due(self, enrollment: ProgramEnrollment) -> bool:
+        """If this enrollment's recert deadline has passed, reset it in place for
+        a new cycle. Returns True when a reset occurred. Safe to call on every
+        progress load — a no-op when recert is disabled or the date is in the
+        future."""
+        reset_date = getattr(enrollment, "next_recert_reset_at", None)
+        if not reset_date or reset_date > datetime.now(timezone.utc).date():
+            return False
+
+        # Never auto-resurrect a member who has left, failed, or paused the
+        # program (see _RECERTABLE_STATUSES) — that would undo a withdrawal.
+        if enrollment.status not in self._RECERTABLE_STATUSES:
+            return False
+
+        program = await self._get_program_for_enrollment(enrollment)
+        if not program or not getattr(program, "recert_enabled", False):
+            return False
+
+        await self._perform_enrollment_reset(enrollment, program)
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        await self._safe_notify_recert_reset(enrollment, program)
+        return True
+
+    async def run_due_recert_resets(
+        self, organization_id: UUID
+    ) -> Tuple[int, Optional[str]]:
+        """Auto-reset every enrollment in the organization whose recert deadline
+        has passed. Intended for a scheduled sweep, but safe to call on demand.
+        Returns (reset_count, error_message)."""
+        today = datetime.now(timezone.utc).date()
+        # Select the parent program alongside each enrollment so the reset loop
+        # doesn't issue a per-enrollment program lookup (N+1). Only recertable
+        # statuses are eligible so a withdrawn member is never resurrected.
+        result = await self.db.execute(
+            select(ProgramEnrollment, TrainingProgram)
+            .join(TrainingProgram, ProgramEnrollment.program_id == TrainingProgram.id)
+            .where(
+                TrainingProgram.organization_id == str(organization_id),
+                TrainingProgram.recert_enabled.is_(True),
+                ProgramEnrollment.status.in_(self._RECERTABLE_STATUSES),
+                ProgramEnrollment.next_recert_reset_at.isnot(None),
+                ProgramEnrollment.next_recert_reset_at <= today,
+            )
+        )
+
+        count = 0
+        reset_pairs: List[Tuple[ProgramEnrollment, TrainingProgram]] = []
+        for enrollment, program in result.all():
+            # Defense in depth: the WHERE clause already excludes non-recertable
+            # statuses, but enforce the invariant here too so the sweep can never
+            # reactivate a member who has left the program.
+            if enrollment.status not in self._RECERTABLE_STATUSES:
+                continue
+            await self._perform_enrollment_reset(enrollment, program)
+            reset_pairs.append((enrollment, program))
+            count += 1
+
+        if count:
+            await self.db.commit()
+            # Notify each member their cycle restarted (after the batch commits).
+            for enrollment, program in reset_pairs:
+                await self._safe_notify_recert_reset(enrollment, program)
+        return count, None
+
     async def _recalculate_enrollment_progress(
         self,
         enrollment_id: UUID,
@@ -1988,6 +2843,7 @@ class TrainingProgramService:
             return
 
         was_completed = enrollment.status == EnrollmentStatus.COMPLETED
+        was_active = enrollment.status == EnrollmentStatus.ACTIVE
 
         # Get all requirement progress for this enrollment
         result = await self.db.execute(
@@ -2017,8 +2873,12 @@ class TrainingProgramService:
             )
         )
 
-        # Check if enrollment is complete
-        if avg_percentage >= 100.0:
+        # Only an ACTIVE enrollment may auto-complete. A WITHDRAWN, FAILED,
+        # EXPIRED, or ON_HOLD enrollment retains its progress rows, so without
+        # this guard a progress edit that reaches 100% would silently flip it to
+        # COMPLETED — reversing a withdrawal or overriding a terminal state.
+        newly_completed = avg_percentage >= 100.0 and was_active
+        if newly_completed:
             await self.db.execute(
                 update(ProgramEnrollment)
                 .where(ProgramEnrollment.id == str(enrollment_id))
@@ -2027,7 +2887,7 @@ class TrainingProgramService:
                     completed_at=datetime.now(timezone.utc),
                 )
             )
-        elif was_completed:
+        elif avg_percentage < 100.0 and was_completed:
             # Progress fell back below 100% for an enrollment that had already
             # completed — e.g. an officer corrected an over-count downward, or a
             # new required requirement was added to the program. Reopen it so it
@@ -2045,7 +2905,7 @@ class TrainingProgramService:
         await self.db.commit()
 
         # Send completion notification if newly completed
-        if avg_percentage >= 100.0 and not was_completed:
+        if newly_completed:
             try:
                 # Re-fetch enrollment for notification
                 await self.db.refresh(enrollment)
@@ -2104,9 +2964,7 @@ class TrainingProgramService:
             return None
         if current_phase_id is None:
             return ordered[0]
-        current = next(
-            (p for p in ordered if str(p.id) == str(current_phase_id)), None
-        )
+        current = next((p for p in ordered if str(p.id) == str(current_phase_id)), None)
         if current is None:
             return ordered[0]
         for phase in ordered:
@@ -2206,9 +3064,7 @@ class TrainingProgramService:
         enrollments without a current phase.
         """
         enroll_result = await self.db.execute(
-            select(ProgramEnrollment).where(
-                ProgramEnrollment.id == str(enrollment_id)
-            )
+            select(ProgramEnrollment).where(ProgramEnrollment.id == str(enrollment_id))
         )
         enrollment = enroll_result.scalar_one_or_none()
         if not enrollment:
@@ -2235,9 +3091,7 @@ class TrainingProgramService:
             current = by_id.get(str(enrollment.current_phase_id))
             if current is None or current.requires_manual_advancement:
                 return
-            if not await self._is_phase_complete(
-                enrollment_id, UUID(str(current.id))
-            ):
+            if not await self._is_phase_complete(enrollment_id, UUID(str(current.id))):
                 return
             next_phase = self._next_phase(phases, enrollment.current_phase_id)
             if next_phase is None:
@@ -2791,18 +3645,24 @@ class TrainingProgramService:
                 )
 
         source = _coerce_enum(
-            req_data.get("source"), RequirementSource, "source",
+            req_data.get("source"),
+            RequirementSource,
+            "source",
             RequirementSource.DEPARTMENT,
         )
         requirement_type = _coerce_enum(
-            req_data.get("requirement_type"), RequirementType, "requirement_type",
+            req_data.get("requirement_type"),
+            RequirementType,
+            "requirement_type",
             RequirementType.HOURS,
         )
         training_type = _coerce_enum(
             req_data.get("training_type"), TrainingType, "training_type"
         )
         frequency = _coerce_enum(
-            req_data.get("frequency"), RequirementFrequency, "frequency",
+            req_data.get("frequency"),
+            RequirementFrequency,
+            "frequency",
             RequirementFrequency.ANNUAL,
         )
 
@@ -2945,21 +3805,19 @@ class TrainingProgramService:
 
     # ==================== Registry Import Methods ====================
 
-    async def import_registry_requirements(
+    async def preview_registry_requirements(
         self,
         registry_file_path: str,
         organization_id: UUID,
-        created_by: UUID,
-        skip_existing: bool = True,
-    ) -> Tuple[int, List[str], Optional[str], Optional[str]]:
+    ) -> Tuple[Optional[List[dict]], Optional[str]]:
         """
-        Import requirements from a registry JSON file
-
-        Returns: (imported_count, errors, last_updated, source_url)
+        List a registry's requirements for the "pick and choose" import UI, each
+        flagged with whether the org has already imported it (by registry_name +
+        registry_code). Returns (items, error_message).
         """
         file_path = Path(registry_file_path)
         if not file_path.exists():
-            return 0, [f"Registry file not found: {registry_file_path}"], None, None
+            return None, f"Registry file not found: {registry_file_path}"
 
         def _read_json(path: Path) -> Any:
             with open(path, "r") as f:
@@ -2968,17 +3826,112 @@ class TrainingProgramService:
         try:
             registry_data = await asyncio.to_thread(_read_json, file_path)
         except json.JSONDecodeError as e:
-            return 0, [f"Invalid JSON in registry file: {str(e)}"], None, None
+            return None, f"Invalid JSON in registry file: {str(e)}"
+
+        registry_name = registry_data.get("registry_name")
+        requirements_data = registry_data.get("requirements", [])
+        topic_names = {
+            ta.get("code"): ta.get("name")
+            for ta in registry_data.get("nccr_topic_areas", [])
+            if ta.get("code")
+        }
+
+        # Which of this registry's codes the org already holds (one query).
+        existing_result = await self.db.execute(
+            select(TrainingRequirement.registry_code).where(
+                TrainingRequirement.organization_id == str(organization_id),
+                TrainingRequirement.registry_name == registry_name,
+            )
+        )
+        existing_codes = {row[0] for row in existing_result.all() if row[0]}
+
+        items: List[dict] = []
+        for req in requirements_data:
+            code = req.get("registry_code")
+            sections = [
+                topic_names.get(d.get("registry_code"), d.get("registry_code"))
+                for d in (req.get("category_hour_distributions") or [])
+                if d.get("registry_code")
+            ]
+            items.append(
+                {
+                    "registry_code": code,
+                    "name": req.get("name"),
+                    "description": req.get("description"),
+                    "requirement_type": req.get("requirement_type", "hours"),
+                    "required_hours": req.get("required_hours"),
+                    "frequency": req.get("frequency"),
+                    "already_imported": bool(code and code in existing_codes),
+                    "sections": sections,
+                }
+            )
+        return items, None
+
+    async def import_registry_requirements(
+        self,
+        registry_file_path: str,
+        organization_id: UUID,
+        created_by: UUID,
+        skip_existing: bool = True,
+        selected_codes: Optional[List[str]] = None,
+    ) -> Tuple[int, int, List[str], Optional[str], Optional[str]]:
+        """
+        Import requirements from a registry JSON file.
+
+        When ``selected_codes`` is provided, only requirements whose
+        ``registry_code`` is in that list are imported (the "pick and choose"
+        path); when it is None, the whole registry is imported.
+
+        Returns:
+            (imported_count, categories_created, errors, last_updated, source_url)
+        """
+        file_path = Path(registry_file_path)
+        if not file_path.exists():
+            return (
+                0,
+                0,
+                [f"Registry file not found: {registry_file_path}"],
+                None,
+                None,
+            )
+
+        def _read_json(path: Path) -> Any:
+            with open(path, "r") as f:
+                return json.load(f)
+
+        try:
+            registry_data = await asyncio.to_thread(_read_json, file_path)
+        except json.JSONDecodeError as e:
+            return 0, 0, [f"Invalid JSON in registry file: {str(e)}"], None, None
 
         registry_name = registry_data.get("registry_name")
         last_updated = registry_data.get("last_updated")
         source_url = registry_data.get("source_url")
         requirements_data = registry_data.get("requirements", [])
 
+        # Topic-area (section) names keyed by their registry_code, e.g.
+        # "NCCR-AIRWAY" -> "Airway, Respiration & Ventilation". Used to name any
+        # section categories we auto-create so imported requirements actually
+        # link to something the org can tag courses/sessions with.
+        topic_names = {
+            ta.get("code"): ta.get("name")
+            for ta in registry_data.get("nccr_topic_areas", [])
+            if ta.get("code")
+        }
+        # Cache of ensured section categories: registry_code -> category id.
+        ensured_categories: dict = {}
+        categories_created = 0
+
+        selected = set(selected_codes) if selected_codes is not None else None
+
         imported_count = 0
         errors = []
 
         for req_data in requirements_data:
+            # Selective import: skip anything the caller didn't pick.
+            if selected is not None and req_data.get("registry_code") not in selected:
+                continue
+
             # Check if requirement already exists
             if skip_existing and req_data.get("registry_code"):
                 existing = await self.db.execute(
@@ -2993,8 +3946,11 @@ class TrainingProgramService:
                     continue
 
             try:
-                # Resolve category_ids from category_hour_distributions
-                # by matching registry_code on TrainingCategory.
+                # Resolve category_ids from category_hour_distributions by
+                # matching registry_code on TrainingCategory. Auto-create the
+                # section category if the org doesn't have it yet, so the
+                # requirement links to real categories (courses/sessions tagged
+                # with a section then count toward it).
                 category_ids = None
                 distributions = req_data.get("category_hour_distributions")
                 if distributions:
@@ -3002,6 +3958,9 @@ class TrainingProgramService:
                     for dist in distributions:
                         rc = dist.get("registry_code")
                         if not rc:
+                            continue
+                        if rc in ensured_categories:
+                            resolved_ids.append(ensured_categories[rc])
                             continue
                         cat_result = await self.db.execute(
                             select(TrainingCategory).where(
@@ -3012,8 +3971,19 @@ class TrainingProgramService:
                             )
                         )
                         cat = cat_result.scalar_one_or_none()
-                        if cat:
-                            resolved_ids.append(cat.id)
+                        if not cat:
+                            cat = TrainingCategory(
+                                organization_id=organization_id,
+                                name=topic_names.get(rc, rc),
+                                registry_code=rc,
+                                created_by=created_by,
+                                active=True,
+                            )
+                            self.db.add(cat)
+                            await self.db.flush()
+                            categories_created += 1
+                        ensured_categories[rc] = cat.id
+                        resolved_ids.append(cat.id)
                     if resolved_ids:
                         category_ids = resolved_ids
 
@@ -3054,4 +4024,4 @@ class TrainingProgramService:
                 )
 
         await self.db.commit()
-        return imported_count, errors, last_updated, source_url
+        return imported_count, categories_created, errors, last_updated, source_url

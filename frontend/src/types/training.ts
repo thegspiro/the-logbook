@@ -69,6 +69,7 @@ export interface TrainingSession {
   expiration_months?: number;
 
   // Auto-completion & approval settings
+  counts_toward_certification?: boolean;
   auto_create_records?: boolean;
   require_completion_confirmation?: boolean;
   approval_deadline_days?: number;
@@ -137,6 +138,7 @@ export interface TrainingSessionCreate {
   materials_required?: string[] | undefined;
 
   // Auto-completion settings
+  counts_toward_certification?: boolean | undefined;  // Feed linked certificate requirements
   auto_create_records?: boolean | undefined;  // Create TrainingRecords on check-in
   require_completion_confirmation?: boolean | undefined;  // Instructor must confirm completion
 }
@@ -398,6 +400,9 @@ export interface TrainingRequirement {
   registry_name?: string;
   registry_code?: string;
   is_editable?: boolean;
+  // Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
+  // this requirement by category? Off by default — in-house delivery only.
+  allows_external_credit?: boolean;
   training_type?: TrainingType;
   // Requirement quantities (field used depends on requirement_type)
   required_hours?: number;
@@ -443,6 +448,7 @@ export interface TrainingRequirementCreate {
   registry_name?: string | undefined;
   registry_code?: string | undefined;
   is_editable?: boolean | undefined;
+  allows_external_credit?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | undefined;
   required_courses?: string[] | undefined;
@@ -481,6 +487,7 @@ export interface TrainingRequirementUpdate {
   registry_name?: string | undefined;
   registry_code?: string | undefined;
   is_editable?: boolean | undefined;
+  allows_external_credit?: boolean | undefined;
   training_type?: TrainingType | undefined;
   required_hours?: number | undefined;
   required_courses?: string[] | undefined;
@@ -602,6 +609,10 @@ export interface TrainingProgram {
   };
   is_template: boolean;
   active: boolean;
+  recert_enabled: boolean;
+  recert_interval_months?: number;
+  recert_anchor_month?: number;
+  recert_anchor_day?: number;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -624,6 +635,10 @@ export interface TrainingProgramCreate {
     send_if_below_percentage?: number | undefined;
   } | undefined;
   is_template?: boolean | undefined;
+  recert_enabled?: boolean | undefined;
+  recert_interval_months?: number | undefined;
+  recert_anchor_month?: number | undefined;
+  recert_anchor_day?: number | undefined;
 }
 
 export interface ProgramPhase {
@@ -693,6 +708,10 @@ export interface TrainingProgramUpdate {
   warning_days_before?: number | undefined;
   is_template?: boolean | undefined;
   active?: boolean | undefined;
+  recert_enabled?: boolean | undefined;
+  recert_interval_months?: number | undefined;
+  recert_anchor_month?: number | undefined;
+  recert_anchor_day?: number | undefined;
 }
 
 export interface ProgramPhaseUpdate {
@@ -764,6 +783,8 @@ export interface ProgramEnrollment {
   status: EnrollmentStatus;
   completed_at?: string;
   deadline_warning_sent: boolean;
+  next_recert_reset_at?: string;
+  last_recert_reset_at?: string;
   notes?: string;
   created_at: string;
   updated_at: string;
@@ -844,6 +865,7 @@ export interface MemberProgramProgress {
 export interface RegistryImportResult {
   registry_name: string;
   imported_count: number;
+  categories_created?: number;
   skipped_count: number;
   errors: string[];
   last_updated?: string;
@@ -857,6 +879,17 @@ export interface RegistryInfo {
   last_updated?: string;
   source_url?: string;
   requirement_count: number;
+}
+
+export interface RegistryRequirementPreview {
+  registry_code?: string | null;
+  name: string;
+  description?: string | null;
+  requirement_type: string;
+  required_hours?: number | null;
+  frequency?: string | null;
+  already_imported: boolean;
+  sections?: string[];
 }
 
 // Bulk Enrollment
@@ -890,6 +923,7 @@ export interface ProgramBuildRequirementInput {
   passing_score?: number | undefined;
   max_attempts?: number | undefined;
   checklist_items?: string[] | undefined;
+  allows_external_credit?: boolean | undefined;
   is_required: boolean;
   sort_order: number;
 }
@@ -1250,6 +1284,9 @@ export interface SubmissionReviewRequest {
   override_hours?: number | undefined;
   override_credit_hours?: number | undefined;
   override_training_type?: TrainingType | undefined;
+  // Optionally apply the approved training toward a pipeline requirement.
+  apply_to_program_id?: string | undefined;
+  apply_to_requirement_id?: string | undefined;
 }
 
 // ==================== Shift Completion Reports ====================

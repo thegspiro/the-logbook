@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Training Pipelines: abuse safeguards, working alerts, and fixability (2026-07-16)
+
+A review of the whole training-program module, hardening how its many progress
+feeds work together and making mistakes easy to correct.
+
+**Abuse safeguards**
+
+- **Members can't self-complete their own requirements** — a member may still
+  mark a requirement in-progress, but only a training officer can set a numeric
+  progress value, record a test score, or mark a requirement complete/verified/
+  waived. Members log training through the self-report submission flow, which
+  routes to an officer. Previously a member could PATCH their own requirement to
+  100% and bypass review entirely.
+- **No self-approval of self-reported training** — a training officer can no
+  longer approve their own submission; a second officer must sign it off, so an
+  officer can't grant themselves hours or credit unchecked.
+- **Withdrawn/failed enrollments are never auto-resurrected** — the enrollment
+  rollup only auto-completes an enrollment that is still active, so a
+  withdrawn/failed member reaching 100% isn't silently flipped back to completed.
+- **Future-dated submissions rejected** and program-linked sessions only fan out
+  to hours-type requirements, closing two ways bogus credit could slip in.
+
+**Idempotency ledger — a training can't be double-credited**
+
+- The six pipeline feeds now record each accrual in a per-source credit ledger
+  keyed uniquely on (requirement progress, source type, source id). Re-processing
+  the same shift report, re-syncing the same external course, re-finalizing a
+  session, or re-approving a submission is an idempotent no-op — the same real
+  training can never be counted twice. The ledger also records the units each
+  source contributed, which is what makes clean reversal possible.
+
+**Alerts that actually fire**
+
+- **Struggling-member and deadline alerts are delivered** — these previously
+  computed who was behind but sent the notification to a mentor field that didn't
+  exist, so no one was ever told. Alerts now reach the member and their training
+  officers (resolved by role), throttled so a persistently-behind recruit isn't
+  re-alerted every weekly run. Pace/behind-schedule checks measure from the
+  current cycle, so a member fresh off a recert reset isn't flagged overdue on
+  day one.
+
+**Fixability — undo mistakes cleanly**
+
+- **Void a training record** (`DELETE /training/records/{id}`) — marks a
+  mistaken or duplicate record cancelled (kept for audit, never hard-deleted) and
+  un-applies any pipeline credit it produced.
+- **Reverse an approval**
+  (`POST /training/submissions/{id}/reverse-approval`) — voids the record the
+  approval spawned, un-applies the credit keyed on both the submission and the
+  record, and returns the submission to pending review to be re-decided.
+- Both are training.manage-gated and audit-logged, and build on the ledger so
+  the requirement math unwinds automatically instead of by hand.
+
 ### Training Pipelines: end-to-end progression tracking (2026-07-14)
 
 Made training programs ("pipelines") work as a real enroll → progress → advance →
@@ -72,14 +125,28 @@ progression.
   carries that level's national recertification component (NCCR hours by topic area)
   plus the appropriate life-support certifications (BLS; ACLS/PALS/PHTLS at the
   advanced levels).
+- **Registry section categories — connect your courses to requirements.** Requirements
+  that distribute hours across topic-area sections (e.g. the NREMT levels' Airway /
+  Cardiology / Trauma / Medical / Operations) now actually link to something. Importing
+  such a requirement auto-creates a **training category per section** (matched by
+  registry code, deduped) and links the requirement to them. Tag a course, session, or
+  record with a section category and its hours count toward that requirement — the
+  compliance engine and the session→pipeline feed already credit category-matched
+  hours. Previously these sections resolved to nothing, so the requirement counted all
+  hours indiscriminately. The import picker now shows each requirement's sections, and
+  the result reports how many categories were created.
+- **Pick-and-choose registry import.** Clicking a registry no longer imports the whole
+  thing at once — it opens a picker that previews every requirement
+  (`GET …/requirements/registries/{name}/preview`) and lets the officer tick exactly
+  which to import (`POST …/import/{name}` with `registry_codes`). Requirements already
+  in the library are shown as "Imported" and locked out; the rest are pre-selected with
+  select-all/clear-all.
 - **Expanded NFPA registry.** Added seven more NFPA professional-qualification
   standards as annual continuing-compliance requirements: Hazmat/WMD Responder (1072),
   Technical Rescuer (1006), Fire Investigator (1033), Fire Inspector (1031), Fire &
   Life Safety Educator/PIO (1035), Wildland Fire Fighter (1051), and Fire Department
   Safety Officer (1521) — alongside the existing 1001/1002/1021/1041/1403/1500/1582.
   Pro Board is unchanged.
-
-**Progress tracking**
 
 **Progress tracking**
 
@@ -94,6 +161,46 @@ progression.
 - **Completion revert** — a completed enrollment reopens to *active* if its progress
   later drops below 100% (e.g. a new required requirement is added, or a value is
   corrected down).
+
+**Recertification cycle (progress reset)**
+
+- **Manual reset** — for certifications that expire (e.g. NREMT's biennial recert),
+  an officer can clear accumulated progress and start a new cycle without
+  re-enrolling. In the progress modal, **Reset** on one requirement clears just that
+  item (`POST /training/programs/progress/{id}/reset`); **Start new cycle** resets
+  every requirement and returns the member to the first phase
+  (`POST /training/programs/enrollments/{id}/reset`). Both are confirmed and gated by
+  `training.manage`.
+- **Automatic reset on a stored deadline** — a pipeline can carry a recurring recert
+  cycle (Edit dialog): a cycle length in months plus an optional fixed calendar
+  anchor (reset month + day, e.g. March 30). Each enrollment tracks its
+  `next_recert_reset_at`; once it passes, the enrollment is reset for a new cycle and
+  the deadline advances. Resets apply lazily when the member's progress is opened (after
+  the view's permission check, never before), and `POST /training/programs/recert/run-due`
+  sweeps every past-due enrollment. That sweep now runs **daily at 5 AM** as a
+  registered scheduled task (`recert_resets` in `scheduled_tasks.py` — picked up by the
+  in-process scheduler and the documented crontab), so a member no one is watching still
+  resets on time. Only active/completed/expired members are auto-reset — a withdrawn,
+  failed, or on-hold member is never resurrected. Fields added by migration
+  `20260715_0001`.
+- **Reset notifications** — whenever a cycle resets (manual, on-view, or the sweep), the
+  member gets an in-app notification that their recertification cycle has started, with
+  the new deadline and a link to their progress; the assigned mentor is notified too.
+- **Audit trail** — resetting a requirement or a whole enrollment, withdrawing a member,
+  and running the recert sweep now write audit-log events (`log_audit_event`), matching
+  the rest of the training module. The withdrawal event records whether it was
+  self-service or officer-initiated.
+
+**Leaving a program**
+
+- **Self-service withdrawal** — a member can remove themselves from a program from
+  their progression view ("Leave program"), e.g. after stepping down from a
+  certification level they no longer need to maintain
+  (`POST /training/programs/enrollments/{id}/withdraw`; officers with
+  `training.manage` can withdraw anyone). The withdrawal is soft — the record is kept
+  for history but the enrollment leaves the member's active dashboard and stops
+  generating warnings, and they can be re-enrolled later. Reuses the existing
+  `WITHDRAWN` status (no migration).
 
 **Phases**
 
@@ -111,6 +218,40 @@ progression.
   percentage, so the pipeline showed 0%.) A session may link to a specific
   **requirement**, or to a program + **category**, in which case it advances the
   program's requirements tagged with that category.
+- **Certification-eligibility toggle** — a training session now carries a **"Counts
+  toward certification requirements"** flag (on by default; `counts_toward_certification`,
+  migration `20260716_0001`). Turn it off for a session that a certifying body (NFPA/NREMT)
+  wouldn't accept: attendance still creates the member's training record (they keep the
+  hours toward general compliance) but the session no longer feeds the linked
+  pipeline/certificate requirements, so ineligible hours don't inflate a certificate.
+- **External / synced courses → pipeline (opt-in)** — importing a training record from an
+  external provider (Vector Solutions, etc.) can advance the pipeline requirements it
+  satisfies by category, not just the compliance matrix. On import, for the member's
+  **active** enrollments, an HOURS requirement tagged with the record's category accrues
+  the record's hours and a COURSES requirement accrues one completion — routed through the
+  same updater as sessions, so percentage, auto-completion, rollup, and phase advancement
+  all run (`TrainingProgramService.credit_category_progress`, applied post-commit in
+  `bulk_import_records`). **A requirement only accepts imported credit when an officer opts
+  it in** via a new per-requirement `allows_external_credit` flag (off by default; migration
+  `20260717_0001`) — so a Vector "mobile radios" course never checks off a requirement the
+  department wants delivered in-house. When enabled, the same completion counts toward every
+  active program that requires the category; other requirement types are left for explicit
+  sign-off. The choice is **surfaced to the officer wherever a requirement is created or
+  edited** — the Requirements page, the create-pipeline wizard, and the pipeline requirement
+  editor each show a flagged callout (for hours/course requirements) that spells out the
+  current behavior and the toggle, so it's a deliberate decision rather than a hidden default.
+- **Officer applies self-reported training → pipeline** — a training officer can now credit
+  approved self-reported training toward a specific pipeline requirement, which is ideal for
+  **make-up sessions that had no scheduled training date**. It works two ways: when approving
+  a submission, the officer can pick a target program + requirement from the member's active
+  enrollments (`apply_to_program_id`/`apply_to_requirement_id` on the review), and an approved
+  submission can be applied **retroactively** from its card
+  (`POST /training/programs/apply-training-record`). Hours requirements gain the approved
+  hours, a course counts as one completion, and status-based requirements (certification /
+  skills / checklist / knowledge test) are marked complete — all through the real updater
+  (`TrainingProgramService.apply_training_to_requirement`), so rollup and phase advancement
+  run. Because it's an explicit officer sign-off, it bypasses the `allows_external_credit`
+  opt-in (which only gates the *automatic* import feed). Audit-logged.
 - **Skills tests → pipeline** — a skill template carries a default **linked training
   requirement** (each test inherits it, overridable per test via a new
   `requirement_id` on `skill_templates`/`skill_tests`, migration

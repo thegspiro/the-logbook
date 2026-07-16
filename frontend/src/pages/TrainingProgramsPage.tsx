@@ -20,6 +20,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
+import RegistryImportModal from './RegistryImportModal';
 import { getErrorMessage } from '@/utils/errorHandling';
 import type {
   TrainingProgram,
@@ -40,7 +41,7 @@ const TrainingProgramsPage: React.FC = () => {
   const [instantiatingKey, setInstantiatingKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [importingRegistry, setImportingRegistry] = useState<string | null>(null);
+  const [registryModal, setRegistryModal] = useState<{ key: string; name: string } | null>(null);
   const importFileRef = React.useRef<HTMLInputElement>(null);
 
   const handleExportProgram = async (e: React.MouseEvent, programId: string, programName: string) => {
@@ -121,27 +122,6 @@ const TrainingProgramsPage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to add template'));
     } finally {
       setInstantiatingKey(null);
-    }
-  };
-
-  const handleImportRegistry = async (registryName: string) => {
-    setImportingRegistry(registryName);
-    try {
-      const result = await trainingProgramService.importRegistry(registryName);
-      const label = result.registry_name || registryName;
-      if (result.errors && result.errors.length > 0) {
-        // Surface the real reason instead of a misleading green "imported 0".
-        toast.error(`Couldn't import ${label}: ${result.errors[0]}`);
-      } else if (result.imported_count === 0) {
-        toast(`No new requirements to import from ${label} — they're already in your library.`);
-      } else {
-        toast.success(`Imported ${result.imported_count} requirement${result.imported_count === 1 ? '' : 's'} from ${label}`);
-      }
-      void loadData();
-    } catch (error: unknown) {
-      toast.error(`Failed to import registry: ${getErrorMessage(error)}`);
-    } finally {
-      setImportingRegistry(null);
     }
   };
 
@@ -413,15 +393,12 @@ const TrainingProgramsPage: React.FC = () => {
                     ]).map((registry) => (
                       <button
                         key={registry.key}
-                        onClick={() => { void handleImportRegistry(registry.key); }}
-                        disabled={importingRegistry !== null}
-                        className="flex flex-col items-center px-4 py-3 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover disabled:opacity-50"
+                        onClick={() => setRegistryModal({ key: registry.key, name: registry.name })}
+                        className="flex flex-col items-center px-4 py-3 bg-theme-surface text-theme-text-primary rounded-lg hover:bg-theme-surface-hover"
                       >
                         <div className="flex items-center space-x-2">
                           <Download className="w-5 h-5" aria-hidden="true" />
-                          <span>
-                            {importingRegistry === registry.key ? 'Importing...' : `Import ${registry.name}`}
-                          </span>
+                          <span>Import {registry.name}</span>
                         </div>
                         {registry.last_updated && (
                           <span className="text-xs text-theme-text-muted mt-1">
@@ -520,6 +497,14 @@ const TrainingProgramsPage: React.FC = () => {
         )}
       </main>
 
+      {registryModal && (
+        <RegistryImportModal
+          registryKey={registryModal.key}
+          registryName={registryModal.name}
+          onClose={() => setRegistryModal(null)}
+          onImported={() => { void loadData(); }}
+        />
+      )}
     </div>
   );
 };

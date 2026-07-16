@@ -447,6 +447,14 @@ class TrainingRequirement(Base):
         Boolean, default=True
     )  # Department can override registry requirements
 
+    # When False (the default), imported/external training records (e.g. Vector
+    # Solutions syncs) never auto-credit this requirement by category — it must be
+    # satisfied by an in-house session, a skills test, or manual officer sign-off.
+    # Officers opt a requirement in when online/third-party delivery is acceptable
+    # (e.g. HIPAA CE), and leave it off for in-house-only competencies (e.g. a
+    # hands-on radios drill that a Vector course must not check off).
+    allows_external_credit = Column(Boolean, default=False, nullable=False)
+
     # Requirement Quantities (based on requirement_type)
     required_hours = Column(Float)  # For HOURS type
     required_courses = Column(JSON)  # For COURSES type - list of course IDs
@@ -627,6 +635,13 @@ class TrainingSession(Base):
     )  # Prefix for auto-generated cert numbers
     issuing_agency = Column(String(255))
     expiration_months = Column(Integer)
+
+    # When False, attendance still creates a TrainingRecord (the member gets
+    # credit toward general training compliance) but does NOT feed the linked
+    # pipeline/certificate requirements. Used for sessions that count toward a
+    # program but aren't delivered in a way the certifying body (NFPA/NREMT)
+    # would accept, so ineligible hours don't inflate a member's certificate.
+    counts_toward_certification = Column(Boolean, default=True, nullable=False)
 
     # Auto-completion Settings
     auto_create_records = Column(
@@ -814,6 +829,17 @@ class TrainingProgram(Base):
     # Reminder Settings
     reminder_conditions = Column(JSON)  # Conditional reminder rules
     # Example: {"milestone_threshold": 50, "days_before_deadline": 90, "send_if_below_percentage": 40}
+
+    # Recertification Cycle (auto-reset)
+    # When enabled, an enrolled member's accumulated progress is cleared on a
+    # recurring deadline so a fresh certification cycle can begin — e.g. NREMT's
+    # biennial recert, which is due every other March 30. recert_interval_months
+    # sets the cadence; recert_anchor_month/day optionally pin the reset to a
+    # fixed calendar date rather than rolling from the enrollment date.
+    recert_enabled = Column(Boolean, default=False, nullable=False)
+    recert_interval_months = Column(Integer)  # e.g. 24 for a two-year cycle
+    recert_anchor_month = Column(Integer)  # 1-12, optional fixed reset month
+    recert_anchor_day = Column(Integer)  # 1-31, optional fixed reset day
 
     # Status
     active = Column(Boolean, default=True, index=True)
@@ -1086,6 +1112,22 @@ class ProgramEnrollment(Base):
     # Deadline Tracking
     deadline_warning_sent = Column(Boolean, default=False)
     deadline_warning_sent_at = Column(DateTime(timezone=True))
+    # Throttle for "falling behind" alerts so the weekly sweep doesn't re-notify
+    # the same struggling member every run.
+    struggling_alert_sent_at = Column(DateTime(timezone=True))
+
+    # Start of the CURRENT cycle. Equal to enrolled_at until a recert reset, then
+    # advanced to the reset time so pace/behind-schedule heuristics measure the
+    # fresh cycle rather than the original enrollment (which would flag a member
+    # as instantly overdue the moment their new cycle begins). Falls back to
+    # enrolled_at when null (pre-existing enrollments).
+    cycle_started_at = Column(DateTime(timezone=True))
+
+    # Recertification cycle tracking (see TrainingProgram.recert_enabled).
+    # When today reaches next_recert_reset_at, the enrollment is auto-reset for
+    # a new cycle and the date is advanced to the following deadline.
+    next_recert_reset_at = Column(Date, index=True)
+    last_recert_reset_at = Column(DateTime(timezone=True))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1188,6 +1230,78 @@ class RequirementProgress(Base):
 
     def __repr__(self):
         return f"<RequirementProgress(enrollment_id={self.enrollment_id}, status={self.status}, progress={self.progress_percentage}%)>"
+
+
+class ProgressCreditSource(str, enum.Enum):
+    """Where a unit of requirement progress originated.
+
+    Every automated feed that accrues numeric progress toward a requirement
+    (hours/shifts/calls/courses) tags its credit with one of these. Together
+    with the originating record's id, it forms the idempotency key that stops a
+    single real training from being counted twice — whether from a retry, a
+    re-sync, or a re-finalized session.
+    """
+
+    TRAINING_SESSION = "training_session"
+    SHIFT_REPORT = "shift_report"
+    EXTERNAL_IMPORT = "external_import"
+    OFFICER_APPLY = "officer_apply"
+
+
+class RequirementProgressCredit(Base):
+    """Idempotency ledger for automated requirement-progress credit.
+
+    One row per (progress, source record) accrual. The unique constraint on
+    (progress_id, source_type, source_id) is the safeguard: an automated feed
+    that tries to apply the same source a second time is rejected at the DB
+    level, so replays and cross-feed reprocessing cannot double-credit. Each row
+    also records the units it contributed, which is what lets an officer cleanly
+    un-apply a single credit later (see revoke path) without recomputing the
+    whole enrollment by hand.
+    """
+
+    __tablename__ = "requirement_progress_credits"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    progress_id = Column(
+        String(36),
+        ForeignKey("requirement_progress.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_type = Column(
+        Enum(
+            ProgressCreditSource,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+    )
+    # Id of the originating record (training session, shift report, imported
+    # training record, etc.). Kept as a plain string so any feed's identifier
+    # fits without a cross-table FK.
+    source_id = Column(String(64), nullable=False)
+    units = Column(Float, nullable=False, default=0.0)
+
+    applied_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "progress_id",
+            "source_type",
+            "source_id",
+            name="uq_progress_credit_source",
+        ),
+        Index("idx_progress_credit_progress", "progress_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<RequirementProgressCredit(progress_id={self.progress_id}, "
+            f"source={self.source_type}:{self.source_id}, units={self.units})>"
+        )
 
 
 class SkillEvaluation(Base):

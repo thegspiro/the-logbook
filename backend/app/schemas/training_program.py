@@ -40,6 +40,9 @@ class TrainingRequirementEnhancedBase(BaseModel):
     registry_name: Optional[str] = Field(None, max_length=100)
     registry_code: Optional[str] = Field(None, max_length=50)
     is_editable: bool = True
+    # Opt-in: may imported/external training (e.g. Vector Solutions) auto-credit
+    # this requirement by category? Off by default — in-house delivery only.
+    allows_external_credit: bool = False
 
     # Different requirement quantities.
     # required_courses / required_skills / required_roles are stored as JSON
@@ -90,6 +93,7 @@ class TrainingRequirementEnhancedUpdate(BaseModel):
     description: Optional[str] = None
     requirement_type: Optional[RequirementTypeStr] = None
     is_editable: Optional[bool] = None
+    allows_external_credit: Optional[bool] = None
     training_type: Optional[str] = None
     required_hours: Optional[float] = Field(None, ge=0)
     required_courses: Optional[List[str]] = None
@@ -148,6 +152,13 @@ class TrainingProgramBase(BaseModel):
     time_limit_days: Optional[int] = Field(None, ge=0)
     warning_days_before: int = Field(default=30, ge=0)
     is_template: bool = False
+    # Recertification cycle: when enabled, enrolled members' progress auto-resets
+    # on a recurring deadline. anchor_month/day optionally pin it to a fixed date
+    # (e.g. NREMT's March 30) rather than rolling from the enrollment date.
+    recert_enabled: bool = False
+    recert_interval_months: Optional[int] = Field(None, ge=1, le=120)
+    recert_anchor_month: Optional[int] = Field(None, ge=1, le=12)
+    recert_anchor_day: Optional[int] = Field(None, ge=1, le=31)
 
 
 class TrainingProgramCreate(TrainingProgramBase):
@@ -167,6 +178,10 @@ class TrainingProgramUpdate(BaseModel):
     warning_days_before: Optional[int] = Field(None, ge=0)
     is_template: Optional[bool] = None
     active: Optional[bool] = None
+    recert_enabled: Optional[bool] = None
+    recert_interval_months: Optional[int] = Field(None, ge=1, le=120)
+    recert_anchor_month: Optional[int] = Field(None, ge=1, le=12)
+    recert_anchor_day: Optional[int] = Field(None, ge=1, le=31)
 
 
 class TrainingProgramResponse(TrainingProgramBase, UTCResponseBase):
@@ -338,6 +353,20 @@ class ProgramEnrollmentCreate(ProgramEnrollmentBase):
     program_id: UUID
 
 
+class ProgramEnrollmentWithdraw(BaseModel):
+    """Schema for withdrawing from a program enrollment"""
+
+    reason: Optional[str] = Field(None, max_length=500)
+
+
+class ApplyTrainingRecordRequest(BaseModel):
+    """Officer applies an existing training record toward a pipeline requirement."""
+
+    record_id: UUID
+    program_id: UUID
+    requirement_id: UUID
+
+
 class ProgramEnrollmentUpdate(BaseModel):
     """Schema for updating a program enrollment"""
 
@@ -359,6 +388,8 @@ class ProgramEnrollmentResponse(ProgramEnrollmentBase, UTCResponseBase):
     status: EnrollmentStatusStr
     completed_at: Optional[datetime] = None
     deadline_warning_sent: bool
+    next_recert_reset_at: Optional[date] = None
+    last_recert_reset_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 
@@ -552,10 +583,34 @@ class RegistryImportResult(BaseModel):
 
     registry_name: str
     imported_count: int
+    # Section (topic-area) categories auto-created to link the requirements.
+    categories_created: int = 0
     skipped_count: int
     errors: List[str] = []
     last_updated: Optional[str] = None
     source_url: Optional[str] = None
+
+
+class RegistryRequirementPreview(BaseModel):
+    """One selectable requirement in a registry, for the pick-and-choose import."""
+
+    registry_code: Optional[str] = None
+    name: str
+    description: Optional[str] = None
+    requirement_type: str
+    required_hours: Optional[float] = None
+    frequency: Optional[str] = None
+    already_imported: bool = False
+    # Topic-area sections this requirement's hours are distributed across
+    # (e.g. Airway, Cardiology, …) — these become linked training categories.
+    sections: List[str] = []
+
+
+class RegistrySelectiveImport(BaseModel):
+    """Import options: which registry codes to import (None/omitted = all)."""
+
+    registry_codes: Optional[List[str]] = None
+    skip_existing: bool = True
 
 
 # Atomic Program Build Schemas
@@ -580,6 +635,7 @@ class ProgramBuildRequirementInput(BaseModel):
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
     checklist_items: Optional[List[str]] = None
+    allows_external_credit: bool = False
     is_required: bool = True
     sort_order: int = Field(default=0, ge=0)
 

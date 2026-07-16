@@ -3,10 +3,10 @@ Tests for the training-session -> pipeline progress feed
 (app/services/training_session_service.py).
 
 Approving a program-linked training session must advance the member's linked
-pipeline requirement through the REAL updater
-(TrainingProgramService.update_requirement_progress) so percentage,
-auto-completion, enrollment rollup, and phase advancement all run — not the old
-hand-mutation that left the pipeline stuck at 0%.
+pipeline requirement through the REAL updater, keyed on the session in the
+idempotency ledger (TrainingProgramService.apply_requirement_credit) so
+percentage, auto-completion, enrollment rollup, and phase advancement all run —
+and re-approving the same session cannot double-credit the member's hours.
 
 DB is mocked; no MySQL.
 """
@@ -17,6 +17,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.models.training import ProgressCreditSource
 from app.services.training_program_service import TrainingProgramService
 from app.services.training_session_service import TrainingSessionService
 
@@ -55,15 +56,15 @@ class TestResolveCategoryRequirementIds:
 
 
 class TestApplyPipelineProgress:
-    async def test_routes_through_update_requirement_progress(self, monkeypatch):
+    async def test_routes_through_credit_ledger(self, monkeypatch):
         enrollment = SimpleNamespace(id="enr-1")
         progress = SimpleNamespace(id="rp-1", progress_value=5.0)
         db = RecordingSession([_one(enrollment), _one(progress)])
         svc = TrainingSessionService(db)
 
-        mock_update = AsyncMock(return_value=(SimpleNamespace(), None))
+        mock_credit = AsyncMock(return_value=(SimpleNamespace(), None))
         monkeypatch.setattr(
-            TrainingProgramService, "update_requirement_progress", mock_update
+            TrainingProgramService, "apply_requirement_credit", mock_credit
         )
 
         org, officer = uuid4(), uuid4()
@@ -74,42 +75,46 @@ class TestApplyPipelineProgress:
             hours_completed=10.0,
             organization_id=org,
             verified_by=officer,
+            session_id="sess-9",
         )
 
-        mock_update.assert_awaited_once()
-        kwargs = mock_update.await_args.kwargs
+        mock_credit.assert_awaited_once()
+        kwargs = mock_credit.await_args.kwargs
         assert kwargs["progress_id"] == "rp-1"
         assert kwargs["organization_id"] == org
         assert kwargs["verified_by"] == officer
-        # Hours accrue onto the existing value; the updater derives the percentage.
-        assert kwargs["updates"].progress_value == 15.0
+        # Keyed on the session so a re-approval can't double-credit; hours are the
+        # units, and the ledger routes them through the real updater.
+        assert kwargs["source_type"] == ProgressCreditSource.TRAINING_SESSION
+        assert kwargs["source_id"] == "sess-9"
+        assert kwargs["units"] == 10.0
 
     async def test_noop_without_active_enrollment(self, monkeypatch):
         db = RecordingSession([_one(None)])
         svc = TrainingSessionService(db)
-        mock_update = AsyncMock()
+        mock_credit = AsyncMock()
         monkeypatch.setattr(
-            TrainingProgramService, "update_requirement_progress", mock_update
+            TrainingProgramService, "apply_requirement_credit", mock_credit
         )
 
         await svc._apply_pipeline_progress(
-            "u1", "p1", "r1", 10.0, uuid4(), uuid4()
+            "u1", "p1", "r1", 10.0, uuid4(), uuid4(), "sess-9"
         )
-        mock_update.assert_not_awaited()
+        mock_credit.assert_not_awaited()
 
     async def test_noop_without_progress_row(self, monkeypatch):
         enrollment = SimpleNamespace(id="enr-1")
         db = RecordingSession([_one(enrollment), _one(None)])
         svc = TrainingSessionService(db)
-        mock_update = AsyncMock()
+        mock_credit = AsyncMock()
         monkeypatch.setattr(
-            TrainingProgramService, "update_requirement_progress", mock_update
+            TrainingProgramService, "apply_requirement_credit", mock_credit
         )
 
         await svc._apply_pipeline_progress(
-            "u1", "p1", "r1", 10.0, uuid4(), uuid4()
+            "u1", "p1", "r1", 10.0, uuid4(), uuid4(), "sess-9"
         )
-        mock_update.assert_not_awaited()
+        mock_credit.assert_not_awaited()
 
     async def test_updater_failure_is_swallowed(self, monkeypatch):
         enrollment = SimpleNamespace(id="enr-1")
@@ -118,13 +123,13 @@ class TestApplyPipelineProgress:
         svc = TrainingSessionService(db)
         monkeypatch.setattr(
             TrainingProgramService,
-            "update_requirement_progress",
+            "apply_requirement_credit",
             AsyncMock(side_effect=RuntimeError("boom")),
         )
 
         # Must not raise — records are already committed; feed failures are logged.
         await svc._apply_pipeline_progress(
-            "u1", "p1", "r1", 10.0, uuid4(), uuid4()
+            "u1", "p1", "r1", 10.0, uuid4(), uuid4(), "sess-9"
         )
 
 
@@ -135,8 +140,8 @@ class TestApplyPipelineUpdates:
 
         org, officer = uuid4(), uuid4()
         updates = [
-            ("u1", "p1", "r1", 4.0),
-            ("u2", "p1", "r2", 8.0),
+            ("u1", "p1", "r1", 4.0, "sess-1"),
+            ("u2", "p1", "r2", 8.0, "sess-1"),
         ]
         await svc._apply_pipeline_updates(updates, org, officer)
 
@@ -146,6 +151,7 @@ class TestApplyPipelineUpdates:
         assert first["hours_completed"] == 4.0
         assert first["organization_id"] == org
         assert first["verified_by"] == officer
+        assert first["session_id"] == "sess-1"
 
 
 if __name__ == "__main__":  # pragma: no cover

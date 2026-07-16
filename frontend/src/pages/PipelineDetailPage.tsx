@@ -28,6 +28,7 @@ import {
   ArrowUp,
   ArrowDown,
   Flag,
+  RotateCcw,
 } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
@@ -40,6 +41,7 @@ import {
   MilestoneFormModal,
 } from './PipelineEditModals';
 import { getErrorMessage } from '../utils/errorHandling';
+import { formatDate } from '../utils/dateFormatting';
 import { STATUS_META, groupRecordsByPhase, isPhaseGroupComplete } from '../utils/pipelineProgress';
 import type {
   TrainingProgram,
@@ -55,6 +57,16 @@ import type {
   RequirementProgressRecord,
   RequirementProgressUpdate,
 } from '../types/training';
+
+// Format a calendar-date-only value (e.g. the recert deadline "2028-03-30")
+// without a timezone shift: build it at local midnight from its Y-M-D parts so
+// it never rolls back a day in western timezones.
+const formatCalendarDate = (isoDate?: string): string => {
+  if (!isoDate) return '';
+  const [y, m, d] = isoDate.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  return formatDate(new Date(y, m - 1, d));
+};
 
 // Label + colour for each eligibility status; drives the picker badges.
 const ELIGIBILITY_META: Record<EligibilityStatus, { label: string; className: string }> = {
@@ -433,8 +445,9 @@ function requirementTarget(
 const RequirementProgressRow: React.FC<{
   record: RequirementProgressRecord;
   onUpdate: (progressId: string, updates: RequirementProgressUpdate) => Promise<void>;
+  onReset: (progressId: string, requirementName: string) => Promise<void>;
   saving: boolean;
-}> = ({ record, onUpdate, saving }) => {
+}> = ({ record, onUpdate, onReset, saving }) => {
   const req = record.requirement;
   const numeric = req ? NUMERIC_TYPES.has(req.requirement_type) : false;
   const scored = req ? SCORED_TYPES.has(req.requirement_type) : false;
@@ -584,6 +597,17 @@ const RequirementProgressRow: React.FC<{
             <Circle className="w-3.5 h-3.5 inline mr-1" /> Reopen
           </button>
         )}
+        {record.status !== 'not_started' && (
+          <button
+            type="button"
+            onClick={() => { void onReset(record.id, req?.name ?? 'this requirement'); }}
+            disabled={saving}
+            title="Reset accumulated progress for a new cycle"
+            className="text-xs px-2 py-1 rounded-md border border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover disabled:opacity-40"
+          >
+            <RotateCcw className="w-3.5 h-3.5 inline mr-1" /> Reset
+          </button>
+        )}
       </div>
     </div>
   );
@@ -604,6 +628,7 @@ const EnrollmentProgressModal: React.FC<{
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
+  const [resettingCycle, setResettingCycle] = useState(false);
 
   const load = useCallback(async () => {
     if (!enrollmentId) return;
@@ -652,6 +677,36 @@ const EnrollmentProgressModal: React.FC<{
     }
   };
 
+  const handleReset = async (progressId: string, requirementName: string) => {
+    if (!window.confirm(`Reset "${requirementName}" to not-started? This clears the accumulated progress for a new cycle.`)) return;
+    setSavingId(progressId);
+    try {
+      await trainingProgramService.resetProgress(progressId);
+      await load();
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reset requirement'));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleResetCycle = async () => {
+    if (!enrollmentId) return;
+    if (!window.confirm(`Start a new cycle for ${memberName}? Every requirement resets to not-started and they return to the first phase.`)) return;
+    setResettingCycle(true);
+    try {
+      await trainingProgramService.resetEnrollment(enrollmentId);
+      toast.success('Started a new cycle');
+      await load();
+      onSaved();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to reset enrollment'));
+    } finally {
+      setResettingCycle(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const phased = structureType === 'phases' && phases.length > 0;
@@ -690,6 +745,15 @@ const EnrollmentProgressModal: React.FC<{
                   Current phase: <span className="text-theme-text-secondary">{data.current_phase.name}</span>
                 </p>
               )}
+              {data?.enrollment.next_recert_reset_at && (
+                <p className="text-xs text-theme-text-muted mt-1 inline-flex items-center gap-1">
+                  <RotateCcw className="w-3 h-3" />
+                  Auto-resets{' '}
+                  <span className="text-theme-text-secondary">
+                    {formatCalendarDate(data.enrollment.next_recert_reset_at)}
+                  </span>
+                </p>
+              )}
             </div>
             <button
               type="button"
@@ -700,17 +764,29 @@ const EnrollmentProgressModal: React.FC<{
               <X className="w-5 h-5" />
             </button>
           </div>
-          {phased && (
+          <div className="flex flex-wrap gap-2 mt-3">
+            {phased && (
+              <button
+                type="button"
+                onClick={() => { void handleAdvance(); }}
+                disabled={!data || !hasNextPhase || advancing}
+                className="btn-primary text-xs flex items-center gap-1 px-3 disabled:opacity-50"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                {advancing ? 'Advancing...' : hasNextPhase ? 'Advance to next phase' : 'Final phase reached'}
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => { void handleAdvance(); }}
-              disabled={!data || !hasNextPhase || advancing}
-              className="btn-primary text-xs flex items-center gap-1 px-3 mt-3 disabled:opacity-50"
+              onClick={() => { void handleResetCycle(); }}
+              disabled={!data || resettingCycle}
+              title="Reset every requirement and return to the first phase — for a new recert cycle"
+              className="text-xs flex items-center gap-1 px-3 py-2 rounded-lg border border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover disabled:opacity-50"
             >
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              {advancing ? 'Advancing...' : hasNextPhase ? 'Advance to next phase' : 'Final phase reached'}
+              <RotateCcw className="w-3.5 h-3.5" />
+              {resettingCycle ? 'Resetting...' : 'Start new cycle'}
             </button>
-          )}
+          </div>
         </div>
 
         <div className="p-6 overflow-y-auto space-y-4">
@@ -753,6 +829,7 @@ const EnrollmentProgressModal: React.FC<{
                         key={record.id}
                         record={record}
                         onUpdate={handleUpdate}
+                        onReset={handleReset}
                         saving={savingId === record.id}
                       />
                     ))}
@@ -766,6 +843,7 @@ const EnrollmentProgressModal: React.FC<{
                 key={record.id}
                 record={record}
                 onUpdate={handleUpdate}
+                onReset={handleReset}
                 saving={savingId === record.id}
               />
             ))

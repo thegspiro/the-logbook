@@ -593,6 +593,78 @@ async def update_record(
     return record
 
 
+@router.delete("/records/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def void_record(
+    record_id: UUID,
+    reason: str | None = Query(
+        default=None, description="Why the record is being voided (audit trail)"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """
+    Void a training record entered in error.
+
+    The record is marked ``cancelled`` (never hard-deleted, so the correction
+    stays auditable) and any pipeline-requirement credit it produced is
+    un-applied — so a mistaken or duplicate entry can be reversed cleanly
+    without leaving inflated progress behind.
+
+    **Authentication required**
+    **Requires permission: training.manage**
+    """
+    from app.services.training_program_service import TrainingProgramService
+
+    result = await db.execute(
+        select(TrainingRecord)
+        .where(TrainingRecord.id == str(record_id))
+        .where(TrainingRecord.organization_id == current_user.organization_id)
+    )
+    record = result.scalar_one_or_none()
+    if not record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Record not found"
+        )
+
+    if record.status == TrainingStatus.CANCELLED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Record is already voided",
+        )
+
+    # Un-apply any pipeline credit this record fed before voiding it, so the
+    # member's requirement progress reflects the correction.
+    program_service = TrainingProgramService(db)
+    credits_reversed = await program_service.reverse_credits_for_source(
+        organization_id=current_user.organization_id,
+        source_id=str(record_id),
+        verified_by=current_user.id,
+    )
+
+    record.status = TrainingStatus.CANCELLED
+    void_note = f"[VOIDED by {current_user.username}"
+    if reason:
+        void_note += f": {reason}"
+    void_note += "]"
+    record.notes = f"{record.notes}\n{void_note}" if record.notes else void_note
+
+    await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="training_record_voided",
+        event_category="training",
+        severity="warning",
+        event_data={
+            "record_id": str(record_id),
+            "reason": reason,
+            "credits_reversed": credits_reversed,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
+
 # Training Categories
 
 
