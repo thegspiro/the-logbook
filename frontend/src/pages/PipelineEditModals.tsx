@@ -6,7 +6,7 @@
 
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { X } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 import { trainingProgramService } from '../services/api';
 import { getErrorMessage } from '../utils/errorHandling';
 import type {
@@ -468,22 +468,32 @@ export const RequirementFormModal: React.FC<{
         </div>
       )}
       {(type === 'hours' || type === 'courses') && (
-        <label className="inline-flex items-start gap-2 text-sm text-theme-text-secondary">
-          <input
-            type="checkbox"
-            className="mt-0.5"
-            checked={allowsExternal}
-            onChange={(e) => setAllowsExternal(e.target.checked)}
-          />
-          <span>
-            Accept external / imported training credit
-            <span className="block text-xs text-theme-text-muted">
-              Off by default: only in-house sessions, skills tests, or manual sign-off satisfy this.
-              Turn on to let imported courses (e.g. Vector Solutions) in a matching category count
-              toward it.
-            </span>
-          </span>
-        </label>
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+          <div className="space-y-2">
+            <p className="text-sm text-theme-text-secondary">
+              {allowsExternal ? (
+                <>Imported courses <strong>will</strong> count toward this requirement when they
+                carry a matching category (e.g. a Vector Solutions completion).</>
+              ) : (
+                <>By default, imported courses (e.g. Vector Solutions) <strong>will not</strong> count
+                toward this requirement — only an in-house session, a skills test, or manual sign-off
+                satisfies it.</>
+              )}
+            </p>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={allowsExternal}
+                onChange={(e) => setAllowsExternal(e.target.checked)}
+              />
+              <span className="text-sm text-theme-text-secondary">
+                Accept external / imported training credit for this requirement
+              </span>
+            </label>
+          </div>
+        </div>
       )}
       <label className="inline-flex items-center gap-2 text-sm text-theme-text-secondary">
         <input type="checkbox" checked={isRequired} onChange={(e) => setIsRequired(e.target.checked)} />

@@ -627,6 +627,7 @@ class ProgramBuildRequirementInput(BaseModel):
     passing_score: Optional[float] = Field(None, ge=0, le=100)
     max_attempts: Optional[int] = Field(None, ge=1)
     checklist_items: Optional[List[str]] = None
+    allows_external_credit: bool = False
     is_required: bool = True
     sort_order: int = Field(default=0, ge=0)
 

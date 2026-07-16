@@ -183,7 +183,10 @@ progression.
   `20260717_0001`) — so a Vector "mobile radios" course never checks off a requirement the
   department wants delivered in-house. When enabled, the same completion counts toward every
   active program that requires the category; other requirement types are left for explicit
-  sign-off.
+  sign-off. The choice is **surfaced to the officer wherever a requirement is created or
+  edited** — the Requirements page, the create-pipeline wizard, and the pipeline requirement
+  editor each show a flagged callout (for hours/course requirements) that spells out the
+  current behavior and the toggle, so it's a deliberate decision rather than a hidden default.
 - **Skills tests → pipeline** — a skill template carries a default **linked training
   requirement** (each test inherits it, overridable per test via a new
   `requirement_id` on `skill_templates`/`skill_tests`, migration

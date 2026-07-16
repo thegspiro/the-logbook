@@ -687,6 +687,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
     max_attempts: seed?.max_attempts || undefined,
     frequency: seed?.frequency || 'annual' as RequirementFrequency,
     year: seed?.year || new Date().getFullYear() as number | undefined,
+    allows_external_credit: seed?.allows_external_credit ?? false,
     applies_to_all: seed?.applies_to_all ?? true,
     required_membership_types: seed?.required_membership_types || [] as string[],
     due_date: seed?.due_date || '',
@@ -774,6 +775,7 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
           ? { max_attempts: formData.max_attempts } : {}),
         frequency: formData.frequency,
         ...(formData.year ? { year: formData.year } : {}),
+        allows_external_credit: formData.allows_external_credit,
         applies_to_all: formData.applies_to_all,
         required_membership_types: formData.required_membership_types.length > 0 ? formData.required_membership_types : undefined,
         ...(formData.due_date ? { due_date: formData.due_date } : {}),
@@ -1279,6 +1281,42 @@ const RequirementModal: React.FC<RequirementModalProps> = ({
                     )}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* External / imported training credit — flagged so the officer makes
+              a deliberate choice about whether third-party courses count. */}
+          {(formData.requirement_type === 'hours' || formData.requirement_type === 'courses') && (
+            <div className="space-y-3">
+              <h4 className="text-theme-text-primary font-semibold border-b border-theme-surface-border pb-2">
+                External / Imported Training Credit
+              </h4>
+              <div className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+                <div className="space-y-2">
+                  <p className="text-sm text-theme-text-secondary">
+                    {formData.allows_external_credit ? (
+                      <>Imported courses <strong>will</strong> count toward this requirement when
+                      they carry a matching category (e.g. a Vector Solutions completion).</>
+                    ) : (
+                      <>By default, courses imported from an external provider (e.g. Vector
+                      Solutions) <strong>will not</strong> count toward this requirement — it can
+                      only be satisfied by an in-house session, a skills test, or manual sign-off.</>
+                    )}
+                  </p>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.allows_external_credit}
+                      onChange={(e) => setFormData({ ...formData, allows_external_credit: e.target.checked })}
+                      className="w-5 h-5 mt-0.5 rounded-sm border-theme-input-border bg-theme-input-bg text-red-700 dark:text-red-500 focus:ring-theme-focus-ring"
+                    />
+                    <span className="text-sm text-theme-text-secondary">
+                      Accept external / imported training credit for this requirement
+                    </span>
+                  </label>
+                </div>
               </div>
             </div>
           )}

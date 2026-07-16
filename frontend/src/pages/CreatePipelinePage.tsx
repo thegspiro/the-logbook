@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Check,
@@ -51,6 +52,7 @@ interface RequirementFormData {
   passing_score: string;
   max_attempts: string;
   checklist_items: string[];
+  allows_external_credit: boolean;
   is_required: boolean;
   sort_order: number;
 }
@@ -102,6 +104,7 @@ const emptyRequirement = (sortOrder: number): RequirementFormData => ({
   passing_score: '',
   max_attempts: '',
   checklist_items: [],
+  allows_external_credit: false,
   is_required: true,
   sort_order: sortOrder,
 });
@@ -571,6 +574,30 @@ const StepRequirements: React.FC<{
                     </label>
                     <HelpText>Uncheck for optional or extra-credit items that shouldn&apos;t hold up advancement.</HelpText>
                   </div>
+
+                  {/* External-credit flag — a deliberate choice for each hours/
+                      courses requirement, since the default is in-house-only. */}
+                  {(req.requirement_type === 'hours' || req.requirement_type === 'courses') && (
+                    <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+                      <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" aria-hidden="true" />
+                      <div>
+                        <label className="flex items-start gap-2 text-xs text-theme-text-secondary">
+                          <input
+                            type="checkbox"
+                            checked={req.allows_external_credit}
+                            onChange={(e) => onUpdateRequirement(phase.id, req.id, 'allows_external_credit', e.target.checked)}
+                            className="w-3 h-3 mt-0.5 text-red-500 bg-theme-input-bg border-theme-input-border rounded-sm"
+                          />
+                          <span>Accept external / imported training credit</span>
+                        </label>
+                        <HelpText>
+                          Off by default — imported courses (e.g. Vector Solutions) won&apos;t count
+                          toward this; only in-house sessions, skills tests, or manual sign-off will.
+                          Check it if online/third-party delivery is acceptable.
+                        </HelpText>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Conditional fields based on type */}
                   {req.requirement_type === 'hours' && (
@@ -1097,6 +1124,7 @@ const CreatePipelinePage: React.FC = () => {
             passing_score: reqData.passing_score ? parseFloat(reqData.passing_score) : undefined,
             max_attempts: reqData.max_attempts ? parseInt(reqData.max_attempts) : undefined,
             checklist_items: reqData.checklist_items.filter((i) => i.trim()),
+            allows_external_credit: reqData.allows_external_credit,
             is_required: reqData.is_required,
             sort_order: reqData.sort_order,
           })),
