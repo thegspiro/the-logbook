@@ -1434,6 +1434,7 @@ class ExternalTrainingSyncService:
                     category_id=record.category_id,
                     hours=float(record.hours_completed or 0),
                     is_course_completion=True,
+                    source_id=str(record.id),
                 )
             except Exception as e:
                 logger.error(

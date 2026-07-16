@@ -463,7 +463,7 @@ class TrainingSessionService:
         # through the token-based officer approval workflow. (Capture the flag
         # before commit expires the ORM object.)
         requires_confirmation = training_session.require_completion_confirmation
-        pipeline_updates: List[Tuple[str, str, str, float]] = []
+        pipeline_updates: List[Tuple[str, str, str, float, str]] = []
         if not requires_confirmation:
             training_approval.status = ApprovalStatus.APPROVED
             training_approval.approved_by = str(finalized_by)
@@ -759,7 +759,7 @@ class TrainingSessionService:
         approval: TrainingApproval,
         attendees: list[AttendeeApprovalData],
         approved_by: UUID,
-    ) -> List[Tuple[str, str, str, float]]:
+    ) -> List[Tuple[str, str, str, float, str]]:
         """
         Create or update TrainingRecords for all approved attendees.
 
@@ -770,7 +770,7 @@ class TrainingSessionService:
         progress updater commits internally, so the caller applies them via
         ``_apply_pipeline_updates`` after its own approval+records commit.
         """
-        pipeline_updates: List[Tuple[str, str, str, float]] = []
+        pipeline_updates: List[Tuple[str, str, str, float, str]] = []
 
         # Get training session details
         session_result = await self.db.execute(
@@ -927,6 +927,7 @@ class TrainingSessionService:
                             str(training_session.program_id),
                             str(training_session.requirement_id),
                             hours_completed,
+                            str(training_session.id),
                         )
                     )
                 else:
@@ -937,6 +938,7 @@ class TrainingSessionService:
                                 str(training_session.program_id),
                                 req_id,
                                 hours_completed,
+                                str(training_session.id),
                             )
                         )
 
@@ -979,14 +981,14 @@ class TrainingSessionService:
 
     async def _apply_pipeline_updates(
         self,
-        updates: List[Tuple[str, str, str, float]],
+        updates: List[Tuple[str, str, str, float, str]],
         organization_id: UUID,
         verified_by: UUID,
     ) -> None:
         """Apply queued session→pipeline progress updates after the approval has
         committed. Each update commits independently; a failure on one is logged
         and never blocks the others (the training records are already saved)."""
-        for user_id, program_id, requirement_id, hours in updates:
+        for user_id, program_id, requirement_id, hours, session_id in updates:
             await self._apply_pipeline_progress(
                 user_id=user_id,
                 program_id=program_id,
@@ -994,6 +996,7 @@ class TrainingSessionService:
                 hours_completed=hours,
                 organization_id=organization_id,
                 verified_by=verified_by,
+                session_id=session_id,
             )
 
     async def _apply_pipeline_progress(
@@ -1004,18 +1007,21 @@ class TrainingSessionService:
         hours_completed: float,
         organization_id: UUID,
         verified_by: UUID,
+        session_id: str,
     ) -> None:
         """
         Advance a member's linked pipeline requirement when a program-linked
         training session is approved.
 
-        Routes through ``TrainingProgramService.update_requirement_progress`` —
-        the same path shift completion uses — so the requirement percentage,
-        auto-completion, enrollment rollup, and phase advancement all run. (This
-        previously hand-mutated ``progress_value`` only, leaving the pipeline
-        stuck at 0%.)
+        Routes through ``TrainingProgramService.apply_requirement_credit`` — the
+        same real updater shift completion uses, wrapped in the idempotency
+        ledger keyed on this session — so the requirement percentage,
+        auto-completion, enrollment rollup, and phase advancement all run, and
+        re-approving/re-finalizing the same session cannot double-credit the
+        member's hours. (This previously hand-mutated ``progress_value`` only,
+        leaving the pipeline stuck at 0%.)
         """
-        from app.schemas.training_program import RequirementProgressUpdate
+        from app.models.training import ProgressCreditSource
         from app.services.training_program_service import TrainingProgramService
 
         try:
@@ -1040,16 +1046,15 @@ class TrainingSessionService:
             if not progress:
                 return
 
-            # Accrue hours onto the existing value and let the real updater compute
-            # percentage, auto-complete, roll up the enrollment, and advance phases.
-            new_value = float(progress.progress_value or 0) + hours_completed
-
             program_service = TrainingProgramService(self.db)
-            _, error = await program_service.update_requirement_progress(
+            _, error = await program_service.apply_requirement_credit(
                 progress_id=progress.id,
                 organization_id=organization_id,
-                updates=RequirementProgressUpdate(progress_value=new_value),
+                source_type=ProgressCreditSource.TRAINING_SESSION,
+                source_id=str(session_id),
+                units=float(hours_completed),
                 verified_by=verified_by,
+                applied_by=verified_by,
             )
             if error:
                 logger.error(

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
-from app.models.training import RequirementType
+from app.models.training import ProgressCreditSource, RequirementType
 from app.services.training_program_service import TrainingProgramService
 
 
@@ -172,3 +172,28 @@ class TestCreditCategoryProgress:
 
         assert advanced == 0
         svc.update_requirement_progress.assert_not_awaited()
+
+    async def test_with_source_id_routes_through_credit_ledger(self):
+        # When the imported record's id is threaded through, the accrual goes via
+        # the idempotency ledger keyed on that record — so a re-sync of the same
+        # record cannot double-credit.
+        enrollment = SimpleNamespace(id="enr-1")
+        p_hours, r_hours = _prog(2.0), _req(RequirementType.HOURS)
+        db = RecordingSession([_scalars([enrollment]), _rows([(p_hours, r_hours)])])
+        svc = TrainingProgramService(db)
+        svc.apply_requirement_credit = AsyncMock(return_value=(MagicMock(), None))
+
+        advanced = await svc.credit_category_progress(
+            user_id="u1",
+            organization_id=uuid4(),
+            category_id="cat-1",
+            hours=4.0,
+            source_id="rec-42",
+        )
+
+        assert advanced == 1
+        svc.apply_requirement_credit.assert_awaited_once()
+        kwargs = svc.apply_requirement_credit.await_args.kwargs
+        assert kwargs["source_type"] == ProgressCreditSource.EXTERNAL_IMPORT
+        assert kwargs["source_id"] == "rec-42"
+        assert kwargs["units"] == 4.0

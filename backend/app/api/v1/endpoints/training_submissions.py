@@ -269,6 +269,7 @@ async def review_submission(
                 requirement_id=review.apply_to_requirement_id,
                 hours=float(submission.hours_completed or 0),
                 verified_by=current_user.id,
+                source_id=str(submission_id),
             )
             await log_audit_event(
                 db=db,

@@ -289,6 +289,7 @@ class ShiftCompletionService:
                 enrollment_id=enrollment_id,
                 officer_id=officer_id,
                 matched_skill_ids=matched_skill_ids,
+                source_id=str(report.id),
             )
 
             if requirements_progressed:
@@ -551,15 +552,11 @@ class ShiftCompletionService:
         try:
             org_row = (
                 await self.db.execute(
-                    select(Organization).where(
-                        Organization.id == str(organization_id)
-                    )
+                    select(Organization).where(Organization.id == str(organization_id))
                 )
             ).scalar_one_or_none()
             org_settings = (org_row.settings if org_row else None) or {}
-            fu_cfg = (org_settings.get("shift_reports") or {}).get(
-                "follow_up", {}
-            )
+            fu_cfg = (org_settings.get("shift_reports") or {}).get("follow_up", {})
             try:
                 threshold = int(fu_cfg.get("low_rating_threshold", 2))
             except (TypeError, ValueError):
@@ -567,11 +564,7 @@ class ShiftCompletionService:
 
             rating = report.performance_rating
             improvement_text = (report.areas_for_improvement or "").strip()
-            low_rating = (
-                threshold > 0
-                and rating is not None
-                and rating <= threshold
-            )
+            low_rating = threshold > 0 and rating is not None and rating <= threshold
             has_improvement = bool(improvement_text)
             if not low_rating and not has_improvement:
                 return
@@ -624,9 +617,7 @@ class ShiftCompletionService:
                 "areas_for_improvement_present": has_improvement,
             }
 
-            officer_id_str = (
-                str(report.officer_id) if report.officer_id else None
-            )
+            officer_id_str = str(report.officer_id) if report.officer_id else None
             for to_user in officers:
                 if officer_id_str and str(to_user.id) == officer_id_str:
                     continue
@@ -841,6 +832,7 @@ class ShiftCompletionService:
         enrollment_id: Optional[str],
         officer_id: UUID,
         matched_skill_ids: Optional[List[str]] = None,
+        source_id: Optional[str] = None,
     ) -> list:
         """
         Find active enrollment requirements for the trainee and
@@ -960,20 +952,39 @@ class ShiftCompletionService:
                             type_totals[ct_key] = type_totals.get(ct_key, 0) + 1
                         notes["call_type_totals"] = type_totals
 
-                    update_data = RequirementProgressUpdate(
-                        status="in_progress",
-                        progress_value=new_value,
-                        progress_notes=notes if notes else None,
-                    )
+                    if source_id:
+                        # Key the accrual on the shift report so re-processing the
+                        # same report (draft→approved re-trigger, retry) cannot
+                        # double-credit. Notes + IN_PROGRESS pass through unchanged.
+                        from app.models.training import ProgressCreditSource
 
-                    updated_progress, error = (
-                        await program_service.update_requirement_progress(
-                            progress_id=progress.id,
-                            organization_id=organization_id,
-                            updates=update_data,
-                            verified_by=officer_id,
+                        updated_progress, error = (
+                            await program_service.apply_requirement_credit(
+                                progress_id=progress.id,
+                                organization_id=organization_id,
+                                source_type=ProgressCreditSource.SHIFT_REPORT,
+                                source_id=str(source_id),
+                                units=float(value_to_add),
+                                verified_by=officer_id,
+                                applied_by=officer_id,
+                                progress_notes=notes if notes else None,
+                                mark_in_progress=True,
+                            )
                         )
-                    )
+                    else:
+                        update_data = RequirementProgressUpdate(
+                            status="in_progress",
+                            progress_value=new_value,
+                            progress_notes=notes if notes else None,
+                        )
+                        updated_progress, error = (
+                            await program_service.update_requirement_progress(
+                                progress_id=progress.id,
+                                organization_id=organization_id,
+                                updates=update_data,
+                                verified_by=officer_id,
+                            )
+                        )
 
                     if updated_progress and not error:
                         entry = {
@@ -1077,6 +1088,7 @@ class ShiftCompletionService:
             enrollment_id=report.enrollment_id,
             officer_id=UUID(officer_id),
             matched_skill_ids=matched_skill_ids,
+            source_id=str(report.id),
         )
         if requirements_progressed:
             report.requirements_progressed = requirements_progressed

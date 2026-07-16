@@ -1232,6 +1232,78 @@ class RequirementProgress(Base):
         return f"<RequirementProgress(enrollment_id={self.enrollment_id}, status={self.status}, progress={self.progress_percentage}%)>"
 
 
+class ProgressCreditSource(str, enum.Enum):
+    """Where a unit of requirement progress originated.
+
+    Every automated feed that accrues numeric progress toward a requirement
+    (hours/shifts/calls/courses) tags its credit with one of these. Together
+    with the originating record's id, it forms the idempotency key that stops a
+    single real training from being counted twice — whether from a retry, a
+    re-sync, or a re-finalized session.
+    """
+
+    TRAINING_SESSION = "training_session"
+    SHIFT_REPORT = "shift_report"
+    EXTERNAL_IMPORT = "external_import"
+    OFFICER_APPLY = "officer_apply"
+
+
+class RequirementProgressCredit(Base):
+    """Idempotency ledger for automated requirement-progress credit.
+
+    One row per (progress, source record) accrual. The unique constraint on
+    (progress_id, source_type, source_id) is the safeguard: an automated feed
+    that tries to apply the same source a second time is rejected at the DB
+    level, so replays and cross-feed reprocessing cannot double-credit. Each row
+    also records the units it contributed, which is what lets an officer cleanly
+    un-apply a single credit later (see revoke path) without recomputing the
+    whole enrollment by hand.
+    """
+
+    __tablename__ = "requirement_progress_credits"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    progress_id = Column(
+        String(36),
+        ForeignKey("requirement_progress.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_type = Column(
+        Enum(
+            ProgressCreditSource,
+            values_callable=lambda x: [e.value for e in x],
+        ),
+        nullable=False,
+    )
+    # Id of the originating record (training session, shift report, imported
+    # training record, etc.). Kept as a plain string so any feed's identifier
+    # fits without a cross-table FK.
+    source_id = Column(String(64), nullable=False)
+    units = Column(Float, nullable=False, default=0.0)
+
+    applied_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint(
+            "progress_id",
+            "source_type",
+            "source_id",
+            name="uq_progress_credit_source",
+        ),
+        Index("idx_progress_credit_progress", "progress_id"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<RequirementProgressCredit(progress_id={self.progress_id}, "
+            f"source={self.source_type}:{self.source_id}, units={self.units})>"
+        )
+
+
 class SkillEvaluation(Base):
     """
     Skill Evaluation model

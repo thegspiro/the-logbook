@@ -27,7 +27,9 @@ from app.models.training import (
     ProgramPhase,
     ProgramRequirement,
     ProgramStructureType,
+    ProgressCreditSource,
     RequirementProgress,
+    RequirementProgressCredit,
     RequirementFrequency,
     RequirementProgressStatus,
     RequirementSource,
@@ -2096,6 +2098,143 @@ class TrainingProgramService:
 
         return progress, None
 
+    async def _get_org_scoped_progress(
+        self, progress_id: Any, organization_id: UUID
+    ) -> Optional[RequirementProgress]:
+        """Fetch a requirement-progress row, scoped to the org via its program."""
+        result = await self.db.execute(
+            select(RequirementProgress)
+            .join(ProgramEnrollment)
+            .join(TrainingProgram)
+            .where(
+                RequirementProgress.id == str(progress_id),
+                TrainingProgram.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def apply_requirement_credit(
+        self,
+        progress_id: Any,
+        organization_id: UUID,
+        source_type: ProgressCreditSource,
+        source_id: str,
+        units: float,
+        verified_by: Optional[UUID] = None,
+        applied_by: Optional[UUID] = None,
+        progress_notes: Optional[Dict] = None,
+        mark_in_progress: bool = False,
+    ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
+        """Idempotently accrue ``units`` of numeric progress onto a requirement,
+        recording the originating record in the credit ledger.
+
+        The ledger's unique key is (progress_id, source_type, source_id). If that
+        source has already been credited to this requirement, the call is a no-op
+        that returns the current progress — a retry, an external re-sync, or a
+        re-finalized session lands here and changes nothing, so a single real
+        training can never be counted twice. Otherwise the ledger row is written
+        and the accrual is applied through ``update_requirement_progress`` (so
+        percentage, auto-completion, enrollment rollup, and phase advancement all
+        run exactly as for any other feed).
+
+        ``progress_notes`` and ``mark_in_progress`` pass through to the updater so
+        richer feeds (shift completion tracks call-type history and forces the
+        row to IN_PROGRESS) keep their behavior while gaining idempotency.
+
+        Returns (progress, error). All feed callers should route their numeric
+        accruals through here rather than mutating ``progress_value`` directly.
+        """
+        if units is None or units <= 0:
+            return None, None
+
+        progress = await self._get_org_scoped_progress(progress_id, organization_id)
+        if progress is None:
+            return None, "Requirement progress not found"
+
+        existing = await self.db.execute(
+            select(RequirementProgressCredit).where(
+                RequirementProgressCredit.progress_id == str(progress_id),
+                RequirementProgressCredit.source_type == source_type,
+                RequirementProgressCredit.source_id == str(source_id),
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            # Already credited from this source — the idempotent no-op that makes
+            # the feeds safe to replay.
+            return progress, None
+
+        # Insert the ledger row first: the DB unique constraint — not the check
+        # above — is the real guard, catching a duplicate that races in from a
+        # concurrent request on a separate session.
+        ledger = RequirementProgressCredit(
+            progress_id=str(progress_id),
+            source_type=source_type,
+            source_id=str(source_id),
+            units=float(units),
+            applied_by=str(applied_by) if applied_by else None,
+        )
+        self.db.add(ledger)
+        try:
+            await self.db.flush()
+        except IntegrityError:
+            await self.db.rollback()
+            return progress, None
+
+        new_value = float(progress.progress_value or 0) + float(units)
+        update_kwargs: Dict[str, Any] = {"progress_value": new_value}
+        if mark_in_progress:
+            update_kwargs["status"] = RequirementProgressStatus.IN_PROGRESS.value
+        if progress_notes is not None:
+            update_kwargs["progress_notes"] = progress_notes
+        return await self.update_requirement_progress(
+            progress_id=progress.id,
+            organization_id=organization_id,
+            updates=RequirementProgressUpdate(**update_kwargs),
+            verified_by=verified_by,
+        )
+
+    async def revoke_requirement_credit(
+        self,
+        progress_id: Any,
+        organization_id: UUID,
+        source_type: ProgressCreditSource,
+        source_id: str,
+        verified_by: Optional[UUID] = None,
+    ) -> Tuple[Optional[RequirementProgress], Optional[str]]:
+        """Reverse a single previously-applied credit: drop its ledger row and
+        subtract its units back off the requirement (floored at 0), re-running
+        the normal recompute so the enrollment rollup and phase state follow.
+
+        Idempotent — reversing a credit that was never recorded is a no-op. This
+        is the primitive an officer's "un-apply" action builds on.
+        """
+        progress = await self._get_org_scoped_progress(progress_id, organization_id)
+        if progress is None:
+            return None, "Requirement progress not found"
+
+        credit_result = await self.db.execute(
+            select(RequirementProgressCredit).where(
+                RequirementProgressCredit.progress_id == str(progress_id),
+                RequirementProgressCredit.source_type == source_type,
+                RequirementProgressCredit.source_id == str(source_id),
+            )
+        )
+        credit = credit_result.scalar_one_or_none()
+        if credit is None:
+            return progress, None
+
+        units = float(credit.units or 0)
+        await self.db.delete(credit)
+        await self.db.flush()
+
+        new_value = max(0.0, float(progress.progress_value or 0) - units)
+        return await self.update_requirement_progress(
+            progress_id=progress.id,
+            organization_id=organization_id,
+            updates=RequirementProgressUpdate(progress_value=new_value),
+            verified_by=verified_by,
+        )
+
     async def credit_category_progress(
         self,
         user_id: Any,
@@ -2103,6 +2242,7 @@ class TrainingProgramService:
         category_id: str,
         hours: float,
         is_course_completion: bool = True,
+        source_id: Optional[str] = None,
     ) -> int:
         """Advance a member's ACTIVE pipeline requirements that are tagged with
         ``category_id`` from an out-of-band completion — e.g. a course synced from
@@ -2115,9 +2255,11 @@ class TrainingProgramService:
         toward every active program that requires the category — mirroring how the
         compliance engine credits category-matched hours everywhere.
 
-        Routes each accrual through ``update_requirement_progress`` so percentage,
-        auto-completion, enrollment rollup, and phase advancement all run. Returns
-        the number of requirement rows advanced.
+        Routes each accrual through ``apply_requirement_credit`` (keyed on the
+        originating record via ``source_id``) so percentage, auto-completion,
+        enrollment rollup, and phase advancement all run — and, crucially, a
+        re-synced record cannot double-credit. Returns the number of requirement
+        rows advanced.
         """
         if hours <= 0 and not is_course_completion:
             return 0
@@ -2166,12 +2308,27 @@ class TrainingProgramService:
                 if increment <= 0:
                     continue
 
-                new_value = float(progress.progress_value or 0) + increment
-                _, error = await self.update_requirement_progress(
-                    progress_id=progress.id,
-                    organization_id=organization_id,
-                    updates=RequirementProgressUpdate(progress_value=new_value),
-                )
+                if source_id:
+                    # Key the credit on the imported record so re-syncing the
+                    # same record is an idempotent no-op — cannot double-credit.
+                    _, error = await self.apply_requirement_credit(
+                        progress_id=progress.id,
+                        organization_id=organization_id,
+                        source_type=ProgressCreditSource.EXTERNAL_IMPORT,
+                        source_id=str(source_id),
+                        units=increment,
+                    )
+                else:
+                    # No source record to key on (defensive; the import feed
+                    # always passes one). Accrue directly without a ledger entry
+                    # rather than invent a colliding key that would silently drop
+                    # legitimate later accruals.
+                    new_value = float(progress.progress_value or 0) + increment
+                    _, error = await self.update_requirement_progress(
+                        progress_id=progress.id,
+                        organization_id=organization_id,
+                        updates=RequirementProgressUpdate(progress_value=new_value),
+                    )
                 if error:
                     logger.error(
                         f"External pipeline feed failed: user={user_id} "
@@ -2246,6 +2403,7 @@ class TrainingProgramService:
         requirement_id: Any,
         hours: float,
         verified_by: Optional[UUID] = None,
+        source_id: Optional[str] = None,
     ) -> Tuple[bool, Optional[str]]:
         """Apply a completed training toward one specific pipeline requirement for
         a member's ACTIVE enrollment — an explicit officer action (e.g. crediting a
@@ -2269,28 +2427,49 @@ class TrainingProgramService:
         progress, requirement = row
         rtype = requirement.requirement_type
         if rtype == RequirementType.HOURS:
-            updates = RequirementProgressUpdate(
-                progress_value=float(progress.progress_value or 0) + float(hours)
-            )
+            units: Optional[float] = float(hours)
         elif rtype in (
             RequirementType.COURSES,
             RequirementType.SHIFTS,
             RequirementType.CALLS,
         ):
-            updates = RequirementProgressUpdate(
-                progress_value=float(progress.progress_value or 0) + 1.0
-            )
+            units = 1.0
+        else:
+            units = None
+
+        if units is not None:
+            # Numeric accrual — route through the credit ledger, keyed on the
+            # originating record/submission, so applying the same source twice
+            # (e.g. re-approving a submission) cannot double-count. When no
+            # source id is supplied, accrue directly.
+            if source_id:
+                _, error = await self.apply_requirement_credit(
+                    progress_id=progress.id,
+                    organization_id=organization_id,
+                    source_type=ProgressCreditSource.OFFICER_APPLY,
+                    source_id=str(source_id),
+                    units=units,
+                    verified_by=verified_by,
+                    applied_by=verified_by,
+                )
+            else:
+                new_value = float(progress.progress_value or 0) + units
+                _, error = await self.update_requirement_progress(
+                    progress_id=progress.id,
+                    organization_id=organization_id,
+                    updates=RequirementProgressUpdate(progress_value=new_value),
+                    verified_by=verified_by,
+                )
         else:
             # Certification / skills / checklist / knowledge-test: the officer is
-            # signing off that this training satisfies the requirement.
-            updates = RequirementProgressUpdate(status="completed")
-
-        _, error = await self.update_requirement_progress(
-            progress_id=progress.id,
-            organization_id=organization_id,
-            updates=updates,
-            verified_by=verified_by,
-        )
+            # signing off that this training satisfies the requirement. Marking a
+            # requirement complete is naturally idempotent, so no ledger entry.
+            _, error = await self.update_requirement_progress(
+                progress_id=progress.id,
+                organization_id=organization_id,
+                updates=RequirementProgressUpdate(status="completed"),
+                verified_by=verified_by,
+            )
         if error:
             return False, error
         return True, None
