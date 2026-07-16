@@ -255,6 +255,12 @@ Tracks member participation in programs.
 - `status`: active | completed | on_hold | withdrawn | failed
 - `completed_at`: Completion timestamp
 - `deadline_warning_sent`: Has warning been sent?
+- `deadline_warning_sent_at`: When the last deadline warning was sent
+- `cycle_started_at`: Start of the current (recert) cycle — pace/behind-schedule
+  heuristics measure from here, not `enrolled_at`, so a member fresh off a recert
+  reset isn't flagged overdue on day one
+- `struggling_alert_sent_at`: Throttles the weekly "falling behind" alert so it
+  isn't re-sent every run
 
 ### RequirementProgress
 Tracks progress on individual requirements.
@@ -262,7 +268,7 @@ Tracks progress on individual requirements.
 **Fields:**
 - `enrollment_id`: Parent enrollment
 - `requirement_id`: The requirement
-- `status`: not_started | in_progress | completed | waived
+- `status`: not_started | in_progress | completed | verified | waived
 - `progress_value`: Hours, shifts, calls, etc. completed
 - `progress_percentage`: Calculated percentage
 - `progress_notes`: Historical notes (JSONB)
@@ -270,6 +276,24 @@ Tracks progress on individual requirements.
 - `completed_at`: When finished
 - `verified_by`: Officer who verified
 - `verified_at`: Verification timestamp
+
+### RequirementProgressCredit
+Idempotency ledger for automated requirement-progress credit — one row per
+`(requirement progress, source record)` accrual. The unique constraint is the
+safeguard that stops a single real training from being counted twice across the
+pipeline feeds (a retried shift report, a re-synced course, a re-finalized
+session, or a re-approved submission is a no-op). Each row records the units it
+contributed, which is what makes a credit cleanly reversible.
+
+**Fields:**
+- `progress_id`: The requirement-progress row credited
+- `source_type`: `ProgressCreditSource` — training_session | shift_report |
+  external_import | officer_apply
+- `source_id`: Id of the originating record (session, shift report, imported
+  record, submission)
+- `units`: How much progress this source contributed
+- `applied_by`: Officer who applied it (nullable)
+- **Unique:** `(progress_id, source_type, source_id)`
 
 ### SkillEvaluation & SkillCheckoff
 Skills assessment framework.
@@ -431,7 +455,9 @@ async def update_requirement_progress(
     progress_id: UUID,
     organization_id: UUID,
     updates: RequirementProgressUpdate,
-    verified_by: Optional[UUID] = None
+    verified_by: Optional[UUID] = None,
+    acting_user_id: Optional[UUID] = None,
+    can_manage: bool = False,
 ) -> Tuple[Optional[RequirementProgress], Optional[str]]
 ```
 
@@ -445,6 +471,39 @@ async def update_requirement_progress(
 4. Auto-completes at 100%
 5. Triggers `_recalculate_enrollment_progress()`
 
+**Authorization guard:** when `acting_user_id` is supplied (a member-initiated
+request) and `can_manage` is False, the member may mark a requirement
+*in-progress* but may **not** set a numeric progress value, record a test score,
+or mark it complete/verified/waived — those are officer-only. System callers
+(the feeds) omit `acting_user_id` and are always permitted.
+
+**Idempotent credit — the safe way for feeds to accrue progress:**
+
+```python
+async def apply_requirement_credit(
+    progress_id, organization_id,
+    source_type: ProgressCreditSource, source_id: str, units: float,
+    verified_by=None, applied_by=None,
+    progress_notes=None, mark_in_progress=False,
+) -> Tuple[Optional[RequirementProgress], Optional[str]]
+```
+
+Records the accrual in the `requirement_progress_credits` ledger keyed on
+`(progress, source_type, source_id)` and applies `units` through
+`update_requirement_progress` exactly once. A duplicate source is a no-op caught
+by the unique constraint, so all four numeric feeds are safe to replay. Its
+inverses:
+
+```python
+async def revoke_requirement_credit(progress_id, organization_id, source_type, source_id, ...)
+async def reverse_credits_for_source(organization_id, source_id, source_type=None, ...) -> int
+```
+
+`revoke_*` reverses one credit (drops the ledger row, subtracts its units,
+floored at 0). `reverse_credits_for_source` reverses *every* credit a given
+record/submission produced — the primitive behind voiding a record and reversing
+an approval.
+
 ```python
 async def _recalculate_enrollment_progress(
     enrollment_id: UUID
@@ -455,7 +514,8 @@ async def _recalculate_enrollment_progress(
 1. Gets all required requirement progress
 2. Calculates average percentage
 3. Updates enrollment.progress_percentage
-4. Auto-completes enrollment at 100%
+4. Auto-completes enrollment at 100% — **only if the enrollment is still active**
+   (a withdrawn/failed member reaching 100% is never resurrected to completed)
 
 #### Registry Methods
 
@@ -536,8 +596,16 @@ Returns `(adjusted_required, waived_months_count, active_months_count)` using th
 POST   /api/v1/training/records              # Create a training record
 GET    /api/v1/training/records              # List training records
 POST   /api/v1/training/records/bulk         # Bulk create up to 500 records (with duplicate detection)
+PATCH  /api/v1/training/records/{id}         # Update a training record
+DELETE /api/v1/training/records/{id}         # Void a record (cancels it, kept for audit; un-applies any pipeline credit)
 GET    /api/v1/training/compliance-summary/{user_id}  # Get member compliance summary (green/yellow/red)
 ```
+
+**Voiding a record.** `DELETE /records/{id}` (training.manage) marks the record
+`cancelled` rather than hard-deleting it, so the correction stays auditable, and
+un-applies any pipeline-requirement credit the record produced via
+`reverse_credits_for_source`. The compliance engine only counts `completed`
+records, so a voided one stops counting immediately.
 
 **Bulk Create Request:**
 ```json
@@ -998,6 +1066,17 @@ Adds to `training_requirements`:
 ### Actor FK On-Delete Hardening (2026-07-02)
 
 - `20260702_0001_training_actor_fks_set_null.py` — Switches all 28 audit/actor FKs across the training tables (`created_by`, `updated_by`, `approved_by`, `reviewed_by`, `verified_by`, `granted_by`, `evaluated_by`, `evaluator_id`, `last_evaluator_id`, etc.) from bare `ForeignKey("users.id")` (MySQL default RESTRICT, which blocked user deletion) to `ON DELETE SET NULL`, and relaxes `skill_checkoffs.evaluator_id` from NOT NULL. Existing MySQL auto-named constraints are discovered via the inspector at run time and recreated under deterministic names
+
+### Module Review — Cycle Tracking & Credit Ledger (2026-07)
+
+- `20260718_0001_add_enrollment_cycle_and_struggling_tracking.py` — Adds
+  `cycle_started_at` and `struggling_alert_sent_at` to `program_enrollments` so
+  pace/behind-schedule heuristics anchor to the current recert cycle and the
+  weekly struggling-member alert can be throttled.
+- `20260719_0001_add_requirement_progress_credit_ledger.py` — Creates
+  `requirement_progress_credits` (the idempotency ledger) with a unique
+  constraint on `(progress_id, source_type, source_id)`, so a single training
+  can't be double-credited and a credit can be cleanly reversed.
 
 See `docs/ALEMBIC_MIGRATIONS.md` for the full revision chain (these branch off
 `20260411_0200`).
