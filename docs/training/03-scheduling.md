@@ -1568,4 +1568,120 @@ Previously, if you started an equipment check but couldn't finish it, the check 
 
 ---
 
+## Shift Lifecycle: Calendars, Close-Out & Handoff (2026-07-16)
+
+This release strengthens the whole shift lifecycle — from subscribing to your
+schedule, through running a shift, to closing it out cleanly.
+
+### Subscribe to Your Shifts (Calendar Feed)
+
+You can now see your shifts inside your phone or computer calendar
+(Google Calendar, Apple Calendar, Outlook).
+
+1. Open **My Shifts**.
+2. Click **Subscribe to my shifts**.
+3. Copy the link, and add it as a **subscribed/Internet calendar** in your
+   calendar app.
+
+Your shifts then appear automatically and stay up to date. The link is private
+to you — don't share it. If it ever leaks, click **Reset link** to invalidate
+the old one and get a new one.
+
+> **Note:** The feed is read-only and shows roughly the last two months through
+> the next year of your assigned (non-cancelled) shifts.
+
+> **[SCREENSHOT NEEDED]:** _[The "Subscribe to my shifts" card on My Shifts,
+> expanded to show the calendar URL, Copy button, and Reset link.]_
+
+### The On-Duty Officer Can Run Their Own Shift
+
+The officer named on a shift can now manage **that** shift — assign and adjust
+the crew, record attendance, log calls, and finalize or cancel it — without a
+department-wide scheduling permission. Editing or deleting the shift record
+itself still requires a scheduling manager.
+
+### Live Readiness Panel
+
+Open a shift while it's active and you'll see a **readiness** strip at the top:
+
+- how many assigned members are **present** (checked in) vs. assigned,
+- **staffing** vs. the target (flagged if understaffed), and
+- any **start-of-shift equipment checks** still outstanding.
+
+### Requiring End-of-Shift Equipment Checks (Optional)
+
+Departments can require end-of-shift equipment checks to be complete before a
+shift is finalized. Turn it on in **Scheduling → Settings → Close-out rules**.
+
+- When it's on, the **Finalize** button is blocked while any end-of-shift check
+  is outstanding. An officer can still **finalize with an override** by checking
+  the box and entering a reason — the override is recorded in the audit log.
+- When it's off (the default), you can finalize freely, but you'll see a tip
+  explaining the benefit so you can decide whether to require it.
+
+**Why turn it on:** it guarantees every apparatus is verified ready at the end
+of a shift and keeps your equipment-compliance records complete.
+
+### Restrict Check-In to Assigned Members (Optional)
+
+Also under **Close-out rules**: when enabled, only members rostered on a shift
+can check in (open shifts are exempt), so attendance reflects the actual crew.
+
+### Cancelling a Shift (Instead of Deleting)
+
+Use **Cancel shift** to call a shift off without losing the record. Cancelling
+keeps the shift for history, marks everyone's assignment cancelled, and notifies
+the crew. Cancelled shifts drop off the Open Shifts list and show a "Cancelled"
+badge. (A finalized shift can't be cancelled — reopen it first if you need to.)
+
+### Reopening a Finalized Shift
+
+Made a mistake after finalizing? A scheduling manager or the shift officer can
+**Reopen** a finalized shift from its detail panel (a reason is logged),
+correct attendance or the crew, then finalize again.
+
+### Pass-Down / Crew Handoff Notes
+
+When you finalize a shift, you can leave a **pass-down** for the next crew —
+apparatus issues, ongoing incidents, staffing notes. The incoming crew sees it
+as a **Handoff from previous shift** banner on the next shift for that apparatus.
+
+### Overtime / Hours Advisory (Optional)
+
+Departments can set an hours cap (**Scheduling → Settings**). When assigning or
+signing up would push a member's scheduled hours over that cap within the
+configured window, a **non-blocking** warning appears — it advises, it doesn't
+prevent the assignment.
+
+### Training-Position Crew Slots
+
+When assigning a crew seat, an officer can mark it a **Training position** and
+optionally link the trainee's **program** and an **evaluating officer**. When
+the shift is finalized, a draft completion report is created for that member
+against the linked program, ready for the evaluator to complete.
+
+### Automatic Shift Generation (Optional)
+
+Under **Scheduling → Settings**, a department can turn on **automatic shift
+generation** so active patterns keep producing shifts a chosen number of weeks
+ahead — no need to press "Generate" each cycle.
+
+> **[SCREENSHOT NEEDED]:** _[Scheduling Settings → General showing the Close-out
+> rules card (require end-of-shift checks, restrict check-in), the overtime cap,
+> and the automatic shift generation toggle.]_
+
+### Edge Cases
+
+| Scenario | Behavior |
+|----------|----------|
+| Finalize with end-of-shift checks incomplete, enforcement **off** | Allowed; an informational tip appears |
+| Finalize with checks incomplete, enforcement **on** | Blocked unless the officer overrides with a logged reason |
+| Cancel a finalized shift | Not allowed — reopen first |
+| Check in when not rostered, restriction **on** | Rejected ("You are not assigned to this shift") unless the shift is open to all members |
+| Reopen a shift that was never finalized | Rejected ("Shift is not finalized") |
+| Calendar feed link shared/leaked | Reset the link; the old URL stops working immediately |
+| Manager tries to confirm on a member's behalf | Rejected — confirmation is self-only |
+
+---
+
 **Previous:** [Training & Certification](./02-training.md) | **Next:** [Events & Meetings](./04-events-meetings.md)

@@ -313,6 +313,64 @@ printable QR code.]**
 
 ---
 
+## SHORT 8I: Put Your Shifts in Your Phone Calendar
+
+**Length:** 45 seconds
+**Extracted From:** Script 6, Chapter 5
+
+---
+
+**[SCREEN: The My Shifts tab]**
+
+> "Want your shifts in your phone's calendar automatically? Here's how."
+
+**[SCREEN: Click "Subscribe to my shifts"]**
+
+> "Open My Shifts and click 'Subscribe to my shifts.'"
+
+**[SCREEN: Copy the calendar link]**
+
+> "Copy the link, and add it as a subscribed calendar in Google Calendar,
+> Apple Calendar, or Outlook."
+
+**[SCREEN: Show shifts appearing in a phone calendar app]**
+
+> "Now every shift shows up automatically and stays in sync."
+
+**[CALLOUT: "Your shifts, in the calendar you already use"]**
+
+---
+
+## SHORT 8J: Require End-of-Shift Checks Before Finalizing
+
+**Length:** 50 seconds
+**Extracted From:** Script 4, Chapter 6
+
+---
+
+**[SCREEN: Scheduling → Settings → Close-out rules card]**
+
+> "Want to make sure every apparatus is verified ready before a shift closes
+> out? Turn on one setting."
+
+**[SCREEN: Toggle on "Require end-of-shift equipment checks"]**
+
+> "In Scheduling Settings, switch on 'Require end-of-shift equipment checks.'"
+
+**[SCREEN: An officer opening the finalize dialog with checks outstanding —
+Finalize is blocked]**
+
+> "Now a shift can't be finalized while its end-of-shift checks are outstanding.
+> Officers can still override in an emergency —"
+
+**[SCREEN: Show the override checkbox and reason field]**
+
+> "— but the override is logged with a reason."
+
+**[CALLOUT: "Accountability, on every shift"]**
+
+---
+
 ## Production Notes for Shorts
 
 ### Format Guidelines

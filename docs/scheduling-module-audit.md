@@ -194,8 +194,24 @@ All confirmed findings were fixed on branch `claude/determined-lamport-8qa2mp`. 
 - **S5** — `confirm_assignment` `organization_id` is now required and always filtered; two tests updated to pass it. (`scheduling_service.py`, `tests/test_scheduling.py`)
 - **S6** — `/shifts/open` now rejects reversed ranges and caps the window at `MAX_OPEN_SHIFTS_DAYS` (366). (`endpoints/scheduling.py`)
 - **S7** — No fix needed: `/scheduling/` is already in `UNCACHEABLE_PREFIXES` (`utils/apiCache.ts:50`). Resolved.
-- **S4** — Not changed (needs product-intent confirmation). Still flagged.
+- **S4** — Not changed at the time (needs product-intent confirmation). Still flagged.
 - **S8** — By design; left documented.
+
+### Follow-up (2026-07-16) — S4/S8/C5 resolved
+
+A later scheduling-lifecycle review (branch `claude/scheduling-module-review-ndgvub`)
+closed the three items left open above:
+- **S4** — `update_assignment` now rejects setting `assignment_status` to
+  `confirmed`; confirmation stays self-only via `confirm_assignment`.
+  Decline/cancel/no-show remain manageable. (`scheduling_service.py`,
+  `tests/test_scheduling.py::test_update_assignment_blocks_force_confirm`)
+- **S8** — the global `run-task` endpoint now requires a new wildcard-only
+  `system.run_tasks` permission instead of `admin.access`/`settings.manage`,
+  so a single-org admin can no longer trigger all-org sweeps.
+  (`core/permissions.py`, `endpoints/scheduled.py`)
+- **C5** — manual overnight shifts now roll the end to the next day on
+  create/edit, so the backend accepts them. (`SchedulingPage.tsx`,
+  `ShiftDetailPanel.tsx`)
 
 **Backend — calculations**
 - **C2** — Compliance auto-report day clamped to the month length (`min(report_day, days_in_month)`); evaluated per current month. (`scheduled_tasks.py`)
