@@ -42,6 +42,10 @@ interface SchedulingState {
 
   // Department feature toggle: whether platoon scheduling UI is shown.
   platoonsEnabled: boolean;
+  // Whether the department requires end-of-shift equipment checks before a
+  // shift can be finalized. Used to tailor the finalize flow (awareness prompt
+  // when off, enforcement when on).
+  requireEndOfShiftChecks: boolean;
   settingsLoaded: boolean;
 
   // ─── Actions ────────────────────────────────────────────────────────────
@@ -72,6 +76,7 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
   summaryError: null,
 
   platoonsEnabled: false,
+  requireEndOfShiftChecks: false,
   settingsLoaded: false,
 
   // ─── Actions ────────────────────────────────────────────────────────────
@@ -80,7 +85,11 @@ export const useSchedulingStore = create<SchedulingState>((set, get) => ({
     if (get().settingsLoaded) return;
     try {
       const settings = await schedulingService.getFeatureSettings();
-      set({ platoonsEnabled: settings.platoons_enabled, settingsLoaded: true });
+      set({
+        platoonsEnabled: settings.platoons_enabled,
+        requireEndOfShiftChecks: settings.require_end_of_shift_checks,
+        settingsLoaded: true,
+      });
     } catch {
       // Non-critical — default to platoons disabled on failure.
       set({ settingsLoaded: true });

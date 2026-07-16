@@ -61,6 +61,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     members: memberOptions,
     loadMembers,
     platoonsEnabled,
+    requireEndOfShiftChecks,
     loadSettings,
   } = useSchedulingStore();
   useEffect(() => { void loadSettings(); }, [loadSettings]);
@@ -1110,8 +1111,8 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 />
               </div>
 
-              {/* Incomplete end-of-shift checks: block, or override with a reason */}
-              {hasIncompleteEquipmentChecks && (
+              {/* Enforcement ON: block, or override with a logged reason. */}
+              {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
                 <div className="p-2 rounded-md border border-red-500/20 bg-red-500/5 space-y-2">
                   <label className="flex items-center gap-2 text-xs font-medium text-red-700 dark:text-red-300 cursor-pointer">
                     <input
@@ -1139,6 +1140,21 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 </div>
               )}
 
+              {/* Enforcement OFF (default): allow, but surface the feature. */}
+              {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks && (
+                <div className="p-2 rounded-md border border-sky-500/20 bg-sky-500/5 space-y-1">
+                  <p className="text-xs font-medium text-sky-700 dark:text-sky-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Some end-of-shift equipment checks aren&apos;t complete.
+                  </p>
+                  <p className="text-xs text-theme-text-muted">
+                    You can still finalize. Departments can <strong>require end-of-shift checks before
+                    finalizing</strong> so every apparatus is verified ready and accountability is
+                    documented{canManage ? ' — turn it on in Scheduling Settings → Close-out rules.' : '. Ask an admin to enable it in Scheduling Settings.'}
+                  </p>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 justify-end pt-1">
                 <button
                   onClick={() => setShowFinalizeChecklist(false)}
@@ -1148,7 +1164,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 </button>
                 <button
                   onClick={() => { void handleFinalize(); }}
-                  disabled={pending.finalizing || (hasIncompleteEquipmentChecks && !overrideChecks)}
+                  disabled={pending.finalizing || (requireEndOfShiftChecks && hasIncompleteEquipmentChecks && !overrideChecks)}
                   className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition-colors"
                 >
                   {pending.finalizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}

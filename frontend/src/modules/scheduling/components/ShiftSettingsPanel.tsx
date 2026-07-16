@@ -352,10 +352,24 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               <h3 className="text-base font-semibold text-theme-text-primary">
                 Shift close-out rules
               </h3>
+              {!feature.require_end_of_shift_checks && (
+                <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-3 text-sm text-theme-text-secondary">
+                  <p className="font-medium text-sky-700 dark:text-sky-300">Tip: require end-of-shift checks before finalizing</p>
+                  <p className="mt-0.5">
+                    It&apos;s off by default. Turning it on makes sure every apparatus is
+                    verified ready at the end of each shift, documents accountability, and
+                    keeps equipment-compliance records complete — officers can still override
+                    with a logged reason when needed.
+                  </p>
+                </div>
+              )}
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-theme-text-primary">
+                  <p className="text-sm font-medium text-theme-text-primary flex items-center gap-2">
                     Require end-of-shift equipment checks
+                    <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-sky-500/10 text-sky-700 dark:text-sky-300">
+                      Recommended
+                    </span>
                   </p>
                   <p className="text-sm text-theme-text-muted mt-0.5">
                     Block finalizing a shift while any end-of-shift check is
