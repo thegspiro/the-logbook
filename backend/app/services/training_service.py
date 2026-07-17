@@ -547,7 +547,11 @@ class TrainingService:
         if adjusted_required > 0:
             pct = min(completed_value / adjusted_required * 100, 100)
         else:
-            pct = 100.0
+            # No positive target (an unset/misconfigured hours target, or a
+            # courses requirement with no courses linked): met only if something
+            # matching was actually completed. Defaulting to 100% here showed
+            # members compliant for annual renewals they had never taken.
+            pct = 100.0 if completed_value > 0 else 0.0
 
         if cert_expired:
             pct = 0.0
@@ -737,21 +741,31 @@ class TrainingService:
                         due_date=requirement.due_date,
                     )
 
+            # A requirement with no positive target (required_hours unset/0) must
+            # NOT read as satisfied by default — only an actual matching
+            # completion counts. Previously "else True" showed a member compliant
+            # for, e.g., an annual renewal they had never taken.
             is_complete = (
-                completed_value >= required_value if required_value > 0 else True
+                completed_value >= required_value
+                if required_value > 0
+                else completed_value > 0
             )
 
         # ---- COURSES requirements ----
         elif req_type == RequirementType.COURSES.value:
             course_ids = requirement.required_courses or []
             if not course_ids:
+                # No courses are linked to this requirement, so there is nothing a
+                # member can complete — it can never be genuinely satisfied. Report
+                # it incomplete rather than vacuously "done" (which showed every
+                # member compliant for a misconfigured requirement).
                 return RequirementProgress(
                     requirement_id=requirement.id,
                     requirement_name=requirement.name,
                     required_hours=0,
                     completed_hours=0,
-                    percentage_complete=100.0,
-                    is_complete=True,
+                    percentage_complete=0.0,
+                    is_complete=False,
                     due_date=requirement.due_date,
                 )
 
@@ -838,7 +852,9 @@ class TrainingService:
                 )
 
             is_complete = (
-                completed_value >= required_value if required_value > 0 else True
+                completed_value >= required_value
+                if required_value > 0
+                else completed_value > 0
             )
 
         # ---- CALLS requirements ----
@@ -866,7 +882,9 @@ class TrainingService:
                 )
 
             is_complete = (
-                completed_value >= required_value if required_value > 0 else True
+                completed_value >= required_value
+                if required_value > 0
+                else completed_value > 0
             )
 
         # ---- Fallback (skills_evaluation, checklist, etc.) ----
@@ -901,9 +919,13 @@ class TrainingService:
                 completed_value = 0
                 required_value = 1
 
-        percentage = (
-            (completed_value / required_value * 100) if required_value > 0 else 100
-        )
+        if required_value > 0:
+            percentage = completed_value / required_value * 100
+        else:
+            # No positive target: 100% only if something matching was actually
+            # completed, otherwise 0% — never a default "compliant" for a member
+            # with nothing on file.
+            percentage = 100.0 if completed_value > 0 else 0.0
         percentage = min(percentage, 100.0)
 
         return RequirementProgress(
