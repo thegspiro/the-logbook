@@ -165,6 +165,24 @@ const SchedulingPage: React.FC = () => {
   const tz = useTimezone();
   const { resolvedTheme } = useTheme();
   const canManage = checkPermission("scheduling.manage");
+
+  // Expiring-item count for the "Supply" admin card badge.
+  const [supplyCount, setSupplyCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!canManage) return;
+    let cancelled = false;
+    void schedulingService
+      .getSupplyExpiringItems(30)
+      .then((res) => {
+        if (!cancelled) setSupplyCount(res.total);
+      })
+      .catch(() => {
+        /* non-critical — badge just won't show */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage]);
   const [shiftReportsEnabled, setShiftReportsEnabled] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -1069,6 +1087,13 @@ const SchedulingPage: React.FC = () => {
                         {link.description}
                       </p>
                     </div>
+                    {link.path === '/scheduling/supply/expiring' &&
+                      supplyCount != null &&
+                      supplyCount > 0 && (
+                        <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[11px] font-semibold shrink-0">
+                          {supplyCount}
+                        </span>
+                      )}
                     <ExternalLink className="w-3.5 h-3.5 text-theme-text-muted sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0" />
                   </Link>
                 );

@@ -3,11 +3,11 @@
  *
  * Shows checklist items deployed on apparatus that are expiring soon (or
  * already expired), alongside the ready replacement stock on hand for each.
- * Lets a supply officer see at a glance what needs replacing and whether a
- * fresh unit is ready to swap onto the vehicle.
+ * A supply officer can filter/sort the worklist and add replacement stock
+ * inline without leaving the page.
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -15,23 +15,47 @@ import {
   Loader2,
   PackageCheck,
   PackageX,
+  PackagePlus,
   Truck,
   ChevronRight,
+  X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { SupplyExpiringItem } from '../../modules/scheduling/types/equipmentCheck';
+import { inventoryService } from '../../services/inventoryService';
+import type { InventoryLotCreate } from '../../services/eventServices';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 
 const WINDOW_OPTIONS = [30, 60, 90];
 
+type Filter = 'all' | 'restock' | 'expired';
+type SortBy = 'soonest' | 'apparatus';
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'restock', label: 'Needs restock' },
+  { key: 'expired', label: 'Expired' },
+];
+
+function emptyLotForm(): InventoryLotCreate {
+  return { lot_number: '', expiration_date: '', quantity: 1, received_date: '', notes: '' };
+}
+
 const SupplyExpiringPage: React.FC = () => {
   const tz = useTimezone();
   const [daysAhead, setDaysAhead] = useState(30);
   const [items, setItems] = useState<SupplyExpiringItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('soonest');
+
+  // Inline add-stock modal
+  const [stockTarget, setStockTarget] = useState<SupplyExpiringItem | null>(null);
+  const [lotForm, setLotForm] = useState<InventoryLotCreate>(emptyLotForm);
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async (window: number) => {
     setLoading(true);
@@ -51,6 +75,62 @@ const SupplyExpiringPage: React.FC = () => {
 
   const withStock = items.filter((i) => i.readyStock > 0).length;
   const withoutStock = items.filter((i) => i.readyStock <= 0).length;
+
+  const visibleItems = useMemo(() => {
+    let list = items;
+    if (filter === 'restock') list = list.filter((i) => i.readyStock <= 0);
+    else if (filter === 'expired') list = list.filter((i) => i.isExpired);
+
+    const sorted = [...list];
+    if (sortBy === 'apparatus') {
+      sorted.sort((a, b) => {
+        const an = a.apparatusName || 'zzz';
+        const bn = b.apparatusName || 'zzz';
+        if (an !== bn) return an.localeCompare(bn);
+        return (a.daysUntilExpiration ?? 0) - (b.daysUntilExpiration ?? 0);
+      });
+    } else {
+      // Soonest first (expired items sort to the top via negative days).
+      sorted.sort(
+        (a, b) => (a.daysUntilExpiration ?? 0) - (b.daysUntilExpiration ?? 0),
+      );
+    }
+    return sorted;
+  }, [items, filter, sortBy]);
+
+  const openAddStock = (item: SupplyExpiringItem) => {
+    setStockTarget(item);
+    setLotForm({
+      ...emptyLotForm(),
+      lot_number: '',
+      quantity: 1,
+    });
+  };
+
+  const submitAddStock = async () => {
+    if (!stockTarget?.inventoryItemId) return;
+    if (lotForm.quantity == null || lotForm.quantity < 1) {
+      toast.error('Enter a quantity of at least 1');
+      return;
+    }
+    setSaving(true);
+    try {
+      await inventoryService.addItemLot(stockTarget.inventoryItemId, {
+        lot_number: lotForm.lot_number?.trim() || undefined,
+        expiration_date: lotForm.expiration_date || undefined,
+        quantity: Number(lotForm.quantity),
+        received_date: lotForm.received_date || undefined,
+        notes: lotForm.notes?.trim() || undefined,
+      });
+      toast.success('Stock added');
+      setStockTarget(null);
+      void load(daysAhead);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to add stock'));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
@@ -80,19 +160,51 @@ const SupplyExpiringPage: React.FC = () => {
       </div>
 
       {!loading && items.length > 0 && (
-        <div className="flex flex-wrap gap-3 text-sm">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-theme-surface border border-theme-surface-border px-3 py-1 text-theme-text-muted">
-            <Clock className="w-4 h-4" /> {items.length} expiring
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1">
-            <PackageCheck className="w-4 h-4" /> {withStock} with ready stock
-          </span>
-          {withoutStock > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-3 py-1">
-              <PackageX className="w-4 h-4" /> {withoutStock} need restock
+        <>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-theme-surface border border-theme-surface-border px-3 py-1 text-theme-text-muted">
+              <Clock className="w-4 h-4" /> {items.length} expiring
             </span>
-          )}
-        </div>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1">
+              <PackageCheck className="w-4 h-4" /> {withStock} with ready stock
+            </span>
+            {withoutStock > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 px-3 py-1">
+                <PackageX className="w-4 h-4" /> {withoutStock} need restock
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="tab-scroll flex items-center gap-1 rounded-lg border border-theme-surface-border p-1">
+              {FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => setFilter(f.key)}
+                  className={`px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                    filter === f.key
+                      ? 'bg-theme-surface-secondary text-theme-text-primary'
+                      : 'text-theme-text-muted hover:text-theme-text-primary'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 text-sm text-theme-text-muted">
+              Sort
+              <select
+                className="form-input py-1 text-sm"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortBy)}
+              >
+                <option value="soonest">Soonest expiry</option>
+                <option value="apparatus">By apparatus</option>
+              </select>
+            </label>
+          </div>
+        </>
       )}
 
       {loading ? (
@@ -106,9 +218,13 @@ const SupplyExpiringPage: React.FC = () => {
             Nothing expiring in the next {daysAhead} days. All stocked up.
           </p>
         </div>
+      ) : visibleItems.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-theme-surface-border p-8 text-center text-sm text-theme-text-muted">
+          No items match this filter.
+        </div>
       ) : (
         <ul className="space-y-2">
-          {items.map((item) => {
+          {visibleItems.map((item) => {
             const days = item.daysUntilExpiration;
             return (
               <li
@@ -147,7 +263,7 @@ const SupplyExpiringPage: React.FC = () => {
                       {item.lotNumber && <span>· Lot {item.lotNumber}</span>}
                     </div>
                   </div>
-                  <div className="shrink-0 text-right">
+                  <div className="shrink-0 flex flex-col items-end gap-1.5">
                     {item.readyStock > 0 ? (
                       <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-3 py-1 text-sm font-medium">
                         <PackageCheck className="w-4 h-4" /> {item.readyStock} ready
@@ -157,16 +273,27 @@ const SupplyExpiringPage: React.FC = () => {
                         <PackageX className="w-4 h-4" /> No stock
                       </span>
                     )}
-                    {item.inventoryItemId && (
-                      <div className="mt-1">
+                    {item.inventoryItemId ? (
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => openAddStock(item)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          <PackagePlus className="w-3.5 h-3.5" /> Add stock
+                        </button>
                         <Link
                           to={`/inventory/items/${item.inventoryItemId}`}
-                          className="inline-flex items-center gap-0.5 text-xs text-blue-600 hover:text-blue-700"
+                          className="inline-flex items-center gap-0.5 text-xs text-theme-text-muted hover:text-theme-text-primary"
                         >
-                          {item.readyStock > 0 ? 'Manage stock' : 'Add stock'}
+                          Manage
                           <ChevronRight className="w-3 h-3" />
                         </Link>
                       </div>
+                    ) : (
+                      <span className="text-[11px] text-theme-text-muted italic">
+                        Not linked to inventory
+                      </span>
                     )}
                   </div>
                 </div>
@@ -187,6 +314,92 @@ const SupplyExpiringPage: React.FC = () => {
             );
           })}
         </ul>
+      )}
+
+      {/* Inline add-stock modal */}
+      {stockTarget && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-theme-surface rounded-t-2xl sm:rounded-2xl border border-theme-surface-border shadow-xl">
+            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-theme-text-primary">Add ready stock</h3>
+                <p className="text-xs text-theme-text-muted truncate">{stockTarget.itemName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStockTarget(null)}
+                className="p-1.5 text-theme-text-muted hover:text-theme-text-primary"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="px-4 py-4 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Lot Number</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. LOT-4823"
+                    value={lotForm.lot_number ?? ''}
+                    onChange={(e) => setLotForm((p) => ({ ...p, lot_number: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Quantity</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-input"
+                    value={lotForm.quantity}
+                    onChange={(e) => setLotForm((p) => ({ ...p, quantity: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Expiration</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={lotForm.expiration_date ?? ''}
+                    onChange={(e) => setLotForm((p) => ({ ...p, expiration_date: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Received</label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={lotForm.received_date ?? ''}
+                    onChange={(e) => setLotForm((p) => ({ ...p, received_date: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void submitAddStock()}
+                  className="btn-primary btn-sm inline-flex items-center gap-1 disabled:opacity-50"
+                >
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <PackagePlus className="w-4 h-4" />
+                  )}
+                  Add stock
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStockTarget(null)}
+                  className="btn-secondary btn-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

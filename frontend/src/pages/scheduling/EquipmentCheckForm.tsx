@@ -1421,6 +1421,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               )}
               {renderExpirationBadge(item)}
             </div>
+            {swapOverrides[item.id] && (
+              <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
+                <PackageCheck className="h-3 w-3" aria-hidden="true" />
+                Swapped in
+                {swapOverrides[item.id]?.lotNumber
+                  ? ` Lot ${swapOverrides[item.id]?.lotNumber}`
+                  : ' fresh stock'}
+                {swapOverrides[item.id]?.expirationDate
+                  ? ` · exp ${formatDate(swapOverrides[item.id]?.expirationDate, tz)}`
+                  : ''}
+              </p>
+            )}
             {item.description && (
               <p className={`mt-0.5 text-xs text-theme-text-muted ${isQuantity ? '' : 'ml-6'}`}>
                 {item.description}
@@ -1482,16 +1494,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               </span>
             )}
           </button>
-          {item.inventoryItemId && item.hasExpiration && (
-            <button
-              type="button"
-              onClick={() => { void openSwap(item); }}
-              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors min-h-[36px] font-medium"
-            >
-              <Repeat className="h-3 w-3" aria-hidden="true" />
-              Swap
-            </button>
-          )}
+          {item.inventoryItemId &&
+            (getExpirationStatus(item) === 'expired' ||
+              getExpirationStatus(item) === 'expiring_soon') && (
+              <button
+                type="button"
+                onClick={() => { void openSwap(item); }}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors min-h-[36px] font-medium"
+              >
+                <Repeat className="h-3 w-3" aria-hidden="true" />
+                Swap
+              </button>
+            )}
         </div>
         {showNotesField && (
           <textarea

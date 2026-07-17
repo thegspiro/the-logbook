@@ -115,18 +115,30 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
   const today = getTodayLocalDate(tz);
   const totalReady = lots.reduce((sum, l) => sum + l.quantity, 0);
 
-  const expiryState = (lot: InventoryLot): 'expired' | 'soon' | 'ok' => {
-    if (!lot.expiration_date) return 'ok';
+  const daysLeft = (lot: InventoryLot): number | null => {
+    if (!lot.expiration_date) return null;
     const day = 24 * 60 * 60 * 1000;
-    const diffDays = Math.round(
+    return Math.round(
       (new Date(`${lot.expiration_date}T00:00:00`).getTime() -
         new Date(`${today}T00:00:00`).getTime()) /
         day,
     );
-    if (diffDays < 0) return 'expired';
-    if (diffDays <= 30) return 'soon';
+  };
+
+  const expiryState = (lot: InventoryLot): 'expired' | 'soon' | 'ok' => {
+    const d = daysLeft(lot);
+    if (d === null) return 'ok';
+    if (d < 0) return 'expired';
+    if (d <= 30) return 'soon';
     return 'ok';
   };
+
+  const daysLeftLabel = (d: number): string =>
+    d < 0
+      ? `${Math.abs(d)}d ago`
+      : d === 0
+        ? 'today'
+        : `${d}d left`;
 
   if (loading) {
     return (
@@ -265,6 +277,12 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                         {state === 'soon' && <Clock className="w-3 h-3" />}
                         {state === 'expired' ? 'Expired ' : 'Exp '}
                         {formatDate(lot.expiration_date, tz)}
+                        {(() => {
+                          const d = daysLeft(lot);
+                          return d === null ? null : (
+                            <span className="opacity-70">· {daysLeftLabel(d)}</span>
+                          );
+                        })()}
                       </span>
                     )}
                   </div>

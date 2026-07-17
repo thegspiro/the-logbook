@@ -18,7 +18,9 @@ interface InventoryItemPickerProps {
 
 const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChange }) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ id: string; name: string }[]>([]);
+  const [results, setResults] = useState<
+    { id: string; name: string; sub?: string }[]
+  >([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
@@ -73,7 +75,14 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
     void inventoryService
       .getItems({ search: q.trim(), limit: 10, active_only: true })
       .then((res) => {
-        setResults(res.items.map((i) => ({ id: i.id, name: i.name })));
+        setResults(
+          res.items.map((i) => {
+            const sub = [i.manufacturer, i.model_number || i.serial_number]
+              .filter(Boolean)
+              .join(' · ');
+            return { id: i.id, name: i.name, ...(sub ? { sub } : {}) };
+          }),
+        );
       })
       .catch(() => setResults([]))
       .finally(() => setLoading(false));
@@ -139,9 +148,12 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
                   setQuery('');
                   setResults([]);
                 }}
-                className="block w-full px-3 py-2 text-left text-sm text-theme-text-primary hover:bg-theme-surface-secondary"
+                className="block w-full px-3 py-2 text-left hover:bg-theme-surface-secondary"
               >
-                {r.name}
+                <span className="block text-sm text-theme-text-primary">{r.name}</span>
+                {r.sub && (
+                  <span className="block text-xs text-theme-text-muted">{r.sub}</span>
+                )}
               </button>
             ))
           )}
