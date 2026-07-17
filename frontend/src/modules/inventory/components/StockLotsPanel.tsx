@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, AlertTriangle, Loader2, PackagePlus } from 'lucide-react';
+import { Plus, Trash2, AlertTriangle, Clock, Loader2, PackagePlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
 import type { InventoryLot, InventoryLotCreate } from '@/services/eventServices';
@@ -91,16 +91,24 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
     }
   };
 
-  const adjustQuantity = async (lot: InventoryLot, delta: number) => {
-    const next = Math.max(0, lot.quantity + delta);
-    if (next === lot.quantity) return;
-    // Optimistic update; revert on failure.
-    setLots((prev) => prev.map((l) => (l.id === lot.id ? { ...l, quantity: next } : l)));
+  const adjustQuantity = async (lotId: string, delta: number) => {
+    // Compute the new quantity from the latest state (not a render-time
+    // closure) so rapid clicks don't stack onto a stale base.
+    let target: number | null = null;
+    setLots((prev) =>
+      prev.map((l) => {
+        if (l.id !== lotId) return l;
+        target = Math.max(0, l.quantity + delta);
+        return { ...l, quantity: target };
+      }),
+    );
+    if (target === null) return;
     try {
-      await inventoryService.updateItemLot(lot.id, { quantity: next });
+      await inventoryService.updateItemLot(lotId, { quantity: target });
     } catch (err: unknown) {
-      setLots((prev) => prev.map((l) => (l.id === lot.id ? { ...l, quantity: lot.quantity } : l)));
       toast.error(getErrorMessage(err, 'Failed to update quantity'));
+      // Re-sync from the server rather than guessing the pre-click value.
+      void load();
     }
   };
 
@@ -109,7 +117,14 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
 
   const expiryState = (lot: InventoryLot): 'expired' | 'soon' | 'ok' => {
     if (!lot.expiration_date) return 'ok';
-    if (lot.expiration_date < today) return 'expired';
+    const day = 24 * 60 * 60 * 1000;
+    const diffDays = Math.round(
+      (new Date(`${lot.expiration_date}T00:00:00`).getTime() -
+        new Date(`${today}T00:00:00`).getTime()) /
+        day,
+    );
+    if (diffDays < 0) return 'expired';
+    if (diffDays <= 30) return 'soon';
     return 'ok';
   };
 
@@ -226,7 +241,9 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                 className={`flex items-center justify-between gap-3 rounded-lg border p-3 ${
                   state === 'expired'
                     ? 'border-red-300 bg-red-50 dark:border-red-900/50 dark:bg-red-900/10'
-                    : 'border-theme-surface-border bg-theme-surface'
+                    : state === 'soon'
+                      ? 'border-yellow-300 bg-yellow-50 dark:border-yellow-900/50 dark:bg-yellow-900/10'
+                      : 'border-theme-surface-border bg-theme-surface'
                 }`}
               >
                 <div className="min-w-0">
@@ -239,10 +256,13 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                         className={`inline-flex items-center gap-1 text-xs ${
                           state === 'expired'
                             ? 'text-red-600 dark:text-red-400 font-medium'
-                            : 'text-theme-text-muted'
+                            : state === 'soon'
+                              ? 'text-yellow-700 dark:text-yellow-400 font-medium'
+                              : 'text-theme-text-muted'
                         }`}
                       >
                         {state === 'expired' && <AlertTriangle className="w-3 h-3" />}
+                        {state === 'soon' && <Clock className="w-3 h-3" />}
                         {state === 'expired' ? 'Expired ' : 'Exp '}
                         {formatDate(lot.expiration_date, tz)}
                       </span>
@@ -258,7 +278,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                       <button
                         type="button"
                         aria-label="Decrease quantity"
-                        onClick={() => void adjustQuantity(lot, -1)}
+                        onClick={() => void adjustQuantity(lot.id, -1)}
                         className="btn-icon"
                       >
                         −
@@ -269,7 +289,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
                       <button
                         type="button"
                         aria-label="Increase quantity"
-                        onClick={() => void adjustQuantity(lot, 1)}
+                        onClick={() => void adjustQuantity(lot.id, 1)}
                         className="btn-icon"
                       >
                         +

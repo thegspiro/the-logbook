@@ -3941,22 +3941,6 @@ class InventoryService:
         )
         return [(row[0], row[1]) for row in result.all()]
 
-    async def consume_lot_unit(
-        self, lot_id: str, organization_id: str, quantity: int = 1
-    ) -> Optional[InventoryLot]:
-        """Decrement a lot's on-hand quantity when stock is used/swapped.
-
-        Raises ValueError if the lot lacks enough stock.
-        """
-        lot = await self._get_lot(lot_id, organization_id)
-        if not lot:
-            return None
-        if lot.quantity < quantity:
-            raise ValueError("Not enough stock in this lot")
-        lot.quantity -= quantity
-        await self.db.flush()
-        return lot
-
     async def get_overdue_checkouts_for_alerts(
         self,
         organization_id: UUID,

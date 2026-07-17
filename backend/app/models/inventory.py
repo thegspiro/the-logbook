@@ -541,7 +541,9 @@ class InventoryLot(Base):
     item = relationship("InventoryItem", back_populates="lots")
 
     __table_args__ = (
-        Index("idx_inventory_lots_item", "inventory_item_id"),
+        # organization_id and inventory_item_id are already single-column
+        # indexed via index=True; this composite serves the "expiring stock"
+        # lookup (org + expiration window).
         Index("idx_inventory_lots_org_exp", "organization_id", "expiration_date"),
     )
 

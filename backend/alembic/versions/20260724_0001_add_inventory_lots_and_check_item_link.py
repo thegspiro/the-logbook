@@ -57,9 +57,6 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "idx_inventory_lots_item", "inventory_lots", ["inventory_item_id"]
-    )
-    op.create_index(
         "idx_inventory_lots_org_exp",
         "inventory_lots",
         ["organization_id", "expiration_date"],
@@ -104,5 +101,4 @@ def downgrade() -> None:
     op.drop_index("ix_inventory_lots_inventory_item_id", table_name="inventory_lots")
     op.drop_index("ix_inventory_lots_organization_id", table_name="inventory_lots")
     op.drop_index("idx_inventory_lots_org_exp", table_name="inventory_lots")
-    op.drop_index("idx_inventory_lots_item", table_name="inventory_lots")
     op.drop_table("inventory_lots")

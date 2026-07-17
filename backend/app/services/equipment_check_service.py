@@ -1355,11 +1355,17 @@ class EquipmentCheckService:
         if not item:
             return None
 
+        # Lock the lot row for the read-check-decrement so two concurrent
+        # swaps of the same unit can't both pass the stock guard and
+        # over-consume (matches the with_for_update pattern used across the
+        # inventory service's stock mutations).
         lot = await self.db.scalar(
-            select(InventoryLot).where(
+            select(InventoryLot)
+            .where(
                 InventoryLot.id == inventory_lot_id,
                 InventoryLot.organization_id == organization_id,
             )
+            .with_for_update()
         )
         if lot is None:
             raise ValueError("Stock lot not found")

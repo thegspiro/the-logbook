@@ -23,6 +23,26 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
   const [loading, setLoading] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Cancel any pending debounced search when unmounting.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  // Close the results dropdown when clicking outside the picker.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
 
   // Resolve the display name for an already-linked item.
   useEffect(() => {
@@ -90,7 +110,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({ value, onChan
   }
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <div className="flex items-center gap-2 rounded-md border border-theme-surface-border bg-theme-surface px-3 py-2">
         <Search className="h-4 w-4 text-theme-text-muted shrink-0" />
         <input

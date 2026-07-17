@@ -364,7 +364,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     setSwapLoading(true);
     try {
       const lots = await inventoryService.getItemLots(item.inventoryItemId);
-      setSwapLots(lots.filter((l) => l.quantity > 0));
+      // Freshest (latest expiration) first — that's the best unit to swap in.
+      const inStock = lots
+        .filter((l) => l.quantity > 0)
+        .sort((a, b) => (b.expiration_date ?? '').localeCompare(a.expiration_date ?? ''));
+      setSwapLots(inStock);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load ready stock'));
     } finally {
@@ -752,8 +756,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       const items: CheckItemResultSubmit[] = [];
       for (const compartment of compartments) {
-        for (const item of compartment.items) {
-          if (item.checkType === 'header') continue;
+        for (const rawItem of compartment.items) {
+          if (rawItem.checkType === 'header') continue;
+          // Reflect any in-check lot swap so the recorded snapshot carries the
+          // fresh unit's lot/expiration rather than the pre-swap values.
+          const item = applyOverride(rawItem);
           const result = results[item.id];
 
           // Detect serial/lot updates for date_lot items
@@ -860,8 +867,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const fallbackItems: CheckItemResultSubmit[] = [];
         const fallbackPhotos: { itemId: string; files: File[] }[] = [];
         for (const compartment of compartments) {
-          for (const item of compartment.items) {
-            if (item.checkType === 'header') continue;
+          for (const rawItem of compartment.items) {
+            if (rawItem.checkType === 'header') continue;
+            const item = applyOverride(rawItem);
             const result = results[item.id];
             if (result?.photoFiles && result.photoFiles.length > 0) {
               fallbackPhotos.push({ itemId: item.id, files: result.photoFiles });
