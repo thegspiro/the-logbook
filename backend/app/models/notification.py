@@ -293,6 +293,13 @@ class DepartmentMessage(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     expires_at = Column(DateTime(timezone=True), nullable=True)
+    # Soft delete: preserves read/acknowledgment records (compliance evidence)
+    # instead of cascade-removing them on a hard DELETE.
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    # Deferred publish time. A future value means the message is not yet live
+    # (hidden from inboxes, not yet escalated); the publish task clears this to
+    # NULL when it goes live, so NULL == published/immediate.
+    scheduled_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -308,6 +315,16 @@ class DepartmentMessage(Base):
         Index("idx_dept_msg_org", "organization_id"),
         Index("idx_dept_msg_org_active", "organization_id", "is_active"),
         Index("idx_dept_msg_org_pinned", "organization_id", "is_pinned"),
+        # Inbox/unread queries filter on org + is_active + expires_at, so index
+        # the trailing expiry to keep the active-message scan cheap.
+        Index(
+            "idx_dept_msg_org_active_expires",
+            "organization_id",
+            "is_active",
+            "expires_at",
+        ),
+        # The publish task scans all orgs for due scheduled messages.
+        Index("idx_dept_msg_scheduled_at", "scheduled_at"),
     )
 
     def __repr__(self):

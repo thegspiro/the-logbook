@@ -277,6 +277,11 @@ class EmailService:
         self.organization = organization
         self._smtp_config = self._get_smtp_config()
         self._cloudflare_config = self._get_cloudflare_config()
+        # ID of the MessageHistory row written by the most recent send_email
+        # call on this instance. Lets callers fetch the exact record they just
+        # created instead of guessing "the latest row", which races under
+        # concurrent sends.
+        self.last_message_history_id: Optional[str] = None
 
     def _make_message_id(self) -> str:
         """Generate a unique RFC 5322 Message-ID header value.
@@ -1014,6 +1019,7 @@ class EmailService:
             )
         db.add(history)
         await db.flush()
+        self.last_message_history_id = history.id
 
     async def render_ballot_notification(
         self,

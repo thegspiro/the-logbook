@@ -557,6 +557,7 @@ export interface DepartmentMessageRecord {
   requires_acknowledgment: boolean;
   posted_by?: string;
   expires_at?: string;
+  scheduled_at?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -582,11 +583,32 @@ export interface InboxMessage {
 
 export interface MessageStats {
   message_id: string;
+  total_targeted: number;
   total_reads: number;
   total_acknowledged: number;
 }
 
+export interface AckReportRecipient {
+  user_id: string;
+  name: string;
+  status?: string;
+  is_read: boolean;
+  read_at?: string;
+  is_acknowledged: boolean;
+  acknowledged_at?: string;
+}
+
+export interface AcknowledgmentReport {
+  message_id: string;
+  requires_acknowledgment: boolean;
+  total_targeted: number;
+  total_read: number;
+  total_acknowledged: number;
+  recipients: AckReportRecipient[];
+}
+
 export interface RoleOption {
+  id: string;
   name: string;
   slug: string;
 }

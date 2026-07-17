@@ -4,21 +4,25 @@
  * Create a department message/announcement with audience targeting.
  *
  * Targeting contract: the backend's _is_targeted matches target_roles against
- * the member's role *names* and target_statuses against the member's status
- * value, so this form submits role names (not slugs) and status values. Getting
- * this wrong would silently deliver a role-targeted message to nobody.
+ * the member's role *ids* (rename-safe) and target_statuses against the
+ * member's status value, so this form submits role ids and status values.
+ * Getting this wrong would silently deliver a role-targeted message to nobody.
  */
 
 import React, { useEffect, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { messagesService, userService } from '../../../services/api';
-import type { RoleOption } from '../../../services/adminServices';
+import type { RoleOption, DepartmentMessageRecord } from '../../../services/adminServices';
 import type { User } from '../../../types/user';
 import { UserStatus } from '../../../constants/enums';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatForDateTimeInput, localToUTC } from '../../../utils/dateFormatting';
 import toast from 'react-hot-toast';
 
 interface MessageComposeFormProps {
-  onCreated: () => void;
+  /** When provided, the form edits this message instead of creating a new one. */
+  message?: DepartmentMessageRecord;
+  onSaved: () => void;
   onCancel: () => void;
 }
 
@@ -37,18 +41,25 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: UserStatus.RETIRED, label: 'Retired' },
 ];
 
-const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCancel }) => {
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [priority, setPriority] = useState('normal');
-  const [targetType, setTargetType] = useState<TargetType>('all');
-  const [targetRoles, setTargetRoles] = useState<string[]>([]);
-  const [targetStatuses, setTargetStatuses] = useState<string[]>([]);
-  const [targetMembers, setTargetMembers] = useState<string[]>([]);
-  const [isPinned, setIsPinned] = useState(false);
-  const [isPersistent, setIsPersistent] = useState(false);
-  const [requiresAck, setRequiresAck] = useState(false);
-  const [expiresAt, setExpiresAt] = useState('');
+const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ message, onSaved, onCancel }) => {
+  const tz = useTimezone();
+  const isEditing = Boolean(message);
+  const [title, setTitle] = useState(message?.title ?? '');
+  const [body, setBody] = useState(message?.body ?? '');
+  const [priority, setPriority] = useState<string>(message?.priority ?? 'normal');
+  const [targetType, setTargetType] = useState<TargetType>(message?.target_type ?? 'all');
+  const [targetRoles, setTargetRoles] = useState<string[]>(message?.target_roles ?? []);
+  const [targetStatuses, setTargetStatuses] = useState<string[]>(message?.target_statuses ?? []);
+  const [targetMembers, setTargetMembers] = useState<string[]>(message?.target_member_ids ?? []);
+  const [isPinned, setIsPinned] = useState(message?.is_pinned ?? false);
+  const [isPersistent, setIsPersistent] = useState(message?.is_persistent ?? false);
+  const [requiresAck, setRequiresAck] = useState(message?.requires_acknowledgment ?? false);
+  const [expiresAt, setExpiresAt] = useState(
+    message?.expires_at ? formatForDateTimeInput(message.expires_at, tz) : '',
+  );
+  const [scheduledAt, setScheduledAt] = useState(
+    message?.scheduled_at ? formatForDateTimeInput(message.scheduled_at, tz) : '',
+  );
 
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [members, setMembers] = useState<User[]>([]);
@@ -93,9 +104,32 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCa
     setSubmitting(true);
     setError(null);
     try {
-      // Build the payload conditionally — omitting optional keys rather than
-      // sending undefined (exactOptionalPropertyTypes) and only attaching the
-      // audience list relevant to the chosen target type.
+      if (isEditing && message) {
+        // On edit, send every target list explicitly (null when not applicable)
+        // so switching the audience type clears the now-irrelevant targeting
+        // instead of leaving stale role/status/member arrays behind.
+        await messagesService.updateMessage(message.id, {
+          title: title.trim(),
+          body: body.trim(),
+          priority,
+          target_type: targetType,
+          target_roles: targetType === 'roles' ? targetRoles : null,
+          target_statuses: targetType === 'statuses' ? targetStatuses : null,
+          target_member_ids: targetType === 'members' ? targetMembers : null,
+          is_pinned: isPinned,
+          is_persistent: isPersistent,
+          requires_acknowledgment: requiresAck,
+          expires_at: expiresAt ? localToUTC(expiresAt, tz) : null,
+          scheduled_at: scheduledAt ? localToUTC(scheduledAt, tz) : null,
+        });
+        toast.success('Message updated');
+        onSaved();
+        return;
+      }
+
+      // Build the create payload conditionally — omitting optional keys rather
+      // than sending undefined (exactOptionalPropertyTypes) and only attaching
+      // the audience list relevant to the chosen target type.
       const payload: Parameters<typeof messagesService.createMessage>[0] = {
         title: title.trim(),
         body: body.trim(),
@@ -108,14 +142,19 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCa
       if (targetType === 'roles') payload.target_roles = targetRoles;
       if (targetType === 'statuses') payload.target_statuses = targetStatuses;
       if (targetType === 'members') payload.target_member_ids = targetMembers;
-      // datetime-local is local time; send a UTC ISO instant when provided.
-      if (expiresAt) payload.expires_at = new Date(expiresAt).toISOString();
+      // datetime-local is interpreted in the org timezone; send a UTC instant.
+      if (expiresAt) payload.expires_at = localToUTC(expiresAt, tz);
+      if (scheduledAt) payload.scheduled_at = localToUTC(scheduledAt, tz);
 
       await messagesService.createMessage(payload);
-      toast.success('Message posted');
-      onCreated();
+      toast.success(scheduledAt ? 'Message scheduled' : 'Message posted');
+      onSaved();
     } catch {
-      setError('Unable to post the message. Please try again.');
+      setError(
+        isEditing
+          ? 'Unable to save your changes. Please try again.'
+          : 'Unable to post the message. Please try again.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -204,12 +243,12 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCa
           <legend className="text-theme-text-secondary px-1 text-sm font-medium">Roles</legend>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {roles.map((r) => (
-              <label key={r.slug} className="flex items-center gap-2 text-sm">
+              <label key={r.id} className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   className={checkboxClass}
-                  checked={targetRoles.includes(r.name)}
-                  onChange={() => setTargetRoles((prev) => toggle(prev, r.name))}
+                  checked={targetRoles.includes(r.id)}
+                  onChange={() => setTargetRoles((prev) => toggle(prev, r.id))}
                 />
                 {r.name}
               </label>
@@ -295,17 +334,34 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCa
         </label>
       </div>
 
-      <div>
-        <label htmlFor="msg-expires" className={labelClass}>
-          Expires (optional)
-        </label>
-        <input
-          id="msg-expires"
-          type="datetime-local"
-          className={inputClass}
-          value={expiresAt}
-          onChange={(e) => setExpiresAt(e.target.value)}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="msg-schedule" className={labelClass}>
+            Schedule for later (optional)
+          </label>
+          <input
+            id="msg-schedule"
+            type="datetime-local"
+            className={inputClass}
+            value={scheduledAt}
+            onChange={(e) => setScheduledAt(e.target.value)}
+          />
+          <p className="text-theme-text-muted mt-1 text-xs">
+            Leave blank to publish immediately.
+          </p>
+        </div>
+        <div>
+          <label htmlFor="msg-expires" className={labelClass}>
+            Expires (optional)
+          </label>
+          <input
+            id="msg-expires"
+            type="datetime-local"
+            className={inputClass}
+            value={expiresAt}
+            onChange={(e) => setExpiresAt(e.target.value)}
+          />
+        </div>
       </div>
 
       <div className="flex justify-end gap-2 pt-2">
@@ -323,7 +379,7 @@ const MessageComposeForm: React.FC<MessageComposeFormProps> = ({ onCreated, onCa
           className="btn-info inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-          Post message
+          {isEditing ? 'Save changes' : scheduledAt ? 'Schedule message' : 'Post message'}
         </button>
       </div>
     </form>

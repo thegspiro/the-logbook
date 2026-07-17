@@ -142,6 +142,17 @@ const ContactInfoSection: React.FC<ContactInfoSectionProps> = ({
                   Email notifications
                 </span>
               </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.notification_preferences?.sms_notifications}
+                  onChange={() => onNotificationToggle("sms_notifications")}
+                  className="form-checkbox border-theme-surface-border"
+                />
+                <span className="ml-2 text-sm text-theme-text-secondary">
+                  Urgent text messages
+                </span>
+              </label>
             </div>
           </div>
 

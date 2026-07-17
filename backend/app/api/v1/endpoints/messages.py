@@ -7,7 +7,14 @@ communications. Visible on member dashboards.
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+)
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +22,9 @@ from app.api.dependencies import PaginationParams, get_current_user, require_per
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found
+from app.models.notification import MessagePriority, MessageTargetType
 from app.models.user import User
+from app.services.message_delivery_service import deliver_department_message
 from app.services.messaging_service import MessagingService
 
 router = APIRouter()
@@ -28,9 +37,12 @@ router = APIRouter()
 
 class MessageCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
-    body: str = Field(..., min_length=1)
-    priority: str = Field(default="normal")
-    target_type: str = Field(default="all")
+    body: str = Field(..., min_length=1, max_length=20000)
+    # Typed as enums so an invalid priority/target_type is rejected with a 422
+    # at the schema layer rather than surfacing as a raw ValueError from the
+    # service.
+    priority: MessagePriority = MessagePriority.NORMAL
+    target_type: MessageTargetType = MessageTargetType.ALL
     target_roles: list[str] | None = None
     target_statuses: list[str] | None = None
     target_member_ids: list[str] | None = None
@@ -38,13 +50,15 @@ class MessageCreate(BaseModel):
     is_persistent: bool = False
     requires_acknowledgment: bool = False
     expires_at: datetime | None = None
+    # A future value defers publishing (and escalation) until that time.
+    scheduled_at: datetime | None = None
 
 
 class MessageUpdate(BaseModel):
-    title: str | None = None
-    body: str | None = None
-    priority: str | None = None
-    target_type: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    body: str | None = Field(default=None, min_length=1, max_length=20000)
+    priority: MessagePriority | None = None
+    target_type: MessageTargetType | None = None
     target_roles: list[str] | None = None
     target_statuses: list[str] | None = None
     target_member_ids: list[str] | None = None
@@ -53,6 +67,7 @@ class MessageUpdate(BaseModel):
     is_persistent: bool | None = None
     requires_acknowledgment: bool | None = None
     expires_at: datetime | None = None
+    scheduled_at: datetime | None = None
 
 
 class MessageResponse(BaseModel):
@@ -71,6 +86,7 @@ class MessageResponse(BaseModel):
     requires_acknowledgment: bool
     posted_by: str | None = None
     expires_at: str | None = None
+    scheduled_at: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
 
@@ -99,11 +115,32 @@ class InboxMessage(BaseModel):
 
 class MessageStatsResponse(BaseModel):
     message_id: str
+    total_targeted: int
     total_reads: int
     total_acknowledged: int
 
 
+class AckReportRecipient(BaseModel):
+    user_id: str
+    name: str
+    status: str | None = None
+    is_read: bool
+    read_at: str | None = None
+    is_acknowledged: bool
+    acknowledged_at: str | None = None
+
+
+class AckReportResponse(BaseModel):
+    message_id: str
+    requires_acknowledgment: bool
+    total_targeted: int
+    total_read: int
+    total_acknowledged: int
+    recipients: list[AckReportRecipient]
+
+
 class RoleOption(BaseModel):
+    id: str
     name: str
     slug: str
 
@@ -132,6 +169,7 @@ def _serialize_message(msg) -> dict:
         "requires_acknowledgment": msg.requires_acknowledgment,
         "posted_by": msg.posted_by,
         "expires_at": msg.expires_at.isoformat() if msg.expires_at else None,
+        "scheduled_at": msg.scheduled_at.isoformat() if msg.scheduled_at else None,
         "created_at": msg.created_at.isoformat() if msg.created_at else None,
         "updated_at": msg.updated_at.isoformat() if msg.updated_at else None,
     }
@@ -145,6 +183,8 @@ def _serialize_message(msg) -> dict:
 @router.get("", response_model=dict)
 async def list_messages(
     include_inactive: bool = Query(False),
+    search: str | None = Query(None),
+    priority: MessagePriority | None = Query(None),
     pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.manage")),
@@ -154,6 +194,8 @@ async def list_messages(
     messages, total = await service.get_messages(
         organization_id=current_user.organization_id,
         include_inactive=include_inactive,
+        search=search,
+        priority=priority.value if priority else None,
         skip=pagination.skip,
         limit=pagination.limit,
     )
@@ -166,6 +208,7 @@ async def list_messages(
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=MessageResponse)
 async def create_message(
     data: MessageCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.manage")),
 ):
@@ -185,6 +228,7 @@ async def create_message(
         is_persistent=data.is_persistent,
         requires_acknowledgment=data.requires_acknowledgment,
         expires_at=data.expires_at,
+        scheduled_at=data.scheduled_at,
     )
     if error:
         raise HTTPException(status_code=400, detail=error)
@@ -195,12 +239,21 @@ async def create_message(
         severity="info",
         event_data={
             "message_title": data.title,
-            "target_type": data.target_type,
-            "priority": data.priority,
+            "target_type": data.target_type.value,
+            "priority": data.priority.value,
         },
         user_id=str(current_user.id),
         username=current_user.username,
     )
+    # Fan the message out to the channels members actually watch (bell inbox,
+    # plus email/SMS escalation for urgent/ack-required). Deferred so the POST
+    # returns immediately; failures there never affect the created message.
+    # Messages scheduled for a future time (scheduled_at still set) are escalated
+    # later by the publish task, not now.
+    if message.scheduled_at is None:
+        background_tasks.add_task(
+            deliver_department_message, message.id, current_user.organization_id
+        )
     return _serialize_message(message)
 
 
@@ -276,6 +329,18 @@ async def update_message(
     )
     if error:
         raise HTTPException(status_code=400, detail=error)
+    await log_audit_event(
+        db=db,
+        event_type="message_updated",
+        event_category="messages",
+        severity="info",
+        event_data={
+            "message_id": message_id,
+            "fields": sorted(updates.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return _serialize_message(message)
 
 
@@ -332,6 +397,17 @@ async def acknowledge_message(
     )
     if not success:
         raise HTTPException(status_code=400, detail=error)
+    # Acknowledgments are treated as compliance evidence, so record who
+    # acknowledged what and when in the audit trail.
+    await log_audit_event(
+        db=db,
+        event_type="message_acknowledged",
+        event_category="messages",
+        severity="info",
+        event_data={"message_id": message_id},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return {"status": "ok"}
 
 
@@ -347,3 +423,23 @@ async def get_message_stats(
     if "error" in stats:
         raise HTTPException(status_code=404, detail=stats["error"])
     return stats
+
+
+@router.get("/{message_id}/acknowledgments", response_model=AckReportResponse)
+async def get_acknowledgment_report(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("notifications.manage")),
+):
+    """Per-recipient read/acknowledgment breakdown for a message.
+
+    Lets leadership see exactly who has and has not acknowledged an
+    acknowledgment-required notice (e.g. an SOP change).
+    """
+    service = MessagingService(db)
+    report = await service.get_acknowledgment_report(
+        message_id, current_user.organization_id
+    )
+    if report is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return report

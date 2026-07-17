@@ -4,6 +4,7 @@ import { formatRelativeTime } from "../hooks/useRelativeTime";
 import { useRegisterPullToRefresh } from "../hooks/useRegisterPullToRefresh";
 import DashboardStatCard from "../components/dashboard/DashboardStatCard";
 import DashboardCardHeader from "../components/dashboard/DashboardCardHeader";
+import { LinkifiedText } from "../components/ux";
 import {
   Bell,
   Calendar,
@@ -276,9 +277,15 @@ const Dashboard: React.FC = () => {
 
   const loadDeptMessages = async () => {
     try {
-      const data = await messagesService.getInbox({ limit: 10 });
+      // The badge uses the dedicated unread-count endpoint (which counts
+      // across ALL messages and treats ack-required messages as pending until
+      // acknowledged) rather than the length of this capped 10-item preview.
+      const [data, unread] = await Promise.all([
+        messagesService.getInbox({ limit: 10 }),
+        messagesService.getUnreadCount(),
+      ]);
       setDeptMessages(data);
-      setDeptMsgUnread(data.filter((m) => !m.is_read).length);
+      setDeptMsgUnread(unread.unread_count);
     } catch {
       // Messages are non-critical
     } finally {
@@ -289,10 +296,15 @@ const Dashboard: React.FC = () => {
   const markMessageRead = async (msgId: string) => {
     try {
       await messagesService.markAsRead(msgId);
+      // A message that requires acknowledgment stays "pending" until it is
+      // acknowledged, so reading it must not drop the unread count.
+      const msg = deptMessages.find((m) => m.id === msgId);
       setDeptMessages((prev) =>
         prev.map((m) => (m.id === msgId ? { ...m, is_read: true } : m)),
       );
-      setDeptMsgUnread((prev) => Math.max(0, prev - 1));
+      if (msg && !msg.requires_acknowledgment) {
+        setDeptMsgUnread((prev) => Math.max(0, prev - 1));
+      }
     } catch {
       toast.error("Failed to mark message as read");
     }
@@ -943,7 +955,7 @@ const Dashboard: React.FC = () => {
                           )}
                         </div>
                         <p className="text-theme-text-secondary text-sm whitespace-pre-line line-clamp-3">
-                          {msg.body}
+                          <LinkifiedText text={msg.body} />
                         </p>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-2">
                           <div className="flex items-center gap-3 text-xs text-theme-text-muted">

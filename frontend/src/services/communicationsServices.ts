@@ -5,7 +5,7 @@
 import api from './apiClient';
 import type {
   NotificationRuleRecord, NotificationLogRecord, NotificationsSummary,
-  DepartmentMessageRecord, InboxMessage, MessageStats, RoleOption,
+  DepartmentMessageRecord, InboxMessage, MessageStats, AcknowledgmentReport, RoleOption,
   EmailTemplate, EmailAttachment, EmailTemplateUpdate, EmailTemplatePreview,
 } from './adminServices';
 
@@ -360,7 +360,7 @@ export interface LocationCreate {
 
 export const messagesService = {
   // Admin CRUD
-  async getMessages(params?: { include_inactive?: boolean; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
+  async getMessages(params?: { include_inactive?: boolean; search?: string; priority?: string; skip?: number; limit?: number }): Promise<{ messages: DepartmentMessageRecord[]; total: number }> {
     const response = await api.get<{ messages: DepartmentMessageRecord[]; total: number }>('/messages', { params });
     return response.data;
   },
@@ -376,6 +376,7 @@ export const messagesService = {
     is_persistent?: boolean;
     requires_acknowledgment?: boolean;
     expires_at?: string;
+    scheduled_at?: string;
   }): Promise<DepartmentMessageRecord> {
     const response = await api.post<DepartmentMessageRecord>('/messages', data);
     return response.data;
@@ -397,6 +398,10 @@ export const messagesService = {
   },
   async getMessageStats(messageId: string): Promise<MessageStats> {
     const response = await api.get<MessageStats>(`/messages/${messageId}/stats`);
+    return response.data;
+  },
+  async getAcknowledgmentReport(messageId: string): Promise<AcknowledgmentReport> {
+    const response = await api.get<AcknowledgmentReport>(`/messages/${messageId}/acknowledgments`);
     return response.data;
   },
 

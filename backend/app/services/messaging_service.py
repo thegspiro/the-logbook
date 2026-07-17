@@ -12,7 +12,7 @@ from sqlalchemy import desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.utils import generate_uuid
+from app.core.utils import generate_uuid, safe_error_detail
 from app.models.notification import (
     DepartmentMessage,
     DepartmentMessageRead,
@@ -47,9 +47,19 @@ class MessagingService:
         is_persistent: bool = False,
         requires_acknowledgment: bool = False,
         expires_at: Optional[datetime] = None,
+        scheduled_at: Optional[datetime] = None,
     ) -> Tuple[Optional[DepartmentMessage], Optional[str]]:
-        """Create a new department message"""
+        """Create a new department message.
+
+        Only a *future* scheduled_at defers the message; a missing or past value
+        means "publish now" and is stored as NULL, so callers can treat
+        scheduled_at is None as "live immediately".
+        """
         try:
+            now = datetime.now(timezone.utc)
+            effective_scheduled = (
+                scheduled_at if (scheduled_at and scheduled_at > now) else None
+            )
             message = DepartmentMessage(
                 id=generate_uuid(),
                 organization_id=organization_id,
@@ -66,6 +76,7 @@ class MessagingService:
                 requires_acknowledgment=requires_acknowledgment,
                 posted_by=posted_by,
                 expires_at=expires_at,
+                scheduled_at=effective_scheduled,
             )
             self.db.add(message)
             await self.db.commit()
@@ -73,27 +84,54 @@ class MessagingService:
             return message, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def get_messages(
         self,
         organization_id: str,
         include_inactive: bool = False,
+        include_deleted: bool = False,
+        search: Optional[str] = None,
+        priority: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
     ) -> Tuple[List[DepartmentMessage], int]:
-        """Get all messages for admin management"""
-        query = select(DepartmentMessage).where(
-            DepartmentMessage.organization_id == organization_id
-        )
-        if not include_inactive:
-            query = query.where(DepartmentMessage.is_active == True)  # noqa: E712
+        """Get all messages for admin management.
 
-        count_q = select(func.count(DepartmentMessage.id)).where(
-            DepartmentMessage.organization_id == organization_id
+        Soft-deleted messages (deleted_at set) are hidden by default so a
+        "deleted" message does not reappear in the admin list, while its
+        read/acknowledgment records are preserved in the database. Supports a
+        title/body search and a priority filter, applied to both the page and
+        its total count.
+        """
+
+        def _apply_filters(q):
+            if not include_inactive:
+                q = q.where(DepartmentMessage.is_active == True)  # noqa: E712
+            if not include_deleted:
+                q = q.where(DepartmentMessage.deleted_at.is_(None))
+            if search and search.strip():
+                pattern = f"%{search.strip()}%"
+                q = q.where(
+                    or_(
+                        DepartmentMessage.title.ilike(pattern),
+                        DepartmentMessage.body.ilike(pattern),
+                    )
+                )
+            if priority:
+                q = q.where(DepartmentMessage.priority == MessagePriority(priority))
+            return q
+
+        query = _apply_filters(
+            select(DepartmentMessage).where(
+                DepartmentMessage.organization_id == organization_id
+            )
         )
-        if not include_inactive:
-            count_q = count_q.where(DepartmentMessage.is_active == True)  # noqa: E712
+        count_q = _apply_filters(
+            select(func.count(DepartmentMessage.id)).where(
+                DepartmentMessage.organization_id == organization_id
+            )
+        )
 
         total_result = await self.db.execute(count_q)
         total = total_result.scalar() or 0
@@ -124,11 +162,32 @@ class MessagingService:
     async def update_message(
         self, message_id: str, organization_id: str, updates: Dict[str, Any]
     ) -> Tuple[Optional[DepartmentMessage], Optional[str]]:
-        """Update a message"""
+        """Update a message.
+
+        Rescheduling is only allowed for a message that is still pending
+        (scheduled_at in the future). A message whose scheduled_at is NULL has
+        already been published/escalated, and moving it back to a future time
+        would make the publish task escalate it a second time, so that is
+        rejected.
+        """
         try:
             message = await self.get_message_by_id(message_id, organization_id)
             if not message:
                 return None, "Message not found"
+
+            new_sched = updates.get("scheduled_at")
+            if new_sched is not None and message.scheduled_at is None:
+                cmp = (
+                    new_sched
+                    if new_sched.tzinfo is not None
+                    else new_sched.replace(tzinfo=timezone.utc)
+                )
+                if cmp > datetime.now(timezone.utc):
+                    return (
+                        None,
+                        "Cannot reschedule a message that has already been "
+                        "published",
+                    )
 
             allowed_fields = {
                 "title",
@@ -143,6 +202,7 @@ class MessagingService:
                 "is_persistent",
                 "requires_acknowledgment",
                 "expires_at",
+                "scheduled_at",
             }
             for key, value in updates.items():
                 if key in allowed_fields:
@@ -157,22 +217,29 @@ class MessagingService:
             return message, None
         except Exception as e:
             await self.db.rollback()
-            return None, str(e)
+            return None, safe_error_detail(e)
 
     async def delete_message(
         self, message_id: str, organization_id: str
     ) -> Tuple[bool, Optional[str]]:
-        """Delete a message (hard delete)"""
+        """Soft-delete a message.
+
+        Sets deleted_at and deactivates the message instead of issuing a hard
+        DELETE. A hard delete would cascade-remove the DepartmentMessageRead
+        rows, destroying the record of who acknowledged the message — which is
+        treated as compliance evidence. Soft delete keeps that history intact.
+        """
         try:
             message = await self.get_message_by_id(message_id, organization_id)
-            if not message:
+            if not message or message.deleted_at is not None:
                 return False, "Message not found"
-            await self.db.delete(message)
+            message.deleted_at = datetime.now(timezone.utc)
+            message.is_active = False
             await self.db.commit()
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
 
     # ============================================
     # Inbox — Messages for the Current User
@@ -200,21 +267,26 @@ class MessagingService:
         if not user:
             return []
 
-        user_role_names = [r.name for r in user.roles]
-        user_status = (
-            user.status.value if hasattr(user.status, "value") else str(user.status)
-        )
+        user_role_ids, user_role_names, user_status = self._user_targeting_context(user)
 
-        # Get all active, non-expired messages for this org
+        # Get all active, non-expired, non-deleted messages for this org
         query = select(DepartmentMessage).where(
             DepartmentMessage.organization_id == organization_id,
             DepartmentMessage.is_active == True,  # noqa: E712
+            DepartmentMessage.deleted_at.is_(None),
         )
         # Exclude expired
         query = query.where(
             or_(
                 DepartmentMessage.expires_at.is_(None),
                 DepartmentMessage.expires_at > now,
+            )
+        )
+        # Exclude messages scheduled to publish in the future
+        query = query.where(
+            or_(
+                DepartmentMessage.scheduled_at.is_(None),
+                DepartmentMessage.scheduled_at <= now,
             )
         )
         query = query.order_by(
@@ -228,7 +300,9 @@ class MessagingService:
         # Filter by targeting
         visible_messages = []
         for msg in all_messages:
-            if self._is_targeted(msg, user_id, user_role_names, user_status):
+            if self._is_targeted(
+                msg, user_id, user_role_ids, user_role_names, user_status
+            ):
                 visible_messages.append(msg)
 
         # Get read statuses for this user
@@ -244,12 +318,21 @@ class MessagingService:
         else:
             reads = {}
 
-        # Optionally filter out read messages
+        # Optionally filter out messages the user has already resolved.
+        # A message is "resolved" when acknowledged (if it requires
+        # acknowledgment) or otherwise when read. Persistent messages are
+        # always shown regardless of resolution — that is what makes them
+        # persistent — so they never drop off the inbox until an admin clears
+        # them.
         enriched = []
         for msg in visible_messages:
             read_record = reads.get(msg.id)
             is_read = read_record is not None
-            if not include_read and is_read:
+            is_acknowledged = (
+                read_record.acknowledged_at is not None if read_record else False
+            )
+            resolved = is_acknowledged if msg.requires_acknowledgment else is_read
+            if not include_read and resolved and not msg.is_persistent:
                 continue
             enriched.append(
                 {
@@ -317,10 +400,13 @@ class MessagingService:
         return enriched
 
     async def get_unread_count(self, organization_id: str, user_id: str) -> int:
-        """Get count of unread messages for a user.
+        """Get count of unresolved (pending) messages for a user.
 
-        Uses a lightweight query that only loads IDs and targeting fields
-        instead of fetching full message bodies through get_inbox.
+        Loads only the id + targeting/flag columns needed to evaluate
+        visibility — never the message body — so the dashboard badge stays
+        cheap. A message counts as pending until it is acknowledged (when it
+        requires acknowledgment) or otherwise read, so a message that requires
+        acknowledgment is not cleared from the count merely by being opened.
         """
         now = datetime.now(timezone.utc)
 
@@ -331,17 +417,23 @@ class MessagingService:
         if not user:
             return 0
 
-        user_role_names = [r.name for r in user.roles]
-        user_status = (
-            user.status.value if hasattr(user.status, "value") else str(user.status)
-        )
+        user_role_ids, user_role_names, user_status = self._user_targeting_context(user)
 
-        # Load only active, non-expired message IDs + targeting fields
+        # Load only the columns needed to evaluate targeting/resolution —
+        # crucially NOT the body — for active, non-expired, non-deleted rows.
         query = (
-            select(DepartmentMessage)
+            select(
+                DepartmentMessage.id,
+                DepartmentMessage.target_type,
+                DepartmentMessage.target_roles,
+                DepartmentMessage.target_statuses,
+                DepartmentMessage.target_member_ids,
+                DepartmentMessage.requires_acknowledgment,
+            )
             .where(
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active == True,  # noqa: E712
+                DepartmentMessage.deleted_at.is_(None),
             )
             .where(
                 or_(
@@ -349,37 +441,77 @@ class MessagingService:
                     DepartmentMessage.expires_at > now,
                 )
             )
+            .where(
+                or_(
+                    DepartmentMessage.scheduled_at.is_(None),
+                    DepartmentMessage.scheduled_at <= now,
+                )
+            )
         )
         result = await self.db.execute(query)
-        all_messages = result.scalars().all()
+        rows = result.all()
 
-        visible_ids = [
-            m.id
-            for m in all_messages
-            if self._is_targeted(m, user_id, user_role_names, user_status)
+        visible = [
+            row
+            for row in rows
+            if self._is_targeted(
+                row, user_id, user_role_ids, user_role_names, user_status
+            )
         ]
-        if not visible_ids:
+        if not visible:
             return 0
 
-        # Count how many of those the user has already read
+        visible_ids = [row.id for row in visible]
+
+        # Fetch the caller's read/ack state for the visible messages.
         read_result = await self.db.execute(
-            select(func.count(DepartmentMessageRead.id)).where(
+            select(
+                DepartmentMessageRead.message_id,
+                DepartmentMessageRead.acknowledged_at,
+            ).where(
                 DepartmentMessageRead.user_id == user_id,
                 DepartmentMessageRead.message_id.in_(visible_ids),
             )
         )
-        read_count = read_result.scalar() or 0
+        acknowledged_by_msg = {r.message_id: r.acknowledged_at for r in read_result}
 
-        return len(visible_ids) - read_count
+        pending = 0
+        for row in visible:
+            has_read_record = row.id in acknowledged_by_msg
+            is_acknowledged = acknowledged_by_msg.get(row.id) is not None
+            resolved = (
+                is_acknowledged if row.requires_acknowledgment else has_read_record
+            )
+            if not resolved:
+                pending += 1
+
+        return pending
+
+    @staticmethod
+    def _user_targeting_context(user) -> Tuple[List[str], List[str], str]:
+        """Extract the (role_ids, role_names, status) a user is matched on."""
+        role_ids = [str(r.id) for r in user.roles]
+        role_names = [r.name for r in user.roles]
+        status = (
+            user.status.value if hasattr(user.status, "value") else str(user.status)
+        )
+        return role_ids, role_names, status
 
     def _is_targeted(
         self,
         message: DepartmentMessage,
         user_id: str,
+        user_role_ids: List[str],
         user_role_names: List[str],
         user_status: str,
     ) -> bool:
-        """Check if a message targets the given user"""
+        """Check if a message targets the given user.
+
+        Role targeting matches on role *id* (rename-safe). A role-name fallback
+        is retained so messages authored before role-id targeting — or entries
+        that could not be backfilled because the role was since deleted — still
+        reach the right members.
+        """
         tt = (
             message.target_type.value
             if hasattr(message.target_type, "value")
@@ -390,7 +522,9 @@ class MessagingService:
             return True
         elif tt == "roles":
             target_roles = message.target_roles or []
-            return any(r in target_roles for r in user_role_names)
+            return any(rid in target_roles for rid in user_role_ids) or any(
+                rname in target_roles for rname in user_role_names
+            )
         elif tt == "statuses":
             target_statuses = message.target_statuses or []
             return user_status in target_statuses
@@ -412,7 +546,7 @@ class MessagingService:
         (polluting its stats) or fake an acknowledgment on a message that was
         never aimed at them (acks are used as compliance evidence)."""
         message = await self.get_message_by_id(message_id, organization_id)
-        if not message:
+        if not message or message.deleted_at is not None:
             return None
         user_result = await self.db.execute(
             select(User).options(selectinload(User.roles)).where(User.id == user_id)
@@ -420,11 +554,8 @@ class MessagingService:
         user = user_result.scalar_one_or_none()
         if not user:
             return None
-        role_names = [r.name for r in user.roles]
-        status = (
-            user.status.value if hasattr(user.status, "value") else str(user.status)
-        )
-        if not self._is_targeted(message, str(user_id), role_names, status):
+        role_ids, role_names, status = self._user_targeting_context(user)
+        if not self._is_targeted(message, str(user_id), role_ids, role_names, status):
             return None
         return message
 
@@ -458,7 +589,7 @@ class MessagingService:
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
 
     async def acknowledge_message(
         self, message_id: str, user_id: str, organization_id: str
@@ -495,12 +626,39 @@ class MessagingService:
             return True, None
         except Exception as e:
             await self.db.rollback()
-            return False, str(e)
+            return False, safe_error_detail(e)
+
+    async def _targeted_users(
+        self, message: DepartmentMessage, organization_id: str
+    ) -> List[User]:
+        """Resolve the concrete set of users a message is targeted at.
+
+        Loads the org's users (with roles) once and reuses _is_targeted so the
+        report and the stats denominator agree exactly with what the inbox
+        delivers. Bounded by org size, so an in-Python filter is acceptable for
+        this admin-only, low-frequency path.
+        """
+        users_result = await self.db.execute(
+            select(User)
+            .options(selectinload(User.roles))
+            .where(User.organization_id == organization_id)
+        )
+        users = users_result.scalars().all()
+        targeted = []
+        for u in users:
+            role_ids, role_names, status = self._user_targeting_context(u)
+            if self._is_targeted(message, str(u.id), role_ids, role_names, status):
+                targeted.append(u)
+        return targeted
 
     async def get_message_stats(
         self, message_id: str, organization_id: str
     ) -> Dict[str, Any]:
-        """Get read/acknowledge stats for a message (admin view)"""
+        """Get read/acknowledge stats for a message (admin view).
+
+        Includes total_targeted (the audience denominator) so read/ack counts
+        can be read as a completion rate rather than a bare number.
+        """
         message = await self.get_message_by_id(message_id, organization_id)
         if not message:
             return {"error": "Message not found"}
@@ -516,18 +674,95 @@ class MessagingService:
                 DepartmentMessageRead.acknowledged_at.isnot(None),
             )
         )
+        targeted = await self._targeted_users(message, organization_id)
 
         return {
             "message_id": message_id,
+            "total_targeted": len(targeted),
             "total_reads": read_count.scalar() or 0,
             "total_acknowledged": ack_count.scalar() or 0,
         }
 
+    async def get_acknowledgment_report(
+        self, message_id: str, organization_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Per-recipient read/acknowledgment breakdown for a message.
+
+        Answers "who has (not) acknowledged this?" — the report leadership
+        needs for acknowledgment-required notices (e.g. an SOP change). Returns
+        None when the message does not exist in the org.
+        """
+        message = await self.get_message_by_id(message_id, organization_id)
+        if not message:
+            return None
+
+        targeted = await self._targeted_users(message, organization_id)
+
+        reads: Dict[str, DepartmentMessageRead] = {}
+        if targeted:
+            reads_result = await self.db.execute(
+                select(DepartmentMessageRead).where(
+                    DepartmentMessageRead.message_id == message_id,
+                    DepartmentMessageRead.user_id.in_([str(u.id) for u in targeted]),
+                )
+            )
+            reads = {r.user_id: r for r in reads_result.scalars().all()}
+
+        recipients = []
+        total_read = 0
+        total_acknowledged = 0
+        for u in targeted:
+            record = reads.get(str(u.id))
+            is_read = record is not None
+            is_acknowledged = bool(record and record.acknowledged_at is not None)
+            if is_read:
+                total_read += 1
+            if is_acknowledged:
+                total_acknowledged += 1
+            recipients.append(
+                {
+                    "user_id": str(u.id),
+                    "name": f"{u.first_name or ''} {u.last_name or ''}".strip()
+                    or (u.username or "Unknown"),
+                    "status": (
+                        u.status.value if hasattr(u.status, "value") else str(u.status)
+                    ),
+                    "is_read": is_read,
+                    "read_at": (
+                        record.read_at.isoformat()
+                        if record and record.read_at
+                        else None
+                    ),
+                    "is_acknowledged": is_acknowledged,
+                    "acknowledged_at": (
+                        record.acknowledged_at.isoformat()
+                        if record and record.acknowledged_at
+                        else None
+                    ),
+                }
+            )
+
+        # Surface the members who still owe an acknowledgment/read first.
+        recipients.sort(key=lambda r: (r["is_acknowledged"], r["is_read"], r["name"]))
+
+        return {
+            "message_id": message_id,
+            "requires_acknowledgment": message.requires_acknowledgment,
+            "total_targeted": len(targeted),
+            "total_read": total_read,
+            "total_acknowledged": total_acknowledged,
+            "recipients": recipients,
+        }
+
     async def get_available_roles(self, organization_id: str) -> List[Dict[str, str]]:
-        """Get list of roles for targeting dropdown"""
+        """Get list of roles for targeting dropdown.
+
+        Includes the role id, which is what role-targeted messages store (the
+        id is stable across renames, unlike the name).
+        """
         result = await self.db.execute(
-            select(Role.name, Role.slug)
+            select(Role.id, Role.name, Role.slug)
             .where(Role.organization_id == organization_id)
             .order_by(Role.priority.desc())
         )
-        return [{"name": r.name, "slug": r.slug} for r in result.all()]
+        return [{"id": r.id, "name": r.name, "slug": r.slug} for r in result.all()]

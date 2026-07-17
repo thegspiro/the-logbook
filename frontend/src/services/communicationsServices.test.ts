@@ -525,6 +525,26 @@ describe('messagesService', () => {
     });
   });
 
+  // --- getAcknowledgmentReport ---
+  describe('getAcknowledgmentReport', () => {
+    it('should GET /messages/:id/acknowledgments', async () => {
+      const report = {
+        message_id: 'm1',
+        requires_acknowledgment: true,
+        total_targeted: 2,
+        total_read: 1,
+        total_acknowledged: 1,
+        recipients: [],
+      };
+      mockGet.mockResolvedValueOnce({ data: report });
+
+      const result = await messagesService.getAcknowledgmentReport('m1');
+
+      expect(mockGet).toHaveBeenCalledWith('/messages/m1/acknowledgments');
+      expect(result).toEqual(report);
+    });
+  });
+
   // --- getInbox ---
   describe('getInbox', () => {
     it('should GET /messages/inbox with params', async () => {

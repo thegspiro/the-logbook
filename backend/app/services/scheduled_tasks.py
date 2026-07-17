@@ -214,6 +214,12 @@ SCHEDULE = {
         "recommended_time": "03:00",
         "cron": "0 3 * * *",
     },
+    "publish_scheduled_messages": {
+        "description": "Publish and escalate department messages whose scheduled send time has arrived",
+        "frequency": "every 15 minutes",
+        "recommended_time": "*/15",
+        "cron": "*/15 * * * *",
+    },
     "series_end_reminders": {
         "description": "Send email reminders 6 months before recurring event series end dates",
         "frequency": "daily",
@@ -3143,6 +3149,48 @@ async def run_message_history_cleanup(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
+    """
+    Publish department messages whose scheduled send time has arrived.
+
+    A message scheduled for the future is created hidden (scheduled_at set) and
+    is not escalated until it goes live. This task finds due messages, marks
+    them live (scheduled_at cleared to NULL) and then fans each out across the
+    in-app/email/SMS channels — the same delivery used for immediate posts.
+
+    scheduled_at is cleared *before* delivery so a delivery failure leaves the
+    message live-but-unescalated (members still see it in their inbox) rather
+    than risking a duplicate escalation on the next run.
+    """
+    from datetime import timezone
+
+    from app.models.notification import DepartmentMessage
+    from app.services.message_delivery_service import MessageDeliveryService
+
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(DepartmentMessage).where(
+            DepartmentMessage.scheduled_at.isnot(None),
+            DepartmentMessage.scheduled_at <= now,
+            DepartmentMessage.is_active == True,  # noqa: E712
+            DepartmentMessage.deleted_at.is_(None),
+        )
+    )
+    due = list(result.scalars().all())
+
+    delivery = MessageDeliveryService(db)
+    published = 0
+    for message in due:
+        message.scheduled_at = None
+        await db.commit()
+        await delivery.deliver(message)
+        published += 1
+
+    if published:
+        logger.info(f"Published {published} scheduled department message(s)")
+    return {"task": "publish_scheduled_messages", "published": published}
+
+
 async def run_inventory_low_stock_alerts(db: AsyncSession) -> Dict[str, Any]:
     """
     Send email alerts to admins when inventory items drop below reorder point.
@@ -3435,9 +3483,8 @@ async def run_compliance_auto_reports(db: AsyncSession) -> Dict[str, Any]:
     On the configured report_day_of_month, generates monthly reports.
     On January 1st, generates yearly reports.
     """
-    from datetime import timezone as _tz_compliance
-
     import calendar
+    from datetime import timezone as _tz_compliance
 
     from app.models.compliance_config import ComplianceConfig
     from app.services.compliance_config_service import ComplianceReportService
@@ -4337,6 +4384,7 @@ TASK_RUNNERS = {
     "nfpa_retirement_alerts": run_nfpa_retirement_alerts,
     "compliance_auto_reports": run_compliance_auto_reports,
     "message_history_cleanup": run_message_history_cleanup,
+    "publish_scheduled_messages": run_publish_scheduled_messages,
     "series_end_reminders": run_series_end_reminders,
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
@@ -4364,6 +4412,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     # Every 15 minutes
     "inventory_notifications": 900,
     "shift_auto_checkout": 900,
+    "publish_scheduled_messages": 900,
     # Every 30 minutes
     "event_reminders": 1800,
     "post_event_validation": 1800,

@@ -181,14 +181,17 @@ async def send_test_email(
     else:
         logger.info(f"Test email sent to {body.to_email} by {current_user.id}")
 
-    # Return the latest history record for the response
-    latest = await db.execute(
-        select(MessageHistory)
-        .where(MessageHistory.organization_id == current_user.organization_id)
-        .order_by(MessageHistory.sent_at.desc())
-        .limit(1)
-    )
-    history = latest.scalar_one_or_none()
+    # Return the exact history record this send created. Fetching by the
+    # id captured during the send avoids the race where "the latest row for
+    # the org" belongs to a different concurrent send.
+    history = None
+    if email_svc.last_message_history_id:
+        result = await db.execute(
+            select(MessageHistory).where(
+                MessageHistory.id == email_svc.last_message_history_id
+            )
+        )
+        history = result.scalar_one_or_none()
     if not history:
         # Fallback: construct a response without a persisted record
         raise HTTPException(

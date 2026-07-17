@@ -7,19 +7,29 @@ explicit member id) and the unread-count flow that builds on it. DB mocked;
 no MySQL.
 """
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from app.services.messaging_service import MessagingService
 
 
-def _msg(mid="m1", target_type="all", roles=None, statuses=None, members=None):
+def _msg(
+    mid="m1",
+    target_type="all",
+    roles=None,
+    statuses=None,
+    members=None,
+    requires_acknowledgment=False,
+):
     return SimpleNamespace(
         id=mid,
         target_type=target_type,
         target_roles=roles,
         target_statuses=statuses,
         target_member_ids=members,
+        requires_acknowledgment=requires_acknowledgment,
+        deleted_at=None,
     )
 
 
@@ -27,24 +37,33 @@ def _svc():
     return MessagingService(MagicMock())
 
 
-def _targeted(message, user_id="u1", roles=None, status="active"):
-    return _svc()._is_targeted(message, user_id, roles or [], status)
+def _targeted(message, user_id="u1", role_ids=None, roles=None, status="active"):
+    return _svc()._is_targeted(message, user_id, role_ids or [], roles or [], status)
 
 
 class TestIsTargeted:
     def test_all_reaches_everyone(self):
         assert _targeted(_msg(target_type="all")) is True
 
-    def test_roles_match(self):
+    def test_roles_match_by_id(self):
+        # Primary path: target_roles holds role ids.
+        msg = _msg(target_type="roles", roles=["role-officer", "role-chief"])
+        assert _targeted(msg, role_ids=["role-ff", "role-officer"]) is True
+
+    def test_roles_match_by_name_fallback(self):
+        # Legacy/un-backfillable entries stored as names still match.
         msg = _msg(target_type="roles", roles=["officer", "chief"])
         assert _targeted(msg, roles=["firefighter", "officer"]) is True
 
     def test_roles_no_match(self):
-        msg = _msg(target_type="roles", roles=["chief"])
-        assert _targeted(msg, roles=["firefighter"]) is False
+        msg = _msg(target_type="roles", roles=["role-chief"])
+        assert _targeted(msg, role_ids=["role-ff"], roles=["firefighter"]) is False
 
     def test_roles_empty_target_denies(self):
-        assert _targeted(_msg(target_type="roles", roles=[]), roles=["chief"]) is False
+        assert (
+            _targeted(_msg(target_type="roles", roles=[]), role_ids=["role-chief"])
+            is False
+        )
 
     def test_statuses_match(self):
         msg = _msg(target_type="statuses", statuses=["active", "probationary"])
@@ -73,17 +92,23 @@ class TestIsTargeted:
 class TestUnreadCount:
     def _user(self, roles=("officer",), status="active"):
         return SimpleNamespace(
-            roles=[SimpleNamespace(name=r) for r in roles],
+            roles=[SimpleNamespace(id=r, name=r) for r in roles],
             status=SimpleNamespace(value=status),
         )
 
-    def _db(self, user, messages, read_count):
+    def _read(self, message_id, acknowledged_at=None):
+        # Mirrors the (message_id, acknowledged_at) row the lightweight unread
+        # query now selects.
+        return SimpleNamespace(message_id=message_id, acknowledged_at=acknowledged_at)
+
+    def _db(self, user, messages, reads):
         db = MagicMock()
         user_res = MagicMock(scalar_one_or_none=MagicMock(return_value=user))
-        msg_res = MagicMock()
-        msg_res.scalars.return_value.all.return_value = messages
-        read_res = MagicMock(scalar=MagicMock(return_value=read_count))
-        db.execute = AsyncMock(side_effect=[user_res, msg_res, read_res])
+        # get_unread_count now selects columns (not full ORM objects) and reads
+        # them via result.all().
+        msg_res = MagicMock(all=MagicMock(return_value=messages))
+        # The reads result is iterated directly (for r in result).
+        db.execute = AsyncMock(side_effect=[user_res, msg_res, list(reads)])
         return db
 
     async def test_returns_zero_when_user_missing(self):
@@ -99,9 +124,28 @@ class TestUnreadCount:
             _msg("m2", "roles", roles=["officer"]),
             _msg("m3", "roles", roles=["chief"]),  # not visible to officer
         ]
-        db = self._db(self._user(roles=("officer",)), messages, read_count=1)
-        # 2 visible (m1, m2), 1 read -> 1 unread.
+        # m1 has a read record -> resolved. m2 unread -> pending.
+        db = self._db(
+            self._user(roles=("officer",)), messages, reads=[self._read("m1")]
+        )
         assert await MessagingService(db).get_unread_count("org-1", "u1") == 1
+
+    async def test_ack_required_message_stays_pending_until_acknowledged(self):
+        # A read-but-not-acknowledged ack-required message is still pending.
+        messages = [_msg("m1", "all", requires_acknowledgment=True)]
+        db = self._db(
+            self._user(), messages, reads=[self._read("m1", acknowledged_at=None)]
+        )
+        assert await MessagingService(db).get_unread_count("org-1", "u1") == 1
+
+    async def test_ack_required_message_clears_once_acknowledged(self):
+        messages = [_msg("m1", "all", requires_acknowledgment=True)]
+        db = self._db(
+            self._user(),
+            messages,
+            reads=[self._read("m1", acknowledged_at=datetime.now(timezone.utc))],
+        )
+        assert await MessagingService(db).get_unread_count("org-1", "u1") == 0
 
     async def test_zero_when_nothing_visible(self):
         messages = [_msg("m1", "roles", roles=["chief"])]
@@ -109,8 +153,7 @@ class TestUnreadCount:
         user_res = MagicMock(
             scalar_one_or_none=MagicMock(return_value=self._user(roles=("officer",)))
         )
-        msg_res = MagicMock()
-        msg_res.scalars.return_value.all.return_value = messages
+        msg_res = MagicMock(all=MagicMock(return_value=messages))
         # No read query should run when nothing is visible.
         db.execute = AsyncMock(side_effect=[user_res, msg_res])
         assert await MessagingService(db).get_unread_count("org-1", "u1") == 0
@@ -123,7 +166,7 @@ class TestReadAckVisibilityGate:
 
     def _user(self, roles=(), status="active"):
         return SimpleNamespace(
-            roles=[SimpleNamespace(name=r) for r in roles],
+            roles=[SimpleNamespace(id=r, name=r) for r in roles],
             status=SimpleNamespace(value=status),
         )
 
@@ -187,6 +230,189 @@ class TestReadAckVisibilityGate:
         ok, _ = await MessagingService(db).acknowledge_message("m1", "u1", "org-1")
         assert ok is False
         db.add.assert_not_called()
+
+
+class TestSoftDelete:
+    """delete_message must preserve read/acknowledgment rows (compliance
+    evidence) by soft-deleting instead of issuing a hard DELETE."""
+
+    async def test_delete_soft_deletes_and_deactivates(self):
+        message = SimpleNamespace(deleted_at=None, is_active=True)
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=message))
+        )
+        db.commit = AsyncMock()
+        db.delete = MagicMock()
+
+        ok, err = await MessagingService(db).delete_message("m1", "org-1")
+
+        assert ok is True
+        assert err is None
+        assert message.deleted_at is not None
+        assert message.is_active is False
+        # No hard delete — the row (and its cascade of reads) stays.
+        db.delete.assert_not_called()
+
+    async def test_delete_already_deleted_is_not_found(self):
+        message = SimpleNamespace(
+            deleted_at=datetime.now(timezone.utc), is_active=False
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=message))
+        )
+        db.commit = AsyncMock()
+
+        ok, err = await MessagingService(db).delete_message("m1", "org-1")
+
+        assert ok is False
+        assert err == "Message not found"
+
+
+class TestAcknowledgmentReport:
+    """get_acknowledgment_report answers "who has (not) acknowledged" for the
+    targeted audience, with pending recipients surfaced first."""
+
+    def _user(self, uid, first, roles=(), status="active"):
+        return SimpleNamespace(
+            id=uid,
+            first_name=first,
+            last_name="",
+            username=first.lower(),
+            roles=[SimpleNamespace(id=r, name=r) for r in roles],
+            status=SimpleNamespace(value=status),
+        )
+
+    async def test_reports_targeted_read_and_ack_state(self):
+        message = _msg("m1", "all", requires_acknowledgment=True)
+        users = [self._user("u1", "Ann"), self._user("u2", "Ben")]
+        now = datetime.now(timezone.utc)
+        read_u1 = SimpleNamespace(user_id="u1", read_at=now, acknowledged_at=now)
+
+        db = MagicMock()
+        msg_res = MagicMock(scalar_one_or_none=MagicMock(return_value=message))
+        users_res = MagicMock()
+        users_res.scalars.return_value.all.return_value = users
+        reads_res = MagicMock()
+        reads_res.scalars.return_value.all.return_value = [read_u1]
+        db.execute = AsyncMock(side_effect=[msg_res, users_res, reads_res])
+
+        report = await MessagingService(db).get_acknowledgment_report("m1", "org-1")
+
+        assert report is not None
+        assert report["total_targeted"] == 2
+        assert report["total_read"] == 1
+        assert report["total_acknowledged"] == 1
+        # Pending recipient (u2) is surfaced before the acknowledged one (u1).
+        assert [r["user_id"] for r in report["recipients"]] == ["u2", "u1"]
+        assert report["recipients"][0]["is_acknowledged"] is False
+        assert report["recipients"][1]["is_acknowledged"] is True
+
+    async def test_missing_message_returns_none(self):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+        report = await MessagingService(db).get_acknowledgment_report(
+            "missing", "org-1"
+        )
+        assert report is None
+
+
+class TestGetMessages:
+    async def test_returns_page_and_total_with_search_and_priority(self):
+        db = MagicMock()
+        count_res = MagicMock(scalar=MagicMock(return_value=3))
+        page_res = MagicMock()
+        page_res.scalars.return_value.all.return_value = [_msg("m1")]
+        db.execute = AsyncMock(side_effect=[count_res, page_res])
+
+        messages, total = await MessagingService(db).get_messages(
+            "org-1", search="drill", priority="urgent", skip=0, limit=25
+        )
+
+        assert total == 3
+        assert [m.id for m in messages] == ["m1"]
+        # A count query and a page query were both issued.
+        assert db.execute.await_count == 2
+
+
+class TestCreateScheduling:
+    """create_message only defers on a *future* scheduled_at; a past or absent
+    value means publish-now (stored as NULL)."""
+
+    def _db(self):
+        db = MagicMock()
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        return db
+
+    async def test_future_scheduled_at_is_stored(self):
+        future = datetime.now(timezone.utc) + timedelta(hours=2)
+        message, err = await MessagingService(self._db()).create_message(
+            "org-1", "author", "Drill", "Body", scheduled_at=future
+        )
+        assert err is None
+        assert message.scheduled_at == future
+
+    async def test_past_scheduled_at_becomes_immediate(self):
+        past = datetime.now(timezone.utc) - timedelta(hours=2)
+        message, _ = await MessagingService(self._db()).create_message(
+            "org-1", "author", "Drill", "Body", scheduled_at=past
+        )
+        assert message.scheduled_at is None
+
+    async def test_no_schedule_is_immediate(self):
+        message, _ = await MessagingService(self._db()).create_message(
+            "org-1", "author", "Drill", "Body"
+        )
+        assert message.scheduled_at is None
+
+
+class TestRescheduleGuard:
+    """A published message (scheduled_at NULL) can't be moved to a future time,
+    which would make the publish task escalate it a second time."""
+
+    def _db_with(self, message):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=message))
+        )
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        return db
+
+    async def test_cannot_reschedule_already_published_message(self):
+        published = SimpleNamespace(scheduled_at=None)
+        db = self._db_with(published)
+        future = datetime.now(timezone.utc) + timedelta(hours=1)
+        message, err = await MessagingService(db).update_message(
+            "m1", "org-1", {"scheduled_at": future}
+        )
+        assert message is None
+        assert "already been published" in err
+
+    async def test_can_reschedule_a_still_pending_message(self):
+        pending = SimpleNamespace(
+            scheduled_at=datetime.now(timezone.utc) + timedelta(hours=5)
+        )
+        db = self._db_with(pending)
+        new_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        message, err = await MessagingService(db).update_message(
+            "m1", "org-1", {"scheduled_at": new_time}
+        )
+        assert err is None
+        assert pending.scheduled_at == new_time
+
+    async def test_clearing_schedule_on_published_message_is_allowed(self):
+        published = SimpleNamespace(scheduled_at=None, is_active=True)
+        db = self._db_with(published)
+        message, err = await MessagingService(db).update_message(
+            "m1", "org-1", {"scheduled_at": None, "is_active": False}
+        )
+        assert err is None
 
 
 if __name__ == "__main__":  # pragma: no cover
