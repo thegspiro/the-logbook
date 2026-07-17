@@ -2141,6 +2141,15 @@ class CheckTemplateItem(Base):
         ForeignKey("apparatus_equipment.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # Direct link to the inventory catalog item this checklist entry consumes.
+    # Enables ready-stock tracking and swapping a fresh lot onto the apparatus
+    # during a check. Nullable so checklist items without a catalog entry (e.g.
+    # pass/fail inspections) still work.
+    inventory_item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
@@ -2172,6 +2181,7 @@ class CheckTemplateItem(Base):
     __table_args__ = (
         Index("idx_check_item_compartment", "compartment_id"),
         Index("idx_check_item_equipment", "equipment_id"),
+        Index("idx_check_item_inventory", "inventory_item_id"),
     )
 
 

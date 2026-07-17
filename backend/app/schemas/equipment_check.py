@@ -35,6 +35,7 @@ class CheckTemplateItemCreate(BaseModel):
     lot_number: Optional[str] = Field(None, max_length=100)
     image_url: Optional[str] = Field(None, max_length=500)
     equipment_id: Optional[str] = None
+    inventory_item_id: Optional[str] = None
     has_expiration: bool = False
     expiration_date: Optional[date] = None
     expiration_warning_days: int = 30
@@ -58,6 +59,7 @@ class CheckTemplateItemUpdate(BaseModel):
     lot_number: Optional[str] = Field(None, max_length=100)
     image_url: Optional[str] = Field(None, max_length=500)
     equipment_id: Optional[str] = None
+    inventory_item_id: Optional[str] = None
     has_expiration: Optional[bool] = None
     expiration_date: Optional[date] = None
     expiration_warning_days: Optional[int] = None
@@ -88,6 +90,7 @@ class CheckTemplateItemResponse(UTCResponseBase):
     lot_number: Optional[str] = None
     image_url: Optional[str] = None
     equipment_id: Optional[str] = None
+    inventory_item_id: Optional[str] = None
     has_expiration: bool
     expiration_date: Optional[date] = None
     expiration_warning_days: int
@@ -550,3 +553,74 @@ class TemplateChangeLogListResponse(BaseModel):
 
     items: List[TemplateChangeLogResponse] = []
     total: int = 0
+
+
+# ============================================
+# Supply Officer: Expiring Items + Lot Swap
+# ============================================
+
+_camel_config = ConfigDict(
+    from_attributes=True,
+    alias_generator=to_camel,
+    populate_by_name=True,
+)
+
+
+class ReadyLot(BaseModel):
+    """A ready-stock lot available to swap onto an apparatus."""
+
+    model_config = _camel_config
+
+    id: str
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    quantity: int = 0
+
+
+class SupplyExpiringItem(BaseModel):
+    """A deployed checklist item nearing expiration, with ready-stock info."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    item_name: str
+    compartment_name: Optional[str] = None
+    template_id: Optional[str] = None
+    template_name: Optional[str] = None
+    apparatus_id: Optional[str] = None
+    apparatus_name: Optional[str] = None
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    days_until_expiration: Optional[int] = None
+    is_expired: bool = False
+    inventory_item_id: Optional[str] = None
+    inventory_item_name: Optional[str] = None
+    ready_stock: int = 0
+    ready_lots: List[ReadyLot] = []
+
+
+class SupplyOverviewResponse(BaseModel):
+    """Supply-officer view of items expiring soon across all apparatus."""
+
+    model_config = _camel_config
+
+    days_ahead: int
+    total: int = 0
+    items: List[SupplyExpiringItem] = []
+
+
+class LotSwapRequest(BaseModel):
+    """Swap a ready-stock lot onto the apparatus for a checklist item."""
+
+    inventory_lot_id: str
+
+
+class LotSwapResponse(BaseModel):
+    """Result of a lot swap: the deployed item now carries the new lot."""
+
+    model_config = _camel_config
+
+    template_item_id: str
+    lot_number: Optional[str] = None
+    expiration_date: Optional[date] = None
+    remaining_quantity: int = 0

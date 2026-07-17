@@ -349,6 +349,55 @@ class InventoryItemResponse(InventoryItemBase):
 
 
 # ============================================
+# Inventory Lot (ready stock) Schemas
+# ============================================
+
+
+class InventoryLotBase(BaseModel):
+    """Shared fields for a stock lot of a consumable item."""
+
+    lot_number: Optional[str] = Field(None, max_length=100)
+    expiration_date: Optional[date] = None
+    quantity: int = Field(0, ge=0)
+    received_date: Optional[date] = None
+    notes: Optional[FreeText] = None
+
+
+class InventoryLotCreate(InventoryLotBase):
+    """Schema for adding a stock lot to an item."""
+
+
+class InventoryLotUpdate(BaseModel):
+    """Schema for updating a stock lot (partial)."""
+
+    lot_number: Optional[str] = Field(None, max_length=100)
+    expiration_date: Optional[date] = None
+    quantity: Optional[int] = Field(None, ge=0)
+    received_date: Optional[date] = None
+    notes: Optional[FreeText] = None
+
+
+class InventoryLotResponse(InventoryLotBase):
+    """Schema for a stock lot response."""
+
+    id: UUID
+    organization_id: UUID
+    inventory_item_id: UUID
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[UUID] = None
+
+    model_config = _response_config
+
+
+class ExpiringLotResponse(InventoryLotResponse):
+    """A stock lot nearing expiration, with its item name for display."""
+
+    item_name: Optional[str] = None
+    days_until_expiration: Optional[int] = None
+
+
+# ============================================
 # Assignment Schemas
 # ============================================
 

@@ -149,6 +149,7 @@ const ADMIN_LINKS: {
   { label: "Patterns", path: "/scheduling/patterns", icon: Repeat, description: "Configure shift patterns" },
   { label: "Reports", path: "/scheduling/reports", icon: BarChart3, description: "View scheduling reports" },
   { label: "Check Reports", path: "/scheduling/equipment-check-reports", icon: ClipboardList, description: "Equipment compliance" },
+  { label: "Supply", path: "/scheduling/supply/expiring", icon: Truck, description: "Expiring items & stock" },
   { label: "Settings", path: "/scheduling/settings", icon: Settings, description: "Department settings" },
 ];
 

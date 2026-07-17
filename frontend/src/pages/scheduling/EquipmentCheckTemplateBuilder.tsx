@@ -64,6 +64,7 @@ import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
+import InventoryItemPicker from '@/modules/scheduling/components/InventoryItemPicker';
 import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
@@ -120,6 +121,7 @@ interface ItemFormState {
   levelUnit: string;
   serialNumber: string;
   lotNumber: string;
+  inventoryItemId?: string;
   hasExpiration: boolean;
   expirationDate: string;
   expirationWarningDays: string;
@@ -139,6 +141,7 @@ function emptyItem(): ItemFormState {
     levelUnit: '',
     serialNumber: '',
     lotNumber: '',
+    inventoryItemId: '',
     hasExpiration: false,
     expirationDate: '',
     expirationWarningDays: '30',
@@ -372,6 +375,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             levelUnit: item.levelUnit ?? '',
             serialNumber: item.serialNumber ?? '',
             lotNumber: item.lotNumber ?? '',
+            inventoryItemId: item.inventoryItemId ?? '',
             hasExpiration: item.hasExpiration,
             expirationDate: item.expirationDate ?? '',
             expirationWarningDays: String(item.expirationWarningDays ?? 30),
@@ -1203,6 +1207,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (patch.levelUnit !== undefined) apiPatch.level_unit = patch.levelUnit.trim() || undefined;
       if (patch.serialNumber !== undefined) apiPatch.serial_number = patch.serialNumber.trim() || undefined;
       if (patch.lotNumber !== undefined) apiPatch.lot_number = patch.lotNumber.trim() || undefined;
+      if (patch.inventoryItemId !== undefined) apiPatch.inventory_item_id = patch.inventoryItemId || undefined;
       if (patch.hasExpiration !== undefined) apiPatch.has_expiration = patch.hasExpiration;
       if (patch.expirationDate !== undefined) apiPatch.expiration_date = patch.expirationDate.trim() || undefined;
       if (patch.expirationWarningDays !== undefined) apiPatch.expiration_warning_days = patch.expirationWarningDays ? Number(patch.expirationWarningDays) : undefined;
@@ -1291,6 +1296,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             level_unit: item.levelUnit.trim() || undefined,
             serial_number: item.serialNumber.trim() || undefined,
             lot_number: item.lotNumber.trim() || undefined,
+            inventory_item_id: item.inventoryItemId || undefined,
             image_url: item.imageUrl.trim() || undefined,
             has_expiration: item.hasExpiration,
             expiration_date: item.expirationDate.trim() || undefined,
@@ -1347,6 +1353,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     level_unit: item.levelUnit.trim() || undefined,
                     serial_number: item.serialNumber.trim() || undefined,
                     lot_number: item.lotNumber.trim() || undefined,
+                    inventory_item_id: item.inventoryItemId || undefined,
                     image_url: item.imageUrl.trim() || undefined,
                     has_expiration: item.hasExpiration,
                     expiration_date: item.expirationDate.trim() || undefined,
@@ -1394,6 +1401,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               level_unit: item.levelUnit.trim() || undefined,
               serial_number: item.serialNumber.trim() || undefined,
               lot_number: item.lotNumber.trim() || undefined,
+              inventory_item_id: item.inventoryItemId || undefined,
               image_url: item.imageUrl.trim() || undefined,
               has_expiration: item.hasExpiration,
               expiration_date: item.expirationDate.trim() || undefined,
@@ -2299,6 +2307,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </label>
                 <input type="text" className={inputClass} placeholder="https://..." value={item.imageUrl} onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })} />
               </div>
+            </div>
+
+            {/* Inventory link — connects to the catalog for ready-stock + swaps */}
+            <div>
+              <label className={labelClass}>
+                <Package className="inline h-3.5 w-3.5 mr-1" />
+                Linked Inventory Item
+              </label>
+              <InventoryItemPicker
+                value={item.inventoryItemId || undefined}
+                onChange={(id) =>
+                  updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })
+                }
+              />
+              <p className="mt-1 text-[11px] text-theme-text-muted">
+                Link to track replacement stock and enable lot swaps during checks.
+              </p>
             </div>
 
             {/* Expiration row */}

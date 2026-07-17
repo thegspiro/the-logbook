@@ -866,4 +866,53 @@ describe('inventoryService', () => {
       await expect(inventoryService.deleteStorageArea('bad-id')).rejects.toThrow('Server Error');
     });
   });
+
+  // ── Stock Lots ──────────────────────────────────────────────────────
+
+  describe('stock lots', () => {
+    it('getItemLots GETs the item lots endpoint', async () => {
+      const lots = [{ id: 'l1', quantity: 5 }];
+      mockGet.mockResolvedValueOnce({ data: lots });
+
+      const result = await inventoryService.getItemLots('item-1');
+
+      expect(mockGet).toHaveBeenCalledWith('/inventory/items/item-1/lots');
+      expect(result).toEqual(lots);
+    });
+
+    it('addItemLot POSTs the lot payload', async () => {
+      const data = { lot_number: 'LOT-1', quantity: 3, expiration_date: '2027-01-01' };
+      mockPost.mockResolvedValueOnce({ data: { id: 'l1', ...data } });
+
+      await inventoryService.addItemLot('item-1', data);
+
+      expect(mockPost).toHaveBeenCalledWith('/inventory/items/item-1/lots', data);
+    });
+
+    it('updateItemLot PATCHes the lot', async () => {
+      mockPatch.mockResolvedValueOnce({ data: { id: 'l1', quantity: 2 } });
+
+      await inventoryService.updateItemLot('l1', { quantity: 2 });
+
+      expect(mockPatch).toHaveBeenCalledWith('/inventory/lots/l1', { quantity: 2 });
+    });
+
+    it('deleteItemLot DELETEs the lot', async () => {
+      mockDelete.mockResolvedValueOnce({ data: undefined });
+
+      await inventoryService.deleteItemLot('l1');
+
+      expect(mockDelete).toHaveBeenCalledWith('/inventory/lots/l1');
+    });
+
+    it('getExpiringLots GETs with the days_ahead param', async () => {
+      mockGet.mockResolvedValueOnce({ data: [] });
+
+      await inventoryService.getExpiringLots(60);
+
+      expect(mockGet).toHaveBeenCalledWith('/inventory/lots/expiring', {
+        params: { days_ahead: 60 },
+      });
+    });
+  });
 });

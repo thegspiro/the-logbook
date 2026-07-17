@@ -5,7 +5,7 @@ Business logic for equipment check template management, shift equipment
 check submissions, checklist resolution by position, and item history.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -20,6 +20,7 @@ from app.models.apparatus import (
     EquipmentCheckTemplate,
     TemplateChangeLog,
 )
+from app.models.inventory import InventoryItem, InventoryLot
 from app.models.training import (
     Shift,
     ShiftAssignment,
@@ -27,6 +28,7 @@ from app.models.training import (
     ShiftEquipmentCheckItem,
 )
 from app.models.user import Organization, User
+from app.services.inventory_service import InventoryService
 
 
 class EquipmentCheckService:
@@ -1221,6 +1223,169 @@ class EquipmentCheckService:
             )
         )
         return list(result.scalars().all())
+
+    async def get_supply_overview(
+        self, organization_id: str, days_ahead: int = 30
+    ) -> Dict[str, Any]:
+        """Supply-officer view: checklist items expiring soon on apparatus,
+        joined with the ready replacement stock available to swap in."""
+        today = date.today()
+        cutoff = today + timedelta(days=days_ahead)
+
+        result = await self.db.execute(
+            select(
+                CheckTemplateItem,
+                CheckTemplateCompartment,
+                EquipmentCheckTemplate,
+            )
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                EquipmentCheckTemplate.organization_id == organization_id,
+                CheckTemplateItem.has_expiration.is_(True),
+                CheckTemplateItem.expiration_date.isnot(None),
+                CheckTemplateItem.expiration_date <= cutoff,
+            )
+            .order_by(CheckTemplateItem.expiration_date.asc())
+        )
+        rows = result.all()
+
+        apparatus_ids = {t.apparatus_id for (_, _, t) in rows if t.apparatus_id}
+        apparatus_names: Dict[str, str] = {}
+        if apparatus_ids:
+            ares = await self.db.execute(
+                select(Apparatus.id, Apparatus.name).where(
+                    Apparatus.id.in_(apparatus_ids)
+                )
+            )
+            apparatus_names = {aid: name for aid, name in ares.all()}
+
+        inv_ids = [i.inventory_item_id for (i, _, _) in rows if i.inventory_item_id]
+        inventory_service = InventoryService(self.db)
+        lots_by_item = await inventory_service.get_lots_for_items(
+            organization_id, inv_ids
+        )
+        item_names: Dict[str, str] = {}
+        if inv_ids:
+            nres = await self.db.execute(
+                select(InventoryItem.id, InventoryItem.name).where(
+                    InventoryItem.id.in_(inv_ids)
+                )
+            )
+            item_names = {iid: name for iid, name in nres.all()}
+
+        items: List[Dict[str, Any]] = []
+        for (item, comp, tmpl) in rows:
+            exp = item.expiration_date
+            lots = lots_by_item.get(item.inventory_item_id or "", [])
+            items.append(
+                {
+                    "template_item_id": item.id,
+                    "item_name": item.name,
+                    "compartment_name": comp.name,
+                    "template_id": tmpl.id,
+                    "template_name": tmpl.name,
+                    "apparatus_id": tmpl.apparatus_id,
+                    "apparatus_name": (
+                        apparatus_names.get(tmpl.apparatus_id)
+                        if tmpl.apparatus_id
+                        else None
+                    ),
+                    "lot_number": item.lot_number,
+                    "expiration_date": exp,
+                    "days_until_expiration": (exp - today).days if exp else None,
+                    "is_expired": bool(exp and exp < today),
+                    "inventory_item_id": item.inventory_item_id,
+                    "inventory_item_name": (
+                        item_names.get(item.inventory_item_id)
+                        if item.inventory_item_id
+                        else None
+                    ),
+                    "ready_stock": sum(lot.quantity for lot in lots),
+                    "ready_lots": [
+                        {
+                            "id": lot.id,
+                            "lot_number": lot.lot_number,
+                            "expiration_date": lot.expiration_date,
+                            "quantity": lot.quantity,
+                        }
+                        for lot in lots
+                    ],
+                }
+            )
+
+        return {"days_ahead": days_ahead, "total": len(items), "items": items}
+
+    async def swap_item_lot(
+        self,
+        template_item_id: str,
+        inventory_lot_id: str,
+        organization_id: str,
+        user: Optional[User] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Swap a ready-stock lot onto the apparatus for a checklist item.
+
+        Decrements the lot's on-hand quantity by one and updates the deployed
+        checklist item's lot number and expiration to the new lot's values, so
+        the truck now reflects the fresher unit. Raises ValueError on a
+        mismatched or empty lot.
+        """
+        result = await self.db.execute(
+            select(CheckTemplateItem)
+            .join(
+                CheckTemplateCompartment,
+                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
+            )
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
+            .where(
+                CheckTemplateItem.id == template_item_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
+            )
+        )
+        item = result.scalars().first()
+        if not item:
+            return None
+
+        lot = await self.db.scalar(
+            select(InventoryLot).where(
+                InventoryLot.id == inventory_lot_id,
+                InventoryLot.organization_id == organization_id,
+            )
+        )
+        if lot is None:
+            raise ValueError("Stock lot not found")
+        if item.inventory_item_id and lot.inventory_item_id != item.inventory_item_id:
+            raise ValueError("This stock lot is for a different inventory item")
+        if lot.quantity < 1:
+            raise ValueError("No stock available in this lot")
+
+        lot.quantity -= 1
+        # Establish the catalog link if this was the item's first swap.
+        if not item.inventory_item_id:
+            item.inventory_item_id = lot.inventory_item_id
+        if lot.lot_number is not None:
+            item.lot_number = lot.lot_number
+        if lot.expiration_date is not None:
+            item.has_expiration = True
+            item.expiration_date = lot.expiration_date
+
+        await self.db.commit()
+
+        return {
+            "template_item_id": item.id,
+            "lot_number": item.lot_number,
+            "expiration_date": item.expiration_date,
+            "remaining_quantity": lot.quantity,
+        }
 
     # ------------------------------------------------------------------
     # Private Helpers

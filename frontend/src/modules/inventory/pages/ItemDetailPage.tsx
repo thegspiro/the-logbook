@@ -25,6 +25,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { ItemFormModal } from '../components/ItemFormModal';
+import StockLotsPanel from '../components/StockLotsPanel';
 import { VariantCapsules } from '../components/VariantCapsules';
 import { getDisplayName } from '../utils/variantHelpers';
 import { useTimezone } from '../../../hooks/useTimezone';
@@ -37,7 +38,7 @@ import toast from 'react-hot-toast';
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-type Tab = 'history' | 'nfpa' | 'inspections' | 'exposures';
+type Tab = 'history' | 'nfpa' | 'inspections' | 'exposures' | 'stock';
 
 const HISTORY_ICONS: Record<string, React.ReactNode> = {
   assignment: <User className="w-4 h-4 text-blue-500" />,
@@ -251,6 +252,7 @@ const ItemDetailPage: React.FC = () => {
   /* ---------- available tabs -------------------------------------- */
   const tabs: { key: Tab; label: string; show: boolean }[] = [
     { key: 'history', label: 'History', show: true },
+    { key: 'stock', label: 'Stock Lots', show: true },
     { key: 'nfpa', label: 'NFPA Compliance', show: isNfpa },
     { key: 'inspections', label: 'Inspections', show: hasMaintenance },
     { key: 'exposures', label: 'Exposures', show: isNfpa },
@@ -459,6 +461,7 @@ const ItemDetailPage: React.FC = () => {
           ) : (
             <>
               {activeTab === 'history' && <HistoryTab events={history} tz={tz} />}
+              {activeTab === 'stock' && <StockLotsPanel itemId={id ?? ''} canManage={canManage} />}
               {activeTab === 'nfpa' && isNfpa && (
                 <NFPATab data={nfpa} tz={tz} canManage={canManage} onEdit={() => setShowNfpaModal(true)} />
               )}

@@ -38,11 +38,14 @@ from app.schemas.equipment_check import (
     EquipmentCheckTemplateUpdate,
     FailureLogResponse,
     ItemTrendResponse,
+    LotSwapRequest,
+    LotSwapResponse,
     ReorderRequest,
     ShiftCheckSummary,
     ShiftEquipmentCheckCreate,
     ShiftEquipmentCheckResponse,
     StandaloneEquipmentCheckCreate,
+    SupplyOverviewResponse,
     TemplateChangeLogListResponse,
 )
 from app.services.equipment_check_service import EquipmentCheckService
@@ -1220,3 +1223,56 @@ async def download_csv_sample(
             )
         },
     )
+
+
+# =====================================================================
+# Supply Officer: Expiring Items + Lot Swap
+# =====================================================================
+
+
+@router.get(
+    "/supply/expiring-items",
+    response_model=SupplyOverviewResponse,
+)
+async def get_supply_expiring_items(
+    days_ahead: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.view")),
+):
+    """Checklist items expiring soon on apparatus, with ready replacement
+    stock the supply officer can prepare or swap in."""
+    service = EquipmentCheckService(db)
+    return await service.get_supply_overview(
+        organization_id=str(current_user.organization_id),
+        days_ahead=days_ahead,
+    )
+
+
+@router.post(
+    "/items/{template_item_id}/swap",
+    response_model=LotSwapResponse,
+)
+async def swap_item_lot(
+    template_item_id: str,
+    data: LotSwapRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Swap a ready-stock lot onto the apparatus for a checklist item.
+
+    Decrements the lot's on-hand quantity and updates the deployed item's
+    lot number and expiration to the fresher unit that was swapped in.
+    """
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.swap_item_lot(
+            template_item_id=template_item_id,
+            inventory_lot_id=data.inventory_lot_id,
+            organization_id=str(current_user.organization_id),
+            user=current_user,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Checklist item not found")
+    return result

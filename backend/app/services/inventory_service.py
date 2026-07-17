@@ -18,9 +18,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.audit import log_audit_event
-from app.models.notification import NotificationLog
-from app.utils.impact_plan_pdf import render_impact_plan_pdf
-from app.utils.label_renderer import LabelSpec, render_labels
 from app.models.inventory import (
     AssignmentType,
     CheckOutRecord,
@@ -31,6 +28,7 @@ from app.models.inventory import (
     InventoryCategory,
     InventoryImpactPlan,
     InventoryItem,
+    InventoryLot,
     IssuanceAllowance,
     ItemAssignment,
     ItemCondition,
@@ -53,6 +51,7 @@ from app.models.inventory import (
     WriteOffRequest,
     WriteOffStatus,
 )
+from app.models.notification import NotificationLog
 from app.models.operational_rank import OperationalRank
 from app.models.user import (
     MembershipType,
@@ -62,6 +61,8 @@ from app.models.user import (
     UserStatus,
     user_positions,
 )
+from app.utils.impact_plan_pdf import render_impact_plan_pdf
+from app.utils.label_renderer import LabelSpec, render_labels
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
@@ -3806,6 +3807,155 @@ class InventoryService:
             .order_by(InventoryItem.quantity.asc())
         )
         return list(result.scalars().all())
+
+    # ------------------------------------------------------------------
+    # Stock Lots (ready replacement stock with lot # + expiration)
+    # ------------------------------------------------------------------
+
+    async def _get_item(
+        self, item_id: str, organization_id: str
+    ) -> Optional[InventoryItem]:
+        """Fetch an item scoped to the organization."""
+        return await self.db.scalar(
+            select(InventoryItem).where(
+                InventoryItem.id == item_id,
+                InventoryItem.organization_id == organization_id,
+            )
+        )
+
+    async def _get_lot(
+        self, lot_id: str, organization_id: str
+    ) -> Optional[InventoryLot]:
+        """Fetch a lot scoped to the organization."""
+        return await self.db.scalar(
+            select(InventoryLot).where(
+                InventoryLot.id == lot_id,
+                InventoryLot.organization_id == organization_id,
+            )
+        )
+
+    async def list_lots(
+        self, item_id: str, organization_id: str
+    ) -> List[InventoryLot]:
+        """List all stock lots for an item, soonest-to-expire first."""
+        result = await self.db.execute(
+            select(InventoryLot)
+            .where(
+                InventoryLot.inventory_item_id == item_id,
+                InventoryLot.organization_id == organization_id,
+            )
+            .order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date.asc(),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def add_lot(
+        self,
+        item_id: str,
+        organization_id: str,
+        data: Dict[str, Any],
+        created_by: Optional[str] = None,
+    ) -> Optional[InventoryLot]:
+        """Add a ready-stock lot to an item."""
+        item = await self._get_item(item_id, organization_id)
+        if not item:
+            return None
+
+        lot = InventoryLot(
+            organization_id=organization_id,
+            inventory_item_id=item_id,
+            created_by=created_by,
+            **data,
+        )
+        self.db.add(lot)
+        await self.db.commit()
+        await self.db.refresh(lot)
+        return lot
+
+    async def update_lot(
+        self,
+        lot_id: str,
+        organization_id: str,
+        data: Dict[str, Any],
+    ) -> Optional[InventoryLot]:
+        """Update a stock lot."""
+        lot = await self._get_lot(lot_id, organization_id)
+        if not lot:
+            return None
+        for key, value in data.items():
+            if hasattr(lot, key):
+                setattr(lot, key, value)
+        await self.db.commit()
+        await self.db.refresh(lot)
+        return lot
+
+    async def delete_lot(self, lot_id: str, organization_id: str) -> bool:
+        """Delete a stock lot."""
+        lot = await self._get_lot(lot_id, organization_id)
+        if not lot:
+            return False
+        await self.db.delete(lot)
+        await self.db.commit()
+        return True
+
+    async def get_lots_for_items(
+        self, organization_id: str, item_ids: List[str]
+    ) -> Dict[str, List[InventoryLot]]:
+        """Map each item id to its in-stock lots (quantity > 0)."""
+        if not item_ids:
+            return {}
+        result = await self.db.execute(
+            select(InventoryLot)
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryLot.inventory_item_id.in_(item_ids),
+                InventoryLot.quantity > 0,
+            )
+            .order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date.asc(),
+            )
+        )
+        by_item: Dict[str, List[InventoryLot]] = {}
+        for lot in result.scalars().all():
+            by_item.setdefault(lot.inventory_item_id, []).append(lot)
+        return by_item
+
+    async def get_expiring_lots(
+        self, organization_id: str, days_ahead: int = 30
+    ) -> List[Tuple[InventoryLot, str]]:
+        """Get in-stock lots expiring within N days, with the item name."""
+        cutoff = date.today() + timedelta(days=days_ahead)
+        result = await self.db.execute(
+            select(InventoryLot, InventoryItem.name)
+            .join(InventoryItem, InventoryItem.id == InventoryLot.inventory_item_id)
+            .where(
+                InventoryLot.organization_id == organization_id,
+                InventoryLot.quantity > 0,
+                InventoryLot.expiration_date.isnot(None),
+                InventoryLot.expiration_date <= cutoff,
+            )
+            .order_by(InventoryLot.expiration_date.asc())
+        )
+        return [(row[0], row[1]) for row in result.all()]
+
+    async def consume_lot_unit(
+        self, lot_id: str, organization_id: str, quantity: int = 1
+    ) -> Optional[InventoryLot]:
+        """Decrement a lot's on-hand quantity when stock is used/swapped.
+
+        Raises ValueError if the lot lacks enough stock.
+        """
+        lot = await self._get_lot(lot_id, organization_id)
+        if not lot:
+            return None
+        if lot.quantity < quantity:
+            raise ValueError("Not enough stock in this lot")
+        lot.quantity -= quantity
+        await self.db.flush()
+        return lot
 
     async def get_overdue_checkouts_for_alerts(
         self,

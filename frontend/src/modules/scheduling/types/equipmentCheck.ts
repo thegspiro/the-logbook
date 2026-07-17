@@ -111,6 +111,7 @@ export interface CheckTemplateItem {
   lotNumber?: string;
   imageUrl?: string;
   equipmentId?: string;
+  inventoryItemId?: string;
   hasExpiration: boolean;
   expirationDate?: string;
   expirationWarningDays: number;
@@ -133,6 +134,7 @@ export interface CheckTemplateItemCreate {
   lot_number?: string | undefined;
   image_url?: string | undefined;
   equipment_id?: string | undefined;
+  inventory_item_id?: string | undefined;
   has_expiration?: boolean | undefined;
   expiration_date?: string | undefined;
   expiration_warning_days?: number | undefined;
@@ -154,6 +156,7 @@ export interface CheckTemplateItemUpdate {
   lot_number?: string | undefined;
   image_url?: string | undefined;
   equipment_id?: string | undefined;
+  inventory_item_id?: string | undefined;
   has_expiration?: boolean | undefined;
   expiration_date?: string | undefined;
   expiration_warning_days?: number | undefined;
@@ -439,6 +442,46 @@ export interface ItemTrendResponse {
   itemName: string;
   trends: ItemTrendEntry[];
   history: CheckItemHistory[];
+}
+
+// ─── Supply Officer: Expiring Items + Ready Stock ───────────────────────────
+
+export interface ReadyLot {
+  id: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  quantity: number;
+}
+
+export interface SupplyExpiringItem {
+  templateItemId: string;
+  itemName: string;
+  compartmentName?: string;
+  templateId?: string;
+  templateName?: string;
+  apparatusId?: string;
+  apparatusName?: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  daysUntilExpiration?: number;
+  isExpired: boolean;
+  inventoryItemId?: string;
+  inventoryItemName?: string;
+  readyStock: number;
+  readyLots: ReadyLot[];
+}
+
+export interface SupplyOverview {
+  daysAhead: number;
+  total: number;
+  items: SupplyExpiringItem[];
+}
+
+export interface LotSwapResult {
+  templateItemId: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  remainingQuantity: number;
 }
 
 // ─── Template Change Log ────────────────────────────────────────────────────

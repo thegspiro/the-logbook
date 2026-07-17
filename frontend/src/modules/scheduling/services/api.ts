@@ -63,6 +63,8 @@ import type {
   FailureLogResponse,
   ItemTrendResponse,
   TemplateChangeLogResponse,
+  SupplyOverview,
+  LotSwapResult,
 } from '../types/equipmentCheck';
 
 declare module 'axios' {
@@ -757,6 +759,21 @@ export const schedulingService = {
       `/equipment-checks/templates/${templateId}/clone`,
       null,
       { params: { target_apparatus_id: targetApparatusId } },
+    );
+    return response.data;
+  },
+
+  // --- Supply Officer: expiring items + lot swap ---
+  async getSupplyExpiringItems(daysAhead = 30): Promise<SupplyOverview> {
+    const response = await api.get<SupplyOverview>('/equipment-checks/supply/expiring-items', {
+      params: { days_ahead: daysAhead },
+    });
+    return response.data;
+  },
+  async swapItemLot(templateItemId: string, inventoryLotId: string): Promise<LotSwapResult> {
+    const response = await api.post<LotSwapResult>(
+      `/equipment-checks/items/${templateItemId}/swap`,
+      { inventory_lot_id: inventoryLotId },
     );
     return response.data;
   },

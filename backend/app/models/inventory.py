@@ -476,6 +476,9 @@ class InventoryItem(Base):
     variant_group = relationship(
         "ItemVariantGroup", back_populates="items", foreign_keys=[variant_group_id]
     )
+    lots = relationship(
+        "InventoryLot", back_populates="item", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("idx_inventory_items_org_category", "organization_id", "category_id"),
@@ -492,6 +495,61 @@ class InventoryItem(Base):
             "organization_id", "serial_number", name="uq_item_org_serial_number"
         ),
     )
+
+
+class InventoryLot(Base):
+    """
+    A batch/lot of a consumable inventory item held as ready stock.
+
+    One inventory item (e.g. "4x4 Gauze") can have many lots on hand, each with
+    its own lot number and expiration date. Lots are the replacement stock a
+    supply officer keeps ready to swap onto apparatus during equipment checks:
+    when a crew swaps in a fresh unit, its lot's quantity is decremented and the
+    deployed check item inherits the lot number and expiration.
+    """
+
+    __tablename__ = "inventory_lots"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    inventory_item_id = Column(
+        String(36),
+        ForeignKey("inventory_items.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    lot_number = Column(String(100), nullable=True)
+    expiration_date = Column(Date, nullable=True)
+    quantity = Column(Integer, default=0, nullable=False)  # ready units on hand
+    received_date = Column(Date, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    item = relationship("InventoryItem", back_populates="lots")
+
+    __table_args__ = (
+        Index("idx_inventory_lots_item", "inventory_item_id"),
+        Index("idx_inventory_lots_org_exp", "organization_id", "expiration_date"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<InventoryLot(item_id={self.inventory_item_id}, "
+            f"lot={self.lot_number}, qty={self.quantity})>"
+        )
 
 
 class ItemAssignment(Base):
