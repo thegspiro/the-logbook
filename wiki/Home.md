@@ -62,6 +62,7 @@ docker-compose up -d
 - **[Training Programs](Module-Training)** - Training & certification tracking
 - **[Elections & Voting](Module-Elections)** - Election management system
 - **[Event Management](Module-Events)** - QR code check-in system
+- **[Communications](Module-Communications)** - Department messages with acknowledgment tracking, email/SMS escalation, and scheduled send
 - **[Scheduling](Module-Scheduling)** - Shift scheduling, signup, swaps, templates, pattern presets & reports
 - **[Admin Hours](Module-Admin-Hours)** - Administrative hours tracking with QR code clock-in/clock-out, bulk approve, CSV export
 - **[Member ID Card](../docs/MEMBER_ID_CARD.md)** - Digital member identification with QR code, barcode, and print support

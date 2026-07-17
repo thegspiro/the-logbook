@@ -323,7 +323,24 @@ RSVP list and check-in status]**
 
 **[CALLOUT: "Election results are permanently archived for historical records"]**
 
-**[TRANSITION: Scheduling section]**
+**[TRANSITION: Communications]**
+
+### DEPARTMENT ANNOUNCEMENTS (17:45 – 18:00)
+
+**[SCREEN: Navigate to Communications → Messages]**
+
+> "When you need to reach the whole department fast, use Communications →
+> Messages. Set the priority: a normal post shows up in the app, but mark it
+> Urgent and it also goes out by email and text message, so a mandatory callback
+> or a station closure reaches people who aren't logged in. Target everyone, a
+> specific role, or individual members."
+
+> "For anything members must confirm — a policy change, an inspection deadline —
+> turn on Require acknowledgment. You'll get a report of exactly who has and
+> hasn't signed off, which is your paper trail for compliance. You can also
+> schedule an announcement to go out at a set time."
+
+**[SCREEN: Show an urgent message and the acknowledgment report]**
 
 ---
 

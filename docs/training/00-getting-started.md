@@ -149,7 +149,7 @@ The dashboard is your landing page after login. It provides an at-a-glance view 
 - **Upcoming Shifts** - Your next assigned shifts
 - **Recent Activity** - Latest actions across the department
 - **Notifications** - Unread alerts and reminders with **Clear All** and individual dismiss (X) buttons. Persistent department messages (set by administrators) cannot be dismissed by regular members and show a "Persistent" badge
-- **Department Messages** - Organization-wide announcements from administrators. Persistent messages remain visible until an admin clears them
+- **Department Messages** - Organization-wide announcements from administrators. Urgent messages are highlighted (and may also reach you by email/text), some ask you to **Acknowledge** them, and persistent messages remain visible until an admin clears them. Your full message history lives on the **Messages** page (megaphone icon)
 
 > **Screenshot needed:**
 > _[Screenshot of the dashboard showing the stats cards at the top, the notification section with "Clear All" button, a persistent department message with "Persistent" badge, individual notification cards with dismiss (X) buttons, the upcoming events panel, and upcoming shifts panel]_
@@ -184,7 +184,7 @@ To update your personal settings, click **My Account** in the sidebar. This take
 From here you can:
 
 - Update your **email** and **phone number**
-- Set your **notification preferences** (email, event reminders, training alerts)
+- Set your **notification preferences** (email, urgent text messages, event reminders, training alerts)
 - Change your **password**
 - View your **assigned roles and permissions**
 

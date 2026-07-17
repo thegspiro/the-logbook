@@ -2030,7 +2030,16 @@ A calendar month is "waived" if the leave covers **15 or more days** of that mon
 
 # Monthly 1st at 8:00 AM — membership tier auto-advance
 0 8 1 * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=membership_tier_advance
+
+# Every 15 minutes — publish & escalate scheduled department messages
+*/15 * * * * curl -s -X POST http://localhost:8000/api/v1/scheduled/run-task?task=publish_scheduled_messages
 ```
+
+> **Note:** Department messages scheduled for a future time are published by the
+> `publish_scheduled_messages` task, so it must run on a short interval (~15 min)
+> for scheduled sends to go out near their chosen time. The built-in in-process
+> scheduler already runs it every 15 minutes; the crontab entry is only needed if
+> you drive scheduled tasks externally.
 
 **Manual trigger**: Any task can be run on-demand via the same endpoint.
 

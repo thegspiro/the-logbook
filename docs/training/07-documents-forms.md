@@ -308,42 +308,128 @@ On the dashboard, notifications now have dismiss controls:
 
 ## Department Messages
 
-**Required Permission:** `notifications.manage`
+Department Messages are leadership announcements broadcast to the whole
+department or a targeted group. There are two surfaces:
 
-Officers can broadcast messages to the entire department or targeted groups:
+- **Members** read them at **Messages** (`/messages`, the megaphone icon in the
+  sidebar), on the **dashboard** "Department Messages" card, and in the
+  notification **bell**. No special permission is required to read your own
+  messages.
+- **Officers** compose and manage them at **Communications → Messages**
+  (`/communications/messages`). **Required Permission:** `notifications.manage`.
 
-1. Navigate to **Notifications**.
-2. Switch to the **Messages** tab.
-3. Click **New Message**.
-4. Set the **priority** (Normal, Important, Urgent).
-5. Choose the **target**: All Members, specific roles, or individual members.
-6. Toggle **Persistent** if the message should stay on the dashboard until an admin clears it.
-7. Write the message.
-8. Send.
+### Posting a message
 
-Members receive the message as an in-app notification on the dashboard and optionally by email.
-
-### Persistent Messages
-
-When the **Persistent** toggle is enabled:
-- The message shows a **"Persistent"** badge on the dashboard
-- Regular members **cannot dismiss** the message — the dismiss (X) button is hidden
-- Only users with `notifications.manage` permission see a **"Clear"** button to remove the message
-- The message remains visible for all targeted members until an admin clears it
-
-This is useful for important department-wide announcements that must be acknowledged (e.g., "SCBA annual inspection mandatory by March 31 — contact Lt. Smith to schedule").
+1. Go to **Communications → Messages** and click **New message**.
+2. Enter a **title** and **message** body. URLs you type (e.g. a sign-up form or
+   SOP link) become clickable links automatically.
+3. Set the **priority**: Normal, Important, or Urgent. Priority drives both the
+   styling and how far the message is escalated (see below).
+4. Choose the **audience**:
+   - **Everyone** — the whole department.
+   - **By role** — one or more roles (e.g. Probationary Members, Officers).
+   - **By status** — member statuses (Active, Probationary, Leave, etc.).
+   - **Specific members** — hand-picked individuals (searchable list).
+5. Optionally toggle **Pin to top**, **Persistent**, or **Require
+   acknowledgment**, and set an **Expires** date and/or a **Schedule for later**
+   time (see the sections below).
+6. Click **Post message** (or **Schedule message** if you set a future time).
 
 > **Screenshot needed:**
-> _[Screenshot of the dashboard showing a persistent department message with the "Persistent" badge, no dismiss button for regular members, and a "Clear" button visible in a separate admin view]_
+> _[Screenshot of the New message form showing title/body, priority, audience selector with the "By role" checklist expanded, the flag toggles, and the Schedule/Expires fields]_
+
+### How members receive a message
+
+Every targeted member gets the message in the app (the dashboard card, the
+`/messages` inbox, and a bell notification). Higher priorities are **escalated**
+to the channels members actually watch when they're not in the app:
+
+| Priority / flag | In-app (bell, inbox, dashboard) | Email | SMS |
+|-----------------|:---:|:---:|:---:|
+| Normal | ✅ | — | — |
+| Important | ✅ | — | — |
+| Requires acknowledgment | ✅ | ✅ | — |
+| Urgent | ✅ | ✅ | ✅ |
+
+Email and SMS respect each member's **notification preferences** (see
+[Member notification controls](#member-notification-controls)). SMS is only sent
+when the department has SMS (Twilio) configured and the member has a mobile
+number on file. The author of a message is not notified about their own post.
+
+### Requiring acknowledgment
+
+Toggle **Require acknowledgment** for messages members must confirm they've read
+(e.g. an SOP change). These behave differently:
+
+- The member sees an **Acknowledge** button on the message and the message stays
+  in their "new/unread" count until they acknowledge it — simply opening it is
+  not enough.
+- Acknowledgment-required messages are also emailed to targeted members.
+- Officers can open the **acknowledgment report** (the bar-chart icon on a
+  message) to see the completion rate — **X of Y acknowledged / read** — and a
+  per-member breakdown listing exactly who still owes an acknowledgment.
+  Acknowledgments are treated as compliance evidence and are recorded in the
+  audit log.
+
+> **Screenshot needed:**
+> _[Screenshot of the acknowledgment report panel showing the "Acknowledged 12/20" summary and the recipient list with members who have not yet acknowledged surfaced at the top]_
+
+### Scheduling a message
+
+Set **Schedule for later** to a future date/time to have the message publish
+automatically at that time instead of immediately. Until then it is hidden from
+members and shows a **"Scheduled · <time>"** badge in the admin list. When the
+scheduled time arrives (checked every ~15 minutes) the message goes live and is
+escalated just like an immediate post. Leave the field blank to publish now.
+
+> A message that has **already been published cannot be moved back to a future
+> time** — that would re-send it. You can still reschedule a message that is
+> *pending* (has not gone out yet).
+
+### Editing and managing messages
+
+- **Edit** — the pencil icon reopens the compose form so you can fix the title,
+  body, audience, flags, or expiry in place (no need to delete and repost).
+- **Search & filter** — the admin list has a search box (title/body) and a
+  priority filter, and paginates for large histories.
+- **Delete** — the trash icon removes the message from members' view. This is a
+  **soft delete**: the read/acknowledgment records are preserved for compliance,
+  so a deleted acknowledgment-required message still has its evidence trail.
+
+### Persistent messages
+
+When the **Persistent** toggle is enabled:
+- The message shows a **"Persistent"** badge on the dashboard.
+- It stays on the dashboard/inbox for targeted members regardless of read state
+  — it does not drop off once read.
+- Only users with `notifications.manage` see a **"Clear"** button to remove it.
+
+This is useful for standing notices that should remain visible until leadership
+takes them down (e.g., "SCBA annual inspection mandatory by March 31 — contact
+Lt. Smith to schedule").
+
+### Member notification controls
+
+Members manage how they're reached under **Settings → Notifications**:
+- **Email Notifications** — receive escalation emails for important/urgent
+  messages.
+- **Urgent Text Messages** — receive an SMS for urgent messages (requires a
+  mobile number on file and the department to have SMS enabled).
+
+Both default to on; turning one off opts the member out of that channel. The
+in-app notification is always delivered regardless of these settings.
 
 ### Edge Cases
 
 | Scenario | Behavior |
 |----------|----------|
-| Non-persistent message | Appears on dashboard with normal dismiss (X) button |
-| Admin views persistent message | Sees both the "Persistent" badge and the "Clear" button |
-| Member marks all notifications as read | Persistent messages are unaffected — they can only be cleared by an admin |
-| Message targeting specific roles | Only members with those roles see the message on their dashboard |
+| Message targeting specific roles | Only members holding one of those roles see it. Targeting follows the role even if it is later renamed. |
+| Renaming a targeted role | Existing role-targeted messages keep reaching the same role (targeting is by role identity, not name). |
+| Member marks all notifications as read | Persistent messages are unaffected — only an admin can clear them. |
+| Deleting an acknowledgment-required message | The message is hidden from members but its read/acknowledgment records are kept for compliance. |
+| Editing an already-sent message | Saves changes in place; it is **not** re-sent or re-escalated. |
+| Urgent message when Twilio isn't configured | Still delivered in-app and by email; SMS is skipped. |
+| Very high volume of urgent/ack messages | Email/SMS escalation is rate-limited per department to prevent runaway sends; the in-app notification is always delivered. |
 
 ---
 

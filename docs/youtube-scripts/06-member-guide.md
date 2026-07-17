@@ -331,11 +331,19 @@ fewer widgets than the Chief's view but still informative.]**
 **[SCREEN: Navigate to Notifications (NotificationsPage)]**
 
 > "The Notifications page shows everything that's been sent to you — event
-> reminders, training expirations, shift changes, announcements. You can manage
-> your notification preferences here too — choose what you want email alerts
-> for versus what you only want to see in-app."
+> reminders, training expirations, shift changes, announcements. Department
+> announcements also live on your Messages page, the megaphone icon in the
+> sidebar. If a message is marked urgent it stands out, and some ask you to tap
+> Acknowledge to confirm you've read it — do that so leadership knows it reached
+> you."
 
-**[SCREEN: Show notification preferences]**
+**[SCREEN: Show the Messages page and an Acknowledge button]**
+
+> "In Settings → Notifications you choose how you're reached: email alerts, and
+> whether you get a text message for urgent announcements. To get those texts,
+> make sure your mobile number is on file."
+
+**[SCREEN: Show notification preferences including the Urgent Text Messages toggle]**
 
 **[TRANSITION: Profile and wrap-up]**
 

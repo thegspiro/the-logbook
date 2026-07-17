@@ -419,7 +419,15 @@ thresholds]**
 
 > "With email enabled, the platform can send: event reminders, training
 > expiration warnings, shift schedule notifications, password reset links,
-> election announcements, and custom notifications."
+> election announcements, and custom notifications. Important and
+> acknowledgment-required department messages are emailed automatically too."
+
+> "If you also configure Twilio — account SID, auth token, and a sending number
+> in the environment settings — the platform can send **SMS** for *urgent*
+> department messages, reaching members even when they're off the app. Without
+> Twilio, urgent messages still deliver in-app and by email; the text is simply
+> skipped. Members choose whether to receive those texts in their own settings,
+> and need a mobile number on file."
 
 > "One thing to note: Cloudflare Email Service doesn't support file
 > attachments. If your department sends compliance reports or other files
