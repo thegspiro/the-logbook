@@ -251,7 +251,7 @@ record to open the Attachments panel]**
 > "One click and everyone's records are updated. This is the fastest way to
 > process training after a class."
 
-### MEMBER SELF-SUBMISSION (11:00 – 12:00)
+### MEMBER SELF-SUBMISSION (11:00 – 11:30)
 
 **[SCREEN: Navigate to Submit Training page (SubmitTrainingPage) — show from
 a member's perspective]**
@@ -269,6 +269,33 @@ a member's perspective]**
 > approve or reject with notes, and the member's record is updated."
 
 **[CALLOUT: "Member submissions require Training Officer approval"]**
+
+> "One rule worth knowing: you **can't approve your own** self-reported training.
+> If you submit a class you took, a **different** officer has to sign it off — so
+> nobody grants themselves hours unchecked. You can still reject or ask for a
+> revision on your own submission."
+
+### FIXING A MISTAKE (11:30 – 12:00)
+
+_Production note: this beat is folded into the back half of Chapter 4; downstream
+chapter timings are unchanged._
+
+**[SCREEN: Open an already-approved submission and show the "Reverse Approval"
+action]**
+
+> "Approved the wrong thing? It happens. On an approved submission, **Reverse
+> Approval** undoes it cleanly — it voids the training record that approval
+> created, takes back any pipeline credit it applied, and sends the submission
+> back to pending so you can re-decide."
+
+**[SCREEN: On a member's training history, show the "Void" action on a record]**
+
+> "And any record entered by mistake can be **voided** — it's marked cancelled
+> and kept for your audit trail, never truly deleted, and any progress it counted
+> toward a program comes back off automatically. You don't have to hand-fix
+> anyone's numbers."
+
+**[CALLOUT: "Reverse an approval or void a record — mistakes are easy to undo"]**
 
 **[TRANSITION: Skills testing]**
 

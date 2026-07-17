@@ -193,6 +193,8 @@ From the **Enrollments** tab, click an enrolled member to open their progress de
 
 Completing any requirement — of **any** type — counts toward the member's **overall progress percentage**.
 
+> **Only officers can complete or credit a requirement.** Setting a numeric value (hours/shifts/calls/courses), recording a test score, or marking a requirement complete/verified/waived requires `training.manage`. A member viewing their own progress can mark a requirement **in progress**, but to get credit they submit their training for review — they can't set their own requirement to 100%.
+
 > **[SCREENSHOT NEEDED]:** _A member's enrollment progress detail showing requirements grouped by phase, each with a status control (Complete / In Progress / Reopen), an officer "Verify" action, and inputs for logging hours, shifts, calls, or courses._
 
 ### Recording a Knowledge Test
@@ -226,6 +228,9 @@ Several actions credit pipeline progress without anyone editing the enrollment d
 - **Completing a shift report** — a filed and approved shift completion report credits matching hours, shifts, calls, and skills (see [Shift Completion Reports](#shift-completion-reports)).
 - **Approving a linked training session** — approving a training session that is **linked to the program** credits progress, matched either by a specific **requirement** or by training **category**.
 - **Passing a linked skills test** — passing a skills test that is **linked to a requirement** completes that requirement (see the [Skills Testing](./09-skills-testing.md) guide).
+- **An approved external/synced course** — an imported course (e.g. from Vector Solutions) credits any requirement it matches by category, if the requirement opts into external credit.
+
+> **No double-counting.** Each of these feeds records its credit against the specific source (the shift report, the session, the imported record, the submission). If the same source is processed again — a re-synced course, a re-filed report, a re-approved submission — it is recognized and **not** credited a second time, so one real training never inflates a member's progress twice.
 
 ### Viewing Your Own Progress (Members)
 
@@ -346,6 +351,8 @@ Navigate to **Training Admin > Officer Dashboard** for a department-wide overvie
 > **Screenshot placeholder:**
 > _[Screenshot of the Training Officer Dashboard showing summary cards (completion rate, pending reviews, upcoming expirations), a chart of monthly training hours, and a list of members needing attention]_
 
+> **Automatic "falling behind" alerts.** A weekly check flags members who are behind pace or approaching a deadline and notifies **both the member and the training officers** so someone can step in. A member isn't re-alerted every week while they stay behind (the alert is throttled), and a member who just started a fresh recertification cycle isn't flagged as overdue on day one — pace is measured from the current cycle, not their original enrollment date.
+
 ---
 
 ## Reviewing Submissions
@@ -362,7 +369,18 @@ Navigate to **Training Admin > Review Submissions** to see training records pend
 > **Screenshot placeholder:**
 > _[Screenshot of the Review Submissions page showing a list of pending submissions with member name, course, date, and hours. Show one expanded submission with the approve/reject buttons and the attached certificate preview]_
 
+> **You can't approve your own submission.** If you self-report training, a **different** officer has to approve it — you can't sign off your own hours or credit. (You can still reject or request revision on your own submission.)
+
 > **Hint:** Self-reported submissions reviewed here are separate from finalizing a training session. Whether finalizing a session needs a second officer to confirm is governed by the **Require instructor confirmation** option (see "Finalizing a Training Session" below) — it is no longer always required.
+
+### Fixing a Mistaken Approval or Record
+
+Approvals and records can be undone without hand-editing anyone's progress:
+
+- **Reverse an approval** — on an already-approved submission, reversing the approval **voids the training record it created**, takes back any pipeline credit it applied, and returns the submission to **pending review** so you can re-decide (reject it, or re-approve with corrected hours).
+- **Void a record** — a training record entered in error can be voided. It is marked **cancelled** (kept for the audit trail, never truly deleted) and any pipeline credit it fed is taken back off automatically. Because compliance only counts completed records, a voided record stops counting right away.
+
+Both actions require `training.manage` and are recorded in the audit log.
 
 ---
 
