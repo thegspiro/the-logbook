@@ -174,9 +174,22 @@ const SchedulingPage: React.FC = () => {
     templatesLoaded,
     apparatus: apparatusList,
     summary,
+    platoonsEnabled,
     loadInitialData,
     loadSummary,
   } = useSchedulingStore();
+
+  // Platoons admin page is only relevant when platoon scheduling is enabled.
+  const adminLinks = useMemo(
+    () =>
+      platoonsEnabled
+        ? [
+            ...ADMIN_LINKS,
+            { label: "Platoons", path: "/scheduling/platoons", icon: Users, description: "Assign platoon rosters" },
+          ]
+        : ADMIN_LINKS,
+    [platoonsEnabled],
+  );
 
   // Tab state — honour ?tab= query param for deep-linking
   const initialTab = (searchParams.get('tab') || 'schedule') as TabId;
@@ -438,7 +451,15 @@ const SchedulingPage: React.FC = () => {
 
       // Convert local times to UTC so the backend stores correct values
       const startDateTime = localToUTC(`${shiftForm.startDate}T${startTime}`, tz);
-      const endDateTime = localToUTC(`${endDate}T${endTime}`, tz);
+      let endDateTime = localToUTC(`${endDate}T${endTime}`, tz);
+      // Overnight guard: if custom times make the end fall on/before the start
+      // (e.g. 19:00 → 07:00 on the same date), roll the end to the next day so
+      // the backend doesn't reject it (end_time must be after start_time).
+      if (new Date(endDateTime) <= new Date(startDateTime)) {
+        const rolled = new Date(endDateTime);
+        rolled.setUTCDate(rolled.getUTCDate() + 1);
+        endDateTime = rolled.toISOString();
+      }
 
       const templatePositions = resolveTemplatePositions(template.positions);
 
@@ -1030,7 +1051,7 @@ const SchedulingPage: React.FC = () => {
               Administration
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {ADMIN_LINKS.map((link) => {
+              {adminLinks.map((link) => {
                 const Icon = link.icon;
                 return (
                   <Link

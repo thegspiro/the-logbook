@@ -340,6 +340,58 @@ curl -X POST \
 
 ---
 
+### 7. Personal Shift Calendar (ICS Feed)
+
+Return a member's own upcoming shifts as an RFC 5545 iCalendar feed, so they can
+subscribe from Google Calendar, Apple Calendar, Outlook, etc. Calendar apps
+cannot authenticate with cookies, so the feed is protected by an unguessable
+per-user token embedded in the URL instead of a login.
+
+**Endpoint:** `GET /calendar/{token}.ics`
+
+**Authentication:** Not required (the token *is* the credential)
+
+**Content-Type:** `text/calendar`
+
+The member obtains their personal feed URL from the authenticated app
+(My Shifts → "Subscribe to my shifts"), which calls
+`GET /api/v1/scheduling/calendar-feed` to mint the token on first use and
+`POST /api/v1/scheduling/calendar-feed/rotate` to invalidate an old URL.
+
+**Example Request:**
+```bash
+curl https://your-logbook-instance.com/api/public/v1/calendar/AbC...48charToken.ics
+```
+
+**Example Response (excerpt):**
+```
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//The Logbook//EN
+X-WR-CALNAME:Springfield Volunteer Fire Department Events
+X-WR-TIMEZONE:America/New_York
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:8f1c...@thelogbook.app
+SUMMARY:Duty Shift — Platoon A
+DTSTART:20260718T110000Z
+DTEND:20260718T230000Z
+DTSTAMP:20260716T120000Z
+END:VEVENT
+END:VCALENDAR
+```
+
+**Notes:**
+- The feed covers roughly the last 60 days through the next 365 days of the
+  member's active (non-cancelled) shift assignments.
+- Only the member's own shift times/notes are exposed — no other members' data.
+- The token is a 64-character URL-safe string. Treat the feed URL as private;
+  rotating the token immediately invalidates the previous URL.
+- Returns 404 for an unknown or malformed token.
+
+---
+
 ### Security Notes
 
 #### Public Form Protection

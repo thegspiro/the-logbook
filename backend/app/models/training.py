@@ -2393,6 +2393,18 @@ class ExternalTrainingImport(Base):
 # ============================================
 
 
+class ShiftStatus(str, enum.Enum):
+    """Lifecycle status of a shift.
+
+    ``is_finalized`` tracks the separate "closed after review" step; a shift
+    can be finalized only while ``scheduled``. ``cancelled`` preserves the
+    record (and its history) instead of a destructive delete.
+    """
+
+    SCHEDULED = "scheduled"
+    CANCELLED = "cancelled"
+
+
 class Shift(Base):
     """
     Shift model (Framework)
@@ -2437,6 +2449,10 @@ class Shift(Base):
     # Notes
     notes = Column(Text)
     activities = Column(JSON)  # Training, station duties, etc.
+    # Crew-to-crew handoff / pass-down captured at finalization and surfaced to
+    # the next crew on the same apparatus (staffing changes, apparatus issues,
+    # ongoing incidents, etc.).
+    pass_down_notes = Column(Text, nullable=True)
 
     # When True, all members (including non-operational types) can self-signup.
     # Copied from ShiftTemplate when a shift is created from a template.
@@ -2454,6 +2470,21 @@ class Shift(Base):
     finalized_by = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+
+    # Lifecycle — a cancelled shift is kept (with its history) instead of
+    # being hard-deleted, so assigned crew can be notified and reporting
+    # can distinguish "called off" from "never existed".
+    status = Column(
+        Enum(ShiftStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ShiftStatus.SCHEDULED,
+        server_default=ShiftStatus.SCHEDULED.value,
+    )
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    cancelled_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    cancellation_reason = Column(Text, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -2805,6 +2836,20 @@ class ShiftAssignment(Base):
         Enum(AssignmentStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=AssignmentStatus.ASSIGNED,
+    )
+
+    # Training slot — when True this seat is a supervised training/rider
+    # position. Optionally links the trainee's program and the evaluating
+    # officer so shift finalization drafts a completion report against the
+    # right program with the right reviewer.
+    is_training = Column(Boolean, default=False, nullable=False, server_default="0")
+    training_program_id = Column(
+        String(36),
+        ForeignKey("training_programs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    training_evaluator_id = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Tracking

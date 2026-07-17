@@ -16,6 +16,14 @@
 
 ## Current Head
 
+> **Update (2026-07-16):** The two 2026-05 heads have since been merged and the
+> chain is **linear again with a single head**. The current head is
+> **`20260722_0001`** (`20260722_0001_add_shift_pass_down_notes.py`). Recent
+> scheduling migrations, in order: `20260720_0001` (shift training-slot fields +
+> shift lifecycle status) → `20260721_0001` (`users.calendar_feed_token`) →
+> `20260722_0001` (`shifts.pass_down_notes`). New migrations should set
+> `down_revision = "20260722_0001"`.
+
 > **Note (2026-05-29):** The full "Full Revision Chain" table below is stale and
 > ends at `20260223_0300`; roughly 75 additional migrations exist on disk between
 > that revision and the current heads. The chain has also **branched** (see

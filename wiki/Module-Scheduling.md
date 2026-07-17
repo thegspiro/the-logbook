@@ -34,6 +34,59 @@ The Scheduling module manages shift scheduling, member self-service signup, swap
 - **Staffing-Based Open Shifts** — *(2026-06-09)* The Open Shifts list now ranks by **actual staffing** (unfilled required position, or active `ASSIGNED`/`CONFIRMED` count below `min_staffing`) instead of a fixed page, so fully-staffed shifts no longer push genuinely-open ones out of view (capped at 500 candidates per window)
 - **Scheduling Query Performance** — *(2026-06-09)* New composite index `idx_shift_assign_shift_status` on `shift_assignments(shift_id, assignment_status)`, plus batch-loading across the scheduled reminder/validation/auto-checkout tasks and the compliance report (eliminates N+1 officer/attendance/assignment/leave queries)
 - **Platoon Rotations (opt-in)** — *(2026-06-19)* Person-level platoon membership (A/B/C) drives multi-platoon rotation generation with leave-aware staffing and a hold-over roster. Off by default; toggled per department (see below)
+- **Full Shift Lifecycle** — *(2026-07-16)* Per-shift officer authority, a live readiness panel, cancel-instead-of-delete, reopen/unfinalize, crew pass-down notes, and optional server-side close-out enforcement (require end-of-shift checks; restrict check-in to the roster). See below
+- **Personal Calendar Feed & Automation** — *(2026-07-16)* Members subscribe to their shifts in Google/Apple Calendar via a private ICS link; departments can auto-generate shifts from patterns on a rolling horizon and get overtime/hours advisories. See below
+
+---
+
+## Full Shift Lifecycle, Calendars & Automation (2026-07-16)
+
+A broad review closing gaps from shift start-up through close-out, plus
+member-facing conveniences.
+
+### Running a shift
+
+- **Per-shift officer authority** — the officer named on a shift can manage its
+  crew, attendance, calls, finalize, and cancellation without a department-wide
+  `scheduling.manage`/`assign` grant. Editing/deleting the shift itself still
+  requires `scheduling.manage`.
+- **Readiness panel** — the shift detail shows present-vs-assigned, staffing vs.
+  target (understaffed flag), and outstanding start-of-shift checks *during* the
+  shift, not just at finalize.
+- **Cancel a shift** — cancels instead of deleting: the record is kept, the crew
+  is notified, and the shift drops out of open-shift signup. Finalized shifts
+  can't be cancelled.
+- **Reopen a finalized shift** — a permissioned, audit-logged correction path;
+  re-finalize when done.
+- **Pass-down / handoff** — a note captured at finalize, shown to the next crew
+  on the same apparatus.
+
+### Close-out rules (department settings, off by default)
+
+| Setting | Default | Effect |
+|---------|---------|--------|
+| `require_end_of_shift_checks` | `false` | Blocks finalize while end-of-shift equipment checks are outstanding; officers can override with a logged reason |
+| `restrict_checkin_to_assigned` | `false` | Only rostered members may check in (open shifts exempt) |
+
+### Member conveniences
+
+- **Subscribe to my shifts** — My Shifts → "Subscribe to my shifts" gives each
+  member a private calendar URL for Google/Apple Calendar/Outlook. The link can
+  be reset if it leaks.
+- **Overtime advisory** — an optional soft warning when an assignment/signup
+  pushes a member's scheduled hours over the department cap
+  (`max_hours_per_window` / `hours_window_days`).
+
+### Automation
+
+- **Auto-generate shifts** — a daily task keeps active patterns generating
+  shifts to a chosen horizon (`auto_generate_enabled`, `auto_generate_weeks`).
+
+### Training-position crew slots
+
+- An officer can mark a crew-board seat as a supervised training slot and link
+  it to the trainee's program + evaluator; finalizing drafts a completion report
+  against that program.
 
 ---
 

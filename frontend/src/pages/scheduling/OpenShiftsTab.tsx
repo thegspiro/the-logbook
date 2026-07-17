@@ -71,22 +71,32 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
 
   useEffect(() => { void loadShifts(); }, [loadShifts]);
 
+  const surfaceWarnings = (res: { evoc_warnings?: { message: string }[]; overtime_warnings?: string[] }) => {
+    const messages = [
+      ...(res.evoc_warnings ?? []).map((w) => w.message),
+      ...(res.overtime_warnings ?? []),
+    ];
+    if (messages.length > 0) toast(messages.join(' '), { icon: '⚠️' });
+  };
+
   const handleSignup = async (shiftId: string) => {
     setSigningUp(true);
     try {
-      await schedulingService.signupForShift(shiftId, { position: signupPosition });
+      const res = await schedulingService.signupForShift(shiftId, { position: signupPosition });
       toast.success('Signed up for shift — a manager will confirm your assignment');
+      surfaceWarnings(res);
       setSignupShiftId(null);
       void loadShifts();
     } catch (signupErr) {
       const appError = toAppError(signupErr);
       if (canAssign && user?.id && (appError.status === 403 || appError.status === 404)) {
         try {
-          await schedulingService.createAssignment(shiftId, {
+          const res = await schedulingService.createAssignment(shiftId, {
             user_id: user.id,
             position: signupPosition,
           });
           toast.success('Signed up for shift — a manager will confirm your assignment');
+          surfaceWarnings(res);
           setSignupShiftId(null);
           void loadShifts();
           return;

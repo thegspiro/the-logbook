@@ -107,12 +107,17 @@ class ShiftResponse(UTCResponseBase):
     color: Optional[str] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
+    pass_down_notes: Optional[str] = None
     attendee_count: Optional[int] = 0
     call_count: int = 0
     total_hours: Optional[float] = None
     is_finalized: bool = False
     finalized_at: Optional[datetime] = None
     finalized_by: Optional[UUID] = None
+    status: str = "scheduled"
+    cancelled_at: Optional[datetime] = None
+    cancelled_by: Optional[UUID] = None
+    cancellation_reason: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
@@ -152,6 +157,24 @@ class ShiftFinalizeRequest(BaseModel):
     """Optional request body for finalizing a shift."""
 
     manual_hours: Optional[List[ManualHoursEntry]] = None
+    # Finalize despite outstanding end-of-shift checks (org enforcement on).
+    # The reason is recorded in the audit log.
+    override_incomplete_checks: bool = False
+    override_reason: Optional[str] = None
+    # Crew-to-crew handoff captured at finalize.
+    pass_down_notes: Optional[str] = None
+
+
+class ShiftCancelRequest(BaseModel):
+    """Optional request body for cancelling a shift."""
+
+    reason: Optional[str] = None
+
+
+class ShiftReopenRequest(BaseModel):
+    """Request body for reopening a finalized shift for corrections."""
+
+    reason: Optional[str] = None
 
 
 class ShiftAttendanceResponse(UTCResponseBase):
@@ -532,6 +555,11 @@ class ShiftAssignmentCreate(BaseModel):
     user_id: UUID
     position: ShiftPosition = ShiftPosition.FIREFIGHTER
     notes: Optional[str] = None
+    # Training slot: mark this seat as a supervised training/rider position and
+    # optionally link the trainee's program and the evaluating officer.
+    is_training: bool = False
+    training_program_id: Optional[str] = None
+    training_evaluator_id: Optional[str] = None
 
 
 class ShiftAssignmentUpdate(BaseModel):
@@ -540,6 +568,9 @@ class ShiftAssignmentUpdate(BaseModel):
     position: Optional[ShiftPosition] = None
     assignment_status: Optional[AssignmentStatus] = None
     notes: Optional[str] = None
+    is_training: Optional[bool] = None
+    training_program_id: Optional[str] = None
+    training_evaluator_id: Optional[str] = None
 
 
 class EmbeddedShiftInfo(BaseModel):
@@ -568,7 +599,17 @@ class ShiftAssignmentResponse(UTCResponseBase):
     assigned_by: Optional[UUID] = None
     confirmed_at: Optional[datetime] = None
     notes: Optional[str] = None
+    is_training: bool = False
+    training_program_id: Optional[str] = None
+    training_program_name: Optional[str] = None
+    training_evaluator_id: Optional[str] = None
+    training_evaluator_name: Optional[str] = None
     shift: Optional[EmbeddedShiftInfo] = None
+    # Soft, non-blocking advisories attached by the endpoint (EVOC driver
+    # eligibility, overtime/hours). Declared here so response_model does not
+    # strip them from the assign/signup responses.
+    evoc_warnings: Optional[List[Any]] = None
+    overtime_warnings: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
 
@@ -705,10 +746,29 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
     open_positions: List[str]
 
 
+class CalendarFeedResponse(BaseModel):
+    """The member's personal ICS calendar-feed token and relative path."""
+
+    token: str
+    feed_path: str
+
+
 class SchedulingFeatureSettings(BaseModel):
     """Department-wide scheduling feature toggles (readable by any member)."""
 
     platoons_enabled: bool = False
+    # Overtime advisory: when max_hours_per_window > 0, assigning a member is
+    # flagged (soft, non-blocking) if their scheduled hours in the trailing
+    # window exceed the cap. 0/None disables the check.
+    max_hours_per_window: Optional[float] = Field(default=None, ge=0, le=336)
+    hours_window_days: int = Field(default=7, ge=1, le=31)
+    # Auto-generation: when enabled, a daily task keeps active patterns
+    # generating shifts this many weeks ahead.
+    auto_generate_enabled: bool = False
+    auto_generate_weeks: int = Field(default=4, ge=1, le=52)
+    # Lifecycle enforcement
+    require_end_of_shift_checks: bool = False
+    restrict_checkin_to_assigned: bool = False
 
 
 # ============================================

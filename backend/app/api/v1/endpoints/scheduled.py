@@ -31,10 +31,14 @@ async def list_scheduled_tasks(
 async def run_scheduled_task(
     task: str = Query(..., description="Task ID to run (e.g. cert_expiration_alerts)"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("admin.access", "settings.manage")),
+    current_user: User = Depends(require_permission("system.run_tasks")),
 ):
     """
     Manually trigger a scheduled task.
+
+    Each task iterates **every** organization, so triggering one has
+    platform-wide side effects. It is therefore restricted to the wildcard
+    "System Owner" (``system.run_tasks``) rather than a single-org admin.
 
     Available tasks:
     - `cert_expiration_alerts` — Send tiered cert expiration alerts (daily)
@@ -43,7 +47,7 @@ async def run_scheduled_task(
     - `membership_tier_advance` — Auto-advance membership tiers (monthly)
     - `inventory_notifications` — Process delayed inventory change emails (every 15 min)
 
-    **Requires admin permission**
+    **Requires system.run_tasks (platform System Owner).**
     """
     runner = TASK_RUNNERS.get(task)
     if not runner:

@@ -22,6 +22,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 
+from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
 from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
@@ -2047,6 +2048,10 @@ app.include_router(public_forms_router, prefix="/api")
 
 # Include public display API (no auth required - uses /api/public/v1/display)
 app.include_router(public_display_router, prefix="/api")
+
+# Include public calendar ICS feed (no auth — token-protected per-user feed at
+# /api/public/v1/calendar/{token}.ics)
+app.include_router(public_calendar_router, prefix="/api")
 
 app.include_router(sf_webhook_router, prefix="/api")
 

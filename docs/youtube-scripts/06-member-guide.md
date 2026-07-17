@@ -225,7 +225,7 @@ fewer widgets than the Chief's view but still informative.]**
 
 ## CHAPTER 5: Scheduling & Shift Swaps (12:00 – 15:00)
 
-### VIEWING YOUR SCHEDULE (12:00 – 13:00)
+### VIEWING YOUR SCHEDULE (12:00 – 12:45)
 
 **[SCREEN: Navigate to Scheduling (SchedulingPage)]**
 
@@ -238,7 +238,26 @@ fewer widgets than the Chief's view but still informative.]**
 > "Toggle between week and month view. Click on any shift to see who else is
 > assigned and what the coverage looks like."
 
-### REQUESTING A SHIFT SWAP (13:00 – 14:30)
+### SUBSCRIBE TO YOUR SHIFTS (12:45 – 13:15)
+
+**[SCREEN: Open the My Shifts tab]**
+
+> "Want your shifts right in your phone's calendar? Open My Shifts and click
+> 'Subscribe to my shifts.'"
+
+**[SCREEN: Expand the "Subscribe to my shifts" card; show the calendar link,
+Copy button, and Reset link]**
+
+> "Copy this private link and add it as a subscribed calendar in Google
+> Calendar, Apple Calendar, or Outlook. Your shifts show up automatically and
+> stay in sync — no re-checking the app."
+
+**[CALLOUT: "This link is just for you — don't share it."]**
+
+> "If you ever need to, hit 'Reset link' and the old one stops working
+> immediately."
+
+### REQUESTING A SHIFT SWAP (13:15 – 14:30)
 
 > "Need to swap a shift? Maybe you have a family commitment or a schedule
 > conflict. The Logbook handles this digitally — no more calling around to find
@@ -410,7 +429,8 @@ Show the app opening full-screen like a native app.]**
 | QR Code Check-In | 6:00–7:00 | "Checking In with a QR Code" |
 | Checking Training Status | 8:00–9:30 | "Checking Your Training Compliance Status" |
 | Submitting External Training | 9:30–11:00 | "Submitting External Training for Credit" |
-| Requesting a Shift Swap | 13:00–14:30 | "How to Request a Shift Swap" |
+| Subscribe to Your Shifts | 12:45–13:15 | "Put Your Shifts in Your Phone Calendar" |
+| Requesting a Shift Swap | 13:15–14:30 | "How to Request a Shift Swap" |
 | Voting in an Election | 16:00–17:00 | "How to Vote in a Department Election" |
 | Setting Up Dark Mode | 18:00–19:00 | "Customizing Your Logbook (Dark Mode & More)" |
 | Adding to Home Screen | 19:30–20:00 | "Add The Logbook to Your Phone's Home Screen" |

@@ -31,6 +31,12 @@ export interface Assignment {
   shift?: ShiftRecord;
   confirmed_at?: string;
   notes?: string;
+  /** Training slot: this seat is a supervised training/rider position. */
+  is_training?: boolean;
+  training_program_id?: string | null;
+  training_program_name?: string | null;
+  training_evaluator_id?: string | null;
+  training_evaluator_name?: string | null;
 }
 
 /** A request to swap shifts between two members. */

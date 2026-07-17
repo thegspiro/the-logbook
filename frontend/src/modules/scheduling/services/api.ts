@@ -101,6 +101,7 @@ export interface ShiftRecord {
   color?: string | null;
   notes?: string;
   activities?: unknown;
+  pass_down_notes?: string | null;
   open_to_all_members?: boolean;
   attendee_count: number;
   call_count: number;
@@ -108,6 +109,10 @@ export interface ShiftRecord {
   is_finalized: boolean;
   finalized_at?: string;
   finalized_by?: string;
+  status?: 'scheduled' | 'cancelled';
+  cancelled_at?: string;
+  cancelled_by?: string;
+  cancellation_reason?: string | null;
   created_at: string;
   updated_at: string;
   created_by?: string;
@@ -119,6 +124,16 @@ export interface PlatoonRosterEntry {
   user_id: string;
   user_name: string;
   status: 'assigned' | 'on_leave' | 'available';
+}
+
+export interface SchedulingFeatureSettings {
+  platoons_enabled: boolean;
+  max_hours_per_window?: number | null;
+  hours_window_days: number;
+  auto_generate_enabled: boolean;
+  auto_generate_weeks: number;
+  require_end_of_shift_checks: boolean;
+  restrict_checkin_to_assigned: boolean;
 }
 
 export interface PlatoonMember {
@@ -337,15 +352,65 @@ export const schedulingService = {
     await api.delete(`/scheduling/shifts/${shiftId}`);
   },
 
+  async getCalendarFeed(): Promise<{ token: string; feed_path: string }> {
+    const response = await api.get<{ token: string; feed_path: string }>(
+      '/scheduling/calendar-feed',
+    );
+    return response.data;
+  },
+
+  async rotateCalendarFeed(): Promise<{ token: string; feed_path: string }> {
+    const response = await api.post<{ token: string; feed_path: string }>(
+      '/scheduling/calendar-feed/rotate',
+    );
+    return response.data;
+  },
+
+  async cancelShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
+    const response = await api.post<ShiftRecord>(
+      `/scheduling/shifts/${shiftId}/cancel`,
+      reason ? { reason } : {},
+    );
+    return response.data;
+  },
+
   async finalizeShift(
     shiftId: string,
     manualHours?: { user_id: string; hours: number }[],
+    opts?: {
+      override_incomplete_checks?: boolean;
+      override_reason?: string;
+      pass_down_notes?: string;
+    },
   ): Promise<ShiftRecord> {
-    const body = manualHours?.length ? { manual_hours: manualHours } : {};
+    const body: Record<string, unknown> = {};
+    if (manualHours?.length) body.manual_hours = manualHours;
+    if (opts?.override_incomplete_checks) {
+      body.override_incomplete_checks = true;
+      if (opts.override_reason) body.override_reason = opts.override_reason;
+    }
+    if (opts?.pass_down_notes) body.pass_down_notes = opts.pass_down_notes;
     const response = await api.post<ShiftRecord>(
       `/scheduling/shifts/${shiftId}/finalize`,
       body,
     );
+    return response.data;
+  },
+
+  async reopenShift(shiftId: string, reason?: string): Promise<ShiftRecord> {
+    const response = await api.post<ShiftRecord>(
+      `/scheduling/shifts/${shiftId}/reopen`,
+      reason ? { reason } : {},
+    );
+    return response.data;
+  },
+
+  async getShiftHandoff(
+    shiftId: string,
+  ): Promise<{ shift_id: string; shift_date: string | null; pass_down_notes: string } | null> {
+    const response = await api.get<
+      { shift_id: string; shift_date: string | null; pass_down_notes: string } | null
+    >(`/scheduling/shifts/${shiftId}/handoff`);
     return response.data;
   },
 
@@ -398,8 +463,8 @@ export const schedulingService = {
       status: a.assignment_status ?? a.status ?? 'assigned',
     }));
   },
-  async createAssignment(shiftId: string, data: AssignmentCreate): Promise<Assignment & { evoc_warnings?: EvocWarning[] }> {
-    const response = await api.post<Assignment & { evoc_warnings?: EvocWarning[] }>(
+  async createAssignment(shiftId: string, data: AssignmentCreate): Promise<Assignment & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }> {
+    const response = await api.post<Assignment & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }>(
       `/scheduling/shifts/${shiftId}/assignments`,
       data,
     );
@@ -581,8 +646,13 @@ export const schedulingService = {
   },
 
   // --- Shift Signup (member self-service) ---
-  async signupForShift(shiftId: string, data?: { position?: string }): Promise<ShiftSignupResponse> {
-    const response = await api.post<ShiftSignupResponse>(`/scheduling/shifts/${shiftId}/signup`, data ?? {});
+  async signupForShift(
+    shiftId: string,
+    data?: { position?: string },
+  ): Promise<ShiftSignupResponse & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }> {
+    const response = await api.post<
+      ShiftSignupResponse & { evoc_warnings?: EvocWarning[]; overtime_warnings?: string[] }
+    >(`/scheduling/shifts/${shiftId}/signup`, data ?? {});
     return response.data;
   },
   async withdrawSignup(shiftId: string): Promise<void> {
@@ -628,12 +698,12 @@ export const schedulingService = {
   },
 
   // --- Department feature toggles ---
-  async getFeatureSettings(): Promise<{ platoons_enabled: boolean }> {
-    const response = await api.get<{ platoons_enabled: boolean }>('/scheduling/settings');
+  async getFeatureSettings(): Promise<SchedulingFeatureSettings> {
+    const response = await api.get<SchedulingFeatureSettings>('/scheduling/settings');
     return response.data;
   },
-  async updateFeatureSettings(data: { platoons_enabled: boolean }): Promise<{ platoons_enabled: boolean }> {
-    const response = await api.put<{ platoons_enabled: boolean }>('/scheduling/settings', data);
+  async updateFeatureSettings(data: Partial<SchedulingFeatureSettings>): Promise<SchedulingFeatureSettings> {
+    const response = await api.put<SchedulingFeatureSettings>('/scheduling/settings', data);
     return response.data;
   },
 

@@ -118,6 +118,12 @@ SCHEDULE = {
         "recommended_time": "05:00",
         "cron": "0 5 * * *",
     },
+    "shift_pattern_generation": {
+        "description": "Generate upcoming shifts from active patterns for orgs with auto-generation enabled (rolling horizon)",
+        "frequency": "daily",
+        "recommended_time": "04:00",
+        "cron": "0 4 * * *",
+    },
     "membership_tier_advance": {
         "description": "Auto-advance members to higher membership tiers based on years of service",
         "frequency": "monthly",
@@ -403,6 +409,27 @@ async def run_enrollment_deadline_warnings(db: AsyncSession) -> Dict[str, Any]:
         return result.get("warnings_sent", 0)
 
     return await _for_each_org(db, "enrollment_deadline_warnings", _process)
+
+
+async def run_shift_pattern_generation(db: AsyncSession) -> Dict[str, Any]:
+    """Keep active shift patterns generating shifts ahead of time.
+
+    For each org with ``scheduling.auto_generate_enabled``, generates shifts
+    from every active pattern out to the configured horizon. Idempotent — the
+    generator skips shifts that already exist — so shifts appear on a rolling
+    basis without anyone pressing "generate".
+    """
+    from app.services.scheduling_service import SchedulingService
+
+    async def _process(db_session, org):
+        sched = (org.settings or {}).get("scheduling", {})
+        if not sched.get("auto_generate_enabled"):
+            return 0
+        weeks = sched.get("auto_generate_weeks", 4)
+        service = SchedulingService(db_session)
+        return await service.auto_generate_shifts_for_org(org.id, weeks)
+
+    return await _for_each_org(db, "shift_pattern_generation", _process)
 
 
 async def run_recert_resets(db: AsyncSession) -> Dict[str, Any]:
@@ -4320,6 +4347,7 @@ TASK_RUNNERS = {
     "admin_hours_auto_close": run_admin_hours_auto_close,
     "expire_ip_exceptions": run_expire_ip_exceptions,
     "membership_inactivity_warnings": run_membership_inactivity_warnings,
+    "shift_pattern_generation": run_shift_pattern_generation,
 }
 
 # Interval (in seconds) at which each task auto-runs in the in-process
@@ -4361,6 +4389,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "expire_ip_exceptions": 86400,
     "membership_inactivity_warnings": 86400,
     "recert_resets": 86400,
+    "shift_pattern_generation": 86400,
     # Weekly
     "struggling_member_check": 604800,
     "enrollment_deadline_warnings": 604800,

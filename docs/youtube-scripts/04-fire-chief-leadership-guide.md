@@ -329,7 +329,7 @@ RSVP list and check-in status]**
 
 ## CHAPTER 6: Scheduling & Shift Oversight (18:00 – 21:00)
 
-### VIEWING THE SCHEDULE (18:00 – 19:00)
+### VIEWING THE SCHEDULE (18:00 – 18:45)
 
 **[SCREEN: Navigate to Scheduling (SchedulingPage)]**
 
@@ -343,7 +343,7 @@ RSVP list and check-in status]**
 > types and coverage status — green for fully staffed, yellow for minimum
 > staffing, red for gaps."
 
-### APPROVING SHIFT SWAPS (19:00 – 20:00)
+### APPROVING SHIFT SWAPS (18:45 – 19:45)
 
 > "When members request shift swaps, the requests come to the designated
 > approver — usually a Captain or Chief officer. You'll see pending swap
@@ -358,7 +358,29 @@ who's swapping, which shifts, and the impact on coverage.]**
 
 **[SCREEN: Show approving a swap request]**
 
-### SCHEDULING REPORTS (20:00 – 21:00)
+### SETTING SHIFT CLOSE-OUT RULES (19:45 – 20:15)
+
+**[SCREEN: Scheduling → Settings → Close-out rules card]**
+
+> "Here's where you set your department's standards for closing out a shift. You
+> can require that end-of-shift equipment checks are done before an officer can
+> finalize a shift — so every apparatus is verified ready and nothing slips
+> through."
+
+**[SCREEN: Toggle on "Require end-of-shift equipment checks"]**
+
+> "It's off by default. When you turn it on, an officer who tries to finalize
+> with checks outstanding is stopped — but they can still override in a genuine
+> emergency, and that override is written to the audit log with their reason."
+
+**[CALLOUT: "Accountability without getting in the way of the run."]**
+
+> "You can also require that only rostered members check in, so attendance
+> matches the crew that actually worked. And if something needs fixing after a
+> shift is closed, an officer can reopen it, make the correction, and finalize
+> again — every reopen is logged too."
+
+### SCHEDULING REPORTS (20:15 – 21:00)
 
 **[SCREEN: Navigate to Scheduling Reports (SchedulingReportsPage)]**
 
@@ -483,5 +505,6 @@ and tables.]**
 | Event Templates | 7:00–8:00 | "Save Time with Event Templates" |
 | Running an Election | 14:00–18:00 | "How to Run a Department Election" |
 | Scheduling Overview | 18:00–21:00 | "Managing Shifts & Scheduling" |
+| Shift Close-Out Rules | 19:45–20:15 | "Require End-of-Shift Checks Before Finalizing" |
 | Generating Reports | 21:00–22:30 | "Generating Reports for Officer Meetings" |
 | Chief's Daily Routine | 24:00–25:30 | "The Chief's Daily Routine on The Logbook" |
