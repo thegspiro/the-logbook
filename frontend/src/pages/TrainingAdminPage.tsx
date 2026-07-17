@@ -72,6 +72,10 @@ const TrainingEnhancementsTab = lazyWithRetry(
 const ComplianceOfficerDashboard = lazyWithRetry(
   () => import("./ComplianceOfficerDashboard"),
 );
+const CourseLibraryPage = lazyWithRetry(() => import("./CourseLibraryPage"));
+const MemberTrainingStatusPage = lazyWithRetry(
+  () => import("./MemberTrainingStatusPage"),
+);
 
 // ── Type definitions ────────────────────────────────────────────
 
@@ -118,6 +122,7 @@ const pages: PageDef[] = [
       { id: "submissions", label: "Submissions" },
       { id: "sessions", label: "Sessions" },
       { id: "shift-reports", label: "Shift Reports" },
+      { id: "member-status", label: "Monthly Status" },
     ],
     defaultTab: "submissions",
   },
@@ -129,6 +134,7 @@ const pages: PageDef[] = [
       "Configure requirements, pipelines, integrations, and data imports",
     tabs: [
       { id: "requirements", label: "Requirements" },
+      { id: "courses", label: "Course Library" },
       { id: "pipelines", label: "Pipelines" },
       { id: "manual-entry", label: "Manual Entry" },
       { id: "integrations", label: "Integrations" },
@@ -189,7 +195,9 @@ const legacyTabMap: Record<string, { page: PageId; tab: string }> = {
   submissions: { page: "records", tab: "submissions" },
   sessions: { page: "records", tab: "sessions" },
   "shift-reports": { page: "records", tab: "shift-reports" },
+  "member-status": { page: "records", tab: "member-status" },
   requirements: { page: "setup", tab: "requirements" },
+  courses: { page: "setup", tab: "courses" },
   pipelines: { page: "setup", tab: "pipelines" },
   integrations: { page: "setup", tab: "integrations" },
   import: { page: "setup", tab: "import" },
@@ -244,11 +252,13 @@ const TabContent: React.FC<{ page: PageId; tab: string }> = ({ page, tab }) => {
     if (tab === "submissions") return <ReviewSubmissionsPage />;
     if (tab === "sessions") return <CreateTrainingSessionPage />;
     if (tab === "shift-reports") return <ShiftReportPage />;
+    if (tab === "member-status") return <MemberTrainingStatusPage />;
   }
 
   // Setup sub-page
   if (page === "setup") {
     if (tab === "requirements") return <TrainingRequirementsPage />;
+    if (tab === "courses") return <CourseLibraryPage embedded />;
     if (tab === "pipelines") return <CreatePipelinePage />;
     if (tab === "manual-entry") return <ManualEntrySettingsPanel />;
     if (tab === "integrations") return <ExternalTrainingPage />;
