@@ -438,6 +438,10 @@ export interface TrainingRequirement {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  // Non-blocking backend warning when the requirement has no target for its
+  // type (e.g. a Course requirement with no course linked), so it can never be
+  // completed. Present only when misconfigured; otherwise null/undefined.
+  config_warning?: string | null;
 }
 
 export interface TrainingRequirementCreate {

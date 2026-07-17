@@ -329,25 +329,57 @@ class TrainingRequirementBase(BaseModel):
         return validate_enum_value(v, ModelTrainingType, "training_type")
 
 
+# The quantity field each requirement type needs to be satisfiable, plus a
+# human-facing label for the warning shown on an under-configured requirement.
+# A requirement whose type has no target (e.g. a Course requirement with no
+# course linked) can never be genuinely completed — and before it was fixed it
+# even read as 100%/compliant — so it must be caught at creation and flagged
+# afterward.
+_REQUIREMENT_QUANTITY_FIELDS = {
+    RequirementType.HOURS: ("required_hours", "no hours target is set"),
+    RequirementType.COURSES: ("required_courses", "no course is linked to it"),
+    RequirementType.SHIFTS: ("required_shifts", "no shift count is set"),
+    RequirementType.CALLS: ("required_calls", "no call count is set"),
+    RequirementType.KNOWLEDGE_TEST: ("passing_score", "no passing score is set"),
+}
+
+
+def requirement_config_warning(obj: object) -> Optional[str]:
+    """Return a warning when a requirement's type has no target to measure
+    against (so it can never be completed), else ``None``.
+
+    ``obj`` may be a Pydantic model or an ORM requirement — anything exposing
+    ``requirement_type`` and the quantity fields. Shared by the response schema
+    (to surface the warning to officers) and the create-time validator.
+    """
+    rtype = getattr(obj, "requirement_type", None)
+    spec = _REQUIREMENT_QUANTITY_FIELDS.get(rtype)
+    if not spec:
+        return None
+    field_name, clause = spec
+    if not getattr(obj, field_name, None):
+        type_label = rtype.value if hasattr(rtype, "value") else str(rtype)
+        return (
+            f"This {type_label} requirement can't be completed — {clause}. "
+            "Members won't earn credit until it's fixed."
+        )
+    return None
+
+
 class TrainingRequirementCreate(TrainingRequirementBase):
     """Schema for creating a new training requirement"""
 
     @model_validator(mode="after")
     def validate_quantity_for_type(self) -> "TrainingRequirementCreate":
         """Ensure the relevant quantity field is set for the requirement type."""
-        checks = {
-            RequirementType.HOURS: ("required_hours", self.required_hours),
-            RequirementType.COURSES: ("required_courses", self.required_courses),
-            RequirementType.SHIFTS: ("required_shifts", self.required_shifts),
-            RequirementType.CALLS: ("required_calls", self.required_calls),
-            RequirementType.KNOWLEDGE_TEST: ("passing_score", self.passing_score),
-        }
-        field_name, value = checks.get(self.requirement_type, (None, "skip"))
-        if value != "skip" and not value:
-            raise ValueError(
-                f"{field_name} is required for requirement_type "
-                f"'{self.requirement_type.value}'"
-            )
+        spec = _REQUIREMENT_QUANTITY_FIELDS.get(self.requirement_type)
+        if spec:
+            field_name, _ = spec
+            if not getattr(self, field_name, None):
+                raise ValueError(
+                    f"{field_name} is required for requirement_type "
+                    f"'{self.requirement_type.value}'"
+                )
         return self
 
 
@@ -412,8 +444,19 @@ class TrainingRequirementResponse(TrainingRequirementBase, UTCResponseBase):
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None
+    # Non-blocking flag: set when the requirement has no target for its type
+    # (e.g. a Course requirement with no course linked). Surfaced in the officer
+    # UI so a requirement that can never be completed is caught, even though
+    # editing into that state isn't blocked.
+    config_warning: Optional[str] = None
 
     model_config = _response_config
+
+    @model_validator(mode="after")
+    def _compute_config_warning(self) -> "TrainingRequirementResponse":
+        if self.config_warning is None:
+            self.config_warning = requirement_config_warning(self)
+        return self
 
 
 # Training Statistics and Reports
