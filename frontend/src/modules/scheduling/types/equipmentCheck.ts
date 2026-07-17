@@ -48,6 +48,49 @@ export const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
 };
 
 // ============================================================================
+// Storage Container Types
+// ============================================================================
+
+// Preset storage-container kinds a department can pick from. A compartment's
+// `containerType` holds one of these keys OR a free-text custom label, so
+// departments can describe where equipment lives in their own terms
+// (e.g. a "pack" inside a "bag" inside a "compartment").
+export const CONTAINER_TYPE_PRESETS: { value: string; label: string }[] = [
+  { value: "compartment", label: "Compartment" },
+  { value: "cabinet", label: "Cabinet" },
+  { value: "drawer", label: "Drawer" },
+  { value: "shelf", label: "Shelf" },
+  { value: "bag", label: "Bag" },
+  { value: "pack", label: "Pack" },
+  { value: "pouch", label: "Pouch" },
+  { value: "box", label: "Box" },
+  { value: "case", label: "Case" },
+  { value: "tray", label: "Tray" },
+  { value: "kit", label: "Kit" },
+];
+
+const CONTAINER_TYPE_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  CONTAINER_TYPE_PRESETS.map((p) => [p.value, p.label]),
+);
+
+/**
+ * Resolve a compartment's `containerType` to a human-readable label.
+ * Known preset keys map to their label; anything else (a department's
+ * custom label) is returned verbatim. Empty falls back to "Compartment".
+ */
+export function containerTypeLabel(value?: string | null): string {
+  const key = (value ?? "").trim();
+  if (!key) return "Compartment";
+  return CONTAINER_TYPE_LABEL_MAP[key] ?? key;
+}
+
+/** True when the value is one of the known presets (not a custom label). */
+export function isPresetContainerType(value?: string | null): boolean {
+  const key = (value ?? "").trim();
+  return key === "" || key in CONTAINER_TYPE_LABEL_MAP;
+}
+
+// ============================================================================
 // Check Template Item
 // ============================================================================
 
@@ -128,6 +171,7 @@ export interface CheckTemplateCompartment {
   sortOrder: number;
   imageUrl?: string;
   isHeader?: boolean;
+  containerType?: string;
   parentCompartmentId?: string;
   items: CheckTemplateItem[];
   createdAt?: string;
@@ -140,6 +184,7 @@ export interface CheckTemplateCompartmentCreate {
   sort_order?: number | undefined;
   image_url?: string | undefined;
   is_header?: boolean | undefined;
+  container_type?: string | undefined;
   parent_compartment_id?: string | undefined;
   items?: CheckTemplateItemCreate[] | undefined;
 }
@@ -150,6 +195,7 @@ export interface CheckTemplateCompartmentUpdate {
   sort_order?: number | undefined;
   image_url?: string | undefined;
   is_header?: boolean | undefined;
+  container_type?: string | undefined;
   parent_compartment_id?: string | undefined;
 }
 

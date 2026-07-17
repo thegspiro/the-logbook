@@ -1317,6 +1317,7 @@ class EquipmentCheckService:
             sort_order=source.sort_order,
             image_url=source.image_url,
             is_header=source.is_header,
+            container_type=source.container_type,
             parent_compartment_id=parent_id,
         )
         self.db.add(compartment)

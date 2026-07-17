@@ -2076,6 +2076,12 @@ class CheckTemplateCompartment(Base):
     sort_order = Column(Integer, default=0, nullable=False)
     image_url = Column(String(500), nullable=True)
     is_header = Column(Boolean, default=False, nullable=False)
+    # Storage container kind. Holds either a known preset key
+    # (compartment, bag, pack, cabinet, drawer, shelf, box, kit, pouch,
+    # tray, case) or a department's own custom label. Lets each
+    # department describe where equipment lives in their own terms
+    # (e.g. a "pack" inside a "bag" inside a "compartment").
+    container_type = Column(String(50), nullable=False, default="compartment")
     parent_compartment_id = Column(
         String(36),
         ForeignKey("check_template_compartments.id", ondelete="SET NULL"),

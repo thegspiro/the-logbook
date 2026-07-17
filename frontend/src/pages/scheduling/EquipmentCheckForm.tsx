@@ -55,6 +55,7 @@ import type {
   LastCheckItemResult,
 } from '../../modules/scheduling/types/equipmentCheck';
 import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
+import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
 
 // ============================================================================
 // Types
@@ -189,54 +190,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Resolve sub-compartments: merge children inline under their parent
   // --------------------------------------------------------------------------
 
-  const compartments = useMemo(() => {
-    const raw = template.compartments;
-    const childIds = new Set<string>();
-
-    // Identify all compartments that are children of another
-    for (const c of raw) {
-      if (c.parentCompartmentId) {
-        childIds.add(c.id);
-      }
-    }
-
-    // Build resolved list: for each top-level compartment, append child
-    // compartment items with a synthetic header item as a sub-heading
-    const resolved: CheckTemplateCompartment[] = [];
-    for (const comp of raw) {
-      if (childIds.has(comp.id)) continue; // skip children at top level
-
-      // Find children of this compartment, preserving their sort order
-      const children = raw.filter((c) => c.parentCompartmentId === comp.id);
-      if (children.length === 0) {
-        resolved.push(comp);
-        continue;
-      }
-
-      // Merge: parent items first, then each child as sub-heading + its items
-      const mergedItems: CheckTemplateItem[] = [...comp.items];
-      for (const child of children) {
-        // Inject a synthetic header to label the sub-compartment
-        const subHeader: CheckTemplateItem = {
-          id: `subheader-${child.id}`,
-          compartmentId: comp.id,
-          name: child.name,
-          sortOrder: mergedItems.length,
-          checkType: 'header',
-          isRequired: false,
-          hasExpiration: false,
-          expirationWarningDays: 0,
-        };
-        if (child.description) subHeader.description = child.description;
-        mergedItems.push(subHeader);
-        mergedItems.push(...child.items);
-      }
-
-      resolved.push({ ...comp, items: mergedItems });
-    }
-
-    return resolved;
-  }, [template.compartments]);
+  // Flatten the compartment tree to any depth. Each top-level compartment
+  // becomes one card; every nested container (a "pack" inside a "bag" inside a
+  // "compartment") is merged in below its parent as a synthetic sub-heading
+  // that shows its type + name, indented by depth. `storagePathByItemId`
+  // records each item's full location path so submitted results and reports
+  // reflect exactly where the item lives, not just its top-level compartment.
+  const { compartments, storagePathByItemId } = useMemo(
+    () => flattenCompartmentTree(template.compartments),
+    [template.compartments],
+  );
 
   // --------------------------------------------------------------------------
   // Offline queue sync — drain pending checks when connectivity returns
@@ -725,7 +688,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
           items.push({
             template_item_id: item.id,
-            compartment_name: compartment.name,
+            compartment_name:
+              storagePathByItemId.get(item.id) ?? compartment.name,
             item_name: item.name,
             check_type: item.checkType,
             status: result?.status || 'not_checked',
@@ -823,7 +787,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             }
             fallbackItems.push({
               template_item_id: item.id,
-              compartment_name: compartment.name,
+              compartment_name:
+                storagePathByItemId.get(item.id) ?? compartment.name,
               item_name: item.name,
               check_type: item.checkType,
               status: result?.status || 'not_checked',

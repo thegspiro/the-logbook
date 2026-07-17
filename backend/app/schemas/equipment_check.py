@@ -108,6 +108,7 @@ class CheckTemplateCompartmentCreate(BaseModel):
     sort_order: int = 0
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: bool = False
+    container_type: str = Field("compartment", max_length=50)
     parent_compartment_id: Optional[str] = None
     items: Optional[List[CheckTemplateItemCreate]] = None
 
@@ -120,6 +121,7 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     sort_order: Optional[int] = None
     image_url: Optional[str] = Field(None, max_length=500)
     is_header: Optional[bool] = None
+    container_type: Optional[str] = Field(None, max_length=50)
     parent_compartment_id: Optional[str] = None
 
 
@@ -139,6 +141,7 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
     sort_order: int
     image_url: Optional[str] = None
     is_header: bool = False
+    container_type: str = "compartment"
     parent_compartment_id: Optional[str] = None
     items: List[CheckTemplateItemResponse] = []
     created_at: Optional[datetime] = None
@@ -151,6 +154,14 @@ class CheckTemplateCompartmentResponse(UTCResponseBase):
         if v is None:
             return False
         return bool(v)
+
+    @field_validator("container_type", mode="before")
+    @classmethod
+    def coerce_container_type(cls, v: object) -> str:
+        """Rows created before the container_type column store NULL."""
+        if v is None:
+            return "compartment"
+        return str(v)
 
 
 # ============================================

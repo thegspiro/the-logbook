@@ -75,6 +75,9 @@ import type {
 } from '@/modules/scheduling/types/equipmentCheck';
 import {
   TEMPLATE_TYPE_LABELS,
+  CONTAINER_TYPE_PRESETS,
+  containerTypeLabel,
+  isPresetContainerType,
 } from '@/modules/scheduling/types/equipmentCheck';
 
 // ============================================================================
@@ -153,6 +156,7 @@ interface CompartmentFormState {
   description: string;
   imageUrl: string;
   isHeader: boolean;
+  containerType: string;
   parentCompartmentId: string;
   items: ItemFormState[];
 }
@@ -163,6 +167,7 @@ function emptyCompartment(): CompartmentFormState {
     description: '',
     imageUrl: '',
     isHeader: false,
+    containerType: 'compartment',
     parentCompartmentId: '',
     items: [],
   };
@@ -295,6 +300,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Bulk selection: per-compartment set of selected item indices
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
 
+  // Compartment keys whose storage-type selector is in free-text ("Custom…")
+  // mode, so the text input stays visible even while the value is still blank.
+  const [customContainerKeys, setCustomContainerKeys] = useState<Set<string>>(new Set());
+
   // Inline editing: which item key is being renamed inline
   const [inlineEditKey, setInlineEditKey] = useState<string | null>(null);
   const [inlineEditValue, setInlineEditValue] = useState('');
@@ -348,6 +357,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           description: c.description ?? '',
           imageUrl: c.imageUrl ?? '',
           isHeader: c.isHeader ?? false,
+          containerType: c.containerType ?? 'compartment',
           parentCompartmentId: c.parentCompartmentId ?? '',
           items: (c.items ?? []).map((item) => ({
             id: item.id,
@@ -446,6 +456,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const payload: CheckTemplateCompartmentCreate = {
         name: 'New Compartment',
         sort_order: compartments.length,
+        container_type: 'compartment',
       };
       const created = await schedulingService.addCompartment(templateId, payload);
       const comp: CompartmentFormState = {
@@ -454,6 +465,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         description: created.description ?? '',
         imageUrl: created.imageUrl ?? '',
         isHeader: false,
+        containerType: created.containerType ?? 'compartment',
         parentCompartmentId: created.parentCompartmentId ?? '',
         items: [],
       };
@@ -489,6 +501,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         description: created.description ?? '',
         imageUrl: created.imageUrl ?? '',
         isHeader: true,
+        containerType: created.containerType ?? 'compartment',
         parentCompartmentId: created.parentCompartmentId ?? '',
         items: [],
       };
@@ -546,6 +559,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       description: comp.description,
       imageUrl: comp.imageUrl,
       isHeader: comp.isHeader,
+      containerType: comp.containerType,
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
     };
@@ -1262,6 +1276,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           sort_order: idx,
           image_url: c.imageUrl.trim() || undefined,
           is_header: c.isHeader || undefined,
+          container_type: c.containerType || undefined,
           parent_compartment_id: c.parentCompartmentId || undefined,
           items: c.items.map((item, itemIdx) => ({
             name: item.name || 'Untitled Item',
@@ -1312,6 +1327,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 description: comp.description.trim() || undefined,
                 image_url: comp.imageUrl.trim() || undefined,
                 is_header: comp.isHeader,
+                container_type: comp.containerType || undefined,
                 parent_compartment_id: comp.parentCompartmentId || undefined,
               }),
             );
@@ -1362,6 +1378,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             description: c.description.trim() || undefined,
             sort_order: idx,
             image_url: c.imageUrl.trim() || undefined,
+            is_header: c.isHeader || undefined,
+            container_type: c.containerType || undefined,
             parent_compartment_id: c.parentCompartmentId || undefined,
             items: c.items.map((item, itemIdx) => ({
               name: item.name || 'Untitled Item',
@@ -1439,6 +1457,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         description: '',
         imageUrl: '',
         isHeader: false,
+        containerType: 'compartment',
         parentCompartmentId: '',
         items: comp.items.map((item) => ({
           ...emptyItem(),
@@ -1500,6 +1519,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         name: c.name,
         description: c.description,
         isHeader: c.isHeader || undefined,
+        containerType: c.containerType || undefined,
         items: c.items.map((item) => ({
           name: item.name,
           description: item.description,
@@ -1548,6 +1568,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             name: string;
             description?: string;
             isHeader?: boolean;
+            containerType?: string;
             items?: Array<Record<string, unknown>>;
           }>;
         };
@@ -1568,6 +1589,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           description: c.description ?? '',
           imageUrl: '',
           isHeader: Boolean(c.isHeader),
+          containerType: c.containerType || 'compartment',
           parentCompartmentId: '',
           items: (c.items ?? []).map((item) => ({
             ...emptyItem(),
@@ -1670,6 +1692,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       description: '',
       imageUrl: '',
       isHeader: false,
+      containerType: 'compartment',
       parentCompartmentId: '',
       items,
     }));
@@ -1731,6 +1754,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         sortOrder: cIdx,
         ...(c.imageUrl ? { imageUrl: c.imageUrl } : {}),
         ...(c.isHeader ? { isHeader: true } : {}),
+        containerType: c.containerType || 'compartment',
         ...(c.parentCompartmentId ? { parentCompartmentId: c.parentCompartmentId } : {}),
         items: c.items.map((item, iIdx): CheckTemplateItem => ({
           id: item.id ?? `preview-item-${cIdx}-${iIdx}`,
@@ -1797,35 +1821,85 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
+  const compartmentKey = useCallback(
+    (comp: CompartmentFormState, flatIdx: number) => comp.id ?? `comp-${flatIdx}`,
+    [],
+  );
+
+  // Depth-first display order: each top-level compartment is followed by its
+  // nested containers (a "pack" inside a "bag" inside a "compartment"), so the
+  // list visually reflects the storage hierarchy. `idx` is the position in the
+  // flat `compartments` array (what every handler expects); `depth` drives the
+  // indentation. Nesting is keyed on a parent's saved id, so children of
+  // not-yet-saved parents simply render at the top level.
+  const orderedCompartments = useMemo(() => {
+    const result: { comp: CompartmentFormState; idx: number; depth: number }[] = [];
+    const childIdxByParent = new Map<string, number[]>();
+    const topLevel: number[] = [];
+    compartments.forEach((c, i) => {
+      const pid = c.parentCompartmentId;
+      if (pid) {
+        const arr = childIdxByParent.get(pid) ?? [];
+        arr.push(i);
+        childIdxByParent.set(pid, arr);
+      } else {
+        topLevel.push(i);
+      }
+    });
+
+    const seen = new Set<number>();
+    const visit = (flatIdx: number, depth: number) => {
+      if (seen.has(flatIdx)) return; // guard against parent-cycle loops
+      const comp = compartments[flatIdx];
+      if (!comp) return;
+      seen.add(flatIdx);
+      result.push({ comp, idx: flatIdx, depth });
+      if (comp.id) {
+        for (const childIdx of childIdxByParent.get(comp.id) ?? []) {
+          visit(childIdx, depth + 1);
+        }
+      }
+    };
+    for (const i of topLevel) visit(i, 0);
+    // Append any orphans (parent id points at a missing/removed compartment).
+    compartments.forEach((_, i) => {
+      if (!seen.has(i)) visit(i, 0);
+    });
+    return result;
+  }, [compartments]);
+
   const compartmentIds = useMemo(
-    () => compartments.map((c, i) => c.id ?? `comp-${i}`),
-    [compartments],
+    () => orderedCompartments.map(({ comp, idx }) => compartmentKey(comp, idx)),
+    [orderedCompartments, compartmentKey],
   );
 
   const handleCompartmentDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = compartmentIds.indexOf(String(active.id));
-    const newIndex = compartmentIds.indexOf(String(over.id));
-    if (oldIndex === -1 || newIndex === -1) return;
+    // Map the dragged/target ids back to their positions in the flat array.
+    const activeFlat = orderedCompartments.find(
+      (o) => compartmentKey(o.comp, o.idx) === String(active.id),
+    )?.idx;
+    const overFlat = orderedCompartments.find(
+      (o) => compartmentKey(o.comp, o.idx) === String(over.id),
+    )?.idx;
+    if (activeFlat == null || overFlat == null) return;
 
     setCompartments((prev) => {
       const next = [...prev];
-      const [moved] = next.splice(oldIndex, 1);
+      const [moved] = next.splice(activeFlat, 1);
       if (!moved) return prev;
-      next.splice(newIndex, 0, moved);
+      next.splice(overFlat, 0, moved);
       return next;
     });
 
     // Persist reorder if template is saved
     if (isEditing && templateId) {
-      const reorderedIds = [...compartmentIds];
-      const [movedId] = reorderedIds.splice(oldIndex, 1);
-      if (movedId) reorderedIds.splice(newIndex, 0, movedId);
-      const savedIds = reorderedIds.filter(
-        (id) => !id.startsWith('comp-'),
-      );
+      const flatIds = compartments.map((c, i) => compartmentKey(c, i));
+      const [movedId] = flatIds.splice(activeFlat, 1);
+      if (movedId) flatIds.splice(overFlat, 0, movedId);
+      const savedIds = flatIds.filter((id) => !id.startsWith('comp-'));
       if (savedIds.length > 0) {
         void schedulingService
           .reorderCompartments(templateId, savedIds)
@@ -2273,9 +2347,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     sortableRef?: React.Ref<HTMLDivElement>,
     sortableStyle?: React.CSSProperties,
     sortableAttributes?: DraggableAttributes,
+    depth = 0,
   ) => {
     const key = comp.id ?? `comp-${idx}`;
     const isExpanded = expandedCompartments.has(key);
+    const typeLabel = containerTypeLabel(comp.containerType);
+    const parentName = comp.parentCompartmentId
+      ? compartments.find((c) => c.id === comp.parentCompartmentId)?.name
+      : undefined;
 
     // Section header compartment — simplified visual divider
     if (comp.isHeader) {
@@ -2379,9 +2458,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             ) : (
               <ChevronDown className="h-4 w-4 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
             )}
+            {depth > 0 && (
+              <Package className="h-3.5 w-3.5 text-theme-text-muted flex-shrink-0" aria-hidden="true" />
+            )}
             <span className="font-medium text-theme-text-primary truncate">
-              {comp.name || 'Untitled Compartment'}
+              {comp.name || `Untitled ${typeLabel}`}
             </span>
+            <span className="rounded-full bg-theme-surface-secondary px-2 py-0.5 text-[10px] font-medium text-theme-text-muted flex-shrink-0">
+              {typeLabel}
+            </span>
+            {parentName && (
+              <span className="hidden md:inline text-[10px] text-theme-text-muted truncate flex-shrink-0">
+                in {parentName}
+              </span>
+            )}
           </button>
 
           {/* Status badges */}
@@ -2457,12 +2547,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {/* Compartment fields */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label htmlFor={`comp-name-${key}`} className={labelClass}>Compartment Name</label>
+                <label htmlFor={`comp-name-${key}`} className={labelClass}>{typeLabel} Name</label>
                 <input
                   id={`comp-name-${key}`}
                   type="text"
                   className={inputClass}
-                  placeholder="e.g. Driver Side, Cab, Hose Bed"
+                  placeholder="e.g. Driver Side, Trauma Bag, IV Pack"
                   value={comp.name}
                   onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
                 />
@@ -2481,7 +2571,80 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Storage type: presets + a free-text "Custom…" option so each
+                  department can describe how their equipment is stored. */}
+              {(() => {
+                const inCustom =
+                  customContainerKeys.has(key) ||
+                  !isPresetContainerType(comp.containerType);
+                return (
+                  <div>
+                    <label className={labelClass}>
+                      <Package className="inline h-3.5 w-3.5 mr-1" />
+                      Storage Type
+                    </label>
+                    <select
+                      className={selectClass}
+                      aria-label="Storage type"
+                      value={inCustom ? '__custom__' : comp.containerType || 'compartment'}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === '__custom__') {
+                          setCustomContainerKeys((prev) => new Set(prev).add(key));
+                          updateCompartmentField(idx, { containerType: '' });
+                        } else {
+                          setCustomContainerKeys((prev) => {
+                            const next = new Set(prev);
+                            next.delete(key);
+                            return next;
+                          });
+                          updateCompartmentField(idx, { containerType: v });
+                        }
+                      }}
+                    >
+                      {CONTAINER_TYPE_PRESETS.map((p) => (
+                        <option key={p.value} value={p.value}>
+                          {p.label}
+                        </option>
+                      ))}
+                      <option value="__custom__">Custom…</option>
+                    </select>
+                    {inCustom && (
+                      <input
+                        type="text"
+                        className={`${inputClass} mt-2`}
+                        placeholder="e.g. Trauma Kit, Top Shelf, Red Bag"
+                        aria-label="Custom storage type label"
+                        value={comp.containerType}
+                        onChange={(e) =>
+                          updateCompartmentField(idx, { containerType: e.target.value })
+                        }
+                      />
+                    )}
+                  </div>
+                );
+              })()}
               <div>
+                <label className={labelClass}>Stored Inside</label>
+                <select
+                  className={selectClass}
+                  value={comp.parentCompartmentId}
+                  onChange={(e) =>
+                    updateCompartmentField(idx, { parentCompartmentId: e.target.value })
+                  }
+                >
+                  <option value="">Nothing (top-level)</option>
+                  {compartments
+                    .filter((other, cIdx) => cIdx !== idx && Boolean(other.id))
+                    .map((other) => (
+                      <option key={other.id} value={other.id ?? ''}>
+                        {containerTypeLabel(other.containerType)}:{' '}
+                        {other.name || 'Untitled'}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="sm:col-span-2">
                 <label className={labelClass}>
                   <Image className="inline h-3.5 w-3.5 mr-1" />
                   Image URL
@@ -2493,28 +2656,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   value={comp.imageUrl}
                   onChange={(e) => updateCompartmentField(idx, { imageUrl: e.target.value })}
                 />
-              </div>
-              <div>
-                <label className={labelClass}>Parent Compartment</label>
-                <select
-                  className={selectClass}
-                  value={comp.parentCompartmentId}
-                  onChange={(e) =>
-                    updateCompartmentField(idx, { parentCompartmentId: e.target.value })
-                  }
-                >
-                  <option value="">None (top-level)</option>
-                  {compartments
-                    .filter((_, cIdx) => cIdx !== idx)
-                    .map((other, oIdx) => {
-                      const otherId = other.id ?? `comp-${oIdx >= idx ? oIdx + 1 : oIdx}`;
-                      return (
-                        <option key={otherId} value={other.id ?? ''}>
-                          {other.name || 'Untitled Compartment'}
-                        </option>
-                      );
-                    })}
-                </select>
               </div>
             </div>
 
@@ -3116,13 +3257,26 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCompartmentDragEnd}>
             <SortableContext items={compartmentIds} strategy={verticalListSortingStrategy}>
-              {compartments.map((comp, idx) => (
-                <SortableCompartmentWrapper key={comp.id ?? `comp-${idx}`} id={comp.id ?? `comp-${idx}`}>
-                  {({ listeners: compListeners, setNodeRef, style, attributes }) =>
-                    renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes)
-                  }
-                </SortableCompartmentWrapper>
-              ))}
+              {orderedCompartments.map(({ comp, idx, depth }) => {
+                const id = compartmentKey(comp, idx);
+                return (
+                  <div
+                    key={id}
+                    style={depth > 0 ? { marginLeft: depth * 20 } : undefined}
+                    className={
+                      depth > 0
+                        ? 'border-l-2 border-theme-surface-border/60 pl-2'
+                        : undefined
+                    }
+                  >
+                    <SortableCompartmentWrapper id={id}>
+                      {({ listeners: compListeners, setNodeRef, style, attributes }) =>
+                        renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes, depth)
+                      }
+                    </SortableCompartmentWrapper>
+                  </div>
+                );
+              })}
             </SortableContext>
           </DndContext>
         </div>
