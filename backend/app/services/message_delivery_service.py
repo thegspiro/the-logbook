@@ -32,6 +32,15 @@ MESSAGE_CATEGORY = "department_message"
 # SMS bodies are billed per segment, so keep the escalation text short.
 _SMS_MAX_LEN = 300
 
+# Per-org escalation throttle. Caps how many email/SMS *broadcasts* an
+# organization can fire within the window, so a runaway loop or a compromised
+# admin account can't blast the whole department (SMS especially costs money).
+# The limiter fails open: if Redis is unavailable, urgent alerts still go out —
+# dropping a real safety notification is worse than an occasional over-send.
+_ESCALATION_WINDOW_SECONDS = 3600
+_EMAIL_ESCALATION_LIMIT = 30
+_SMS_ESCALATION_LIMIT = 10
+
 
 def _priority_value(message: DepartmentMessage) -> str:
     return (
@@ -154,6 +163,21 @@ class MessageDeliveryService:
             if not to_emails:
                 return
 
+            from app.core.security import is_rate_limited
+
+            if await is_rate_limited(
+                f"deptmsg_email:{message.organization_id}",
+                _EMAIL_ESCALATION_LIMIT,
+                _ESCALATION_WINDOW_SECONDS,
+                fail_closed=False,
+            ):
+                logger.warning(
+                    "Email escalation throttled for org {} (message {})",
+                    message.organization_id,
+                    message.id,
+                )
+                return
+
             from app.services.email_service import EmailService, wrap_email_body
 
             priority = _priority_value(message)
@@ -200,6 +224,21 @@ class MessageDeliveryService:
                 and _wants(u.notification_preferences, "sms_notifications")
             ]
             if not numbers:
+                return
+
+            from app.core.security import is_rate_limited
+
+            if await is_rate_limited(
+                f"deptmsg_sms:{message.organization_id}",
+                _SMS_ESCALATION_LIMIT,
+                _ESCALATION_WINDOW_SECONDS,
+                fail_closed=False,
+            ):
+                logger.warning(
+                    "SMS escalation throttled for org {} (message {})",
+                    message.organization_id,
+                    message.id,
+                )
                 return
 
             org_name = (org.name if org and org.name else "Department").strip()

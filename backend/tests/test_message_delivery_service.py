@@ -185,6 +185,49 @@ class TestSmsGating:
         assert numbers == ["+1555mobile", "+1555phone"]
 
 
+class TestEscalationRateLimit:
+    """When the per-org escalation throttle trips, the costly channel is
+    skipped — but the message itself and its in-app notification are unaffected
+    (those are handled outside these channel methods)."""
+
+    async def test_email_skipped_when_rate_limited(self):
+        db = _db()
+        recipients = [_user("u1", email="a@fd.co")]
+        sent = {"called": False}
+
+        class _FakeEmail:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, **kwargs):
+                sent["called"] = True
+                return (1, 0)
+
+        svc = MessageDeliveryService(db)
+        with patch(
+            "app.core.security.is_rate_limited", new=AsyncMock(return_value=True)
+        ), patch("app.services.email_service.EmailService", _FakeEmail), patch(
+            "app.services.email_service.wrap_email_body", return_value="<html></html>"
+        ):
+            await svc._send_email(_msg(priority="urgent"), recipients, org=None)
+
+        assert sent["called"] is False
+
+    async def test_sms_skipped_when_rate_limited(self):
+        db = _db()
+        recipients = [_user("u1", mobile="+15551234567")]
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock()
+        svc = MessageDeliveryService(db)
+        with patch(
+            "app.core.security.is_rate_limited", new=AsyncMock(return_value=True)
+        ), patch("app.services.sms_service.SMSService", return_value=fake_sms):
+            await svc._send_sms(_msg(priority="urgent"), recipients, org=None)
+
+        fake_sms.send_bulk_sms.assert_not_awaited()
+
+
 class TestPublishScheduledMessages:
     """The publish task marks due messages live (clears scheduled_at) and then
     delivers them via the shared escalation path."""

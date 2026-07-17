@@ -162,11 +162,32 @@ class MessagingService:
     async def update_message(
         self, message_id: str, organization_id: str, updates: Dict[str, Any]
     ) -> Tuple[Optional[DepartmentMessage], Optional[str]]:
-        """Update a message"""
+        """Update a message.
+
+        Rescheduling is only allowed for a message that is still pending
+        (scheduled_at in the future). A message whose scheduled_at is NULL has
+        already been published/escalated, and moving it back to a future time
+        would make the publish task escalate it a second time, so that is
+        rejected.
+        """
         try:
             message = await self.get_message_by_id(message_id, organization_id)
             if not message:
                 return None, "Message not found"
+
+            new_sched = updates.get("scheduled_at")
+            if new_sched is not None and message.scheduled_at is None:
+                cmp = (
+                    new_sched
+                    if new_sched.tzinfo is not None
+                    else new_sched.replace(tzinfo=timezone.utc)
+                )
+                if cmp > datetime.now(timezone.utc):
+                    return (
+                        None,
+                        "Cannot reschedule a message that has already been "
+                        "published",
+                    )
 
             allowed_fields = {
                 "title",

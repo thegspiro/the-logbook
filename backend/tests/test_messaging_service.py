@@ -371,6 +371,50 @@ class TestCreateScheduling:
         assert message.scheduled_at is None
 
 
+class TestRescheduleGuard:
+    """A published message (scheduled_at NULL) can't be moved to a future time,
+    which would make the publish task escalate it a second time."""
+
+    def _db_with(self, message):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=message))
+        )
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        return db
+
+    async def test_cannot_reschedule_already_published_message(self):
+        published = SimpleNamespace(scheduled_at=None)
+        db = self._db_with(published)
+        future = datetime.now(timezone.utc) + timedelta(hours=1)
+        message, err = await MessagingService(db).update_message(
+            "m1", "org-1", {"scheduled_at": future}
+        )
+        assert message is None
+        assert "already been published" in err
+
+    async def test_can_reschedule_a_still_pending_message(self):
+        pending = SimpleNamespace(
+            scheduled_at=datetime.now(timezone.utc) + timedelta(hours=5)
+        )
+        db = self._db_with(pending)
+        new_time = datetime.now(timezone.utc) + timedelta(hours=1)
+        message, err = await MessagingService(db).update_message(
+            "m1", "org-1", {"scheduled_at": new_time}
+        )
+        assert err is None
+        assert pending.scheduled_at == new_time
+
+    async def test_clearing_schedule_on_published_message_is_allowed(self):
+        published = SimpleNamespace(scheduled_at=None, is_active=True)
+        db = self._db_with(published)
+        message, err = await MessagingService(db).update_message(
+            "m1", "org-1", {"scheduled_at": None, "is_active": False}
+        )
+        assert err is None
+
+
 if __name__ == "__main__":  # pragma: no cover
     import pytest
 
