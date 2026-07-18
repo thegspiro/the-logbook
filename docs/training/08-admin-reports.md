@@ -643,7 +643,7 @@ This CSV can be opened in Excel, attached to the county submission form, or impo
 
 Based on the report, Chief Owens takes action:
 
-1. **Foster and Harris** — Sends a department message (via **Notifications > Messages**) reminding them of the minimum training requirement and asking them to schedule makeup training in Q1 2026.
+1. **Foster and Harris** — Sends a department message (via **Communications → Messages**) reminding them of the minimum training requirement and asking them to schedule makeup training in Q1 2026.
 2. **Garcia** — Reviews his LOA to confirm the adjusted requirement is correct. His 18/24 hours means he still has a gap — she notes this for his return-to-duty plan.
 3. **Brooks** — Adds a note to follow up in February about CPR renewal.
 
@@ -989,19 +989,24 @@ Dashboard notification cards now include **clear** and **dismiss** buttons direc
 > **Screenshot needed:**
 > _[Screenshot of the Dashboard notifications area showing notification cards with dismiss (X) and clear (checkmark) buttons visible on each card]_
 
-### Persistent Department Messages
+### Department Messages
 
-Administrators can create department-wide persistent messages:
+Administrators post department announcements from **Communications → Messages**
+(`notifications.manage`). Beyond simple persistent notices, messages support
+priority-based **email/SMS escalation**, **required acknowledgment** with a
+who-has-not-acknowledged report, **scheduled send**, and in-place **editing**.
 
-1. Navigate to **Notifications** (admin view)
-2. Click **Create Department Message**
-3. Enter the message content and mark as **Persistent**
-4. All department members see the message until an admin clears it
+1. Navigate to **Communications → Messages** and click **New message**.
+2. Enter the title and body, set priority and audience, and optionally toggle
+   **Persistent** / **Require acknowledgment** or set a schedule.
+3. Members see it in the app; urgent and acknowledgment-required messages are
+   also emailed (urgent adds SMS when configured).
 
-> **Screenshot needed:**
-> _[Screenshot of a persistent department message banner on the Dashboard with the admin-only "Clear for All" button visible]_
+For the full workflow — acknowledgment reports, scheduling, targeting, and
+member notification controls — see
+[Documents, Forms & Communications → Department Messages](./07-documents-forms.md#department-messages).
 
-> **Edge case:** Non-admin users cannot dismiss persistent messages. The dismiss button is hidden for regular members; only admins see the "Clear for All" action.
+> **Edge case:** Non-admin users cannot dismiss persistent messages. The dismiss button is hidden for regular members; only admins see the "Clear" action.
 
 ### Notification Channel Filter
 

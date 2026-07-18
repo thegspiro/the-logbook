@@ -271,7 +271,10 @@ class User(Base):
 
     # Notification Preferences (stored as JSON object)
     # Format: {"email": true, "email_notifications": true,
-    #          "event_reminders": true, "training_reminders": true}
+    #          "sms_notifications": true, "event_reminders": true,
+    #          "training_reminders": true}
+    # sms_notifications gates SMS for urgent department messages (requires a
+    # mobile/phone on file and Twilio configured).
     notification_preferences = Column(JSON, default=dict)
 
     # Department Membership (one per member, no permissions – purely classification)

@@ -324,11 +324,21 @@ tasks like verifying voter eligibility and certifying results]**
 
 **[SCREEN: Navigate to Communications module]**
 
-> "If your department uses the Communications module, you can send announcements
-> to the entire membership or to specific groups. Compose a message, select the
-> recipients, and send — it reaches members via email and in-app notification."
+> "Under Communications → Messages, you can send announcements to the entire
+> membership or to specific roles, statuses, or individual members. Compose a
+> message, pick the audience, and set a priority. Every targeted member gets it
+> in-app; mark it Important or Urgent and it also goes out by email — Urgent
+> messages even send a text, so a time-sensitive callout reaches people who
+> aren't logged in."
 
-**[SCREEN: Show composing and sending a department-wide announcement]**
+**[SCREEN: Show composing a message with the audience selector and priority]**
+
+> "Turn on 'Require acknowledgment' for anything members must confirm they've
+> read — like an SOP change. You'll get a report showing exactly who has and
+> hasn't acknowledged it. You can also schedule a message to go out later, and
+> edit or delete a message after posting."
+
+**[SCREEN: Show the acknowledgment report and the schedule field]**
 
 ### PUBLIC PORTAL (15:30 – 16:00)
 

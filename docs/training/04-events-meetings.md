@@ -1078,19 +1078,14 @@ Dashboard notification cards now include **clear** and **dismiss** buttons, allo
 > **Screenshot needed:**
 > _[Screenshot of the Dashboard notifications section showing notification cards with dismiss (X) and clear (checkmark) buttons on each card]_
 
-### Persistent Department Messages
+### Department Messages
 
-Administrators can create department-wide messages that persist for all members until explicitly cleared by an admin:
+Administrators broadcast department-wide announcements from **Communications →
+Messages** — with priority-based email/SMS escalation, required acknowledgment,
+scheduling, and targeting. See the full how-to in
+[Documents, Forms & Communications → Department Messages](./07-documents-forms.md#department-messages).
 
-1. Navigate to **Notifications** (admin)
-2. Click **Create Department Message**
-3. Enter the message content and mark it as **Persistent**
-4. The message appears for all department members until an admin clears it
-
-> **Screenshot needed:**
-> _[Screenshot of a persistent department message on the Dashboard showing the message content with an admin-only "Clear for All" button, and no dismiss button for regular members]_
-
-> **Edge case:** Non-admin users cannot dismiss persistent messages — the dismiss button is not shown. Only users with admin permissions see the "Clear for All" action.
+> **Edge case:** Non-admin users cannot dismiss persistent messages — the dismiss button is not shown. Only users with `notifications.manage` see the "Clear" action.
 
 ### Notification Channel Filter
 

@@ -85,6 +85,12 @@ Welcome to The Logbook documentation! This directory contains comprehensive guid
     - 7 system document folders with custom folder support
     - API endpoint reference and security considerations
 
+11. **[COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md)**
+    - Department Messages: targeting, priority, acknowledgment tracking
+    - In-app / email / SMS escalation by priority
+    - Scheduled send, soft delete, editing, per-org escalation rate limits
+    - Data model, API endpoint reference, permissions, and migrations
+
 10. **[PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md)**
     - Public API v1.1.0 with public form endpoints
     - Form retrieval and submission without authentication
@@ -382,6 +388,7 @@ See [ERROR_MESSAGES_COMPLETE.md](./ERROR_MESSAGES_COMPLETE.md) for the full erro
 | Inactivity timeouts / purging | [PROSPECTIVE_MEMBERS_MODULE.md](./PROSPECTIVE_MEMBERS_MODULE.md#inactivity-timeout-system) |
 | Meeting minutes / templates | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md) |
 | Document management / folders | [MEETING_MINUTES_MODULE.md](./MEETING_MINUTES_MODULE.md#documents-module) |
+| Department messages / announcements | [COMMUNICATIONS_MODULE.md](./COMMUNICATIONS_MODULE.md) |
 | Public API (forms, events) | [PUBLIC_API_DOCUMENTATION.md](./PUBLIC_API_DOCUMENTATION.md) |
 | Election security | [ELECTION_SECURITY_AUDIT.md](../ELECTION_SECURITY_AUDIT.md) |
 | Events / recurring events / RSVP | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md#events-module-issues) |
@@ -481,6 +488,7 @@ docker-compose ps
 | ASYNC_SQLALCHEMY_REVIEW.md | 1.0 | 2026-02-10 | Current |
 | PROSPECTIVE_MEMBERS_MODULE.md | 1.0 | 2026-02-12 | Current |
 | MEETING_MINUTES_MODULE.md | 1.0 | 2026-02-13 | Current |
+| COMMUNICATIONS_MODULE.md | 1.0 | 2026-07-17 | Current |
 | ONBOARDING_FLOW.md | 1.3 | 2026-06-25 | Current — login page guards against unconfigured installs, EMT operational rank, optional-module enabled-state visibility |
 | DROP_NOTIFICATIONS.md | 1.0 | 2026-02-14 | Current |
 | TYPESCRIPT_SAFEGUARDS.md | 1.1 | 2026-02-14 | Current |

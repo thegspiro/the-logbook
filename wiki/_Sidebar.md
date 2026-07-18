@@ -31,6 +31,7 @@
 - [Training Compliance](../docs/training-compliance-calculations.md)
 - [Elections](Module-Elections)
 - [Events](Module-Events)
+- [Communications](Module-Communications)
 - [Public Programs](Public-Programs)
 - [Scheduling](Module-Scheduling)
 - [Admin Hours](Module-Admin-Hours)

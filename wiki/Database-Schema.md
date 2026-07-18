@@ -25,8 +25,8 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `audit_logs` | Tamper-proof audit trail with SHA-256 hash chain |
 | `notification_rules` | Notification rule definitions with trigger, category, channel, and config *(2026-03-23)* |
 | `notification_logs` | In-app and email notification records with action_url, expiry, and `metadata` JSON column for structured context (shift_id, shift_date, checklist_count, etc.) *(updated 2026-03-26)* |
-| `department_messages` | Internal department messages with targeting, priority, and `is_persistent` flag *(2026-03-23)* |
-| `department_message_reads` | Per-user read/acknowledged tracking for department messages *(2026-03-23)* |
+| `department_messages` | Internal department messages with targeting (roles by id, statuses, or member ids), priority, `is_persistent`, `requires_acknowledgment`, `expires_at`, `deleted_at` (soft delete), and `scheduled_at` (deferred publish) *(updated 2026-07-17)* |
+| `department_message_reads` | Per-user read/acknowledged tracking for department messages (preserved on soft delete as compliance evidence) *(updated 2026-07-17)* |
 | `security_alerts` | Intrusion detection and security event alerts |
 
 ---

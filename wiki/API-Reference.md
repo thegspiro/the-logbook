@@ -232,17 +232,31 @@ POST   /api/v1/elections/{id}/send-report                              # Email e
 GET    /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification (rate-limited)
 ```
 
-## Department Messages *(2026-03-23)*
+## Department Messages *(updated 2026-07-17)*
+
+Admin endpoints require `notifications.manage`. Inbox/read/acknowledge endpoints
+are available to any authenticated member (scoped to messages targeted to them).
 
 ```
-GET    /api/v1/messages                                  # List department messages
-POST   /api/v1/messages                                  # Create department message
+# Admin (notifications.manage)
+GET    /api/v1/messages                                  # List messages (supports include_inactive, search, priority, pagination)
+POST   /api/v1/messages                                  # Create message (supports scheduled_at for deferred publish)
+GET    /api/v1/messages/roles                            # Roles available for targeting (id, name, slug)
 GET    /api/v1/messages/{id}                             # Get message
-PATCH  /api/v1/messages/{id}                             # Update message
-DELETE /api/v1/messages/{id}                             # Delete message
+PATCH  /api/v1/messages/{id}                             # Update message (edit / reschedule)
+DELETE /api/v1/messages/{id}                             # Soft-delete message (read/ack records preserved)
+GET    /api/v1/messages/{id}/stats                       # Read/ack counts with audience denominator
+GET    /api/v1/messages/{id}/acknowledgments             # Per-recipient read/ack breakdown
+
+# Member (authenticated)
+GET    /api/v1/messages/inbox                            # Messages targeted to the current user
+GET    /api/v1/messages/inbox/unread-count               # Current user's unread/pending count
 POST   /api/v1/messages/{id}/read                        # Mark message as read
-POST   /api/v1/messages/{id}/clear                       # Admin clear persistent message
+POST   /api/v1/messages/{id}/acknowledge                 # Acknowledge (for ack-required messages)
 ```
+
+Posting a message fans it out across in-app / email / SMS channels by priority
+(see the [Training guide](../docs/training/07-documents-forms.md#department-messages)).
 
 ---
 

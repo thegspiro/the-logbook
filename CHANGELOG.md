@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Department Messaging: reliable delivery, acknowledgment tracking, and scheduling (2026-07-17)
+
+A pass over the internal Department Messages feature so announcements reliably
+reach the right members, leadership can prove who has seen mandatory notices, and
+the delivery/scheduling machinery can't be broken or abused by a single message.
+
+**Delivery that actually reaches people**
+
+- **Cross-channel escalation** — posting a message now fans it out to the
+  channels members watch: an in-app notification (bell inbox) for every targeted
+  member, an email for urgent or acknowledgment-required messages, and an SMS for
+  urgent messages (when the department has Twilio configured and the member has a
+  mobile number). Previously "urgent" only changed a badge color and was invisible
+  to anyone not already in the app. Escalation runs in the background so posting
+  stays instant, and each channel is best-effort so one failing channel never
+  blocks the others.
+- **Members can opt out per channel** — a new **Urgent Text Messages** toggle
+  joins **Email Notifications** in Settings → Notifications (and the profile
+  contact editor). The in-app notification is always delivered regardless.
+
+**Acknowledgment tracking and compliance**
+
+- **Acknowledgment stays pending until acknowledged** — an acknowledgment-required
+  message keeps counting as unread until the member actually acknowledges it, not
+  merely opens it.
+- **Who-has-not-acknowledged report** — officers get a per-recipient breakdown
+  with a real denominator (X of Y acknowledged / read), surfacing members who
+  still owe an acknowledgment. Message edits and acknowledgments are now
+  audit-logged.
+- **Soft delete preserves evidence** — deleting a message hides it from members
+  but keeps the read/acknowledgment records, so a deleted mandatory notice still
+  has its compliance trail. (A hard delete previously destroyed that evidence.)
+
+**Authoring improvements**
+
+- **Edit in place** — officers can edit a message's title, body, audience, flags,
+  and expiry instead of deleting and reposting.
+- **Scheduled send** — schedule a message to publish (and escalate) at a future
+  time; it stays hidden with a "Scheduled" badge until then. An already-published
+  message can't be moved back to a future time (which would re-send it).
+- **Clickable links** — URLs in a message body render as links in the inbox and
+  dashboard (safely — no HTML injection).
+- **Search, priority filter, and pagination** on the admin message list.
+- **Rename-safe role targeting** — role-targeted messages now follow the role's
+  identity, so renaming a role no longer silently stops delivery. Existing
+  messages are backfilled.
+
+**Correctness, safety, and abuse resistance**
+
+- **Accurate unread badge** — the dashboard badge uses the real unread count
+  instead of a capped preview, and the unread query no longer loads message bodies.
+- **Per-department escalation rate limit** — email/SMS escalation is throttled per
+  organization (fail-open, so real safety alerts still go out) so a runaway loop or
+  compromised admin can't blast the whole department across the metered channels.
+- **A single message can't break the batch** — the delivery path is fully guarded
+  and the scheduled-publish task isolates failures, so one bad message can't halt
+  delivery of the others.
+- Server-side validation of priority/target values, sanitized error responses, a
+  new `expires_at` index, and a fix for a concurrency bug in the test-email
+  response.
 ### Scheduling: full shift lifecycle, personal calendars, automation, and safeguards (2026-07-16)
 
 A broad review of the scheduling/shift module, closing operational gaps from
