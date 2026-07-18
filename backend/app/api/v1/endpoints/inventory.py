@@ -9,7 +9,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import (
+    APIRouter,
+    Depends,
+)
 from fastapi import File as FastAPIFile
 from fastapi import (
     HTTPException,
@@ -74,23 +77,27 @@ from app.schemas.inventory import (
     EquipmentRequestCreate,
     EquipmentRequestFulfill,
     EquipmentRequestReview,
+    ExpiringLotResponse,
     ImpactPlanCreate,
-    ImpactPlanResponse,
-    ImpactPlanUpdate,
     ImpactPlannerIssueRequest,
     ImpactPlannerIssueResponse,
     ImpactPlannerOptionsResponse,
-    ImpactPlannerRequestSizesResponse,
     ImpactPlannerReorderRequest,
     ImpactPlannerReorderResponse,
     ImpactPlannerRequest,
+    ImpactPlannerRequestSizesResponse,
     ImpactPlannerResponse,
+    ImpactPlanResponse,
+    ImpactPlanUpdate,
     InventoryCategoryCreate,
     InventoryCategoryResponse,
     InventoryCategoryUpdate,
     InventoryItemCreate,
     InventoryItemResponse,
     InventoryItemUpdate,
+    InventoryLotCreate,
+    InventoryLotResponse,
+    InventoryLotUpdate,
     InventorySummary,
     IssuanceAllowanceCreate,
     IssuanceAllowanceResponse,
@@ -5485,4 +5492,114 @@ async def set_label_preset(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     await db.commit()
+    return result
+
+
+# =====================================================================
+# Stock Lots (ready replacement stock: lot # + expiration + quantity)
+# =====================================================================
+
+
+@router.get(
+    "/items/{item_id}/lots",
+    response_model=list[InventoryLotResponse],
+)
+async def list_item_lots(
+    item_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """List ready-stock lots for an item (soonest-to-expire first)."""
+    service = InventoryService(db)
+    return await service.list_lots(item_id, str(current_user.organization_id))
+
+
+@router.post(
+    "/items/{item_id}/lots",
+    response_model=InventoryLotResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_item_lot(
+    item_id: str,
+    data: InventoryLotCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Add a ready-stock lot (lot number, expiration, quantity) to an item."""
+    service = InventoryService(db)
+    lot = await service.add_lot(
+        item_id=item_id,
+        organization_id=str(current_user.organization_id),
+        data=data.model_dump(exclude_unset=True),
+        created_by=str(current_user.id),
+    )
+    if lot is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return lot
+
+
+@router.patch(
+    "/lots/{lot_id}",
+    response_model=InventoryLotResponse,
+)
+async def update_item_lot(
+    lot_id: str,
+    data: InventoryLotUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Update a stock lot (quantity, expiration, lot number, notes)."""
+    service = InventoryService(db)
+    lot = await service.update_lot(
+        lot_id=lot_id,
+        organization_id=str(current_user.organization_id),
+        data=data.model_dump(exclude_unset=True),
+    )
+    if lot is None:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    return lot
+
+
+@router.delete("/lots/{lot_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_item_lot(
+    lot_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Delete a stock lot."""
+    service = InventoryService(db)
+    deleted = await service.delete_lot(lot_id, str(current_user.organization_id))
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Lot not found")
+
+
+@router.get(
+    "/lots/expiring",
+    response_model=list[ExpiringLotResponse],
+)
+async def list_expiring_lots(
+    days_ahead: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.view")),
+):
+    """List in-stock lots expiring within N days, with item name."""
+    from datetime import date as _date
+
+    service = InventoryService(db)
+    rows = await service.get_expiring_lots(
+        str(current_user.organization_id), days_ahead
+    )
+    today = _date.today()
+    result: list[ExpiringLotResponse] = []
+    for lot, item_name in rows:
+        days_until = (
+            (lot.expiration_date - today).days if lot.expiration_date else None
+        )
+        result.append(
+            ExpiringLotResponse.model_validate(
+                lot, from_attributes=True
+            ).model_copy(
+                update={"item_name": item_name, "days_until_expiration": days_until}
+            )
+        )
     return result

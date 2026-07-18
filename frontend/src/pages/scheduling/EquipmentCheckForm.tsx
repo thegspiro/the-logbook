@@ -32,9 +32,17 @@ import {
   Type,
   WifiOff,
   RefreshCw,
+  Repeat,
+  X,
+  PackageCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { inventoryService } from '../../services/inventoryService';
+import type { InventoryLot } from '../../services/eventServices';
+import { getErrorMessage } from '../../utils/errorHandling';
+import { formatDate } from '../../utils/dateFormatting';
+import { useTimezone } from '../../hooks/useTimezone';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import {
   enqueueCheck,
@@ -55,6 +63,7 @@ import type {
   LastCheckItemResult,
 } from '../../modules/scheduling/types/equipmentCheck';
 import { CHECK_TYPE_LABELS } from '../../modules/scheduling/types/equipmentCheck';
+import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
 
 // ============================================================================
 // Types
@@ -168,7 +177,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   previewMode,
   existingCheckId,
 }) => {
+  const tz = useTimezone();
   const [results, setResults] = useState<Record<string, ItemResult>>({});
+  // Lot swaps performed during this check: override the deployed item's lot /
+  // expiration so the badge reflects the fresher unit that was swapped in.
+  const [swapOverrides, setSwapOverrides] = useState<
+    Record<string, { lotNumber?: string; expirationDate?: string }>
+  >({});
+  const [swapTarget, setSwapTarget] = useState<CheckTemplateItem | null>(null);
+  const [swapLots, setSwapLots] = useState<InventoryLot[]>([]);
+  const [swapLoading, setSwapLoading] = useState(false);
+  const [swapping, setSwapping] = useState(false);
   const [collapsedCompartments, setCollapsedCompartments] = useState<Set<string>>(new Set());
   const [expandedNotes, setExpandedNotes] = useState<Set<string>>(new Set());
   const [expandedPhotos, setExpandedPhotos] = useState<Set<string>>(new Set());
@@ -189,54 +208,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Resolve sub-compartments: merge children inline under their parent
   // --------------------------------------------------------------------------
 
-  const compartments = useMemo(() => {
-    const raw = template.compartments;
-    const childIds = new Set<string>();
-
-    // Identify all compartments that are children of another
-    for (const c of raw) {
-      if (c.parentCompartmentId) {
-        childIds.add(c.id);
-      }
-    }
-
-    // Build resolved list: for each top-level compartment, append child
-    // compartment items with a synthetic header item as a sub-heading
-    const resolved: CheckTemplateCompartment[] = [];
-    for (const comp of raw) {
-      if (childIds.has(comp.id)) continue; // skip children at top level
-
-      // Find children of this compartment, preserving their sort order
-      const children = raw.filter((c) => c.parentCompartmentId === comp.id);
-      if (children.length === 0) {
-        resolved.push(comp);
-        continue;
-      }
-
-      // Merge: parent items first, then each child as sub-heading + its items
-      const mergedItems: CheckTemplateItem[] = [...comp.items];
-      for (const child of children) {
-        // Inject a synthetic header to label the sub-compartment
-        const subHeader: CheckTemplateItem = {
-          id: `subheader-${child.id}`,
-          compartmentId: comp.id,
-          name: child.name,
-          sortOrder: mergedItems.length,
-          checkType: 'header',
-          isRequired: false,
-          hasExpiration: false,
-          expirationWarningDays: 0,
-        };
-        if (child.description) subHeader.description = child.description;
-        mergedItems.push(subHeader);
-        mergedItems.push(...child.items);
-      }
-
-      resolved.push({ ...comp, items: mergedItems });
-    }
-
-    return resolved;
-  }, [template.compartments]);
+  // Flatten the compartment tree to any depth. Each top-level compartment
+  // becomes one card; every nested container (a "pack" inside a "bag" inside a
+  // "compartment") is merged in below its parent as a synthetic sub-heading
+  // that shows its type + name, indented by depth. `storagePathByItemId`
+  // records each item's full location path so submitted results and reports
+  // reflect exactly where the item lives, not just its top-level compartment.
+  const { compartments, storagePathByItemId } = useMemo(
+    () => flattenCompartmentTree(template.compartments),
+    [template.compartments],
+  );
 
   // --------------------------------------------------------------------------
   // Offline queue sync — drain pending checks when connectivity returns
@@ -357,6 +338,73 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       }));
     },
     [],
+  );
+
+  // Apply any in-check lot swap to an item so the badge and expiration reflect
+  // the fresher unit that was swapped in (without needing a template re-fetch).
+  const applyOverride = useCallback(
+    (item: CheckTemplateItem): CheckTemplateItem => {
+      const o = swapOverrides[item.id];
+      if (!o) return item;
+      return {
+        ...item,
+        ...(o.lotNumber !== undefined ? { lotNumber: o.lotNumber } : {}),
+        ...(o.expirationDate !== undefined
+          ? { hasExpiration: true, expirationDate: o.expirationDate }
+          : {}),
+      };
+    },
+    [swapOverrides],
+  );
+
+  const openSwap = useCallback(async (item: CheckTemplateItem) => {
+    if (!item.inventoryItemId) return;
+    setSwapTarget(item);
+    setSwapLots([]);
+    setSwapLoading(true);
+    try {
+      const lots = await inventoryService.getItemLots(item.inventoryItemId);
+      // Freshest (latest expiration) first — that's the best unit to swap in.
+      const inStock = lots
+        .filter((l) => l.quantity > 0)
+        .sort((a, b) => (b.expiration_date ?? '').localeCompare(a.expiration_date ?? ''));
+      setSwapLots(inStock);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load ready stock'));
+    } finally {
+      setSwapLoading(false);
+    }
+  }, []);
+
+  const doSwap = useCallback(
+    async (lot: InventoryLot) => {
+      if (!swapTarget) return;
+      setSwapping(true);
+      try {
+        const res = await schedulingService.swapItemLot(swapTarget.id, lot.id);
+        setSwapOverrides((prev) => ({
+          ...prev,
+          [swapTarget.id]: {
+            ...(res.lotNumber !== undefined ? { lotNumber: res.lotNumber } : {}),
+            ...(res.expirationDate !== undefined
+              ? { expirationDate: res.expirationDate }
+              : {}),
+          },
+        }));
+        // Record the swapped-in lot as the found lot and clear the auto-fail.
+        updateResult(swapTarget.id, {
+          lotFound: res.lotNumber,
+          status: 'not_checked',
+        });
+        toast.success('Swapped in fresh stock');
+        setSwapTarget(null);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to swap lot'));
+      } finally {
+        setSwapping(false);
+      }
+    },
+    [swapTarget, updateResult],
   );
 
   const toggleNotes = useCallback((itemId: string) => {
@@ -708,8 +756,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       const items: CheckItemResultSubmit[] = [];
       for (const compartment of compartments) {
-        for (const item of compartment.items) {
-          if (item.checkType === 'header') continue;
+        for (const rawItem of compartment.items) {
+          if (rawItem.checkType === 'header') continue;
+          // Reflect any in-check lot swap so the recorded snapshot carries the
+          // fresh unit's lot/expiration rather than the pre-swap values.
+          const item = applyOverride(rawItem);
           const result = results[item.id];
 
           // Detect serial/lot updates for date_lot items
@@ -725,7 +776,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
           items.push({
             template_item_id: item.id,
-            compartment_name: compartment.name,
+            compartment_name:
+              storagePathByItemId.get(item.id) ?? compartment.name,
             item_name: item.name,
             check_type: item.checkType,
             status: result?.status || 'not_checked',
@@ -815,15 +867,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         const fallbackItems: CheckItemResultSubmit[] = [];
         const fallbackPhotos: { itemId: string; files: File[] }[] = [];
         for (const compartment of compartments) {
-          for (const item of compartment.items) {
-            if (item.checkType === 'header') continue;
+          for (const rawItem of compartment.items) {
+            if (rawItem.checkType === 'header') continue;
+            const item = applyOverride(rawItem);
             const result = results[item.id];
             if (result?.photoFiles && result.photoFiles.length > 0) {
               fallbackPhotos.push({ itemId: item.id, files: result.photoFiles });
             }
             fallbackItems.push({
               template_item_id: item.id,
-              compartment_name: compartment.name,
+              compartment_name:
+                storagePathByItemId.get(item.id) ?? compartment.name,
               item_name: item.name,
               check_type: item.checkType,
               status: result?.status || 'not_checked',
@@ -1292,7 +1346,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Render: Check Item (phone-first, large touch targets)
   // --------------------------------------------------------------------------
 
-  const renderCheckItem = (item: CheckTemplateItem) => {
+  const renderCheckItem = (rawItem: CheckTemplateItem) => {
+    const item = applyOverride(rawItem);
     if (item.checkType === 'header') {
       return (
         <div key={item.id} className="pt-3 first:pt-0">
@@ -1366,6 +1421,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               )}
               {renderExpirationBadge(item)}
             </div>
+            {swapOverrides[item.id] && (
+              <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
+                <PackageCheck className="h-3 w-3" aria-hidden="true" />
+                Swapped in
+                {swapOverrides[item.id]?.lotNumber
+                  ? ` Lot ${swapOverrides[item.id]?.lotNumber}`
+                  : ' fresh stock'}
+                {swapOverrides[item.id]?.expirationDate
+                  ? ` · exp ${formatDate(swapOverrides[item.id]?.expirationDate, tz)}`
+                  : ''}
+              </p>
+            )}
             {item.description && (
               <p className={`mt-0.5 text-xs text-theme-text-muted ${isQuantity ? '' : 'ml-6'}`}>
                 {item.description}
@@ -1427,6 +1494,18 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               </span>
             )}
           </button>
+          {item.inventoryItemId &&
+            (getExpirationStatus(item) === 'expired' ||
+              getExpirationStatus(item) === 'expiring_soon') && (
+              <button
+                type="button"
+                onClick={() => { void openSwap(item); }}
+                className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 transition-colors min-h-[36px] font-medium"
+              >
+                <Repeat className="h-3 w-3" aria-hidden="true" />
+                Swap
+              </button>
+            )}
         </div>
         {showNotesField && (
           <textarea
@@ -1741,6 +1820,74 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       {/* Content */}
       {renderFlatView()}
+
+      {/* Lot swap modal — pick a ready replacement to put on the apparatus */}
+      {swapTarget && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4">
+          <div className="w-full sm:max-w-md bg-theme-surface rounded-t-2xl sm:rounded-2xl border border-theme-surface-border shadow-xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between border-b border-theme-surface-border px-4 py-3">
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-theme-text-primary truncate">
+                  Swap in fresh stock
+                </h3>
+                <p className="text-xs text-theme-text-muted truncate">{swapTarget.name}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSwapTarget(null)}
+                className="p-1.5 text-theme-text-muted hover:text-theme-text-primary"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="overflow-auto px-4 py-3 space-y-2">
+              {swapLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-theme-text-muted" />
+                </div>
+              ) : swapLots.length === 0 ? (
+                <p className="py-8 text-center text-sm text-theme-text-muted">
+                  No ready stock on hand. Ask the supply officer to add stock for
+                  this item.
+                </p>
+              ) : (
+                swapLots.map((lot) => (
+                  <div
+                    key={lot.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-theme-surface-border p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-theme-text-primary truncate">
+                        {lot.lot_number || 'No lot #'}
+                      </p>
+                      <p className="text-xs text-theme-text-muted">
+                        {lot.expiration_date
+                          ? `Exp ${formatDate(lot.expiration_date, tz)}`
+                          : 'No expiration'}{' '}
+                        · {lot.quantity} ready
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={swapping}
+                      onClick={() => { void doSwap(lot); }}
+                      className="btn-primary btn-sm inline-flex items-center gap-1 disabled:opacity-50 shrink-0"
+                    >
+                      {swapping ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <PackageCheck className="h-4 w-4" />
+                      )}
+                      Swap in
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

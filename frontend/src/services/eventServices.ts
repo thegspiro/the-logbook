@@ -1396,6 +1396,45 @@ export interface NFPARetirementDueItem {
 }
 
 // ============================================
+// Inventory Stock Lot Types (ready replacement stock)
+// ============================================
+
+export interface InventoryLot {
+  id: string;
+  organization_id: string;
+  inventory_item_id: string;
+  lot_number?: string;
+  expiration_date?: string;
+  quantity: number;
+  received_date?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+  created_by?: string;
+}
+
+export interface InventoryLotCreate {
+  lot_number?: string | undefined;
+  expiration_date?: string | undefined;
+  quantity: number;
+  received_date?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface InventoryLotUpdate {
+  lot_number?: string | undefined;
+  expiration_date?: string | undefined;
+  quantity?: number | undefined;
+  received_date?: string | undefined;
+  notes?: string | undefined;
+}
+
+export interface ExpiringLot extends InventoryLot {
+  item_name?: string;
+  days_until_expiration?: number;
+}
+
+// ============================================
 // Charge Management Types
 // ============================================
 

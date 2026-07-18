@@ -183,6 +183,7 @@ from app.models.inventory import (
     InventoryActionType,
     InventoryCategory,
     InventoryItem,
+    InventoryLot,
     InventoryNotificationQueue,
     IssuanceAllowance,
     ItemAssignment,
@@ -479,6 +480,7 @@ __all__ = [
     # Inventory models
     "InventoryCategory",
     "InventoryItem",
+    "InventoryLot",
     "ItemAssignment",
     "ItemIssuance",
     "IssuanceAllowance",

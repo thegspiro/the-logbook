@@ -24,6 +24,7 @@ import {
   FileX,
   Truck,
   AlertTriangle,
+  Clock,
   BoxSelect,
   Ruler,
   UserPlus,
@@ -395,6 +396,13 @@ export const InventoryAdminHub: React.FC = () => {
                 badge={lowStockAlerts.length > 0 ? lowStockAlerts.length : undefined}
                 badgeColor="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
                 iconBg="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+              />
+              <NavCard
+                to="/scheduling/supply/expiring"
+                icon={<Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+                title="Expiring on Apparatus"
+                description="Items expiring on the trucks and ready replacement stock"
+                iconBg="bg-amber-500/10 text-amber-600 dark:text-amber-400"
               />
             </div>
           </Section>
