@@ -55,6 +55,7 @@ from app.schemas.training import (
     UserTrainingStats,
 )
 from app.services.training_compliance import (
+    _load_compliance_config,
     evaluate_member_requirement,
     get_org_include_current_month,
     get_requirement_date_window,
@@ -2228,6 +2229,186 @@ async def get_compliance_matrix(
     return {
         "members": [m.model_dump() for m in matrix],
         "requirements": [{"id": r.id, "name": r.name} for r in requirements],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ============================================
+# Member Period Status (month-at-a-glance roster)
+# ============================================
+
+
+class MemberPeriodStatusRow(BaseModel):
+    user_id: str
+    member_name: str
+    # Activity within the selected [start_date, end_date] window
+    trainings_completed: int
+    hours_completed: float
+    last_activity: str | None = None  # ISO date of latest completion in window
+    # Current overall compliance standing (not period-scoped)
+    compliance_status: str  # "green" | "yellow" | "red" | "exempt"
+    requirements_met: int
+    requirements_total: int
+
+
+@router.get("/records/member-status")
+async def get_member_period_status(
+    start_date: date = Query(..., description="Period start (inclusive)"),
+    end_date: date = Query(..., description="Period end (inclusive)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("training.manage")),
+):
+    """Month-at-a-glance roster: for every active member, their training
+    *activity* inside the selected period (completions, hours, last activity)
+    plus their current *compliance standing*. Lets a training officer see how
+    everyone is doing over a chosen window in one view.
+    """
+    if end_date < start_date:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="end_date must be on or after start_date",
+        )
+
+    org_id = current_user.organization_id
+
+    members_result = await db.execute(
+        select(User)
+        .where(
+            User.organization_id == org_id,
+            User.status == UserStatus.ACTIVE,
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.last_name, User.first_name)
+    )
+    members = members_result.scalars().all()
+
+    reqs_result = await db.execute(
+        select(TrainingRequirement).where(
+            TrainingRequirement.organization_id == org_id,
+            TrainingRequirement.active == True,  # noqa: E712
+        )
+    )
+    requirements = reqs_result.scalars().all()
+
+    if not members:
+        return {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "members": [],
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    records_result = await db.execute(
+        select(TrainingRecord).where(
+            TrainingRecord.organization_id == org_id,
+            TrainingRecord.user_id.in_([m.id for m in members]),
+        )
+    )
+    records_by_user: dict = {}
+    for r in records_result.scalars().all():
+        records_by_user.setdefault(r.user_id, []).append(r)
+
+    waivers_by_user = await fetch_org_waivers(db, str(org_id))
+    today = date.today()
+    org_include_current = await get_org_include_current_month(db, str(org_id))
+
+    # Compliance thresholds (fall back to sensible defaults)
+    config = await _load_compliance_config(db, str(org_id))
+    compliant_threshold = getattr(config, "compliant_threshold", None) or 100.0
+    at_risk_threshold = getattr(config, "at_risk_threshold", None) or 75.0
+    threshold_type = getattr(config, "threshold_type", None) or "percentage"
+
+    rows: list[MemberPeriodStatusRow] = []
+    for member in members:
+        member_records = records_by_user.get(member.id, [])
+        member_waivers = waivers_by_user.get(str(member.id), [])
+        member_membership_type = member.membership_type or "active"
+        member_name = (
+            f"{member.last_name}, {member.first_name}"
+            if member.last_name
+            else member.first_name or member.username
+        )
+
+        # ---- Activity within the selected window ----
+        in_window = [
+            r
+            for r in member_records
+            if r.status == TrainingStatus.COMPLETED
+            and r.completion_date
+            and start_date <= r.completion_date <= end_date
+        ]
+        hours = sum(r.hours_completed or 0 for r in in_window)
+        last_dates = [r.completion_date for r in in_window if r.completion_date]
+        last_activity = max(last_dates).isoformat() if last_dates else None
+
+        # ---- Current compliance standing ----
+        if getattr(member, "compliance_exempt", False):
+            rows.append(
+                MemberPeriodStatusRow(
+                    user_id=member.id,
+                    member_name=member_name,
+                    trainings_completed=len(in_window),
+                    hours_completed=round(hours, 2),
+                    last_activity=last_activity,
+                    compliance_status="exempt",
+                    requirements_met=0,
+                    requirements_total=0,
+                )
+            )
+            continue
+
+        applicable = [
+            req
+            for req in requirements
+            if not req.required_membership_types
+            or member_membership_type in req.required_membership_types
+        ]
+        met = 0
+        for req in applicable:
+            req_status, _, _ = _evaluate_member_requirement(
+                req,
+                member_records,
+                today,
+                waivers=member_waivers,
+                org_include_current_month=org_include_current,
+            )
+            if req_status == TrainingStatus.COMPLETED.value:
+                met += 1
+
+        total = len(applicable)
+        pct = (met / total * 100) if total else 100.0
+        if total == 0:
+            status_color = "green"
+        elif threshold_type == "all_required":
+            status_color = (
+                "green"
+                if met >= total
+                else ("yellow" if pct >= at_risk_threshold else "red")
+            )
+        else:
+            status_color = (
+                "green"
+                if pct >= compliant_threshold
+                else ("yellow" if pct >= at_risk_threshold else "red")
+            )
+
+        rows.append(
+            MemberPeriodStatusRow(
+                user_id=member.id,
+                member_name=member_name,
+                trainings_completed=len(in_window),
+                hours_completed=round(hours, 2),
+                last_activity=last_activity,
+                compliance_status=status_color,
+                requirements_met=met,
+                requirements_total=total,
+            )
+        )
+
+    return {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "members": [r.model_dump() for r in rows],
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 

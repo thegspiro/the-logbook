@@ -20,10 +20,10 @@ from app.services.training_waiver_service import (
     adjust_required,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers to build lightweight mock objects
 # ---------------------------------------------------------------------------
+
 
 def _make_requirement(**kwargs):
     """Build a mock requirement with sensible defaults."""
@@ -68,6 +68,7 @@ def _make_requirement(**kwargs):
 def _make_record(**kwargs):
     """Build a mock training record."""
     from app.models.training import TrainingStatus
+
     defaults = {
         "id": "rec-1",
         "user_id": "user-1",
@@ -103,9 +104,7 @@ class TestGetDateWindow:
         assert end == date(2026, 12, 31)
 
     def test_annual_with_year(self):
-        req = _make_requirement(
-            frequency=SimpleNamespace(value="annual"), year=2025
-        )
+        req = _make_requirement(frequency=SimpleNamespace(value="annual"), year=2025)
         start, end = TrainingService._get_date_window(req, date(2026, 6, 15))
         assert start == date(2025, 1, 1)
         assert end == date(2025, 12, 31)
@@ -314,9 +313,25 @@ class TestEvaluateRequirementDetailHours:
         assert result["required_hours"] == 24.0
         assert 0 < result["progress_percentage"] < 100
 
-    def test_hours_zero_required(self):
+    def test_hours_zero_required_no_records_is_not_met(self):
+        # A requirement with no positive target must NOT read as satisfied for a
+        # member with nothing on file — that showed members compliant for annual
+        # renewals they had never taken.
         req = _make_requirement(required_hours=0)
         records = []
+        result = TrainingService.evaluate_requirement_detail(
+            req, records, date(2026, 6, 15)
+        )
+        assert result["is_met"] is False
+        assert result["progress_percentage"] == 0.0
+
+    def test_hours_zero_required_with_a_completion_is_met(self):
+        # Once the member actually completes matching training, a no-minimum
+        # requirement is satisfied.
+        req = _make_requirement(required_hours=0)
+        records = [
+            _make_record(hours_completed=2.0, completion_date=date(2026, 3, 1)),
+        ]
         result = TrainingService.evaluate_requirement_detail(
             req, records, date(2026, 6, 15)
         )
@@ -325,6 +340,7 @@ class TestEvaluateRequirementDetailHours:
 
     def test_hours_filtered_by_training_type(self):
         from app.models.training import TrainingType
+
         req = _make_requirement(
             required_hours=10.0,
             training_type=TrainingType.CERTIFICATION,
@@ -529,16 +545,19 @@ class TestEvaluateRequirementDetailCourses:
         assert result["completed_hours"] == 1.0
         assert result["required_hours"] == 3.0
 
-    def test_courses_empty_list_is_met(self):
+    def test_courses_empty_list_is_not_met(self):
+        # A courses requirement with no courses linked has nothing to complete,
+        # so it can never be genuinely satisfied — it must report incomplete, not
+        # vacuously "met" (which showed everyone compliant for a misconfigured
+        # requirement).
         req = _make_requirement(
             requirement_type=SimpleNamespace(value="courses"),
             required_courses=[],
             required_hours=None,
         )
-        result = TrainingService.evaluate_requirement_detail(
-            req, [], date(2026, 6, 15)
-        )
-        assert result["is_met"] is True
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
+        assert result["is_met"] is False
+        assert result["progress_percentage"] == 0.0
 
 
 class TestEvaluateRequirementDetailCertification:
@@ -588,9 +607,7 @@ class TestEvaluateRequirementDetailCertification:
             requirement_type=SimpleNamespace(value="certification"),
             required_hours=None,
         )
-        result = TrainingService.evaluate_requirement_detail(
-            req, [], date(2026, 6, 15)
-        )
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
         assert result["is_met"] is False
         assert result["cert_expired"] is True
 
@@ -788,19 +805,25 @@ class TestWaiverCalculations:
     """Test waiver-related pure calculation functions."""
 
     def test_count_waived_months_full_months(self):
-        waivers = [WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 5, 31))]
+        waivers = [
+            WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 5, 31))
+        ]
         count = count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31))
         assert count == 3
 
     def test_count_waived_months_partial_under_threshold(self):
         """A waiver covering less than 15 days of a month does not waive it."""
-        waivers = [WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 3, 14))]
+        waivers = [
+            WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 3, 14))
+        ]
         count = count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31))
         assert count == 0
 
     def test_count_waived_months_partial_at_threshold(self):
         """A waiver covering exactly 15 days counts."""
-        waivers = [WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 3, 15))]
+        waivers = [
+            WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 3, 15))
+        ]
         count = count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31))
         assert count == 1
 
@@ -823,20 +846,37 @@ class TestWaiverCalculations:
             ),
         ]
         # For req-1: should count
-        assert count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31), req_id="req-1") == 3
+        assert (
+            count_waived_months(
+                waivers, date(2026, 1, 1), date(2026, 12, 31), req_id="req-1"
+            )
+            == 3
+        )
         # For req-2: should not count
-        assert count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31), req_id="req-2") == 0
+        assert (
+            count_waived_months(
+                waivers, date(2026, 1, 1), date(2026, 12, 31), req_id="req-2"
+            )
+            == 0
+        )
 
     def test_count_waived_months_blanket_applies_to_all(self):
         """Blanket waivers (requirement_ids=None) apply to all requirements."""
         waivers = [
             WaiverPeriod(start_date=date(2026, 3, 1), end_date=date(2026, 5, 31)),
         ]
-        assert count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31), req_id="any-req") == 3
+        assert (
+            count_waived_months(
+                waivers, date(2026, 1, 1), date(2026, 12, 31), req_id="any-req"
+            )
+            == 3
+        )
 
     def test_count_waived_months_no_overlap(self):
         """Waivers outside the evaluation period are ignored."""
-        waivers = [WaiverPeriod(start_date=date(2025, 1, 1), end_date=date(2025, 3, 31))]
+        waivers = [
+            WaiverPeriod(start_date=date(2025, 1, 1), end_date=date(2025, 3, 31))
+        ]
         count = count_waived_months(waivers, date(2026, 1, 1), date(2026, 12, 31))
         assert count == 0
 
@@ -906,7 +946,10 @@ class TestWaiverCalculations:
         ]
         # Mid-month rolling window: Feb 24 2025 → Feb 24 2026 (13 calendar months)
         adjusted, waived, active = adjust_required(
-            12.0, date(2025, 2, 24), date(2026, 2, 24), waivers,
+            12.0,
+            date(2025, 2, 24),
+            date(2026, 2, 24),
+            waivers,
             period_months=12,
         )
         assert waived == 1
@@ -920,7 +963,10 @@ class TestWaiverCalculations:
         ]
         # Same window without override → total_months_in_period returns 13
         adjusted, waived, active = adjust_required(
-            12.0, date(2025, 2, 24), date(2026, 2, 24), waivers,
+            12.0,
+            date(2025, 2, 24),
+            date(2026, 2, 24),
+            waivers,
         )
         assert active == 12  # 13 - 1 = 12 (incorrect for a "12-month" period)
 
@@ -983,17 +1029,112 @@ class TestEvaluateRequirementDetailFields:
         req = _make_requirement()
         result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
         expected_fields = {
-            "id", "name", "description", "requirement_type", "frequency",
-            "training_type", "required_hours", "original_required_hours",
-            "completed_hours", "progress_percentage", "is_met", "due_date",
-            "days_until_due", "waived_months", "active_months",
-            "cert_expired", "blocks_activity",
+            "id",
+            "name",
+            "description",
+            "requirement_type",
+            "frequency",
+            "training_type",
+            "required_hours",
+            "original_required_hours",
+            "completed_hours",
+            "progress_percentage",
+            "is_met",
+            "due_date",
+            "days_until_due",
+            "waived_months",
+            "active_months",
+            "cert_expired",
+            "blocks_activity",
         }
         assert set(result.keys()) == expected_fields
 
     def test_days_until_due_calculated(self):
         req = _make_requirement(due_date=date(2026, 12, 31))
-        result = TrainingService.evaluate_requirement_detail(
-            req, [], date(2026, 6, 15)
-        )
+        result = TrainingService.evaluate_requirement_detail(req, [], date(2026, 6, 15))
         assert result["days_until_due"] == (date(2026, 12, 31) - date(2026, 6, 15)).days
+
+
+# =====================================================
+# check_requirement_progress — the dashboard path
+# (async; the endpoint /requirements/progress/{user_id} uses this)
+# =====================================================
+
+
+class _MockSession:
+    """Minimal async session returning queued execute() results in order."""
+
+    def __init__(self, results):
+        from unittest.mock import AsyncMock
+
+        self._results = list(results)
+        self.commit = AsyncMock()
+
+    async def execute(self, *args, **kwargs):
+        from unittest.mock import MagicMock
+
+        return self._results.pop(0) if self._results else MagicMock()
+
+
+def _one(obj):
+    from unittest.mock import MagicMock
+
+    return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
+
+
+def _scalar(val):
+    from unittest.mock import MagicMock
+
+    return MagicMock(scalar=MagicMock(return_value=val))
+
+
+class TestCheckRequirementProgressZeroTarget:
+    """A requirement with no positive target must not read as compliant for a
+    member with nothing on file — the reported annual-renewal false-compliance."""
+
+    async def test_hours_no_target_no_records_is_not_complete(self):
+        from uuid import uuid4
+
+        req = _make_requirement(id=str(uuid4()), required_hours=0)
+        db = _MockSession([_one(req), _scalar(0)])  # requirement, then hours sum
+        svc = TrainingService(db)
+
+        progress = await svc.check_requirement_progress(
+            user_id="u1", requirement_id="req-1", organization_id="org-1", waivers=[]
+        )
+
+        assert progress.is_complete is False
+        assert progress.percentage_complete == 0.0
+
+    async def test_hours_no_target_with_a_completion_is_complete(self):
+        from uuid import uuid4
+
+        req = _make_requirement(id=str(uuid4()), required_hours=0)
+        db = _MockSession([_one(req), _scalar(3.0)])  # 3 matching hours on file
+        svc = TrainingService(db)
+
+        progress = await svc.check_requirement_progress(
+            user_id="u1", requirement_id="req-1", organization_id="org-1", waivers=[]
+        )
+
+        assert progress.is_complete is True
+        assert progress.percentage_complete == 100.0
+
+    async def test_courses_with_no_courses_linked_is_not_complete(self):
+        from uuid import uuid4
+
+        req = _make_requirement(
+            id=str(uuid4()),
+            requirement_type=SimpleNamespace(value="courses"),
+            required_courses=[],
+            required_hours=None,
+        )
+        db = _MockSession([_one(req)])  # early return before any records query
+        svc = TrainingService(db)
+
+        progress = await svc.check_requirement_progress(
+            user_id="u1", requirement_id="req-1", organization_id="org-1", waivers=[]
+        )
+
+        assert progress.is_complete is False
+        assert progress.percentage_complete == 0.0

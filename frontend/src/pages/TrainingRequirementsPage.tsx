@@ -454,6 +454,17 @@ const RequirementCard: React.FC<RequirementCardProps> = ({
               <p className="text-theme-text-muted text-sm mb-3">{requirement.description}</p>
             )}
 
+            {/* Misconfiguration warning — a requirement with no target for its
+                type can never be completed (and used to read as compliant). */}
+            {requirement.config_warning && (
+              <div className="mb-3 flex items-start gap-2 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-700 dark:text-yellow-400" />
+                <p className="text-xs text-yellow-800 dark:text-yellow-300">
+                  {requirement.config_warning}
+                </p>
+              </div>
+            )}
+
             {/* Quick Info */}
             <div className="flex flex-wrap gap-3 text-sm">
               {requirement.required_hours && (

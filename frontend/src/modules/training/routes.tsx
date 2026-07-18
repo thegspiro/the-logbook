@@ -12,6 +12,7 @@
 import React from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
+import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 // Training Module - Member-facing
@@ -76,6 +77,19 @@ const CompliancePrintPage = lazyWithRetry(
   () => import('../../pages/training/CompliancePrintPage'),
 );
 
+/**
+ * Course Library entry point. Members browse the catalog on the standalone page;
+ * training officers are sent into the admin hub's Course Library tab so they get
+ * the training-admin header/nav in context (rather than a bare standalone page).
+ */
+const CourseLibraryRoute: React.FC = () => {
+  const checkPermission = useAuthStore((s) => s.checkPermission);
+  if (checkPermission('training.manage')) {
+    return <Navigate to="/training/admin?page=setup&tab=courses" replace />;
+  }
+  return <CourseLibraryPage />;
+};
+
 export const getTrainingRoutes = () => {
   return (
     <React.Fragment>
@@ -83,7 +97,7 @@ export const getTrainingRoutes = () => {
       <Route path="/training" element={<MyTrainingPage />} />
       <Route path="/training/my-training" element={<MyTrainingPage />} />
       <Route path="/training/submit" element={<SubmitTrainingPage />} />
-      <Route path="/training/courses" element={<CourseLibraryPage />} />
+      <Route path="/training/courses" element={<CourseLibraryRoute />} />
       <Route path="/training/programs" element={<TrainingProgramsPage />} />
       <Route
         path="/training/programs/:programId"
