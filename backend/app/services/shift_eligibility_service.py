@@ -290,12 +290,52 @@ class ShiftEligibilityService:
     # Org settings management
     # ------------------------------------------------------------------
 
+    def get_overtime_settings(self, org: Organization) -> Dict[str, Any]:
+        """Return the org's overtime advisory config.
+
+        ``max_hours_per_window`` (0/absent disables the check) and
+        ``hours_window_days`` (default 7).
+        """
+        sched = self._get_scheduling_settings(org)
+        return {
+            "max_hours_per_window": sched.get("max_hours_per_window"),
+            "hours_window_days": sched.get("hours_window_days", 7),
+        }
+
+    def get_auto_generate_settings(self, org: Organization) -> Dict[str, Any]:
+        """Return the org's auto shift-generation config."""
+        sched = self._get_scheduling_settings(org)
+        return {
+            "auto_generate_enabled": bool(
+                sched.get("auto_generate_enabled", False)
+            ),
+            "auto_generate_weeks": sched.get("auto_generate_weeks", 4),
+        }
+
+    def get_lifecycle_settings(self, org: Organization) -> Dict[str, Any]:
+        """Return the org's shift-lifecycle enforcement toggles."""
+        sched = self._get_scheduling_settings(org)
+        return {
+            "require_end_of_shift_checks": bool(
+                sched.get("require_end_of_shift_checks", False)
+            ),
+            "restrict_checkin_to_assigned": bool(
+                sched.get("restrict_checkin_to_assigned", False)
+            ),
+        }
+
     async def update_scheduling_settings(
         self,
         organization_id: str,
         excluded_membership_types: Optional[List[str]] = None,
         open_positions: Optional[List[str]] = None,
         platoons_enabled: Optional[bool] = None,
+        max_hours_per_window: Optional[float] = None,
+        hours_window_days: Optional[int] = None,
+        auto_generate_enabled: Optional[bool] = None,
+        auto_generate_weeks: Optional[int] = None,
+        require_end_of_shift_checks: Optional[bool] = None,
+        restrict_checkin_to_assigned: Optional[bool] = None,
     ) -> dict:
         """Update scheduling eligibility settings on the organization."""
         org = await self._get_org(organization_id)
@@ -311,6 +351,21 @@ class ShiftEligibilityService:
             scheduling["open_positions"] = open_positions
         if platoons_enabled is not None:
             scheduling["platoons_enabled"] = platoons_enabled
+        if max_hours_per_window is not None:
+            # 0 clears the cap (disables the advisory).
+            scheduling["max_hours_per_window"] = (
+                max_hours_per_window if max_hours_per_window > 0 else None
+            )
+        if hours_window_days is not None:
+            scheduling["hours_window_days"] = hours_window_days
+        if auto_generate_enabled is not None:
+            scheduling["auto_generate_enabled"] = auto_generate_enabled
+        if auto_generate_weeks is not None:
+            scheduling["auto_generate_weeks"] = auto_generate_weeks
+        if require_end_of_shift_checks is not None:
+            scheduling["require_end_of_shift_checks"] = require_end_of_shift_checks
+        if restrict_checkin_to_assigned is not None:
+            scheduling["restrict_checkin_to_assigned"] = restrict_checkin_to_assigned
 
         settings["scheduling"] = scheduling
         org.settings = settings

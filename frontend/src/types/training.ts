@@ -438,6 +438,10 @@ export interface TrainingRequirement {
   created_at: string;
   updated_at: string;
   created_by?: string;
+  // Non-blocking backend warning when the requirement has no target for its
+  // type (e.g. a Course requirement with no course linked), so it can never be
+  // completed. Present only when misconfigured; otherwise null/undefined.
+  config_warning?: string | null;
 }
 
 export interface TrainingRequirementCreate {
@@ -2427,4 +2431,27 @@ export interface SeedDefaultsResponse {
   categories_count: number;
   category_names: string[];
   mappings_created: number;
+}
+
+// Month-at-a-glance member training roster (records → Monthly Status tab)
+export type MemberComplianceStatusColor = 'green' | 'yellow' | 'red' | 'exempt';
+
+export interface MemberPeriodStatusRow {
+  user_id: string;
+  member_name: string;
+  // Activity within the selected window
+  trainings_completed: number;
+  hours_completed: number;
+  last_activity?: string | null;
+  // Current overall compliance standing
+  compliance_status: MemberComplianceStatusColor;
+  requirements_met: number;
+  requirements_total: number;
+}
+
+export interface MemberPeriodStatusResponse {
+  start_date: string;
+  end_date: string;
+  members: MemberPeriodStatusRow[];
+  generated_at: string;
 }

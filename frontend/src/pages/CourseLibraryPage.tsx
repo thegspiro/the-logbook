@@ -376,7 +376,12 @@ const TypeBadge: React.FC<{ type: TrainingType }> = ({ type }) => {
 
 // ==================== Main Page ====================
 
-const CourseLibraryPage: React.FC = () => {
+// `embedded` renders the page as a tab inside TrainingAdminPage (which already
+// provides the outer page chrome + title), so we drop the standalone
+// min-h-screen wrapper and the big page header to avoid doubling them up.
+const CourseLibraryPage: React.FC<{ embedded?: boolean }> = ({
+  embedded = false,
+}) => {
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
   const [categories, setCategories] = useState<TrainingCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -459,19 +464,25 @@ const CourseLibraryPage: React.FC = () => {
   }, [categories]);
 
   return (
-    <div className="min-h-screen">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className={embedded ? '' : 'min-h-screen'}>
+      <main className={embedded ? '' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'}>
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
-              <BookOpen className="w-8 h-8 text-red-700 dark:text-red-500" />
-              <span>Course Library</span>
-            </h1>
-            <p className="text-theme-text-muted mt-1">
+          {embedded ? (
+            <p className="text-theme-text-muted text-sm">
               Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
             </p>
-          </div>
+          ) : (
+            <div>
+              <h1 className="text-3xl font-bold text-theme-text-primary flex items-center space-x-3">
+                <BookOpen className="w-8 h-8 text-red-700 dark:text-red-500" />
+                <span>Course Library</span>
+              </h1>
+              <p className="text-theme-text-muted mt-1">
+                Organization-wide training course catalog ({courses.length} course{courses.length !== 1 ? 's' : ''})
+              </p>
+            </div>
+          )}
           <button
             onClick={() => { setEditCourse(null); setShowModal(true); }}
             className="btn-primary flex items-center space-x-2"

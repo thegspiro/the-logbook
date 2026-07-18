@@ -61,12 +61,18 @@ export interface AssignmentCreate {
   user_id: string;
   position?: string;
   notes?: string;
+  is_training?: boolean;
+  training_program_id?: string | undefined;
+  training_evaluator_id?: string | undefined;
 }
 
 export interface AssignmentUpdate {
   position?: string;
   assignment_status?: AssignmentStatus;
   notes?: string | undefined;
+  is_training?: boolean;
+  training_program_id?: string | undefined;
+  training_evaluator_id?: string | undefined;
 }
 
 // ============================================================================

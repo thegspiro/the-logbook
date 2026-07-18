@@ -67,6 +67,109 @@ the delivery/scheduling machinery can't be broken or abused by a single message.
 - Server-side validation of priority/target values, sanitized error responses, a
   new `expires_at` index, and a fix for a concurrency bug in the test-email
   response.
+### Scheduling: full shift lifecycle, personal calendars, automation, and safeguards (2026-07-16)
+
+A broad review of the scheduling/shift module, closing operational gaps from
+shift start-up through close-out, adding member-facing conveniences, and
+fixing several correctness and security issues.
+
+**Running a shift end-to-end**
+
+- **Per-shift officer authority** — the officer named on a shift can now manage
+  that shift's crew, attendance, calls, finalize, and cancellation without a
+  department-wide `scheduling.manage`/`assign` grant. Editing or deleting the
+  shift record itself still requires `scheduling.manage`. Previously "shift
+  officer" was only a label with no permissions.
+- **Live readiness panel** — the shift detail now shows, during the shift,
+  present-vs-assigned, staffing vs. target (with an understaffed flag), and any
+  outstanding start-of-shift equipment checks — instead of that state only
+  appearing inside the finalize dialog.
+- **Cancel a shift (instead of deleting it)** — shifts gain a lifecycle status
+  (scheduled/cancelled). Cancelling preserves the record and its history, marks
+  every active assignment cancelled, and notifies the assigned crew; a finalized
+  shift can't be cancelled. Cancelled shifts drop out of open-shift signup and
+  are shown struck-through with a badge.
+- **Reopen / unfinalize** — a permissioned, audit-logged way to reopen a
+  finalized shift for corrections and re-finalize it. Finalization is no longer
+  a dead end.
+- **Crew pass-down / handoff notes** — a structured note captured at
+  finalization, shown on the shift, and surfaced to the next crew on the same
+  apparatus via a handoff banner.
+
+**Close-out enforcement (opt-in)**
+
+- **Require end-of-shift equipment checks before finalizing** — previously this
+  "requirement" was a disabled button only; a direct API call finalized anyway.
+  `finalize_shift` now enforces it server-side when the department enables it
+  (`require_end_of_shift_checks`, off by default). The finalizing officer can
+  override with a reason that is written to the audit log. The feature is
+  surfaced (benefit-led) in the finalize flow and settings so departments
+  discover it.
+- **Restrict check-in to assigned members** (`restrict_checkin_to_assigned`,
+  off by default) — self check-in is rejected for members not rostered on the
+  shift (open shifts exempt), so attendance reflects the real crew.
+- **Understaffed shifts are flagged at finalize**, so running short is part of
+  the close-out record.
+
+**Member conveniences**
+
+- **Personal calendar (ICS) feed** — members subscribe to their shifts in
+  Google/Apple Calendar/Outlook via a private, token-protected URL
+  (`/api/public/v1/calendar/{token}.ics`). The token is created on demand and
+  can be rotated. New "Subscribe to my shifts" card on the My Shifts tab.
+- **Overtime / hours advisory** — an optional soft (non-blocking) warning when
+  an assignment or self-signup pushes a member's scheduled hours in a trailing
+  window over a department-configured cap (`max_hours_per_window`,
+  `hours_window_days`). Modeled on the existing EVOC driver warning.
+
+**Training integration**
+
+- **Training-position crew slots** — an officer can mark a crew-board seat as a
+  supervised training/rider slot and link it to the trainee's program and the
+  evaluating officer. On finalize, a draft completion report is created against
+  the linked program with the evaluator as reviewer, feeding the existing
+  shift-completion → training-progress pipeline.
+
+**Automation**
+
+- **Automatic shift generation** — a daily task keeps every active pattern
+  generating shifts out to a configurable horizon for departments that opt in
+  (`auto_generate_enabled`, `auto_generate_weeks`), so upcoming shifts appear
+  without pressing "generate". Idempotent per pattern.
+
+**Quick wins**
+
+- Per-shift **minimum-staffing override** in the shift edit form (was
+  template/apparatus-locked).
+- The **Platoons** admin page is now reachable from the Scheduling admin links
+  when platoon scheduling is enabled (previously only via a deep link).
+- The **Scheduling Officer** role now also holds `scheduling.swap` and
+  `scheduling.report`, so a station officer can approve swaps/time-off and open
+  compliance reports.
+
+**Correctness & security fixes**
+
+- **Advisories now actually reach the client** — `ShiftAssignmentResponse`
+  lacked `evoc_warnings`/`overtime_warnings` fields, so `response_model` was
+  silently stripping the EVOC and overtime warnings the endpoints attached.
+  Added the fields; both warnings now surface on assign and self-signup.
+- **No force-confirm on a member's behalf** (S4) — `update_assignment` can no
+  longer set an assignment to `confirmed`; confirmation stays self-only via the
+  dedicated confirm flow. Decline/cancel/no-show remain manageable.
+- **Global task runner locked down** (S8) — the `run-task` endpoint (which
+  iterates every organization) now requires a new wildcard-only
+  `system.run_tasks` permission instead of any single-org admin permission.
+- **Overnight shifts (C5)** — manually created/edited overnight shifts
+  (e.g. 19:00→07:00) now roll the end to the next day so the backend accepts
+  them.
+
+**Migrations**
+
+- `20260720_0001` — shift-assignment training-slot fields
+  (`is_training`, `training_program_id`, `training_evaluator_id`) and shift
+  lifecycle (`status`, `cancelled_at`, `cancelled_by`, `cancellation_reason`).
+- `20260721_0001` — per-user `calendar_feed_token`.
+- `20260722_0001` — shift `pass_down_notes`.
 
 ### Training Pipelines: abuse safeguards, working alerts, and fixability (2026-07-16)
 

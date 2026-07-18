@@ -44,6 +44,10 @@ const EquipmentCheckReportsPage = lazyWithRetry(
   () => import('../../pages/scheduling/EquipmentCheckReportsPage'),
 );
 
+const SupplyExpiringPage = lazyWithRetry(
+  () => import('../../pages/scheduling/SupplyExpiringPage'),
+);
+
 const ShiftCheckInPage = lazyWithRetry(
   () => import('../../pages/scheduling/ShiftCheckInPage'),
 );
@@ -142,6 +146,22 @@ export const getSchedulingRoutes = () => {
           <Suspense fallback={null}>
             <ProtectedRoute requiredPermission="scheduling.manage">
               <EquipmentCheckReportsPage />
+            </ProtectedRoute>
+          </Suspense>
+        }
+      />
+      <Route
+        path="/scheduling/supply/expiring"
+        element={
+          <Suspense fallback={null}>
+            <ProtectedRoute
+              requiredAnyPermission={[
+                'scheduling.manage',
+                'equipment_check.view',
+                'inventory.view',
+              ]}
+            >
+              <SupplyExpiringPage />
             </ProtectedRoute>
           </Suspense>
         }

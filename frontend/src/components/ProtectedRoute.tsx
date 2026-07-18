@@ -5,12 +5,15 @@ import { useAuthStore } from '../stores/authStore';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredPermission?: string;
+  /** Any one of these permissions grants access (OR logic). */
+  requiredAnyPermission?: string[];
   requiredRole?: string;
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requiredPermission,
+  requiredAnyPermission,
   requiredRole,
 }) => {
   const location = useLocation();
@@ -73,8 +76,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to="/account" state={{ forceMfaSetup: true }} replace />;
   }
 
-  // Check for required permission
-  if (requiredPermission && !checkPermission(requiredPermission)) {
+  // Check for required permission (single, AND) or any-of (OR)
+  const lacksSingle = requiredPermission && !checkPermission(requiredPermission);
+  const lacksAny =
+    requiredAnyPermission &&
+    requiredAnyPermission.length > 0 &&
+    !requiredAnyPermission.some((p) => checkPermission(p));
+  if (lacksSingle || lacksAny) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="max-w-md w-full text-center">

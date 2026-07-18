@@ -185,3 +185,34 @@ Confirmed clean: org-tenancy on all event/RSVP/check-in/attachment ops; public
 path-traversal guard; RSVP capacity/waitlist row-locking; recurrence
 date/leap-year math; UTC-store/local-display; no banned date patterns; module
 axios uses the authenticated global client; no TODO/FIXME stubs.
+
+### Scheduling module — lifecycle review & enhancements (2026-07-16)
+Multi-session review of the scheduling/shift module on branch
+`claude/scheduling-module-review-ndgvub`. Focused on operational gaps from
+shift start-up through close-out, member conveniences, automation, and the
+still-open audit items.
+
+**Implemented (verified, clearly-correct):**
+- Per-shift officer authority; cancel-shift lifecycle; reopen/unfinalize
+  (audit-logged); crew pass-down + handoff banner; live readiness panel.
+- Opt-in server-side enforcement of end-of-shift equipment checks at finalize
+  (with logged officer override) — previously a UI-only gate a direct API call
+  bypassed; optional check-in-to-roster restriction.
+- Training-position crew slots feeding draft completion reports; personal ICS
+  calendar feed (public token endpoint); overtime/hours advisory;
+  auto-generate shifts from patterns (new daily task, wired into the runner
+  registry); several quick wins (per-shift min-staffing, Platoons link,
+  Scheduling Officer swap/report perms).
+- **Fixed a real bug:** `ShiftAssignmentResponse` lacked
+  `evoc_warnings`/`overtime_warnings`, so `response_model` was silently
+  stripping those advisories before they reached the client.
+- **Closed prior audit items S4/S8/C5** (see `scheduling-module-audit.md`
+  follow-up): no force-confirm; `run-task` gated to wildcard-only
+  `system.run_tasks`; overnight-shift end rolls to next day.
+
+**Needs owner decision (logged in KNOWN_LIMITATIONS.md):**
+- "Shifts completed" is counted from three different sources (TrainingRecords
+  vs. ShiftAttendance vs. the progress-credit ledger) — reconciling changes
+  established compliance numbers, so it needs a decision on the authoritative
+  source. `get_member_hours_report` likewise reports scheduled, not actual,
+  hours. A formal "active/in-progress" shift state was also deferred.

@@ -23,6 +23,18 @@ services.
 | 6 | The Member Experience — Your Day-to-Day Guide | All members, firefighters, engineers | 15–20 min |
 | 7 | Secretary & Administrative Officer Guide | Secretaries, treasurers, admin staff | 20–25 min |
 
+### Feature Deep Dives (Medium/Short-Form, focused on one subsystem)
+
+| # | Title | Target Audience | Est. Length |
+|---|-------|----------------|-------------|
+| 9 | Training Pipelines — An Officer's Guide | Training officers, RTOs/FTOs | 20–25 min |
+| 10 | Your Training Pipeline — A Member's Guide | Recruits, probationary & enrolled members | 8–12 min |
+| 11 | Building a Training Pipeline — Step-by-Step Setup | Training officers (first-time setup) | 12–16 min |
+
+> Scripts 9–11 form a **training-pipeline mini-series**: 11 builds a pipeline, 9
+> runs it day to day, and 10 shows the member's side. They complement Script 5
+> (the broad Training Officer guide) rather than replacing it.
+
 ### Quick Tips / Shorts (1–3 minutes, extracted from role guides or standalone)
 
 | # | Title | Clip Source |

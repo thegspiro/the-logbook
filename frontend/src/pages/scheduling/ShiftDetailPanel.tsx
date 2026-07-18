@@ -22,6 +22,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment } from '../../types/scheduling';
@@ -54,18 +55,28 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const { user, checkPermission } = useAuthStore();
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
-  const canAssign = checkPermission('scheduling.assign') || canManage;
   const {
     apparatus: apparatusList,
     loadApparatus,
     members: memberOptions,
     loadMembers,
     platoonsEnabled,
+    requireEndOfShiftChecks,
     loadSettings,
   } = useSchedulingStore();
   useEffect(() => { void loadSettings(); }, [loadSettings]);
 
   const [shift, setShift] = useState(initialShift);
+  // The named on-duty officer of this shift may manage its crew, attendance,
+  // calls, and closeout even without a department-wide scheduling grant
+  // (mirrors the backend's per-shift authority). Editing/deleting the shift
+  // record itself still requires scheduling.manage.
+  const isShiftOfficer = !!(
+    shift.shift_officer_id && user?.id && String(shift.shift_officer_id) === String(user.id)
+  );
+  const canAssign = checkPermission('scheduling.assign') || canManage || isShiftOfficer;
+  const canManageShift = canManage || isShiftOfficer;
+  const isCancelled = shift.status === 'cancelled';
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEquipmentChecks, setShowEquipmentChecks] = useState(false);
@@ -104,6 +115,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     notes: shift.notes || '',
     shift_officer_id: shift.shift_officer_id || '',
     positions: shift.positions ?? [],
+    min_staffing: shift.min_staffing != null ? String(shift.min_staffing) : '',
   });
   // Async operation flags — grouped to reduce useState count
   const [pending, setPending] = useState({
@@ -141,6 +153,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // Manual hours for members without attendance (used during finalization)
   const [manualHours, setManualHours] = useState<Record<string, string>>({});
 
+  // Close-out state — pass-down handoff and the incomplete-checks override.
+  const [passDownNotes, setPassDownNotes] = useState('');
+  const [overrideChecks, setOverrideChecks] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [handoff, setHandoff] = useState<{ shift_date: string | null; pass_down_notes: string } | null>(null);
+  const [showReopenConfirm, setShowReopenConfirm] = useState(false);
+  const [reopenReason, setReopenReason] = useState('');
+
   // UI visibility toggles
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFinalizeChecklist, setShowFinalizeChecklist] = useState(false);
@@ -155,9 +175,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   const [editingNotesValue, setEditingNotesValue] = useState('');
 
   // Assign state (admin) — position-first flow with member search
-  const [assignForm, setAssignForm] = useState({ user_id: '', position: '' });
+  const [assignForm, setAssignForm] = useState({
+    user_id: '',
+    position: '',
+    is_training: false,
+    training_program_id: '',
+    training_evaluator_id: '',
+  });
   const [memberSearch, setMemberSearch] = useState('');
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
+
+  // Cancel-shift state
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+
+  // Training programs for the training-slot dropdown (loaded lazily when the
+  // assign form is opened with the training option in view).
+  const [trainingPrograms, setTrainingPrograms] = useState<{ id: string; name: string }[]>([]);
 
   // Bulk assignment state — maps position name to selected user_id
   const [bulkAssignments, setBulkAssignments] = useState<Record<string, string>>({});
@@ -189,12 +223,13 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const load = async () => {
       setLoading(true);
       try {
-        const [assignData, checkData, attendanceData, allAttData, detail] = await Promise.all([
+        const [assignData, checkData, attendanceData, allAttData, detail, handoffData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
           schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
           schedulingService.getMyAttendance(shift.id),
           schedulingService.getShiftAttendance(shift.id).catch(() => []),
           schedulingService.getShift(shift.id).catch(() => null),
+          schedulingService.getShiftHandoff(shift.id).catch(() => null),
         ]);
         if (!cancelled) {
           setAssignments(assignData);
@@ -202,6 +237,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           setMyAttendance(attendanceData);
           setAllAttendance(allAttData);
           setPlatoonRoster(detail?.platoon_roster ?? []);
+          setHandoff(handoffData);
         }
       } catch (err) {
         if (!cancelled) {
@@ -244,6 +280,25 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     if (isEditing) void loadApparatus();
   }, [isEditing, loadApparatus]);
 
+  // Load active training programs once, when the assign form is first opened,
+  // for the training-slot program dropdown.
+  useEffect(() => {
+    if (!showAssignForm || trainingPrograms.length > 0) return;
+    const loadPrograms = async () => {
+      try {
+        const programs = await trainingProgramService.getPrograms();
+        setTrainingPrograms(
+          programs
+            .filter(p => p.active && !p.is_template)
+            .map(p => ({ id: p.id, name: p.name })),
+        );
+      } catch {
+        // Non-critical — training-slot program link is optional.
+      }
+    };
+    void loadPrograms();
+  }, [showAssignForm, trainingPrograms.length]);
+
   const filteredMembers = useMemo(() => {
     const available = memberOptions.filter(m => !unavailableIds.has(m.id));
     if (!memberSearch) return available;
@@ -266,14 +321,28 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   // One-click fill-in / hold-over: assign an available platoon member to the
   // shift straight from the roster. Position defaults to firefighter and can
   // be adjusted afterward in the crew board.
+  // Surface soft (non-blocking) warnings returned when creating an assignment
+  // — EVOC driver eligibility and overtime/hours limits.
+  const surfaceAssignmentWarnings = (res: {
+    evoc_warnings?: { message: string }[];
+    overtime_warnings?: string[];
+  }) => {
+    const messages = [
+      ...(res.evoc_warnings ?? []).map(w => w.message),
+      ...(res.overtime_warnings ?? []),
+    ];
+    if (messages.length > 0) toast(messages.join(' '), { icon: '⚠️' });
+  };
+
   const handleAssignFromRoster = async (userId: string) => {
     setPendingFlag('assigningRoster', true);
     try {
-      await schedulingService.createAssignment(shift.id, {
+      const res = await schedulingService.createAssignment(shift.id, {
         user_id: userId,
         position: 'firefighter',
       });
       toast.success('Member assigned to shift');
+      surfaceAssignmentWarnings(res);
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
@@ -287,8 +356,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     const pos = position || signupPosition;
     setPendingFlag('signingUp', true);
     try {
-      await schedulingService.signupForShift(shift.id, { position: pos });
+      const res = await schedulingService.signupForShift(shift.id, { position: pos });
       toast.success('Signed up for shift');
+      surfaceAssignmentWarnings(res);
       await refreshAssignments();
       onRefresh?.();
     } catch (err) {
@@ -402,7 +472,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
   };
 
   const openAssignFormForPosition = (position: string) => {
-    setAssignForm({ user_id: '', position });
+    setAssignForm({ user_id: '', position, is_training: false, training_program_id: '', training_evaluator_id: '' });
     setMemberSearch('');
     setShowBulkAssign(false);
     setShowAssignForm(true);
@@ -444,13 +514,23 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     if (!assignForm.user_id) { toast.error('Select a member'); return; }
     setPendingFlag('assigning', true);
     try {
-      await schedulingService.createAssignment(shift.id, {
+      const res = await schedulingService.createAssignment(shift.id, {
         user_id: assignForm.user_id,
         position: assignForm.position,
+        is_training: assignForm.is_training,
+        training_program_id: assignForm.is_training ? (assignForm.training_program_id || undefined) : undefined,
+        training_evaluator_id: assignForm.is_training ? (assignForm.training_evaluator_id || undefined) : undefined,
       });
       toast.success('Member assigned');
+      surfaceAssignmentWarnings(res);
       setShowAssignForm(false);
-      setAssignForm({ user_id: '', position: openPositions[0] ?? positionOptions[0]?.[0] ?? 'firefighter' });
+      setAssignForm({
+        user_id: '',
+        position: openPositions[0] ?? positionOptions[0]?.[0] ?? 'firefighter',
+        is_training: false,
+        training_program_id: '',
+        training_evaluator_id: '',
+      });
       setMemberSearch('');
       await refreshAssignments();
       onRefresh?.();
@@ -461,10 +541,29 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
     }
   };
 
+  // Cancel (not delete) the shift — preserves history and notifies crew.
+  const handleCancel = async () => {
+    setPendingFlag('deleting', true);
+    try {
+      const updated = await schedulingService.cancelShift(shift.id, cancelReason.trim() || undefined);
+      setShift(updated);
+      setShowCancelConfirm(false);
+      setCancelReason('');
+      toast.success('Shift cancelled');
+      await refreshAssignments();
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to cancel shift'));
+    } finally {
+      setPendingFlag('deleting', false);
+    }
+  };
+
   // Edit shift
   const handleSaveEdit = async () => {
     setPendingFlag('saving', true);
     try {
+      const trimmedStaffing = editForm.min_staffing.trim();
       const payload: Record<string, unknown> = {
         shift_date: editForm.shift_date,
         notes: editForm.notes || null,
@@ -472,12 +571,21 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         apparatus_id: editForm.apparatus_id || null,
         color: editForm.color || null,
         positions: editForm.positions.length > 0 ? editForm.positions : null,
+        min_staffing: trimmedStaffing ? Number(trimmedStaffing) : null,
       };
       if (editForm.start_time) {
         payload.start_time = localToUTC(`${editForm.shift_date}T${editForm.start_time}`, tz);
       }
       if (editForm.end_time) {
-        payload.end_time = localToUTC(`${editForm.shift_date}T${editForm.end_time}`, tz);
+        let end = localToUTC(`${editForm.shift_date}T${editForm.end_time}`, tz);
+        // Overnight guard: roll the end to the next day when it falls on/before
+        // the start (e.g. 19:00 → 07:00), so the backend accepts it.
+        if (payload.start_time && new Date(end) <= new Date(payload.start_time as string)) {
+          const rolled = new Date(end);
+          rolled.setUTCDate(rolled.getUTCDate() + 1);
+          end = rolled.toISOString();
+        }
+        payload.end_time = end;
       }
       const updated = await schedulingService.updateShift(shift.id, payload);
       setShift(updated);
@@ -512,17 +620,43 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
       const entries = Object.entries(manualHours)
         .map(([uid, val]) => ({ user_id: uid, hours: parseFloat(val) }))
         .filter(e => e.hours > 0 && !isNaN(e.hours));
+      const opts: { override_incomplete_checks?: boolean; override_reason?: string; pass_down_notes?: string } = {};
+      if (overrideChecks) {
+        opts.override_incomplete_checks = true;
+        if (overrideReason.trim()) opts.override_reason = overrideReason.trim();
+      }
+      if (passDownNotes.trim()) opts.pass_down_notes = passDownNotes.trim();
       const updated = await schedulingService.finalizeShift(
         shift.id,
         entries.length > 0 ? entries : undefined,
+        opts,
       );
       setShift(updated);
       setManualHours({});
+      setPassDownNotes('');
+      setOverrideChecks(false);
+      setOverrideReason('');
       toast.success('Shift finalized');
       setShowFinalizeChecklist(false);
       onRefresh?.();
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to finalize shift'));
+    } finally {
+      setPendingFlag('finalizing', false);
+    }
+  };
+
+  const handleReopen = async () => {
+    setPendingFlag('finalizing', true);
+    try {
+      const updated = await schedulingService.reopenShift(shift.id, reopenReason.trim() || undefined);
+      setShift(updated);
+      setShowReopenConfirm(false);
+      setReopenReason('');
+      toast.success('Shift reopened');
+      onRefresh?.();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to reopen shift'));
     } finally {
       setPendingFlag('finalizing', false);
     }
@@ -639,6 +773,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               editable={canAssign && !isPast}
               updatingPosition={pending.updatingPosition}
             />
+            {assignment.is_training && (
+              <span
+                className="inline-block mt-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20"
+                title={assignment.training_program_name ? `Training slot — ${assignment.training_program_name}` : 'Training slot'}
+              >
+                Training
+              </span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1 sm:gap-2 shrink-0">
@@ -713,9 +855,9 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
               )}
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              {canManage && !isPast && !shift.is_finalized && (
+              {canManage && !isPast && !shift.is_finalized && !isCancelled && (
                 <>
-                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '', positions: shift.positions ?? [] }); setIsEditing(!isEditing); }}
+                  <button onClick={() => { setEditForm({ shift_date: shift.shift_date, start_time: toTimeValue(shift.start_time), end_time: toTimeValue(shift.end_time), apparatus_id: shift.apparatus_id || '', color: shift.color || '', notes: shift.notes || '', shift_officer_id: shift.shift_officer_id || '', positions: shift.positions ?? [], min_staffing: shift.min_staffing != null ? String(shift.min_staffing) : '' }); setIsEditing(!isEditing); }}
                     className="p-2 text-theme-text-muted hover:text-violet-500 hover:bg-violet-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Edit shift"
                   >
                     <Pencil className="w-4 h-4" />
@@ -727,7 +869,14 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </button>
                 </>
               )}
-              {canManage && isPast && !shift.is_finalized && (
+              {canManageShift && !isPast && !shift.is_finalized && !isCancelled && (
+                <button onClick={() => setShowCancelConfirm(true)}
+                  className="p-2 text-theme-text-muted hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Cancel shift"
+                >
+                  <XCircle className="w-4 h-4" />
+                </button>
+              )}
+              {canManageShift && isPast && !shift.is_finalized && !isCancelled && (
                 <button
                   onClick={() => setShowFinalizeChecklist(true)}
                   className="px-3 py-1.5 text-sm font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors inline-flex items-center gap-1.5"
@@ -745,6 +894,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
         </div>
 
         <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
+          {/* Handoff from the previous crew on this apparatus */}
+          {handoff?.pass_down_notes && (
+            <div className="px-3 py-2 bg-sky-500/10 border border-sky-500/20 rounded-lg">
+              <p className="text-xs font-semibold text-sky-700 dark:text-sky-300 mb-0.5">
+                Handoff from previous shift{handoff.shift_date ? ` (${handoff.shift_date})` : ''}
+              </p>
+              <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{handoff.pass_down_notes}</p>
+            </div>
+          )}
+
+          {/* Readiness — present vs assigned, staffing, outstanding start checks */}
+          {!shift.is_finalized && !isCancelled && activeAssignments.length > 0 && (() => {
+            const checkedInIds = new Set(allAttendance.filter(a => a.checked_in_at).map(a => a.user_id));
+            const presentCount = activeAssignments.filter(a => checkedInIds.has(a.user_id)).length;
+            const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
+            const understaffed = target > 0 && activeAssignments.length < target;
+            const outstandingStartChecks = equipmentCheckSummaries.filter(
+              c => c.checkTiming === 'start_of_shift' && !c.isCompleted,
+            ).length;
+            return (
+              <div className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                <span className="font-semibold text-theme-text-secondary">Readiness</span>
+                <span className="text-theme-text-primary">
+                  {presentCount}/{activeAssignments.length} present
+                </span>
+                {target > 0 && (
+                  <span className={understaffed ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-theme-text-muted'}>
+                    {activeAssignments.length}/{target} staffed{understaffed ? ' — understaffed' : ''}
+                  </span>
+                )}
+                {outstandingStartChecks > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400">
+                    {outstandingStartChecks} start-of-shift check{outstandingStartChecks > 1 ? 's' : ''} pending
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+
           {/* Delete Confirmation */}
           {showDeleteConfirm && (
             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg space-y-3">
@@ -759,6 +947,45 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   {pending.deleting && <Loader2 className="w-3 h-3 animate-spin" />}
                   Delete Shift
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* Cancel Confirmation */}
+          {showCancelConfirm && (
+            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg space-y-3">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Cancel this shift? The record is kept, all assignments are marked cancelled, and the assigned crew is notified.
+              </p>
+              <div>
+                <label htmlFor="cancel-reason" className="block text-xs font-medium text-theme-text-secondary mb-1">Reason (optional)</label>
+                <input id="cancel-reason" type="text" value={cancelReason}
+                  onChange={e => setCancelReason(e.target.value)}
+                  placeholder="e.g. station closed for weather"
+                  className={inputCls}
+                />
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <button onClick={() => { setShowCancelConfirm(false); setCancelReason(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Keep Shift</button>
+                <button onClick={() => { void handleCancel(); }} disabled={pending.deleting}
+                  className="px-3 py-1.5 text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+                >
+                  {pending.deleting && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Cancel Shift
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Cancelled banner */}
+          {isCancelled && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-start gap-2">
+              <XCircle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <span className="font-medium text-amber-700 dark:text-amber-300">This shift is cancelled.</span>
+                {shift.cancellation_reason && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">{shift.cancellation_reason}</p>
+                )}
               </div>
             </div>
           )}
@@ -868,12 +1095,79 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                     <span className="text-theme-text-secondary">{shift.call_count} call(s) recorded</span>
                   </div>
                 )}
+
+                {/* Staffing advisory — noted so an understaffed shift is on the record */}
+                {(() => {
+                  const target = hasApparatusPositions ? apparatusPositions.length : (shift.min_staffing ?? 0);
+                  if (!(target > 0 && activeAssignments.length < target)) return null;
+                  return (
+                    <div className="flex items-start gap-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded-md">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+                      <span className="text-amber-700 dark:text-amber-400">
+                        Ran understaffed — {activeAssignments.length} of {target} positions filled.
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
 
-              {hasIncompleteEquipmentChecks && (
-                <p className="text-xs text-red-600 dark:text-red-300">
-                  Complete all equipment checks before finalizing this shift.
-                </p>
+              {/* Pass-down handoff for the next crew */}
+              <div>
+                <label htmlFor="pass-down" className="block text-xs font-medium text-theme-text-secondary mb-1">
+                  Pass-down to next crew (optional)
+                </label>
+                <textarea
+                  id="pass-down"
+                  rows={2}
+                  value={passDownNotes}
+                  onChange={e => setPassDownNotes(e.target.value)}
+                  placeholder="Apparatus issues, ongoing incidents, staffing notes…"
+                  className={inputCls}
+                />
+              </div>
+
+              {/* Enforcement ON: block, or override with a logged reason. */}
+              {hasIncompleteEquipmentChecks && requireEndOfShiftChecks && (
+                <div className="p-2 rounded-md border border-red-500/20 bg-red-500/5 space-y-2">
+                  <label className="flex items-center gap-2 text-xs font-medium text-red-700 dark:text-red-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={overrideChecks}
+                      onChange={e => setOverrideChecks(e.target.checked)}
+                      className="rounded border-theme-surface-border"
+                    />
+                    Finalize anyway, with equipment checks outstanding
+                  </label>
+                  {overrideChecks && (
+                    <input
+                      type="text"
+                      value={overrideReason}
+                      onChange={e => setOverrideReason(e.target.value)}
+                      placeholder="Reason for override (logged)"
+                      className={inputCls}
+                    />
+                  )}
+                  {!overrideChecks && (
+                    <p className="text-xs text-red-600 dark:text-red-300">
+                      Complete the outstanding checks, or check the box above to override.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Enforcement OFF (default): allow, but surface the feature. */}
+              {hasIncompleteEquipmentChecks && !requireEndOfShiftChecks && (
+                <div className="p-2 rounded-md border border-sky-500/20 bg-sky-500/5 space-y-1">
+                  <p className="text-xs font-medium text-sky-700 dark:text-sky-300 flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    Some end-of-shift equipment checks aren&apos;t complete.
+                  </p>
+                  <p className="text-xs text-theme-text-muted">
+                    You can still finalize. Departments can <strong>require end-of-shift checks before
+                    finalizing</strong> so every apparatus is verified ready and accountability is
+                    documented{canManage ? ' — turn it on in Scheduling Settings → Close-out rules.' : '. Ask an admin to enable it in Scheduling Settings.'}
+                  </p>
+                </div>
               )}
 
               <div className="flex items-center gap-2 justify-end pt-1">
@@ -885,7 +1179,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                 </button>
                 <button
                   onClick={() => { void handleFinalize(); }}
-                  disabled={pending.finalizing || hasIncompleteEquipmentChecks}
+                  disabled={pending.finalizing || (requireEndOfShiftChecks && hasIncompleteEquipmentChecks && !overrideChecks)}
                   className="px-4 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium inline-flex items-center gap-1.5 transition-colors"
                 >
                   {pending.finalizing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
@@ -897,11 +1191,47 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
 
           {/* Finalized badge */}
           {shift.is_finalized && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
-              <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-              <span className="text-sm font-medium text-green-700 dark:text-green-400">
-                Shift finalized{shift.finalized_at ? ` on ${formatDateCustom(new Date(shift.finalized_at), { month: 'short', day: 'numeric', year: 'numeric' }, tz)}` : ''}
-              </span>
+            <div className="px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg space-y-2">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                <span className="text-sm font-medium text-green-700 dark:text-green-400">
+                  Shift finalized{shift.finalized_at ? ` on ${formatDateCustom(new Date(shift.finalized_at), { month: 'short', day: 'numeric', year: 'numeric' }, tz)}` : ''}
+                </span>
+                {canManageShift && !showReopenConfirm && (
+                  <button
+                    onClick={() => setShowReopenConfirm(true)}
+                    className="ml-auto text-xs text-theme-text-muted hover:text-theme-text-primary underline"
+                  >
+                    Reopen
+                  </button>
+                )}
+              </div>
+              {showReopenConfirm && (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={reopenReason}
+                    onChange={e => setReopenReason(e.target.value)}
+                    placeholder="Reason for reopening (logged)"
+                    className={inputCls}
+                  />
+                  <div className="flex items-center gap-2 justify-end">
+                    <button onClick={() => { setShowReopenConfirm(false); setReopenReason(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
+                    <button onClick={() => { void handleReopen(); }} disabled={pending.finalizing}
+                      className="px-3 py-1.5 text-sm font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50">
+                      Reopen shift
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Pass-down from this shift */}
+          {shift.pass_down_notes && (
+            <div className="px-3 py-2 bg-theme-surface border border-theme-surface-border rounded-lg">
+              <p className="text-xs font-semibold text-theme-text-secondary mb-0.5">Pass-down for next crew</p>
+              <p className="text-sm text-theme-text-primary whitespace-pre-wrap">{shift.pass_down_notes}</p>
             </div>
           )}
 
@@ -951,6 +1281,18 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                   </select>
                 </div>
               )}
+              <div>
+                <label htmlFor="edit-min-staffing" className="block text-xs font-medium text-theme-text-secondary mb-1">
+                  <span className="flex items-center gap-1"><Users className="w-3 h-3" /> Minimum staffing</span>
+                </label>
+                <input id="edit-min-staffing" type="number" min="0" max="99"
+                  value={editForm.min_staffing}
+                  onChange={e => setEditForm(p => ({...p, min_staffing: e.target.value}))}
+                  placeholder="Target crew size"
+                  className={inputCls}
+                />
+                <p className="mt-1 text-xs text-theme-text-muted">Overrides the template/apparatus target for this shift.</p>
+              </div>
               <div>
                 <label className="block text-xs font-medium text-theme-text-secondary mb-1">
                   <span className="flex items-center gap-1"><Palette className="w-3 h-3" /> Color</span>
@@ -1243,6 +1585,49 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
                       </select>
                     )}
                   </div>
+                  {/* Step 3: Training slot (optional) */}
+                  <div className="pt-1 border-t border-theme-surface-border/60">
+                    <label className="flex items-center gap-2 text-xs font-medium text-theme-text-secondary cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={assignForm.is_training}
+                        onChange={e => setAssignForm(p => ({ ...p, is_training: e.target.checked }))}
+                        className="rounded border-theme-surface-border"
+                      />
+                      Training position (supervised rider)
+                    </label>
+                    {assignForm.is_training && (
+                      <div className="mt-2 space-y-2 pl-6">
+                        <div>
+                          <label htmlFor="assign-training-program" className="block text-xs text-theme-text-muted mb-1">Program (optional)</label>
+                          <select id="assign-training-program" value={assignForm.training_program_id}
+                            onChange={e => setAssignForm(p => ({ ...p, training_program_id: e.target.value }))}
+                            className={inputCls}
+                          >
+                            <option value="">— No program link —</option>
+                            {trainingPrograms.map(prog => (
+                              <option key={prog.id} value={prog.id}>{prog.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="assign-training-evaluator" className="block text-xs text-theme-text-muted mb-1">Evaluating officer (optional)</label>
+                          <select id="assign-training-evaluator" value={assignForm.training_evaluator_id}
+                            onChange={e => setAssignForm(p => ({ ...p, training_evaluator_id: e.target.value }))}
+                            className={inputCls}
+                          >
+                            <option value="">— Finalizing officer —</option>
+                            {memberOptions.map(m => (
+                              <option key={m.id} value={m.id}>{m.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <p className="text-xs text-theme-text-muted">
+                          A draft training report is created for this member when the shift is finalized.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                   <div className="flex justify-end gap-2">
                     <button onClick={() => { setShowAssignForm(false); setMemberSearch(''); }} className="px-3 py-1.5 text-sm text-theme-text-secondary hover:text-theme-text-primary">Cancel</button>
                     <button onClick={() => { void handleAssign(); }} disabled={pending.assigning || !assignForm.user_id}
@@ -1448,7 +1833,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({
           <div className="pt-1">
             <ShiftCallsSection
               shiftId={shift.id}
-              canManage={canManage && !shift.is_finalized}
+              canManage={canManageShift && !shift.is_finalized}
               tz={tz}
               onChange={() => { void refreshAssignments(); onRefresh?.(); }}
             />

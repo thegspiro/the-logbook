@@ -385,8 +385,12 @@ Lightweight apparatus management at `/apparatus-basic`:
 | `scheduling.manage` | Create/edit/delete shifts, templates, patterns. Approve/deny requests. View reports. |
 | `scheduling.assign` | Assign members to shifts (admin assignment, not self-signup). |
 | `scheduling.view` | View scheduling data (implicit for all authenticated members). |
+| `scheduling.swap` | Request/manage shift swaps and time-off. |
+| `scheduling.report` | View shift reports and analytics. |
 
 **Note:** Shift signup (`POST /shifts/{id}/signup`) uses `get_current_user`, not `require_permission`. Any authenticated member can sign up for open positions.
+
+**Per-shift officer authority *(2026-07-16)*:** The officer named on a shift (`shift_officer_id`) may manage that shift's crew, attendance, calls, finalize, and cancellation even without `scheduling.assign`/`scheduling.manage` — enforced by `_authorize_shift_management`/`_authorize_assignment_management` in `endpoints/scheduling.py` (permission OR is-shift-officer). Editing/deleting the shift record itself still requires `scheduling.manage`. The **Scheduling Officer** role now also holds `scheduling.swap` and `scheduling.report`.
 
 ---
 
@@ -1430,4 +1434,114 @@ rows no longer break boolean gating.
 
 ---
 
-*Last Updated: May 29, 2026*
+## Shift Lifecycle, Personal Calendars, Automation & Safeguards (2026-07-16)
+
+A broad review closing operational gaps from shift start-up through close-out,
+adding member conveniences, and fixing correctness/security issues.
+
+### Running a shift end-to-end
+
+- **Per-shift officer authority** — the named shift officer manages that shift's
+  crew, attendance, calls, finalize, and cancellation without a department-wide
+  grant (see the Permissions note above).
+- **Live readiness panel** (`ShiftDetailPanel`) — during the shift, shows
+  present-vs-assigned, staffing vs. target (understaffed flag), and outstanding
+  start-of-shift equipment checks, instead of that state only appearing in the
+  finalize dialog.
+- **Cancel a shift** — `Shift.status` (`ShiftStatus`: `scheduled`/`cancelled`)
+  plus `cancelled_at`/`cancelled_by`/`cancellation_reason`. `cancel_shift`
+  preserves the record, marks active assignments cancelled, notifies the crew;
+  finalized shifts can't be cancelled; cancelled shifts are excluded from
+  open-shift signup.
+- **Reopen / unfinalize** — `reopen_shift` clears the finalized flag for
+  corrections (audit-logged); re-finalizing re-snapshots.
+- **Crew pass-down** — `Shift.pass_down_notes`, captured at finalize, shown on
+  the shift, and surfaced to the next crew on the same apparatus via
+  `GET /shifts/{id}/handoff`.
+
+### Close-out enforcement (opt-in)
+
+- **Require end-of-shift equipment checks** — `finalize_shift` now enforces
+  this server-side when the department enables it (previously a UI-only
+  disabled button that a direct API call bypassed). The officer can override
+  with a reason (audit event `shift_finalized_check_override`).
+- **Restrict check-in to assigned members** — `member_check_in` rejects
+  non-rostered members (open shifts exempt).
+- **Understaffed shifts** are flagged in the finalize checklist.
+
+### Member conveniences
+
+- **Personal calendar (ICS) feed** — per-user `User.calendar_feed_token`; the
+  member subscribes via a private token URL served by the public endpoint (see
+  Endpoints). Managed from **My Shifts → "Subscribe to my shifts"**.
+- **Overtime / hours advisory** — soft, non-blocking warning when an assignment
+  or self-signup pushes a member's scheduled hours in a trailing window over
+  the department cap. Returned as `overtime_warnings` (see the response-model
+  fix below).
+
+### Training integration
+
+- **Training-position crew slots** — `ShiftAssignment.is_training`,
+  `training_program_id`, `training_evaluator_id`. On finalize,
+  `_create_draft_reports_for_trainees` drafts a completion report against the
+  linked program with the evaluator as reviewer.
+
+### Automation
+
+- **Automatic shift generation** — daily `shift_pattern_generation` task
+  (`scheduled_tasks.py`, registered in `TASK_RUNNERS`/`TASK_INTERVALS_SECONDS`/
+  `SCHEDULE`) calls `auto_generate_shifts_for_org` to keep active patterns
+  generating shifts to the configured horizon. Idempotent per pattern.
+
+### New / changed endpoints
+
+| Method | Path | Notes |
+|--------|------|-------|
+| `POST` | `/api/v1/scheduling/shifts/{id}/cancel` | Cancel a shift (manage or shift officer) |
+| `POST` | `/api/v1/scheduling/shifts/{id}/reopen` | Reopen a finalized shift (manage or shift officer; audit-logged) |
+| `GET`  | `/api/v1/scheduling/shifts/{id}/handoff` | Previous crew's pass-down for this apparatus |
+| `GET`  | `/api/v1/scheduling/calendar-feed` | Mint/return the member's ICS token + path |
+| `POST` | `/api/v1/scheduling/calendar-feed/rotate` | Rotate the ICS token |
+| `GET`  | `/api/public/v1/calendar/{token}.ics` | Public, token-protected personal shift feed |
+
+`POST /shifts/{id}/finalize` gained `override_incomplete_checks`,
+`override_reason`, and `pass_down_notes`. Assign/signup responses now include
+`evoc_warnings` and `overtime_warnings`.
+
+### New `org.settings["scheduling"]` keys
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `require_end_of_shift_checks` | `false` | Block finalize while end-of-shift checks are outstanding (officer override logged) |
+| `restrict_checkin_to_assigned` | `false` | Only rostered members may check in (open shifts exempt) |
+| `max_hours_per_window` | `null` | Overtime cap; `0`/absent disables the advisory |
+| `hours_window_days` | `7` | Trailing window for the overtime advisory |
+| `auto_generate_enabled` | `false` | Enable rolling automatic shift generation from patterns |
+| `auto_generate_weeks` | `4` | How many weeks ahead auto-generation fills |
+
+### Correctness & security fixes
+
+- **`response_model` was stripping advisories** — `ShiftAssignmentResponse` had
+  no `evoc_warnings`/`overtime_warnings` fields, so the EVOC and overtime
+  warnings the endpoints attached never reached the client. Fields added; both
+  now surface on assign and self-signup.
+- **S4** — `update_assignment` can no longer force an assignment to `confirmed`
+  (confirmation stays self-only). **S8** — `run-task` now requires the
+  wildcard-only `system.run_tasks` permission. **C5** — manual overnight shifts
+  roll the end to the next day on create/edit.
+
+### Migrations
+
+- `20260720_0001` — `shift_assignments` training-slot fields + `shifts`
+  lifecycle (`status`, `cancelled_at`, `cancelled_by`, `cancellation_reason`).
+- `20260721_0001` — `users.calendar_feed_token`.
+- `20260722_0001` — `shifts.pass_down_notes`.
+
+**Source:** `models/training.py`, `schemas/scheduling.py`,
+`services/scheduling_service.py`, `services/shift_eligibility_service.py`,
+`api/v1/endpoints/scheduling.py`, `api/public/calendar.py`,
+`services/scheduled_tasks.py`, `core/permissions.py`.
+
+---
+
+*Last Updated: July 16, 2026*

@@ -24,7 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = [pytest.mark.integration]
 
-from app.models.training import AssignmentStatus, PatternType, SwapRequestStatus, TimeOffStatus
+from app.models.training import (
+    AssignmentStatus,
+    PatternType,
+    ShiftStatus,
+    SwapRequestStatus,
+    TimeOffStatus,
+)
 from app.services.scheduling_service import SchedulingService
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -213,6 +219,234 @@ class TestShiftCRUD:
         success, err = await svc.delete_shift(uuid.uuid4(), uuid.UUID(org_id))
         assert success is False
         assert "not found" in err.lower()
+
+    @pytest.mark.asyncio
+    async def test_cancel_shift(self, db_session, setup_org_and_users):
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assignment, _ = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        cancelled, err = await svc.cancel_shift(
+            uuid.UUID(shift.id),
+            uuid.UUID(org_id),
+            cancelled_by_user_id=user_id,
+            reason="station closed for weather",
+        )
+        assert err is None
+        assert cancelled.status == ShiftStatus.CANCELLED
+        assert cancelled.cancellation_reason == "station closed for weather"
+
+        # The record is preserved (not hard-deleted) and its active assignment
+        # is marked cancelled.
+        fetched = await svc.get_shift_by_id(uuid.UUID(shift.id), uuid.UUID(org_id))
+        assert fetched is not None
+        refreshed = await svc.get_assignment_by_id(
+            uuid.UUID(assignment.id), uuid.UUID(org_id)
+        )
+        assert refreshed.assignment_status == AssignmentStatus.CANCELLED
+
+    @pytest.mark.asyncio
+    async def test_cancel_shift_twice_blocked(self, db_session, setup_org_and_users):
+        org_id, user_id, _ = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        _, err1 = await svc.cancel_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id), cancelled_by_user_id=user_id
+        )
+        assert err1 is None
+        _, err2 = await svc.cancel_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id), cancelled_by_user_id=user_id
+        )
+        assert err2 is not None
+        assert "already cancelled" in err2.lower()
+
+    @pytest.mark.asyncio
+    async def test_create_training_assignment_rejects_foreign_program(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        # A training_program_id that is not in the caller's org must be rejected.
+        result, err = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {
+                "user_id": user2_id,
+                "position": "firefighter",
+                "is_training": True,
+                "training_program_id": _uid(),
+            },
+            uuid.UUID(user_id),
+        )
+        assert result is None
+        assert "training program not found" in err.lower()
+
+    @pytest.mark.asyncio
+    async def test_update_assignment_blocks_force_confirm(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        assignment, _ = await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+
+        # A manager cannot force-confirm on a member's behalf (S4).
+        result, err = await svc.update_assignment(
+            uuid.UUID(assignment.id),
+            uuid.UUID(org_id),
+            {"assignment_status": AssignmentStatus.CONFIRMED},
+        )
+        assert result is None
+        assert "confirmation" in err.lower()
+
+        # Other status transitions (e.g. decline) are still allowed.
+        result2, err2 = await svc.update_assignment(
+            uuid.UUID(assignment.id),
+            uuid.UUID(org_id),
+            {"assignment_status": AssignmentStatus.DECLINED},
+        )
+        assert err2 is None
+        assert result2.assignment_status == AssignmentStatus.DECLINED
+
+    @pytest.mark.asyncio
+    async def test_calendar_token_ensure_and_rotate(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        token1 = await svc.ensure_calendar_token(
+            uuid.UUID(user_id), uuid.UUID(org_id)
+        )
+        assert token1
+        # Idempotent — a second call returns the same token.
+        token1b = await svc.ensure_calendar_token(
+            uuid.UUID(user_id), uuid.UUID(org_id)
+        )
+        assert token1b == token1
+
+        token2 = await svc.rotate_calendar_token(
+            uuid.UUID(user_id), uuid.UUID(org_id)
+        )
+        assert token2 and token2 != token1
+
+        # The new token resolves to the owning member; the old one no longer does.
+        owner = await svc.get_user_by_calendar_token(token2)
+        assert owner is not None and str(owner.id) == user_id
+        assert await svc.get_user_by_calendar_token(token1) is None
+
+    @pytest.mark.asyncio
+    async def test_reopen_requires_finalized_shift(
+        self, db_session, setup_org_and_users
+    ):
+        org_id, user_id, _ = await setup_org_and_users
+        svc = SchedulingService(db_session)
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+        # A shift that was never finalized cannot be reopened.
+        result, err = await svc.reopen_shift(
+            uuid.UUID(shift.id), uuid.UUID(org_id)
+        )
+        assert result is None
+        assert "not finalized" in err.lower()
+
+    @pytest.mark.asyncio
+    async def test_restrict_checkin_to_assigned(
+        self, db_session, setup_org_and_users
+    ):
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        org_id, user_id, user2_id = await setup_org_and_users
+        svc = SchedulingService(db_session)
+        await ShiftEligibilityService(db_session).update_scheduling_settings(
+            org_id, restrict_checkin_to_assigned=True
+        )
+
+        today = date.today()
+        shift, _ = await svc.create_shift(
+            uuid.UUID(org_id),
+            {
+                "shift_date": today,
+                "start_time": datetime(today.year, today.month, today.day, 7, 0),
+            },
+            uuid.UUID(user_id),
+        )
+
+        # An unrostered member is blocked from checking in.
+        result, err = await svc.member_check_in(
+            shift.id, user2_id, uuid.UUID(org_id)
+        )
+        assert result is None
+        assert "not assigned" in err.lower()
+
+        # After being assigned, the member can check in.
+        await svc.create_assignment(
+            uuid.UUID(org_id),
+            uuid.UUID(shift.id),
+            {"user_id": user2_id, "position": "firefighter"},
+            uuid.UUID(user_id),
+        )
+        result2, err2 = await svc.member_check_in(
+            shift.id, user2_id, uuid.UUID(org_id)
+        )
+        assert err2 is None
+        assert result2 is not None
 
     @pytest.mark.asyncio
     async def test_protected_fields_not_updated(self, db_session, setup_org_and_users):

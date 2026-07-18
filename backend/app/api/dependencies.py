@@ -194,6 +194,16 @@ def _has_permission(required: str, user_permissions: set) -> bool:
     return permission_matches(required, user_permissions)
 
 
+def user_has_permission(user: User, permission: str) -> bool:
+    """Return True if ``user``'s roles grant ``permission`` (wildcards honored).
+
+    A programmatic counterpart to :func:`require_permission` for handlers that
+    must combine an org-level permission check with a per-record condition
+    (e.g. "has scheduling.manage OR is this shift's officer").
+    """
+    return _has_permission(permission, _collect_user_permissions(user))
+
+
 class PermissionChecker:
     """
     Dependency class for checking user permissions using OR logic.

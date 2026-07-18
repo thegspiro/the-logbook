@@ -21,6 +21,7 @@ import type {
   ImpactPlannerReorderRequest, ImpactPlannerReorderResponse,
   ImpactPlannerIssueRequest, ImpactPlannerIssueResponse,
   ImpactPlan, ImpactPlanCreate, ImpactPlannerRequestSizesResponse,
+  InventoryLot, InventoryLotCreate, InventoryLotUpdate, ExpiringLot,
 } from './eventServices';
 
 export const inventoryService = {
@@ -624,6 +625,33 @@ export const inventoryService = {
 
   async upsertMySizePreferences(data: MemberSizePreferencesCreate): Promise<MemberSizePreferences> {
     const response = await api.put<MemberSizePreferences>('/inventory/my/size-preferences', data);
+    return response.data;
+  },
+
+  // Stock lots (ready replacement stock: lot # + expiration + quantity)
+  async getItemLots(itemId: string): Promise<InventoryLot[]> {
+    const response = await api.get<InventoryLot[]>(`/inventory/items/${itemId}/lots`);
+    return response.data;
+  },
+
+  async addItemLot(itemId: string, data: InventoryLotCreate): Promise<InventoryLot> {
+    const response = await api.post<InventoryLot>(`/inventory/items/${itemId}/lots`, data);
+    return response.data;
+  },
+
+  async updateItemLot(lotId: string, data: InventoryLotUpdate): Promise<InventoryLot> {
+    const response = await api.patch<InventoryLot>(`/inventory/lots/${lotId}`, data);
+    return response.data;
+  },
+
+  async deleteItemLot(lotId: string): Promise<void> {
+    await api.delete(`/inventory/lots/${lotId}`);
+  },
+
+  async getExpiringLots(daysAhead = 30): Promise<ExpiringLot[]> {
+    const response = await api.get<ExpiringLot[]>('/inventory/lots/expiring', {
+      params: { days_ahead: daysAhead },
+    });
     return response.data;
   },
 };
