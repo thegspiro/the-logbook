@@ -691,6 +691,11 @@ class Session(Base):
 
     token = Column(String(512), nullable=False, unique=True, index=True)
     refresh_token = Column(String(512))
+    # The immediately-previous refresh token, honored for a short grace window
+    # after rotation so two concurrent legitimate refreshes (multi-tab, app
+    # boot, network retry) don't look like token theft and trigger a mass logout.
+    previous_refresh_token = Column(String(512), nullable=True, index=True)
+    previous_refresh_expires_at = Column(DateTime(timezone=True), nullable=True)
     ip_address = Column(String(45))
     user_agent = Column(Text)
     geo_location = Column(JSON)

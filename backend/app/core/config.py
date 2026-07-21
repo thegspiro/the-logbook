@@ -135,6 +135,9 @@ class Settings(BaseSettings):
         30  # Short-lived access tokens (use refresh flow)
     )
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Grace window during which a just-rotated refresh token is still accepted,
+    # so concurrent legitimate refreshes don't trip replay detection. Keep short.
+    REFRESH_ROTATION_GRACE_SECONDS: int = 30
 
     # Password Policy
     PASSWORD_MIN_LENGTH: int = 12
