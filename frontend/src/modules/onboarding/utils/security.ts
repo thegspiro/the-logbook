@@ -90,52 +90,11 @@ export const isValidUsernameSecure = (username: string): boolean => {
   return /^[a-zA-Z0-9_-]{3,32}$/.test(username);
 };
 
-/**
- * Simple symmetric obfuscation for sessionStorage (client-side only - NOT production-grade)
- * WARNING: This is obfuscation, not true encryption. Sensitive data should NEVER
- * be stored client-side. This is only to prevent casual inspection.
- *
- * SECURITY: If VITE_SESSION_KEY is not set, a per-session random key is generated
- * instead of using a hardcoded default. This prevents all instances sharing the same key.
- */
-const getObfuscationKey = (): string => {
-  const envKey: unknown = import.meta.env.VITE_SESSION_KEY;
-  if (typeof envKey === 'string' && envKey) return envKey;
-
-  // Generate a per-session random key if no env key is set
-  const storageKey = 'obfuscation_session_key';
-  let key = sessionStorage.getItem(storageKey);
-  if (!key) {
-    const array = new Uint8Array(32);
-    crypto.getRandomValues(array);
-    key = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-    sessionStorage.setItem(storageKey, key);
-  }
-  return key;
-};
-const ENCRYPTION_KEY = getObfuscationKey();
-
-export const obfuscate = (text: string): string => {
-  // Simple XOR cipher for obfuscation (NOT secure encryption)
-  let result = '';
-  for (let i = 0; i < text.length; i++) {
-    result += String.fromCharCode(text.charCodeAt(i) ^ ENCRYPTION_KEY.charCodeAt(i % ENCRYPTION_KEY.length));
-  }
-  return btoa(result); // Base64 encode
-};
-
-export const deobfuscate = (encoded: string): string => {
-  try {
-    const text = atob(encoded); // Base64 decode
-    let result = '';
-    for (let i = 0; i < text.length; i++) {
-      result += String.fromCharCode(text.charCodeAt(i) ^ ENCRYPTION_KEY.charCodeAt(i % ENCRYPTION_KEY.length));
-    }
-    return result;
-  } catch {
-    return '';
-  }
-};
+// NOTE: A reversible XOR-based obfuscate()/deobfuscate() pair used to live here
+// for stashing onboarding data in sessionStorage. It was unused (sensitive
+// onboarding data is now POSTed straight to the server, never stored
+// client-side) and gave a false sense of protection, so it was removed. Do not
+// reintroduce client-side "encryption" of sensitive data — use the server.
 
 /**
  * Hash sensitive data before storage (one-way)

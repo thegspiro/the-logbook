@@ -1215,11 +1215,11 @@ class EquipmentCheckService:
                 EquipmentCheckTemplate.organization_id == organization_id,
                 CheckTemplateItem.has_expiration.is_(True),
                 CheckTemplateItem.expiration_date.isnot(None),
+                # Compute the cutoff in Python with a bound value rather than
+                # interpolating into a raw SQL INTERVAL fragment (fragile even
+                # though days_ahead is int-bounded upstream).
                 CheckTemplateItem.expiration_date
-                <= func.date_add(
-                    func.current_date(),
-                    func.text(f"INTERVAL {days_ahead} DAY"),
-                ),
+                <= (date.today() + timedelta(days=days_ahead)),
             )
         )
         return list(result.scalars().all())

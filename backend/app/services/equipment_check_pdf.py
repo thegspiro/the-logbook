@@ -10,6 +10,7 @@ Produces downloadable PDF reports using reportlab:
 import io
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from xml.sax.saxutils import escape as _xml_escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -18,6 +19,19 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 _styles = getSampleStyleSheet()
+
+
+def _esc(value: Any) -> str:
+    """XML-escape a value for safe inclusion in a ReportLab ``Paragraph``.
+
+    ``Paragraph`` content is parsed as intra-paragraph XML markup, so raw
+    user-supplied text is an injection sink: an unbalanced ``<`` or ``&`` crashes
+    ``doc.build()`` (DoS on report generation) and ``<img src=.../>`` / ``<a>``
+    tags can embed local files or trigger fetches into the rendered PDF. Table
+    *cell* strings are not parsed and do not need this; only ``Paragraph`` text.
+    """
+    return _xml_escape(str(value if value is not None else ""))
+
 
 TITLE_STYLE = ParagraphStyle(
     "ReportTitle",
@@ -112,7 +126,7 @@ def generate_compliance_pdf(
         period = f"Through {date_to}"
     elements.append(
         Paragraph(
-            f"Period: {period or 'Last 30 days'}  |  Generated: {_now_str()}",
+            f"Period: {_esc(period) or 'Last 30 days'}  |  Generated: {_now_str()}",
             SUBTITLE_STYLE,
         )
     )
@@ -235,7 +249,7 @@ def generate_failure_log_pdf(
         period = f"{date_from} to {date_to}"
     elements.append(
         Paragraph(
-            f"Period: {period or 'Last 30 days'}  |  "
+            f"Period: {_esc(period) or 'Last 30 days'}  |  "
             f"Total failures: {data.get('total', 0)}  |  "
             f"Generated: {_now_str()}",
             SUBTITLE_STYLE,
@@ -323,9 +337,9 @@ def generate_check_detail_pdf(
         checked_at = checked_at[:19]
     elements.append(
         Paragraph(
-            f"Checked by: {check.get('checked_by_name', 'Unknown')}  |  "
-            f"Date: {checked_at or '-'}  |  "
-            f"Timing: {check.get('check_timing', '-')}",
+            f"Checked by: {_esc(check.get('checked_by_name', 'Unknown'))}  |  "
+            f"Date: {_esc(checked_at) or '-'}  |  "
+            f"Timing: {_esc(check.get('check_timing', '-'))}",
             SUBTITLE_STYLE,
         )
     )
@@ -347,7 +361,7 @@ def generate_check_detail_pdf(
         compartments.setdefault(comp, []).append(item)
 
     for comp_name, comp_items in compartments.items():
-        elements.append(Paragraph(comp_name, SECTION_STYLE))
+        elements.append(Paragraph(_esc(comp_name), SECTION_STYLE))
         header = ["Item", "Type", "Status", "Notes"]
         rows = [header]
         for it in comp_items:
@@ -387,7 +401,7 @@ def generate_check_detail_pdf(
     # Notes
     if check.get("notes"):
         elements.append(Paragraph("Overall Notes", SECTION_STYLE))
-        elements.append(Paragraph(str(check["notes"]), BODY_STYLE))
+        elements.append(Paragraph(_esc(check["notes"]), BODY_STYLE))
 
     doc.build(elements)
     return buf.getvalue()
