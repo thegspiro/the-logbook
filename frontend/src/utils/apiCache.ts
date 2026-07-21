@@ -71,6 +71,23 @@ const UNCACHEABLE_PREFIXES = [
   '/integrations/',        // integration config may contain API keys, webhook URLs, secrets
   '/finance/',             // budgets, purchase/expense/check requests & reimbursements tied to members (PII)
   '/grants/',              // grant applications and donor/fundraising records (PII)
+  '/roles/user/',          // an arbitrary user's full permission set (authz data)
+  '/roles/admin-access',   // admin-status probe (authz decision — must not go stale)
+  '/facilities/occupants', // facility occupant PII
+  '/facilities/access-keys', // physical building access-key inventory
+] as const;
+
+/**
+ * Substring patterns for sensitive SUB-resources whose parent path IS cacheable
+ * (e.g. event list/detail may be cached, but a specific event's attendance
+ * roster must not be). These are matched with `includes` because the resource
+ * id sits mid-path, so a `startsWith` prefix cannot target them.
+ */
+const UNCACHEABLE_SUBSTRINGS = [
+  '/rsvps',              // event attendance roster (member names/status — PII)
+  '/eligible-members',   // returns member first/last name + email (PII)
+  '/external-attendees', // external attendee PII
+  '/check-in-monitoring', // live attendee/location check-in data (PII)
 ] as const;
 
 interface CacheEntry {
@@ -193,7 +210,10 @@ export function getResourcePrefix(url: string): string {
  * Returns false for endpoints carrying sensitive/PII/PHI data.
  */
 export function isCacheable(url: string): boolean {
-  return !UNCACHEABLE_PREFIXES.some((prefix) => url.startsWith(prefix));
+  if (UNCACHEABLE_PREFIXES.some((prefix) => url.startsWith(prefix))) {
+    return false;
+  }
+  return !UNCACHEABLE_SUBSTRINGS.some((pattern) => url.includes(pattern));
 }
 
 /**
