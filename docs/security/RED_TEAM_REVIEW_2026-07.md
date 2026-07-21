@@ -13,17 +13,53 @@ code inspection during the review.
 
 ## Remediation status
 
-**All five HIGH findings are fixed** on branch `claude/app-security-red-team-rgf6bk`:
+**All HIGH, MEDIUM, and LOW findings are remediated** on branch
+`claude/app-security-red-team-rgf6bk` (except a full CAPTCHA on public forms —
+a documented follow-up — and M9, which verification found to be a non-issue).
 
+### HIGH
 | ID | Finding | Status | Where |
 |----|---------|--------|-------|
-| H1 | Cross-tenant audit-log disclosure | ✅ Fixed | `security_monitoring.py` — both handlers scoped to org |
+| H1 | Cross-tenant audit-log disclosure | ✅ Fixed | `security_monitoring.py` — both handlers org-scoped |
 | H2 | Role-assignment privilege escalation | ✅ Fixed | `users.py` + `roles.py` — permission-subset ceiling on assign/create/update/clone |
 | H3 | MFA brute-force + TOTP replay | ✅ Fixed | `mfa_service.py`, `auth.py`, migration `20260725_0001` |
-| H4 | Unkeyed audit hash chain | ✅ Fixed | `audit.py` HMAC-SHA256 + versioning, migration `20260726_0001` |
+| H4 | Unkeyed audit hash chain | ✅ Fixed | `audit.py` HMAC-SHA256 + `hash_version`, migration `20260726_0001` |
 | H5 | Global-lockout rate-limit DoS | ✅ Fixed | `security_middleware.py` — `get_client_ip()` |
 
-MEDIUM and LOW items below are **not yet remediated**.
+### MEDIUM
+| ID | Finding | Status | Where |
+|----|---------|--------|-------|
+| M1 | Secure cookie dropped by http:// origin | ✅ Fixed | `auth.py` — force Secure in prod/staging |
+| M2 | Refresh rotation mass-logout | ✅ Fixed | `auth_service.py` grace window, migration `20260727_0001` |
+| M3 | Username enumeration | ✅ Fixed | `auth_service.py` dummy verify + `ACCOUNT_LOCKOUT_REVEAL=False` |
+| M4 | DNS-rebinding SSRF | ✅ Fixed | `url_validator.assert_outbound_url_safe()` at send time |
+| M5 | XXE in ePCR/NEMSIS import | ✅ Fixed | `epcr_import_service.py` → defusedxml |
+| M6 | Public-form abuse | ⚠️ Partial | daily cap + distributed limit added; CAPTCHA is a follow-up |
+| M7 | Webhook replay | ✅ Fixed | `webhook_replay.is_duplicate_webhook()` on all 3 inbound webhooks |
+| M8 | Public rate limiting not distributed | ✅ Fixed | `public_rate_limit()` (Redis-backed) |
+| M9 | Audit logs hard-deletable | ✅ N/A | Verified non-issue — no delete path on `audit_logs`; description corrected |
+| M10 | CSRF "no cookie ⇒ allow" | ✅ Fixed | `verify_csrf_token` — reject when session cookie present |
+| M11 | PII endpoints cacheable | ✅ Fixed | `apiCache.ts` — events rosters + facilities excluded |
+
+### LOW / hardening
+| ID | Finding | Status |
+|----|---------|--------|
+| L1 | Dev compose used in prod | ✅ `docker-compose.prod.yml` override added |
+| L2 | Docs/DEBUG-in-prod non-blocking | ✅ Promoted to CRITICAL (blocks prod boot) |
+| L3 | Authz data cached | ✅ `/roles/user/`, `/roles/admin-access` excluded |
+| L4 | ReportLab markup injection | ✅ `equipment_check_pdf.py` escapes Paragraph inputs |
+| L5 | MFA recovery codes reversible | ✅ Hashed at rest + constant-time verify |
+| L6 | No request-body cap | ✅ `RequestSizeLimitMiddleware` |
+| L7 | OAuth no domain allowlist | ✅ Operator warning when Google allowlist unset |
+| L8 | display/calendar unthrottled | ✅ Per-IP rate limiting added |
+| L9 | Misc (SQL fragment, ENCRYPTION_KEY len, dead code) | ✅ Fixed |
+
+**Testing note:** backend deps and MySQL/Redis are not available in the review
+environment, so the full pytest suite was not run here. All changed Python is
+flake8-clean; new/changed logic (MFA replay + lockout, recovery-code hashing,
+HMAC audit keying, cache exclusions) is covered by unit tests and the
+security-critical pure functions were validated standalone. CI should run the
+full suite and the two new Alembic migrations.
 
 > **Discovered while working (pre-existing, unrelated to these fixes):** two Alembic migration
 > files — `20260720_0001_add_department_message_deleted_at.py` and
