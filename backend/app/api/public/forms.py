@@ -18,7 +18,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security_middleware import get_client_ip, public_rate_limit
+from app.core.config import settings
+from app.core.security_middleware import (
+    daily_cap_exceeded,
+    get_client_ip,
+    public_rate_limit,
+)
 from app.models.user import Organization
 from app.schemas.forms import (
     PublicFormFieldResponse,
@@ -149,6 +154,14 @@ async def submit_public_form(
     Includes rate limiting, honeypot detection, and input sanitization.
     """
     _validate_slug(slug)
+
+    # Per-form daily ceiling: bounds DB/email/integration abuse from a
+    # distributed flood that per-IP limiting alone cannot stop.
+    if await daily_cap_exceeded(f"pub_form:{slug}", settings.PUBLIC_FORM_DAILY_LIMIT):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="This form is not accepting further submissions today.",
+        )
 
     service = FormsService(db)
 

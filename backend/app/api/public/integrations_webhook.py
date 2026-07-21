@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
+from app.utils.webhook_replay import is_duplicate_webhook
 from app.models.integration import Integration
 from app.services.integration_services import calcom_service, documenso_service
 from app.services.integration_services.webhook_service import (
@@ -140,6 +141,11 @@ async def documenso_inbound_webhook(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid signature"
         )
 
+    # Replay protection: don't reprocess a captured, validly-signed delivery.
+    if await is_duplicate_webhook(f"documenso:{integration_id}", body):
+        logger.info("Ignoring duplicate Documenso webhook for {}", integration_id)
+        return {"success": True, "event": "duplicate", "advanced": False}
+
     payload = await _read_json(request)
     event = documenso_service.parse_webhook_event(payload)
 
@@ -198,6 +204,11 @@ async def calcom_inbound_webhook(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid signature"
         )
+
+    # Replay protection: don't reprocess a captured, validly-signed delivery.
+    if await is_duplicate_webhook(f"calcom:{integration_id}", body):
+        logger.info("Ignoring duplicate Cal.com webhook for {}", integration_id)
+        return {"success": True, "event": "duplicate", "advanced": False}
 
     payload = await _read_json(request)
     event = calcom_service.parse_webhook_event(payload)

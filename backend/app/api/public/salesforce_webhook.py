@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
+from app.utils.webhook_replay import is_duplicate_webhook
 from app.models.integration import Integration
 from app.services.integration_services.salesforce_service import SalesforceService
 from app.services.integration_services.salesforce_sync_service import (
@@ -119,6 +120,15 @@ async def salesforce_inbound_webhook(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid signature",
         )
+
+    # Replay protection: a captured, validly-signed request must not be
+    # reprocessed. Ack duplicates with 200 so the provider stops retrying.
+    if await is_duplicate_webhook(f"salesforce:{integration_id}", body):
+        logger.info(
+            "Ignoring duplicate Salesforce webhook for integration {}",
+            integration_id,
+        )
+        return {"status": "ignored", "reason": "duplicate"}
 
     try:
         payload = await request.json()

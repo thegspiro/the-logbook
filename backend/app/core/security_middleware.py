@@ -186,6 +186,38 @@ async def public_rate_limit(
     )
 
 
+async def daily_cap_exceeded(scope: str, limit: int) -> bool:
+    """Return True if *scope* has hit its per-UTC-day count *limit*.
+
+    A total (all-IPs) ceiling for unauthenticated resources that trigger
+    expensive side effects — e.g. public form submissions that create
+    membership-pipeline prospects and send email. Per-IP rate limiting alone
+    doesn't stop a distributed flood; this bounds the daily blast radius.
+
+    Backed by an atomic Redis INCR with a ~26h expiry. Fails OPEN when Redis is
+    unavailable (availability over the cap) — the per-IP limiter still applies.
+    """
+    from datetime import datetime, timezone
+
+    from loguru import logger
+
+    from app.core.cache import cache_manager
+
+    if limit <= 0 or not (cache_manager.is_connected and cache_manager.redis_client):
+        return False
+
+    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    key = f"daily_cap:{scope}:{day}"
+    try:
+        count = await cache_manager.redis_client.incr(key)
+        if count == 1:
+            await cache_manager.redis_client.expire(key, 93600)  # ~26h
+        return count > limit
+    except Exception as exc:
+        logger.warning("Daily-cap check failed (allowing): {}", exc)
+        return False
+
+
 # ============================================
 # CSRF Protection
 # ============================================

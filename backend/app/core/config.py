@@ -207,6 +207,10 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 60
+    # Per-form/day ceiling on unauthenticated public form submissions (bounds
+    # DB flooding and integration/email abuse from a distributed spam flood).
+    # 0 disables the cap.
+    PUBLIC_FORM_DAILY_LIMIT: int = 500
 
     # Trusted proxy IPs for X-Forwarded-For validation
     TRUSTED_PROXY_IPS: str = ""  # Comma-separated list of trusted proxy IPs
