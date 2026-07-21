@@ -11,6 +11,28 @@ code inspection during the review.
 > file-upload handling, and client-side auth are notably well-built. The findings below are real
 > but sit on top of a solid foundation; the two HIGH tenant/authz issues are the ones to fix first.
 
+## Remediation status
+
+**All five HIGH findings are fixed** on branch `claude/app-security-red-team-rgf6bk`:
+
+| ID | Finding | Status | Where |
+|----|---------|--------|-------|
+| H1 | Cross-tenant audit-log disclosure | ✅ Fixed | `security_monitoring.py` — both handlers scoped to org |
+| H2 | Role-assignment privilege escalation | ✅ Fixed | `users.py` + `roles.py` — permission-subset ceiling on assign/create/update/clone |
+| H3 | MFA brute-force + TOTP replay | ✅ Fixed | `mfa_service.py`, `auth.py`, migration `20260725_0001` |
+| H4 | Unkeyed audit hash chain | ✅ Fixed | `audit.py` HMAC-SHA256 + versioning, migration `20260726_0001` |
+| H5 | Global-lockout rate-limit DoS | ✅ Fixed | `security_middleware.py` — `get_client_ip()` |
+
+MEDIUM and LOW items below are **not yet remediated**.
+
+> **Discovered while working (pre-existing, unrelated to these fixes):** two Alembic migration
+> files — `20260720_0001_add_department_message_deleted_at.py` and
+> `20260720_0001_add_training_positions_and_shift_status.py` — declare the **same** `revision =
+> "20260720_0001"` with the same `down_revision`. Duplicate revision ids collide in the Alembic
+> graph and will error on `alembic upgrade`. Fixing it means renaming one revision and re-pointing
+> the downstream `20260721_0001.down_revision`; validate with `alembic history`/`heads` in a live
+> environment before applying.
+
 ---
 
 ## HIGH
