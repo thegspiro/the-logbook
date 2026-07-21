@@ -308,6 +308,10 @@ class User(Base):
     mfa_enabled = Column(Boolean, default=False)
     _mfa_secret_encrypted = Column("mfa_secret", String(255))
     _mfa_backup_codes_encrypted = Column("mfa_backup_codes", JSON)
+    # Highest TOTP time-step (unix_time // period) already accepted at login.
+    # A code whose step is <= this value is rejected as a replay, so a captured
+    # or shoulder-surfed code cannot be reused within its ±30s validity window.
+    mfa_last_timestep = Column(Integer, nullable=True)
 
     @property
     def mfa_secret(self) -> str | None:

@@ -678,15 +678,33 @@ async def mfa_login(
     if payload.get("type") != "mfa_pending" or not payload.get("sub"):
         raise invalid
 
+    from datetime import datetime, timedelta, timezone
+
     result = await db.execute(select(User).where(User.id == str(payload["sub"])))
     user = result.scalar_one_or_none()
     if not user or not user.mfa_enabled or not user.is_active:
         raise invalid
 
+    # Per-user brute-force protection: the second factor shares the account's
+    # failed-login counter/lockout so that guessing TOTP codes is throttled and
+    # eventually locks the account. Previously only the password step enforced
+    # lockout, leaving MFA guessable at the per-IP rate limit alone. A generic
+    # error is returned for the locked state so it does not confirm the account.
+    now = datetime.now(timezone.utc)
+    locked_until = user.locked_until
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if locked_until and locked_until > now:
+        raise invalid
+
     verified = False
-    if data.code and mfa_service.verify_totp(user.mfa_secret, data.code):
-        verified = True
-    elif data.recovery_code:
+    matched_timestep: int | None = None
+    if data.code:
+        matched_timestep = mfa_service.verify_totp_get_timestep(
+            user.mfa_secret, data.code, last_timestep=user.mfa_last_timestep
+        )
+        verified = matched_timestep is not None
+    if not verified and data.recovery_code:
         target = mfa_service.normalize_recovery_code(data.recovery_code)
         codes = user.mfa_backup_codes or []
         remaining = [
@@ -695,12 +713,27 @@ async def mfa_login(
         if len(remaining) != len(codes):
             verified = True
             user.mfa_backup_codes = remaining  # consume the used code
-            await db.commit()
 
     if not verified:
+        # Count the failed second factor toward the account lockout, mirroring
+        # the password-step logic in AuthService.authenticate_user.
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
+            user.locked_until = now + timedelta(
+                minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
+            )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid verification code"
         )
+
+    # Success: record the consumed TOTP step (replay prevention) and clear the
+    # failure counter/lock.
+    if matched_timestep is not None:
+        user.mfa_last_timestep = matched_timestep
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    await db.commit()
 
     access_token, refresh_token = await AuthService(db).create_user_tokens(
         user=user,

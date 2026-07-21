@@ -1,5 +1,7 @@
 """Unit tests for the TOTP MFA service (pure functions, no DB)."""
 
+import time
+
 import pyotp
 
 from app.services import mfa_service
@@ -34,3 +36,36 @@ def test_recovery_codes_are_unique_and_formatted():
 def test_normalize_recovery_code():
     assert mfa_service.normalize_recovery_code(" AB12C-DE34F ") == "ab12c-de34f"
     assert mfa_service.normalize_recovery_code("a b c") == "abc"
+
+
+def test_verify_totp_get_timestep_returns_current_step():
+    secret = mfa_service.generate_secret()
+    code = pyotp.TOTP(secret).now()
+    expected_step = int(time.time()) // 30
+    assert (
+        mfa_service.verify_totp_get_timestep(secret, code, last_timestep=None)
+        == expected_step
+    )
+
+
+def test_verify_totp_get_timestep_rejects_replay():
+    """A code whose step was already consumed must be rejected (replay guard)."""
+    secret = mfa_service.generate_secret()
+    code = pyotp.TOTP(secret).now()
+    step = mfa_service.verify_totp_get_timestep(secret, code, last_timestep=None)
+    assert step is not None
+    # Same code, now that its step is recorded as last-used -> replay -> None.
+    assert mfa_service.verify_totp_get_timestep(secret, code, last_timestep=step) is None
+    # An older last_timestep does not block the current, un-consumed step.
+    assert (
+        mfa_service.verify_totp_get_timestep(secret, code, last_timestep=step - 1)
+        == step
+    )
+
+
+def test_verify_totp_get_timestep_rejects_invalid_input():
+    secret = mfa_service.generate_secret()
+    assert mfa_service.verify_totp_get_timestep(secret, "000000") is None
+    assert mfa_service.verify_totp_get_timestep(secret, "abcdef") is None
+    assert mfa_service.verify_totp_get_timestep(secret, "") is None
+    assert mfa_service.verify_totp_get_timestep("", pyotp.TOTP(secret).now()) is None
