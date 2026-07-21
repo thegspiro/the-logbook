@@ -1329,28 +1329,6 @@ export const multiAgencyService = {
 
 // ==================== xAPI Services ====================
 
-export const xapiService = {
-  async ingestStatement(rawStatement: Record<string, unknown>, sourceProviderId?: string): Promise<import('../types/training').XAPIStatement> {
-    const response = await api.post<import('../types/training').XAPIStatement>('/training/xapi/statements', {
-      raw_statement: rawStatement,
-      source_provider_id: sourceProviderId,
-    });
-    return response.data;
-  },
-
-  async ingestBatch(statements: Record<string, unknown>[], sourceProviderId?: string): Promise<import('../types/training').XAPIBatchResponse> {
-    const response = await api.post<import('../types/training').XAPIBatchResponse>('/training/xapi/statements/batch', {
-      statements,
-      source_provider_id: sourceProviderId,
-    });
-    return response.data;
-  },
-
-  async processStatements(): Promise<{ processed: number }> {
-    const response = await api.post<{ processed: number }>('/training/xapi/process');
-    return response.data;
-  },
-};
 
 // ==================== Report Export Services ====================
 

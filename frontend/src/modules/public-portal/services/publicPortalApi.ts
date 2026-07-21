@@ -14,7 +14,6 @@ import type {
   PublicPortalUsageStats,
   PublicPortalDataWhitelist,
   CreateAPIKeyRequest,
-  UpdateAPIKeyRequest,
   UpdateConfigRequest,
   AccessLogFilters,
 } from '../types';
@@ -30,12 +29,6 @@ export const getConfig = async (): Promise<PublicPortalConfig> => {
   return response.data;
 };
 
-export const createConfig = async (
-  config: UpdateConfigRequest
-): Promise<PublicPortalConfig> => {
-  const response = await api.post<PublicPortalConfig>('/config', config);
-  return response.data;
-};
 
 export const updateConfig = async (
   config: UpdateConfigRequest
@@ -64,13 +57,6 @@ export const createAPIKey = async (
   return response.data;
 };
 
-export const updateAPIKey = async (
-  keyId: string,
-  data: UpdateAPIKeyRequest
-): Promise<PublicPortalAPIKey> => {
-  const response = await api.patch<PublicPortalAPIKey>(`/api-keys/${keyId}`, data);
-  return response.data;
-};
 
 export const revokeAPIKey = async (
   keyId: string
@@ -110,14 +96,6 @@ export const getWhitelist = async (
   return response.data;
 };
 
-export const createWhitelistEntry = async (data: {
-  data_category: string;
-  field_name: string;
-  is_enabled: boolean;
-}): Promise<PublicPortalDataWhitelist> => {
-  const response = await api.post<PublicPortalDataWhitelist>('/whitelist', data);
-  return response.data;
-};
 
 export const updateWhitelistEntry = async (
   entryId: string,

@@ -4,18 +4,6 @@
  * CRITICAL: This module handles sensitive data encryption and sanitization
  */
 
-/**
- * Escape a plain-text string for safe insertion into HTML.
- *
- * NOTE: This does NOT sanitize HTML — it escapes ALL markup so the output
- * is rendered as literal text. For actual HTML sanitization (allowing safe
- * tags), use DOMPurify instead.
- */
-export const escapeTextForHTML = (input: string): string => {
-  const element = document.createElement('div');
-  element.textContent = input;
-  return element.innerHTML;
-};
 
 /**
  * Sanitize input to prevent injection attacks
@@ -29,18 +17,6 @@ export const sanitizeInput = (input: string): string => {
     .trim();
 };
 
-/**
- * Validate and sanitize URL
- */
-export const isValidURL = (url: string): boolean => {
-  try {
-    const urlObj = new URL(url);
-    // Only allow https URLs (http for development)
-    return urlObj.protocol === 'https:' || (import.meta.env.DEV && urlObj.protocol === 'http:');
-  } catch {
-    return false;
-  }
-};
 
 /**
  * Validate phone number format
@@ -96,59 +72,4 @@ export const isValidUsernameSecure = (username: string): boolean => {
 // client-side) and gave a false sense of protection, so it was removed. Do not
 // reintroduce client-side "encryption" of sensitive data — use the server.
 
-/**
- * Hash sensitive data before storage (one-way)
- */
-export const hashData = async (data: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const dataBuffer = encoder.encode(data);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-};
 
-/**
- * Generate a secure random token
- */
-export const generateSecureToken = (): string => {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-};
-
-/**
- * Validate that we're on HTTPS (except in development)
- */
-export const enforceHTTPS = (): boolean => {
-  if (import.meta.env.DEV) return true;
-
-  if (window.location.protocol !== 'https:') {
-    console.error('SECURITY ERROR: Application must be served over HTTPS');
-    return false;
-  }
-
-  return true;
-};
-
-/**
- * Check if Content Security Policy is enabled
- */
-export const checkCSP = (): void => {
-  // Log warning if CSP is not detected
-  const meta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
-  if (!meta && !import.meta.env.DEV) {
-    console.warn('WARNING: Content Security Policy not detected. Add CSP headers for enhanced security.');
-  }
-};
-
-/**
- * Prevent clickjacking
- */
-export const preventClickjacking = (): void => {
-  if (window.top !== window.self && !import.meta.env.DEV) {
-    console.error('SECURITY: Possible clickjacking attempt detected');
-    if (window.top) {
-      window.top.location.href = window.self.location.href;
-    }
-  }
-};

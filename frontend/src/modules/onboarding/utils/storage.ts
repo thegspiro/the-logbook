@@ -7,7 +7,7 @@
  * - All sensitive configuration is sent directly to the backend and not persisted locally
  */
 
-import { OnboardingData, EmailConfig, AdminUser } from '../types';
+import { OnboardingData, EmailConfig } from '../types';
 
 /**
  * Storage keys for non-sensitive UI state only
@@ -86,19 +86,6 @@ export const saveDepartmentInfo = (name: string, logoData?: string) => {
   }
 };
 
-/**
- * Save navigation layout preference (non-sensitive)
- */
-export const saveNavigationLayout = (layout: 'top' | 'left') => {
-  localStorage.setItem(STORAGE_KEYS.NAVIGATION_LAYOUT, layout);
-};
-
-/**
- * Save email platform choice (platform name only, no credentials)
- */
-export const saveEmailPlatform = (platform: string) => {
-  sessionStorage.setItem(STORAGE_KEYS.EMAIL_PLATFORM, platform);
-};
 
 /**
  * Mark email as configured (no credentials stored)
@@ -123,12 +110,6 @@ export const saveEmailConfig = (config: EmailConfig, method?: 'oauth' | 'apppass
   }
 };
 
-/**
- * Save file storage platform choice (platform name only)
- */
-export const saveFileStorage = (platform: string) => {
-  sessionStorage.setItem(STORAGE_KEYS.FILE_STORAGE_PLATFORM, platform);
-};
 
 /**
  * Mark file storage as configured (no API keys stored)
@@ -147,78 +128,6 @@ export const saveFileStorageConfig = (_config: Record<string, unknown>) => {
   );
 };
 
-/**
- * Save authentication platform choice (platform name only)
- */
-export const saveAuthenticationPlatform = (platform: string) => {
-  sessionStorage.setItem(STORAGE_KEYS.AUTHENTICATION_PLATFORM, platform);
-};
-
-/**
- * Mark authentication as configured (no secrets stored)
- *
- * SECURITY: OAuth secrets are sent directly to backend.
- * Only the configuration status is stored locally.
- */
-export const saveAuthenticationConfig = (_config: Record<string, unknown>) => {
-  // SECURITY: Do NOT store the actual config with OAuth secrets
-  // Only mark as configured
-  sessionStorage.setItem(STORAGE_KEYS.AUTH_CONFIGURED, 'true');
-
-  console.warn(
-    'SECURITY: Authentication secrets should be sent directly to the backend API. ' +
-    'The configuration has been excluded from local storage.'
-  );
-};
-
-/**
- * Mark IT team as configured (no PII stored)
- *
- * SECURITY: IT team contact info is sent directly to backend.
- * Only the configuration status is stored locally.
- */
-export const saveITTeamInfo = (_info: Record<string, unknown>) => {
-  // SECURITY: Do NOT store personal contact information
-  // Only mark as configured
-  sessionStorage.setItem(STORAGE_KEYS.IT_TEAM_CONFIGURED, 'true');
-
-  console.warn(
-    'SECURITY: IT team contact information should be sent directly to the backend API. ' +
-    'The information has been excluded from local storage.'
-  );
-};
-
-/**
- * Mark admin user as created (no password stored)
- *
- * SECURITY: Admin credentials are sent directly to backend.
- * Only the creation status is stored locally.
- */
-export const saveAdminUser = (_user: AdminUser) => {
-  // SECURITY: Do NOT store user credentials (especially password)
-  // Only mark as created
-  sessionStorage.setItem(STORAGE_KEYS.ADMIN_CREATED, 'true');
-
-  console.warn(
-    'SECURITY: Admin credentials should be sent directly to the backend API. ' +
-    'The credentials have been excluded from local storage.'
-  );
-};
-
-/**
- * Clear all onboarding data including any legacy sensitive data
- */
-export const clearOnboardingData = () => {
-  // Clear current keys
-  Object.values(STORAGE_KEYS).forEach((key) => {
-    sessionStorage.removeItem(key);
-  });
-
-  // Also clear any deprecated sensitive keys that might exist
-  DEPRECATED_SENSITIVE_KEYS.forEach((key) => {
-    sessionStorage.removeItem(key);
-  });
-};
 
 /**
  * Remove any legacy sensitive data that may have been stored
@@ -250,23 +159,4 @@ export const getLogoData = (): string | null => {
   return sessionStorage.getItem(STORAGE_KEYS.LOGO_DATA);
 };
 
-/**
- * Check if onboarding has required data
- */
-export const hasRequiredOnboardingData = (): boolean => {
-  const departmentName = getDepartmentName();
-  return !!departmentName;
-};
 
-/**
- * Check configuration status (without exposing actual config)
- */
-export const getConfigurationStatus = () => {
-  return {
-    emailConfigured: sessionStorage.getItem(STORAGE_KEYS.EMAIL_CONFIGURED) === 'true',
-    fileStorageConfigured: sessionStorage.getItem(STORAGE_KEYS.FILE_STORAGE_CONFIGURED) === 'true',
-    authConfigured: sessionStorage.getItem(STORAGE_KEYS.AUTH_CONFIGURED) === 'true',
-    itTeamConfigured: sessionStorage.getItem(STORAGE_KEYS.IT_TEAM_CONFIGURED) === 'true',
-    adminCreated: sessionStorage.getItem(STORAGE_KEYS.ADMIN_CREATED) === 'true',
-  };
-};

@@ -347,39 +347,6 @@ export const RETURN_CONDITION_OPTIONS = [
 // NFPA 1851/1852 Compliance
 // ============================================
 
-export const NFPA_INSPECTION_LEVEL_OPTIONS = [
-  { value: 'routine', label: 'Routine (Visual)' },
-  { value: 'advanced', label: 'Advanced (Liner/Seam/Barrier)' },
-  { value: 'independent', label: 'Independent (Third-Party Lab)' },
-] as const;
-
-export const NFPA_CONTAMINATION_LEVEL_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'light', label: 'Light' },
-  { value: 'moderate', label: 'Moderate' },
-  { value: 'heavy', label: 'Heavy' },
-  { value: 'gross', label: 'Gross' },
-] as const;
-
-export const NFPA_EXPOSURE_TYPE_OPTIONS = [
-  { value: 'structure_fire', label: 'Structure Fire' },
-  { value: 'vehicle_fire', label: 'Vehicle Fire' },
-  { value: 'wildland_fire', label: 'Wildland Fire' },
-  { value: 'hazmat', label: 'Hazmat' },
-  { value: 'bloodborne_pathogen', label: 'Bloodborne Pathogen' },
-  { value: 'chemical', label: 'Chemical' },
-  { value: 'smoke', label: 'Smoke' },
-  { value: 'other', label: 'Other' },
-] as const;
-
-export const NFPA_ENSEMBLE_ROLE_OPTIONS = [
-  { value: 'coat', label: 'Coat' },
-  { value: 'pants', label: 'Pants' },
-  { value: 'helmet', label: 'Helmet' },
-  { value: 'gloves', label: 'Gloves' },
-  { value: 'boots', label: 'Boots' },
-  { value: 'hood', label: 'Hood' },
-] as const;
 
 // ============================================
 // IP Exception Approval Status
@@ -421,16 +388,6 @@ export const IP_EXCEPTION_USE_CASE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-// ============================================
-// Country Risk Level
-// ============================================
-export const CountryRiskLevel = {
-  LOW: 'low',
-  MEDIUM: 'medium',
-  HIGH: 'high',
-  CRITICAL: 'critical',
-} as const;
-export type CountryRiskLevel = (typeof CountryRiskLevel)[keyof typeof CountryRiskLevel];
 
 export const COUNTRY_RISK_LEVEL_COLORS: Record<string, string> = {
   low: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20',

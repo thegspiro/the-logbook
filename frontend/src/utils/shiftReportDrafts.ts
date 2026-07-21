@@ -71,23 +71,3 @@ export function deleteDraft(shiftId: string): void {
     // silent fail
   }
 }
-
-export function listDrafts(): ShiftReportDraft[] {
-  try {
-    const index: string[] = JSON.parse(
-      localStorage.getItem(DRAFT_INDEX_KEY) || '[]',
-    ) as string[];
-    const drafts: ShiftReportDraft[] = [];
-    for (const shiftId of index) {
-      const draft = loadDraft(shiftId);
-      if (draft) drafts.push(draft);
-    }
-    return drafts.sort((a, b) => b.savedAt - a.savedAt);
-  } catch {
-    return [];
-  }
-}
-
-export function hasDraft(shiftId: string): boolean {
-  return localStorage.getItem(getDraftKey(shiftId)) !== null;
-}

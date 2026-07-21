@@ -25,9 +25,5 @@ export const AUTO_SAVE_INTERVAL_MS = 30_000; // 30 seconds
 // File uploads
 // ============================================
 export const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5 MB
-export const MAX_FORM_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+// 10 MB
 
-// ============================================
-// WebSocket reconnection
-// ============================================
-export const WS_MAX_RECONNECT_DELAY_MS = 30_000;
