@@ -177,6 +177,13 @@ class Settings(BaseSettings):
     # that rotating SECRET_KEY does not invalidate existing vote signatures.
     VOTE_SIGNING_KEY: str = ""
 
+    # Audit-log signing key — keys the HMAC-SHA256 tamper-evidence hash chain.
+    # Falls back to SECRET_KEY if not set. A DEDICATED key stored outside the
+    # application database is strongly recommended: it means an attacker who can
+    # only write audit rows (SQL access) cannot forge a valid chain, since they
+    # do not possess the key. Store it in a secrets manager / HSM, not the DB.
+    AUDIT_LOG_SIGNING_KEY: str = ""
+
     # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
     ENCRYPTION_KEY: str = ""
 

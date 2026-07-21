@@ -6,6 +6,7 @@ with cryptographic integrity verification.
 """
 
 import hashlib
+import hmac
 import json
 import time
 from datetime import UTC, datetime
@@ -15,7 +16,26 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.audit import AuditLog, AuditLogCheckpoint
+
+# Current hash-chain algorithm version. Version 1 was an *unkeyed* SHA-256 hash,
+# which is tamper-EVIDENT but not tamper-PROOF: anyone able to write audit rows
+# could recompute a fully valid chain. Version 2 keys the chain with HMAC-SHA256
+# so forging the chain requires the signing key, not just DB write access.
+_CURRENT_HASH_VERSION = 2
+_LEGACY_HASH_VERSION = 1
+
+
+def _get_audit_signing_key() -> str:
+    """Return the HMAC key for the audit chain.
+
+    Prefers a dedicated ``AUDIT_LOG_SIGNING_KEY`` (ideally stored outside the
+    app database) and falls back to ``SECRET_KEY``. Either way the key lives in
+    application config/secrets, never in the audit tables, so a DB-only attacker
+    cannot forge the chain.
+    """
+    return settings.AUDIT_LOG_SIGNING_KEY or settings.SECRET_KEY
 
 
 class AuditLogger:
@@ -48,12 +68,21 @@ class AuditLogger:
         return str(ts)
 
     @staticmethod
-    def calculate_hash(log_data: dict[str, Any], previous_hash: str) -> str:
+    def calculate_hash(
+        log_data: dict[str, Any],
+        previous_hash: str,
+        version: int = _CURRENT_HASH_VERSION,
+    ) -> str:
         """
-        Calculate SHA-256 hash for log entry
+        Calculate the integrity hash for a log entry.
 
-        Creates a deterministic hash from log entry data and previous hash,
-        forming a blockchain-inspired chain.
+        Creates a deterministic hash from log entry data and the previous hash,
+        forming a blockchain-inspired chain. ``version`` selects the algorithm:
+
+        - ``2`` (default): keyed HMAC-SHA256 — forging the chain requires the
+          signing key, not merely DB write access.
+        - ``1``: legacy unkeyed SHA-256, retained ONLY to verify entries written
+          before the keyed upgrade. Never used for new entries.
         """
         # json.dumps with sort_keys produces identical output regardless of
         # Python dict insertion order or MySQL JSON key reordering.
@@ -72,7 +101,14 @@ class AuditLogger:
             ]
         )
 
-        # Calculate SHA-256 hash
+        if version >= _CURRENT_HASH_VERSION:
+            return hmac.new(
+                _get_audit_signing_key().encode(),
+                data_string.encode(),
+                hashlib.sha256,
+            ).hexdigest()
+
+        # Legacy unkeyed SHA-256 (version 1) — verification of old rows only.
         return hashlib.sha256(data_string.encode()).hexdigest()
 
     def _build_hash_data(self, log: AuditLog) -> dict[str, Any]:
@@ -146,8 +182,10 @@ class AuditLogger:
                     "event_data": event_data,
                 }
 
-                # Calculate current hash
-                current_hash = self.calculate_hash(log_data, previous_hash)
+                # Calculate current hash with the keyed (HMAC) algorithm.
+                current_hash = self.calculate_hash(
+                    log_data, previous_hash, _CURRENT_HASH_VERSION
+                )
 
                 # Create log entry
                 log_entry = AuditLog(
@@ -165,6 +203,7 @@ class AuditLogger:
                     event_data=event_data,
                     previous_hash=previous_hash,
                     current_hash=current_hash,
+                    hash_version=_CURRENT_HASH_VERSION,
                 )
 
                 db.add(log_entry)
@@ -223,10 +262,37 @@ class AuditLogger:
             "errors": [],
         }
 
-        # Verify each log entry
+        # Verify each log entry. Each row is verified under ITS OWN recorded
+        # algorithm version so pre-upgrade (legacy SHA-256) rows still pass while
+        # new rows are checked with keyed HMAC.
+        #
+        # No-downgrade guard: once the chain has produced any keyed (v2) entry,
+        # every later entry must also be keyed. Otherwise an attacker with DB
+        # write access could rewrite the tail as forgeable legacy (v1) rows and
+        # still present a self-consistent chain. ``max_version_seen`` tracks the
+        # high-water mark; a lower-versioned row after it is treated as tamper.
+        max_version_seen = _LEGACY_HASH_VERSION
         for i, log in enumerate(logs):
+            row_version = log.hash_version or _LEGACY_HASH_VERSION
             log_data = self._build_hash_data(log)
-            calculated_hash = self.calculate_hash(log_data, log.previous_hash)
+            calculated_hash = self.calculate_hash(
+                log_data, log.previous_hash, row_version
+            )
+
+            if row_version < max_version_seen:
+                results["verified"] = False
+                results["errors"].append(
+                    {
+                        "log_id": log.id,
+                        "error": (
+                            "Hash version downgrade - entry uses an older, "
+                            "unkeyed algorithm than earlier entries"
+                        ),
+                        "row_version": row_version,
+                        "expected_min_version": max_version_seen,
+                    }
+                )
+            max_version_seen = max(max_version_seen, row_version)
 
             # Check if hash matches
             if calculated_hash != log.current_hash:
@@ -272,11 +338,16 @@ class AuditLogger:
         if not logs:
             return 0
 
+        # Rehash each row under its own stored version so this recovery tool does
+        # not silently re-baseline legacy rows into the keyed scheme (or vice
+        # versa). Because v2 hashing requires the signing key, an attacker
+        # without it cannot use this path to forge a valid keyed chain.
         previous_hash = "0" * 64
         count = 0
         for log in logs:
+            row_version = log.hash_version or _LEGACY_HASH_VERSION
             log_data = self._build_hash_data(log)
-            correct_hash = self.calculate_hash(log_data, previous_hash)
+            correct_hash = self.calculate_hash(log_data, previous_hash, row_version)
             if log.previous_hash != previous_hash or log.current_hash != correct_hash:
                 log.previous_hash = previous_hash
                 log.current_hash = correct_hash
