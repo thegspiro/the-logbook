@@ -7,6 +7,7 @@ codes are stored encrypted on the User model (see User.mfa_secret /
 User.mfa_backup_codes properties).
 """
 
+import hashlib
 import hmac
 import secrets
 import time
@@ -88,3 +89,37 @@ def generate_recovery_codes(count: int = RECOVERY_CODE_COUNT) -> list[str]:
 def normalize_recovery_code(code: str) -> str:
     """Normalize user-entered recovery codes for comparison."""
     return (code or "").strip().lower().replace(" ", "")
+
+
+def hash_recovery_code(code: str) -> str:
+    """Return the SHA-256 hex hash of a normalized recovery code.
+
+    Recovery codes are secrets used only for equality checks, so they are stored
+    HASHED (irreversible) rather than reversibly encrypted — a DB read plus the
+    encryption key must not yield usable codes.
+    """
+    return hashlib.sha256(normalize_recovery_code(code).encode()).hexdigest()
+
+
+def find_matching_recovery_code(
+    candidate: str, stored_codes: list[str]
+) -> str | None:
+    """Return the stored entry matching *candidate*, or None, in constant time.
+
+    Compares against every stored entry without early-exit to avoid leaking, via
+    timing, which/whether a code matched. Backward compatible: matches both new
+    hashed entries and any legacy plaintext entries written before hashing was
+    introduced, so existing users' recovery codes keep working until rotated.
+    """
+    target_hash = hash_recovery_code(candidate)
+    target_norm = normalize_recovery_code(candidate)
+    match: str | None = None
+    for stored in stored_codes:
+        stored_norm = normalize_recovery_code(stored)
+        # New scheme: stored_norm is the code's hash. Legacy: stored_norm is the
+        # normalized plaintext code. Each entry can only match one branch.
+        if hmac.compare_digest(stored_norm, target_hash) or hmac.compare_digest(
+            stored_norm, target_norm
+        ):
+            match = stored
+    return match

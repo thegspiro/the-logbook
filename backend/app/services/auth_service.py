@@ -200,6 +200,13 @@ class AuthService:
                     f"attempts. Try again in about {remaining_min} minute(s), or "
                     "reset your password."
                 )
+            # Strict anti-enumeration path: the locked branch returns before the
+            # real Argon2 verify below, so without a dummy hash a locked (i.e.
+            # existing) account would answer noticeably faster than the
+            # wrong-password path and be distinguishable by timing. Equalize it.
+            verify_password(
+                "dummy-password", hash_password("dummy-password", skip_validation=True)
+            )
             return None, "Incorrect username or password"
 
         # Verify password

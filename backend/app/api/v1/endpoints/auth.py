@@ -73,11 +73,15 @@ def _set_auth_cookies(
 
     # SEC: Determine the Secure flag for auth cookies.
     # 1. Explicit override via COOKIE_SECURE env var always wins.
-    # 2. Auto-detect: if ANY allowed origin uses plain http://, the browser
-    #    would silently discard Secure cookies, so we must disable it.
-    #    This covers localhost dev, LAN IPs, and any other HTTP-only setup.
+    # 2. In production/staging, ALWAYS use Secure — a stray http:// origin in
+    #    ALLOWED_ORIGINS (e.g. a legacy LAN/admin host) must never silently
+    #    downgrade session cookies to cleartext (SSL-strip / MITM exposure).
+    # 3. Otherwise (development) auto-detect: if ANY allowed origin uses plain
+    #    http://, the browser would discard Secure cookies, so disable it.
     if settings.COOKIE_SECURE is not None:
         use_secure = settings.COOKIE_SECURE
+    elif settings.ENVIRONMENT in ("production", "staging"):
+        use_secure = True
     else:
         origins = (
             settings.ALLOWED_ORIGINS
@@ -286,6 +290,9 @@ def _cookies_secure() -> bool:
     """Mirror _set_auth_cookies' Secure-flag detection for the state cookie."""
     if settings.COOKIE_SECURE is not None:
         return settings.COOKIE_SECURE
+    # Never downgrade to cleartext cookies in prod/staging (see _set_auth_cookies).
+    if settings.ENVIRONMENT in ("production", "staging"):
+        return True
     origins = (
         settings.ALLOWED_ORIGINS
         if isinstance(settings.ALLOWED_ORIGINS, list)
@@ -705,14 +712,12 @@ async def mfa_login(
         )
         verified = matched_timestep is not None
     if not verified and data.recovery_code:
-        target = mfa_service.normalize_recovery_code(data.recovery_code)
         codes = user.mfa_backup_codes or []
-        remaining = [
-            c for c in codes if mfa_service.normalize_recovery_code(c) != target
-        ]
-        if len(remaining) != len(codes):
+        matched = mfa_service.find_matching_recovery_code(data.recovery_code, codes)
+        if matched is not None:
             verified = True
-            user.mfa_backup_codes = remaining  # consume the used code
+            # Consume the used code (single-use).
+            user.mfa_backup_codes = [c for c in codes if c != matched]
 
     if not verified:
         # Count the failed second factor toward the account lockout, mirroring
@@ -794,7 +799,10 @@ async def mfa_verify_setup(
 
     recovery_codes = mfa_service.generate_recovery_codes()
     current_user.mfa_enabled = True
-    current_user.mfa_backup_codes = recovery_codes
+    # Store only hashes at rest; the plaintext is shown to the user exactly once.
+    current_user.mfa_backup_codes = [
+        mfa_service.hash_recovery_code(c) for c in recovery_codes
+    ]
     await db.commit()
 
     await log_audit_event(
@@ -892,7 +900,10 @@ async def mfa_regenerate_recovery_codes(
         raise HTTPException(status_code=400, detail="Invalid verification code")
 
     recovery_codes = mfa_service.generate_recovery_codes()
-    current_user.mfa_backup_codes = recovery_codes
+    # Store only hashes at rest; the plaintext is shown to the user exactly once.
+    current_user.mfa_backup_codes = [
+        mfa_service.hash_recovery_code(c) for c in recovery_codes
+    ]
     await db.commit()
 
     await log_audit_event(

@@ -69,3 +69,28 @@ def test_verify_totp_get_timestep_rejects_invalid_input():
     assert mfa_service.verify_totp_get_timestep(secret, "abcdef") is None
     assert mfa_service.verify_totp_get_timestep(secret, "") is None
     assert mfa_service.verify_totp_get_timestep("", pyotp.TOTP(secret).now()) is None
+
+
+def test_hash_recovery_code_is_stable_and_normalized():
+    h1 = mfa_service.hash_recovery_code("AB12C-DE34F")
+    h2 = mfa_service.hash_recovery_code(" ab12c-de34f ")
+    assert h1 == h2  # case/whitespace-insensitive
+    assert len(h1) == 64  # SHA-256 hex
+    assert h1 != "ab12c-de34f"  # not reversible plaintext
+
+
+def test_find_matching_recovery_code_hashed_store():
+    codes = mfa_service.generate_recovery_codes(3)
+    stored = [mfa_service.hash_recovery_code(c) for c in codes]
+    # Correct code (any case/spacing) matches its stored hash.
+    assert mfa_service.find_matching_recovery_code(codes[0].upper(), stored) == stored[0]
+    # Wrong code matches nothing.
+    assert mfa_service.find_matching_recovery_code("zzzzz-zzzzz", stored) is None
+
+
+def test_find_matching_recovery_code_legacy_plaintext():
+    """Recovery codes stored as plaintext (pre-hashing) must still verify."""
+    codes = mfa_service.generate_recovery_codes(2)
+    legacy = [mfa_service.normalize_recovery_code(c) for c in codes]
+    assert mfa_service.find_matching_recovery_code(codes[0], legacy) == legacy[0]
+    assert mfa_service.find_matching_recovery_code("nope-nope", legacy) is None

@@ -170,7 +170,11 @@ class Settings(BaseSettings):
     # or password". Friendlier — it stops users hammering a disguised lock — but
     # it confirms the account exists. Set False for strict anti-enumeration
     # (SEC-14) on internet-facing deployments.
-    ACCOUNT_LOCKOUT_REVEAL: bool = True
+    # Default False (strict anti-enumeration): a locked account returns the same
+    # generic "incorrect username or password" as a wrong password, never
+    # confirming the account exists. Set True to instead tell users about the
+    # temporary lock (friendlier, but reveals account existence — SEC-14).
+    ACCOUNT_LOCKOUT_REVEAL: bool = False
 
     # Vote signing key — used for HMAC-SHA256 vote integrity signatures.
     # Falls back to SECRET_KEY if not set.  A dedicated key is recommended so
