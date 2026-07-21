@@ -177,35 +177,6 @@ class LocationService:
 
         return True
 
-    async def get_location_events(
-        self,
-        location_id: UUID,
-        organization_id: str,
-        start_after: Optional[datetime] = None,
-        start_before: Optional[datetime] = None,
-        include_cancelled: bool = False,
-    ) -> List[Event]:
-        """Get all events for a location"""
-        query = (
-            select(Event)
-            .where(Event.location_id == str(location_id))
-            .where(Event.organization_id == str(organization_id))
-        )
-
-        if not include_cancelled:
-            query = query.where(Event.is_cancelled == False)  # noqa: E712
-
-        if start_after:
-            query = query.where(Event.start_datetime >= start_after)
-
-        if start_before:
-            query = query.where(Event.start_datetime <= start_before)
-
-        query = query.order_by(Event.start_datetime)
-
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
     async def get_current_events_in_check_in_window(
         self,
         location_id: UUID,

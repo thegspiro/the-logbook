@@ -295,10 +295,6 @@ class OrganizationService:
         # Return updated settings
         return await self.get_organization_settings(organization_id)
 
-    def check_contact_info_enabled(self, settings: OrganizationSettings) -> bool:
-        """Check if contact information display is enabled"""
-        return settings.contact_info_visibility.enabled
-
     async def get_enabled_modules(
         self, organization_id: UUID
     ) -> EnabledModulesResponse:
@@ -437,26 +433,5 @@ class OrganizationService:
         settings_dict["membership_id"] = mid
         org.settings = settings_dict
         await self.db.flush()
-
-        return membership_id
-
-    async def assign_next_membership_number(
-        self,
-        organization_id: UUID,
-        user: "User",
-    ) -> Optional[str]:
-        """
-        Assign a membership number to a user if they don't already have one
-        and auto-generation is enabled.
-
-        Skips assignment if the user already has a membership_number set.
-        Returns the assigned number, or None if no assignment was made.
-        """
-        if user.membership_number:
-            return user.membership_number
-
-        membership_id = await self.generate_next_membership_id(organization_id)
-        if membership_id:
-            user.membership_number = membership_id
 
         return membership_id

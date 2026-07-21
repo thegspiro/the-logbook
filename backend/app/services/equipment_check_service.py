@@ -368,43 +368,6 @@ class EquipmentCheckService:
     # Checklist Resolution for Shifts
     # ------------------------------------------------------------------
 
-    async def get_checklists_for_shift(
-        self,
-        shift_id: str,
-        user_id: str,
-        organization_id: str,
-    ) -> List[Dict[str, Any]]:
-        """
-        Resolve all applicable checklist templates for a shift and user.
-
-        1. Find the shift's apparatus_id
-        2. Look for apparatus-specific templates, fall back to type templates
-        3. Filter by user's assigned position on this shift
-        4. Return templates with completion status
-        """
-        # Get the shift
-        result = await self.db.execute(
-            select(Shift).where(
-                Shift.id == shift_id,
-                Shift.organization_id == organization_id,
-            )
-        )
-        shift = result.scalars().first()
-        if not shift:
-            raise ValueError("Shift not found")
-
-        # Get user's position on this shift
-        result = await self.db.execute(
-            select(ShiftAssignment).where(
-                ShiftAssignment.shift_id == shift_id,
-                ShiftAssignment.user_id == user_id,
-            )
-        )
-        assignment = result.scalars().first()
-        user_position = assignment.position if assignment else None
-
-        return await self._checklists_for_shift(shift, organization_id, user_position)
-
     async def _checklists_for_shift(
         self,
         shift: Shift,
@@ -414,8 +377,7 @@ class EquipmentCheckService:
     ) -> List[Dict[str, Any]]:
         """Build checklist entries for an already-loaded shift.
 
-        Shared by ``get_checklists_for_shift`` (one shift) and
-        ``get_my_checklists`` (many shifts) so the latter does not re-fetch the
+        Used by ``get_my_checklists`` (many shifts) so it does not re-fetch the
         shift/assignment it already holds. Pass ``existing_checks`` (keyed by
         template_id) to reuse a batch-loaded check map instead of querying the
         checks per shift.
@@ -1196,33 +1158,6 @@ class EquipmentCheckService:
     # ------------------------------------------------------------------
     # Expiration Handling
     # ------------------------------------------------------------------
-
-    async def get_expiring_items(
-        self, organization_id: str, days_ahead: int = 30
-    ) -> List[CheckTemplateItem]:
-        """Get items approaching expiration within N days."""
-        result = await self.db.execute(
-            select(CheckTemplateItem)
-            .join(
-                CheckTemplateCompartment,
-                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
-            )
-            .join(
-                EquipmentCheckTemplate,
-                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
-            )
-            .where(
-                EquipmentCheckTemplate.organization_id == organization_id,
-                CheckTemplateItem.has_expiration.is_(True),
-                CheckTemplateItem.expiration_date.isnot(None),
-                # Compute the cutoff in Python with a bound value rather than
-                # interpolating into a raw SQL INTERVAL fragment (fragile even
-                # though days_ahead is int-bounded upstream).
-                CheckTemplateItem.expiration_date
-                <= (date.today() + timedelta(days=days_ahead)),
-            )
-        )
-        return list(result.scalars().all())
 
     async def get_supply_overview(
         self, organization_id: str, days_ahead: int = 30

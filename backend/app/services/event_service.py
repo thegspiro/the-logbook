@@ -1043,15 +1043,6 @@ class EventService:
         await self.db.commit()
         return rsvp_count
 
-    async def get_rsvp(self, event_id: UUID, user_id: UUID) -> Optional[EventRSVP]:
-        """Get a user's RSVP for an event"""
-        result = await self.db.execute(
-            select(EventRSVP)
-            .where(EventRSVP.event_id == str(event_id))
-            .where(EventRSVP.user_id == str(user_id))
-        )
-        return result.scalar_one_or_none()
-
     async def list_event_rsvps(
         self,
         event_id: UUID,

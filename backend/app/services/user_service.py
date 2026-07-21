@@ -89,16 +89,3 @@ class UserService:
             user_responses.append(UserListResponse(**user_dict))
 
         return user_responses
-
-    async def get_user_by_id(
-        self, user_id: UUID, organization_id: UUID
-    ) -> Optional[User]:
-        """Get a user by ID within an organization"""
-        result = await self.db.execute(
-            select(User)
-            .where(User.id == str(user_id))
-            .where(User.organization_id == str(organization_id))
-            .where(User.deleted_at.is_(None))
-            .options(selectinload(User.roles))
-        )
-        return result.scalar_one_or_none()

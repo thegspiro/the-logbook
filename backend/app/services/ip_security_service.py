@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.geoip import get_geoip_service
 from app.models.ip_security import (
-    BlockedAccessAttempt,
     CountryBlockRule,
     IPException,
     IPExceptionApprovalStatus,
@@ -475,27 +474,6 @@ class IPSecurityService:
     # Query: Get Active Allowed IPs for User
     # ============================================
 
-    async def get_active_allowed_ips_for_user(
-        self,
-        db: AsyncSession,
-        user_id: str,
-    ) -> Set[str]:
-        """
-        Get all currently active (approved and not expired) allowed IPs for a user.
-        """
-        now = datetime.now(timezone.utc)
-
-        result = await db.execute(
-            select(IPException.ip_address)
-            .where(IPException.user_id == str(user_id))
-            .where(IPException.exception_type == IPExceptionType.ALLOWLIST)
-            .where(IPException.approval_status == IPExceptionApprovalStatus.APPROVED)
-            .where(IPException.valid_from <= now)
-            .where(IPException.valid_until > now)
-        )
-
-        return set(result.scalars().all())
-
     # ============================================
     # Query: Get All Active Allowed IPs
     # ============================================
@@ -672,44 +650,6 @@ class IPSecurityService:
     # ============================================
     # Blocked Access Logging
     # ============================================
-
-    async def log_blocked_attempt(
-        self,
-        db: AsyncSession,
-        ip_address: str,
-        block_reason: str,
-        user_id: Optional[str] = None,
-        request_path: Optional[str] = None,
-        request_method: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        block_details: Optional[str] = None,
-    ) -> BlockedAccessAttempt:
-        """Log a blocked access attempt."""
-        geoip = get_geoip_service()
-        country_code = None
-        country_name = None
-        if geoip:
-            geo_info = geoip.lookup_ip(ip_address)
-            country_code = geo_info.get("country_code")
-            country_name = geo_info.get("country_name")
-
-        attempt = BlockedAccessAttempt(
-            ip_address=ip_address,
-            country_code=country_code,
-            country_name=country_name,
-            user_id=user_id,
-            block_reason=block_reason,
-            block_details=block_details,
-            request_path=request_path,
-            request_method=request_method,
-            user_agent=user_agent,
-        )
-
-        db.add(attempt)
-        await db.commit()
-        await db.refresh(attempt)
-
-        return attempt
 
     # ============================================
     # Country Block Rules

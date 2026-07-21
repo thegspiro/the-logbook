@@ -223,10 +223,6 @@ class GeoIPService:
         """Get current list of blocked countries."""
         return self.blocked_countries.copy()
 
-    def clear_cache(self) -> None:
-        """Clear the IP lookup cache."""
-        self._ip_cache.clear()
-
     def close(self) -> None:
         """Close the GeoIP database reader."""
         if self.geoip_reader:

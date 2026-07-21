@@ -363,11 +363,6 @@ class Settings(BaseSettings):
             return set()
         return {ip.strip() for ip in self.TRUSTED_PROXY_IPS.split(",") if ip.strip()}
 
-    def is_production_ready(self) -> bool:
-        """Check if configuration is production-ready (no CRITICAL warnings)."""
-        warnings = self.validate_security_config() + self.validate_cors_config()
-        return not any("CRITICAL" in w for w in warnings)
-
     # ============================================
     # GeoIP and Country Blocking
     # ============================================

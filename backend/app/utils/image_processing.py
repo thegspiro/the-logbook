@@ -52,8 +52,3 @@ def optimize_image(
     except Exception as e:
         logger.warning(f"Image optimization failed, using original: {e}")
         return file_bytes
-
-
-def generate_thumbnail(file_bytes: bytes, size: tuple[int, int] = (200, 200)) -> bytes:
-    """Generate a small thumbnail from image bytes."""
-    return optimize_image(file_bytes, max_size=size, quality=70, output_format="WEBP")

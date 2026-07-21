@@ -190,15 +190,6 @@ class SalesforceSyncService:
     # Outbound: Logbook → Salesforce
     # ============================================================
 
-    async def push_member(self, member: dict[str, Any]) -> str | None:
-        """Push a single member to Salesforce as a Contact.
-
-        Returns the Salesforce Contact ID or None on failure. See
-        ``upsert_member`` for the created/updated/adopted classification.
-        """
-        sf_id, _action = await self.upsert_member(member)
-        return sf_id
-
     async def upsert_member(self, member: dict[str, Any]) -> tuple[str | None, str]:
         """Create, update, or adopt a Salesforce Contact for a member.
 
@@ -372,36 +363,6 @@ class SalesforceSyncService:
 
         record_id = await self.sf.create_record("Task", sf_fields)
         logger.info("Created Salesforce Task (training) {}", record_id)
-        return record_id
-
-    async def push_incident(
-        self, call: dict[str, Any], contact_ids: list[str] | None = None
-    ) -> str | None:
-        """Push a shift call / incident to Salesforce as a Task."""
-        sf_fields = _map_fields(
-            call,
-            INCIDENT_TO_TASK,
-            custom_overrides=self._custom_mappings.get("incident"),
-        )
-        incident_num = call.get("incident_number", "")
-        sf_fields["Subject"] = f"Incident {incident_num}"
-        sf_fields["Logbook_Call_ID__c"] = call.get("id", "")
-        sf_fields["Task_Source__c"] = "Logbook Incident"
-        sf_fields["Status"] = "Completed"
-
-        if contact_ids:
-            # Link to the first responding member's Contact
-            sf_fields["WhoId"] = contact_ids[0]
-
-        existing = await self._find_record_by_external_id(
-            "Task", "Logbook_Call_ID__c", call.get("id", "")
-        )
-        if existing:
-            await self.sf.update_record("Task", existing, sf_fields)
-            return existing
-
-        record_id = await self.sf.create_record("Task", sf_fields)
-        logger.info("Created Salesforce Task (incident) {}", record_id)
         return record_id
 
     # ============================================================

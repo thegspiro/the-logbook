@@ -76,22 +76,6 @@ class ElectionService:
     # Election CRUD helpers
     # ------------------------------------------------------------------
 
-    async def list_elections(
-        self,
-        organization_id,
-        status_filter: Optional[str] = None,
-    ) -> List[Election]:
-        """List elections for an organization, optionally filtered by status."""
-        query = select(Election).where(Election.organization_id == str(organization_id))
-
-        if status_filter:
-            status_enum = ElectionStatus(status_filter)
-            query = query.where(Election.status == status_enum)
-
-        query = query.order_by(Election.start_date.desc())
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
     async def get_election(
         self,
         election_id,
@@ -3036,17 +3020,6 @@ Best regards,
             "proxy_voting_enabled": enabled,
             "authorizations": election.proxy_authorizations or [],
         }
-
-    def _get_active_proxy_authorizations_for_user(
-        self, proxy_user_id: str, election: Election
-    ) -> List[Dict]:
-        """Return all active (non-revoked) proxy authorizations where this user is the proxy."""
-        auths = election.proxy_authorizations or []
-        return [
-            a
-            for a in auths
-            if a.get("proxy_user_id") == proxy_user_id and not a.get("revoked_at")
-        ]
 
     async def cast_proxy_vote(
         self,

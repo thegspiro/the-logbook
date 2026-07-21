@@ -85,11 +85,6 @@ _REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
 _MIN_BAR_WIDTH_INCH = 0.0075
 
 
-def _sanitize_barcode_value(raw: str) -> str:
-    """Strip non-ASCII characters that Code128 cannot encode."""
-    return "".join(ch for ch in raw if ord(ch) < 128)
-
-
 # Inventory barcode scheme — a single rule used everywhere: a human-readable
 # sequential number per organization, ``<prefix><zero-padded number>`` with a
 # 6-digit minimum (e.g. INV-000001, INV-000002, ...). The prefix (default
