@@ -14,7 +14,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    get_current_user,
+    require_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.permissions import (
@@ -40,6 +44,34 @@ from app.schemas.role import (
 from app.services.role_service import role_service
 
 router = APIRouter()
+
+
+def _enforce_permission_grant_ceiling(
+    current_user: User, permissions: list[str] | None
+) -> None:
+    """Prevent privilege escalation when minting or editing a role.
+
+    A caller may only create or update a role to contain permissions that are a
+    subset of their own effective permissions. Without this ceiling, a holder of
+    a role-management permission could add ``*`` / ``security.manage`` / etc. to
+    any role (including the org-wide ``member`` system role every user carries)
+    and mass-grant privileges beyond their own authority.
+
+    Wildcards are honored via ``permission_matches``: a caller with ``settings.*``
+    may grant ``settings.edit``, and only a ``*`` holder may put ``*`` on a role.
+    """
+    if not permissions:
+        return
+    caller_perms = _collect_user_permissions(current_user)
+    for perm in permissions:
+        if not permission_matches(perm, caller_perms):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "You cannot grant a role permissions beyond your own "
+                    f"(offending permission: {perm})."
+                ),
+            )
 
 
 # ============================================
@@ -141,6 +173,10 @@ async def create_role(
 
     **Authentication required**
     """
+    # Prevent privilege escalation: cannot mint a role that exceeds your own
+    # permissions.
+    _enforce_permission_grant_ceiling(current_user, role_data.permissions)
+
     async with handle_service_errors("Failed to create role"):
         role = await role_service.create_role(
             db=db,
@@ -218,6 +254,10 @@ async def update_role(
 
     **Authentication required**
     """
+    # Prevent privilege escalation: cannot raise a role's permissions above your
+    # own (guards the org-wide "member" system role in particular).
+    _enforce_permission_grant_ceiling(current_user, role_update.permissions)
+
     async with handle_service_errors("Failed to update role"):
         role = await role_service.update_role(
             db=db,
@@ -328,6 +368,18 @@ async def clone_role(
     Requires `roles.create` permission.
     **Authentication required**
     """
+    # Prevent privilege escalation: cloning copies all of the source role's
+    # permissions, so the caller must already hold every one of them.
+    source_role = ensure_found(
+        await role_service.get_role(
+            db=db,
+            role_id=str(role_id),
+            organization_id=str(current_user.organization_id),
+        ),
+        "Role",
+    )
+    _enforce_permission_grant_ceiling(current_user, source_role.permissions)
+
     try:
         role = await role_service.clone_role(
             db=db,

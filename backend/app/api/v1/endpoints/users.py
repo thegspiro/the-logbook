@@ -476,6 +476,31 @@ async def get_user_roles(
     }
 
 
+def _enforce_role_grant_ceiling(current_user: User, roles: list[Role]) -> None:
+    """Prevent privilege escalation through role assignment.
+
+    A caller may only grant a role whose permissions are a subset of their own
+    effective permissions. Without this ceiling, any holder of a role-management
+    permission (e.g. secretary) could assign themselves — or anyone — a wildcard
+    ("*") "System Owner" role and escalate to full control of the tenant.
+
+    Wildcards are honored via ``permission_matches``: a caller holding
+    ``settings.*`` may grant ``settings.edit``, and only a holder of ``*`` may
+    grant a role that itself contains ``*``.
+    """
+    caller_perms = _collect_user_permissions(current_user)
+    for role in roles:
+        for perm in role.permissions or []:
+            if not _has_permission(perm, caller_perms):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "You cannot assign a role that grants permissions "
+                        "beyond your own."
+                    ),
+                )
+
+
 @router.put("/{user_id}/roles", response_model=UserRoleResponse)
 async def assign_user_roles(
     user_id: UUID,
@@ -528,6 +553,10 @@ async def assign_user_roles(
             )
     else:
         roles = []
+
+    # Prevent privilege escalation: the caller cannot grant a role that exceeds
+    # their own permissions (e.g. assigning a wildcard "System Owner" role).
+    _enforce_role_grant_ceiling(current_user, list(roles))
 
     # Remove all existing role assignments
     await db.execute(delete(user_roles).where(user_roles.c.user_id == str(user_id)))
@@ -625,6 +654,10 @@ async def add_role_to_user(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="User already has this role"
         )
+
+    # Prevent privilege escalation: the caller cannot grant a role that exceeds
+    # their own permissions (e.g. assigning a wildcard "System Owner" role).
+    _enforce_role_grant_ceiling(current_user, [role])
 
     # Capture role name before commit expires the ORM object
     added_role_name = role.name

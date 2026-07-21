@@ -347,8 +347,28 @@ async def get_audit_log_entries(
     Returns paginated audit log entries for administrator review.
     All queries are themselves audit-logged.
     """
-    query = select(AuditLog).order_by(AuditLog.id.desc())
-    count_query = select(func.count()).select_from(AuditLog)
+    # Tenant isolation: AuditLog has no organization_id column, so scope by the
+    # set of user IDs belonging to the caller's organization (mirrors the
+    # canonical audit_logs.py endpoint). Without this, any org's leadership
+    # could read every organization's audit trail. System-level entries
+    # (user_id IS NULL, e.g. scheduled jobs) are intentionally excluded from the
+    # org-scoped view.
+    org_user_ids = (
+        select(User.id)
+        .where(User.organization_id == str(current_user.organization_id))
+        .scalar_subquery()
+    )
+
+    query = (
+        select(AuditLog)
+        .where(AuditLog.user_id.in_(org_user_ids))
+        .order_by(AuditLog.id.desc())
+    )
+    count_query = (
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.user_id.in_(org_user_ids))
+    )
 
     if event_type:
         query = query.where(AuditLog.event_type == event_type)
@@ -432,7 +452,20 @@ async def export_audit_logs(
     Returns audit log entries with full hash chain data for
     offline integrity verification. Requires audit.export permission.
     """
-    query = select(AuditLog).order_by(AuditLog.id)
+    # Tenant isolation: scope the export to the caller's organization (see the
+    # entries handler above). Exporting the full cross-tenant audit trail would
+    # leak every organization's usernames, IPs, and event payloads.
+    org_user_ids = (
+        select(User.id)
+        .where(User.organization_id == str(current_user.organization_id))
+        .scalar_subquery()
+    )
+
+    query = (
+        select(AuditLog)
+        .where(AuditLog.user_id.in_(org_user_ids))
+        .order_by(AuditLog.id)
+    )
 
     if event_type:
         query = query.where(AuditLog.event_type == event_type)

@@ -411,7 +411,13 @@ async def check_rate_limit(
     Usage:
         @router.post("/endpoint", dependencies=[Depends(check_rate_limit)])
     """
-    client_ip = request.client.host if request.client else "unknown"
+    # Use the proxy-aware client IP so that, behind a reverse proxy (nginx,
+    # Docker, load balancer), each real client gets its own bucket. Keying on
+    # request.client.host would collapse every client to the proxy's IP —
+    # letting 5 failed logins from any one client trip the shared bucket and
+    # lock out everyone (global DoS). get_client_ip() only trusts forwarded
+    # headers from configured TRUSTED_PROXY_IPS, so it is not spoofable.
+    client_ip = get_client_ip(request)
 
     # Try Redis-backed sliding-window rate limiting first
     try:
