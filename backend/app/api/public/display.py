@@ -13,10 +13,11 @@ on the scanning user's device.
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.schemas.event import QRCheckInData
 from app.schemas.location import LocationDisplayInfo
 from app.services.event_service import EventService
@@ -25,7 +26,24 @@ from app.services.location_service import LocationService
 router = APIRouter(prefix="/public/v1/display", tags=["public-display"])
 
 
-@router.get("/{display_code}", response_model=LocationDisplayInfo)
+async def _rate_limit_display(request: Request) -> None:
+    """Rate limit public display lookups: 60/minute per IP (DoS guard)."""
+    client_ip = get_client_ip(request)
+    is_limited, _ = await public_rate_limit(
+        key=f"pub_display:{client_ip}", max_requests=60, window_seconds=60
+    )
+    if is_limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
+        )
+
+
+@router.get(
+    "/{display_code}",
+    response_model=LocationDisplayInfo,
+    dependencies=[Depends(_rate_limit_display)],
+)
 async def get_public_location_display(
     display_code: str,
     db: AsyncSession = Depends(get_db),

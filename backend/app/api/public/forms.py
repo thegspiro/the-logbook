@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.core.security_middleware import get_client_ip, rate_limiter
+from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.models.user import Organization
 from app.schemas.forms import (
     PublicFormFieldResponse,
@@ -47,7 +47,7 @@ def _validate_slug(slug: str) -> str:
 async def _rate_limit_view(request: Request) -> None:
     """Rate limit public form views: 60 per minute per IP."""
     client_ip = get_client_ip(request)
-    is_limited, reason = rate_limiter.is_rate_limited(
+    is_limited, reason = await public_rate_limit(
         key=f"pub_form_view:{client_ip}",
         max_requests=60,
         window_seconds=60,
@@ -63,7 +63,7 @@ async def _rate_limit_view(request: Request) -> None:
 async def _rate_limit_submit(request: Request) -> None:
     """Rate limit public form submissions: 10 per minute per IP."""
     client_ip = get_client_ip(request)
-    is_limited, reason = rate_limiter.is_rate_limited(
+    is_limited, reason = await public_rate_limit(
         key=f"pub_form_submit:{client_ip}",
         max_requests=10,
         window_seconds=60,

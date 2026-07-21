@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.security_middleware import get_client_ip, rate_limiter
+from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.models.integration import Integration
 from app.services.integration_services import calcom_service, documenso_service
 from app.services.integration_services.webhook_service import (
@@ -45,7 +45,7 @@ router = APIRouter(
 async def _rate_limit_webhook(request: Request, key: str) -> None:
     """Rate limit inbound webhooks: 30/minute per IP."""
     client_ip = get_client_ip(request)
-    is_limited, reason = rate_limiter.is_rate_limited(
+    is_limited, reason = await public_rate_limit(
         f"{key}:{client_ip}", max_requests=30, window_seconds=60
     )
     if is_limited:

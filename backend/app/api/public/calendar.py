@@ -11,12 +11,13 @@ Only the member's own shift times/notes are exposed — no other members' data.
 
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.models.user import Organization
 from app.services.integration_services.ical_service import generate_ical_feed
 from app.services.scheduling_service import SchedulingService
@@ -36,7 +37,21 @@ def _shift_title(shift) -> str:
     return title
 
 
-@router.get("/{token}.ics")
+async def _rate_limit_feed(request: Request) -> None:
+    """Rate limit ICS feed polling: 60/minute per IP (DoS guard on DB-heavy
+    feed generation). Calendar apps re-poll infrequently, so this is ample."""
+    client_ip = get_client_ip(request)
+    is_limited, _ = await public_rate_limit(
+        key=f"pub_calendar:{client_ip}", max_requests=60, window_seconds=60
+    )
+    if is_limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
+        )
+
+
+@router.get("/{token}.ics", dependencies=[Depends(_rate_limit_feed)])
 async def get_personal_calendar_feed(
     token: str,
     db: AsyncSession = Depends(get_db),

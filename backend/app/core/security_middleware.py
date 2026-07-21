@@ -146,6 +146,46 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 
+async def public_rate_limit(
+    key: str,
+    max_requests: int,
+    window_seconds: int,
+    lockout_seconds: int = 0,
+) -> tuple[bool, str | None]:
+    """Distributed rate-limit for PUBLIC (unauthenticated) routes.
+
+    Public forms, webhooks, and portal/display/calendar endpoints previously
+    used only the per-process in-memory ``rate_limiter``, so behind multiple
+    uvicorn workers/containers the effective limit was multiplied by process
+    count and reset on restart. This helper uses the Redis-backed sliding-window
+    limiter (shared across all processes) and only falls back to the in-memory
+    limiter when Redis is unavailable — degraded but still protective.
+
+    Returns ``(is_limited, reason)`` to match ``RateLimiter.is_rate_limited``.
+    """
+    from app.core.cache import cache_manager
+    from app.core.security import is_rate_limited as redis_rate_limited
+
+    if cache_manager.is_connected and cache_manager.redis_client:
+        try:
+            limited = await redis_rate_limited(
+                key=f"public:{key}",
+                limit=max_requests,
+                window_seconds=window_seconds,
+                fail_closed=False,
+            )
+            return limited, ("rate_limited" if limited else None)
+        except Exception:
+            pass  # Redis error — degrade to the in-memory limiter below.
+
+    return rate_limiter.is_rate_limited(
+        key=key,
+        max_requests=max_requests,
+        window_seconds=window_seconds,
+        lockout_seconds=lockout_seconds,
+    )
+
+
 # ============================================
 # CSRF Protection
 # ============================================
@@ -649,15 +689,20 @@ async def verify_csrf_token(request: HTTPConnection) -> None:
     cookie_token = request.cookies.get("csrf_token")
 
     if not cookie_token:
-        # No CSRF cookie yet — allow (first request after login).
-        # The login response sets the csrf_token cookie for subsequent
-        # requests.  This means the very first state-changing request
-        # after login is NOT protected by the double-submit check.
-        # This is an accepted tradeoff because:
-        #   1. SameSite=Strict on auth cookies is the primary CSRF defence.
-        #   2. A browser that blocks cookies entirely cannot authenticate.
-        #   3. The window is limited to the single request before the
-        #      cookie is set.
+        # No CSRF cookie. The login/refresh response sets the csrf_token cookie
+        # together with the auth cookies, so an authenticated (cookie-bearing)
+        # caller should always have it. Distinguish the two cases:
+        #   - Cookie-authenticated request (access_token cookie present) but no
+        #     csrf_token cookie: anomalous (stripped cookie / cross-site attempt)
+        #     — reject, rather than silently skipping the double-submit check.
+        #   - No session cookie at all (unauthenticated, or a Bearer-token API
+        #     client whose header is not auto-sent by browsers and so is not
+        #     CSRF-exploitable): nothing to protect — allow.
+        if request.cookies.get("access_token"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Missing CSRF token",
+            )
         return
 
     if not request_token or not CSRFProtection.validate_token(
