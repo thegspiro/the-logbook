@@ -256,11 +256,14 @@ class Settings(BaseSettings):
                 'Generate one with: python3 -c "import secrets; print(secrets.token_urlsafe(64))"'
             )
 
-        if not self.ENCRYPTION_KEY or any(
-            p in self.ENCRYPTION_KEY for p in _insecure_patterns
+        if (
+            not self.ENCRYPTION_KEY
+            or any(p in self.ENCRYPTION_KEY for p in _insecure_patterns)
+            or len(self.ENCRYPTION_KEY) < 32
         ):
             warnings.append(
-                "CRITICAL: ENCRYPTION_KEY must be set to a secure random value. "
+                "CRITICAL: ENCRYPTION_KEY must be set to a secure random value "
+                "(min 32 chars). "
                 'Generate one with: python3 -c "import secrets; print(secrets.token_hex(32))"'
             )
 
@@ -296,7 +299,10 @@ class Settings(BaseSettings):
                 )
 
             if self.DEBUG:
-                warnings.append("WARNING: DEBUG mode should be disabled in production")
+                warnings.append(
+                    "CRITICAL: DEBUG mode must be disabled in production — it can "
+                    "expose stack traces and internal details to clients"
+                )
 
             if self.DB_ECHO:
                 warnings.append(
@@ -306,7 +312,9 @@ class Settings(BaseSettings):
 
             if self.ENABLE_DOCS:
                 warnings.append(
-                    "WARNING: API documentation should be disabled in production"
+                    "CRITICAL: API documentation (ENABLE_DOCS) must be disabled in "
+                    "production — /docs, /redoc, and /openapi.json expose the full "
+                    "API surface for enumeration"
                 )
 
             if not self.VOTE_SIGNING_KEY:
@@ -415,6 +423,12 @@ class Settings(BaseSettings):
     STORAGE_TYPE: str = "local"  # local, s3, azure, gcs
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE: int = 52428800  # 50 MB
+
+    # Hard ceiling on any request body, enforced at the ASGI edge before the
+    # body is buffered into memory (memory-exhaustion DoS backstop, independent
+    # of nginx's client_max_body_size). Sized above MAX_FILE_SIZE to leave room
+    # for multipart-upload envelope overhead.
+    MAX_REQUEST_BODY_SIZE: int = 62914560  # 60 MB
 
     # AWS S3
     AWS_ACCESS_KEY_ID: str | None = None
@@ -542,7 +556,11 @@ class Settings(BaseSettings):
     # ============================================
     # Development
     # ============================================
-    ENABLE_DOCS: bool = True  # OpenAPI/Swagger docs
+    # OpenAPI/Swagger docs. On by default for development convenience, but
+    # enabling them in production is a CRITICAL misconfiguration that blocks
+    # startup (they expose the full API surface). Production must set
+    # ENABLE_DOCS=false (the production compose override does this).
+    ENABLE_DOCS: bool = True
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = (
         "text"  # "text" for human-readable, "json" for structured JSON logging

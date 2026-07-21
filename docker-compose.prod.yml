@@ -1,0 +1,39 @@
+# ============================================
+# THE LOGBOOK — PRODUCTION OVERRIDES
+# ============================================
+# The base docker-compose.yml is a DEVELOPMENT configuration (ENVIRONMENT
+#=development, uvicorn --reload, source bind-mount, backend port published).
+# Running it as-is in production enables live code reload and a directly
+# reachable backend. Apply this override on top of it in production:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# It flips the backend to a hardened production configuration. Ensure all
+# required secrets (SECRET_KEY, ENCRYPTION_KEY, ENCRYPTION_SALT, DB_PASSWORD,
+# REDIS_PASSWORD, ALLOWED_ORIGINS) are set in .env before deploying — the app
+# refuses to start in production with insecure/missing values.
+# ============================================
+
+services:
+  backend:
+    build:
+      target: production
+    environment:
+      ENVIRONMENT: production
+      # Secure by default in production: no debug, no API docs, enforce HTTPS.
+      DEBUG: "false"
+      ENABLE_DOCS: "false"
+      SECURITY_ENFORCE_HTTPS: "true"
+      # Encrypt DB/Redis traffic (set to false only if the network is trusted).
+      DB_SSL: "true"
+      REDIS_SSL: "true"
+    # Production runs the app WITHOUT --reload (no live code execution surface).
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3001"]
+    # Do NOT bind-mount the source tree in production — use the built image.
+    volumes:
+      - uploads:/app/uploads
+    # Do NOT publish the backend port to the host in production; it sits behind
+    # the reverse proxy on the internal Docker network. The `!reset` tag clears
+    # the base file's port publish (requires Docker Compose v2.24+); on older
+    # Compose, delete the backend `ports:` block from docker-compose.yml instead.
+    ports: !reset []

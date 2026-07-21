@@ -1893,6 +1893,7 @@ class CORSMiddleware(_StarletteCORSMiddleware):
 from app.core.security_middleware import (
     IPBlockingMiddleware,
     IPLoggingMiddleware,
+    RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
     SecurityMonitoringMiddleware,
 )
@@ -1931,6 +1932,12 @@ app.add_middleware(
 
 # Compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Request body size ceiling — added last so it is the OUTERMOST middleware and
+# rejects oversized bodies before any inner layer buffers them (memory DoS).
+app.add_middleware(
+    RequestSizeLimitMiddleware, max_body_size=settings.MAX_REQUEST_BODY_SIZE
+)
 
 
 # ============================================

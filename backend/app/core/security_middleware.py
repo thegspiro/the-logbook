@@ -318,6 +318,71 @@ class InputSanitizer:
 # ============================================
 
 
+class RequestSizeLimitMiddleware:
+    """Reject oversized request bodies to prevent memory-exhaustion DoS.
+
+    Pure ASGI (see the module note on avoiding BaseHTTPMiddleware). Enforces a
+    hard body-size ceiling two ways:
+    1. Fast path — reject up front with 413 when the declared Content-Length
+       exceeds the cap, before any body is read.
+    2. Slow path — wrap ``receive`` and count streamed bytes, signalling
+       disconnect once the cap is passed, so a client that omits or lies about
+       Content-Length (chunked upload) still cannot force unbounded buffering.
+    """
+
+    def __init__(self, app: ASGIApp, max_body_size: int) -> None:
+        self.app = app
+        self.max_body_size = max_body_size
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        for name, value in scope.get("headers") or []:
+            if name == b"content-length":
+                try:
+                    declared = int(value)
+                except ValueError:
+                    break
+                if declared > self.max_body_size:
+                    await self._send_413(send)
+                    return
+                break
+
+        received = 0
+
+        async def limited_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b"") or b"")
+                if received > self.max_body_size:
+                    # Body exceeded the cap despite the header check (missing or
+                    # dishonest Content-Length). Signal disconnect so the app
+                    # stops consuming the oversized body.
+                    return {"type": "http.disconnect"}
+            return message
+
+        await self.app(scope, limited_receive, send)
+
+    @staticmethod
+    async def _send_413(send: Send) -> None:
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 413,
+                "headers": [(b"content-type", b"application/json")],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b'{"detail":"Request body too large"}',
+            }
+        )
+
+
 class SecurityHeadersMiddleware:
     """
     Add security headers to all responses.
