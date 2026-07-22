@@ -115,18 +115,51 @@ async def send_integration_notification(
     return False
 
 
-async def dispatch_chat_notifications(
-    db: AsyncSession,
-    organization_id: str,
-    kind: str,
-    payload: dict[str, Any],
-) -> int:
-    """Send a chat notification to every enabled messaging integration for an org.
+async def send_integration_summary(
+    integration: Integration, title: str, message: str
+) -> bool:
+    """Send a plain title+message summary to one chat integration.
 
-    Returns the number of successful deliveries. Never raises — each integration
-    is attempted independently and failures are logged, so one broken webhook
-    doesn't suppress the others or bubble up into the request that triggered it.
+    Used for BULK operations (e.g. "12 shifts published") where a per-entity
+    card per item would be spam. Returns True on delivery.
     """
+    itype = integration.integration_type
+    if itype not in MESSAGING_TYPES:
+        return False
+    webhook_url = _webhook_url(integration)
+    if not webhook_url:
+        return False
+
+    if itype == "discord":
+        from app.services.integration_services.discord_service import (
+            send_discord_notification,
+        )
+
+        return await send_discord_notification(
+            webhook_url, content=f"**{title}**\n{message}"
+        )
+
+    if itype == "slack":
+        from app.services.integration_services.slack_service import (
+            send_slack_notification,
+        )
+
+        return await send_slack_notification(webhook_url, f"{title}\n{message}")
+
+    if itype == "microsoft-teams":
+        from app.services.integration_services.teams_service import (
+            send_teams_notification,
+        )
+
+        return await send_teams_notification(webhook_url, title=title, message=message)
+
+    return False
+
+
+async def _enabled_messaging_integrations(
+    db: AsyncSession, organization_id: str
+) -> list[Integration]:
+    """Load an org's enabled Slack/Discord/Teams integrations. Never raises."""
     try:
         result = await db.execute(
             select(Integration).where(
@@ -135,13 +168,26 @@ async def dispatch_chat_notifications(
                 Integration.integration_type.in_(MESSAGING_TYPES),
             )
         )
-        integrations = result.scalars().all()
+        return list(result.scalars().all())
     except Exception as exc:
         logger.warning("Could not load messaging integrations: {}", exc)
-        return 0
+        return []
 
+
+async def dispatch_chat_notifications(
+    db: AsyncSession,
+    organization_id: str,
+    kind: str,
+    payload: dict[str, Any],
+) -> int:
+    """Send a per-entity chat notification to every enabled messaging integration.
+
+    Returns the number of successful deliveries. Never raises — each integration
+    is attempted independently and failures are logged, so one broken webhook
+    doesn't suppress the others or bubble up into the request that triggered it.
+    """
     sent = 0
-    for integration in integrations:
+    for integration in await _enabled_messaging_integrations(db, organization_id):
         try:
             if await send_integration_notification(integration, kind, payload):
                 sent += 1
@@ -152,10 +198,33 @@ async def dispatch_chat_notifications(
     return sent
 
 
+async def dispatch_chat_summary(
+    db: AsyncSession,
+    organization_id: str,
+    title: str,
+    message: str,
+) -> int:
+    """Send a single summary line to every enabled messaging integration.
+
+    The batch-safe counterpart to dispatch_chat_notifications: used for bulk
+    creates so a hundred generated shifts produce one message, not a hundred.
+    """
+    sent = 0
+    for integration in await _enabled_messaging_integrations(db, organization_id):
+        try:
+            if await send_integration_summary(integration, title, message):
+                sent += 1
+        except Exception as exc:
+            logger.warning(
+                "Chat summary to {} failed: {}", integration.integration_type, exc
+            )
+    return sent
+
+
 async def notify_entity_created(
     organization_id: str, kind: str, payload: dict[str, Any]
 ) -> None:
-    """Background-task entrypoint for chat notifications.
+    """Background-task entrypoint for a per-entity chat notification.
 
     Intended for ``BackgroundTasks.add_task`` so it runs AFTER the HTTP response.
     It therefore must NOT reuse the request-scoped DB session (already closed by
@@ -168,3 +237,18 @@ async def notify_entity_created(
             await dispatch_chat_notifications(db, organization_id, kind, payload)
     except Exception as exc:
         logger.warning("Background chat notification failed: {}", exc)
+
+
+async def notify_summary(organization_id: str, title: str, message: str) -> None:
+    """Background-task entrypoint for a bulk-operation summary notification.
+
+    Same self-contained, own-session, never-raises contract as
+    ``notify_entity_created``.
+    """
+    from app.core.database import async_session_factory
+
+    try:
+        async with async_session_factory() as db:
+            await dispatch_chat_summary(db, organization_id, title, message)
+    except Exception as exc:
+        logger.warning("Background chat summary failed: {}", exc)

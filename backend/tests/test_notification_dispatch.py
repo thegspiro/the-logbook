@@ -130,3 +130,53 @@ class TestDispatchChatNotifications:
         db = MagicMock()
         db.execute = AsyncMock(side_effect=RuntimeError("db down"))
         assert await nd.dispatch_chat_notifications(db, "org1", "event", {}) == 0
+
+
+class TestSummaryDispatch:
+    async def test_summary_routes_to_each_platform(self, monkeypatch):
+        discord = AsyncMock(return_value=True)
+        slack = AsyncMock(return_value=True)
+        teams = AsyncMock(return_value=True)
+        monkeypatch.setattr(
+            "app.services.integration_services.discord_service."
+            "send_discord_notification",
+            discord,
+        )
+        monkeypatch.setattr(
+            "app.services.integration_services.slack_service.send_slack_notification",
+            slack,
+        )
+        monkeypatch.setattr(
+            "app.services.integration_services.teams_service.send_teams_notification",
+            teams,
+        )
+        for itype, sender in (
+            ("discord", discord),
+            ("slack", slack),
+            ("microsoft-teams", teams),
+        ):
+            ok = await nd.send_integration_summary(
+                _integration(itype), "🚒 Shifts published", "12 shift(s) added."
+            )
+            assert ok is True
+            sender.assert_awaited()
+
+    async def test_summary_fans_out_and_counts(self, monkeypatch):
+        db = _db_returning([_integration("discord"), _integration("slack")])
+        monkeypatch.setattr(
+            nd, "send_integration_summary", AsyncMock(return_value=True)
+        )
+        sent = await nd.dispatch_chat_summary(db, "org1", "Title", "Body")
+        assert sent == 2
+
+    async def test_summary_skips_non_messaging_and_missing_webhook(self):
+        assert (
+            await nd.send_integration_summary(_integration("salesforce"), "t", "m")
+            is False
+        )
+        assert (
+            await nd.send_integration_summary(
+                _integration("discord", webhook=""), "t", "m"
+            )
+            is False
+        )

@@ -8,7 +8,7 @@ attendance tracking, and calendar views.
 from datetime import date, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,6 +78,10 @@ from app.schemas.scheduling import (
     ShiftUpdate,
     SwapRequestStatus,
     TimeOffStatus,
+)
+from app.services.integration_services.notification_dispatch import (
+    notify_entity_created,
+    notify_summary,
 )
 from app.services.scheduling_service import SchedulingService
 from app.services.shift_eligibility_service import ShiftEligibilityService
@@ -315,6 +319,7 @@ async def list_shifts(
 )
 async def create_shift(
     shift: ShiftCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
@@ -329,6 +334,21 @@ async def create_shift(
             status_code=400,
             detail=_safe_detail("Unable to create shift.", error),
         )
+    # Notify the org's chat integrations about the new shift (background).
+    platoon = getattr(result, "platoon", None)
+    start_time = getattr(result, "start_time", None)
+    end_time = getattr(result, "end_time", None)
+    background_tasks.add_task(
+        notify_entity_created,
+        str(current_user.organization_id),
+        "shift",
+        {
+            "type": f"Platoon {platoon}" if platoon else "Shift",
+            "start_time": start_time.isoformat() if start_time else "",
+            "end_time": end_time.isoformat() if end_time else "",
+            "crew": [],
+        },
+    )
     enriched = await _enrich_shifts(service, current_user.organization_id, [result])
     return enriched[0]
 
@@ -1223,6 +1243,7 @@ async def delete_pattern(
 async def generate_shifts_from_pattern(
     pattern_id: UUID,
     request: GenerateShiftsRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
@@ -1238,6 +1259,14 @@ async def generate_shifts_from_pattern(
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to generate shifts.", error)
+        )
+    # Bulk create → one summary notification, not one per generated shift.
+    if result:
+        background_tasks.add_task(
+            notify_summary,
+            str(current_user.organization_id),
+            "🚒 Shifts published",
+            f"{len(result)} shift(s) were published to the schedule.",
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, result)
     return {"shifts_created": len(result), "shifts": enriched}

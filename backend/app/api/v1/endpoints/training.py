@@ -10,7 +10,16 @@ import io
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -53,6 +62,10 @@ from app.schemas.training import (
     TrainingRequirementResponse,
     TrainingRequirementUpdate,
     UserTrainingStats,
+)
+from app.services.integration_services.notification_dispatch import (
+    notify_entity_created,
+    notify_summary,
 )
 from app.services.training_compliance import (
     _load_compliance_config,
@@ -260,6 +273,7 @@ async def list_records(
 )
 async def create_record(
     record: TrainingRecordCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -343,6 +357,22 @@ async def create_record(
         username=current_user.username,
     )
 
+    # Notify the org's chat integrations about the recorded training (background).
+    notify_member = await db.get(User, str(new_record.user_id))
+    member_name = (
+        getattr(notify_member, "full_name", None) if notify_member else None
+    ) or "A member"
+    background_tasks.add_task(
+        notify_entity_created,
+        str(current_user.organization_id),
+        "training",
+        {
+            "member_name": member_name,
+            "course_name": new_record.course_name,
+            "hours": new_record.hours_completed,
+        },
+    )
+
     response = TrainingRecordResponse.model_validate(new_record)
     response_data = response.model_dump(mode="json")
     if dupes:
@@ -398,6 +428,7 @@ async def _check_duplicate_records(
 )
 async def create_records_bulk(
     payload: BulkTrainingRecordCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -525,6 +556,14 @@ async def create_records_bulk(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+
+        # Bulk create → one summary notification, not one per record.
+        background_tasks.add_task(
+            notify_summary,
+            org_id,
+            "🎓 Training recorded",
+            f"{created} training record(s) were added.",
         )
 
     return BulkTrainingRecordResult(
