@@ -15,6 +15,7 @@ from uuid import UUID
 
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
@@ -80,6 +81,9 @@ from app.services.event_service import (
     DEFAULT_ALLOWED_RSVP_STATUSES,
     PHASE_GATE_PREFIX,
     EventService,
+)
+from app.services.integration_services.notification_dispatch import (
+    notify_entity_created,
 )
 from app.services.notifications_service import NotificationsService
 
@@ -294,6 +298,7 @@ async def list_events(
 @router.post("", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 async def create_event(
     event_data: EventCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("events.manage")),
 ):
@@ -324,6 +329,27 @@ async def create_event(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+
+        # Fan the new event out to the org's chat integrations (Slack/Discord/
+        # Teams) after the response — best-effort, runs in its own DB session.
+        event_type_value = (
+            event.event_type.value
+            if hasattr(event.event_type, "value")
+            else event.event_type
+        )
+        background_tasks.add_task(
+            notify_entity_created,
+            str(current_user.organization_id),
+            "event",
+            {
+                "title": event.title,
+                "event_type": event_type_value,
+                "start_time": (
+                    event.start_datetime.isoformat() if event.start_datetime else "TBD"
+                ),
+                "location": event.location or "",
+            },
         )
 
         return _build_event_response(event)
