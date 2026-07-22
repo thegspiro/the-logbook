@@ -14,8 +14,8 @@ already covered by the red-team review on this branch).
 | # | Module / domain | Backend | Frontend | Status |
 |---|-----------------|---------|----------|--------|
 | 1 | medical-screening | endpoints/medical_screening.py, services/medical_screening_service.py | modules/medical-screening | ✅ |
-| 2 | apparatus | endpoints/apparatus.py, services/apparatus_service.py, evoc_level_service.py | modules/apparatus | 🔄 next |
-| 3 | inventory | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py | (in-app) | ⬜ |
+| 2 | apparatus | endpoints/apparatus.py, services/apparatus_service.py, evoc_level_service.py | modules/apparatus | ✅ |
+| 3 | inventory | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py | (in-app) | 🔄 next |
 | 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | ⬜ |
 | 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | ⬜ |
 | 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ⬜ |
@@ -49,4 +49,8 @@ already covered by the red-team review on this branch).
   3 findings flagged (no safe auto-fix): MS-1 PHI plaintext at rest (MED, needs
   migration), MS-2 names never resolved in compliance/expiring (LOW), MS-3 no
   cross-org validation of referenced IDs on create (LOW). See medical-screening.md.
-  Next: apparatus.
+- #2 apparatus ✅ — 83 endpoints all authed; tenant isolation solid incl.
+  sub-resources; no SQL injection; flake8 clean. 1 finding: AP-1 create paths
+  don't validate parent apparatus is in-org (LOW). Elevated the recurring
+  create-FK-not-org-validated pattern to CROSS-CUTTING.md (XC-1). See apparatus.md.
+  Next: inventory.
