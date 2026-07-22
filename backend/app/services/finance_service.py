@@ -7,6 +7,7 @@ and QuickBooks export.
 """
 
 import csv
+import html
 import io
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -17,6 +18,8 @@ from loguru import logger
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from app.core.config import settings
 
 from app.models.finance import (
     ApprovalChain,
@@ -453,6 +456,7 @@ class FinanceService:
     ) -> list[ApprovalStepRecord]:
         """Create step records for an entity going through an approval chain"""
         records = []
+        email_targets: list[tuple[ApprovalStepRecord, ApprovalChainStep]] = []
         for step in chain.steps:
             status = ApprovalStepStatus.PENDING
 
@@ -484,12 +488,57 @@ class FinanceService:
             ):
                 record.approval_token = secrets.token_urlsafe(32)
                 record.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+                if status == ApprovalStepStatus.PENDING:
+                    email_targets.append((record, step))
 
             self.db.add(record)
             records.append(record)
 
         await self.db.flush()
+
+        # Email each external approver their token link (best-effort — a mail
+        # failure must not roll back the records the entity depends on).
+        for record, step in email_targets:
+            await self.send_approval_request_email(record, step)
+
         return records
+
+    async def send_approval_request_email(
+        self, record: ApprovalStepRecord, step: ApprovalChainStep
+    ) -> bool:
+        """Email an external ("email" approver-type) approver a token link.
+
+        The link points at the frontend approval page, which reads the token and
+        calls the public approve/deny endpoints. Best-effort: returns False and
+        logs on any problem rather than raising into the caller's transaction.
+        Sends nothing when email delivery is disabled platform-wide.
+        """
+        approver_email = (step.approver_value or "").strip()
+        token = record.approval_token
+        if not approver_email or not token:
+            return False
+
+        link = f"{settings.FRONTEND_URL.rstrip('/')}/finance/approvals/{token}"
+        safe_step = html.escape(step.name or "Approval")
+        html_body = (
+            "<p>An approval is awaiting your response in The Logbook.</p>"
+            f"<p><strong>Step:</strong> {safe_step}</p>"
+            f'<p><a href="{link}">Review and respond</a></p>'
+            "<p>This link expires in 7 days and can be used once.</p>"
+        )
+        try:
+            from app.services.email_service import EmailService
+
+            sent, _failed = await EmailService().send_email(
+                to_emails=[approver_email],
+                subject="Approval requested — The Logbook",
+                html_body=html_body,
+                template_type="finance_approval_request",
+            )
+            return sent > 0
+        except Exception as exc:
+            logger.warning("Approval request email to {} failed: {}", approver_email, exc)
+            return False
 
     async def get_approval_records(
         self, entity_type: ApprovalEntityType, entity_id: str

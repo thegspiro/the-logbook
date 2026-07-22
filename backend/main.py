@@ -25,6 +25,7 @@ from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
 from app.api.public.forms import router as public_forms_router
+from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
@@ -2065,6 +2066,10 @@ app.include_router(sf_webhook_router, prefix="/api")
 # Include Documenso & Cal.com inbound webhooks
 # (no auth — uses /api/public/v1/webhooks/{documenso,calcom})
 app.include_router(integrations_webhook_router, prefix="/api")
+
+# Include public finance approval endpoints (external approvers act via an
+# emailed token link — /api/public/v1/finance/approvals/{token})
+app.include_router(finance_approvals_router, prefix="/api")
 
 
 # Health check endpoint
