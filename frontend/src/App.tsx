@@ -76,6 +76,7 @@ import { OAuthCallbackPage } from './pages/OAuthCallbackPage';
 // Auth pages - loaded immediately for password reset flow
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { FinanceApprovalPage } from './pages/FinanceApprovalPage';
 
 /**
  * Main Application Component
@@ -177,6 +178,11 @@ function App() {
                 {/* Password Reset Pages */}
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                {/* Public external-approver page (token-authenticated) */}
+                <Route
+                  path="/finance/approvals/:token"
+                  element={<FinanceApprovalPage />}
+                />
 
                 {/* Catch all - redirect to welcome */}
                 <Route path="*" element={<Navigate to="/" replace />} />
