@@ -33,7 +33,7 @@ from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import ROLE_MEMBER
 from app.core.database import database_manager, get_db
-from app.core.security_middleware import check_rate_limit
+from app.core.security_middleware import check_rate_limit, get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
 from app.models.user import Role, User, UserStatus, user_roles
@@ -50,6 +50,7 @@ from app.schemas.user import (
     UserWithRolesResponse,
 )
 from app.services.organization_service import OrganizationService
+from app.services.security_monitoring import report_privilege_escalation_attempt
 from app.services.user_service import UserService
 from app.utils.security_notifications import notify_security_event
 
@@ -476,7 +477,12 @@ async def get_user_roles(
     }
 
 
-def _enforce_role_grant_ceiling(current_user: User, roles: list[Role]) -> None:
+async def _enforce_role_grant_ceiling(
+    current_user: User,
+    roles: list[Role],
+    db: AsyncSession,
+    ip_address: str | None,
+) -> None:
     """Prevent privilege escalation through role assignment.
 
     A caller may only grant a role whose permissions are a subset of their own
@@ -487,11 +493,17 @@ def _enforce_role_grant_ceiling(current_user: User, roles: list[Role]) -> None:
     Wildcards are honored via ``permission_matches``: a caller holding
     ``settings.*`` may grant ``settings.edit``, and only a holder of ``*`` may
     grant a role that itself contains ``*``.
+
+    A blocked attempt is reported to security monitoring (a CRITICAL alert), so
+    a user probing for an escalation path is visible even though it's denied.
     """
     caller_perms = _collect_user_permissions(current_user)
     for role in roles:
         for perm in role.permissions or []:
             if not _has_permission(perm, caller_perms):
+                await report_privilege_escalation_attempt(
+                    db, str(current_user.id), f"role:{role.id}", ip_address
+                )
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=(
@@ -505,6 +517,7 @@ def _enforce_role_grant_ceiling(current_user: User, roles: list[Role]) -> None:
 async def assign_user_roles(
     user_id: UUID,
     role_assignment: UserRoleAssignment,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
@@ -556,7 +569,9 @@ async def assign_user_roles(
 
     # Prevent privilege escalation: the caller cannot grant a role that exceeds
     # their own permissions (e.g. assigning a wildcard "System Owner" role).
-    _enforce_role_grant_ceiling(current_user, list(roles))
+    await _enforce_role_grant_ceiling(
+        current_user, list(roles), db, get_client_ip(request)
+    )
 
     # Remove all existing role assignments
     await db.execute(delete(user_roles).where(user_roles.c.user_id == str(user_id)))
@@ -604,6 +619,7 @@ async def assign_user_roles(
 async def add_role_to_user(
     user_id: UUID,
     role_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
@@ -657,7 +673,7 @@ async def add_role_to_user(
 
     # Prevent privilege escalation: the caller cannot grant a role that exceeds
     # their own permissions (e.g. assigning a wildcard "System Owner" role).
-    _enforce_role_grant_ceiling(current_user, [role])
+    await _enforce_role_grant_ceiling(current_user, [role], db, get_client_ip(request))
 
     # Capture role name before commit expires the ORM object
     added_role_name = role.name

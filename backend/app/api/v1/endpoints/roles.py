@@ -10,7 +10,7 @@ Post-Onboarding Role Management endpoints for:
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,6 +21,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.security_middleware import get_client_ip
 from app.core.permissions import (
     get_admin_role_slugs,
     get_permission_details,
@@ -42,12 +43,16 @@ from app.schemas.role import (
     UserPermissionsResponse,
 )
 from app.services.role_service import role_service
+from app.services.security_monitoring import report_privilege_escalation_attempt
 
 router = APIRouter()
 
 
-def _enforce_permission_grant_ceiling(
-    current_user: User, permissions: list[str] | None
+async def _enforce_permission_grant_ceiling(
+    current_user: User,
+    permissions: list[str] | None,
+    db: AsyncSession,
+    ip_address: str | None,
 ) -> None:
     """Prevent privilege escalation when minting or editing a role.
 
@@ -59,12 +64,17 @@ def _enforce_permission_grant_ceiling(
 
     Wildcards are honored via ``permission_matches``: a caller with ``settings.*``
     may grant ``settings.edit``, and only a ``*`` holder may put ``*`` on a role.
+
+    A blocked attempt is reported to security monitoring (a CRITICAL alert).
     """
     if not permissions:
         return
     caller_perms = _collect_user_permissions(current_user)
     for perm in permissions:
         if not permission_matches(perm, caller_perms):
+            await report_privilege_escalation_attempt(
+                db, str(current_user.id), f"permission:{perm}", ip_address
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
@@ -158,6 +168,7 @@ async def list_roles(
 @router.post("", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     role_data: RoleCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
@@ -175,7 +186,9 @@ async def create_role(
     """
     # Prevent privilege escalation: cannot mint a role that exceeds your own
     # permissions.
-    _enforce_permission_grant_ceiling(current_user, role_data.permissions)
+    await _enforce_permission_grant_ceiling(
+        current_user, role_data.permissions, db, get_client_ip(request)
+    )
 
     async with handle_service_errors("Failed to create role"):
         role = await role_service.create_role(
@@ -235,6 +248,7 @@ async def get_role(
 async def update_role(
     role_id: UUID,
     role_update: RoleUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
@@ -256,7 +270,9 @@ async def update_role(
     """
     # Prevent privilege escalation: cannot raise a role's permissions above your
     # own (guards the org-wide "member" system role in particular).
-    _enforce_permission_grant_ceiling(current_user, role_update.permissions)
+    await _enforce_permission_grant_ceiling(
+        current_user, role_update.permissions, db, get_client_ip(request)
+    )
 
     async with handle_service_errors("Failed to update role"):
         role = await role_service.update_role(
@@ -352,6 +368,7 @@ async def delete_role(
 async def clone_role(
     role_id: UUID,
     clone_request: RoleCloneRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
@@ -378,7 +395,9 @@ async def clone_role(
         ),
         "Role",
     )
-    _enforce_permission_grant_ceiling(current_user, source_role.permissions)
+    await _enforce_permission_grant_ceiling(
+        current_user, source_role.permissions, db, get_client_ip(request)
+    )
 
     try:
         role = await role_service.clone_role(

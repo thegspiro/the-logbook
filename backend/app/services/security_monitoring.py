@@ -978,3 +978,32 @@ class SecurityMonitoringService:
 
 # Global instance
 security_monitor = SecurityMonitoringService()
+
+
+async def report_privilege_escalation_attempt(
+    db: AsyncSession,
+    user_id: str,
+    target_resource: str,
+    ip_address: Optional[str] = None,
+) -> None:
+    """Record a BLOCKED privilege-escalation attempt (best-effort).
+
+    Called from the role/permission-grant ceiling checks when a caller is denied
+    for trying to grant permissions beyond their own authority. Fires a CRITICAL
+    alert and commits it so the record survives the 403 the caller is about to
+    raise — ``_add_alert`` only flushes, and the raise would otherwise roll the
+    session back. Never propagates: security monitoring must not break the
+    request it observes.
+    """
+    try:
+        alert = await security_monitor.detect_privilege_escalation(
+            db,
+            user_id=user_id,
+            action="modify_permissions",
+            target_resource=target_resource,
+            ip_address=ip_address,
+        )
+        if alert is not None:
+            await db.commit()
+    except Exception as exc:
+        logger.warning("Privilege-escalation reporting failed: {}", exc)

@@ -58,6 +58,7 @@ from app.schemas.auth import (
 from app.schemas.organization import AuthSettings
 from app.services import mfa_service
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
+from app.services.security_monitoring import security_monitor
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -602,7 +603,23 @@ async def login(
             detail="Service temporarily unavailable. Please try again in a few moments.",
         )
 
+    login_ip = get_client_ip(request)
+
     if not user:
+        # Feed the failed attempt to brute-force detection. It fires a HIGH
+        # alert once the per-IP/per-user hourly threshold is crossed. Best-effort
+        # and must never break the login response. Because the alert row is only
+        # flushed (not committed) and this handler then raises (rolling back the
+        # session), commit when an alert actually fired so it persists — mirroring
+        # authenticate_user's failed-attempt commit.
+        try:
+            alert = await security_monitor.detect_brute_force(
+                db, ip=login_ip, user_id=None, success=False
+            )
+            if alert is not None:
+                await db.commit()
+        except Exception:
+            logger.debug("brute-force detection failed on login failure")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_error or "Incorrect username or password",
@@ -615,6 +632,14 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive. Please contact an administrator.",
         )
+
+    # Correct password: clear the brute-force counters for this IP/user.
+    try:
+        await security_monitor.detect_brute_force(
+            db, ip=login_ip, user_id=str(user.id), success=True
+        )
+    except Exception:
+        logger.debug("brute-force counter reset failed on login success")
 
     # If MFA is enabled, password alone is not enough: issue a short-lived
     # challenge token and require the second factor before any session cookie.
