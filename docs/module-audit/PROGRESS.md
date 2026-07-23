@@ -17,8 +17,8 @@ already covered by the red-team review on this branch).
 | 2 | apparatus | endpoints/apparatus.py, services/apparatus_service.py, evoc_level_service.py | modules/apparatus | ✅ |
 | 3 | inventory | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py | (in-app) | ✅ |
 | 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | ✅ |
-| 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | 🔄 next |
-| 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ⬜ |
+| 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | ✅ |
+| 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | 🔄 next |
 | 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ⬜ |
 | 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ⬜ |
 | 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ⬜ |
@@ -71,4 +71,19 @@ already covered by the red-team review on this branch).
   clean 400 instead of a DB 500). 2 flagged: FAC-3 create/update FK-validation
   gaps (XC-1), FAC-4 `list_facilities` search implemented but not exposed by the
   endpoint. See facilities.md. XC-1 now confirmed in every module audited.
-  Next: elections.
+- #5 elections ✅ — security-critical; token voting path is largely sound
+  (512-bit tokens, single-use, org derived from token, window enforced,
+  concurrency-locked). **2 HIGH fixes applied:** ELEC-1 (`cast_vote` never
+  checked `eligibility.is_eligible` → any member could vote in a draft/closed
+  election, out of window, or off the eligible list; added the gate mirroring
+  `cast_proxy_vote`), ELEC-2 (cross-tenant IDOR: `update_candidate`/
+  `delete_candidate` fetched the target with no org filter → org-A admin could
+  edit/delete org-B candidates; added `get_election(id, org)` ownership gate).
+  4 MED flagged (design/behavior-change, not auto-fixed): ELEC-3 dedup hash
+  excludes candidate_id so approval/multi-vote is broken, ELEC-4
+  rollback_election salt-loss enables double-voting, ELEC-5 tokens stored
+  plaintext despite "hashed" docs, ELEC-6 anonymous ballots de-anonymizable via
+  DB read until close. 3 LOW: ELEC-7 (XC-1 candidate user_id), ELEC-8 receipt
+  never returned, ELEC-9 dead branch. New cross-cutting pattern XC-3 (admin
+  by-id writes scoped only by permission, not org). See elections.md.
+  Next: meetings/minutes.

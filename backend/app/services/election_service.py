@@ -845,10 +845,16 @@ class ElectionService:
 
         Returns: (Vote object, error message)
         """
-        # Check eligibility
+        # Check eligibility. This gate is authoritative: check_voter_eligibility
+        # enforces election status, the open/close window, restricted
+        # eligible-voter lists, and membership-tier/attendance rules. Skipping it
+        # would let any authenticated member vote in a draft/closed election,
+        # outside the voting window, or without being on the eligible list.
         eligibility = await self.check_voter_eligibility(
             user_id, election_id, organization_id
         )
+        if not eligibility.is_eligible:
+            return None, eligibility.reason or "You are not eligible to vote"
 
         # Get election for further checks
         result = await self.db.execute(

@@ -1119,6 +1119,16 @@ async def update_candidate(
     **Authentication required**
     **Requires permission: elections.manage**
     """
+    # Confirm the election belongs to the caller's org before touching the
+    # candidate — the candidate is fetched by (id, election_id) path params
+    # only, so without this an admin could edit another org's candidate.
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+
     result = await db.execute(
         select(Candidate)
         .where(Candidate.id == str(candidate_id))
@@ -1173,6 +1183,16 @@ async def delete_candidate(
     **Authentication required**
     **Requires permission: elections.manage**
     """
+    # Confirm the election belongs to the caller's org before touching the
+    # candidate — the candidate is fetched by (id, election_id) path params
+    # only, so without this an admin could delete another org's candidate.
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+
     result = await db.execute(
         select(Candidate)
         .where(Candidate.id == str(candidate_id))
