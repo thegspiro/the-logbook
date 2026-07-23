@@ -15,8 +15,8 @@ already covered by the red-team review on this branch).
 |---|-----------------|---------|----------|--------|
 | 1 | medical-screening | endpoints/medical_screening.py, services/medical_screening_service.py | modules/medical-screening | ✅ |
 | 2 | apparatus | endpoints/apparatus.py, services/apparatus_service.py, evoc_level_service.py | modules/apparatus | ✅ |
-| 3 | inventory | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py | (in-app) | 🔄 next |
-| 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | ⬜ |
+| 3 | inventory | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py | (in-app) | ✅ |
+| 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | 🔄 next |
 | 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | ⬜ |
 | 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ⬜ |
 | 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ⬜ |
@@ -53,4 +53,14 @@ already covered by the red-team review on this branch).
   sub-resources; no SQL injection; flake8 clean. 1 finding: AP-1 create paths
   don't validate parent apparatus is in-org (LOW). Elevated the recurring
   create-FK-not-org-validated pattern to CROSS-CUTTING.md (XC-1). See apparatus.md.
-  Next: inventory.
+- #3 inventory ✅ — 116 endpoints all authed (WS authenticates manually);
+  service-layer tenant isolation solid on all by-id reads/updates/deletes; label
+  service org-scoped; no raw SQL; flake8 clean. **2 fixes applied:** INV-1 (real
+  AttributeError bug in `get_item_history` — `i.quantity`/`i.reason` →
+  `quantity_issued`/`issue_reason`), INV-2 (MEDIUM: `create_equipment_request`
+  looked up the item without an org filter → cross-tenant read + foreign FK
+  stored; now org-scoped + 404). 4 flagged: INV-3 maintenance-record item not
+  org-validated + silent no-op (LOW), INV-4 broad create/update FK-validation
+  gaps (XC-1 cluster), INV-5 reorder search LIKE not wildcard-escaped (LOW),
+  INV-6 kit `optional` flag read but never persisted (LOW). See inventory.md.
+  Next: facilities.

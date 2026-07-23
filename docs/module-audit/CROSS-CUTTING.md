@@ -4,7 +4,9 @@ Patterns that recur across modules, aggregated here so a single fix can address
 the whole class rather than one module at a time.
 
 ## XC-1 — Create/update paths don't validate referenced FK ids are in-org
-**Seen in:** medical-screening (MS-3), apparatus (AP-1). Expected in more.
+**Seen in:** medical-screening (MS-3), apparatus (AP-1), inventory (INV-3,
+INV-4 — the largest cluster: ~15 create/update methods across the service and
+endpoints). Confirmed recurring; expected in more modules.
 
 Many create endpoints set `organization_id` from `current_user` (correct) but
 accept client-supplied foreign-key ids (`user_id`, `prospect_id`,
