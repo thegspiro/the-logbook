@@ -1221,24 +1221,22 @@ class FacilitiesService:
         if not facility:
             raise ValueError("Invalid facility")
 
-        # Verify maintenance type (if provided)
-        if maintenance_data.maintenance_type_id:
-            maint_type = await self.get_maintenance_type(
-                maintenance_data.maintenance_type_id, organization_id
-            )
-            if not maint_type:
-                raise ValueError("Invalid maintenance type")
+        # maintenance_type_id is NOT NULL on the model, but the Create schema
+        # declares it optional — guard here so a missing value returns a clean
+        # 400 instead of a DB IntegrityError (500) at insert time.
+        if not maintenance_data.maintenance_type_id:
+            raise ValueError("maintenance_type_id is required")
+        maint_type = await self.get_maintenance_type(
+            maintenance_data.maintenance_type_id, organization_id
+        )
+        if not maint_type:
+            raise ValueError("Invalid maintenance type")
 
         # Validate historic entries
         if maintenance_data.is_historic and not maintenance_data.occurred_date:
             raise ValueError("occurred_date is required for historic entries")
 
         dump = maintenance_data.model_dump()
-        # Convert attachment models to dicts for JSON storage
-        if dump.get("attachments"):
-            dump["attachments"] = [
-                a if isinstance(a, dict) else a for a in dump["attachments"]
-            ]
 
         maintenance = FacilityMaintenance(
             organization_id=organization_id,
@@ -1275,12 +1273,6 @@ class FacilitiesService:
             return None
 
         update_data = maintenance_data.model_dump(exclude_unset=True)
-
-        # Convert attachment models to dicts for JSON storage
-        if "attachments" in update_data and update_data["attachments"]:
-            update_data["attachments"] = [
-                a if isinstance(a, dict) else a for a in update_data["attachments"]
-            ]
 
         # Handle completion
         if (
@@ -1498,11 +1490,6 @@ class FacilitiesService:
             raise ValueError("Invalid facility")
 
         dump = inspection_data.model_dump()
-        # Convert attachment models to dicts for JSON storage
-        if dump.get("attachments"):
-            dump["attachments"] = [
-                a if isinstance(a, dict) else a for a in dump["attachments"]
-            ]
 
         inspection = FacilityInspection(
             organization_id=organization_id,
@@ -1528,12 +1515,6 @@ class FacilitiesService:
             return None
 
         update_data = inspection_data.model_dump(exclude_unset=True)
-
-        # Convert attachment models to dicts for JSON storage
-        if "attachments" in update_data and update_data["attachments"]:
-            update_data["attachments"] = [
-                a if isinstance(a, dict) else a for a in update_data["attachments"]
-            ]
 
         for field, value in update_data.items():
             setattr(inspection, field, value)
@@ -2302,11 +2283,6 @@ class FacilitiesService:
             raise ValueError("Invalid facility")
 
         dump = project_data.model_dump()
-        # Convert attachment models to dicts for JSON storage
-        if dump.get("attachments"):
-            dump["attachments"] = [
-                a if isinstance(a, dict) else a for a in dump["attachments"]
-            ]
 
         project = FacilityCapitalProject(
             organization_id=organization_id,
@@ -2332,12 +2308,6 @@ class FacilitiesService:
             return None
 
         update_data = project_data.model_dump(exclude_unset=True)
-
-        # Convert attachment models to dicts for JSON storage
-        if "attachments" in update_data and update_data["attachments"]:
-            update_data["attachments"] = [
-                a if isinstance(a, dict) else a for a in update_data["attachments"]
-            ]
 
         for field, value in update_data.items():
             setattr(project, field, value)
@@ -2420,11 +2390,6 @@ class FacilitiesService:
             raise ValueError("Invalid facility")
 
         dump = policy_data.model_dump()
-        # Convert attachment models to dicts for JSON storage
-        if dump.get("attachments"):
-            dump["attachments"] = [
-                a if isinstance(a, dict) else a for a in dump["attachments"]
-            ]
 
         policy = FacilityInsurancePolicy(
             organization_id=organization_id,
@@ -2450,12 +2415,6 @@ class FacilitiesService:
             return None
 
         update_data = policy_data.model_dump(exclude_unset=True)
-
-        # Convert attachment models to dicts for JSON storage
-        if "attachments" in update_data and update_data["attachments"]:
-            update_data["attachments"] = [
-                a if isinstance(a, dict) else a for a in update_data["attachments"]
-            ]
 
         for field, value in update_data.items():
             setattr(policy, field, value)

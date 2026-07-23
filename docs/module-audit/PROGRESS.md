@@ -16,8 +16,8 @@ already covered by the red-team review on this branch).
 | 1 | medical-screening | endpoints/medical_screening.py, services/medical_screening_service.py | modules/medical-screening | ✅ |
 | 2 | apparatus | endpoints/apparatus.py, services/apparatus_service.py, evoc_level_service.py | modules/apparatus | ✅ |
 | 3 | inventory | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py | (in-app) | ✅ |
-| 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | 🔄 next |
-| 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | ⬜ |
+| 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | ✅ |
+| 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | 🔄 next |
 | 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ⬜ |
 | 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ⬜ |
 | 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ⬜ |
@@ -63,4 +63,12 @@ already covered by the red-team review on this branch).
   org-validated + silent no-op (LOW), INV-4 broad create/update FK-validation
   gaps (XC-1 cluster), INV-5 reorder search LIKE not wildcard-escaped (LOW),
   INV-6 kit `optional` flag read but never persisted (LOW). See inventory.md.
-  Next: facilities.
+- #4 facilities ✅ — 95 endpoints all `require_permission`-gated; tenant
+  isolation solid on every by-id op; the one search is properly LIKE-escaped; no
+  raw SQL. **2 fixes applied:** FAC-1 (removed 8 dead no-op "attachment
+  conversion" blocks + misleading comments), FAC-2 (LOW: `maintenance_type_id`
+  is NOT NULL but schema-optional → added a guard so a missing value returns a
+  clean 400 instead of a DB 500). 2 flagged: FAC-3 create/update FK-validation
+  gaps (XC-1), FAC-4 `list_facilities` search implemented but not exposed by the
+  endpoint. See facilities.md. XC-1 now confirmed in every module audited.
+  Next: elections.
