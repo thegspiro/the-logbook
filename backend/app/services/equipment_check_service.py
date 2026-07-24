@@ -162,12 +162,18 @@ class EquipmentCheckService:
         if not source:
             return None
 
-        # Look up apparatus to get name
+        # Look up apparatus (org-scoped) to get the name and to reject cloning
+        # onto another org's apparatus id.
         result = await self.db.execute(
-            select(Apparatus).where(Apparatus.id == target_apparatus_id)
+            select(Apparatus).where(
+                Apparatus.id == target_apparatus_id,
+                Apparatus.organization_id == organization_id,
+            )
         )
         apparatus = result.scalars().first()
-        apparatus_name = apparatus.name if apparatus else ""
+        if apparatus is None:
+            raise ValueError("Target apparatus not found")
+        apparatus_name = apparatus.name or ""
 
         clone_name = (
             f"{apparatus_name} - {source.name}" if apparatus_name else source.name
@@ -559,13 +565,20 @@ class EquipmentCheckService:
     async def _update_apparatus_deficiency(
         self,
         apparatus_id: Optional[str],
+        organization_id: str,
         overall_status: str,
     ) -> None:
         """Update the deficiency flag on an apparatus after a check."""
         if not apparatus_id:
             return
+        # Scope to the caller's org: apparatus_id can be client-supplied
+        # (standalone checks), and this mutates safety state (has_deficiency),
+        # so a foreign id must never match.
         apparatus_result = await self.db.execute(
-            select(Apparatus).where(Apparatus.id == apparatus_id)
+            select(Apparatus).where(
+                Apparatus.id == apparatus_id,
+                Apparatus.organization_id == organization_id,
+            )
         )
         apparatus = apparatus_result.scalars().first()
         if not apparatus:
@@ -581,16 +594,32 @@ class EquipmentCheckService:
     async def _load_template_items_map(
         self,
         items_data: List[Dict[str, Any]],
+        organization_id: str,
     ) -> Dict[str, CheckTemplateItem]:
-        """Load CheckTemplateItem records referenced by the submitted items."""
+        """Load CheckTemplateItem records referenced by the submitted items.
+
+        Scoped to the caller's org via the compartment→template join:
+        _create_check_items writes serial/lot numbers back onto these rows, so
+        a foreign template_item_id must never resolve to a loaded record.
+        """
         template_item_ids = [
             i.get("template_item_id") for i in items_data if i.get("template_item_id")
         ]
         template_items_map: Dict[str, CheckTemplateItem] = {}
         if template_item_ids:
             tmpl_result = await self.db.execute(
-                select(CheckTemplateItem).where(
-                    CheckTemplateItem.id.in_(template_item_ids)
+                select(CheckTemplateItem)
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateItem.compartment_id == CheckTemplateCompartment.id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    CheckTemplateCompartment.template_id == EquipmentCheckTemplate.id,
+                )
+                .where(
+                    CheckTemplateItem.id.in_(template_item_ids),
+                    EquipmentCheckTemplate.organization_id == organization_id,
                 )
             )
             for ti in tmpl_result.scalars().all():
@@ -690,10 +719,14 @@ class EquipmentCheckService:
                     f"Items do not belong to template: " f"{', '.join(invalid)}"
                 )
 
-        template_items_map = await self._load_template_items_map(items_data)
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
         await self._create_check_items(check.id, items_data, template_items_map)
 
-        await self._update_apparatus_deficiency(shift.apparatus_id, overall_status)
+        await self._update_apparatus_deficiency(
+            shift.apparatus_id, organization_id, overall_status
+        )
 
         # Collect failed item details for notifications
         critical_items: List[Dict[str, Any]] = []
@@ -760,6 +793,17 @@ class EquipmentCheckService:
             raise ValueError("Template not found")
 
         apparatus_id = data.get("apparatus_id") or template.apparatus_id
+        # A client-supplied apparatus_id must belong to the caller's org — the
+        # template's own apparatus_id is already org-scoped.
+        if data.get("apparatus_id"):
+            appt_result = await self.db.execute(
+                select(Apparatus.id).where(
+                    Apparatus.id == apparatus_id,
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            if appt_result.scalar_one_or_none() is None:
+                raise ValueError("Apparatus not found")
 
         items_data = data.pop("items", [])
 
@@ -790,10 +834,14 @@ class EquipmentCheckService:
         self.db.add(check)
         await self.db.flush()
 
-        template_items_map = await self._load_template_items_map(items_data)
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
         await self._create_check_items(check.id, items_data, template_items_map)
 
-        await self._update_apparatus_deficiency(apparatus_id, overall_status)
+        await self._update_apparatus_deficiency(
+            apparatus_id, organization_id, overall_status
+        )
 
         try:
             await self.db.commit()

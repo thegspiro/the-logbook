@@ -1258,7 +1258,9 @@ async def swap_item_lot(
     template_item_id: str,
     data: LotSwapRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.manage", "inventory.manage")
+    ),
 ):
     """Swap a ready-stock lot onto the apparatus for a checklist item.
 

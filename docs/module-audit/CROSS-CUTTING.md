@@ -20,11 +20,15 @@ dominant cross-cutting pattern.
 the target by `(id, election_id)` path params with no `organization_id` filter;
 `require_permission` only asserts the permission in the caller's *own* org).
 Distinct from XC-1: this is a live cross-tenant **write/delete**, not just a
-stored dangling FK. Fixed in-place for elections by gating on
-`get_election(id, current_user.organization_id)` first. **Action:** when
-auditing remaining modules, specifically check that every `manage`-gated
-update/delete resolves its target through an org-scoped fetch — permission
-checks alone do not scope the object.
+stored dangling FK. Also seen in equipment-check (EC-4 — `clone_template`
+looked up the target apparatus by id with no org filter and attached the clone
+to it) and, most severely, EC-1 (a client-supplied `apparatus_id` on a
+standalone check mutated another org's `has_deficiency` safety flag). Fixed
+in-place each time by org-scoping the target lookup. **Action:** when auditing
+remaining modules, specifically check that every `manage`-gated update/delete —
+and every helper that mutates a row fetched by a client-supplied id — resolves
+its target through an org-scoped fetch; permission checks alone do not scope the
+object.
 
 Many create endpoints set `organization_id` from `current_user` (correct) but
 accept client-supplied foreign-key ids (`user_id`, `prospect_id`,

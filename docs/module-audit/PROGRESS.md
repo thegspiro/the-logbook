@@ -19,8 +19,8 @@ already covered by the red-team review on this branch).
 | 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | ✅ |
 | 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | ✅ |
 | 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ✅ |
-| 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | 🔄 next |
-| 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ⬜ |
+| 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ✅ |
+| 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | 🔄 next |
 | 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ⬜ |
 | 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ⬜ |
 | 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ⬜ |
@@ -95,4 +95,18 @@ already covered by the red-team review on this branch).
   `.ilike()` calls missing `escape="\\"` so LIKE-escaping was a no-op). 2
   flagged: MM-3 (MEDIUM: draft/executive minutes readable by any `minutes.view`
   holder — needs a product decision + permission tier), MM-4 (XC-1 FK-validation
-  gaps). See meetings-minutes.md. Next: equipment-check.
+  gaps). See meetings-minutes.md.
+- #7 equipment-check ✅ — heaviest iteration; check-submission path had real
+  cross-tenant writes. **5 fixes applied:** EC-1 (HIGH — client `apparatus_id`
+  on a standalone check mutated another org's `has_deficiency` safety flag;
+  org-scoped `_update_apparatus_deficiency` + validate apparatus_id in-org),
+  EC-2 (MED — `submit_check` wrote serial/lot back onto foreign template items;
+  org-scoped `_load_template_items_map` via compartment→template join), EC-3
+  (MED — `swap_item_lot` inventory write required no permission; added
+  `equipment_check.manage`/`inventory.manage`), EC-4 (MED — `clone_template`
+  attached clone to unvalidated apparatus; org-scoped lookup; XC-3), EC-5 (LOW —
+  unescaped LIKE; prior commit). 6 flagged: EC-6 create_report trainee_id (XC-1),
+  EC-7 read endpoints bypass equipment_check.view, EC-8 unscoped changelog reads,
+  EC-9 get_report fragile no-org getter, EC-10 complete_incomplete_check skips
+  auto-fail rule, EC-11 compliance metrics stubbed. See equipment-check.md.
+  Next: documents.
