@@ -1939,8 +1939,13 @@ class EquipmentCheckService:
         if apparatus_id:
             base_q = base_q.where(ShiftEquipmentCheck.apparatus_id == apparatus_id)
         if item_name:
+            # Escape LIKE wildcards so a literal % or _ in the filter doesn't
+            # act as a wildcard (declare the escape char so it's honored).
+            safe_item = (
+                item_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             base_q = base_q.where(
-                ShiftEquipmentCheckItem.item_name.ilike(f"%{item_name}%")
+                ShiftEquipmentCheckItem.item_name.ilike(f"%{safe_item}%", escape="\\")
             )
 
         # Count
