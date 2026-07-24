@@ -9,6 +9,8 @@ interface used by the documents API endpoint (using direct returns
 and HTTPException-style error handling rather than tuple returns).
 """
 
+import asyncio
+import os
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
@@ -190,7 +192,9 @@ class DocumentsService:
             return True
         folder = await self.get_folder_by_id(document.folder_id, organization_id)
         if folder is None:
-            return True
+            # Fail closed: a document that references a folder we can't resolve
+            # must not become readable by falling through the ACL.
+            return False
         return self.can_access_folder(folder, user)
 
     async def accessible_folder_ids(
@@ -345,8 +349,21 @@ class DocumentsService:
         if not document:
             return False
 
+        file_path = document.file_path
         await self.db.delete(document)
         await self.db.commit()
+
+        # Remove the backing file so a delete doesn't leave the (potentially
+        # sensitive) upload orphaned on disk. Best-effort — a missing file is
+        # not an error, and the DB row is already gone.
+        if file_path:
+            try:
+                await asyncio.to_thread(os.remove, file_path)
+            except OSError:
+                logger.warning(
+                    f"Could not remove backing file for deleted document "
+                    f"{document_id}: {file_path}"
+                )
         return True
 
     # ============================================

@@ -20,8 +20,8 @@ already covered by the red-team review on this branch).
 | 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | ✅ |
 | 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ✅ |
 | 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ✅ |
-| 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | 🔄 next |
-| 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ⬜ |
+| 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ✅ |
+| 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | 🔄 next |
 | 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ⬜ |
 | 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ⬜ |
 | 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ⬜ |
@@ -109,4 +109,15 @@ already covered by the red-team review on this branch).
   EC-7 read endpoints bypass equipment_check.view, EC-8 unscoped changelog reads,
   EC-9 get_report fragile no-org getter, EC-10 complete_incomplete_check skips
   auto-fail rule, EC-11 compliance metrics stubbed. See equipment-check.md.
-  Next: documents.
+- #8 documents ✅ — upload well-hardened (UUID filenames, magic-byte MIME, no
+  traversal); tenant isolation solid; folder ACL **not** bypassable on direct
+  read; no file_path leak (that field is on the minutes PublishedDocumentResponse,
+  not this module). **3 fixes applied:** DOC-1 (MED data-retention:
+  delete_document orphaned the on-disk file — now removes it), DOC-2 (LOW
+  fail-open ACL: can_access_document returned True on a missing folder — now
+  fails closed), DOC-3 (LOW fail-open: upload_document silently accepted an
+  invalid/foreign folder_id — now 404s). 3 flagged: DOC-4 get_summary aggregates
+  ignore folder ACL, DOC-5 folder ACL is per-folder not hierarchical (confirm
+  intent), DOC-6 write-path FK/enum validation gaps (leadership-gated, XC-1).
+  delete_folder still orphans subtree files (flagged). See documents.md.
+  Next: membership pipeline.
