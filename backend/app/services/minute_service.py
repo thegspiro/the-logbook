@@ -80,12 +80,22 @@ class MinuteService:
         ):
             minutes_dict["footer_config"] = data.footer_config.model_dump()
 
-        # If a template_id is provided but no sections, populate from template
-        if minutes_dict.get("template_id") and not minutes_dict.get("sections"):
+        # Validate any client-supplied template_id belongs to the caller's org
+        # *whenever* it is present — not only when populating sections from it.
+        # Otherwise a foreign template_id is persisted and later eager-loaded by
+        # get_minutes (template FK join, no org filter), leaking another org's
+        # header/footer config into the response and the published document.
+        template = None
+        if minutes_dict.get("template_id"):
             template = await self._get_template(
                 minutes_dict["template_id"], organization_id
             )
-            if template and template.sections:
+            if template is None:
+                raise ValueError("Invalid template")
+
+        # If a template is provided but no sections, populate from template
+        if template and not minutes_dict.get("sections"):
+            if template.sections:
                 minutes_dict["sections"] = [
                     {
                         "order": s["order"],
@@ -227,12 +237,12 @@ class MinuteService:
             search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
-                    MeetingMinutes.title.ilike(search_term),
-                    MeetingMinutes.notes.ilike(search_term),
-                    MeetingMinutes.old_business.ilike(search_term),
-                    MeetingMinutes.new_business.ilike(search_term),
-                    MeetingMinutes.agenda.ilike(search_term),
-                    MeetingMinutes.announcements.ilike(search_term),
+                    MeetingMinutes.title.ilike(search_term, escape="\\"),
+                    MeetingMinutes.notes.ilike(search_term, escape="\\"),
+                    MeetingMinutes.old_business.ilike(search_term, escape="\\"),
+                    MeetingMinutes.new_business.ilike(search_term, escape="\\"),
+                    MeetingMinutes.agenda.ilike(search_term, escape="\\"),
+                    MeetingMinutes.announcements.ilike(search_term, escape="\\"),
                 )
             )
 
@@ -662,7 +672,7 @@ class MinuteService:
             stmt = (
                 select(MeetingMinutes)
                 .where(MeetingMinutes.organization_id == str(organization_id))
-                .where(field.ilike(search_term))
+                .where(field.ilike(search_term, escape="\\"))
                 .order_by(MeetingMinutes.meeting_date.desc())
                 .limit(limit - len(results))
             )

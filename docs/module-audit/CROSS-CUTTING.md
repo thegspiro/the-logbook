@@ -8,8 +8,12 @@ the whole class rather than one module at a time.
 INV-4 — the largest cluster: ~15 create/update methods across the service and
 endpoints), facilities (FAC-3 — create_photo/document facility_id, maintenance
 system_id, access-key assigned_to_user_id, plus update-path re-validation gaps),
-elections (ELEC-7 — candidate `user_id`). Now confirmed in **every module
-audited so far** — this is the dominant cross-cutting pattern.
+elections (ELEC-7 — candidate `user_id`), meetings/minutes (MM-4 — `event_id`,
+action-item `assignee_id`, bulk-meeting attendee `user_id` / `assigned_to`; and
+MM-1, the one instance where the unvalidated FK caused an actual **cross-org
+disclosure** — a foreign `template_id` leaked another org's template config, now
+fixed in-place). Now confirmed in **every module audited so far** — this is the
+dominant cross-cutting pattern.
 
 ## XC-3 — Admin by-id writes scoped only by permission, not by org (IDOR)
 **Seen in:** elections (ELEC-2 — `update_candidate`/`delete_candidate` fetched

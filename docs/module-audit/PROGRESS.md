@@ -18,8 +18,8 @@ already covered by the red-team review on this branch).
 | 3 | inventory | endpoints/inventory.py, labels.py, services/inventory_service.py, label_service.py | (in-app) | ✅ |
 | 4 | facilities | endpoints/facilities.py, services/facilities_service.py | modules/facilities | ✅ |
 | 5 | elections | endpoints/elections.py, services/election_service.py, quorum_service.py | modules/elections | ✅ |
-| 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | 🔄 next |
-| 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ⬜ |
+| 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ✅ |
+| 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | 🔄 next |
 | 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ⬜ |
 | 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ⬜ |
 | 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ⬜ |
@@ -86,4 +86,13 @@ already covered by the red-team review on this branch).
   DB read until close. 3 LOW: ELEC-7 (XC-1 candidate user_id), ELEC-8 receipt
   never returned, ELEC-9 dead branch. New cross-cutting pattern XC-3 (admin
   by-id writes scoped only by permission, not org). See elections.md.
-  Next: meetings/minutes.
+- #6 meetings/minutes ✅ — 42 endpoints all authed; direct-object tenant
+  isolation solid and **XC-3 clean** (every admin write org-scoped — the ELEC-2
+  flaw does not recur). **2 fixes applied:** MM-1 (MEDIUM: cross-org template
+  leak — a foreign `template_id` sent alongside `sections` was persisted and
+  eager-loaded with no org filter, leaking another org's header/footer into the
+  response + published doc; now validated in-org on create), MM-2 (LOW: 10
+  `.ilike()` calls missing `escape="\\"` so LIKE-escaping was a no-op). 2
+  flagged: MM-3 (MEDIUM: draft/executive minutes readable by any `minutes.view`
+  holder — needs a product decision + permission tier), MM-4 (XC-1 FK-validation
+  gaps). See meetings-minutes.md. Next: equipment-check.

@@ -122,9 +122,9 @@ class MeetingsService:
             search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
-                    Meeting.title.ilike(search_term),
-                    Meeting.notes.ilike(search_term),
-                    Meeting.agenda.ilike(search_term),
+                    Meeting.title.ilike(search_term, escape="\\"),
+                    Meeting.notes.ilike(search_term, escape="\\"),
+                    Meeting.agenda.ilike(search_term, escape="\\"),
                 )
             )
 
