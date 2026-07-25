@@ -21,8 +21,8 @@ already covered by the red-team review on this branch).
 | 6 | meetings/minutes | endpoints/meetings.py, minutes.py, services/meetings_service.py, minute_service.py | modules/minutes | ✅ |
 | 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ✅ |
 | 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ✅ |
-| 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | 🔄 next |
-| 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ⬜ |
+| 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ✅ |
+| 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | 🔄 next |
 | 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ⬜ |
 | 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ⬜ |
 | 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ⬜ |
@@ -120,4 +120,18 @@ already covered by the red-team review on this branch).
   ignore folder ACL, DOC-5 folder ACL is per-folder not hierarchical (confirm
   intent), DOC-6 write-path FK/enum validation gaps (leadership-gated, XC-1).
   delete_folder still orphans subtree files (flagged). See documents.md.
-  Next: membership pipeline.
+- #9 membership pipeline ✅ — sensitive applicant PII module; tenant isolation
+  solid (XC-3 absent), file upload/download is a model implementation (magic-byte
+  MIME, UUID names, realpath download guard). **3 fixes applied:** MP-2 (MED:
+  create_prospect stored an unvalidated pipeline_id → leaked a foreign org's step
+  config in the response; now org-validated), MP-3 (create_leave didn't validate
+  user_id in-org; now validated), MP-4 (PATCH leave skipped date-order check; now
+  validated + both leave endpoints convert ValueError→400). **1 HIGH flagged for
+  a product decision:** MP-1 — applicant background-check/ID downloads + PII are
+  reachable with the generic `members.view` roster permission (consistently
+  across all 13 prospect-read routes, so a deliberate access-model choice, not a
+  slip); recommend requiring prospective_members.view/.manage. 3 LOW flagged:
+  MP-5 (more XC-1 create paths), MP-6 (PII in activity/audit log), MP-7
+  (inconsistent existing-member PII disclosure). New cross-cutting pattern XC-2
+  (sensitive reads gated broader than intended). See membership-pipeline.md.
+  Next: messaging/comms.

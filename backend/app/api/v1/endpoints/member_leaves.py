@@ -30,7 +30,7 @@ from app.api.dependencies import (
     require_permission,
 )
 from app.core.database import get_db
-from app.core.utils import ensure_found
+from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import User
 from app.services.member_leave_service import MemberLeaveService
 from app.services.scheduling_service import SchedulingService
@@ -124,16 +124,19 @@ async def create_leave_of_absence(
         raise HTTPException(status_code=400, detail="End date must be after start date")
 
     svc = MemberLeaveService(db)
-    leave = await svc.create_leave(
-        organization_id=str(current_user.organization_id),
-        user_id=data.user_id,
-        start_date=data.start_date,
-        end_date=data.end_date,
-        leave_type=data.leave_type,
-        reason=data.reason,
-        granted_by=str(current_user.id),
-        exempt_from_training_waiver=data.exempt_from_training_waiver,
-    )
+    try:
+        leave = await svc.create_leave(
+            organization_id=str(current_user.organization_id),
+            user_id=data.user_id,
+            start_date=data.start_date,
+            end_date=data.end_date,
+            leave_type=data.leave_type,
+            reason=data.reason,
+            granted_by=str(current_user.id),
+            exempt_from_training_waiver=data.exempt_from_training_waiver,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
 
     # Keep the schedule representative: drop the member's existing shift
     # assignments during the leave so those slots show as open for fill-in or
@@ -225,14 +228,15 @@ async def update_leave_of_absence(
     """Update a leave of absence."""
     svc = MemberLeaveService(db)
     updates = data.model_dump(exclude_unset=True)
-    leave = ensure_found(
-        await svc.update_leave(
+    try:
+        updated = await svc.update_leave(
             organization_id=str(current_user.organization_id),
             leave_id=leave_id,
             **updates,
-        ),
-        "Leave of absence",
-    )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    leave = ensure_found(updated, "Leave of absence")
     return _to_response(leave)
 
 

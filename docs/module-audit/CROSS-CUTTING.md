@@ -42,4 +42,13 @@ but it's a consistent gap.
 referenced row is missing or out-of-org, used by create/update service methods.
 Roll out per-module with tests. Not auto-applied — behavior change.
 
-## XC-2 — (reserved) add further recurring patterns here as they surface.
+## XC-2 — Sensitive reads gated by a permission broader than intended
+**Seen in:** membership-pipeline (MP-1 — applicant PII / background-check
+document downloads reachable with generic `members.view` roster permission
+instead of the dedicated `prospective_members.view`), documents (DOC-4 — summary
+aggregates ignore the folder ACL), meetings/minutes (MM-3 — draft/executive
+minutes readable by any `minutes.view` holder). Pattern: a `.view`-style read is
+gated by a permission held by rank-and-file when the data warrants a narrower
+gate. Each is an access-policy decision (behavior change), so flagged for the
+maintainer rather than auto-tightened. **Action:** for each module, confirm the
+intended audience of sensitive reads vs the permission actually required.

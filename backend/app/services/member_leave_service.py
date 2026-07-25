@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
 from app.models.training import TrainingWaiver, TrainingWaiverType
-from app.models.user import LeaveType, MemberLeaveOfAbsence
+from app.models.user import LeaveType, MemberLeaveOfAbsence, User
 
 
 class MemberLeaveService:
@@ -106,6 +106,21 @@ class MemberLeaveService:
         TrainingWaiver is automatically created so the member's training
         requirements are adjusted for the leave period.
         """
+        # The target user_id is client-supplied — verify it belongs to the
+        # caller's org before writing the leave (and its linked waiver), so we
+        # don't create org-local rows referencing a foreign member.
+        member_result = await self.db.execute(
+            select(User.id).where(
+                User.id == user_id,
+                User.organization_id == organization_id,
+            )
+        )
+        if member_result.scalar_one_or_none() is None:
+            raise ValueError("Member not found")
+
+        if end_date is not None and end_date < start_date:
+            raise ValueError("end_date must be on or after start_date")
+
         try:
             lt = LeaveType(leave_type)
         except ValueError:
@@ -197,6 +212,11 @@ class MemberLeaveService:
         for key, value in kwargs.items():
             if value is not None:
                 setattr(leave, key, value)
+
+        # Validate date order on the resulting record — the create path enforces
+        # this but the update path previously did not, allowing an inverted range.
+        if leave.end_date is not None and leave.end_date < leave.start_date:
+            raise ValueError("end_date must be on or after start_date")
 
         # Handle exempt_from_training_waiver toggle
         exempt_changed = (
