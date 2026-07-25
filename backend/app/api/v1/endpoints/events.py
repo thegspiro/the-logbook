@@ -1297,8 +1297,15 @@ async def rsvp_to_series(
     """
     service = EventService(db)
 
-    # Resolve the parent event id — if this is a child, use its parent
-    event_result = await db.execute(select(Event).where(Event.id == str(event_id)))
+    # Resolve the parent event id — if this is a child, use its parent.
+    # Scope the fetch to the caller's org so a foreign/unknown id is a clean
+    # 404 rather than an existence oracle.
+    event_result = await db.execute(
+        select(Event).where(
+            Event.id == str(event_id),
+            Event.organization_id == str(current_user.organization_id),
+        )
+    )
     event = event_result.scalar_one_or_none()
     if not event:
         raise HTTPException(
@@ -2220,7 +2227,6 @@ async def upload_event_attachment(
     **Requires permission: events.manage**
     """
     # Verify event exists
-    EventService(db)
     result = await db.execute(
         select(Event)
         .where(Event.id == str(event_id))

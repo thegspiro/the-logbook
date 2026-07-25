@@ -29,8 +29,8 @@ already covered by the red-team review on this branch).
 | 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ✅ |
 | 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ✅ |
 | 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ✅ |
-| 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | 🔄 next |
-| 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ⬜ |
+| 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ✅ |
+| 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | 🔄 next |
 | 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ⬜ |
 | 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ⬜ |
 | 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ⬜ |
@@ -222,4 +222,16 @@ already covered by the red-team review on this branch).
   expiring_soon_days report filters could 500; added _safe_int coercion). 3
   flagged: RPT-3 member/applicant PII at reports.view (permission granularity),
   RPT-4 org-id typing inconsistency, RPT-5 aggregate correctness/polish. See
-  reports-analytics.md. Next: events.
+  reports-analytics.md.
+- #17 events ✅ — public event-request flow solid (org-validated, server-stamped,
+  256-bit token, no body injection, replay-guarded); tenant isolation strong
+  (XC-3 clean, RSVP self-scoped, attachments hardened). **4 fixes applied:** EV-1
+  (MED: cross-org location_id on event create/update → disclosed another org's
+  location + defeated its room double-booking; now validated via org-scoped
+  get_location), EV-2 (LOW/MED: public contact_name unescaped in notification
+  email HTML; now escaped like the sibling assignee branch), EV-3 (LOW: rsvp-series
+  anchor fetch not org-scoped — existence oracle; now scoped), EV-4 (dead
+  EventService instantiation removed). 3 flagged: EV-5 (public intake has no
+  per-org opt-in + weaker anti-spam than forms — feature+config), EV-6 (members
+  can RSVP to draft/past events), EV-7 (status-check not rate-limited [token is
+  256-bit] + template-email TypeError). See events.md. Next: training.
