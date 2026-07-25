@@ -27,8 +27,8 @@ already covered by the red-team review on this branch).
 | 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ✅ |
 | 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ✅ |
 | 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ✅ |
-| 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | 🔄 next |
-| 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ⬜ |
+| 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ✅ |
+| 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | 🔄 next |
 | 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ⬜ |
 | 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ⬜ |
 | 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ⬜ |
@@ -201,4 +201,15 @@ already covered by the red-team review on this branch).
   flagged: GF-6 remaining stored-only cross-org FKs (XC-1), GF-7 no overspend/
   status-transition guards + re-award duplicates tasks, GF-8 is_anonymous flag
   never enforced, GF-9 float money math / zero amounts / donor-PII gate. See
-  grants-fundraising.md. Next: admin-hours.
+  grants-fundraising.md.
+- #15 admin-hours ✅ — time-clock; self-service ownership + clock integrity
+  solid, approvals org-scoped (XC-3 clean), no impersonation. **3 fixes
+  applied:** AH-1 (HIGH time-fraud: create_manual_entry auto-approved
+  client-supplied times → self-credited compliance hours; now manual entries
+  always PENDING + future-clock-out check + 24h max-duration cap), AH-2 (MED
+  cross-tenant: auto_close_stale_sessions mutated ALL orgs' active sessions;
+  added optional org scope — endpoint scoped, cron stays global), AH-3 (LOW:
+  auto-approved clock-outs now stamp approved_at). Mock-based service tests run +
+  pass (updated the one asserting old auto-approve). 2 flagged: AH-4 officers can
+  self-approve (SoD — but small-dept concern, needs a toggle), AH-5 minor
+  scoping omissions (not exploitable). See admin-hours.md. Next: reports/analytics.

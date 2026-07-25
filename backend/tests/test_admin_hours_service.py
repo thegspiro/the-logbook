@@ -199,7 +199,10 @@ class TestCreateManualEntry:
             "org-1", "u1", "cat-1", now - timedelta(hours=2), now - timedelta(hours=1)
         )
         assert entry.duration_minutes == 60
-        assert entry.status == AdminHoursEntryStatus.APPROVED
+        # Manual entries carry client-supplied times, so they always require
+        # officer review — never auto-approve, even for a require_approval=False
+        # category (which only auto-approves server-timed clock-outs).
+        assert entry.status == AdminHoursEntryStatus.PENDING
 
 
 if __name__ == "__main__":  # pragma: no cover

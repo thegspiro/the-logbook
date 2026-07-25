@@ -58,6 +58,14 @@ open decisions that need an owner are collected in
   recompute (which is itself now department-scoped). Also fixed: a donation saved
   without an explicit payment status was omitted from campaign/donor totals until
   a later edit.
+- **Admin Hours — manual time entries now always require officer approval, and
+  the stale-session cleanup stays within your department.** A manually entered
+  time record (member-supplied start/end times) previously auto-approved itself
+  for categories that don't require approval — letting a member self-credit
+  fabricated or backdated compliance hours; manual entries now always start
+  Pending review, with a future-time check and a 24-hour cap. The "close stale
+  clock-ins" action was also scoping across all departments and now affects only
+  the caller's department (the nightly cleanup job is unchanged).
 
 **Data protection & correctness**
 
