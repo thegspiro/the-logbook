@@ -23,8 +23,8 @@ already covered by the red-team review on this branch).
 | 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ✅ |
 | 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ✅ |
 | 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ✅ |
-| 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | 🔄 next |
-| 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ⬜ |
+| 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ✅ |
+| 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | 🔄 next |
 | 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ⬜ |
 | 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ⬜ |
 | 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ⬜ |
@@ -152,4 +152,11 @@ already covered by the red-team review on this branch).
   test-email HTML — the one gap in the module's otherwise-correct escaping; now
   html.escaped). 2 LOW flagged: MSG-2 (targeting lists not org-validated on
   write, XC-1, not exploitable), MSG-3 (admin test-email to arbitrary address, by
-  design). See messaging.md. Next: notifications.
+  design). See messaging.md.
+- #11 notifications ✅ — very clean module; user-scoping / IDOR prevention is
+  exemplary (`/my/*` inbox paths filter recipient_id; `mark_as_read` documents +
+  enforces the guard). **1 fix applied:** NOTIF-1 (LOW: `/logs/{id}/read` marked
+  any org notification read org-wide but required only `notifications.view` while
+  `/logs/read-all` requires `.manage`; raised to `.manage` — no frontend caller,
+  safe). Tenant isolation solid, no SQL injection, flake8 clean. See
+  notifications.md. Next: integrations.
