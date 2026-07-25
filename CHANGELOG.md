@@ -74,6 +74,16 @@ open decisions that need an owner are collected in
   an external-provider user-mapping screen no longer reveals another department's
   member name/email. A department-overview report count was also inadvertently
   tallying meeting action items across all departments and is now scoped to yours.
+- **Scheduling — self-signup can no longer make a member the shift officer.**
+  Signing up for an "officer" position on an open shift previously ran the
+  manager-only auto-promotion logic and set the member as the shift's officer,
+  granting crew-wide authority over that shift; open-shift self-signup now skips
+  that promotion. Self-signup also now re-checks shift state, so a member can no
+  longer add themselves to a cancelled, finalized, or past-dated shift. The
+  shift-officer assignment is validated in-department on shift create/update (a
+  foreign user id can no longer be attached to a shift or minted an apparatus
+  assignment), and the member-hours report no longer joins member names/emails
+  without a department filter.
 
 **Data protection & correctness**
 

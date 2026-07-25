@@ -570,6 +570,11 @@ class SchedulingService:
     ) -> Tuple[Optional[Shift], Optional[str]]:
         """Create a new shift"""
         try:
+            officer_id = shift_data.get("shift_officer_id")
+            if officer_id and not await self._user_in_org(
+                officer_id, organization_id
+            ):
+                return None, "Shift officer not found"
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -1107,6 +1112,16 @@ class SchedulingService:
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return None, "Shift not found"
+
+            # A client-supplied shift_officer_id must belong to the caller's org
+            # before it is persisted (and before _sync_officer_assignment mints
+            # an apparatus assignment for it), or a foreign user id could be
+            # attached to the shift and given crew authority.
+            new_officer = update_data.get("shift_officer_id")
+            if new_officer and not await self._user_in_org(
+                new_officer, organization_id
+            ):
+                return None, "Shift officer not found"
 
             old_officer_id = shift.shift_officer_id
 
@@ -2150,13 +2165,28 @@ class SchedulingService:
         shift_id: UUID,
         assignment_data: Dict[str, Any],
         assigned_by: UUID,
+        self_signup: bool = False,
     ) -> Tuple[Optional[ShiftAssignment], Optional[str]]:
-        """Create a new shift assignment"""
+        """Create a new shift assignment.
+
+        ``self_signup=True`` marks a member self-service signup (vs an officer
+        assigning someone). Self-signup is restricted to an open, current shift
+        and never confers shift-officer authority (see below); managers keep the
+        flexibility to assign to cancelled/finalized/past shifts for records.
+        """
         try:
             # Verify shift belongs to org
             shift = await self.get_shift_by_id(shift_id, organization_id)
             if not shift:
                 return None, "Shift not found"
+
+            if self_signup:
+                if shift.status == ShiftStatus.CANCELLED:
+                    return None, "This shift has been cancelled"
+                if shift.is_finalized:
+                    return None, "This shift is already finalized"
+                if shift.shift_date and shift.shift_date < date.today():
+                    return None, "Cannot sign up for a past shift"
 
             user_id = assignment_data.get("user_id")
 
@@ -2270,8 +2300,14 @@ class SchedulingService:
             assigned_position = assignment_data.get("position", "")
             if isinstance(assigned_position, ShiftPosition):
                 assigned_position = assigned_position.value
+            # Never auto-promote a self-service signup to shift officer — that
+            # would grant a member crew-wide authority (manage everyone's
+            # assignments/attendance/finalize) simply by signing up for an
+            # officer slot on an open_to_all_members shift. Only an officer-made
+            # assignment designates the shift officer.
             if (
-                not shift.shift_officer_id
+                not self_signup
+                and not shift.shift_officer_id
                 and assigned_position in officer_positions
                 and user_id
             ):
@@ -3744,6 +3780,10 @@ class SchedulingService:
             .join(Shift, ShiftAssignment.shift_id == Shift.id)
             .join(User, ShiftAssignment.user_id == User.id)
             .where(ShiftAssignment.organization_id == str(organization_id))
+            # Also constrain the joined user to the org — an assignment row's
+            # user_id could reference a foreign user (see shift_officer_id
+            # validation), and this report exposes email + name.
+            .where(User.organization_id == str(organization_id))
             .where(Shift.shift_date >= start_date)
             .where(Shift.shift_date <= end_date)
             .group_by(

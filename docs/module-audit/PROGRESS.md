@@ -31,8 +31,8 @@ already covered by the red-team review on this branch).
 | 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ✅ |
 | 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ✅ |
 | 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ✅ |
-| 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | 🔄 next |
-| 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ⬜ |
+| 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ✅ |
+| 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | 🔄 next |
 | 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ⬜ |
 | 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ⬜ |
 | 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ⬜ |
@@ -250,3 +250,20 @@ already covered by the red-team review on this branch).
   (external/enhancement FK defense-in-depth + _decrypt_field fallback +
   enhancement-service spot-check). training_program_service (4027 L) got
   invariant-focused coverage. See training.md. Next: scheduling.
+- #19 scheduling ✅ — shift management + self-service signup/swap +
+  pattern generation; two parallel readers (self-service + manager).
+  Manager tenant isolation solid (XC-3 clean), no SQL injection, swap manual
+  path blocks self-approval. **5 fixes applied:** SCH-1 (HIGH self-escalation:
+  self-signup for an officer-position slot on an open_to_all_members shift ran
+  the manager auto-promote block and set the member as shift_officer_id → gained
+  crew authority; added a self_signup flag that guards the promote block),
+  SCH-2 (HIGH: self-signup skipped cancelled/finalized/past-date guards; now
+  enforced when self_signup=True), SCH-3 (HIGH DoS: generate_shifts_from_pattern
+  had no range bound; added MAX_GENERATION_DAYS=366 + end<start check), SCH-4
+  (MED XC-1 + PII leak: create/update_shift stored an unvalidated
+  shift_officer_id feeding _sync_officer_assignment, and get_member_hours_report's
+  User join lacked an org filter → foreign name/email leak; both now
+  org-validated/scoped). 2 flagged: SCH-5 (swap accept-path re-validation +
+  self-approval, behavior-change), SCH-6 (finalize manual_hours override +
+  apparatus/station/template FK defense-in-depth). scheduling_service (~5k L)
+  got invariant-focused coverage. See scheduling.md. Next: finance.

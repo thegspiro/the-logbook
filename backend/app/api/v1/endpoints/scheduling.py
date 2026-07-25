@@ -92,6 +92,11 @@ router = APIRouter()
 # cannot request an arbitrarily wide date range.
 MAX_OPEN_SHIFTS_DAYS = 366
 
+# Maximum span for a single pattern-generation request. Generation WRITES a
+# shift (+ assignments) per day in one transaction, so an unbounded range is a
+# DoS (memory/DB exhaustion). About a year, matching the read-window cap.
+MAX_GENERATION_DAYS = 366
+
 
 def _safe_detail(prefix: str, error: str | None) -> str:
     """Build a sanitized error detail from a service-layer error string."""
@@ -1248,6 +1253,18 @@ async def generate_shifts_from_pattern(
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Generate shifts from a pattern for a date range"""
+    if request.end_date < request.start_date:
+        raise HTTPException(
+            status_code=400, detail="End date must be on or after start date."
+        )
+    if (request.end_date - request.start_date).days > MAX_GENERATION_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Date range too large — generate at most "
+                f"{MAX_GENERATION_DAYS} days at a time."
+            ),
+        )
     service = SchedulingService(db)
     result, error = await service.generate_shifts_from_pattern(
         pattern_id,
@@ -1917,7 +1934,11 @@ async def signup_for_shift(
         "position": signup.position.value,
     }
     result, error = await service.create_assignment(
-        current_user.organization_id, shift_id, assignment_data, current_user.id
+        current_user.organization_id,
+        shift_id,
+        assignment_data,
+        current_user.id,
+        self_signup=True,
     )
     if error:
         raise HTTPException(
