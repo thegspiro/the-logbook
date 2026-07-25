@@ -47,11 +47,14 @@ Roll out per-module with tests. Not auto-applied — behavior change.
 document downloads reachable with generic `members.view` roster permission —
 **✅ FIXED**: the applicant/pipeline routes now require
 `prospective_members.view/.manage`, and the election-package routes require
-those or `elections.view/.manage`; `members.view` removed), documents (DOC-4 —
-summary aggregates ignore the folder ACL), meetings/minutes (MM-3 —
-draft/executive minutes readable by any `minutes.view` holder). Pattern: a
-`.view`-style read is gated by a permission held by rank-and-file when the data
-warrants a narrower gate. Verify each: is it dead over-permission (frontend
-already gates tighter, so removal is safe — as with MP-1), or a real access-model
-decision? **Action:** for each module, confirm the intended audience of sensitive
-reads vs the permission actually required; MM-3 and DOC-4 remain open decisions.
+those or `elections.view/.manage`; `members.view` removed), meetings/minutes
+(MM-3 — draft/executive minutes readable by any `minutes.view` holder — **✅
+FIXED**: reads now return only approved, non-executive minutes to callers without
+`minutes.manage`), documents (DOC-4 — summary aggregates ignore the folder ACL —
+still open). Pattern: a `.view`-style read is gated by a permission held by
+rank-and-file when the data warrants a narrower gate. Two fix shapes seen: (a)
+the broad permission is *dead over-permission* because the frontend already gates
+tighter, so removing it is safe (MP-1); (b) the read genuinely needs a
+status/type gate keyed on the existing `.manage` permission (MM-3). **Action:**
+for each module, confirm the intended audience of sensitive reads vs the
+permission required; DOC-4 remains an open decision.

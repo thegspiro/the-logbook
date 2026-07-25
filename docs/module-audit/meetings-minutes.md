@@ -43,18 +43,30 @@ in the query could still act as a wildcard — over-broad matching, not injectio
 **Fix:** added `escape="\\"` to all 10 `.ilike(search_term)` calls across both
 services.
 
-### MM-3 — MEDIUM — Unpublished / executive minutes readable by any viewer
-`get_minutes` / `list_minutes` / `search_minutes` apply **no status filter**, so
-a plain `minutes.view` holder can read `DRAFT`/`SUBMITTED`/`REJECTED`
-(unapproved) minutes. Separately, `MinutesMeetingType.EXECUTIVE` minutes and the
-`executive_session` / `personnel_matters` sections are returned to anyone with
-`minutes.view` — there is no confidential/executive permission tier, and
-`search_minutes` returns snippet text from executive minutes to any viewer.
-**Status:** flagged — this is a product/access-control decision (should drafts be
-member-visible? should executive content need a stronger permission?) and a
-behavior change that could break legitimate workflows. Recommend a deliberate
-design: gate unpublished reads behind `minutes.manage` (or author-only), and add
-an executive/confidential permission tier. Not auto-applied.
+### MM-3 — MEDIUM — Unpublished / executive minutes readable by any viewer — ✅ FIXED
+`get_minutes` / `list_minutes` / `search_minutes` / `get_stats` applied **no
+status filter**, so a plain `minutes.view` holder could read
+`DRAFT`/`SUBMITTED`/`REJECTED` (unapproved) minutes, and
+`MinutesMeetingType.EXECUTIVE` (closed-session) minutes were returned to anyone
+with `minutes.view` — with no confidential tier.
+**Fix:** the four read paths now take a `restricted` flag. A caller **without
+`minutes.manage`** sees only `APPROVED`, non-`EXECUTIVE` minutes across list,
+search, and stats; a by-id fetch of an unpublished or executive record returns
+404 (existence not revealed). Callers **with `minutes.manage`** (secretaries/
+officers — the same permission already required to create/edit/approve minutes,
+19 write endpoints) see everything, and internal service callers keep the
+unrestricted default. This matches the module's own write model (drafts are
+work-in-progress; executive sessions are closed content) and needs **no new
+permission** and no frontend change (members' lists simply return only ratified
+minutes).
+**Adjustable follow-up (flagged):** if a distinct audience needs executive-session
+minutes *without* full `minutes.manage` (e.g. board members who attend but don't
+edit), that requires a dedicated `minutes.view_executive`-style tier — a larger
+change (seed data + role assignment + frontend) intentionally left for a
+deliberate decision. Also note a **frontend inconsistency**: `MinutesPage` /
+`MinutesDetailPage` compute `canManage` from `meetings.manage`, while the backend
+gates minutes writes (and now restricted reads) on `minutes.manage`; roles that
+manage minutes should hold both.
 
 ### MM-4 — LOW — Cross-org / unvalidated FKs on create (XC-1 class)
 - `create_minutes` / `update_minutes` store `event_id` with no in-org check.

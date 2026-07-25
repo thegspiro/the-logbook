@@ -95,7 +95,13 @@ already covered by the red-team review on this branch).
   `.ilike()` calls missing `escape="\\"` so LIKE-escaping was a no-op). 2
   flagged: MM-3 (MEDIUM: draft/executive minutes readable by any `minutes.view`
   holder — needs a product decision + permission tier), MM-4 (XC-1 FK-validation
-  gaps). See meetings-minutes.md.
+  gaps). See meetings-minutes.md. **MM-3 now FIXED (2026-07-25):** the four read
+  paths (list/get/search/stats) take a `restricted` flag; callers without
+  `minutes.manage` see only approved, non-executive minutes (by-id 404s on
+  restricted records), keyed on the same permission that already gates the 19
+  minutes write endpoints — no new permission or frontend change. Follow-up
+  flagged: a `minutes.view_executive` tier if board members need executive
+  minutes without full manage.
 - #7 equipment-check ✅ — heaviest iteration; check-submission path had real
   cross-tenant writes. **5 fixes applied:** EC-1 (HIGH — client `apparatus_id`
   on a standalone check mutated another org's `has_deficiency` safety flag;

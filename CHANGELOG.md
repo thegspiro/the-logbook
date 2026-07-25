@@ -72,6 +72,13 @@ open decisions that need an owner are collected in
   via the API. They now require `prospective_members.view`/`.manage` (the
   permission the UI already required to open those pages). Election officers keep
   access to applicant **election packages** through `elections.view`/`.manage`.
+- **Unpublished and executive-session minutes are no longer visible to all
+  members.** Meeting-minutes lists, detail, search, and dashboard stats now show
+  a member (holding only `minutes.view`) just the **approved, non-executive**
+  minutes; drafts, submitted/rejected minutes, and closed executive-session
+  minutes remain visible only to those with `minutes.manage` (the secretaries/
+  officers who already draft and approve them). No new permission or UI change
+  required.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged
