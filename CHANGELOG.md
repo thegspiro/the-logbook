@@ -74,6 +74,14 @@ open decisions that need an owner are collected in
   an external-provider user-mapping screen no longer reveals another department's
   member name/email. A department-overview report count was also inadvertently
   tallying meeting action items across all departments and is now scoped to yours.
+- **Finance — a budget in another department can no longer be corrupted.**
+  Recording a purchase request, check request, or expense line item against a
+  `budget_id` belonging to **another** department previously incremented that
+  department's encumbered/spent totals on approval or payment (its budget was
+  never read back, so the corruption was silent). The budget update helpers are
+  now department-scoped, and a purchase/check/expense/budget that references a
+  budget, category, or fiscal year from another department is now rejected with
+  a clear error at save time instead of being stored.
 - **Scheduling — self-signup can no longer make a member the shift officer.**
   Signing up for an "officer" position on an open shift previously ran the
   manager-only auto-promotion logic and set the member as the shift's officer,
@@ -119,6 +127,13 @@ open decisions that need an owner are collected in
   via the API. They now require `prospective_members.view`/`.manage` (the
   permission the UI already required to open those pages). Election officers keep
   access to applicant **election packages** through `elections.view`/`.manage`.
+- **Member dues balances are no longer visible to everyone with finance read
+  access.** The dues list (`GET /finance/dues`) accepted a `user_id` filter with
+  no self-scoping, so any member holding the broad `finance.view` permission
+  could read any other member's dues balance and delinquency status. Non-managers
+  are now confined to their own dues; only a dues manager (`finance.manage`, the
+  permission that records and waives payments) can query across members. Members
+  still see their own dues.
 - **Unpublished and executive-session minutes are no longer visible to all
   members.** Meeting-minutes lists, detail, search, and dashboard stats now show
   a member (holding only `minutes.view`) just the **approved, non-executive**

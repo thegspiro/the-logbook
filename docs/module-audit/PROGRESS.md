@@ -32,8 +32,8 @@ already covered by the red-team review on this branch).
 | 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ✅ |
 | 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ✅ |
 | 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ✅ |
-| 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | 🔄 next |
-| 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ⬜ |
+| 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ✅ |
+| 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | 🔄 next |
 | 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ⬜ |
 | 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ⬜ |
 | 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ⬜ |
@@ -267,3 +267,22 @@ already covered by the red-team review on this branch).
   self-approval, behavior-change), SCH-6 (finalize manual_hours override +
   apparatus/station/template FK defense-in-depth). scheduling_service (~5k L)
   got invariant-focused coverage. See scheduling.md. Next: finance.
+- #20 finance ✅ — money-handling module (41 endpoints, budgets/approvals/dues);
+  two parallel readers (service isolation+correctness / endpoint access+SoD).
+  Verified good: all endpoints permission-gated, approval-step IDOR closed
+  (org-scoped + spoof-proof approver), by-id ops org-scoped (XC-3 clean), status
+  guards on all terminal money moves, no SQL injection. **3 fixes applied:**
+  FIN-1 (HIGH XC-1 dangerous variant: a client budget_id on a PR/CR/expense fed
+  three bare-id budget write-helpers that incremented another org's
+  encumbered/spent totals; fixed in two layers — org-filter on the three helpers
+  + a new _validate_finance_fks that rejects foreign budget/category/fiscal-year
+  FKs at create/update), FIN-2 (MED: create/update_budget stored unvalidated
+  fiscal_year_id/category_id — same helper), FIN-3 (HIGH XC-2: GET /dues leaked
+  any member's dues balances to any finance.view holder via the user_id param;
+  non-managers now confined to their own dues, dues managers keep the
+  cross-member view). 4 flagged: FIN-4 (no SoD on terminal money movement —
+  needs finance.disburse tier), FIN-5 (reimbursement/payee records readable by
+  any finance.view holder), FIN-6 (record_dues_payment no idempotency + waive
+  overwrite), FIN-7 (unbounded export/in-memory pagination DoS, request-number
+  race, float aggregates, pending-approvals not assignee-filtered). See
+  finance.md. Next: orgs/roles/users.
