@@ -46,8 +46,30 @@ here.
 | **Member-hours report uses scheduled, not actual, hours** | Open (needs product decision) | `get_member_hours_report` sums scheduled assignment durations (`start_time`→`end_time`), not actual `ShiftAttendance` duration, so it can diverge from hours actually worked/credited. Confirm intended semantics before changing (report title vs. data source). |
 | **No formal "active/in-progress" shift state** | Accepted | `ShiftStatus` is `scheduled`/`cancelled` only; a shift's "activeness" is implied by `start_time`/`end_time` vs. now, and `is_finalized` marks closed. The live readiness panel (2026-07-16) covers most of the operational need without a dedicated state. |
 
+## Multi-Tenant Isolation & Module Audit (2026-07-25)
+
+Open items surfaced by the module-by-module security audit
+([`docs/module-audit/`](./module-audit/PROGRESS.md)). Applied fixes are in the
+CHANGELOG; the items below need an owner decision or are deferred design changes.
+Per-module docs under `docs/module-audit/` carry the full lower-severity list.
+
+| Item | Status | Detail |
+|------|--------|--------|
+| **Prospect PII / background-check downloads gated by `members.view`** | Open decision (HIGH) | All 13 prospect *read* routes accept the generic `members.view` roster permission (OR-ed with `prospective_members.view/.manage`), so any member with roster access can download applicants' background checks/IDs and read DOB/address. The grant is applied consistently — a deliberate access-model choice. Recommend requiring `prospective_members.view/.manage`. Policy change → needs owner sign-off. (MP-1) |
+| **Draft / executive-session minutes readable by any `minutes.view` holder** | Open decision (MED) | `get/list/search_minutes` apply no status filter and there is no confidential/executive permission tier, so unapproved drafts and executive-session content are visible to any viewer. Decide whether to gate unpublished reads and add an executive tier. (MM-3) |
+| **Elections: approval / multi-vote-per-position is silently broken** | Open (MED, needs design) | The vote-dedup unique hash excludes `candidate_id`, so a legitimate second vote for the same position (approval voting / `max_votes_per_position > 1`) collides and is rejected. Fix is conditional on voting method and must not weaken single-vote dedup. (ELEC-3) |
+| **Elections: `rollback_election` can enable double-voting** | Open (MED, needs design) | Reopening a closed election after the anonymity salt was destroyed lets a voter who already voted vote again (their recomputed hash differs). Decide: preserve the salt, or forbid rollback once it's destroyed. (ELEC-4) |
+| **Elections: voting tokens stored/compared in plaintext** | Open (MED) | Tokens are high-entropy (512-bit) but stored and looked up in plaintext, despite model/endpoint docstrings claiming "hashed." DB read access yields live ballot credentials. Recommend storing a SHA-256 of the token (migration) and correcting the docstrings. (ELEC-5) |
+| **Elections: anonymous ballots de-anonymizable via DB read until close** | Open (MED, documented limitation) | Anonymous votes store a deterministic `voter_hash` keyed by a salt in the same `elections` row, plus IP/user-agent, so DB-read access can map votes to voters until `close_election` nulls the salt; `get_election_forensics` exposes per-IP distributions to admins. Minimize stored IP/UA for anonymous elections; treat forensics as break-glass. (ELEC-6) |
+| **Documents: `delete_folder` orphans subtree files; summary ignores folder ACL; ACL not hierarchical** | Open (LOW/design) | `delete_folder` removes DB rows but leaves the subtree's files on disk (the single-document delete now cleans up); `get_summary` aggregates span the whole org past the folder ACL; `can_access_folder` checks only the folder's own visibility, not its ancestor chain (apparatus/facility child folders are org-visible under leadership-only parents — confirm intent). (DOC-4/5) |
+| **Equipment-check: read endpoints bypass `equipment_check.view`; completion skips auto-fail rule; compliance metrics stubbed** | Open (LOW) | Several detail/read endpoints use bare `get_current_user` (org-scoped, but inconsistent with the `.view`-gated list routes); `complete_incomplete_check` doesn't re-apply the expired/under-min auto-fail rule the initial submit uses; `get_compliance_report` returns hardcoded `0` for expected/overdue counts. (EC-6/7/10/11) |
+| **Recurring: create/update paths trust client-supplied FK ids without an org check (XC-1)** | Open (LOW, systemic) | The dominant cross-cutting pattern — create/update methods store `user_id`/`category_id`/`assignee_id`/etc. without verifying the referenced row is in-org. Individually low impact (org-stamped writes → dangling/mis-attributed FKs, not disclosure), but pervasive. Best closed by a shared `assert_in_org(db, Model, id, org_id)` helper rolled out per module. Full instances in [`docs/module-audit/CROSS-CUTTING.md`](./module-audit/CROSS-CUTTING.md) (XC-1/2/3). |
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
 per tick and appends findings. New "needs owner decision" items should be
-mirrored here so they're visible outside the log.
+mirrored here so they're visible outside the log. The parallel module-by-module
+security audit tracks its rotation and per-module findings under
+[`docs/module-audit/`](./module-audit/PROGRESS.md); its open decisions are
+mirrored in the Multi-Tenant Isolation section above.

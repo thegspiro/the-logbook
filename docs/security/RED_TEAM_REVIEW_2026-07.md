@@ -11,6 +11,14 @@ code inspection during the review.
 > file-upload handling, and client-side auth are notably well-built. The findings below are real
 > but sit on top of a solid foundation; the two HIGH tenant/authz issues are the ones to fix first.
 
+> **Follow-on:** this application-wide review is being followed by a
+> module-by-module deep audit ([`docs/module-audit/`](../module-audit/PROGRESS.md))
+> that walks each feature module for tenant-isolation, access-control, and
+> correctness issues the breadth-first pass couldn't reach. It has since found and
+> fixed additional cross-tenant write/read issues (e.g. an elections voting-eligibility
+> bypass and an equipment-check cross-department apparatus write); see the CHANGELOG
+> and [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
+
 ## Remediation status
 
 **All HIGH, MEDIUM, and LOW findings are remediated** on branch

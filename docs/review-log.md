@@ -6,6 +6,13 @@ covers one area, records findings here, fixes what's clearly correct and
 low-risk (security hardening, doc fixes), and surfaces larger items (feature
 work, ambiguous changes) for owner review rather than auto-implementing.
 
+> **Related:** a separate module-by-module security audit (following the
+> [July red-team review](./security/RED_TEAM_REVIEW_2026-07.md)) runs its own
+> rotation and per-module findings under
+> [`docs/module-audit/`](./module-audit/PROGRESS.md). Its applied fixes land in
+> the CHANGELOG and its open decisions are mirrored in
+> [KNOWN_LIMITATIONS.md](./KNOWN_LIMITATIONS.md).
+
 ## Rotation (advances each tick)
 1. Core auth & security — middleware, dependencies, security.py, CSRF, sessions
 2. Documentation — README, CLAUDE.md, `.env` examples, API docs accuracy

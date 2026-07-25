@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: multi-tenant isolation audit — cross-tenant write/read fixes across modules (2026-07-25)
+
+A rotating, module-by-module security audit (see
+[`docs/module-audit/`](docs/module-audit/PROGRESS.md)) following the July
+red-team review. Each module was checked for tenant-isolation (IDOR/BOLA), broken
+access control, injection, and correctness. The fixes below are all applied;
+open decisions that need an owner are collected in
+[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
+
+**Cross-tenant writes closed (highest impact)**
+
+- **Elections — voting eligibility is now enforced.** `cast_vote` computed voter
+  eligibility but never checked the result, so any authenticated member could
+  vote in a draft/closed election, outside the voting window, or while not on a
+  restricted eligible-voter list. The eligibility gate is now enforced (the proxy
+  and token voting paths already enforced it).
+- **Elections — candidate edits/deletes are org-scoped.** `update_candidate` /
+  `delete_candidate` fetched the target by path id without an organization check,
+  so an admin in one department could edit or delete another department's
+  candidates. Both now verify the election belongs to the caller's organization.
+- **Equipment check — apparatus deficiency flag can no longer be flipped across
+  departments.** A standalone check accepted a caller-supplied `apparatus_id` and
+  toggled that apparatus's out-of-service/deficiency state with no org check;
+  this could mark another department's apparatus deficient or clear a real
+  deficiency. The update is now org-scoped and the id is validated on submit.
+- **Equipment check — template item data can no longer be overwritten across
+  departments;** the ready-stock lot **swap now requires a manage permission**
+  (it previously required only being logged in); and template cloning now
+  validates the target apparatus is in-org.
+- **Meetings/Minutes — cross-department template leak closed.** Creating minutes
+  with a foreign `template_id` alongside custom sections persisted that id and
+  leaked another department's header/footer template config into the response and
+  the published document. The template is now validated in-org.
+- **Membership pipeline — foreign FK validation.** Creating a prospect with a
+  foreign `pipeline_id` leaked another department's pipeline step configuration
+  in the response; creating a leave of absence didn't verify the member belonged
+  to the department. Both are now validated in-org.
+
+**Data protection & correctness**
+
+- **Documents — deleting a document now removes the file from disk** (previously
+  the database row was deleted but the potentially sensitive upload was left
+  behind), and two access-control checks that failed *open* now fail *closed*
+  (an unresolved folder no longer grants access; an unknown/foreign upload folder
+  is now rejected).
+- **Inventory — item history no longer errors** for items with pool issuances (a
+  wrong column name raised a 500), and equipment requests validate the referenced
+  item is in-department.
+- **Facilities — a maintenance record without a type returns a clean validation
+  error** instead of a 500, and ~dead no-op code paths were removed.
+- **Leaves of absence — the edit endpoint now validates the date range** (start
+  ≤ end), matching the create endpoint.
+- **Email hardening — LIKE-search wildcards and an HTML email field are now
+  properly escaped** in several modules (meetings/minutes, inventory,
+  equipment-check, messaging test-email).
+
+No user-facing feature changes. Full per-module findings, including lower-severity
+items left as flagged open decisions, are in
+[`docs/module-audit/`](docs/module-audit/PROGRESS.md).
+
 ### Department Messaging: reliable delivery, acknowledgment tracking, and scheduling (2026-07-17)
 
 A pass over the internal Department Messages feature so announcements reliably
