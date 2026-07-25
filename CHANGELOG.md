@@ -67,6 +67,57 @@ No user-facing feature changes. Full per-module findings, including lower-severi
 items left as flagged open decisions, are in
 [`docs/module-audit/`](docs/module-audit/PROGRESS.md).
 
+### Integrations & Finance: chat notifications, security detectors, and external approvals (2026-07-22)
+
+Built out three capabilities that were previously scaffolding:
+
+- **Chat notifications (Slack / Discord / Teams)** — when shifts or training
+  records are created, the department's configured chat integrations now receive
+  a formatted notification. Bulk operations (generating shifts from a pattern,
+  recording training for a group) send a single batched summary rather than one
+  message per row, so a chat channel can't be flooded.
+- **Security event detectors wired in** — repeated failed logins now raise a
+  brute-force signal, and attempts to grant a role/permission the actor doesn't
+  hold themselves raise a privilege-escalation signal, both recorded to the
+  security-monitoring log for review.
+- **External-approver finance flow** — a purchase/expense approval can be sent to
+  an approver by email with a one-time token link; the approver reviews and
+  approves/denies on a public page (`/finance/approvals/:token`) without needing a
+  Logbook account. Tokens are single-purpose and the page never exposes more than
+  the item under review.
+
+### Security: red-team review and full remediation (2026-07-21)
+
+An adversarial, application-wide security review (backend, frontend, middleware,
+public/webhook surface, deployment) followed by remediation of every HIGH,
+MEDIUM, and LOW finding. Full findings and the remediation matrix are in
+[`docs/security/RED_TEAM_REVIEW_2026-07.md`](docs/security/RED_TEAM_REVIEW_2026-07.md).
+
+**HIGH**
+
+- **Cross-tenant audit-log disclosure closed** — the security-monitoring audit
+  endpoints are now scoped to the caller's organization.
+- **Role/permission grant ceiling enforced** — a user can no longer grant a role
+  or permission they don't themselves hold (privilege-escalation ceiling).
+- **Rate-limiter DoS fixed** — the limiter keys on the real client IP
+  (proxy-aware) instead of a spoofable value.
+- **MFA hardened** — TOTP replay is blocked (last-used timestep) and repeated
+  failures lock out (brute-force protection).
+- **Audit hash-chain keyed** — the tamper-evident audit chain is now HMAC-keyed
+  with a versioned, no-downgrade guard.
+
+**MEDIUM / LOW** — PII/roster responses excluded from the client cache; XXE
+(defusedxml), PDF/ReportLab markup injection, and a raw SQL fragment fixed;
+auth hardening (Secure cookies, login-enumeration resistance, hashed MFA recovery
+codes, OAuth warning); config/deploy hardening (docs/debug off in prod, request
+body cap, production compose); CSRF no-cookie gap and distributed public-route
+rate limiting; refresh-token rotation grace; SSRF send-time re-validation
+(DNS-rebinding); webhook replay protection; public-form daily cap.
+
+**Dead-code cleanup** — removed 88 verified-unused items (unimported frontend
+files/modules, 39 dead exports, 36 backend functions), each confirmed with
+`tsc`/ESLint (frontend) and import-resolution + `pytest --collect-only` (backend).
+
 ### Department Messaging: reliable delivery, acknowledgment tracking, and scheduling (2026-07-17)
 
 A pass over the internal Department Messages feature so announcements reliably
