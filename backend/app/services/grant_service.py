@@ -73,11 +73,12 @@ class GrantService:
         if category:
             query = query.where(GrantOpportunity.category == category)
         if search:
-            pattern = f"%{search}%"
+            safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{safe}%"
             query = query.where(
-                (GrantOpportunity.name.ilike(pattern))
-                | (GrantOpportunity.agency.ilike(pattern))
-                | (GrantOpportunity.description.ilike(pattern))
+                (GrantOpportunity.name.ilike(pattern, escape="\\"))
+                | (GrantOpportunity.agency.ilike(pattern, escape="\\"))
+                | (GrantOpportunity.description.ilike(pattern, escape="\\"))
             )
         query = query.order_by(GrantOpportunity.deadline_date.asc().nulls_last())
         result = await self.db.execute(query)
@@ -183,9 +184,33 @@ class GrantService:
         )
         return result.scalar_one_or_none()
 
+    async def _opportunity_in_org(
+        self, opportunity_id: Any, organization_id: str
+    ) -> bool:
+        """Whether a grant opportunity is in the org.
+
+        `opportunity_id` is client-supplied and is eager-loaded into the
+        application response and read by `_generate_compliance_tasks`
+        (`opportunity.category`) — a foreign id would leak another org's
+        opportunity fields and drive task generation, so validate it in-org.
+        """
+        if not opportunity_id:
+            return False
+        result = await self.db.execute(
+            select(GrantOpportunity.id).where(
+                GrantOpportunity.id == str(opportunity_id),
+                GrantOpportunity.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
     async def create_application(
         self, organization_id: str, data: Dict[str, Any], user_id: str
     ) -> GrantApplication:
+        if data.get("opportunity_id") and not await self._opportunity_in_org(
+            data["opportunity_id"], organization_id
+        ):
+            raise ValueError("Grant opportunity not found")
         application = GrantApplication(
             organization_id=organization_id,
             created_by=user_id,
@@ -225,6 +250,11 @@ class GrantService:
         application = await self.get_application(application_id, organization_id)
         if not application:
             return None
+
+        if data.get("opportunity_id") and not await self._opportunity_in_org(
+            data["opportunity_id"], organization_id
+        ):
+            raise ValueError("Grant opportunity not found")
 
         old_status = application.application_status
 
@@ -492,6 +522,26 @@ class GrantService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def _budget_item_in_application(
+        self, budget_item_id: Any, application_id: str
+    ) -> bool:
+        """Whether a budget item belongs to the given (org-verified) application.
+
+        `budget_item_id` is client-supplied and feeds `_update_budget_item_spent`
+        (which fetches and writes the budget item by id) — tying it to the
+        already-org-scoped application prevents an expenditure from corrupting
+        another org's budget line.
+        """
+        if not budget_item_id:
+            return False
+        result = await self.db.execute(
+            select(GrantBudgetItem.id).where(
+                GrantBudgetItem.id == str(budget_item_id),
+                GrantBudgetItem.application_id == str(application_id),
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
     async def create_expenditure(
         self,
         application_id: str,
@@ -502,6 +552,10 @@ class GrantService:
         app = await self.get_application(application_id, organization_id)
         if not app:
             raise ValueError("Application not found")
+        if data.get("budget_item_id") and not await self._budget_item_in_application(
+            data["budget_item_id"], application_id
+        ):
+            raise ValueError("Budget item not found")
         expenditure = GrantExpenditure(
             application_id=application_id,
             created_by=user_id,
@@ -533,6 +587,12 @@ class GrantService:
         expenditure = result.scalar_one_or_none()
         if not expenditure:
             return None
+        # A reassigned budget_item_id must belong to this expenditure's
+        # (org-scoped) application before it feeds the recompute-write.
+        if data.get("budget_item_id") and not await self._budget_item_in_application(
+            data["budget_item_id"], expenditure.application_id
+        ):
+            raise ValueError("Budget item not found")
         old_budget_item_id = expenditure.budget_item_id
         for key, value in data.items():
             setattr(expenditure, key, value)

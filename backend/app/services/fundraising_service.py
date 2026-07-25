@@ -122,12 +122,13 @@ class FundraisingService:
         if donor_type:
             query = query.where(Donor.donor_type == donor_type)
         if search:
-            pattern = f"%{search}%"
+            safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{safe}%"
             query = query.where(
-                (Donor.first_name.ilike(pattern))
-                | (Donor.last_name.ilike(pattern))
-                | (Donor.email.ilike(pattern))
-                | (Donor.company_name.ilike(pattern))
+                (Donor.first_name.ilike(pattern, escape="\\"))
+                | (Donor.last_name.ilike(pattern, escape="\\"))
+                | (Donor.email.ilike(pattern, escape="\\"))
+                | (Donor.company_name.ilike(pattern, escape="\\"))
             )
         query = query.order_by(Donor.last_name.asc(), Donor.first_name.asc())
         result = await self.db.execute(query)
@@ -184,24 +185,58 @@ class FundraisingService:
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
+    async def _entity_in_org(
+        self, model: Any, entity_id: Any, organization_id: str
+    ) -> bool:
+        """Whether a row of ``model`` with ``entity_id`` is in the org.
+
+        Client-supplied campaign/donor ids feed the campaign-total / donor-stats
+        recompute (which fetches and writes the parent) — validate them in-org
+        first so a donation can't corrupt another org's campaign/donor totals.
+        """
+        if not entity_id:
+            return False
+        result = await self.db.execute(
+            select(model.id).where(
+                model.id == str(entity_id),
+                model.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
     async def create_donation(
         self, organization_id: str, data: Dict[str, Any], user_id: str
     ) -> Donation:
+        campaign_id = data.get("campaign_id")
+        donor_id = data.get("donor_id")
+        if campaign_id and not await self._entity_in_org(
+            FundraisingCampaign, campaign_id, organization_id
+        ):
+            raise ValueError("Campaign not found")
+        if donor_id and not await self._entity_in_org(Donor, donor_id, organization_id):
+            raise ValueError("Donor not found")
+
         donation = Donation(
             organization_id=organization_id,
             recorded_by=user_id,
             **data,
         )
+        # Normalize the payment status so the running-total guard below sees the
+        # effective value — the column's server_default only materializes in the
+        # DB, so an omitted status is None on the in-memory row and would
+        # otherwise skip the campaign/donor total update.
+        if not donation.payment_status:
+            donation.payment_status = PaymentStatus.COMPLETED
         self.db.add(donation)
         await self.db.flush()
 
         # Update campaign current_amount
         if donation.campaign_id and donation.payment_status == PaymentStatus.COMPLETED:
-            await self._update_campaign_total(donation.campaign_id)
+            await self._update_campaign_total(donation.campaign_id, organization_id)
 
         # Update donor stats
         if donation.donor_id and donation.payment_status == PaymentStatus.COMPLETED:
-            await self._update_donor_stats(donation.donor_id)
+            await self._update_donor_stats(donation.donor_id, organization_id)
 
         return donation
 
@@ -225,34 +260,53 @@ class FundraisingService:
         old_campaign_id = donation.campaign_id
         old_donor_id = donation.donor_id
 
+        # Validate any reassigned FK is in-org before applying — the recompute
+        # below fetches and writes the referenced campaign/donor.
+        if data.get("campaign_id") and not await self._entity_in_org(
+            FundraisingCampaign, data["campaign_id"], organization_id
+        ):
+            raise ValueError("Campaign not found")
+        if data.get("donor_id") and not await self._entity_in_org(
+            Donor, data["donor_id"], organization_id
+        ):
+            raise ValueError("Donor not found")
+
         for key, value in data.items():
             setattr(donation, key, value)
         await self.db.flush()
 
         # Recalculate aggregates for both the old and new campaign/donor.
         for cid in {old_campaign_id, donation.campaign_id} - {None}:
-            await self._update_campaign_total(cid)
+            await self._update_campaign_total(cid, organization_id)
         for did in {old_donor_id, donation.donor_id} - {None}:
-            await self._update_donor_stats(did)
+            await self._update_donor_stats(did, organization_id)
 
         return donation
 
-    async def _update_campaign_total(self, campaign_id: str) -> None:
+    async def _update_campaign_total(
+        self, campaign_id: str, organization_id: str
+    ) -> None:
         result = await self.db.execute(
             select(func.coalesce(func.sum(Donation.amount), 0)).where(
                 Donation.campaign_id == campaign_id,
+                Donation.organization_id == organization_id,
                 Donation.payment_status == PaymentStatus.COMPLETED.value,
             )
         )
         total = result.scalar()
         camp_result = await self.db.execute(
-            select(FundraisingCampaign).where(FundraisingCampaign.id == campaign_id)
+            select(FundraisingCampaign).where(
+                FundraisingCampaign.id == campaign_id,
+                FundraisingCampaign.organization_id == organization_id,
+            )
         )
         campaign = camp_result.scalar_one_or_none()
         if campaign:
             campaign.current_amount = total
 
-    async def _update_donor_stats(self, donor_id: str) -> None:
+    async def _update_donor_stats(
+        self, donor_id: str, organization_id: str
+    ) -> None:
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(Donation.amount), 0),
@@ -261,11 +315,17 @@ class FundraisingService:
                 func.max(Donation.donation_date),
             ).where(
                 Donation.donor_id == donor_id,
+                Donation.organization_id == organization_id,
                 Donation.payment_status == PaymentStatus.COMPLETED.value,
             )
         )
         row = result.one()
-        donor_result = await self.db.execute(select(Donor).where(Donor.id == donor_id))
+        donor_result = await self.db.execute(
+            select(Donor).where(
+                Donor.id == donor_id,
+                Donor.organization_id == organization_id,
+            )
+        )
         donor = donor_result.scalar_one_or_none()
         if donor:
             donor.total_donated = row[0]

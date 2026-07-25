@@ -26,8 +26,8 @@ already covered by the red-team review on this branch).
 | 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ✅ |
 | 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ✅ |
 | 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ✅ |
-| 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | 🔄 next |
-| 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ⬜ |
+| 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ✅ |
+| 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | 🔄 next |
 | 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ⬜ |
 | 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ⬜ |
 | 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ⬜ |
@@ -186,4 +186,19 @@ already covered by the red-team review on this branch).
   auto-escapes → not exploitable now), FORM-5 (require_authentication /
   allow_multiple_submissions not enforced on public submit), FORM-6 (required
   check presence-only). FORM-1/2 are XC-1 with real cross-tenant write impact.
-  See forms.md. Next: grants/fundraising.
+  See forms.md.
+- #14 grants/fundraising ✅ — money-handling module; direct-object tenant
+  isolation solid but the recompute helpers were the write vector. **5 fixes
+  applied:** GF-1 (**CRITICAL**: create/update_donation accepted cross-org
+  campaign_id/donor_id that fed org-blind recompute helpers overwriting another
+  org's campaign/donor totals; now validated in-org + helpers org-scoped), GF-2
+  (HIGH: expenditure budget_item_id corrupted another org's budget line; now
+  validated against the org-verified application), GF-3 (HIGH correctness:
+  donations with omitted payment_status were dropped from running totals due to
+  exclude_unset + server_default; now normalized), GF-4 (MED: application
+  opportunity_id leaked another org's opportunity fields + drove task-gen; now
+  validated in-org), GF-5 (LOW: donor/opportunity search LIKE not escaped). 4
+  flagged: GF-6 remaining stored-only cross-org FKs (XC-1), GF-7 no overspend/
+  status-transition guards + re-award duplicates tasks, GF-8 is_anonymous flag
+  never enforced, GF-9 float money math / zero amounts / donor-PII gate. See
+  grants-fundraising.md. Next: admin-hours.

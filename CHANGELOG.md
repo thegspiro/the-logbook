@@ -50,6 +50,14 @@ open decisions that need an owner are collected in
   form could RSVP against another department's event. Both integration processors
   now verify the referenced member/item/event belongs to the form's department
   before writing.
+- **Grants/Fundraising — donation and expenditure totals can no longer be
+  corrupted across departments.** Recording a donation or grant expenditure with
+  a campaign / donor / budget-line id belonging to **another** department silently
+  overwrote that department's campaign progress, donor lifetime-giving, or budget
+  spend. Those references are now validated in-department before the totals
+  recompute (which is itself now department-scoped). Also fixed: a donation saved
+  without an explicit payment status was omitted from campaign/donor totals until
+  a later edit.
 
 **Data protection & correctness**
 
