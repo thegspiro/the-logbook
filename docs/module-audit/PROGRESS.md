@@ -22,8 +22,8 @@ already covered by the red-team review on this branch).
 | 7 | equipment-check | endpoints/equipment_check.py, shift_completion.py, services/equipment_check_service.py | (in-app) | ✅ |
 | 8 | documents | endpoints/documents.py, services/document_service.py, documents_service.py | (in-app) | ✅ |
 | 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ✅ |
-| 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | 🔄 next |
-| 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ⬜ |
+| 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ✅ |
+| 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | 🔄 next |
 | 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ⬜ |
 | 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ⬜ |
 | 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ⬜ |
@@ -134,4 +134,12 @@ already covered by the red-team review on this branch).
   MP-5 (more XC-1 create paths), MP-6 (PII in activity/audit log), MP-7
   (inconsistent existing-member PII disclosure). New cross-cutting pattern XC-2
   (sensitive reads gated broader than intended). See membership-pipeline.md.
-  Next: messaging/comms.
+- #10 messaging/comms ✅ — very clean module. Tenant isolation SOLID; **audience
+  targeting provably cannot cross org boundaries** (single org-scoped choke point
+  `_targeted_users`); XC-3 clean; not usable as a spam/phishing relay
+  (destinations are org-scoped user records); a member can't read messages not
+  addressed to them. **1 fix applied:** MSG-1 (LOW: unescaped org name in the
+  test-email HTML — the one gap in the module's otherwise-correct escaping; now
+  html.escaped). 2 LOW flagged: MSG-2 (targeting lists not org-validated on
+  write, XC-1, not exploitable), MSG-3 (admin test-email to arbitrary address, by
+  design). See messaging.md. Next: notifications.
