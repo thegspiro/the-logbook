@@ -81,14 +81,14 @@ async def list_pipelines(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     List all membership pipelines for the organization.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     pipelines = await service.list_pipelines(
@@ -166,14 +166,14 @@ async def get_pipeline(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     Get a single pipeline with its steps.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     pipeline = await service.get_pipeline(
@@ -397,14 +397,14 @@ async def list_steps(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     List all steps for a pipeline.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     pipeline = await service.get_pipeline(
@@ -557,7 +557,7 @@ async def get_kanban_board(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
@@ -566,7 +566,7 @@ async def get_kanban_board(
 
     Returns prospects grouped by their current step.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     board = await service.get_kanban_board(
@@ -590,14 +590,14 @@ async def get_pipeline_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     Get statistics for a pipeline (counts by status, by step, conversion rate).
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     stats = await service.get_pipeline_stats(
@@ -672,7 +672,7 @@ async def list_prospects(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
@@ -682,7 +682,7 @@ async def list_prospects(
     Returns a paginated response with ``items``, ``total``, ``limit``,
     and ``offset`` so clients can implement proper pagination.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     prospects, total = await service.list_prospects(
@@ -848,14 +848,14 @@ async def get_prospect(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     Get a prospective member's full details including step progress.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     prospect = await service.get_prospect(
@@ -1065,14 +1065,14 @@ async def get_prospect_activity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     Get the activity log for a prospect.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     logs = await service.get_activity_log(
@@ -1134,14 +1134,14 @@ async def list_prospect_documents(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     List all documents for a prospect.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     docs = await service.get_prospect_documents(
@@ -1254,14 +1254,14 @@ async def download_prospect_document(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     Download a stored prospect document.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     # get_prospect_documents enforces that the prospect belongs to the caller's
@@ -1347,14 +1347,17 @@ async def get_election_package(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view",
+            "prospective_members.manage",
+            "elections.view",
+            "elections.manage",
         )
     ),
 ):
     """
     Get the election package for a prospect.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view or elections.view**
     """
     service = MembershipPipelineService(db)
     pkg = await service.get_election_package(
@@ -1444,14 +1447,17 @@ async def list_election_packages(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view",
+            "prospective_members.manage",
+            "elections.view",
+            "elections.manage",
         )
     ),
 ):
     """
     List election packages across all prospects, optionally filtered.
 
-    **Requires permission: members.view**
+    **Requires permission: prospective_members.view or elections.view**
     """
     service = MembershipPipelineService(db)
     packages = await service.list_election_packages(
@@ -1564,14 +1570,14 @@ async def list_interviews(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "members.view", "prospective_members.view", "prospective_members.manage"
+            "prospective_members.view", "prospective_members.manage"
         )
     ),
 ):
     """
     List all interviews for a prospect.
 
-    **Requires permission: members.view or prospective_members.view**
+    **Requires permission: prospective_members.view**
     """
     service = MembershipPipelineService(db)
     try:

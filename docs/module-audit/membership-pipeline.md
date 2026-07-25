@@ -28,21 +28,33 @@ address, background checks, IDs).
 
 ## Findings
 
-### MP-1 — HIGH (flagged — policy decision) — Applicant PII / background-check downloads reachable with generic `members.view`
+### MP-1 — HIGH — Applicant PII / background-check downloads reachable with generic `members.view` — ✅ FIXED
 All 13 prospect **read** routes (list, detail, documents list, **document
-download**, interviews list, activity, election-package) gate on
+download**, interviews list, activity, election-package) gated on
 `require_permission("members.view", "prospective_members.view",
-"prospective_members.manage")` — OR logic, so `members.view` alone suffices.
-`members.view` is the generic "View member list" permission typically granted to
-rank-and-file members. Effect: any member with roster-view can **download
-applicants' background checks and IDs** and read DOB/home address.
-**Why flagged, not auto-fixed:** the `members.view` grant is applied
-*consistently across all 13 routes* — a deliberate access-model choice, not a
-slip — so removing it is an access-policy change (would drop prospect visibility
-for roster-viewers who lack `prospective_members.view`). Given the sensitivity,
-the recommended change is to drop `members.view` from these routes and require
-`prospective_members.view`/`.manage` (the module's other write routes already do
-this). **Needs a product decision — see the question raised to the maintainer.**
+"prospective_members.manage")` — OR logic, so `members.view` (the generic "View
+member list" permission typically granted to rank-and-file members) alone
+sufficed. Effect: any member with roster-view could **download applicants'
+background checks and IDs** and read DOB/home address by calling the API
+directly.
+**Investigation before fixing:** the frontend already gates the entire
+prospective-members module on `prospective_members.view`/`.manage`
+(`modules/prospective-members/routes.tsx`), so no legitimate UI flow reached
+these endpoints with only `members.view` — the grant was dead over-permission
+that only widened the raw API. The one cross-module consumer is the
+ElectionDetailPage (gated on `elections.*`), which reads pending **election
+packages** via `list_election_packages`.
+**Fix:**
+- The 11 applicant-PII and pipeline routes (prospects list/detail, documents
+  list, **document download**, activity, interviews, kanban, and the
+  pipeline/steps/stats reads) now require `prospective_members.view`/`.manage`;
+  `members.view` removed.
+- The 2 election-package routes (`get_election_package`,
+  `list_election_packages`) now require `prospective_members.view`/`.manage`
+  **or** `elections.view`/`.manage`, preserving the election-officer workflow
+  while dropping the generic `members.view`.
+- Stale `Requires permission: members.view` docstrings corrected.
+No frontend change needed (it already required `prospective_members.view`).
 
 ### MP-2 — MEDIUM — `create_prospect` stored an unvalidated `pipeline_id` (cross-org config leak) — ✅ FIXED
 A client-supplied `pipeline_id` was used to seed `current_step_id` and

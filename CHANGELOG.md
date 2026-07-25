@@ -63,9 +63,19 @@ open decisions that need an owner are collected in
   properly escaped** in several modules (meetings/minutes, inventory,
   equipment-check, messaging test-email).
 
-No user-facing feature changes. Full per-module findings, including lower-severity
-items left as flagged open decisions, are in
-[`docs/module-audit/`](docs/module-audit/PROGRESS.md).
+**Access control**
+
+- **Prospective-member records now require the prospective-members permission.**
+  The applicant read/detail/**document-download** routes (background checks, IDs,
+  DOB/address) previously also accepted the generic "View member list"
+  (`members.view`) permission, so any member with roster access could pull them
+  via the API. They now require `prospective_members.view`/`.manage` (the
+  permission the UI already required to open those pages). Election officers keep
+  access to applicant **election packages** through `elections.view`/`.manage`.
+
+Aside from the tightened prospective-member access above, no user-facing feature
+changes. Full per-module findings, including lower-severity items left as flagged
+open decisions, are in [`docs/module-audit/`](docs/module-audit/PROGRESS.md).
 
 ### Integrations & Finance: chat notifications, security detectors, and external approvals (2026-07-22)
 

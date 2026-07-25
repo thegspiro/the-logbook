@@ -44,11 +44,14 @@ Roll out per-module with tests. Not auto-applied — behavior change.
 
 ## XC-2 — Sensitive reads gated by a permission broader than intended
 **Seen in:** membership-pipeline (MP-1 — applicant PII / background-check
-document downloads reachable with generic `members.view` roster permission
-instead of the dedicated `prospective_members.view`), documents (DOC-4 — summary
-aggregates ignore the folder ACL), meetings/minutes (MM-3 — draft/executive
-minutes readable by any `minutes.view` holder). Pattern: a `.view`-style read is
-gated by a permission held by rank-and-file when the data warrants a narrower
-gate. Each is an access-policy decision (behavior change), so flagged for the
-maintainer rather than auto-tightened. **Action:** for each module, confirm the
-intended audience of sensitive reads vs the permission actually required.
+document downloads reachable with generic `members.view` roster permission —
+**✅ FIXED**: the applicant/pipeline routes now require
+`prospective_members.view/.manage`, and the election-package routes require
+those or `elections.view/.manage`; `members.view` removed), documents (DOC-4 —
+summary aggregates ignore the folder ACL), meetings/minutes (MM-3 —
+draft/executive minutes readable by any `minutes.view` holder). Pattern: a
+`.view`-style read is gated by a permission held by rank-and-file when the data
+warrants a narrower gate. Verify each: is it dead over-permission (frontend
+already gates tighter, so removal is safe — as with MP-1), or a real access-model
+decision? **Action:** for each module, confirm the intended audience of sensitive
+reads vs the permission actually required; MM-3 and DOC-4 remain open decisions.

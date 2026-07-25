@@ -126,11 +126,15 @@ already covered by the red-team review on this branch).
   create_prospect stored an unvalidated pipeline_id → leaked a foreign org's step
   config in the response; now org-validated), MP-3 (create_leave didn't validate
   user_id in-org; now validated), MP-4 (PATCH leave skipped date-order check; now
-  validated + both leave endpoints convert ValueError→400). **1 HIGH flagged for
-  a product decision:** MP-1 — applicant background-check/ID downloads + PII are
-  reachable with the generic `members.view` roster permission (consistently
-  across all 13 prospect-read routes, so a deliberate access-model choice, not a
-  slip); recommend requiring prospective_members.view/.manage. 3 LOW flagged:
+  validated + both leave endpoints convert ValueError→400). **MP-1 (HIGH) now
+  FIXED (2026-07-25):** applicant background-check/ID downloads + PII were
+  reachable with the generic `members.view` roster permission across all 13
+  prospect-read routes. Investigation showed the frontend already gates the
+  module on `prospective_members.view`, so `members.view` was dead
+  over-permission on the API; removed it (applicant/pipeline routes now require
+  `prospective_members.view/.manage`; the 2 election-package routes require those
+  or `elections.view/.manage`, preserving the election-officer flow). 3 LOW
+  flagged:
   MP-5 (more XC-1 create paths), MP-6 (PII in activity/audit log), MP-7
   (inconsistent existing-member PII disclosure). New cross-cutting pattern XC-2
   (sensitive reads gated broader than intended). See membership-pipeline.md.
