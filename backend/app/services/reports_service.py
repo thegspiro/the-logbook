@@ -34,6 +34,16 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 
 
+def _safe_int(value: Any, default: int) -> int:
+    """Coerce a client-supplied report filter value to int, falling back to
+    ``default`` on any non-numeric input so an invalid filter is a no-op rather
+    than an unhandled 500."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class ReportsService:
     """Service for report generation"""
 
@@ -590,11 +600,13 @@ class ReportsService:
     ) -> Dict[str, Any]:
         """Generate an annual training report with hours, completions, shift reports, and member breakdown."""
         # Default to current year if no dates provided
-        year = (filters or {}).get("year", datetime.now(timezone.utc).year)
+        year = _safe_int(
+            (filters or {}).get("year"), datetime.now(timezone.utc).year
+        )
         if not start_date:
-            start_date = date(int(year), 1, 1)
+            start_date = date(year, 1, 1)
         if not end_date:
-            end_date = date(int(year), 12, 31)
+            end_date = date(year, 12, 31)
 
         # Get active, non-exempt members
         users_result = await self.db.execute(
@@ -715,7 +727,7 @@ class ReportsService:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "period_start": str(start_date),
             "period_end": str(end_date),
-            "year": int(year),
+            "year": year,
             "summary": {
                 "total_members": len(users),
                 "total_training_hours": round(total_hours, 1),
@@ -777,7 +789,7 @@ class ReportsService:
         }
 
         today = date.today()
-        soon_threshold = int((filters or {}).get("expiring_soon_days", 90))
+        soon_threshold = _safe_int((filters or {}).get("expiring_soon_days"), 90)
 
         entries = []
         expired_count = 0
@@ -1341,7 +1353,7 @@ class ReportsService:
 
         from app.models.meeting import ActionItemStatus, MeetingActionItem
         from app.models.minute import ActionItem as MinutesActionItem
-        from app.models.minute import MinutesActionItemStatus
+        from app.models.minute import MeetingMinutes, MinutesActionItemStatus
 
         org_id = str(organization_id)
         period_start = (
@@ -1431,8 +1443,17 @@ class ReportsService:
                 ),
             )
         )
+        # Minutes action items have no organization_id of their own — they are
+        # org-scoped via minutes_id -> meeting_minutes. Join and filter the org,
+        # otherwise this counts open action items across ALL organizations.
         open_minutes_items = await self.db.execute(
-            select(func.count(MinutesActionItem.id)).where(
+            select(func.count(MinutesActionItem.id))
+            .join(
+                MeetingMinutes,
+                MinutesActionItem.minutes_id == MeetingMinutes.id,
+            )
+            .where(
+                MeetingMinutes.organization_id == org_id,
                 MinutesActionItem.status.in_(
                     [
                         MinutesActionItemStatus.PENDING.value,

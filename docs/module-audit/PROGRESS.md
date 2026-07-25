@@ -28,8 +28,8 @@ already covered by the red-team review on this branch).
 | 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ✅ |
 | 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ✅ |
 | 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ✅ |
-| 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | 🔄 next |
-| 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ⬜ |
+| 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ✅ |
+| 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | 🔄 next |
 | 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ⬜ |
 | 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ⬜ |
 | 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ⬜ |
@@ -212,4 +212,14 @@ already covered by the red-team review on this branch).
   auto-approved clock-outs now stamp approved_at). Mock-based service tests run +
   pass (updated the one asserting old auto-approve). 2 flagged: AH-4 officers can
   self-approve (SoD — but small-dept concern, needs a toggle), AH-5 minor
-  scoping omissions (not exploitable). See admin-hours.md. Next: reports/analytics.
+  scoping omissions (not exploitable). See admin-hours.md.
+- #16 reports/analytics ✅ — cross-org-leakage focus. platform_analytics fully
+  org-scoped (16/16 queries); reports org-scoped almost everywhere; no
+  client-supplied group-by/column injection. **2 fixes applied:** RPT-1 (HIGH
+  cross-org leak: department_overview counted minutes action items across ALL
+  orgs — no org filter, and that model has no organization_id so it needs a
+  MeetingMinutes join; now org-scoped), RPT-2 (LOW/MED: unvalidated year /
+  expiring_soon_days report filters could 500; added _safe_int coercion). 3
+  flagged: RPT-3 member/applicant PII at reports.view (permission granularity),
+  RPT-4 org-id typing inconsistency, RPT-5 aggregate correctness/polish. See
+  reports-analytics.md. Next: events.
