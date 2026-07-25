@@ -859,6 +859,20 @@ async def update_user_mapping(
 
     # Update fields
     if mapping_update.internal_user_id is not None:
+        # Validate the mapped member belongs to the caller's org before storing
+        # it — otherwise a foreign user id is persisted and read back (name +
+        # email) via the enrichment lookup.
+        if mapping_update.internal_user_id:
+            member_check = await db.execute(
+                select(User.id).where(
+                    User.id == str(mapping_update.internal_user_id),
+                    User.organization_id == str(current_user.organization_id),
+                )
+            )
+            if member_check.scalar_one_or_none() is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Member not found"
+                )
         mapping.internal_user_id = (
             str(mapping_update.internal_user_id)
             if mapping_update.internal_user_id
@@ -880,7 +894,8 @@ async def update_user_mapping(
     if mapping.internal_user_id:
         user_result = await db.execute(
             select(User.full_name, User.email).where(
-                User.id == mapping.internal_user_id
+                User.id == mapping.internal_user_id,
+                User.organization_id == str(current_user.organization_id),
             )
         )
         user_data = user_result.one_or_none()

@@ -30,8 +30,8 @@ already covered by the red-team review on this branch).
 | 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ✅ |
 | 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ✅ |
 | 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ✅ |
-| 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | 🔄 next |
-| 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ⬜ |
+| 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ✅ |
+| 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | 🔄 next |
 | 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ⬜ |
 | 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ⬜ |
 | 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ⬜ |
@@ -234,4 +234,19 @@ already covered by the red-team review on this branch).
   EventService instantiation removed). 3 flagged: EV-5 (public intake has no
   per-org opt-in + weaker anti-spam than forms — feature+config), EV-6 (members
   can RSVP to draft/past events), EV-7 (status-check not rate-limited [token is
-  256-bit] + template-email TypeError). See events.md. Next: training.
+  256-bit] + template-email TypeError). See events.md.
+- #18 training ✅ — largest module (154 endpoints, ~17k L); audited with two
+  parallel readers (member/compliance + programs/external). Verified good:
+  per-member PHI endpoints self-or-officer gated, programs-service tenant
+  isolation solid (XC-3 clean), external-provider SSRF + credentials solid
+  (URL validated write+every-call, creds encrypted write-only). **4 fixes
+  applied:** TR-1 (HIGH cross-member PHI leak: /certifications/expiring returned
+  every member's certs to any member; now self-confined), TR-2 (MED XC-1:
+  create_record skipped user_id org-validation when rank+station supplied; now
+  unconditional + course lookup org-scoped), TR-3 (MED cross-org PII leak:
+  external user-mapping enrichment read a foreign user's name/email; now
+  org-scoped + internal_user_id validated), TR-4 (dead no-op year statement
+  removed). 2 flagged: TR-5 (auto-approved submissions bypass SoD — config), TR-6
+  (external/enhancement FK defense-in-depth + _decrypt_field fallback +
+  enhancement-service spot-check). training_program_service (4027 L) got
+  invariant-focused coverage. See training.md. Next: scheduling.

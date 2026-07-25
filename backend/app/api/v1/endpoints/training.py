@@ -294,7 +294,8 @@ async def create_record(
     ):
         course_result = await db.execute(
             select(TrainingCourse).where(
-                TrainingCourse.id == str(record_data["course_id"])
+                TrainingCourse.id == str(record_data["course_id"]),
+                TrainingCourse.organization_id == str(current_user.organization_id),
             )
         )
         course = course_result.scalar_one_or_none()
@@ -307,22 +308,23 @@ async def create_record(
             day = min(comp.day, calendar.monthrange(year, month)[1])
             record_data["expiration_date"] = date(year, month, day)
 
-    # Auto-populate rank/station from member's current profile if not explicitly set.
-    # SECURITY: Validate user belongs to the current user's organization.
-    if not record_data.get("rank_at_completion") or not record_data.get(
-        "station_at_completion"
-    ):
-        member_result = await db.execute(
-            select(User)
-            .where(User.id == str(record_data["user_id"]))
-            .where(User.organization_id == str(current_user.organization_id))
-        )
-        member = member_result.scalar_one_or_none()
-        if member:
-            if not record_data.get("rank_at_completion"):
-                record_data["rank_at_completion"] = member.rank
-            if not record_data.get("station_at_completion"):
-                record_data["station_at_completion"] = member.station
+    # SECURITY: the client-supplied user_id must belong to the caller's org.
+    # Validate unconditionally (previously this only ran when rank/station were
+    # omitted, so a record could be attributed to an arbitrary/foreign user by
+    # supplying both fields). Reuse the fetched member to auto-populate
+    # rank/station when not explicitly set.
+    member_result = await db.execute(
+        select(User)
+        .where(User.id == str(record_data["user_id"]))
+        .where(User.organization_id == str(current_user.organization_id))
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if not record_data.get("rank_at_completion"):
+        record_data["rank_at_completion"] = member.rank
+    if not record_data.get("station_at_completion"):
+        record_data["station_at_completion"] = member.station
 
     # Check for potential duplicates and include warning in response
     dupes = await _check_duplicate_records(
@@ -1209,11 +1211,17 @@ async def get_expiring_certifications(
     """
     Get certifications expiring within the specified timeframe
 
-    **Authentication required**
+    **Authentication required** — non-officers see only their own certifications;
+    `training.manage` holders see the whole organization.
     """
+    is_officer = _has_permission(
+        "training.manage", _collect_user_permissions(current_user)
+    )
     training_service = TrainingService(db)
     expiring = await training_service.get_expiring_certifications(
-        organization_id=current_user.organization_id, days_ahead=days_ahead
+        organization_id=current_user.organization_id,
+        days_ahead=days_ahead,
+        user_id=None if is_officer else current_user.id,
     )
     return expiring
 

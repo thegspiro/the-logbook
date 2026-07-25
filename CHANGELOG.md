@@ -66,6 +66,14 @@ open decisions that need an owner are collected in
   Pending review, with a future-time check and a 24-hour cap. The "close stale
   clock-ins" action was also scoping across all departments and now affects only
   the caller's department (the nightly cleanup job is unchanged).
+- **Training/Reports — a few screens that could show more than they should are
+  tightened.** The "expiring certifications" member view returned the whole
+  department's certification records (numbers, scores) to any member; it now
+  shows a member only their own (officers still see everyone). Creating a
+  training record now always verifies the member belongs to your department, and
+  an external-provider user-mapping screen no longer reveals another department's
+  member name/email. A department-overview report count was also inadvertently
+  tallying meeting action items across all departments and is now scoped to yours.
 
 **Data protection & correctness**
 

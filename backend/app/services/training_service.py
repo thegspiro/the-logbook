@@ -944,7 +944,10 @@ class TrainingService:
         """
         Get progress for all requirements applicable to a user
         """
-        year or datetime.now(timezone.utc).year
+        # NOTE: `year` defaults to None → the year filter below is skipped (all
+        # years). A prior no-op `year or <current year>` here was dead code;
+        # whether this should default to the current year is a compliance-
+        # semantics decision (see docs/module-audit/training.md), left as-is.
 
         # Get user's roles
         user_result = await self.db.execute(
@@ -1009,16 +1012,23 @@ class TrainingService:
         return progress_list
 
     async def get_expiring_certifications(
-        self, organization_id: UUID, days_ahead: int = 90
+        self,
+        organization_id: UUID,
+        days_ahead: int = 90,
+        user_id: Optional[UUID] = None,
     ) -> List[TrainingRecord]:
         """
         Get certifications that are expiring within the specified number of days,
         including those that have already expired.
+
+        Pass ``user_id`` to confine the result to one member (self-service
+        callers do this — these records carry certification numbers/scores that
+        are not roster-public, so a non-officer must not see the whole org).
         """
         today = date.today()
         future_date = today + timedelta(days=days_ahead)
 
-        result = await self.db.execute(
+        query = (
             select(TrainingRecord)
             .where(TrainingRecord.organization_id == str(organization_id))
             .where(TrainingRecord.status == TrainingStatus.COMPLETED)
@@ -1026,5 +1036,8 @@ class TrainingService:
             .where(TrainingRecord.expiration_date <= future_date)
             .order_by(TrainingRecord.expiration_date)
         )
+        if user_id is not None:
+            query = query.where(TrainingRecord.user_id == str(user_id))
 
+        result = await self.db.execute(query)
         return result.scalars().all()
