@@ -37,10 +37,18 @@ belong to the caller's organization. Impact is low individually (children are
 org-scoped, so it's mis-attribution / orphan rows, not cross-tenant disclosure),
 but it's a consistent gap.
 
+**Escalated impact seen in forms (FORM-1/FORM-2):** the forms *integration
+processors* trusted submitter-supplied FK ids (`member_id`/`item_id`/`event_id`)
+and drove **cross-module writes** — assigning an in-org item to a foreign user,
+and creating an RSVP against a foreign org's event. So this pattern is not always
+"just a dangling FK": when the unvalidated id feeds a downstream write, it's a
+live cross-tenant write. Fixed in-place with a local `_entity_in_org` helper.
+
 **Recommended fix (one place, many callers):** a shared async helper, e.g.
 `await assert_in_org(db, Model, id, organization_id)` that 404/400s when the
 referenced row is missing or out-of-org, used by create/update service methods.
-Roll out per-module with tests. Not auto-applied — behavior change.
+The forms `_entity_in_org` (forms_service.py) is a working local instance of
+exactly this — promote it to a shared util. Roll out per-module with tests.
 
 ## XC-2 — Sensitive reads gated by a permission broader than intended
 **Seen in:** membership-pipeline (MP-1 — applicant PII / background-check

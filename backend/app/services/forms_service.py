@@ -247,7 +247,11 @@ class FormsService:
                     if raw_value not in allowed:
                         return {}, f"Invalid option for '{field.label}'"
 
-            if field_type == FieldType.CHECKBOX.value and str_value.strip():
+            if (
+                field_type
+                in (FieldType.CHECKBOX.value, FieldType.MULTISELECT.value)
+                and str_value.strip()
+            ):
                 # Validate each comma-separated value against allowed options
                 if field.options:
                     allowed = {
@@ -1905,6 +1909,26 @@ class FormsService:
             f"prospect {prospect.id} (submission {submission.id})"
         )
 
+    async def _entity_in_org(
+        self, model: Any, entity_id: Any, organization_id: Any
+    ) -> bool:
+        """Whether a row of ``model`` with ``entity_id`` exists in the org.
+
+        Used to validate submitter-mapped foreign-key ids (member/item/event)
+        before a cross-module integration write — a public/authenticated form
+        submitter otherwise controls these ids and could target another org's
+        rows (assign an item to a foreign user, RSVP to a foreign event).
+        """
+        if not entity_id:
+            return False
+        result = await self.db.execute(
+            select(model.id).where(
+                model.id == str(entity_id),
+                model.organization_id == str(organization_id),
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
     async def _process_equipment_assignment(
         self,
         submission: FormSubmission,
@@ -1942,6 +1966,27 @@ class FormsService:
                     f"Equipment assignment missing required mapping(s): "
                     f"{', '.join(missing)}"
                 ),
+            }
+
+        # The member_id / item_id are submitter-mapped — validate both belong to
+        # the submission's org before the cross-module write, so a submitter
+        # can't assign an in-org item to a foreign user (the inventory service
+        # scopes item_id by org but not user_id).
+        from app.models.inventory import InventoryItem
+
+        if not await self._entity_in_org(
+            User, mapped_data["member_id"], submission.organization_id
+        ):
+            return {
+                "success": False,
+                "error": "Assigned member is not in this organization",
+            }
+        if not await self._entity_in_org(
+            InventoryItem, mapped_data["item_id"], submission.organization_id
+        ):
+            return {
+                "success": False,
+                "error": "Item is not in this organization",
             }
 
         # Try to perform the assignment via the inventory service
@@ -2013,13 +2058,28 @@ class FormsService:
         if submission.submitted_by:
             try:
                 from app.core.utils import generate_uuid
-                from app.models.event import EventRSVP, RSVPStatus
+                from app.models.event import Event, EventRSVP, RSVPStatus
 
-                # Check for existing RSVP to avoid duplicates
+                # The event_id is submitter-mapped — validate it belongs to the
+                # submission's org before creating an RSVP against it (otherwise
+                # a member could RSVP to, or mutate an RSVP on, a foreign org's
+                # event).
+                if not await self._entity_in_org(
+                    Event, event_id, submission.organization_id
+                ):
+                    return {
+                        "success": False,
+                        "error": "Event is not in this organization",
+                    }
+
+                # Check for existing RSVP to avoid duplicates (org-scoped)
                 existing_result = await self.db.execute(
                     select(EventRSVP)
                     .where(EventRSVP.event_id == str(event_id))
                     .where(EventRSVP.user_id == str(submission.submitted_by))
+                    .where(
+                        EventRSVP.organization_id == str(submission.organization_id)
+                    )
                 )
                 existing_rsvp = existing_result.scalar_one_or_none()
 

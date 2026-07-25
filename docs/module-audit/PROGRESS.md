@@ -25,8 +25,8 @@ already covered by the red-team review on this branch).
 | 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ✅ |
 | 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ✅ |
 | 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ✅ |
-| 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | 🔄 next |
-| 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ⬜ |
+| 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ✅ |
+| 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | 🔄 next |
 | 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ⬜ |
 | 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ⬜ |
 | 17 | events | endpoints/events.py, event_requests.py, services/event_service.py | modules/events | ⬜ |
@@ -172,4 +172,18 @@ already covered by the red-team review on this branch).
   flagged: INT-3 (list/get reads not manage-gated — but consumed cross-module, so
   needs an `integrations.view` tier not a simple gate), INT-4 (PATCH update resets
   omitted config fields to schema defaults — data-integrity bug), INT-5 (dead
-  KNOWN_WEBHOOK_DOMAINS allowlist / nits). See integrations.md. Next: forms.
+  KNOWN_WEBHOOK_DOMAINS allowlist / nits). See integrations.md.
+- #13 forms ✅ — public-submission surface is a model implementation (slug
+  validation, layered rate-limit + daily cap, honeypot, org-from-form,
+  member_lookup stripped). Stored-XSS mitigated (escape-at-storage + React
+  auto-escapes form-def text). Pipeline integration org-safe. **3 fixes applied:**
+  FORM-1 (HIGH: equipment-assignment integration assigned an in-org item to a
+  submitter-supplied cross-org user_id; now validates member+item in-org via a
+  new `_entity_in_org` helper), FORM-2 (HIGH: event-registration integration
+  created an RSVP against a submitter-supplied cross-org event_id; now validates
+  event in-org + org-scopes the dedup query), FORM-3 (LOW: MULTISELECT options
+  not validated). 3 flagged: FORM-4 (form-def text unescaped but React
+  auto-escapes → not exploitable now), FORM-5 (require_authentication /
+  allow_multiple_submissions not enforced on public submit), FORM-6 (required
+  check presence-only). FORM-1/2 are XC-1 with real cross-tenant write impact.
+  See forms.md. Next: grants/fundraising.

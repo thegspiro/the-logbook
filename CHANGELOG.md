@@ -44,6 +44,12 @@ open decisions that need an owner are collected in
   foreign `pipeline_id` leaked another department's pipeline step configuration
   in the response; creating a leave of absence didn't verify the member belonged
   to the department. Both are now validated in-org.
+- **Forms — public-submission integrations validate their targets.** A public
+  equipment-assignment form could assign an in-department item to a
+  submitter-supplied member from **another** department, and an event-registration
+  form could RSVP against another department's event. Both integration processors
+  now verify the referenced member/item/event belongs to the form's department
+  before writing.
 
 **Data protection & correctness**
 
