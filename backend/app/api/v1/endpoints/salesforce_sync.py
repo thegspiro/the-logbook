@@ -7,6 +7,7 @@ status, and managing field mappings between Logbook and Salesforce.
 
 import secrets
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
@@ -409,7 +410,14 @@ def _connect_result_redirect(reason: str | None) -> RedirectResponse:
     ``reason`` is None on success, or a short error code otherwise. The state
     cookie is cleared either way.
     """
-    query = "salesforce=connected" if reason is None else f"salesforce_error={reason}"
+    # Encode the reason — it can carry the attacker-controllable `error` query
+    # param from the OAuth provider, so it must not inject extra query/fragment
+    # content into the redirect URL.
+    query = (
+        "salesforce=connected"
+        if reason is None
+        else f"salesforce_error={quote(str(reason), safe='')}"
+    )
     resp = RedirectResponse(
         url=f"{settings.FRONTEND_URL}/integrations?{query}",
         status_code=status.HTTP_302_FOUND,

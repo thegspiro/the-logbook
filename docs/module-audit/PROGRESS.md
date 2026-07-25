@@ -24,8 +24,8 @@ already covered by the red-team review on this branch).
 | 9 | membership pipeline | endpoints/membership_pipeline.py, member_status.py, member_leaves.py, services/membership_pipeline_service.py | modules/prospective-members | ✅ |
 | 10 | messaging/comms | endpoints/messages.py, message_history.py, services/messaging_service.py, message_delivery_service.py | modules/communications | ✅ |
 | 11 | notifications | endpoints/notifications.py, services/notifications_service.py | (in-app) | ✅ |
-| 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | 🔄 next |
-| 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | ⬜ |
+| 12 | integrations | endpoints/integrations.py, calcom_sync.py, salesforce_sync.py, services/integration_services/* | (in-app) | ✅ |
+| 13 | forms | endpoints/forms.py, public/forms.py, services/forms_service.py | modules/forms | 🔄 next |
 | 14 | grants/fundraising | endpoints/grants.py, services/grant_service.py, fundraising_service.py | modules/grants-fundraising | ⬜ |
 | 15 | admin-hours | endpoints/admin_hours.py, services/admin_hours_service.py | modules/admin-hours | ⬜ |
 | 16 | reports/analytics | endpoints/reports.py, analytics.py, platform_analytics.py, services/reports_service.py | modules/reports | ⬜ |
@@ -159,4 +159,17 @@ already covered by the red-team review on this branch).
   any org notification read org-wide but required only `notifications.view` while
   `/logs/read-all` requires `.manage`; raised to `.manage` — no frontend caller,
   safe). Tenant isolation solid, no SQL injection, flake8 clean. See
-  notifications.md. Next: integrations.
+  notifications.md.
+- #12 integrations ✅ — external-service surfaces. Verified good: **no secret
+  exposure** (write-only + redacted), **OAuth callback state validation robust**
+  (signed JWT + nonce cookie + org-bound load), inbound webhook receiver
+  constant-time verify + fail-closed + replay protection, tenant isolation solid,
+  Salesforce URLs fixed/regex-locked, base client hardened. **2 fixes applied:**
+  INT-1 (MED-HIGH SSRF: chat senders slack/discord/teams + Cal.com client POSTed
+  the stored URL without send-time re-validation → DNS-rebinding TOCTOU; added
+  `assert_outbound_url_safe` fail-closed guard to all four), INT-2 (LOW: unencoded
+  `error` param reflected into the OAuth redirect; now `quote`-encoded). 3
+  flagged: INT-3 (list/get reads not manage-gated — but consumed cross-module, so
+  needs an `integrations.view` tier not a simple gate), INT-4 (PATCH update resets
+  omitted config fields to schema defaults — data-integrity bug), INT-5 (dead
+  KNOWN_WEBHOOK_DOMAINS allowlist / nits). See integrations.md. Next: forms.

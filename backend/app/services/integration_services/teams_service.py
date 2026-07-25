@@ -10,6 +10,7 @@ from typing import Any
 from loguru import logger
 
 from app.services.integration_services.base import create_integration_client
+from app.utils.url_validator import assert_outbound_url_safe
 
 
 async def send_teams_notification(
@@ -30,6 +31,14 @@ async def send_teams_notification(
     Returns:
         True if the message was sent successfully.
     """
+    # SSRF: re-validate the destination at send time (config-save validation
+    # can't defend against DNS-rebinding). Fail closed on an unsafe URL.
+    try:
+        assert_outbound_url_safe(webhook_url)
+    except ValueError as exc:
+        logger.warning("Blocked outbound Teams webhook to unsafe URL {}: {}", webhook_url, exc)
+        return False
+
     payload = {
         "type": "message",
         "attachments": [

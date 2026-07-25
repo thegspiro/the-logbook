@@ -10,6 +10,7 @@ from typing import Any
 from loguru import logger
 
 from app.services.integration_services.base import create_integration_client
+from app.utils.url_validator import assert_outbound_url_safe
 
 # Discord color constants (decimal, not hex)
 COLOR_BLUE = 0x3498DB
@@ -28,6 +29,14 @@ async def send_discord_notification(
 
     Discord returns 204 No Content on success.
     """
+    # SSRF: re-validate the destination at send time (config-save validation
+    # can't defend against DNS-rebinding). Fail closed on an unsafe URL.
+    try:
+        assert_outbound_url_safe(webhook_url)
+    except ValueError as exc:
+        logger.warning("Blocked outbound Discord webhook to unsafe URL {}: {}", webhook_url, exc)
+        return False
+
     payload: dict[str, Any] = {"content": content}
     if embeds:
         payload["embeds"] = embeds

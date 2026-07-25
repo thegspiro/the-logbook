@@ -62,6 +62,13 @@ open decisions that need an owner are collected in
 - **Email hardening — LIKE-search wildcards and an HTML email field are now
   properly escaped** in several modules (meetings/minutes, inventory,
   equipment-check, messaging test-email).
+- **Integrations SSRF hardening — outbound chat/Cal.com calls re-validate the
+  destination at send time.** The Slack/Discord/Teams notification senders and
+  the Cal.com client now re-check the target URL immediately before dispatch
+  (fail-closed), matching the generic-webhook path — closing a DNS-rebinding
+  window where a webhook host validated at save time could later resolve to an
+  internal address. The OAuth connect redirect also now URL-encodes its status
+  parameter.
 
 **Access control**
 
