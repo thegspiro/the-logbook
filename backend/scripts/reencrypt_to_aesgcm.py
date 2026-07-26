@@ -41,6 +41,9 @@ Safety
     docker exec -it intranet-backend python scripts/reencrypt_to_aesgcm.py
     # Apply:
     docker exec -it intranet-backend python scripts/reencrypt_to_aesgcm.py --commit
+
+Full operator runbook (pre-flight, verification, rollback):
+docs/AES256_GCM_BACKFILL_RUNBOOK.md
 """
 
 import argparse
