@@ -10,6 +10,7 @@ Provides endpoints for:
 - Data exfiltration monitoring
 """
 
+import hashlib
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -31,6 +32,20 @@ from app.models.user import User
 from app.services.security_monitoring import AlertType, ThreatLevel, security_monitor
 
 router = APIRouter()
+
+
+def _fingerprint_session_id(session_id: str | None) -> str | None:
+    """Return a non-reversible fingerprint of a session id for the audit export.
+
+    The raw session id is a live-ish session correlation credential; dumping it
+    to every `audit.export` holder is needless exposure (SEC-9). A truncated
+    SHA-256 lets an investigator still group events by session within an export
+    without leaking the actual identifier. session_id is not part of the audit
+    hash chain, so replacing it here does not affect offline integrity checks.
+    """
+    if not session_id:
+        return None
+    return "sha256:" + hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:16]
 
 
 @router.get("/status")
@@ -540,7 +555,7 @@ async def export_audit_logs(
                 ),
                 "user_id": log.user_id,
                 "username": log.username,
-                "session_id": log.session_id,
+                "session_id": _fingerprint_session_id(log.session_id),
                 "ip_address": log.ip_address,
                 "user_agent": log.user_agent,
                 "event_data": log.event_data,

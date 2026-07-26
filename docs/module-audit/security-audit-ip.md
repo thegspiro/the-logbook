@@ -165,22 +165,35 @@ people out):**
 New unit tests cover fail-closed on unknown country plus the private-IP and
 allowlist recovery paths under fail-closed. **Status:** fixed.
 
-### SEC-9 — LOW (flagged) — Residual exposure / robustness
-- Audit export surfaces every member's `ip_address`/`user_agent`/`session_id`
-  plus chain values to any `audit.view`/`audit.export` holder (session_id worth
-  redacting). (SM #6)
-- error_logs stores `error_message`/`context`/steps verbatim and reflects them
-  back — stored-XSS risk depends on the admin viewer escaping output; `context`
-  is a client 4 KB dict that could hold PII/tokens. (EL #6)
-- Audit org-scoping resolves through the mutable `users` table, so rows whose
-  author is deleted/moved silently drop out; a dedicated `organization_id` column
-  on `audit_logs` would make it robust. (AL #7)
-- Cross-org allowlist bypass (documented intentional), private-IP + proxy
-  misconfig geo bypass (ops hardening — warn at startup if GeoIP on but
-  `TRUSTED_PROXY_IPS` empty), admin country-block self-lockout, and the dead
-  org-scoped `get_all_active_allowed_ips` / unused `BLOCKLIST` exception type.
-  (IP #3/#4/#5)
-**Status:** flagged.
+### SEC-9 — LOW — ✅ mostly FIXED — Residual exposure / robustness
+- **✅ session_id redacted in the audit export.** The export now emits a
+  non-reversible truncated-SHA-256 fingerprint of `session_id` instead of the
+  raw value (`_fingerprint_session_id`), so an `audit.export` holder can still
+  correlate events within an export but never sees the live session identifier.
+  session_id is not part of the hash chain, so offline integrity verification is
+  unaffected. `ip_address`/`user_agent` remain (they are the point of a security
+  export). (SM #6)
+- **✅ error-payload / access-log XSS: verified safe.** The admin error-monitoring
+  viewer (`ErrorMonitoringPage.tsx`) and the public-portal access-log viewer
+  (`AccessLogsTab.tsx`) render `error_message`/`context`/`user_agent`/`referer`
+  as plain JSX interpolation, which React auto-escapes; neither uses
+  `dangerouslySetInnerHTML` (the only two such sites are the unrelated
+  link/markdown helpers). No stored-XSS path. `context` remains capped at 4 KB.
+  (EL #6, PP-5)
+- **✅ dead code removed.** The unused org-scoped `get_all_active_allowed_ips`
+  service method was deleted (only the pre-auth `_global` variant is called);
+  the `IPExceptionType.BLOCKLIST` enum value is documented as a reserved
+  placeholder (kept to avoid a needless enum-column migration when the
+  explicit-blocklist feature lands). (IP #5)
+- **Deferred (design, not a bug):** a dedicated `organization_id` column on
+  `audit_logs` would make org-scoping robust against author deletion/move
+  (currently resolves through the mutable `users` join — defense-in-depth, works
+  today). Cross-org allowlist bypass is documented-intentional (pre-auth edge
+  control); the `TRUSTED_PROXY_IPS`-empty startup warning already exists; admin
+  country-block self-lockout is now operator-only after SEC-8's management gate.
+  (AL #7, IP #3/#4)
+**Status:** actionable items fixed; the `audit_logs` org-column is a deferred
+robustness improvement.
 
 ## Notes
 - Large-file caveat: `security_monitoring.py` (1,009 L), `ip_security_service.py`

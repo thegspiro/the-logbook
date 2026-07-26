@@ -364,9 +364,11 @@ start over at #1.
   behind GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT (default off; deploy-time
   BLOCKED_COUNTRIES is the source of truth) since geo-blocking is a platform-edge
   control that can't be per-org.
-  Flagged: SEC-9 (audit export session_id/IP
-  exposure, error payload XSS, users-join scoping fragility, ops hardening). See
-  security-audit-ip.md. Next: core infra.
+  SEC-9 (LOW) now mostly ✅ FIXED: audit-export session_id redacted to a
+  SHA-256 fingerprint; error/access-log XSS verified safe (auto-escaped JSX, no
+  dangerouslySetInnerHTML); dead get_all_active_allowed_ips removed + BLOCKLIST
+  documented. Deferred: dedicated audit_logs.organization_id column (robustness,
+  not a bug). See security-audit-ip.md. Next: core infra.
 - #24 core infra ✅ — backend foundational layer (config/database/cache/websocket/
   security/encrypted_types + shared utils); three parallel readers (cache+ws+db /
   crypto / config+uploads). Verified good: crypto foundation strong (Argon2id,

@@ -322,6 +322,12 @@ open decisions that need an owner are collected in
   lookup prefix so verification checks a single candidate instead of all keys.
   Existing keys upgrade to the selective prefix automatically the next time
   they're used — no re-issue needed. No change to how integrators authenticate.
+- **Audit-log export no longer includes raw session identifiers.** The
+  compliance/backup export replaced each entry's raw `session_id` with a
+  non-reversible fingerprint — investigators can still group events by session,
+  but the live identifier is no longer handed to everyone with export access.
+  Integrity verification is unaffected (session id was never part of the tamper-
+  evidence hash). Also removed a dead internal allowlist helper.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged

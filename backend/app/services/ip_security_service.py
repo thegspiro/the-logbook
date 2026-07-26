@@ -478,32 +478,6 @@ class IPSecurityService:
     # Query: Get All Active Allowed IPs
     # ============================================
 
-    async def get_all_active_allowed_ips(
-        self,
-        db: AsyncSession,
-        organization_id: str,
-    ) -> Set[str]:
-        """
-        Get all currently active allowed IPs for an organization.
-
-        Used by IP blocking middleware to check the allowlist. Always
-        scoped to ``organization_id`` so one org's allowlist can never
-        admit traffic on behalf of another.
-        """
-        now = datetime.now(timezone.utc)
-
-        query = (
-            select(IPException.ip_address)
-            .where(IPException.exception_type == IPExceptionType.ALLOWLIST)
-            .where(IPException.approval_status == IPExceptionApprovalStatus.APPROVED)
-            .where(IPException.organization_id == str(organization_id))
-            .where(IPException.valid_from <= now)
-            .where(IPException.valid_until > now)
-        )
-
-        result = await db.execute(query)
-        return set(result.scalars().all())
-
     async def get_all_active_allowed_ips_global(
         self,
         db: AsyncSession,
