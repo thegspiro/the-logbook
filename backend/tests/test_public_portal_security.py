@@ -45,9 +45,12 @@ from app.core.public_portal_security import (
     generate_api_key,
     ip_rate_limit_cache,
     rate_limit_cache,
+    _last_used_is_stale,
+    _LAST_USED_THROTTLE_SECONDS,
     _MAX_RATE_LIMIT_KEYS,
     _MAX_IP_RATE_LIMIT_KEYS,
 )
+from datetime import timedelta
 from fastapi import HTTPException
 
 
@@ -218,6 +221,37 @@ class TestAuthenticateApiKeyDoSHardening:
                 request, api_key="logbook_" + "a" * 40, db=_ExplodingDB()
             )
         assert exc.value.status_code == 429
+
+
+class TestLastUsedThrottle:
+
+    @pytest.mark.unit
+    def test_missing_is_stale(self):
+        assert _last_used_is_stale(None, datetime.now(timezone.utc)) is True
+        assert _last_used_is_stale("", datetime.now(timezone.utc)) is True
+
+    @pytest.mark.unit
+    def test_recent_is_not_stale(self):
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(seconds=5)).isoformat()
+        assert _last_used_is_stale(recent, now) is False
+
+    @pytest.mark.unit
+    def test_old_is_stale(self):
+        now = datetime.now(timezone.utc)
+        old = (now - timedelta(seconds=_LAST_USED_THROTTLE_SECONDS + 5)).isoformat()
+        assert _last_used_is_stale(old, now) is True
+
+    @pytest.mark.unit
+    def test_malformed_is_stale(self):
+        assert _last_used_is_stale("not-a-timestamp", datetime.now(timezone.utc)) is True
+
+    @pytest.mark.unit
+    def test_naive_timestamp_treated_as_utc(self):
+        now = datetime.now(timezone.utc)
+        naive_recent = now.replace(tzinfo=None).isoformat()
+        # Must not raise on naive/aware subtraction; recent → not stale.
+        assert _last_used_is_stale(naive_recent, now) is False
 
 
 class TestGenerateApiKeyPrefix:

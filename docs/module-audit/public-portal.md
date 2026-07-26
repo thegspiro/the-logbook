@@ -97,12 +97,15 @@ pre-existing duplicate Alembic revision id `20260720_0001` that made the migrati
 chain unrunnable — the `add_department_message_deleted_at` migration was
 renumbered to `20260720_0004` and the chain relinearized.)
 
-### PP-5 — MEDIUM (flagged) — Unauthenticated client input logged verbatim → stored-XSS risk in admin viewer
+### PP-5 — MEDIUM — ✅ verified safe — Unauthenticated client input logged verbatim
 `log_access` stores the raw `user-agent`, `referer`, and `ip_address` (all
-attacker-controlled) into `PublicPortalAccessLog`; if the admin-side access-log
-viewer renders them unescaped, that's stored XSS in the privileged console. The
-real fix is output-encoding in the admin viewer. **Status:** flagged for the
-frontend (iteration #27).
+attacker-controlled) into `PublicPortalAccessLog`. The stored-XSS risk depends on
+the admin viewer rendering them unescaped. **Verified:** the access-log viewer
+(`AccessLogsTab.tsx`) renders `ip_address`/`user_agent`/`referer` as plain JSX
+interpolation, which React auto-escapes, and does not use
+`dangerouslySetInnerHTML` (the only two such sites are unrelated link/markdown
+helpers). No stored-XSS path. **Status:** verified safe (storing raw values is
+fine given output-encoding at render).
 
 ### PP-6 — MEDIUM (flagged) — Rate limiter is per-process + application-status token plaintext at rest
 The in-memory `rate_limit_cache`/`ip_rate_limit_cache` are per-worker (true
@@ -112,14 +115,29 @@ plaintext and matched by DB `==` (a DB/backup read yields live 30-day tokens); i
 should be hashed at rest and looked up by hash. Both are behavior/schema changes.
 **Status:** flagged.
 
-### PP-7 — LOW (flagged) — Per-request write + query amplification, nested-address whitelist
-`authenticate_api_key` commits a `last_used_at` write on every authenticated GET,
-and `detect_anomalies` issues 3 COUNT queries per request (including error paths)
-— both amplify the PP-4 DoS surface. `filter_data_by_whitelist` gates only
-top-level keys, so whitelisting `mailing_address`/`physical_address` exposes the
-whole nested dict (org-level data, not member PII). The `~40-bit` display code has
-no lockout and degrades to the per-process limiter on Redis outage. **Status:**
-flagged.
+### PP-7 — LOW — ✅ mostly FIXED — Per-request write + query amplification, nested-address whitelist
+- **✅ `last_used_at` write throttled.** `authenticate_api_key` no longer writes +
+  commits `last_used_at` on every GET; it refreshes at most once per 60 s per key
+  (`_last_used_is_stale`), and only commits when something actually changed (the
+  timestamp refresh or a legacy-prefix self-heal), removing per-read write
+  amplification / row contention on a hot key.
+- **✅ `detect_anomalies` query count reduced 3→2.** The two last-minute signals
+  (request volume + distinct-endpoint spread) share the same IP+window and are now
+  fetched in a single `SELECT count(id), count(distinct endpoint)` round-trip; the
+  5-minute failed-auth count stays separate.
+- **Accepted (design limitation, not a leak): nested-address whitelist.**
+  `filter_data_by_whitelist` gates top-level keys, so whitelisting
+  `mailing_address`/`physical_address` exposes the whole nested address dict. This
+  is intentionally-public **org** data (not member PII), and the admin whitelist
+  has no per-subfield granularity — recursively filtering would instead break the
+  address display entirely (nested keys aren't individually whitelisted). Left as
+  a granularity limitation; per-subfield whitelisting is a future feature.
+- **Accepted: display code has no per-code lockout.** The `[A-Za-z0-9]{6,12}`
+  display code (≥ ~36 bits) is already behind a 60/min-per-IP limit, so guessing
+  from any single IP is infeasible; a dedicated per-code lockout adds state for
+  marginal gain. The Redis-outage degradation to a per-process limiter is the
+  separate PP-6 (MED, needs Redis) item.
+**Status:** actionable items fixed; two items accepted as design limitations.
 
 ## Notes
 - Large-file caveat: `portal.py` (512 L) and `public_portal_security.py` (477 L)

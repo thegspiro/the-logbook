@@ -69,6 +69,22 @@ def verify_api_key(api_key: str, key_hash: str) -> bool:
 
 _SELECTIVE_PREFIX_LEN = 16  # "logbook_" (8) + 8 key chars ≈ 48 bits — selective
 _LEGACY_PREFIX_LEN = 8  # constant "logbook_" stored by keys created before PP-4
+# Only refresh a key's last_used_at at most once per this window, so a busy key
+# does not force a row write + commit on every single GET (PP-7).
+_LAST_USED_THROTTLE_SECONDS = 60
+
+
+def _last_used_is_stale(stored_iso: str | None, now: datetime) -> bool:
+    """True if last_used_at is missing or older than the throttle window."""
+    if not stored_iso:
+        return True
+    try:
+        prev = datetime.fromisoformat(stored_iso)
+    except (ValueError, TypeError):
+        return True
+    if prev.tzinfo is None:
+        prev = prev.replace(tzinfo=timezone.utc)
+    return (now - prev).total_seconds() >= _LAST_USED_THROTTLE_SECONDS
 
 
 def generate_api_key() -> tuple[str, str]:
@@ -276,17 +292,25 @@ async def detect_anomalies(
     Returns:
         Tuple of (is_suspicious, reason)
     """
-    # Check for rapid requests from same IP (last minute)
+    # Both last-minute signals (request volume and distinct-endpoint spread)
+    # share the same IP + time window, so fetch them in ONE round-trip rather
+    # than two separate COUNT queries per request (this runs on every public
+    # request, so query count matters — PP-7).
     one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id)).where(
+        select(
+            func.count(PublicPortalAccessLog.id),
+            func.count(func.distinct(PublicPortalAccessLog.endpoint)),
+        ).where(
             and_(
                 PublicPortalAccessLog.ip_address == ip_address,
                 PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat(),
             )
         )
     )
-    requests_last_minute = result.scalar() or 0
+    requests_last_minute, unique_endpoints = result.one()
+    requests_last_minute = requests_last_minute or 0
+    unique_endpoints = unique_endpoints or 0
 
     if requests_last_minute > 60:  # More than 1 request per second
         return True, f"Rapid requests: {requests_last_minute} in last minute"
@@ -306,17 +330,6 @@ async def detect_anomalies(
 
     if failed_auth_attempts > 5:
         return True, f"Multiple failed auth attempts: {failed_auth_attempts}"
-
-    # Check for suspicious patterns: accessing many different endpoints rapidly
-    result = await db.execute(
-        select(func.count(func.distinct(PublicPortalAccessLog.endpoint))).where(
-            and_(
-                PublicPortalAccessLog.ip_address == ip_address,
-                PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat(),
-            )
-        )
-    )
-    unique_endpoints = result.scalar() or 0
 
     if unique_endpoints > 10:
         return True, f"Scanning behavior: {unique_endpoints} different endpoints"
@@ -410,16 +423,24 @@ async def authenticate_api_key(
             },
         )
 
-    # Update last used timestamp
-    api_key_obj.last_used_at = datetime.now(timezone.utc).isoformat()
+    # Update last_used_at, but throttled: writing (and committing) on every GET
+    # is write amplification + row contention on a hot key. Only refresh when the
+    # stored value is missing or older than the throttle window (PP-7).
+    now = datetime.now(timezone.utc)
+    needs_commit = False
+    if _last_used_is_stale(api_key_obj.last_used_at, now):
+        api_key_obj.last_used_at = now.isoformat()
+        needs_commit = True
 
     # Self-heal legacy keys: upgrade the non-selective "logbook_" prefix to the
     # selective 16-char prefix (we have the plaintext here) so subsequent lookups
     # for this key hit a single row instead of scanning every legacy key.
     if len(api_key) >= _SELECTIVE_PREFIX_LEN and api_key_obj.key_prefix != selective_prefix:
         api_key_obj.key_prefix = selective_prefix
+        needs_commit = True
 
-    await db.commit()
+    if needs_commit:
+        await db.commit()
 
     return api_key_obj
 

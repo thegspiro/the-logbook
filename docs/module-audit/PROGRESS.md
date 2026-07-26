@@ -430,9 +430,11 @@ start over at #1.
   IP rate limit moved to the front of authenticate_api_key (before DB+bcrypt),
   selective 16-char key prefix (col widened, migration 20260729_0001) with
   legacy self-heal on next use; also fixed a pre-existing duplicate Alembic
-  revision id (20260720_0001) that made the chain unrunnable. Flagged: PP-5
-  (client UA/referer/IP logged
-  verbatim → stored-XSS in admin viewer, fix in frontend #27), PP-6 (per-process
+  revision id (20260720_0001) that made the chain unrunnable. PP-5 (✅ verified
+  safe — access-log viewer auto-escapes via JSX, no dangerouslySetInnerHTML) and
+  PP-7 (✅ mostly fixed — last_used_at write throttled to ≤1/60s, detect_anomalies
+  3→2 queries; nested-address whitelist + display-code lockout accepted as design
+  limitations). Flagged: PP-6 (per-process
   rate limiter needs Redis; application-status token plaintext at rest), PP-7
   (write-on-read + anomaly query load, nested-address whitelist, 40-bit display
   code). See public-portal.md. Next: frontend shared (final).

@@ -328,6 +328,11 @@ open decisions that need an owner are collected in
   but the live identifier is no longer handed to everyone with export access.
   Integrity verification is unaffected (session id was never part of the tamper-
   evidence hash). Also removed a dead internal allowlist helper.
+- **Public-portal request handling made lighter per request.** Authenticated
+  public API calls no longer write to the database on every single request (the
+  key's "last used" timestamp now updates at most once a minute), and the
+  per-request anomaly check uses one fewer database query. No behavior change for
+  integrators.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged
