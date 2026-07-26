@@ -33,8 +33,8 @@ already covered by the red-team review on this branch).
 | 18 | training | endpoints/training*.py, external_training.py, services/training*.py | modules/training | ✅ |
 | 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ✅ |
 | 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ✅ |
-| 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | 🔄 next |
-| 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ⬜ |
+| 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ✅ |
+| 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | 🔄 next |
 | 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ⬜ |
 | 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ⬜ |
 | 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ⬜ |
@@ -286,3 +286,29 @@ already covered by the red-team review on this branch).
   overwrite), FIN-7 (unbounded export/in-memory pagination DoS, request-number
   race, float aggregates, pending-approvals not assignee-filtered). See
   finance.md. Next: orgs/roles/users.
+- #21 orgs/roles/users ✅ — the privilege-management surface (5 endpoint files +
+  4 services + core/permissions); three parallel readers (users+ranks / roles+
+  permissions+member-status / organizations). Verified good: the H2 role-grant
+  ceiling is real + wildcard-correct on the paths it covers, tenant isolation
+  strong (XC-3 clean, orgs never take a client org_id), self-or-admin gates on
+  all user mutations, secrets encrypted/redacted, no SQL injection. **6 fixes
+  applied:** ORU-1 (HIGH escalation: create_member bypassed the role-grant
+  ceiling → a users.create holder could mint a puppet account with a chosen
+  password + wildcard role and take over the tenant; added the ceiling call,
+  both readers flagged it), ORU-2 (HIGH: PATCH /settings accepted the narrow
+  settings.manage_contact_visibility perm on the full settings body → a
+  contact-visibility secretary could rewrite auth/SMTP/S3 secrets; removed that
+  perm from the route, dedicated /settings/contact-info keeps their real
+  capability), ORU-3 (MED: redacted-placeholder preservation omitted "auth" →
+  a full-settings round-trip persisted "••••••••" over the real SSO secret;
+  added auth to the loop), ORU-4 (MED cross-tenant: _resolve_module_settings
+  read an unscoped OnboardingStatus row → org A seeded from another org's
+  modules; org-scoped it), ORU-5 (MED: PATCH /settings/auth echoed secrets
+  un-redacted; return .redacted()), ORU-6 (LOW: contact-info email uniqueness
+  UUID-vs-str self-exclusion bug + email_verified not reset on change; both
+  fixed). Flagged: ORU-7 (role-edit ceiling on current perms / last-admin
+  lockout / member-role mass-escalate), ORU-8 (with-roles + GET /settings expose
+  PII/infra config broader than the privacy gate), ORU-9 (member_status state
+  machine, membership-id row lock/loop cap, audit-history org filter,
+  perm-name reconcile, shallow settings merge). See orgs-roles-users.md. Next:
+  compliance/skills.

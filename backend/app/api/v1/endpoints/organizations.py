@@ -72,7 +72,6 @@ async def update_organization_settings(
     current_user: User = Depends(
         require_permission(
             "settings.manage",
-            "settings.manage_contact_visibility",
             "organization.update_settings",
         )
     ),
@@ -82,11 +81,14 @@ async def update_organization_settings(
 
     This endpoint requires any of:
     - settings.manage
-    - settings.manage_contact_visibility
     - organization.update_settings
 
-    Secretary users can toggle the contact information visibility feature on/off,
-    and control which specific contact fields (email, phone, mobile) are displayed.
+    This accepts the full settings body (auth/SSO, SMTP, file-storage, modules,
+    IT team). It intentionally does NOT accept the narrow
+    `settings.manage_contact_visibility` secretary permission: that permission
+    grants only contact-info visibility toggling via `PATCH /settings/contact-info`,
+    and allowing it here would let a contact-visibility secretary rewrite auth/SMTP/
+    storage secrets and disable modules through the full settings schema.
 
     **Authentication and permission required**
     """
@@ -300,7 +302,9 @@ async def update_auth_settings(
             username=current_user.username,
         )
 
-        return auth_settings
+        # Redact secrets in the response, matching the email/file-storage
+        # siblings — never echo SSO client secrets back in a response body/log.
+        return auth_settings.redacted()
 
 
 @router.patch("/settings/membership-id", response_model=MembershipIdSettings)

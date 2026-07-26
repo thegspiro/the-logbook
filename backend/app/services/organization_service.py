@@ -106,8 +106,18 @@ class OrganizationService:
             # dual-writes during onboarding.
 
         # ── Migration from OnboardingStatus ──
-        onboarding_result = await self.db.execute(select(OnboardingStatus).limit(1))
-        onboarding = onboarding_result.scalar_one_or_none()
+        # Must be scoped to THIS org — an unfiltered `select(OnboardingStatus)
+        # .limit(1)` would seed one org's enabled_modules from an arbitrary
+        # other org's onboarding row (and then persist it below). When `org`
+        # isn't available we cannot scope it safely, so fall through to defaults.
+        onboarding = None
+        if org is not None:
+            onboarding_result = await self.db.execute(
+                select(OnboardingStatus).where(
+                    OnboardingStatus.organization_id == str(org.id)
+                )
+            )
+            onboarding = onboarding_result.scalars().first()
 
         if onboarding and onboarding.enabled_modules:
             enabled_list = onboarding.enabled_modules
@@ -274,7 +284,11 @@ class OrganizationService:
 
         # SEC: If the update contains redacted placeholder values ('••••••••'),
         # preserve the existing encrypted values instead of overwriting them.
-        for section_key in ("email_service", "file_storage"):
+        # "auth" must be included: GET /settings redacts SSO client secrets to
+        # '••••••••', so a full-settings round-trip that saves the auth section
+        # back would otherwise persist the literal bullet string (encrypt skips
+        # it), silently destroying the real SSO client secret and breaking login.
+        for section_key in ("email_service", "file_storage", "auth"):
             incoming = settings_update.get(section_key)
             existing = current_settings.get(section_key)
             if isinstance(incoming, dict) and isinstance(existing, dict):

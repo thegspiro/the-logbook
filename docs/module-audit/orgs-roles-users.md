@@ -1,0 +1,149 @@
+# Module Audit — Orgs / Roles / Users
+
+**Scope:** the privilege-management surface — `endpoints/organizations.py`
+(1,026 L) + `organization_service.py`, `endpoints/roles.py` (623 L) +
+`role_service.py` + `core/permissions.py`, `endpoints/users.py` (1,774 L) +
+`user_service.py`, `endpoints/operational_ranks.py` (193 L) +
+`operational_rank_service.py`, `endpoints/member_status.py` (911 L). Governs role/
+permission assignment, org settings/secrets, and member lifecycle — so privilege
+escalation and secret handling are the headline risks.
+**Audited:** iteration 21 — three parallel readers: (A) users + ranks, (B) roles
++ permissions + member-status, (C) organizations.
+
+## Verified good ✅
+- **The H2 role-grant privilege ceiling is real and correct on the paths it
+  covers.** `_enforce_permission_grant_ceiling` guards role create/update/clone;
+  `_enforce_role_grant_ceiling` guards the assign/add-role paths. Wildcard
+  escalation is properly ceiled (`permission_matches`: only a `*` holder can
+  grant `*`; only a `module.*` holder can grant `module.*`). The caller's
+  permission set includes both positions and operational-rank defaults.
+- **Tenant isolation is strong.** Every by-id user/role/rank/member-status
+  read/mutation filters `organization_id` (or resolves via an org-scoped fetch —
+  **XC-3 clean**). Organizations endpoints derive the org exclusively from
+  `current_user.organization_id` (no `org_id` accepted from path/body/query).
+- **Self-or-admin gate present on all four `get_current_user`-only user
+  mutations** (contact-info, profile, photo up/down): each checks
+  `user_id == current_user.id` or an admin permission — no bare IDOR.
+- **Secrets at rest + on read.** Settings secrets are encrypted before persist,
+  decrypted on read, and redacted on GET/most PATCH responses. JSON nested
+  mutation correctly uses `copy.deepcopy()` (no silent no-op writes).
+- **Password/MFA/state changes are admin-gated, org-scoped, self-blocked**
+  (reset-password, reset-mfa, delete both block self-targeting + revoke sessions).
+  No password hash / MFA secret leaks in any response schema.
+- **No SQL injection** — no LIKE/raw SQL/f-string queries across any of the files;
+  `/admin-access/check` computes from server-resolved roles (not spoofable);
+  operational ranks fully org-scoped + `settings.manage`-gated.
+
+## Findings
+
+### ORU-1 — HIGH (privilege escalation) — `create_member` bypassed the role-grant ceiling — ✅ FIXED
+`POST /users` (`create_member`) assigned client-supplied `role_ids` with **no**
+`_enforce_role_grant_ceiling` call — unlike the assign (`PUT /users/{id}/roles`)
+and add (`POST /users/{id}/roles/{role_id}`) paths that do enforce it. Roles were
+filtered only by org (no `is_system` filter), and `AdminUserCreate` lets the
+caller set a known initial password. Impact: a plain `users.create` holder
+(secretary/coordinator, without `*`) could create a puppet account with a chosen
+password, attach the wildcard `it_manager` ("System Owner", perms `["*"]`) role,
+log in, and take over the entire tenant — the exact escalation the H2 ceiling was
+added to close, via an unguarded third path. Both the users reader and the roles
+reader independently flagged this.
+**Fix:** call `_enforce_role_grant_ceiling(current_user, list(roles), db,
+get_client_ip(request))` right after the role-validity check, before insertion
+(added `request: Request` to the handler). Legitimate in-ceiling grants are
+unaffected.
+
+### ORU-2 — HIGH (privilege escalation → secret rewrite) — `PATCH /settings` accepted the narrow contact-visibility permission — ✅ FIXED
+The full-settings update was gated `require_permission("settings.manage",
+"settings.manage_contact_visibility", "organization.update_settings")` (any-of),
+but its body is the entire `OrganizationSettingsUpdate` schema (auth/SSO, SMTP,
+file-storage, modules, IT team). A secretary holding only
+`settings.manage_contact_visibility` (meant only to toggle contact-info
+visibility) could therefore rewrite the `auth` section — inject an
+attacker-controlled OAuth `client_secret`/Authentik URL — or overwrite SMTP/S3
+credentials and disable modules: privilege escalation bordering on SSO takeover.
+**Fix:** removed `settings.manage_contact_visibility` from this route. That
+permission already has a dedicated narrow endpoint (`PATCH /settings/contact-info`)
+that writes only `contact_info_visibility`, so the secretary keeps their
+legitimate capability and loses only the unintended full-settings write.
+
+### ORU-3 — MEDIUM — Auth secret destroyed on a full-settings round-trip — ✅ FIXED
+The `"••••••••"` redacted-placeholder preservation loop in
+`update_organization_settings` iterated only `("email_service", "file_storage")`,
+not `"auth"`. Since GET `/settings` redacts SSO client secrets to `"••••••••"`, a
+client saving the settings back through the top-level `PATCH /settings` (with the
+auth section still holding the bullets) would persist the literal bullet string
+(encryption skips it), silently overwriting the real SSO client secret and
+breaking login.
+**Fix:** added `"auth"` to the preservation loop's section list.
+
+### ORU-4 — MEDIUM (cross-tenant) — Module migration read another org's onboarding row — ✅ FIXED
+`_resolve_module_settings`'s safety-net path ran
+`select(OnboardingStatus).limit(1)` with **no org filter and no ordering**. In the
+migration path (org settings' modules empty/all-False and not `_user_configured`),
+org A's `enabled_modules` could be seeded from an arbitrary other org's onboarding
+row and then persisted as org A's canonical modules — cross-tenant config bleed +
+non-determinism.
+**Fix:** scoped the query to `OnboardingStatus.organization_id == org.id`; when
+`org` isn't available (can't be scoped safely) the fallback is skipped and
+defaults are returned.
+
+### ORU-5 — MEDIUM — `PATCH /settings/auth` echoed secrets un-redacted — ✅ FIXED
+Unlike its email/file-storage siblings (which `return ….redacted()`), the auth
+PATCH returned `auth_settings` directly, serializing `*_client_secret` fields in
+plaintext in the response body/logs.
+**Fix:** `return auth_settings.redacted()`.
+
+### ORU-6 — LOW — Self-service email change: type-mismatch + no re-verification — ✅ FIXED
+On `PATCH /users/{id}/contact-info`, the email-uniqueness self-exclusion used
+`.where(User.id != user_id)` — a `UUID`-vs-`String` comparison that never
+excludes the caller's own row, so re-saving your own email raised a spurious
+"Email is already in use." And a changed email left `email_verified=True`,
+inheriting trust it hadn't earned.
+**Fix:** `.where(User.id != str(user_id))`, and reset `email_verified=False` when
+the email actually changes.
+
+### ORU-7 — MED/LOW (flagged) — Role-edit ceiling, last-admin lockout, member-role guard
+- `update_role` permits editing `is_system` roles' permissions, and the API-layer
+  ceiling only validates the *new* permission list (early-returns on `[]`). So a
+  privileged-but-not-`*` caller (e.g. Fire Chief) can wipe/downgrade the tenant's
+  only `*` "System Owner" role (or gut `president`) — availability/sabotage, no
+  "cannot edit a role more privileged than you" guard. (roles #2)
+- No last-admin / lockout protection anywhere (removing the last admin, emptying
+  an admin role). (roles #3)
+- The org-wide `member` role can be mass-escalated up to the caller's own ceiling
+  (intended-but-sharp; no dedicated guard on the baseline role). (roles #4)
+**Status:** flagged — each needs a priority/ceiling-on-current-perms rule or a
+last-admin guard, which changes today's allowed admin workflow.
+
+### ORU-8 — MED/LOW (flagged) — Broader PII/config exposure than the privacy gate intends
+- `GET /users/{id}/with-roles` and `GET /users/with-roles` serialize full contact
+  PII (email, phone, home address, DOB, emergency contacts) to any `users.view`
+  holder, bypassing the `contact_info_visibility` gate the list endpoint honors.
+  (users #2)
+- `GET /settings` (`get_current_user`-only) returns integration identifiers
+  (OAuth `client_id`, tenant id, Authentik URL, SMTP host/user, S3 bucket/region)
+  and the whole `it_team` block (member names/emails/phones + free-form
+  `backup_access`) to any authenticated member. (orgs #5)
+**Status:** flagged — gating these behind `settings.manage` / a PII schema split
+is a product decision on who may see full PII/infra config.
+
+### ORU-9 — LOW (flagged) — Correctness/robustness polish
+- `member_status` transitions have no state machine (any-to-any by a
+  `members.manage` holder — lifecycle/approval bypass, no permission grant).
+  (roles #5)
+- Membership-ID generation has no row lock (TOCTOU on the JSON counter → duplicate
+  IDs under concurrent member creation) and an uncapped collision `while` loop.
+  (orgs #6/#7)
+- Member audit-history query not org-filtered on the log rows (target user is
+  pre-verified in-org; defense-in-depth only). (users #6)
+- `users.edit` vs `users.update` permission-name inconsistency between the two
+  self/admin update paths — reconcile against the catalog. (users #5)
+- Top-level `PATCH /settings` merge is shallow (a partial sub-section replaces the
+  whole section — data-loss risk, not a security hole). (orgs #9)
+**Status:** flagged.
+
+## Notes
+- Large-file caveat: `users.py` (1,774 L) and `member_status.py` (911 L) were
+  reviewed for security invariants (escalation, org-scoping, self-or-admin gates,
+  secret/PII handling), not line-by-line. The invariants held on every path
+  examined.

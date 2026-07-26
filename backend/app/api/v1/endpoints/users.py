@@ -126,6 +126,7 @@ async def list_users(
 async def create_member(
     user_data: AdminUserCreate,
     background_tasks: BackgroundTasks,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("users.create")),
 ):
@@ -274,6 +275,16 @@ async def create_member(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="One or more role IDs are invalid",
             )
+
+        # Same privilege ceiling the assign/add-role paths enforce: a caller may
+        # only grant roles whose permissions are a subset of their own. Without
+        # this, a plain `users.create` holder could create an account, set its
+        # password, attach a wildcard/"System Owner" role, and log in as it —
+        # full-tenant escalation through the create path instead of the (already
+        # guarded) assign path.
+        await _enforce_role_grant_ceiling(
+            current_user, list(roles), db, get_client_ip(request)
+        )
 
         for role in roles:
             await db.execute(
@@ -897,7 +908,10 @@ async def update_contact_info(
             select(User)
             .where(User.email == contact_update.email)
             .where(User.organization_id == str(current_user.organization_id))
-            .where(User.id != user_id)
+            # User.id is a String column; user_id is a UUID — compare as strings
+            # so the caller's own row is actually excluded (a UUID-vs-str compare
+            # never matches, producing a spurious "already in use" on self-save).
+            .where(User.id != str(user_id))
             .where(User.deleted_at.is_(None))
         )
         if existing.scalar_one_or_none():
@@ -905,6 +919,10 @@ async def update_contact_info(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Email is already in use",
             )
+        # A changed email is no longer proven to belong to the user; drop the
+        # verified flag so it must be re-verified rather than inheriting trust.
+        if contact_update.email != user.email:
+            user.email_verified = False
         user.email = contact_update.email
 
     if contact_update.phone is not None:

@@ -74,6 +74,20 @@ open decisions that need an owner are collected in
   an external-provider user-mapping screen no longer reveals another department's
   member name/email. A department-overview report count was also inadvertently
   tallying meeting action items across all departments and is now scoped to yours.
+- **Member creation can no longer be used to escalate privileges.** Creating a
+  member (`POST /users`) assigned the requested roles without the privilege
+  ceiling that the role-assignment endpoints already enforce, so a user with only
+  the "create member" permission could create an account with a password they
+  chose, attach a full-access ("System Owner"/wildcard) role, and log in as it —
+  taking over the whole department. Member creation now enforces the same ceiling:
+  you can only grant roles whose permissions are a subset of your own.
+- **A contact-visibility secretary can no longer rewrite authentication/SSO and
+  server secrets.** The full organization-settings update (`PATCH /settings`)
+  accepted the narrow "manage contact visibility" secretary permission, but its
+  body covers the auth/SSO provider, SMTP, file-storage, and module configuration
+  — so that secretary could inject an attacker-controlled OAuth client secret or
+  overwrite mail/storage credentials. That permission has been removed from the
+  full-settings route; it still works on its dedicated contact-info endpoint.
 - **Finance — a budget in another department can no longer be corrupted.**
   Recording a purchase request, check request, or expense line item against a
   `budget_id` belonging to **another** department previously incremented that
@@ -95,6 +109,20 @@ open decisions that need an owner are collected in
 
 **Data protection & correctness**
 
+- **Organization settings — SSO client secrets are no longer silently destroyed
+  or echoed back.** Saving the full settings back through `PATCH /settings` after
+  reading them (where secrets come back redacted as bullets) previously persisted
+  the bullet placeholder over the real SSO client secret, breaking login; the
+  redacted-placeholder preservation now covers the auth section too. Separately,
+  `PATCH /settings/auth` now redacts secrets in its response instead of echoing
+  them in plaintext, matching the email/file-storage endpoints.
+- **Module enablement no longer bleeds across departments.** A migration/safety-net
+  path resolved a department's enabled modules from an unscoped onboarding record
+  and could seed one department's module list from another's; the lookup is now
+  scoped to the department (and skipped when it can't be scoped safely).
+- **Self-service email changes reset verification** — updating your own email no
+  longer keeps the previous "verified" flag, and a self-save no longer falsely
+  reports the address as already in use.
 - **Documents — deleting a document now removes the file from disk** (previously
   the database row was deleted but the potentially sensitive upload was left
   behind), and two access-control checks that failed *open* now fail *closed*
