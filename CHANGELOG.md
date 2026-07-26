@@ -298,6 +298,20 @@ open decisions that need an owner are collected in
   (`AUDIT_ALLOW_CHAIN_REHASH`) rather than being triggerable by any department
   admin with audit-export access. Read-only integrity verification and snapshot
   creation are unchanged.
+- **Geo-blocking can now fail closed, and country rules are platform-scoped.**
+  Country-based access blocking is enforced at the network edge, before any
+  department context exists, using one shared geolocation database and one
+  global blocked-country list. Two hardening changes: (1) a new
+  `GEOIP_FAIL_CLOSED` option (off by default) blocks any address whose country
+  can't be determined — including when the geolocation database is missing or
+  corrupt, which previously disabled blocking silently across the whole app;
+  internal/LAN and explicitly allowlisted addresses are still let through so an
+  operator can always recover. (2) Because the blocked-country list applies to
+  every department at once, changing it at runtime through the admin API is now
+  disabled by default (`GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`) — the list is set
+  at deploy time via `BLOCKED_COUNTRIES` — so one department's admin can no
+  longer alter the shared blocklist for all tenants. Viewing the rules and
+  blocked-attempt logs is unchanged.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged

@@ -8,12 +8,13 @@ Provides endpoints for:
 - Audit trail for IP exceptions
 """
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.ip_security import BlockedAccessAttempt, CountryBlockRule, IPException
@@ -33,6 +34,28 @@ from app.schemas.ip_security import (
 from app.services.ip_security_service import ip_security_service
 
 router = APIRouter()
+
+
+def _require_country_rule_management() -> None:
+    """Guard the platform-wide country-block mutation endpoints.
+
+    Country-block rules are enforced in edge middleware before any tenant
+    context exists, against one shared MaxMind DB and one global blocked-country
+    set — so a change by any org admin affects EVERY tenant. Runtime management
+    is therefore off by default; the platform operator sets the blocklist at
+    deploy time via ``BLOCKED_COUNTRIES`` unless
+    ``GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`` is explicitly enabled.
+    """
+    if not settings.GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Runtime country-block management is disabled. The blocked-"
+                "country list is a platform-wide edge control affecting every "
+                "tenant; set it at deploy time via BLOCKED_COUNTRIES, or enable "
+                "GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT to manage it at runtime."
+            ),
+        )
 
 
 # =============================================================================
@@ -444,8 +467,11 @@ async def add_blocked_country(
     """
     Add a country to the blocked list.
 
-    Requires security.manage or settings.manage permission.
+    Requires security.manage or settings.manage permission. Because the block
+    list is a platform-wide edge control, runtime management must also be
+    enabled via GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT.
     """
+    _require_country_rule_management()
     async with handle_service_errors("Failed to add blocked country"):
         rule = await ip_security_service.add_blocked_country(
             db=db,
@@ -485,8 +511,11 @@ async def remove_blocked_country(
     """
     Remove a country from the blocked list.
 
-    Requires security.manage or settings.manage permission.
+    Requires security.manage or settings.manage permission. Because the block
+    list is a platform-wide edge control, runtime management must also be
+    enabled via GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT.
     """
+    _require_country_rule_management()
     async with handle_service_errors("Failed to remove blocked country"):
         result = await db.execute(
             select(CountryBlockRule).where(

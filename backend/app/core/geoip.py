@@ -63,6 +63,7 @@ class GeoIPService:
         geoip_db_path: str | None = None,
         blocked_countries: set[str] | None = None,
         enabled: bool = True,
+        fail_closed: bool = False,
     ):
         """
         Initialize GeoIP service.
@@ -71,8 +72,11 @@ class GeoIPService:
             geoip_db_path: Path to MaxMind GeoLite2-Country.mmdb file
             blocked_countries: Set of ISO country codes to block
             enabled: Whether geo-blocking is enabled
+            fail_closed: When True, block IPs whose country cannot be resolved
+                (default False = fail-open, allow unresolvable IPs)
         """
         self.enabled = enabled
+        self.fail_closed = fail_closed
         self.blocked_countries = blocked_countries or set()
         self.geoip_reader = None
         self._ip_cache: dict[str, dict[str, Any]] = {}
@@ -198,9 +202,13 @@ class GeoIPService:
         # Lookup country
         info = self.lookup_ip(ip_address)
 
-        # If we couldn't determine country, allow by default (fail-open)
-        # Change to fail-closed for stricter security
+        # Country could not be resolved (missing/corrupt DB, address-not-found,
+        # or lookup error). fail_closed decides the posture. Note: private and
+        # allowlisted IPs already returned above, so a fail-closed deployment
+        # with a missing DB still lets internal/allowlisted operators recover.
         if not info["country_code"]:
+            if self.fail_closed:
+                return True, "country_unknown_failclosed"
             return False, "country_unknown"
 
         # Check if country is blocked
@@ -242,6 +250,7 @@ def init_geoip_service(
     geoip_db_path: str | None = None,
     blocked_countries: set[str] | None = None,
     enabled: bool = True,
+    fail_closed: bool = False,
 ) -> GeoIPService:
     """
     Initialize the global GeoIP service.
@@ -253,5 +262,6 @@ def init_geoip_service(
         geoip_db_path=geoip_db_path,
         blocked_countries=blocked_countries,
         enabled=enabled,
+        fail_closed=fail_closed,
     )
     return geoip_service

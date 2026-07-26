@@ -134,16 +134,36 @@ row; integrity is read-only) and left on `audit.export`/`audit.view`. New unit
 tests cover the repair, the fail-closed keyed-tamper refusal, and the clean-chain
 no-op. **Status:** fixed.
 
-### SEC-8 — MEDIUM (flagged) — IP geo-blocking fails OPEN and `CountryBlockRule` is global
-`geoip.is_ip_blocked` returns *allow* when a country can't be resolved (no
-MaxMind DB, `AddressNotFoundError`, lookup error), and the middleware skips
-blocking entirely if the GeoIP service is `None` — a missing/corrupt DB silently
-disables geo-blocking app-wide (the code comment already flags "change to
+### SEC-8 — MEDIUM — ✅ FIXED — IP geo-blocking fails OPEN and `CountryBlockRule` is global
+`geoip.is_ip_blocked` returned *allow* when a country couldn't be resolved (no
+MaxMind DB, `AddressNotFoundError`, lookup error) — a missing/corrupt DB silently
+disabled geo-blocking app-wide (the code comment already flagged "change to
 fail-closed"). Separately, `CountryBlockRule` has no `organization_id` (one global
-table + one in-process blocked-country set), so any admin's block/unblock affects
-**every** tenant, and unblock-by-`country_code` has no org filter. **Status:**
-flagged — fail-closed is a product decision (would block legitimate unresolved
-IPs); per-org country rules need a schema change.
+table + one in-process blocked-country set), so any org admin's block/unblock
+affected **every** tenant.
+
+**Fix (two configurable postures, both secure-by-default where it doesn't lock
+people out):**
+- **Fail-closed geo-blocking is now selectable.** `GEOIP_FAIL_CLOSED` (default
+  `False`, preserving fail-open so a lookup gap doesn't lock users out) makes
+  `is_ip_blocked` return `(True, "country_unknown_failclosed")` for any IP whose
+  country can't be resolved — including the missing/corrupt-DB case, closing the
+  "silently disabled app-wide" hole. Private/reserved and allowlisted IPs are
+  checked *before* the country lookup, so a fail-closed deployment with a broken
+  DB still lets internal/LAN and allowlisted operators in to recover.
+- **Runtime country-rule management is a platform-operator action.** Geo-blocking
+  is an edge control that runs before any tenant/auth context exists, so per-org
+  `CountryBlockRule` rows don't fit the enforcement model (and there's no
+  platform-super-admin role). Instead, the two *mutating* endpoints
+  (`POST`/`DELETE /ip-security/blocked-countries`) are now gated by
+  `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` (default `False`): an org admin can no
+  longer alter the shared, cross-tenant blocklist via the API. The platform
+  operator sets it at deploy time via `BLOCKED_COUNTRIES`, or enables the flag to
+  allow runtime management. Read endpoints (list rules / blocked attempts) stay
+  available for visibility.
+
+New unit tests cover fail-closed on unknown country plus the private-IP and
+allowlist recovery paths under fail-closed. **Status:** fixed.
 
 ### SEC-9 — LOW (flagged) — Residual exposure / robustness
 - Audit export surfaces every member's `ip_address`/`user_agent`/`session_id`
@@ -169,7 +189,7 @@ IPs); per-org country rules need a schema change.
   injection), not line-by-line. The invariants held on every path examined.
 - The two global-table findings (SEC-6 security_alerts, SEC-8 CountryBlockRule)
   shared a root cause with the broader multi-tenant work: security/enforcement
-  tables that predate per-org scoping. SEC-6 is now **fixed** (org column +
-  backfill migration `20260728_0001`, all four methods org-scoped); SEC-8
-  (per-org country rules) remains open as it needs a product decision on
-  fail-closed geo-blocking.
+  tables that predate per-org scoping. Both are now **fixed** — SEC-6 by an org
+  column + backfill (all four methods org-scoped); SEC-8 by recognizing
+  geo-blocking as a platform-edge control (per-org rules don't fit enforcement)
+  and gating its runtime management + fail-closed posture behind deploy flags.

@@ -358,8 +358,13 @@ start over at #1.
   FIXED: rehash_chain only repairs legacy rows and fails closed (409) on a keyed
   mismatch instead of laundering it; /rehash gated behind break-glass env flag
   AUDIT_ALLOW_CHAIN_REHASH (default off) since there is no platform-admin role.
-  Flagged (schema/behavior-change): SEC-8 (geo
-  fail-open + global CountryBlockRule), SEC-9 (audit export session_id/IP
+  SEC-8 (MED — geo fail-open + global CountryBlockRule) now ✅ FIXED: added
+  GEOIP_FAIL_CLOSED (default off, blocks unresolvable IPs incl. missing-DB;
+  private/allowlisted still allowed) and gated runtime country-rule management
+  behind GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT (default off; deploy-time
+  BLOCKED_COUNTRIES is the source of truth) since geo-blocking is a platform-edge
+  control that can't be per-org.
+  Flagged: SEC-9 (audit export session_id/IP
   exposure, error payload XSS, users-join scoping fragility, ops hardening). See
   security-audit-ip.md. Next: core infra.
 - #24 core infra ✅ — backend foundational layer (config/database/cache/websocket/

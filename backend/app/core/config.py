@@ -377,6 +377,26 @@ class Settings(BaseSettings):
     GEOIP_ENABLED: bool = True  # Enable geo-blocking
     GEOIP_DATABASE_PATH: str = "./data/GeoLite2-Country.mmdb"  # MaxMind database path
 
+    # SEC: When True, geo-blocking fails CLOSED — an IP whose country cannot be
+    # resolved (missing/corrupt MaxMind DB, address-not-found, lookup error) is
+    # BLOCKED rather than allowed. Default False preserves fail-open (a lookup
+    # gap does not lock users out). Private/reserved IPs and allowlisted IPs are
+    # ALWAYS permitted regardless of this flag, so a LAN/allowlisted operator can
+    # still recover if a missing DB would otherwise block everyone. Enabling this
+    # is a deliberate posture choice for security-sensitive deployments that
+    # accept blocking legitimate but unresolvable IPs.
+    GEOIP_FAIL_CLOSED: bool = False
+
+    # SEC: Country-block rules are a PLATFORM-EDGE control — geo-blocking runs in
+    # middleware before any tenant/auth context exists, against one shared
+    # MaxMind DB and one global blocked-country set, so a rule added by any org
+    # admin affects EVERY tenant. Runtime management via the
+    # /ip-security/blocked-countries API is therefore disabled by default; the
+    # platform operator sets the blocklist at deploy time via BLOCKED_COUNTRIES.
+    # Set this True only if a single deployment intends its admins to manage the
+    # shared blocklist at runtime.
+    GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT: bool = False
+
     # Blocked countries (ISO 3166-1 alpha-2 codes, comma-separated)
     # Default: High-risk nations commonly blocked in security-sensitive applications
     BLOCKED_COUNTRIES: str = "KP,IR,SY,CU,RU,BY"

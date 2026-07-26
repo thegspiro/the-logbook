@@ -84,9 +84,12 @@ def test_client_ip_falls_back_to_real_ip_header(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def _service(blocked=None, enabled=True):
+def _service(blocked=None, enabled=True, fail_closed=False):
     return GeoIPService(
-        geoip_db_path=None, blocked_countries=set(blocked or []), enabled=enabled
+        geoip_db_path=None,
+        blocked_countries=set(blocked or []),
+        enabled=enabled,
+        fail_closed=fail_closed,
     )
 
 
@@ -128,6 +131,33 @@ def test_is_ip_blocked_fails_open_on_unknown_country(monkeypatch):
         svc, "lookup_ip", lambda ip: {"country_code": None, "is_blocked": False}
     )
     assert svc.is_ip_blocked("8.8.8.8") == (False, "country_unknown")
+
+
+def test_is_ip_blocked_fails_closed_on_unknown_country(monkeypatch):
+    """With fail_closed, an unresolvable public IP is blocked, not allowed."""
+    svc = _service(blocked={"RU"}, fail_closed=True)
+    monkeypatch.setattr(
+        svc, "lookup_ip", lambda ip: {"country_code": None, "is_blocked": False}
+    )
+    assert svc.is_ip_blocked("8.8.8.8") == (True, "country_unknown_failclosed")
+
+
+def test_fail_closed_still_allows_private_ip():
+    """fail_closed must not lock out internal/LAN traffic (recovery path)."""
+    svc = _service(blocked={"RU"}, fail_closed=True)
+    assert svc.is_ip_blocked("10.1.2.3") == (False, "private_ip")
+
+
+def test_fail_closed_still_honors_allowlist(monkeypatch):
+    """An allowlisted IP is permitted even under fail_closed with no country."""
+    svc = _service(blocked={"RU"}, fail_closed=True)
+    monkeypatch.setattr(
+        svc, "lookup_ip", lambda ip: {"country_code": None, "is_blocked": False}
+    )
+    assert svc.is_ip_blocked("8.8.8.8", allowed_ips={"8.8.8.8"}) == (
+        False,
+        "ip_allowlisted",
+    )
 
 
 # ---------------------------------------------------------------------------

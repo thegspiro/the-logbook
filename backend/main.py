@@ -1417,6 +1417,7 @@ async def lifespan(app: FastAPI):
                     geoip_db_path=settings.GEOIP_DATABASE_PATH,
                     blocked_countries=blocked_countries,
                     enabled=True,
+                    fail_closed=settings.GEOIP_FAIL_CLOSED,
                 )
 
                 # Overlay dynamic country rules managed via the
