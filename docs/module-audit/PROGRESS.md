@@ -349,13 +349,16 @@ start over at #1.
   None), SEC-3 (MED DoS: error_logs troubleshooting_steps capped item count but
   not string length — per-item + total caps), SEC-4 (LOW: audit search LIKE
   metacharacters unescaped), SEC-5 (LOW: error_type schema cap 100 > DB column
-  50). Tests green (security_monitoring 10/10, audit hash chain 4/4). SEC-6
+  50). Tests green (security_monitoring 10/10, audit hash chain 7/7). SEC-6
   (HIGH — security_alerts was a GLOBAL table with no org_id → cross-tenant alert
   read + acknowledge/resolve IDOR-suppress + metric leak) now ✅ FIXED: added
   org_id column + backfill migration 20260728_0001, org-scoped all four service
   methods + endpoint callers, dropped external-endpoint URL leak from status.
-  Flagged (schema/behavior-change): SEC-7 (global audit-chain admin
-  ops gated by any org's audit.export + rehash tamper-laundering), SEC-8 (geo
+  SEC-7 (MED — global audit-chain admin ops + rehash tamper-laundering) now ✅
+  FIXED: rehash_chain only repairs legacy rows and fails closed (409) on a keyed
+  mismatch instead of laundering it; /rehash gated behind break-glass env flag
+  AUDIT_ALLOW_CHAIN_REHASH (default off) since there is no platform-admin role.
+  Flagged (schema/behavior-change): SEC-8 (geo
   fail-open + global CountryBlockRule), SEC-9 (audit export session_id/IP
   exposure, error payload XSS, users-join scoping fragility, ops hardening). See
   security-audit-ip.md. Next: core infra.

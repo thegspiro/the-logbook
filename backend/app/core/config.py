@@ -228,6 +228,14 @@ class Settings(BaseSettings):
     # issues are detected (missing secrets, etc.).  Production and staging
     # ALWAYS block regardless of this flag.  Set to False for local dev only.
     SECURITY_BLOCK_INSECURE_DEFAULTS: bool = False
+    # SEC: Break-glass gate for the audit-chain rehash tool. Rehash rewrites the
+    # single, cross-organization audit hash chain, so it must not be reachable by
+    # an ordinary org admin who merely holds `audit.export`. It stays disabled
+    # until a server operator (who controls the environment — the de-facto
+    # platform administrator) sets this True to perform a one-time legacy-hash
+    # repair, then turns it back off. Even when enabled, rehash can only repair
+    # legacy (unkeyed) rows — it never rewrites keyed rows (see rehash_chain).
+    AUDIT_ALLOW_CHAIN_REHASH: bool = False
 
     def validate_security_config(self) -> list[str]:
         """

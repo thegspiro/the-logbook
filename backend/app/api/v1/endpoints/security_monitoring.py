@@ -23,6 +23,7 @@ from app.core.audit import (
     log_audit_event,
     verify_audit_log_integrity,
 )
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
@@ -294,12 +295,25 @@ async def rehash_audit_chain(
     """
     Recompute the audit log hash chain
 
-    This is a recovery operation that recalculates all hashes in the chain
-    without modifying the underlying log data. Use when hash chain integrity
-    verification fails due to a bug in hash computation (not tampering).
+    This is a recovery operation that repairs legacy (unkeyed) hashes in the
+    single, cross-organization audit chain. Use when integrity verification
+    fails due to the historical hash-computation bug (not tampering). Keyed
+    rows are never rewritten — a keyed mismatch fails closed.
 
-    Requires audit.export permission. The operation is itself audit-logged.
+    Break-glass only: because it rewrites the shared cross-org chain, it stays
+    disabled (403) until a server operator sets ``AUDIT_ALLOW_CHAIN_REHASH``.
+    Requires audit.export permission and is itself audit-logged.
     """
+    if not settings.AUDIT_ALLOW_CHAIN_REHASH:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Audit-chain rehash is disabled. It rewrites the shared "
+                "cross-organization audit chain and must be enabled by a "
+                "server operator (AUDIT_ALLOW_CHAIN_REHASH) as a break-glass "
+                "recovery step."
+            ),
+        )
     try:
         count = await audit_logger.rehash_chain(db)
 
@@ -322,12 +336,16 @@ async def rehash_audit_chain(
             "status": "completed",
             "entries_rehashed": count,
             "message": (
-                f"Rehashed {count} audit log entries"
+                f"Rehashed {count} legacy audit log entries"
                 if count > 0
                 else "All hashes are already correct"
             ),
         }
 
+    except ValueError as e:
+        # rehash_chain fails closed on a keyed-row mismatch (a real integrity
+        # signal it refuses to launder) — surface it as a conflict, not a 500.
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 

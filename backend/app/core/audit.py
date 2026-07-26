@@ -360,14 +360,38 @@ class AuditLogger:
         if not logs:
             return 0
 
-        # Rehash each row under its own stored version so this recovery tool does
-        # not silently re-baseline legacy rows into the keyed scheme (or vice
-        # versa). Because v2 hashing requires the signing key, an attacker
-        # without it cannot use this path to forge a valid keyed chain.
+        # This tool exists ONLY to repair the historical legacy (v1, unkeyed)
+        # hash-computation bug. A keyed (v2) row's stored hash is authoritative
+        # evidence: the server holds the HMAC signing key, so recomputing a v2
+        # hash from the row's *current* event_data and overwriting it would
+        # launder a DB-level tamper into a valid keyed chain. Therefore we NEVER
+        # rewrite a keyed row here. Instead we recompute it and, if it does not
+        # match what is stored, fail closed (raise) so the operator investigates
+        # a real integrity signal rather than silently laundering it. Legacy
+        # rows — which predate keying and cannot be forged into the keyed
+        # scheme without the key — are the only rows this recovery path repairs.
         previous_hash = "0" * 64
         count = 0
         for log in logs:
             row_version = log.hash_version or _LEGACY_HASH_VERSION
+
+            if row_version >= _CURRENT_HASH_VERSION:
+                # Keyed row: verify against its stored hash, never overwrite it.
+                log_data = self._build_hash_data(log)
+                expected = self.calculate_hash(log_data, previous_hash, row_version)
+                if expected != log.current_hash:
+                    raise ValueError(
+                        "Refusing to rehash: keyed audit entry "
+                        f"{log.id} does not match its stored hash. This is a "
+                        "genuine integrity signal (tamper or a bug in keyed "
+                        "hashing), not a legacy-hash mismatch — rehash will not "
+                        "overwrite it. Investigate via the integrity report."
+                    )
+                # Chain forward from the authoritative stored hash.
+                previous_hash = log.current_hash
+                continue
+
+            # Legacy (v1) row: safe to repair the known computation bug.
             log_data = self._build_hash_data(log)
             correct_hash = self.calculate_hash(log_data, previous_hash, row_version)
             if log.previous_hash != previous_hash or log.current_hash != correct_hash:
@@ -378,7 +402,7 @@ class AuditLogger:
 
         if count > 0:
             await db.flush()
-            logger.info(f"Rehashed {count} audit log entries to fix hash chain")
+            logger.info(f"Rehashed {count} legacy audit log entries to fix hash chain")
 
         return count
 

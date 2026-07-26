@@ -284,6 +284,20 @@ open decisions that need an owner are collected in
   no longer reports another tenant's external data-transfer destinations.
   Platform-level pre-auth alerts (e.g. brute-force against the login page, which
   have no owning department) are not shown in any single department's view.
+- **Audit-log tamper-evidence hardened against laundering.** The audit hash
+  chain has a recovery tool that recomputes hashes to repair a historical
+  computation bug. It previously recomputed **every** row's hash from the row's
+  current contents — so anyone with direct database write access could edit a
+  tamper-evident (keyed) entry and then run the recovery tool to "bless" the
+  edited data with a fresh valid hash, laundering the tamper. The tool now only
+  repairs the older legacy entries it was meant to fix; for a keyed entry it
+  refuses to overwrite the stored hash and instead reports the mismatch as a
+  genuine integrity signal to investigate. And because the audit chain spans all
+  departments, the recompute operation is now a break-glass action disabled by
+  default — it must be explicitly enabled by a server operator
+  (`AUDIT_ALLOW_CHAIN_REHASH`) rather than being triggerable by any department
+  admin with audit-export access. Read-only integrity verification and snapshot
+  creation are unchanged.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged

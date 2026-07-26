@@ -103,15 +103,36 @@ comment that the in-memory trackers are not per-tenant. The in-memory
 it cannot be safely scoped). Endpoint callers pass
 `str(current_user.organization_id)`.
 
-### SEC-7 — MEDIUM (flagged) — Global audit-chain admin ops gated by any org's `audit.export`
-`POST /audit-log/rehash` (recomputes hashes for **all** orgs' rows),
-`/checkpoint`, and `/integrity` operate over the entire global chain but are
-gated by `audit.export` — any org's admin can trigger a platform-wide rehash /
-attest the whole chain. And `rehash_chain` recomputes `current_hash` from each
-row's *current* `event_data`, so a privileged operator with DB write access can
-edit a row then launder the tamper into a valid keyed chain (SEC-2's genesis
-anchor doesn't cover tail edits). **Status:** flagged — restrict these to a
-platform/system-admin role and/or forbid rehash of already-v2 rows.
+### SEC-7 — MEDIUM — ✅ FIXED — Global audit-chain admin ops gated by any org's `audit.export`
+`POST /audit-log/rehash` (recomputed hashes for **all** orgs' rows),
+`/checkpoint`, and `/integrity` operate over the entire global chain but were
+gated only by `audit.export` — any org's admin could trigger a platform-wide
+rehash / attest the whole chain. Worse, `rehash_chain` recomputed `current_hash`
+from each row's *current* `event_data` for **every** row, so a privileged
+operator with DB write access could edit a keyed (v2) row then run rehash to
+launder the tamper into a valid keyed chain (the server holds the HMAC key;
+SEC-2's genesis anchor only covers head deletions, not tail edits).
+
+**Fix (two layers):**
+- **Anti-laundering — `rehash_chain` no longer rewrites keyed rows.** The tool
+  now only repairs legacy (v1, unkeyed) rows — its actual purpose, fixing the
+  historical hash-computation bug. For a keyed (v2) row it recomputes the
+  expected hash and, if it does not match what is stored, **fails closed**
+  (raises `ValueError` → 409) instead of overwriting it: a keyed mismatch is a
+  genuine integrity signal (tamper or a v2 bug) and rehash refuses to launder
+  it. Consistent keyed rows are chained forward from their authoritative stored
+  hash, never re-derived from current data.
+- **Break-glass gate for the destructive global op.** Because rehash rewrites
+  the single cross-org chain and there is no platform-super-admin role (every
+  org's highest role is a per-org wildcard), `/rehash` is now disabled (403)
+  unless a server operator sets `AUDIT_ALLOW_CHAIN_REHASH=true` — env control is
+  the de-facto platform-admin boundary. An ordinary org admin holding
+  `audit.export` can no longer trigger a platform-wide chain rewrite.
+
+`/checkpoint` and `/integrity` are non-destructive (checkpoint writes a snapshot
+row; integrity is read-only) and left on `audit.export`/`audit.view`. New unit
+tests cover the repair, the fail-closed keyed-tamper refusal, and the clean-chain
+no-op. **Status:** fixed.
 
 ### SEC-8 — MEDIUM (flagged) — IP geo-blocking fails OPEN and `CountryBlockRule` is global
 `geoip.is_ip_blocked` returns *allow* when a country can't be resolved (no
