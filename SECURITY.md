@@ -24,7 +24,7 @@ The Logbook is designed with security as a core principle, implementing industry
 ### Core Security Implementations
 
 ✅ **Password Hashing**: Argon2id algorithm (OWASP recommended)
-✅ **Data Encryption**: AES-256 encryption for sensitive data at rest
+✅ **Data Encryption**: Authenticated encryption (Fernet — AES-128-CBC + HMAC-SHA256) for sensitive data at rest
 ✅ **Transport Security**: TLS 1.3 for data in transit
 ✅ **Tamper-Proof Logging**: Blockchain-inspired hash chain for audit logs
 ✅ **Multi-Factor Authentication**: TOTP-based 2FA support
@@ -49,7 +49,7 @@ The Logbook includes security features designed with HIPAA requirements in mind 
 - ✅ **Unique User Identification**: Each user has a unique identifier
 - ✅ **Emergency Access Procedure**: Admin override capabilities for emergencies
 - ✅ **Automatic Logoff**: Configurable session timeout (default: 15 minutes)
-- ✅ **Encryption and Decryption**: AES-256 for PHI at rest
+- ✅ **Encryption and Decryption**: Fernet (AES-128-CBC + HMAC-SHA256) for PHI at rest
 
 #### Audit Controls (§ 164.312(b))
 
@@ -228,7 +228,7 @@ Regular testing should include:
 - **Work Factor**: Configured for ~500ms hash time
 - **No Plain Text**: Passwords are NEVER stored in plain text
 - **No Passwords in Logs**: Temporary passwords are never written to application logs
-- **Onboarding Encryption**: Email passwords and API keys entered during onboarding are encrypted (AES-256 via Fernet) before database storage
+- **Onboarding Encryption**: Email passwords and API keys entered during onboarding are encrypted (Fernet — AES-128-CBC + HMAC-SHA256) before database storage
 
 ### Password Policies
 
@@ -252,7 +252,7 @@ Regular testing should include:
 
 ### Encryption at Rest
 
-**Algorithm**: AES-256 (Advanced Encryption Standard)
+**Algorithm**: Fernet — AES-128-CBC for confidentiality plus an HMAC-SHA256 authentication tag (authenticated encryption). Note: this is AES-128, not AES-256; see `docs/KNOWN_LIMITATIONS.md` for the migration-to-256 consideration.
 
 **What is Encrypted:**
 - User passwords (Argon2id hashing)
@@ -271,7 +271,7 @@ Regular testing should include:
 - Email configuration (SMTP passwords, OAuth secrets) encrypted before storage
 - File storage configuration (AWS keys, Azure keys) encrypted before storage
 - Only platform type identifiers are stored in plain text
-- Encrypted data uses the same AES-256 Fernet cipher as field-level encryption
+- Encrypted data uses the same Fernet cipher (AES-128-CBC + HMAC-SHA256) as field-level encryption
 
 ### Encryption in Transit
 

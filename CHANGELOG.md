@@ -57,7 +57,9 @@ open decisions that need an owner are collected in
   spend. Those references are now validated in-department before the totals
   recompute (which is itself now department-scoped). Also fixed: a donation saved
   without an explicit payment status was omitted from campaign/donor totals until
-  a later edit.
+  a later edit. A grant application referencing a funding `opportunity_id` from
+  another department (which leaked that opportunity's fields and drove task
+  generation) is now validated in-department as well.
 - **Admin Hours — manual time entries now always require officer approval, and
   the stale-session cleanup stays within your department.** A manually entered
   time record (member-supplied start/end times) previously auto-approved itself
@@ -74,6 +76,14 @@ open decisions that need an owner are collected in
   an external-provider user-mapping screen no longer reveals another department's
   member name/email. A department-overview report count was also inadvertently
   tallying meeting action items across all departments and is now scoped to yours.
+- **Events — a location from another department can no longer be attached to an
+  event.** Creating or updating an event with a `location_id` belonging to
+  **another** department disclosed that location's details and silently defeated
+  its room double-booking check; the location is now validated in-department. The
+  public event-request notification email now escapes the submitter-supplied
+  contact name (HTML-injection hardening), and an RSVP-series lookup that fetched
+  its anchor event without a department filter (a cross-department existence
+  oracle) is now scoped.
 - **Member creation can no longer be used to escalate privileges.** Creating a
   member (`POST /users`) assigned the requested roles without the privilege
   ceiling that the role-assignment endpoints already enforce, so a user with only
@@ -105,7 +115,9 @@ open decisions that need an owner are collected in
   shift-officer assignment is validated in-department on shift create/update (a
   foreign user id can no longer be attached to a shift or minted an apparatus
   assignment), and the member-hours report no longer joins member names/emails
-  without a department filter.
+  without a department filter. Generating shifts from a recurring pattern is now
+  bounded to a maximum date range (≈ one year per call) so a single request can
+  no longer materialize an unbounded number of shifts (denial-of-service).
 
 **Data protection & correctness**
 
@@ -114,10 +126,12 @@ open decisions that need an owner are collected in
   succeeded, so on a shared station a failed/expired logout could leave one
   member's cached pages (dashboard, action items, training records) visible to
   the next person who signed in on the same tab. The cache is now cleared
-  unconditionally on logout and at the start of every new sign-in. Several more
-  member-identifying endpoints (training compliance/certification lists,
-  skills-test results, event attendance history, notification delivery logs) were
-  also added to the never-cache list.
+  unconditionally on logout, at the start of every new sign-in, and when a token
+  refresh fails during onboarding (which previously skipped the reload that
+  clears it). Several more member-identifying endpoints (training compliance/
+  certification lists, skills-test results, event attendance history, notification
+  delivery logs, scheduled-email recipients) were also added to the never-cache
+  list.
 - **Public portal / integrations hardened.** The public-API key check no longer
   crashes once a second API key exists (every key shared a constant lookup
   prefix, which made the query return multiple rows and error out — it now
@@ -199,7 +213,13 @@ open decisions that need an owner are collected in
   ≤ end), matching the create endpoint.
 - **Email hardening — LIKE-search wildcards and an HTML email field are now
   properly escaped** in several modules (meetings/minutes, inventory,
-  equipment-check, messaging test-email).
+  equipment-check, messaging test-email, grants donor/opportunity search, events
+  request-notification email).
+- **Smaller correctness/validation fixes:** manually-approved clock-outs now
+  stamp their approval timestamp (previously left blank — a gap in the approval
+  audit trail); numeric report filters (`year`, expiring-soon days) are coerced
+  safely so a bad value returns a clean error instead of a 500; and multi-select
+  form answers are validated against the field's defined options.
 - **Integrations SSRF hardening — outbound chat/Cal.com calls re-validate the
   destination at send time.** The Slack/Discord/Teams notification senders and
   the Cal.com client now re-check the target URL immediately before dispatch
@@ -232,6 +252,10 @@ open decisions that need an owner are collected in
   are now confined to their own dues; only a dues manager (`finance.manage`, the
   permission that records and waives payments) can query across members. Members
   still see their own dues.
+- **Marking an org-wide notification read now requires the manage permission.**
+  `POST /notifications/logs/{id}/read` performed an org-wide write but was gated
+  only by `notifications.view` (while the sibling "read all" already required
+  `.manage`); it now requires `notifications.manage` to match.
 - **Unpublished and executive-session minutes are no longer visible to all
   members.** Meeting-minutes lists, detail, search, and dashboard stats now show
   a member (holding only `minutes.view`) just the **approved, non-executive**

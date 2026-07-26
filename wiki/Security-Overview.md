@@ -4,6 +4,23 @@
 
 The Logbook is designed with security as a core principle, implementing industry-standard security practices with features aligned to HIPAA requirements, Section 508 accessibility, and general security best practices. Note: HIPAA compliance requires external review and cannot be self-declared.
 
+### Module-by-Module Security Audit (2026-07)
+
+A rotating, module-by-module security audit covered all 27 modules/domains
+(medical-screening through the shared frontend layer), building on the July
+red-team review. Each module was checked for tenant isolation (IDOR/BOLA),
+broken access control, injection, and correctness; per-module findings and the
+applied vs. flagged status live under [`docs/module-audit/`](../docs/module-audit/PROGRESS.md).
+Highlights of the applied fixes: closed a privilege-escalation path in member
+creation and org-settings updates; closed multiple cross-tenant write/read paths
+(finance budgets, skills-test and dues PHI, module-seed bleed); fixed two
+availability bugs (the onboarding factory-reset FK order and the public-API-key
+auth crash); neutralized spreadsheet-formula injection across six exporters and
+an ICS calendar-injection vector; and stopped cross-user cached-PII leakage on
+shared devices. Open items that need an owner decision or a schema migration
+(e.g. the global `security_alerts` table, DB/Redis TLS enforcement in production)
+are tracked in [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
+
 ### Comprehensive Security Audit & Remediation (2026-03-07)
 
 - **25-issue security audit**: Full audit report identifying critical, high, medium, and low severity issues across backend, frontend, infrastructure, and deployment (`SECURITY_AUDIT.md`)
