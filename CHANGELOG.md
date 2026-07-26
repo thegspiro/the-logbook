@@ -109,6 +109,17 @@ open decisions that need an owner are collected in
 
 **Data protection & correctness**
 
+- **Onboarding / first-run setup hardened.** The factory reset could FK-fail (and
+  never complete) once a headquarters location had been created, because it
+  deleted users before the location that references them — it now removes the
+  location and facility first. During in-progress setup, a leaked/replayed
+  onboarding session can no longer create a second department or a second
+  full-access owner (both are now rejected), and the module/notification/role
+  configuration steps refuse to run once setup is complete. The first-run
+  `/start` and `/system-owner` endpoints are now rate-limited, the database
+  connectivity check no longer returns the raw driver error, and default
+  meeting-minutes templates no longer share a mutable sections list across
+  departments.
 - **Core infrastructure hardened.** Five more CSV exports (equipment-check
   reports, inventory, finance transactions, admin-hours) now run through the
   formula-injection-safe writer, so a member whose name/notes start with

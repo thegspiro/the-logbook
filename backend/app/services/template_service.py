@@ -4,6 +4,7 @@ Minutes Template Service
 Business logic for managing meeting minutes templates.
 """
 
+import copy
 from typing import List, Optional
 from uuid import UUID
 
@@ -160,6 +161,13 @@ class TemplateService:
 
         created = []
         for tpl_data in defaults:
+            # Deep-copy so each org's `sections` is an independent object — the
+            # dict above assigns the module-level DEFAULT_*_SECTIONS constants by
+            # reference, so a later in-place edit of one org's template would
+            # otherwise contaminate the shared constant and every other org's
+            # rows created from it (pitfall #12).
+            tpl_data = dict(tpl_data)
+            tpl_data["sections"] = copy.deepcopy(tpl_data["sections"])
             tpl = MinutesTemplate(
                 organization_id=str(organization_id),
                 created_by=str(created_by),

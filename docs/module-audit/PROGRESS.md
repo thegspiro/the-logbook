@@ -37,8 +37,8 @@ already covered by the red-team review on this branch).
 | 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ✅ |
 | 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ✅ |
 | 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ✅ |
-| 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | 🔄 next |
-| 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | ⬜ |
+| 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ✅ |
+| 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | 🔄 next |
 | 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | ⬜ |
 
 ## Log
@@ -373,3 +373,25 @@ already covered by the red-team review on this branch).
   bombs, Redis TLS no cert verify), CI-10 (Redis no tenant namespacing [latent],
   WS accept-before-auth, PBKDF2 100k / 40-bit recovery codes — migration-shaped).
   See core-infra.md. Next: onboarding.
+- #25 onboarding ✅ — tenant-provisioning flow (onboarding endpoint 1961 L +
+  service 1319 L + org-template services); three parallel readers (endpoint
+  guards / service reset+owner+session / templates). Verified good: the two
+  catastrophic scenarios BLOCKED (post-completion reset refused + session
+  unobtainable post-org; second system-owner/org blocked by needs_onboarding),
+  no secrets in responses, session secrets encrypted, 256-bit session token +
+  CSRF, Argon2id owner password, complete is a one-way latch, template export
+  org-scoped, no SQL injection. **6 fixes applied:** ONB-1 (HIGH correctness:
+  reset deleted users before the HQ Location whose created_by→users is RESTRICT,
+  so reset FK-failed and could never complete — delete Location/Facility before
+  users + narrowed the user_positions except), ONB-2 (MED: in-progress window let
+  a leaked session create multiple orgs/owners — create_organization rejects a
+  2nd org, create_system_owner rejects a 2nd owner), ONB-3 (MED: /modules,
+  /notifications, /complete, /session/roles, /session/positions lacked the
+  needs_onboarding completion guard — added), ONB-4 (MED: /start + /system-owner
+  had no rate limit — added), ONB-5 (LOW/MED: /database-check echoed the raw DB
+  exception — generic error), ONB-6 (LOW: minutes-template seeding shared mutable
+  default sections, pitfall #12 — deepcopy). Also renamed the test_email_*
+  endpoint to clear a PT028. Flagged: ONB-7 (onboarding role editor accepts
+  client-controlled permissions/priority/is_system), ONB-8 (reset owner-reauth,
+  audit durability, /status org-name leak, template mass-assignment). See
+  onboarding.md. Next: public-portal.
