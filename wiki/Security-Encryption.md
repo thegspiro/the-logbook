@@ -9,7 +9,7 @@ The Logbook uses multi-layer encryption to protect data at rest, in transit, and
 | Layer | Algorithm | Purpose |
 |-------|-----------|---------|
 | **Passwords** | Argon2id | Password hashing (irreversible) |
-| **Data at rest** | Fernet (AES-128-CBC + HMAC-SHA256) | Authenticated encryption of sensitive database fields |
+| **Data at rest** | AES-256-GCM | Authenticated encryption of sensitive database fields (legacy Fernet values still readable) |
 | **Data in transit** | TLS 1.3 | HTTPS for all client-server communication |
 | **Audit log integrity** | HMAC-SHA256 keyed hash chain | Tamper-evident audit trail |
 
@@ -25,14 +25,18 @@ Passwords are hashed using Argon2id, the OWASP-recommended algorithm. Argon2id i
 
 ---
 
-## Authenticated Encryption at Rest (Fernet)
+## Authenticated Encryption at Rest (AES-256-GCM)
 
-Sensitive fields in the database are encrypted using **Fernet** (AES-128-CBC for
-confidentiality plus an HMAC-SHA256 authentication tag) before storage. Fernet
-provides authenticated encryption — a tampered ciphertext fails to decrypt rather
-than silently returning garbage. (Note: this is AES-128, not AES-256; a 256-bit
-scheme would require re-encrypting all stored ciphertext — see
-`docs/KNOWN_LIMITATIONS.md`.)
+Sensitive fields in the database are encrypted using **AES-256-GCM** before
+storage — authenticated encryption that provides both confidentiality and
+integrity in one pass (a tampered ciphertext fails to decrypt rather than
+silently returning garbage), with a fresh random 96-bit nonce per value.
+
+Values written before the AES-256-GCM migration used **Fernet**
+(AES-128-CBC + HMAC-SHA256); these remain transparently readable, so no data
+migration is required for correctness. `scripts/reencrypt_to_aesgcm.py`
+re-encrypts existing rows to AES-256-GCM as a background step, after which Fernet
+read-support can be retired.
 
 ### Configuration
 
@@ -50,7 +54,7 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 - MFA secrets
 - Backup encryption keys
 
-> **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are Fernet-encrypted (AES-128-CBC + HMAC-SHA256) before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
+> **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256-GCM encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
 
 ### Key Rotation
 

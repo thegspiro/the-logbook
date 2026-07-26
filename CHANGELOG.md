@@ -121,6 +121,15 @@ open decisions that need an owner are collected in
 
 **Data protection & correctness**
 
+- **Field encryption upgraded to AES-256-GCM.** Sensitive data at rest (PHI,
+  MFA secrets, integration/email/SSO credentials, evaluation notes) is now
+  encrypted with AES-256-GCM authenticated encryption — a stronger cipher than
+  the previous Fernet (AES-128-CBC + HMAC), and one where a tampered value fails
+  to decrypt (fails closed) rather than being read back. Existing encrypted data
+  written under the old scheme remains readable, so the upgrade needs no downtime
+  or data migration for correctness; a maintenance script
+  (`backend/scripts/reencrypt_to_aesgcm.py`, dry-run by default) re-encrypts
+  older rows to AES-256-GCM as a background step.
 - **Cached data no longer leaks between users on a shared device.** The in-memory
   API response cache was only cleared when the logout request to the server
   succeeded, so on a shared station a failed/expired logout could leave one
