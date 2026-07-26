@@ -75,19 +75,33 @@ caller's own org scope).
 51–100 char value passed validation then 500'd on insert.
 **Fix:** aligned the schema cap to 50 (clean 422 instead of a DB error).
 
-### SEC-6 — HIGH (flagged) — `security_alerts` is a global table → cross-tenant read, IDOR-suppress, and metric leaks
-`SecurityAlertRecord` has **no `organization_id` column**, and the service never
-scopes it: `get_recent_alerts` returns every tenant's alerts (source IP, user id,
+### SEC-6 — HIGH — ✅ FIXED — `security_alerts` is a global table → cross-tenant read, IDOR-suppress, and metric leaks
+`SecurityAlertRecord` had **no `organization_id` column**, and the service never
+scoped it: `get_recent_alerts` returned every tenant's alerts (source IP, user id,
 description, and a details blob with prior/current IPs + session id) via
 `GET /alerts` / `/data-exfiltration/status`; `acknowledge_alert`/`resolve_alert`
-fetch by bare id, so an org-A admin can **suppress org-B's live incidents**
+fetched by bare id, so an org-A admin could **suppress org-B's live incidents**
 (XC-3), with the 404 acting as a global existence oracle; and `get_security_status`
-aggregates alert/failed-login counts and in-memory session/endpoint metrics across
-**all** tenants. This is the headline finding, but it cannot be fixed in the query
-layer — it needs a migration adding `organization_id` to `security_alerts`
-(populated at `_add_alert` from the acting user's org, with a backfill decision
-for existing rows) then filtering the four methods. **Status:** flagged (schema
-migration + backfill, untestable here without a DB).
+aggregated alert/failed-login counts and in-memory session/endpoint metrics across
+**all** tenants.
+
+**Fix:** Added a nullable `organization_id` column (+ `ix_security_alerts_organization_id`
+and a composite `idx_security_alert_org_timestamp` index) to `security_alerts`
+(migration `20260728_0001`), which backfills existing rows from each alert's
+`user_id → users.organization_id`. `_add_alert` now resolves the owning org from
+the alert's `user_id` at write time (user-less pre-auth / IP-only alerts stay
+NULL = platform-level, not shown in any org's view). All four read/write methods
+take `organization_id` as a required parameter and filter on it:
+`get_recent_alerts` and `get_security_status` scope every aggregation (failed
+logins scoped via the org's user ids); `acknowledge_alert`/`resolve_alert` add
+`organization_id == caller_org` to the fetch so a 404 is returned uniformly for
+both missing and cross-tenant ids (no oracle). `get_security_status` also stopped
+returning the raw external-endpoint URL list (another tenant's exfil
+destinations) — it now exposes only a process-global **count**, with an explicit
+comment that the in-memory trackers are not per-tenant. The in-memory
+`get_recent_alerts` fallback returns `[]` (the in-memory list carries no org, so
+it cannot be safely scoped). Endpoint callers pass
+`str(current_user.organization_id)`.
 
 ### SEC-7 — MEDIUM (flagged) — Global audit-chain admin ops gated by any org's `audit.export`
 `POST /audit-log/rehash` (recomputes hashes for **all** orgs' rows),
@@ -133,6 +147,8 @@ IPs); per-org country rules need a schema change.
   reviewed for security invariants (org-scoping, enforcement fail-closed, DoS,
   injection), not line-by-line. The invariants held on every path examined.
 - The two global-table findings (SEC-6 security_alerts, SEC-8 CountryBlockRule)
-  share a root cause with the broader multi-tenant work: security/enforcement
-  tables that predate per-org scoping. Both are migration-shaped and are the
-  top open items from this iteration.
+  shared a root cause with the broader multi-tenant work: security/enforcement
+  tables that predate per-org scoping. SEC-6 is now **fixed** (org column +
+  backfill migration `20260728_0001`, all four methods org-scoped); SEC-8
+  (per-org country rules) remains open as it needs a product decision on
+  fail-closed geo-blocking.

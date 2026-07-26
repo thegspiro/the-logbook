@@ -47,7 +47,9 @@ async def get_security_status(
         - Recent alert counts by severity and type
         - Security metrics and thresholds
     """
-    status = await security_monitor.get_security_status(db)
+    status = await security_monitor.get_security_status(
+        db, str(current_user.organization_id)
+    )
 
     await log_audit_event(
         db=db,
@@ -102,6 +104,7 @@ async def get_security_alerts(
             )
 
     alerts = await security_monitor.get_recent_alerts(
+        str(current_user.organization_id),
         limit=limit,
         threat_level=threat_level_enum,
         alert_type=alert_type_enum,
@@ -122,7 +125,7 @@ async def acknowledge_alert(
     Acknowledge a security alert
     """
     success = await security_monitor.acknowledge_alert(
-        alert_id, db, username=current_user.username
+        alert_id, str(current_user.organization_id), db, username=current_user.username
     )
 
     if not success:
@@ -158,7 +161,7 @@ async def resolve_alert(
     Mark a security alert as resolved
     """
     success = await security_monitor.resolve_alert(
-        alert_id, db, username=current_user.username
+        alert_id, str(current_user.organization_id), db, username=current_user.username
     )
 
     if not success:
@@ -546,7 +549,9 @@ async def get_intrusion_detection_status(
     - Brute force detection status
     - Session hijacking detection status
     """
-    status = await security_monitor.get_security_status(db)
+    status = await security_monitor.get_security_status(
+        db, str(current_user.organization_id)
+    )
 
     return {
         "monitoring_active": True,
@@ -572,15 +577,19 @@ async def get_data_exfiltration_status(
     - Large data transfer alerts
     - Bulk access patterns
     """
-    status = await security_monitor.get_security_status(db)
+    status = await security_monitor.get_security_status(
+        db, str(current_user.organization_id)
+    )
 
     # Get exfiltration-related alerts
     exfil_alerts = await security_monitor.get_recent_alerts(
+        str(current_user.organization_id),
         limit=20,
         alert_type=AlertType.DATA_EXFILTRATION,
         db=db,
     )
     external_alerts = await security_monitor.get_recent_alerts(
+        str(current_user.organization_id),
         limit=20,
         alert_type=AlertType.EXTERNAL_DATA_TRANSFER,
         db=db,
@@ -615,7 +624,9 @@ async def trigger_manual_security_check(
     integrity_result = await verify_audit_log_integrity(db)
 
     # Get current security status
-    status = await security_monitor.get_security_status(db)
+    status = await security_monitor.get_security_status(
+        db, str(current_user.organization_id)
+    )
 
     # Log the manual check
     await log_audit_event(

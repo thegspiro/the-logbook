@@ -272,6 +272,18 @@ open decisions that need an owner are collected in
   minutes remain visible only to those with `minutes.manage` (the secretaries/
   officers who already draft and approve them). No new permission or UI change
   required.
+- **Security alerts are now scoped to the owning department.** Security-monitoring
+  alerts (brute-force, session-hijack, data-exfiltration, etc.) were stored in a
+  single global table with no owning tenant, so an admin in one department could
+  read **every** department's alerts — including source IPs, user ids, and prior/
+  current IPs and session ids — and could **acknowledge or resolve (suppress)**
+  another department's live security incidents. The alert table now carries an
+  `organization_id` (backfilled from each alert's user), populated when the alert
+  is raised; the alert list, security-status dashboard, and acknowledge/resolve
+  actions are all confined to the caller's department, and the status dashboard
+  no longer reports another tenant's external data-transfer destinations.
+  Platform-level pre-auth alerts (e.g. brute-force against the login page, which
+  have no owning department) are not shown in any single department's view.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged
