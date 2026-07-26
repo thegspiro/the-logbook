@@ -38,6 +38,8 @@ const UNCACHEABLE_PREFIXES = [
   '/message-history',  // sent-message log: recipient emails, subjects (PII)
   '/roles/my/',       // current user's permissions (security-sensitive)
   '/notifications/my/', // user-specific notification state
+  '/notifications/logs', // delivery logs: recipient identities (PII)
+  '/email-templates/scheduled', // scheduled emails: recipient PII
   '/training/waivers',  // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data
@@ -50,6 +52,12 @@ const UNCACHEABLE_PREFIXES = [
   '/training/module-config/my-training', // current user's full training record
   '/training/programs/enrollments/',  // per-member program enrollment & progress
   '/training/instructors/qualifications', // per-member instructor credentials
+  '/training/compliance-matrix', // org-wide per-member compliance rollup (names + status)
+  '/training/certifications/expiring', // member cert-expiry list (names, numbers)
+  '/training/expiring-certifications', // under-gated twin of the above (member certs)
+  '/training/reports/compliance-forecast', // per-member compliance projection
+  '/training/records', // individual training records (scores, certs) — member PHI-adjacent
+  '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
   '/facilities/emergency-contacts', // emergency contact PII
   '/messages/',       // private member-to-member messages
   '/admin-hours/',    // individual work hours and clock-in records
@@ -85,6 +93,7 @@ const UNCACHEABLE_PREFIXES = [
  */
 const UNCACHEABLE_SUBSTRINGS = [
   '/rsvps',              // event attendance roster (member names/status — PII)
+  '/rsvp-history',       // per-member attendance/decline history (PII) — not matched by '/rsvps'
   '/eligible-members',   // returns member first/last name + email (PII)
   '/external-attendees', // external attendee PII
   '/check-in-monitoring', // live attendee/location check-in data (PII)

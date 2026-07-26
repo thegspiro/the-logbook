@@ -39,7 +39,12 @@ already covered by the red-team review on this branch).
 | 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ✅ |
 | 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ✅ |
 | 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | ✅ |
-| 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | 🔄 next |
+| 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | ✅ |
+
+**✅ Rotation complete — all 27 modules audited (2026-07-26).** Each module has a
+`docs/module-audit/<module>.md`; cross-cutting patterns are in CROSS-CUTTING.md;
+open owner-decision items are in `docs/KNOWN_LIMITATIONS.md`. A second pass would
+start over at #1.
 
 ## Log
 

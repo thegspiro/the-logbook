@@ -109,6 +109,15 @@ open decisions that need an owner are collected in
 
 **Data protection & correctness**
 
+- **Cached data no longer leaks between users on a shared device.** The in-memory
+  API response cache was only cleared when the logout request to the server
+  succeeded, so on a shared station a failed/expired logout could leave one
+  member's cached pages (dashboard, action items, training records) visible to
+  the next person who signed in on the same tab. The cache is now cleared
+  unconditionally on logout and at the start of every new sign-in. Several more
+  member-identifying endpoints (training compliance/certification lists,
+  skills-test results, event attendance history, notification delivery logs) were
+  also added to the never-cache list.
 - **Public portal / integrations hardened.** The public-API key check no longer
   crashes once a second API key exists (every key shared a constant lookup
   prefix, which made the query return multiple rows and error out — it now

@@ -15,6 +15,7 @@ import { authService } from '../services/api';
 import { markLoginComplete, clearTempAccessToken } from '../services/apiClient';
 import type { CurrentUser, LoginCredentials, RegisterData } from '../types/auth';
 import { toAppError, getErrorMessage } from '../utils/errorHandling';
+import { clearCache } from '../utils/apiCache';
 
 /** Number of failed attempts before client-side lockout kicks in. */
 const LOGIN_LOCKOUT_THRESHOLD = 5;
@@ -175,6 +176,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       // Only persist a lightweight session flag — never the actual tokens.
       localStorage.setItem('has_session', '1');
+      // SEC: Start the new session with a clean cache in case a prior user's
+      // session ended without a clean logout (crash/tab-close on a shared tab).
+      clearCache();
 
       // Wait for auth cookies to be stored before navigating to the
       // dashboard.  Without this, the dashboard can fire API calls
@@ -259,6 +263,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         ...(recoveryCode ? { recovery_code: recoveryCode } : {}),
       });
       localStorage.setItem('has_session', '1');
+      clearCache(); // SEC: fresh session starts with a clean cache
       await waitForLoginCookies(csrfBefore);
       markLoginComplete();
       if (resp?.user) {
@@ -291,6 +296,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // SEC: Tokens are stored in httpOnly cookies by the backend response.
       localStorage.setItem('has_session', '1');
+      clearCache(); // SEC: fresh session starts with a clean cache
 
       await get().loadUser();
 
@@ -314,6 +320,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       // SEC: Clear session flag, temporary in-memory token, and any
       // legacy token remnants from localStorage
       clearTempAccessToken();
+      // SEC: Purge the in-memory API cache UNCONDITIONALLY here (not only inside
+      // authService.logout, which is skipped when the logout POST throws — the
+      // common case on a shared terminal with an already-expired session). The
+      // cache key carries no user identity, so a stale entry would otherwise be
+      // served to the next user who logs in on the same tab without a reload.
+      clearCache();
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');

@@ -24,6 +24,7 @@ import {
   isRevalidating,
   markRevalidating,
   clearRevalidating,
+  clearCache,
 } from '../utils/apiCache';
 
 export const API_BASE_URL = '/api/v1';
@@ -262,6 +263,11 @@ api.interceptors.response.use(
         // established yet. A hard redirect here would kick the user out
         // of onboarding and lose their progress.
         localStorage.removeItem('has_session');
+        // SEC: Purge cached responses now. The non-onboarding branch gets a
+        // full reload (which clears the in-memory cache), but the onboarding
+        // branch skips the redirect — without this, cached data would survive
+        // the lost session there.
+        clearCache();
         if (!window.location.pathname.startsWith('/onboarding')) {
           window.location.href = '/login';
         }
