@@ -30,6 +30,20 @@ from app.services.compliance_officer_service import (
 router = APIRouter()
 
 
+def _csv_safe(value: object) -> str:
+    """Neutralize CSV/spreadsheet formula injection.
+
+    A member-controlled cell (e.g. their name) that begins with =, +, -, @, or a
+    leading control char is executed as a formula when the officer opens the
+    export in Excel/Sheets. Prefix such values with an apostrophe so they render
+    as literal text. Normal names are unchanged.
+    """
+    text = "" if value is None else str(value)
+    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
 # =============================================================================
 # Request / Response Schemas
 # =============================================================================
@@ -188,7 +202,7 @@ async def export_annual_report(
         for member in members:
             writer.writerow(
                 [
-                    member.get("name", ""),
+                    _csv_safe(member.get("name", "")),
                     member.get("compliance_pct", 0),
                     member.get("hours_completed", 0),
                     member.get("admin_hours_approved", 0),
@@ -196,7 +210,7 @@ async def export_annual_report(
                     member.get("requirements_met", 0),
                     member.get("requirements_total", 0),
                     member.get("expired_certifications", 0),
-                    member.get("status", ""),
+                    _csv_safe(member.get("status", "")),
                 ]
             )
 

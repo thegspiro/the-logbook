@@ -34,8 +34,8 @@ already covered by the red-team review on this branch).
 | 19 | scheduling | endpoints/scheduling.py, shift_*.py, services/scheduling_service.py, shift_*_service.py | modules/scheduling | ✅ |
 | 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ✅ |
 | 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ✅ |
-| 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | 🔄 next |
-| 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ⬜ |
+| 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ✅ |
+| 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | 🔄 next |
 | 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ⬜ |
 | 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ⬜ |
 | 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | ⬜ |
@@ -312,3 +312,23 @@ already covered by the red-team review on this branch).
   machine, membership-id row lock/loop cap, audit-history org filter,
   perm-name reconcile, shallow settings merge). See orgs-roles-users.md. Next:
   compliance/skills.
+- #22 compliance/skills ✅ — PHI-adjacent compliance + skills-testing (3 endpoint
+  files + 4 services); three parallel readers (skills / compliance-officer /
+  compliance-config). Verified good: no cross-tenant IDOR anywhere (XC-3 clean),
+  the get_current_user-only skills routes org-scoped + discard ownership-checked,
+  skills write-path XC-1 already solid, compliance-officer reads officer-gated
+  (no client member id), no NULL-org rows, no SQL injection. **7 fixes applied:**
+  CS-1 (MED cross-member PHI: GET /tests + /tests/{id} exposed every member's
+  scores/evaluator notes to any member — confined non-officers to their own
+  tests, using the module's existing _user_has_officer_role split), CS-2 (LOW:
+  GET /templates/{id} skipped the visibility filter; applied it), CS-3 (MED XC-1:
+  create/update_profile stored unvalidated cross-org requirement/role/category
+  FK ids — added _validate_profile_fks), CS-4 (MED: CSV formula injection in the
+  annual compliance export — _csv_safe cell sanitizer), CS-5 (MED correctness:
+  zero-requirements member mislabeled at_risk + understated org % — treat as
+  compliant, matching the sibling service), CS-6 (email HTML injection in skills
+  result emails — html.escape), CS-7 (LOW: threshold-ordering validator on
+  compliance config). Flagged: CS-8 (SoD — examiner self-certification +
+  self-attestation), CS-9 (monthly=annual report, email recipient allowlist +
+  HTML escaping, attestation over-fetch, records_with_certification mislabel,
+  ISO str typing). See compliance-skills.md. Next: security/audit/ip.

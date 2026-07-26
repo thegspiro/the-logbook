@@ -7,7 +7,7 @@ Pydantic request/response schemas for compliance config endpoints.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 
 from app.schemas.base import UTCResponseBase
@@ -133,6 +133,16 @@ class ComplianceConfigBase(BaseModel):
     notify_non_compliant_members: bool = False
     notify_days_before_deadline: Optional[List[int]] = None
 
+    @model_validator(mode="after")
+    def _check_threshold_order(self) -> "ComplianceConfigBase":
+        # at_risk is the lower band and compliant the upper; an inverted pair
+        # (e.g. compliant=50, at_risk=90) produces incoherent status bucketing.
+        if self.at_risk_threshold > self.compliant_threshold:
+            raise ValueError(
+                "at_risk_threshold must be less than or equal to compliant_threshold"
+            )
+        return self
+
 
 class ComplianceConfigCreate(ComplianceConfigBase):
     """Schema for creating compliance config (initial setup)."""
@@ -153,6 +163,20 @@ class ComplianceConfigUpdate(BaseModel):
     report_day_of_month: Optional[int] = Field(None, ge=1, le=28)
     notify_non_compliant_members: Optional[bool] = None
     notify_days_before_deadline: Optional[List[int]] = None
+
+    @model_validator(mode="after")
+    def _check_threshold_order(self) -> "ComplianceConfigUpdate":
+        # Only enforce when both are supplied in the same partial update; a
+        # cross-field check against the stored value would need the service.
+        if (
+            self.at_risk_threshold is not None
+            and self.compliant_threshold is not None
+            and self.at_risk_threshold > self.compliant_threshold
+        ):
+            raise ValueError(
+                "at_risk_threshold must be less than or equal to compliant_threshold"
+            )
+        return self
 
 
 class ComplianceConfigResponse(ComplianceConfigBase):

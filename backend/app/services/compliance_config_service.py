@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.admin_hours import AdminHoursCategory
 from app.models.compliance_config import (
     ComplianceConfig,
     ComplianceProfile,
@@ -20,7 +21,7 @@ from app.models.compliance_config import (
     ReportStatus,
 )
 from app.models.training import TrainingRequirement
-from app.models.user import Organization
+from app.models.user import Organization, Position
 from app.services.compliance_officer_service import AnnualComplianceReportService
 from app.services.email_service import EmailService
 
@@ -67,6 +68,53 @@ class ComplianceConfigService:
         # Re-fetch with profiles
         return await self.get_config(organization_id)  # type: ignore[return-value]
 
+    async def _validate_profile_fks(
+        self, organization_id: str, data: Dict[str, Any]
+    ) -> None:
+        """Reject compliance-profile FK ids that don't belong to the caller's
+        org before they are stored.
+
+        A profile stores client-supplied requirement ids, role (position) ids,
+        and admin-hours category ids that drive every member's compliance
+        evaluation. An unvalidated foreign/garbage id silently corrupts that
+        math (a member measured against a requirement that doesn't exist in-org
+        drops out or mis-flags) and is a latent cross-tenant disclosure vector
+        if a downstream renderer resolves the id without an org filter. Only
+        keys present in ``data`` are checked (update passes partial dumps).
+        """
+
+        async def _all_in_org(model: Any, ids: List[Any]) -> None:
+            wanted = {str(i) for i in ids if i}
+            if not wanted:
+                return
+            result = await self.db.execute(
+                select(model.id).where(
+                    model.id.in_(list(wanted)),
+                    model.organization_id == organization_id,
+                )
+            )
+            found = {str(r) for r in result.scalars().all()}
+            if wanted - found:
+                raise ValueError(
+                    f"One or more {model.__name__} ids are not in this organization"
+                )
+
+        if "required_requirement_ids" in data or "optional_requirement_ids" in data:
+            await _all_in_org(
+                TrainingRequirement,
+                (data.get("required_requirement_ids") or [])
+                + (data.get("optional_requirement_ids") or []),
+            )
+        if "role_ids" in data:
+            await _all_in_org(Position, data.get("role_ids") or [])
+        if "admin_hours_requirements" in data:
+            cat_ids = [
+                item.get("category_id")
+                for item in (data.get("admin_hours_requirements") or [])
+                if isinstance(item, dict) and item.get("category_id")
+            ]
+            await _all_in_org(AdminHoursCategory, cat_ids)
+
     async def create_profile(
         self,
         organization_id: str,
@@ -79,6 +127,7 @@ class ComplianceConfigService:
                 "Compliance configuration must be set up before creating profiles"
             )
 
+        await self._validate_profile_fks(organization_id, data)
         profile = ComplianceProfile(config_id=config.id, **data)
         self.db.add(profile)
         await self.db.flush()
@@ -104,6 +153,7 @@ class ComplianceConfigService:
         if not profile:
             raise ValueError("Profile not found")
 
+        await self._validate_profile_fks(organization_id, data)
         for key, value in data.items():
             if hasattr(profile, key) and value is not None:
                 setattr(profile, key, value)

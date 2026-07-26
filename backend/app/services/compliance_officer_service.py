@@ -774,7 +774,12 @@ class AnnualComplianceReportService:
             total_certs_active += active
             total_certs_expired += expired
 
-            if met_count >= req_total and req_total > 0:
+            # A member with no applicable requirements is 100% compliant
+            # (compliance_pct is set to 100.0 above), matching
+            # compute_org_compliance_pct. The prior `req_total > 0` guard here
+            # dropped them out of the compliant bucket and mislabeled them
+            # "at_risk", which also understated the org-wide percentage.
+            if req_total == 0 or met_count >= req_total:
                 fully_compliant += 1
                 member_status = "compliant"
             elif compliance_pct >= 75:

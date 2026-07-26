@@ -109,6 +109,17 @@ open decisions that need an owner are collected in
 
 **Data protection & correctness**
 
+- **Compliance exports and configuration are hardened.** Compliance profiles now
+  reject requirement, role, and admin-hours-category ids that belong to another
+  department (previously stored unvalidated, silently skewing a member's
+  compliance math). The annual compliance CSV export now neutralizes
+  spreadsheet-formula injection (a member whose name starts with `=`/`+`/`-`/`@`
+  can no longer run a formula on the officer's machine when the export is opened).
+  A member with no applicable requirements is now correctly counted as compliant
+  instead of "at risk" (which also understated the department's overall
+  percentage). Skills-result emails now escape member/template names, and the
+  compliance config rejects an at-risk threshold set above the compliant
+  threshold.
 - **Organization settings — SSO client secrets are no longer silently destroyed
   or echoed back.** Saving the full settings back through `PATCH /settings` after
   reading them (where secrets come back redacted as bullets) previously persisted
@@ -155,6 +166,14 @@ open decisions that need an owner are collected in
   via the API. They now require `prospective_members.view`/`.manage` (the
   permission the UI already required to open those pages). Election officers keep
   access to applicant **election packages** through `elections.view`/`.manage`.
+- **Skills-test scores and evaluator notes are no longer visible to every
+  member.** The skills-test list and detail views returned every member's test
+  records — pass/fail, scores, and free-text examiner notes — to any logged-in
+  member, and let them target a specific member by id. A non-officer is now
+  confined to tests they took or evaluated; officers (training managers) keep the
+  full view, matching how the module already restricts test templates. The
+  fetch-a-template-by-id route now applies the same officer-only visibility the
+  template list uses.
 - **Member dues balances are no longer visible to everyone with finance read
   access.** The dues list (`GET /finance/dues`) accepted a `user_id` filter with
   no self-scoping, so any member holding the broad `finance.view` permission
