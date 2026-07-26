@@ -343,19 +343,23 @@ async def authenticate_api_key(
     # Extract key prefix for lookup
     key_prefix = api_key[:8] if len(api_key) >= 8 else api_key
 
-    # Find API key by prefix (fast lookup)
+    # Find candidate keys by prefix. NOTE: the stored key_prefix is currently
+    # the constant "logbook_" marker (the first 8 chars of every key), so it is
+    # NOT selective and this filter can return many rows. Iterate the candidates
+    # and constant-time verify each — using scalar_one_or_none() here raised
+    # MultipleResultsFound (a 500 that broke auth for every tenant) the moment a
+    # second key existed. (Making the prefix selective would need a key re-issue
+    # migration — tracked in KNOWN_LIMITATIONS.)
     result = await db.execute(
         select(PublicPortalAPIKey).where(PublicPortalAPIKey.key_prefix == key_prefix)
     )
-    api_key_obj = result.scalar_one_or_none()
+    api_key_obj = None
+    for candidate in result.scalars().all():
+        if verify_api_key(api_key, candidate.key_hash):
+            api_key_obj = candidate
+            break
 
     if not api_key_obj:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
-        )
-
-    # Verify the full key hash
-    if not verify_api_key(api_key, api_key_obj.key_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
         )

@@ -10,6 +10,7 @@ event time, and the check-in URL. The actual check-in requires authentication
 on the scanning user's device.
 """
 
+import re
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -56,8 +57,10 @@ async def get_public_location_display(
 
     The display_code is a short, non-guessable string assigned to each location.
     """
-    # Validate display code format (alphanumeric, 6-12 chars)
-    if not display_code.isalnum() or len(display_code) < 6 or len(display_code) > 12:
+    # Validate display code format. Use an explicit ASCII regex rather than
+    # str.isalnum(), which also accepts Unicode letters/digits — a looser gate
+    # than the ASCII codes actually issued.
+    if not re.fullmatch(r"[A-Za-z0-9]{6,12}", display_code):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Display not found",

@@ -109,6 +109,14 @@ open decisions that need an owner are collected in
 
 **Data protection & correctness**
 
+- **Public portal / integrations hardened.** The public-API key check no longer
+  crashes once a second API key exists (every key shared a constant lookup
+  prefix, which made the query return multiple rows and error out — it now
+  verifies each candidate). The public calendar (`.ics`) feed now escapes lone
+  carriage returns and the timezone header, closing a calendar-spoofing
+  injection where a stray control character in an event title/notes could inject
+  extra calendar entries. The public location-display code is validated against
+  an explicit ASCII pattern instead of a looser Unicode check.
 - **Onboarding / first-run setup hardened.** The factory reset could FK-fail (and
   never complete) once a headquarters location had been created, because it
   deleted users before the location that references them — it now removes the

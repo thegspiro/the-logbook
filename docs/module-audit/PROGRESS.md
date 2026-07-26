@@ -38,8 +38,8 @@ already covered by the red-team review on this branch).
 | 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ✅ |
 | 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ✅ |
 | 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ✅ |
-| 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | 🔄 next |
-| 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | ⬜ |
+| 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | ✅ |
+| 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | 🔄 next |
 
 ## Log
 
@@ -395,3 +395,23 @@ already covered by the red-team review on this branch).
   client-controlled permissions/priority/is_system), ONB-8 (reset owner-reauth,
   audit durability, /status org-name leak, template mass-assignment). See
   onboarding.md. Next: public-portal.
+- #26 public-portal ✅ — the unauthenticated public-facing surface (portal API +
+  security core, calendar .ics feed, display kiosk board); two parallel readers.
+  Verified good: portal tenant isolation enforced (key→one org), API keys
+  bcrypt-hashed + constant-time verify, revoked/expired rejected, field whitelist
+  default-deny, events/stats no PII, rate-limit caches bounded + cleanup invoked +
+  DB check fails closed, calendar token 384-bit CSPRNG + own-shifts-only,
+  application-status token 256-bit IP-limited, display data-minimized +
+  org-scoped, no SQL injection. **3 fixes applied:** PP-1 (HIGH availability: the
+  API-key prefix is the constant "logbook_" so scalar_one_or_none() raised
+  MultipleResultsFound/500 once a 2nd key existed, breaking auth for all tenants —
+  lookup now iterates + constant-time-verifies candidates, migration-free), PP-2
+  (MED: ICS injection via unescaped lone \r in _escape_ics — now folds all line
+  breaks; also escaped X-WR-TIMEZONE + the datetime fallback), PP-3 (LOW:
+  display-code isalnum accepted Unicode — ASCII regex). Tests: 57 display/ical
+  tests pass. Flagged: PP-4 (HIGH/MED bcrypt-before-rate-limit CPU DoS — needs
+  dependency restructure + selective prefix), PP-5 (client UA/referer/IP logged
+  verbatim → stored-XSS in admin viewer, fix in frontend #27), PP-6 (per-process
+  rate limiter needs Redis; application-status token plaintext at rest), PP-7
+  (write-on-read + anomaly query load, nested-address whitelist, 40-bit display
+  code). See public-portal.md. Next: frontend shared (final).
