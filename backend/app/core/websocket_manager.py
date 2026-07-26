@@ -24,23 +24,42 @@ class ConnectionManager:
     reach every connected client in the same organization.
     """
 
+    # Bound the number of live sockets a single org may hold so one
+    # authenticated tenant cannot exhaust worker memory by opening connections
+    # in a loop (the registry is otherwise only reaped for dead sockets).
+    MAX_CONNECTIONS_PER_ORG = 200
+
     def __init__(self):
         self._connections: Dict[str, Set[WebSocket]] = {}
         self._pubsub = None
         self._listener_task: Optional[asyncio.Task] = None
 
-    async def connect(self, websocket: WebSocket, organization_id: str):
+    async def connect(self, websocket: WebSocket, organization_id: str) -> bool:
+        """Register a socket for an org. Returns False (and closes the socket)
+        if the org is at its connection cap, so the caller stops."""
         try:
             if websocket.client_state.name == "CONNECTING":
                 await websocket.accept()
         except AttributeError:
             pass
+        existing = self._connections.get(organization_id)
+        if existing is not None and len(existing) >= self.MAX_CONNECTIONS_PER_ORG:
+            logger.warning(
+                f"WS connection cap ({self.MAX_CONNECTIONS_PER_ORG}) reached for "
+                f"org={organization_id}; rejecting connection"
+            )
+            try:
+                await websocket.close(code=1013)  # 1013 = try again later
+            except Exception:
+                pass
+            return False
         if organization_id not in self._connections:
             self._connections[organization_id] = set()
         self._connections[organization_id].add(websocket)
         logger.debug(
             f"WS connected: org={organization_id}, total={len(self._connections[organization_id])}"
         )
+        return True
 
     def disconnect(self, websocket: WebSocket, organization_id: str):
         if organization_id in self._connections:

@@ -1296,7 +1296,8 @@ def validate_security_configuration():
 
         # SEC: Block startup in production AND staging when critical security
         # issues exist.  In development, only block if SECURITY_BLOCK_INSECURE_DEFAULTS
-        # is explicitly True (it defaults to True, but can be overridden for local dev).
+        # is explicitly True (it defaults to False, so a dev box with default
+        # secrets is NOT self-protecting — set the flag to opt in).
         critical_warnings = [w for w in warnings if "CRITICAL" in w]
         if critical_warnings and settings.ENVIRONMENT in ("production", "staging"):
             raise RuntimeError(

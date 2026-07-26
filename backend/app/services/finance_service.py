@@ -6,7 +6,6 @@ expense reports, check requests, dues, approval chains,
 and QuickBooks export.
 """
 
-import csv
 import html
 import io
 import secrets
@@ -20,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
+from app.utils.csv_export import SafeCsvWriter
 
 from app.models.finance import (
     ApprovalChain,
@@ -1780,9 +1780,10 @@ class FinanceService:
         )
         ers = list(er_result.scalars().unique().all())
 
-        # Build CSV
+        # Build CSV. SafeCsvWriter neutralizes spreadsheet formula injection in
+        # free-text cells (names, memos).
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = SafeCsvWriter(output)
         writer.writerow(
             ["Date", "Type", "Num", "Name", "Memo", "Account", "Debit", "Credit"]
         )

@@ -411,10 +411,12 @@ def _get_cipher() -> Fernet:
 
 def encrypt_data(data: str) -> str:
     """
-    Encrypt sensitive data using AES-256
+    Encrypt sensitive data using Fernet (AES-128-CBC + HMAC-SHA256).
 
-    HIPAA Compliance: All PHI (Protected Health Information) must be
-    encrypted at rest using AES-256 or equivalent encryption.
+    HIPAA Compliance: PHI (Protected Health Information) is encrypted at rest
+    with authenticated encryption. Fernet provides AES-128-CBC confidentiality
+    plus an HMAC-SHA256 integrity tag (a NIST-approved AES key size); this is
+    "AES or equivalent" for HIPAA purposes — it is NOT AES-256.
 
     Args:
         data: Plain text data to encrypt
@@ -549,7 +551,15 @@ def decode_token(token: str) -> dict[str, Any]:
     # SEC: Hardcode accepted algorithms to prevent algorithm confusion attacks.
     # Never allow "none" or asymmetric algorithms when using symmetric signing.
     _ALLOWED_ALGORITHMS = ["HS256"]
-    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=_ALLOWED_ALGORITHMS)
+    # SEC: Require an expiry claim so a token minted without `exp` (which would
+    # otherwise never expire) is rejected. Every issuer in this codebase sets
+    # exp, so this only closes the malformed/forged-without-exp case.
+    payload = jwt.decode(
+        token,
+        settings.SECRET_KEY,
+        algorithms=_ALLOWED_ALGORITHMS,
+        options={"require": ["exp"]},
+    )
     return payload
 
 

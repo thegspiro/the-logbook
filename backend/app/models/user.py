@@ -318,11 +318,14 @@ class User(Base):
         if not self._mfa_secret_encrypted:
             return None
         try:
+            from cryptography.fernet import InvalidToken
+
             from app.core.security import decrypt_data
 
             return decrypt_data(self._mfa_secret_encrypted)
-        except Exception:
-            # Fallback for pre-encryption plaintext values
+        except InvalidToken:
+            # Fallback for legacy pre-encryption plaintext values only; a real
+            # error (missing key, bug) propagates instead of being masked.
             return self._mfa_secret_encrypted
 
     @mfa_secret.setter
@@ -347,10 +350,13 @@ class User(Base):
             and len(raw[0]) > 40
         ):
             try:
+                from cryptography.fernet import InvalidToken
+
                 from app.core.security import decrypt_data
 
                 return [decrypt_data(c) for c in raw]
-            except Exception:
+            except InvalidToken:
+                # Legacy pre-encryption plaintext codes only.
                 return raw
         return raw
 

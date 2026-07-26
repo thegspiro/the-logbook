@@ -109,6 +109,18 @@ open decisions that need an owner are collected in
 
 **Data protection & correctness**
 
+- **Core infrastructure hardened.** Five more CSV exports (equipment-check
+  reports, inventory, finance transactions, admin-hours) now run through the
+  formula-injection-safe writer, so a member whose name/notes start with
+  `=`/`+`/`-`/`@` can no longer execute a formula on a responder's machine when
+  the export is opened. Database connection errors no longer risk logging the DB
+  password; a single department can no longer exhaust a worker by opening
+  unlimited live WebSocket connections (now capped per department); encrypted
+  fields that fail to decrypt for a real reason (wrong/rotated key) now surface
+  the error instead of silently returning ciphertext; JWTs without an expiry are
+  rejected; and a security-notification email now escapes its message. (An
+  inaccurate "AES-256" label was also corrected — the field encryption is Fernet
+  / AES-128-CBC with an HMAC integrity tag.)
 - **Security tooling hardened.** The in-memory security-monitoring trackers
   (login attempts, API calls, sessions) now enforce their size cap on every
   update instead of relying on a throttled sweep, so a credential-stuffing burst

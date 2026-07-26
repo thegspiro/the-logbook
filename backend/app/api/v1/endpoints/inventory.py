@@ -528,10 +528,11 @@ async def export_items_csv(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Export inventory items as CSV."""
-    import csv
     import io
 
     from starlette.responses import StreamingResponse
+
+    from app.utils.csv_export import SafeCsvWriter
 
     service = InventoryService(db)
     status_enum = None
@@ -551,7 +552,8 @@ async def export_items_csv(
     )
 
     output = io.StringIO()
-    writer = csv.writer(output)
+    # SafeCsvWriter neutralizes spreadsheet formula injection in free-text cells.
+    writer = SafeCsvWriter(output)
     writer.writerow(
         [
             "Name",
@@ -624,13 +626,14 @@ async def download_import_template(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Download a sample CSV template for inventory import."""
-    import csv
     import io
 
     from starlette.responses import StreamingResponse
 
+    from app.utils.csv_export import SafeCsvWriter
+
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = SafeCsvWriter(output)
     writer.writerow(
         [
             "Name",
@@ -4232,7 +4235,9 @@ async def inventory_websocket(
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
-    await ws_manager.connect(websocket, org_id)
+    if not await ws_manager.connect(websocket, org_id):
+        # Org is at its connection cap; connect() already closed the socket.
+        return
     try:
         while True:
             # Keep alive — clients can send pings or we just wait

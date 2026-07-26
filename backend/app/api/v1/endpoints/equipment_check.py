@@ -953,14 +953,16 @@ async def export_csv(
     current_user: User = Depends(require_permission("equipment_check.view")),
 ):
     """Export report data as CSV."""
-    import csv
     import io
 
     from starlette.responses import StreamingResponse
 
+    from app.utils.csv_export import SafeCsvWriter
+
     service = EquipmentCheckService(db)
     output = io.StringIO()
-    writer = csv.writer(output)
+    # SafeCsvWriter neutralizes spreadsheet formula injection in free-text cells.
+    writer = SafeCsvWriter(output)
 
     if report_type == "compliance":
         data = await service.get_compliance_report(

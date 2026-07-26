@@ -5,7 +5,6 @@ Business logic for admin hours tracking, including QR-based clock-in/clock-out,
 manual entry, and approval workflows.
 """
 
-import csv
 import io
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -22,6 +21,7 @@ from app.models.admin_hours import (
     AdminHoursEntryStatus,
     EventHourMapping,
 )
+from app.utils.csv_export import SafeCsvWriter
 from app.models.event import Event
 from app.models.user import Organization, User
 
@@ -957,7 +957,9 @@ class AdminHoursService:
         rows = result.all()
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        # SafeCsvWriter neutralizes spreadsheet formula injection in free-text
+        # cells (member names, notes).
+        writer = SafeCsvWriter(output)
         writer.writerow(
             [
                 "Member",

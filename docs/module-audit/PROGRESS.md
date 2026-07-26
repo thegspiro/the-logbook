@@ -36,8 +36,8 @@ already covered by the red-team review on this branch).
 | 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ✅ |
 | 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ✅ |
 | 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ✅ |
-| 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | 🔄 next |
-| 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ⬜ |
+| 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ✅ |
+| 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | 🔄 next |
 | 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | ⬜ |
 | 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | ⬜ |
 
@@ -352,3 +352,24 @@ already covered by the red-team review on this branch).
   fail-open + global CountryBlockRule), SEC-9 (audit export session_id/IP
   exposure, error payload XSS, users-join scoping fragility, ops hardening). See
   security-audit-ip.md. Next: core infra.
+- #24 core infra ✅ — backend foundational layer (config/database/cache/websocket/
+  security/encrypted_types + shared utils); three parallel readers (cache+ws+db /
+  crypto / config+uploads). Verified good: crypto foundation strong (Argon2id,
+  HS256 pinned, CSPRNG, Fernet authenticated encryption, TOTP replay-protected,
+  refresh rotation, secrets fail-closed), config hardening solid (DEBUG/docs prod-
+  gated, CORS never wildcard), WS auth binds org to JWT + org-partitioned
+  broadcasts, DB session lifecycle correct, image_validator hardened. **8 fixes
+  applied:** CI-1 (MED CSV formula injection in 5 exporters — swapped to the
+  existing SafeCsvWriter: equipment_check, inventory×2, finance_service,
+  admin_hours_service), CI-2 (MED: DB connection errors could log the credentialed
+  DSN — scrub DB_PASSWORD + log type), CI-3 (MED DoS: unbounded WS connection
+  registry — MAX_CONNECTIONS_PER_ORG cap), CI-4 (MED: ORM/user.py field
+  decryption caught bare Exception, masking real key/rotation errors — narrowed
+  to InvalidToken), CI-5 (MED doc: "AES-256" claim corrected to Fernet
+  AES-128-CBC), CI-6 (LOW: decode_token now requires exp), CI-7 (LOW: security-
+  notification email html.escape), CI-8 (LOW: corrected misleading
+  insecure-defaults comment). Tests: 80 security/auth/crypto unit tests pass.
+  Flagged: CI-9 (DB/Redis TLS only WARNS in prod, optimize_image fails open on
+  bombs, Redis TLS no cert verify), CI-10 (Redis no tenant namespacing [latent],
+  WS accept-before-auth, PBKDF2 100k / 40-bit recovery codes — migration-shaped).
+  See core-infra.md. Next: onboarding.
