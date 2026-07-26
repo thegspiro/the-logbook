@@ -312,6 +312,16 @@ open decisions that need an owner are collected in
   at deploy time via `BLOCKED_COUNTRIES` — so one department's admin can no
   longer alter the shared blocklist for all tenants. Viewing the rules and
   blocked-attempt logs is unchanged.
+- **Public-portal API auth hardened against a CPU-exhaustion DoS.** Public API
+  key verification uses bcrypt, which is deliberately slow. The per-IP rate
+  limit previously ran *after* that verification, and because every key shared
+  the same lookup prefix, one unauthenticated request forced a bcrypt check
+  against every key in the system — so a flood of bogus-but-well-formed keys
+  could burn CPU with nothing throttling it. IP rate limiting now runs first,
+  before any database lookup or bcrypt work, and new API keys carry a selective
+  lookup prefix so verification checks a single candidate instead of all keys.
+  Existing keys upgrade to the selective prefix automatically the next time
+  they're used — no re-issue needed. No change to how integrators authenticate.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged

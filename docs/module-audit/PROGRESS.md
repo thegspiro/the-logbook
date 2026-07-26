@@ -424,8 +424,12 @@ start over at #1.
   (MED: ICS injection via unescaped lone \r in _escape_ics — now folds all line
   breaks; also escaped X-WR-TIMEZONE + the datetime fallback), PP-3 (LOW:
   display-code isalnum accepted Unicode — ASCII regex). Tests: 57 display/ical
-  tests pass. Flagged: PP-4 (HIGH/MED bcrypt-before-rate-limit CPU DoS — needs
-  dependency restructure + selective prefix), PP-5 (client UA/referer/IP logged
+  tests pass. PP-4 (HIGH/MED bcrypt-before-rate-limit CPU DoS) now ✅ FIXED:
+  IP rate limit moved to the front of authenticate_api_key (before DB+bcrypt),
+  selective 16-char key prefix (col widened, migration 20260729_0001) with
+  legacy self-heal on next use; also fixed a pre-existing duplicate Alembic
+  revision id (20260720_0001) that made the chain unrunnable. Flagged: PP-5
+  (client UA/referer/IP logged
   verbatim → stored-XSS in admin viewer, fix in frontend #27), PP-6 (per-process
   rate limiter needs Redis; application-status token plaintext at rest), PP-7
   (write-on-read + anomaly query load, nested-address whitelist, 40-bit display

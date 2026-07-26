@@ -9,7 +9,6 @@ Covers:
 
 import sys
 import pytest
-from collections import defaultdict
 from datetime import datetime, timezone
 from types import ModuleType
 from unittest.mock import MagicMock
@@ -40,17 +39,20 @@ for _mod_name in (
         _stubs[_mod_name] = stub
 
 from app.core.public_portal_security import (
+    authenticate_api_key,
     check_ip_rate_limit,
     cleanup_rate_limit_cache,
+    generate_api_key,
     ip_rate_limit_cache,
     rate_limit_cache,
     _MAX_RATE_LIMIT_KEYS,
     _MAX_IP_RATE_LIMIT_KEYS,
 )
+from fastapi import HTTPException
 
 
 @pytest.fixture(autouse=True)
-def clear_caches():
+def _clear_caches():
     """Clear global caches before and after each test."""
     rate_limit_cache.clear()
     ip_rate_limit_cache.clear()
@@ -187,3 +189,48 @@ class TestCheckIpRateLimit:
 
         is_allowed, count, limit = await check_ip_rate_limit("9.9.9.9", limit=100)
         assert is_allowed is False
+
+
+# ---------------------------------------------------------------------------
+# PP-4: IP rate limit ahead of bcrypt; selective key prefix
+# ---------------------------------------------------------------------------
+
+
+class TestAuthenticateApiKeyDoSHardening:
+
+    @pytest.mark.unit
+    async def test_ip_rate_limit_runs_before_db_and_bcrypt(self):
+        """An over-limit IP is rejected before any DB lookup / bcrypt verify."""
+        now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+        ip_rate_limit_cache["1.2.3.4"][int(now.timestamp())] = 100  # at limit
+
+        class _ExplodingDB:
+            async def execute(self, *args, **kwargs):
+                raise AssertionError(
+                    "DB/bcrypt was reached before the IP rate limit (PP-4)"
+                )
+
+        request = MagicMock()
+        request.client.host = "1.2.3.4"
+
+        with pytest.raises(HTTPException) as exc:
+            await authenticate_api_key(
+                request, api_key="logbook_" + "a" * 40, db=_ExplodingDB()
+            )
+        assert exc.value.status_code == 429
+
+
+class TestGenerateApiKeyPrefix:
+
+    @pytest.mark.unit
+    def test_prefix_is_selective_not_constant_marker(self):
+        """The stored prefix must be selective (16 chars), not the "logbook_"."""
+        key1, prefix1 = generate_api_key()
+        key2, prefix2 = generate_api_key()
+
+        assert prefix1 == key1[:16]
+        assert len(prefix1) == 16
+        # The old non-selective 8-char marker forced a bcrypt scan of every key.
+        assert prefix1 != "logbook_"
+        # Selective: two distinct keys get distinct prefixes.
+        assert prefix1 != prefix2

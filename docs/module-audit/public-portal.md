@@ -66,14 +66,36 @@ than the ASCII codes actually issued.
 injection — the lookup is parameterized — but the gate now matches the real
 alphabet.)
 
-### PP-4 — HIGH/MED (flagged) — Expensive bcrypt runs before any IP rate limit (CPU DoS)
-`authenticate_api_key` (a `Depends`) runs `bcrypt.checkpw` before the endpoint
-body's `validate_ip_rate_limit` ever executes, and — with the non-selective
+### PP-4 — HIGH/MED — ✅ FIXED — Expensive bcrypt ran before any IP rate limit (CPU DoS)
+`authenticate_api_key` (a `Depends`) ran `bcrypt.checkpw` before the endpoint
+body's `validate_ip_rate_limit` ever executed, and — with the non-selective
 prefix (PP-1) — an unauthenticated attacker sending a well-formed `logbook_…` key
-forces a bcrypt verify against **every** key per request, with no IP throttle in
-front. The per-key limit is also post-bcrypt. **Status:** flagged — the fix is to
-move IP rate limiting ahead of the bcrypt step (and make the prefix selective so
-only one candidate is verified), a dependency-chain restructure.
+forced a bcrypt verify against **every** key per request, with no IP throttle in
+front (a cheap CPU-exhaustion DoS).
+
+**Fix:**
+- **IP rate limiting moved ahead of the bcrypt step.** `authenticate_api_key` now
+  takes `request` and calls `validate_ip_rate_limit(request)` as its first line —
+  before the DB lookup and the bcrypt loop — so an unauthenticated flood is
+  throttled by IP before any expensive work runs. The now-redundant in-body
+  `validate_ip_rate_limit` calls were removed from the three key-authenticated
+  endpoints (they would have double-counted the IP bucket); the token-based
+  `/application-status` endpoint keeps its own in-body call.
+- **Selective key prefix (PP-1).** `generate_api_key` now stores a 16-char
+  selective prefix (`"logbook_"` + 8 key chars) instead of the constant 8-char
+  `"logbook_"` marker, so a by-prefix lookup returns a single candidate → one
+  bcrypt verify. The `key_prefix` column was widened `String(8)→String(20)`
+  (migration `20260729_0001`), and legacy keys **self-heal**: on the next
+  successful auth (we have the plaintext there), the stored prefix is upgraded to
+  the selective form, so the legacy full-scan shrinks to nothing as keys are used
+  — no forced key re-issue. Lookup queries both the selective and legacy prefix
+  during the transition.
+
+New unit tests assert the IP limit rejects before any DB/bcrypt work and that the
+generated prefix is selective. **Status:** fixed. (Also fixed in passing: a
+pre-existing duplicate Alembic revision id `20260720_0001` that made the migration
+chain unrunnable — the `add_department_message_deleted_at` migration was
+renumbered to `20260720_0004` and the chain relinearized.)
 
 ### PP-5 — MEDIUM (flagged) — Unauthenticated client input logged verbatim → stored-XSS risk in admin viewer
 `log_access` stores the raw `user-agent`, `referer`, and `ip_address` (all
