@@ -75,8 +75,16 @@ async def list_audit_logs(
     if end_date:
         filters.append(AuditLog.timestamp <= end_date)
     if search:
-        like = f"%{search}%"
-        filters.append(or_(AuditLog.username.ilike(like), AuditLog.event_type.ilike(like)))
+        # Escape LIKE metacharacters so a caller-supplied % / _ is matched
+        # literally rather than acting as a wildcard.
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like = f"%{escaped}%"
+        filters.append(
+            or_(
+                AuditLog.username.ilike(like, escape="\\"),
+                AuditLog.event_type.ilike(like, escape="\\"),
+            )
+        )
 
     where_clause = and_(*filters)
 

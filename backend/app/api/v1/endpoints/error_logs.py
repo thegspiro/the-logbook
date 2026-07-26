@@ -22,12 +22,19 @@ router = APIRouter()
 
 # Maximum size for the context field (4 KB)
 MAX_CONTEXT_SIZE = 4096
+# Per-item and aggregate caps for troubleshooting_steps. max_length on the list
+# only bounds the item COUNT, not the length of each string, so without these a
+# member could POST 20 multi-MB strings and balloon the row / flood the table.
+MAX_STEP_LENGTH = 500
+MAX_STEPS_TOTAL_SIZE = 4096
 
 
 class ErrorLogCreate(BaseModel):
     """Validated schema for error log creation."""
 
-    error_type: str = Field(default="UNKNOWN_ERROR", max_length=100)
+    # error_type is String(50) in the model; cap here so an over-long value is
+    # a clean 422 rather than a DB error on insert.
+    error_type: str = Field(default="UNKNOWN_ERROR", max_length=50)
     error_message: str = Field(default="", max_length=2000)
     user_message: str | None = Field(default=None, max_length=500)
     troubleshooting_steps: list[str] = Field(default_factory=list, max_length=20)
@@ -39,6 +46,21 @@ class ErrorLogCreate(BaseModel):
     def validate_context_size(cls, v: dict[str, Any]) -> dict[str, Any]:
         if len(json.dumps(v)) > MAX_CONTEXT_SIZE:
             raise ValueError(f"context must be less than {MAX_CONTEXT_SIZE} bytes")
+        return v
+
+    @field_validator("troubleshooting_steps")
+    @classmethod
+    def validate_steps_size(cls, v: list[str]) -> list[str]:
+        if any(len(step) > MAX_STEP_LENGTH for step in v):
+            raise ValueError(
+                f"each troubleshooting step must be less than "
+                f"{MAX_STEP_LENGTH} characters"
+            )
+        if sum(len(step) for step in v) > MAX_STEPS_TOTAL_SIZE:
+            raise ValueError(
+                f"troubleshooting steps must total less than "
+                f"{MAX_STEPS_TOTAL_SIZE} characters"
+            )
         return v
 
 

@@ -35,8 +35,8 @@ already covered by the red-team review on this branch).
 | 20 | finance | endpoints/finance.py, services/finance_service.py | modules/finance | ✅ |
 | 21 | orgs/roles/users | endpoints/organizations.py, roles.py, users.py, operational_ranks.py, member_status.py | (in-app) | ✅ |
 | 22 | compliance/skills | endpoints/compliance_*.py, skills_testing.py, services/compliance_*_service.py, skills_testing_service.py | (in-app) | ✅ |
-| 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | 🔄 next |
-| 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | ⬜ |
+| 23 | security/audit/ip | endpoints/security_monitoring.py, ip_security.py, audit_logs.py, error_logs.py, core/audit.py | modules/ip-security | ✅ |
+| 24 | core infra | core/config, database, cache, security_middleware, geoip, websocket_manager | services/, utils/, hooks/ | 🔄 next |
 | 25 | onboarding | services/onboarding.py, org_template_service.py | modules/onboarding | ⬜ |
 | 26 | public-portal | public/portal.py, display.py, calendar.py, core/public_portal_security.py | modules/public-portal | ⬜ |
 | 27 | frontend shared | — | components/, components/ux/, hooks/, utils/, stores/ | ⬜ |
@@ -332,3 +332,23 @@ already covered by the red-team review on this branch).
   self-attestation), CS-9 (monthly=annual report, email recipient allowlist +
   HTML escaping, attestation over-fetch, records_with_certification mislabel,
   ISO str typing). See compliance-skills.md. Next: security/audit/ip.
+- #23 security/audit/ip ✅ — the security-tooling surface itself (5 endpoint/core
+  files + 2 services + the middleware IP path); three parallel readers. Verified
+  good: H1/H4/M9 all intact (audit reads org-scoped, HMAC hash chain keyed,
+  append-only), IP-exception self-service NOT exploitable (PENDING-on-create,
+  APPROVED-only enforcement, permission-gated approve), enforcement fails closed,
+  client IP obtained safely, no SQL injection. **5 fixes applied:** SEC-1 (MED
+  DoS: _MAX_TRACKING_KEYS cap was dead — added unthrottled _enforce_key_caps +
+  wired it into detect_brute_force), SEC-2 (MED: verify_integrity didn't detect
+  head-truncation — anchored the first row to the genesis hash when start_id is
+  None), SEC-3 (MED DoS: error_logs troubleshooting_steps capped item count but
+  not string length — per-item + total caps), SEC-4 (LOW: audit search LIKE
+  metacharacters unescaped), SEC-5 (LOW: error_type schema cap 100 > DB column
+  50). Tests green (security_monitoring 10/10, audit hash chain 4/4). Flagged
+  (schema/behavior-change): SEC-6 (HIGH — security_alerts is a GLOBAL table with
+  no org_id → cross-tenant alert read + acknowledge/resolve IDOR-suppress +
+  metric leak; needs a migration + backfill), SEC-7 (global audit-chain admin
+  ops gated by any org's audit.export + rehash tamper-laundering), SEC-8 (geo
+  fail-open + global CountryBlockRule), SEC-9 (audit export session_id/IP
+  exposure, error payload XSS, users-join scoping fragility, ops hardening). See
+  security-audit-ip.md. Next: core infra.

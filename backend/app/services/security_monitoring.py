@@ -156,12 +156,47 @@ class SecurityMonitoringService:
 
         self._last_eviction: float = 0.0
 
+    def _enforce_key_caps(self) -> None:
+        """Hard-cap each tracking dict at ``_MAX_TRACKING_KEYS``.
+
+        The time-based sweep below is throttled to once/60s and only drops keys
+        older than the window, so a burst of many distinct attacker-controlled
+        keys (source IPs / user ids during credential stuffing) could grow these
+        dicts without bound *between* sweeps — the cap constant existed but was
+        never enforced (pitfall #9). This runs on every call, unthrottled, and
+        evicts the least-recently-active keys first.
+        """
+
+        def _last_ts(entries: list) -> datetime:
+            if not entries:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            last = entries[-1]
+            return last[1] if isinstance(last, tuple) else last
+
+        for tracker in (
+            self._api_calls,
+            self._login_attempts,
+            self._session_ips,
+            self._data_transfers,
+        ):
+            overflow = len(tracker) - self._MAX_TRACKING_KEYS
+            if overflow > 0:
+                for key in sorted(tracker, key=lambda k: _last_ts(tracker[k]))[
+                    :overflow
+                ]:
+                    del tracker[key]
+
     def _evict_stale_tracking_keys(self) -> None:
         """Remove stale keys from in-memory tracking dicts to bound memory.
 
-        Runs at most once per 60 seconds to avoid overhead.
+        The hard key cap runs every call; the (more expensive) time-based sweep
+        runs at most once per 60 seconds.
         """
         import time as _time
+
+        # Unthrottled — a within-60s burst must not be able to grow the dicts
+        # past the cap.
+        self._enforce_key_caps()
 
         now = _time.monotonic()
         if now - self._last_eviction < 60:
@@ -367,6 +402,13 @@ class SecurityMonitoringService:
         """
         Detect brute force login attempts
         """
+        # Brute-force / credential-stuffing is exactly the burst that fills
+        # _login_attempts (keyed by attacker-controlled ip + user id), so bound
+        # it here too — _check_rate_limit isn't always on this path. Only the
+        # hard cap (not the time-based sweep) so this stays cheap on the hot
+        # login path.
+        self._enforce_key_caps()
+
         if success:
             # Clear attempts on successful login
             self._login_attempts[ip] = []

@@ -1,0 +1,138 @@
+# Module Audit — Security / Audit / IP
+
+**Scope:** the security-tooling surface itself — `endpoints/security_monitoring.py`
+(650 L) + `services/security_monitoring.py` (1,009 L), `endpoints/ip_security.py`
+(525 L) + `services/ip_security_service.py` (733 L) + the IP-enforcement path of
+`core/security_middleware.py`, `endpoints/audit_logs.py` (155 L),
+`endpoints/error_logs.py` (248 L), `core/audit.py` (576 L). The prior red-team
+review already hardened parts of this surface (audit-log org scoping H1, HMAC
+hash chain H4, hard-delete restriction M9, rate-limiter client-IP H5).
+**Audited:** iteration 23 — three parallel readers: (A) ip-security + enforcement,
+(B) security-monitoring, (C) audit-logs + error-logs + core/audit.
+
+## Verified good ✅
+- **H1 / H4 / M9 all confirmed intact.** Audit reads are org-scoped (via the
+  `org_user_ids` subquery, by-id path included); the hash chain is keyed
+  HMAC-SHA256 from `AUDIT_LOG_SIGNING_KEY`/`SECRET_KEY` (never hardcoded), with a
+  no-downgrade high-water-mark guard; no endpoint deletes/updates `audit_logs`
+  (append-only), the sole rewrite path is the permissioned, audit-logged
+  `rehash_chain` recovery tool.
+- **IP-exception self-service is not exploitable.** A member cannot self-grant an
+  IP bypass: exceptions are `PENDING` on create, only `APPROVED` + in-window ones
+  are enforced, and PENDING→APPROVED is only reachable behind
+  `security.manage`/`settings.manage`. All exception by-id ops are org-scoped;
+  `get_my_exceptions` is user-scoped.
+- **Enforcement fails closed where it matters** — the allowlist load returns an
+  empty set on error (removes bypasses, doesn't grant), and the real client IP is
+  obtained via `get_client_ip` (trusts XFF only from configured proxies, walks
+  right-to-left, never trusts forwarded headers when the proxy list is empty).
+- **No SQL injection** across the surface; bounded pagination on the log/alert
+  endpoints; `safe_error_detail` on error paths; the HMAC/signing key is never
+  placed in a response.
+
+## Findings
+
+### SEC-1 — MEDIUM (DoS) — In-memory tracking caps were defined but never enforced — ✅ FIXED
+`SecurityMonitoringService` declared `_MAX_TRACKING_KEYS = 5000` but never used
+it. The only eviction (`_evict_stale_tracking_keys`) is throttled to once/60s and
+drops only keys older than 2h, and `detect_brute_force` didn't call it at all — so
+a burst of many distinct attacker-controlled keys (source IPs / user ids during
+credential stuffing) grows `_login_attempts` / `_api_calls` / `_session_ips` /
+`_data_transfers` without bound between sweeps (pitfall #9).
+**Fix:** added an unthrottled `_enforce_key_caps()` that hard-caps each dict at
+`_MAX_TRACKING_KEYS`, evicting the least-recently-active keys first; it runs on
+every eviction call and is also invoked directly from `detect_brute_force` (the
+hot login path). Existing tests pass.
+
+### SEC-2 — MEDIUM — Audit chain verification didn't detect head-truncation — ✅ FIXED
+`verify_integrity` checked each row's hash and the `previous_hash` link between
+adjacent rows, but never anchored the first row to the genesis value, and never
+cross-checked a checkpoint. Deleting rows from the **head** of the chain leaves a
+tail that is internally consistent, so `verified: True` was returned for a
+truncated chain — silent removal of audit history was undetectable by the very
+check the design leans on. (DB-level delete required; no API deletes audit rows.)
+**Fix:** when verifying from the chain start (`start_id is None`), the first row's
+`previous_hash` must equal the genesis `"0"*64`, else the chain is reported broken
+("chain head missing"). The checkpoint/Merkle cross-check for tail-truncation
+remains flagged (below).
+
+### SEC-3 — MEDIUM (DoS) — `POST /error_logs/log` allowed unbounded step strings — ✅ FIXED
+`troubleshooting_steps: list[str]` capped only the item **count** (20), not the
+length of each string, and the column is effectively LONGTEXT — so any member
+could POST 20 multi-MB strings per row, ballooning rows / flooding the table.
+**Fix:** added a validator capping each step to 500 chars and the total to 4 KB
+(mirrors the existing `context` size check). `organization_id` is already
+server-stamped from `current_user` (verified good).
+
+### SEC-4 — LOW — Audit search built a LIKE without escaping metacharacters — ✅ FIXED
+`list_audit_logs` built `f"%{search}%"` and `.ilike()`'d it with no `escape=`, so
+caller-supplied `%`/`_` acted as wildcards (LIKE-pattern injection within the
+caller's own org scope).
+**Fix:** escape `\ % _` in the term and pass `escape="\\"`.
+
+### SEC-5 — LOW — `error_type` schema cap exceeded the DB column width — ✅ FIXED
+`ErrorLogCreate.error_type` allowed 100 chars but the column is `String(50)`, so a
+51–100 char value passed validation then 500'd on insert.
+**Fix:** aligned the schema cap to 50 (clean 422 instead of a DB error).
+
+### SEC-6 — HIGH (flagged) — `security_alerts` is a global table → cross-tenant read, IDOR-suppress, and metric leaks
+`SecurityAlertRecord` has **no `organization_id` column**, and the service never
+scopes it: `get_recent_alerts` returns every tenant's alerts (source IP, user id,
+description, and a details blob with prior/current IPs + session id) via
+`GET /alerts` / `/data-exfiltration/status`; `acknowledge_alert`/`resolve_alert`
+fetch by bare id, so an org-A admin can **suppress org-B's live incidents**
+(XC-3), with the 404 acting as a global existence oracle; and `get_security_status`
+aggregates alert/failed-login counts and in-memory session/endpoint metrics across
+**all** tenants. This is the headline finding, but it cannot be fixed in the query
+layer — it needs a migration adding `organization_id` to `security_alerts`
+(populated at `_add_alert` from the acting user's org, with a backfill decision
+for existing rows) then filtering the four methods. **Status:** flagged (schema
+migration + backfill, untestable here without a DB).
+
+### SEC-7 — MEDIUM (flagged) — Global audit-chain admin ops gated by any org's `audit.export`
+`POST /audit-log/rehash` (recomputes hashes for **all** orgs' rows),
+`/checkpoint`, and `/integrity` operate over the entire global chain but are
+gated by `audit.export` — any org's admin can trigger a platform-wide rehash /
+attest the whole chain. And `rehash_chain` recomputes `current_hash` from each
+row's *current* `event_data`, so a privileged operator with DB write access can
+edit a row then launder the tamper into a valid keyed chain (SEC-2's genesis
+anchor doesn't cover tail edits). **Status:** flagged — restrict these to a
+platform/system-admin role and/or forbid rehash of already-v2 rows.
+
+### SEC-8 — MEDIUM (flagged) — IP geo-blocking fails OPEN and `CountryBlockRule` is global
+`geoip.is_ip_blocked` returns *allow* when a country can't be resolved (no
+MaxMind DB, `AddressNotFoundError`, lookup error), and the middleware skips
+blocking entirely if the GeoIP service is `None` — a missing/corrupt DB silently
+disables geo-blocking app-wide (the code comment already flags "change to
+fail-closed"). Separately, `CountryBlockRule` has no `organization_id` (one global
+table + one in-process blocked-country set), so any admin's block/unblock affects
+**every** tenant, and unblock-by-`country_code` has no org filter. **Status:**
+flagged — fail-closed is a product decision (would block legitimate unresolved
+IPs); per-org country rules need a schema change.
+
+### SEC-9 — LOW (flagged) — Residual exposure / robustness
+- Audit export surfaces every member's `ip_address`/`user_agent`/`session_id`
+  plus chain values to any `audit.view`/`audit.export` holder (session_id worth
+  redacting). (SM #6)
+- error_logs stores `error_message`/`context`/steps verbatim and reflects them
+  back — stored-XSS risk depends on the admin viewer escaping output; `context`
+  is a client 4 KB dict that could hold PII/tokens. (EL #6)
+- Audit org-scoping resolves through the mutable `users` table, so rows whose
+  author is deleted/moved silently drop out; a dedicated `organization_id` column
+  on `audit_logs` would make it robust. (AL #7)
+- Cross-org allowlist bypass (documented intentional), private-IP + proxy
+  misconfig geo bypass (ops hardening — warn at startup if GeoIP on but
+  `TRUSTED_PROXY_IPS` empty), admin country-block self-lockout, and the dead
+  org-scoped `get_all_active_allowed_ips` / unused `BLOCKLIST` exception type.
+  (IP #3/#4/#5)
+**Status:** flagged.
+
+## Notes
+- Large-file caveat: `security_monitoring.py` (1,009 L), `ip_security_service.py`
+  (733 L), and the IP-enforcement path of `security_middleware.py` (1,341 L) were
+  reviewed for security invariants (org-scoping, enforcement fail-closed, DoS,
+  injection), not line-by-line. The invariants held on every path examined.
+- The two global-table findings (SEC-6 security_alerts, SEC-8 CountryBlockRule)
+  share a root cause with the broader multi-tenant work: security/enforcement
+  tables that predate per-org scoping. Both are migration-shaped and are the
+  top open items from this iteration.

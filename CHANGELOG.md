@@ -109,6 +109,17 @@ open decisions that need an owner are collected in
 
 **Data protection & correctness**
 
+- **Security tooling hardened.** The in-memory security-monitoring trackers
+  (login attempts, API calls, sessions) now enforce their size cap on every
+  update instead of relying on a throttled sweep, so a credential-stuffing burst
+  from many IPs/accounts can no longer grow them without bound. The audit-log
+  integrity check now detects removal of entries from the **start** of the chain
+  (it anchors the first entry to the genesis hash), closing a gap where a
+  head-truncated chain still reported "verified." The client error-report
+  endpoint now caps the size of each troubleshooting step (previously only the
+  number of steps was limited, so a member could balloon rows), the audit-log
+  search escapes wildcard characters, and an error-type longer than the column
+  allows is now rejected cleanly instead of erroring on insert.
 - **Compliance exports and configuration are hardened.** Compliance profiles now
   reject requirement, role, and admin-hours-category ids that belong to another
   department (previously stored unvalidated, silently skewing a member's

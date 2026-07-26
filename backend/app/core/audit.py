@@ -319,6 +319,28 @@ class AuditLogger:
                             "actual_previous": previous_log.current_hash,
                         }
                     )
+            elif start_id is None:
+                # Anchor the very first row to the genesis value. Without this,
+                # deleting rows from the HEAD of the chain leaves a tail that is
+                # internally consistent and still "verifies" — the new first
+                # row's previous_hash (pointing at a now-deleted row) is never
+                # checked. Only enforce when verifying from the chain start
+                # (start_id is None); a windowed check legitimately starts mid-
+                # chain.
+                if log.previous_hash != "0" * 64:
+                    results["verified"] = False
+                    results["errors"].append(
+                        {
+                            "log_id": log.id,
+                            "error": (
+                                "Chain head missing - first entry does not link "
+                                "to the genesis hash (entries may have been "
+                                "removed from the start of the chain)"
+                            ),
+                            "expected_previous": "0" * 64,
+                            "actual_previous": log.previous_hash,
+                        }
+                    )
 
         return results
 
