@@ -196,6 +196,23 @@ class ShiftCompletionService:
                 raise ValueError(
                     "A report already exists for this " "trainee on this shift"
                 )
+        else:
+            # No shift linkage: the shift/attendance/assignment checks above are
+            # skipped, so the client-supplied trainee_id would otherwise be
+            # stored on the report + SkillCheckoff rows without ever being tied
+            # to the caller's org. Validate it here (XC-1 / EC-6).
+            from app.models.user import User
+
+            trainee = (
+                await self.db.execute(
+                    select(User.id).where(
+                        User.id == trainee_id,
+                        User.organization_id == str(organization_id),
+                    )
+                )
+            ).scalar_one_or_none()
+            if not trainee:
+                raise ValueError("Trainee not found in this organization")
 
         # When linked to a shift, auto-populate from actual records
         if shift_id:
@@ -999,11 +1016,25 @@ class ShiftCompletionService:
 
         return requirements_progressed
 
-    async def get_report(self, report_id: str) -> Optional[ShiftCompletionReport]:
-        """Get a single shift completion report."""
-        result = await self.db.execute(
-            select(ShiftCompletionReport).where(ShiftCompletionReport.id == report_id)
+    async def get_report(
+        self,
+        report_id: str,
+        organization_id: Optional[UUID] = None,
+    ) -> Optional[ShiftCompletionReport]:
+        """Get a single shift completion report.
+
+        Pass ``organization_id`` to scope the fetch to the caller's org — the
+        getter is otherwise unscoped and safe only because callers re-check org
+        afterward, which is an IDOR waiting for a forgetful caller (EC-9).
+        """
+        query = select(ShiftCompletionReport).where(
+            ShiftCompletionReport.id == report_id
         )
+        if organization_id is not None:
+            query = query.where(
+                ShiftCompletionReport.organization_id == str(organization_id)
+            )
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def update_report(
@@ -1032,7 +1063,7 @@ class ShiftCompletionService:
             "review_status",
         }
 
-        report = await self.get_report(report_id)
+        report = await self.get_report(report_id, organization_id)
         if not report:
             return None
         if report.organization_id != str(organization_id):
@@ -1175,7 +1206,7 @@ class ShiftCompletionService:
         trainee_comments: Optional[str] = None,
     ) -> Optional[ShiftCompletionReport]:
         """Trainee acknowledges a shift completion report."""
-        report = await self.get_report(report_id)
+        report = await self.get_report(report_id, organization_id)
         if (
             not report
             or report.trainee_id != trainee_id
@@ -1224,7 +1255,7 @@ class ShiftCompletionService:
         triggers training pipeline progress that was deferred at
         draft creation time.
         """
-        report = await self.get_report(report_id)
+        report = await self.get_report(report_id, organization_id)
         if not report or report.organization_id != str(organization_id):
             return None
 

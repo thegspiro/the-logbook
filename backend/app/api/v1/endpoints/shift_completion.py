@@ -512,11 +512,10 @@ async def get_shift_report(
 ):
     """Get a specific shift completion report."""
     service = ShiftCompletionService(db)
-    report = await service.get_report(report_id)
+    report = await service.get_report(
+        report_id, current_user.organization_id
+    )
     if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
-
-    if report.organization_id != str(current_user.organization_id):
         raise HTTPException(status_code=404, detail="Report not found")
 
     user_id = str(current_user.id)

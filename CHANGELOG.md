@@ -333,6 +333,14 @@ open decisions that need an owner are collected in
   key's "last used" timestamp now updates at most once a minute), and the
   per-request anomaly check uses one fewer database query. No behavior change for
   integrators.
+- **Equipment checks: completing an incomplete check now re-applies the
+  auto-fail rule.** When an initial apparatus check is submitted, expired items
+  and items found below their required quantity are automatically marked failed.
+  Finishing a previously-incomplete check now applies that same rule, so a
+  safety-critical shortfall can no longer be recorded as passing just because it
+  was completed in two steps. Also: a shift completion report created without a
+  linked shift now verifies the named trainee belongs to the department, and the
+  report lookup is department-scoped at the query.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged

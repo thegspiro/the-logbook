@@ -66,12 +66,15 @@ target apparatus isn't in the caller's org.
 `item_name.ilike(f"%{item_name}%")` didn't escape `%`/`_`. Fixed by escaping and
 declaring `escape="\\"` (committed separately at the start of this iteration).
 
-### EC-6 — MED/LOW — `create_report` doesn't validate `trainee_id` org when `shift_id` is absent (XC-1)
+### EC-6 — MED/LOW — ✅ FIXED — `create_report` didn't validate `trainee_id` org when `shift_id` is absent (XC-1)
 When `shift_id` is None, the shift/attendance/assignment block is skipped, so a
-client-supplied `trainee_id` is never tied to the caller's org (the report +
-`SkillCheckoff` rows store a possibly-foreign `user_id`). `_update_requirement_progress`
-re-filters by org, so no cross-org progress leaks — but the stored FK is
-cross-tenant. **Status:** flagged (XC-1).
+client-supplied `trainee_id` was never tied to the caller's org (the report +
+`SkillCheckoff` rows stored a possibly-foreign `user_id`).
+**Fix:** the `shift_id`-absent branch now validates that `trainee_id` is a user
+in the caller's org (`User.id == trainee_id AND organization_id == org`) before
+the report is created, raising "Trainee not found in this organization"
+otherwise. The `shift_id`-present path already tied the trainee via
+attendance/assignment. **Status:** fixed.
 
 ### EC-7 — LOW — Detail/read endpoints bypass `equipment_check.view`
 `get_check`, `get_shift_checks`, `get_item_history`, `get_last_check_results`,
@@ -88,22 +91,31 @@ row by id with no org filter, but only to build changelog text (never returned)
 and the mutation itself is org-scoped. Harmless today; defense-in-depth would add
 the org filter. **Status:** flagged.
 
-### EC-9 — LOW — `get_report` has no org filter (fragile)
-`select(ShiftCompletionReport).where(id == report_id)` with no org constraint —
-safe only because every current caller re-checks `organization_id` afterward. A
-future caller that forgets becomes an IDOR. **Status:** flagged (add the filter
-to the getter).
+### EC-9 — LOW — ✅ FIXED — `get_report` has no org filter (fragile)
+`select(ShiftCompletionReport).where(id == report_id)` had no org constraint —
+safe only because every caller re-checked `organization_id` afterward, an IDOR
+waiting for a forgetful caller.
+**Fix:** `get_report` now takes an optional `organization_id` and filters on it
+when provided; every caller (the three internal mutation paths and the
+`GET /shift-completion/{id}` endpoint) now passes the caller's org, so the getter
+itself is org-scoped rather than relying on downstream re-checks. **Status:** fixed.
 
-### EC-10 — LOW correctness — `complete_incomplete_check` skips the auto-fail rule
+### EC-10 — LOW correctness — ✅ FIXED — `complete_incomplete_check` skipped the auto-fail rule
 Initial submit force-fails items that are expired / below `required_quantity`
-(`_compute_check_status`), but the completion path recomputes from `item.status`
-directly and doesn't re-apply that rule, so `failed_items`/`overall_status` can
-under-count. **Status:** flagged (behavioral divergence between the two write
-paths; needs care + tests).
+(`_compute_check_status`), but the completion path recomputed from `item.status`
+directly and didn't re-apply that rule, so `failed_items`/`overall_status` could
+under-count a safety-critical shortfall as passing.
+**Fix:** `complete_incomplete_check` now applies the same auto-fail rule to the
+check's items (expired → fail; found < required → fail) before computing the
+aggregate counts, matching the initial-submit path. **Status:** fixed.
 
-### EC-11 — LOW — Compliance metrics hardcoded
+### EC-11 — LOW (flagged) — Compliance metrics hardcoded
 `get_compliance_report` always returns `checks_expected = 0` and
-`overdue_count = 0`. Incomplete feature, not wrong. **Status:** flagged.
+`overdue_count = 0`. These need an expected-check-cadence model (how often each
+apparatus is *supposed* to be checked) that doesn't exist yet — an incomplete
+feature, not a bug. **Status:** flagged (feature, not a LOW fix). EC-7
+(read-permission tightening — deferred behavior change) and EC-8 (changelog-only
+unscoped by-id reads — harmless defense-in-depth) remain flagged as above.
 
 ## Notes
 - `shift_completion_service` uses `func.date_format` (MySQL-specific) but fully

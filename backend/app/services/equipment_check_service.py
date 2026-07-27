@@ -910,6 +910,20 @@ class EquipmentCheckService:
                 existing.is_expired = item_data.get("is_expired", existing.is_expired)
 
         all_items = check.items
+        # Re-apply the same auto-fail rule the initial submit uses
+        # (_compute_check_status): an expired item, or one found below its
+        # required quantity, is forced to "fail" so completing an incomplete
+        # check can't leave a safety-critical shortfall marked as passing and
+        # under-count failed_items/overall_status (EC-10). Keeps the two write
+        # paths consistent.
+        for item in all_items:
+            if item.is_expired:
+                item.status = "fail"
+            req_qty = item.required_quantity
+            found_qty = item.quantity_found
+            if req_qty is not None and found_qty is not None and found_qty < req_qty:
+                item.status = "fail"
+
         total = len(all_items)
         completed = sum(1 for i in all_items if i.status != "not_checked")
         failed = sum(1 for i in all_items if i.status == "fail")

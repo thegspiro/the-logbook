@@ -116,10 +116,12 @@ start over at #1.
   (MED — `swap_item_lot` inventory write required no permission; added
   `equipment_check.manage`/`inventory.manage`), EC-4 (MED — `clone_template`
   attached clone to unvalidated apparatus; org-scoped lookup; XC-3), EC-5 (LOW —
-  unescaped LIKE; prior commit). 6 flagged: EC-6 create_report trainee_id (XC-1),
-  EC-7 read endpoints bypass equipment_check.view, EC-8 unscoped changelog reads,
-  EC-9 get_report fragile no-org getter, EC-10 complete_incomplete_check skips
-  auto-fail rule, EC-11 compliance metrics stubbed. See equipment-check.md.
+  unescaped LIKE; prior commit). EC-6 (✅ create_report now validates trainee_id
+  in-org when no shift links it), EC-9 (✅ get_report takes an org filter, all
+  callers pass it), EC-10 (✅ complete_incomplete_check re-applies the auto-fail
+  rule) now FIXED. Flagged: EC-7 (read endpoints bypass equipment_check.view —
+  deferred behavior change), EC-8 (unscoped changelog-only reads — harmless),
+  EC-11 (compliance metrics stubbed — needs cadence model). See equipment-check.md.
 - #8 documents ✅ — upload well-hardened (UUID filenames, magic-byte MIME, no
   traversal); tenant isolation solid; folder ACL **not** bypassable on direct
   read; no file_path leak (that field is on the minutes PublishedDocumentResponse,
