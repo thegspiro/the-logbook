@@ -82,6 +82,17 @@ All items below are fixed on branch `claude/zero-trust-security-review-cypp6z`.
   (CERT_NONE) — no protection against an active man-in-the-middle. Startup now
   warns; set the CA path for full protection.
 
+### Removed: dead `MODULE_*_ENABLED` deployment flags (2026-07-27)
+
+Removed the `MODULE_TRAINING_ENABLED` / `MODULE_COMPLIANCE_ENABLED` /
+`MODULE_SCHEDULING_ENABLED` / `MODULE_ELECTIONS_ENABLED` (etc.) environment
+variables from the Docker composes, installers (`universal-install.sh`,
+`setup-env.py`, `unraid-setup.sh`), the Unraid Community Apps template, and the
+documentation. The backend never read them — all API routers register
+unconditionally — so they only misled operators into thinking they toggled
+features. Module availability is controlled **per organization** at runtime via
+the organization's settings (`enabled_modules`).
+
 ### Security: multi-tenant isolation audit — cross-tenant write/read fixes across modules (2026-07-25)
 
 A rotating, module-by-module security audit (see
