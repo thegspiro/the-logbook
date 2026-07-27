@@ -98,6 +98,16 @@ services:
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
       ENCRYPTION_SALT: ${ENCRYPTION_SALT}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      # Host-header allowlist (rejects spoofed Host with 400); empty derives it
+      # from ALLOWED_ORIGINS' hostnames + localhost.
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
+      # Backend port is published directly (no bundled proxy), so leave
+      # TRUSTED_PROXY_IPS EMPTY. Only set it (proxy IP/CIDR) if you front the app
+      # with a reverse proxy, else X-Forwarded-For becomes spoofable.
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # Production refuses to start unless HTTPS is enforced — front the app with
+      # an HTTPS reverse proxy and set this true (see the Unraid security guide).
+      SECURITY_ENFORCE_HTTPS: ${SECURITY_ENFORCE_HTTPS:-false}
       APP_NAME: ${APP_NAME:-The Logbook}
       VERSION: ${VERSION:-1.0.0}
       ENVIRONMENT: ${ENVIRONMENT:-production}
@@ -127,7 +137,8 @@ services:
       MODULE_ELECTIONS_ENABLED: ${MODULE_ELECTIONS_ENABLED:-true}
 
       # Misc
-      ENABLE_DOCS: ${ENABLE_DOCS:-true}
+      # API docs OFF by default — production blocks startup if enabled.
+      ENABLE_DOCS: ${ENABLE_DOCS:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       TZ: ${TZ:-America/New_York}
