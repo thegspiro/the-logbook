@@ -540,6 +540,8 @@ The following security measures are enforced:
 
 > **Edge case:** If your deployment uses a reverse proxy (nginx, Caddy), the `DB_SSL` and `REDIS_SSL` settings refer to the connection between the backend container and the database/Redis container — not the browser-to-server connection. Browser-to-server TLS is handled by the reverse proxy.
 
+> **Edge case:** When you deploy behind a reverse proxy you must also set `TRUSTED_PROXY_IPS` so the backend resolves each real client IP from the `X-Forwarded-For` header. This setting now accepts CIDR ranges (e.g. `172.16.0.0/12`) as well as individual addresses. It drives geo-blocking, per-client rate limiting, and the client IP recorded in the audit log. If it is left unset behind a proxy, every request appears to come from the proxy's own address — geo-blocking silently does nothing and all clients share a single rate-limit bucket.
+
 ### Authentication & Session Edge Cases
 
 | Scenario | Behavior |
