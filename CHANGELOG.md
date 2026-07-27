@@ -358,6 +358,11 @@ open decisions that need an owner are collected in
   files for every document in the folder and its sub-folders, matching how
   single-document deletion already worked — so sensitive uploads aren't left
   behind.
+- **Compliance report emails are safe against injected content.** The report
+  email now escapes the organization name, report type, and period label before
+  putting them in the HTML body, so a crafted organization name can't inject
+  markup into the recipient's mail client. The report type is also restricted to
+  the known values (monthly/annual).
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged

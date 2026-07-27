@@ -91,6 +91,11 @@ class TestGenerateReport:
         assert report.summary["total_members"] == 10
         assert report.generation_duration_ms is not None
 
+    async def test_invalid_report_type_rejected(self, stub_annual):
+        db = _db([])
+        with pytest.raises(ValueError, match="report_type"):
+            await ComplianceReportService(db).generate_report("org-1", "weekly", 2026)
+
     async def test_monthly_period_label(self, stub_annual):
         stub_annual.result = {"executive_summary": {}}
         db = _db([])

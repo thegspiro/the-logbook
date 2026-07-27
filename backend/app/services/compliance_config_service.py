@@ -4,6 +4,7 @@ Compliance Requirements Configuration Service
 Manages compliance configuration, profiles, and report generation/storage.
 """
 
+import html
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -224,6 +225,12 @@ class ComplianceReportService:
         additional_recipients: Optional[List[str]] = None,
     ) -> ComplianceReport:
         """Generate and store a compliance report."""
+        # Constrain report_type to the known set rather than accepting a
+        # free-form string (it is persisted and interpolated into the report
+        # email) (CS-9).
+        if report_type not in ("monthly", "annual"):
+            raise ValueError("report_type must be 'monthly' or 'annual'")
+
         # Build period label
         if report_type == "monthly" and month:
             period_label = datetime(year, month, 1).strftime("%B %Y")
@@ -338,12 +345,18 @@ class ComplianceReportService:
         total_members = summary.get("total_members", 0)
         compliant_members = summary.get("fully_compliant_members", 0)
 
-        org_name = org.name if org else "Your Organization"
+        # Escape attacker-influenceable text before interpolating into the email
+        # HTML. org.name is user-controlled, and report_type/period_label flow
+        # from the report request — an unescaped value would be HTML/script
+        # injection in the recipient's mail client (CS-9).
+        org_name = html.escape(org.name if org else "Your Organization")
+        report_type_label = html.escape(str(report.report_type or ""))
+        period_label = html.escape(str(report.period_label or ""))
 
         html_body = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #1a1a2e;">Compliance Report — {report.period_label}</h2>
-            <p>The {report.report_type} compliance report for <strong>{org_name}</strong>
+            <h2 style="color: #1a1a2e;">Compliance Report — {period_label}</h2>
+            <p>The {report_type_label} compliance report for <strong>{org_name}</strong>
                has been generated.</p>
 
             <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;

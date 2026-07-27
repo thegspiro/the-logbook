@@ -340,9 +340,11 @@ start over at #1.
   compliant, matching the sibling service), CS-6 (email HTML injection in skills
   result emails — html.escape), CS-7 (LOW: threshold-ordering validator on
   compliance config). Flagged: CS-8 (SoD — examiner self-certification +
-  self-attestation), CS-9 (monthly=annual report, email recipient allowlist +
-  HTML escaping, attestation over-fetch, records_with_certification mislabel,
-  ISO str typing). See compliance-skills.md. Next: security/audit/ip.
+  self-attestation), CS-9 (✅ report-email HTML escaping + report_type enum
+  constraint fixed; still flagged: monthly=annual needs month-window feature,
+  email recipient allowlist is a policy decision, attestation over-fetch blocked
+  on audit_logs org column, records_with_certification mislabel/ISO str typing).
+  See compliance-skills.md. Next: security/audit/ip.
 - #23 security/audit/ip ✅ — the security-tooling surface itself (5 endpoint/core
   files + 2 services + the middleware IP path); three parallel readers. Verified
   good: H1/H4/M9 all intact (audit reads org-scoped, HMAC hash chain keyed,

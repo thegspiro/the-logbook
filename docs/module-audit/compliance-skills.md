@@ -105,20 +105,30 @@ incoherent status bucketing.
 **Status:** flagged — both need a candidate≠examiner / dual-control rule (and
 possibly an `is_practice` carve-out), which changes the workflow.
 
-### CS-9 — LOW (flagged) — Reporting correctness / abuse-surface polish
-- Monthly compliance reports return the full annual dataset merely relabeled
-  (config #2). Report emailing accepts arbitrary client-supplied recipients with
-  no allow-list (config #5, officer email) and the HTML bodies interpolate the
-  org name unescaped (config #6). `report_type` is free-form, not an enum
-  (config #4).
-- Attestation history over-fetches globally (no `organization_id` column on
-  `AuditLog`) so a busy platform can hide an org's own recent attestations
-  (availability, not a leak) (officer #2). `records_with_certification` in the
-  annual report reports the `course_name` fill count under a certification key —
-  a response-key mislabel whose correct intent is ambiguous, so left as-is
-  (officer #5). ISO-readiness membership match relies on `user_id` being a String
-  column (latent) (officer #6).
-**Status:** flagged.
+### CS-9 — LOW — partially FIXED — Reporting correctness / abuse-surface polish
+- **✅ Report email HTML injection closed.** `_email_report` interpolated the org
+  name, `report_type`, and `period_label` raw into the HTML body — `org.name` is
+  user-controlled and `report_type` flowed from the request, so an unescaped
+  value was HTML/script injection in the recipient's mail client. All three are
+  now `html.escape`d. (config #6)
+- **✅ `report_type` constrained.** `generate_report` now rejects anything other
+  than `"monthly"`/`"annual"` (was a free-form string that is persisted and
+  interpolated). (config #4)
+- **Flagged (feature):** monthly reports still return the annual dataset relabeled
+  — a real monthly view needs `generate_annual_report` to accept a month window
+  (data-layer change), deferred. (config #2)
+- **Flagged (policy decision):** report emailing accepts client-supplied
+  `additional_recipients` with no allow-list. Restricting to org-member emails
+  would close a compliance-data exfiltration path but breaks legitimate external
+  recipients (e.g. a state compliance auditor), so it needs an owner decision.
+  (config #5)
+- **Deferred / as-is:** attestation history over-fetches globally (no
+  `organization_id` on `AuditLog` — blocked on the same deferred audit-log
+  org-column as SEC-9; availability, not a leak) (officer #2);
+  `records_with_certification` mislabel is ambiguous-intent, left as-is
+  (officer #5); ISO-readiness `user_id` String match is latent (officer #6).
+**Status:** injection + input-validation fixed; monthly windowing (feature) and
+recipient allow-list (policy) deferred.
 
 ## Notes
 - Large-file caveat: `compliance_officer_service.py` (1,151 L) and
