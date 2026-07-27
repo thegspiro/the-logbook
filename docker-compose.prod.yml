@@ -24,6 +24,14 @@ services:
       DEBUG: "false"
       ENABLE_DOCS: "false"
       SECURITY_ENFORCE_HTTPS: "true"
+      # Trust the private Docker network the reverse proxy sits on so real client
+      # IPs are resolved from X-Forwarded-For (geo-blocking, per-client rate
+      # limiting, audit trails). Without this, every request appears to come from
+      # the proxy's container IP: geo-blocking silently does nothing and all
+      # clients share one rate-limit bucket. CIDR ranges cover Docker's
+      # dynamically-assigned bridge addresses. If your proxy runs on a fixed IP,
+      # narrow this to that address. Override in .env for a non-Docker proxy.
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}
       # Encrypt DB/Redis traffic (set to false only if the network is trusted).
       DB_SSL: "true"
       REDIS_SSL: "true"

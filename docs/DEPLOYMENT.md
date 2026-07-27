@@ -95,6 +95,17 @@ All software will be automatically installed by the installation script:
 ./install.sh --docker
 ```
 
+> **Production hardening.** `./install.sh --docker` configures a production
+> deployment: it sets `ENVIRONMENT=production` and pins
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env`, so every
+> `docker compose ...` command below automatically layers the hardened override
+> (no `--reload`, API docs disabled, HTTPS/TLS enforced, backend port not
+> published). If you deploy **manually** without the installer, either set that
+> same `COMPOSE_FILE` line in your `.env`, or pass the override explicitly:
+> `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
+> The base `docker-compose.yml` alone is a **development** configuration and
+> skips the startup security gate.
+
 **Managing Services:**
 ```bash
 # Start all services
