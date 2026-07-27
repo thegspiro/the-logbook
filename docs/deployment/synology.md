@@ -98,15 +98,27 @@ sudo sed -i "s|^DEBUG=.*|DEBUG=false|" .env
 ### Step 5: Start The Logbook
 
 ```bash
-# Standard deployment (4+ GB RAM)
-sudo docker compose up -d
+# Standard deployment (4+ GB RAM) — production override layered on the base file
+sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
-# For NAS with limited RAM (2-4 GB), use the minimal profile
-sudo docker compose -f docker-compose.yml -f docker-compose.minimal.yml up -d
+# For NAS with limited RAM (2-4 GB), add the minimal profile as well
+sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.minimal.yml up -d
 
 # Verify all containers are running
 sudo docker compose ps
 ```
+
+> **Production hardening.** Step 4 set `ENVIRONMENT=production`, so you must layer
+> the production override — the base `docker-compose.yml` alone is a development
+> configuration (uvicorn `--reload`, backend port published, API docs enabled, no
+> HTTPS enforcement) and skips the startup security gate. The override forces
+> `ENVIRONMENT=production`, disables `--reload` and API docs, enforces HTTPS,
+> enables DB/Redis TLS, and does not publish the backend port. Pin
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
+> later `docker compose ...` command stays hardened. In production the app
+> **refuses to start** if required secrets are missing or weak, if `DEBUG` or API
+> docs are enabled, or if HTTPS isn't enforced — terminate TLS at the DSM reverse
+> proxy (see [Reverse Proxy with DSM](#reverse-proxy-with-dsm)).
 
 ### Step 6: Access The Logbook
 

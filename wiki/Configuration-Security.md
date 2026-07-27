@@ -117,9 +117,13 @@ The application automatically sets these security headers in production:
 headers can no longer be spoofed:
 
 - Forwarded headers (`X-Forwarded-For`, `X-Real-IP`) are **only trusted when the
-  direct peer is listed in `TRUSTED_PROXY_IPS`**. When the list is empty
-  (default), forwarded headers are ignored entirely and the socket peer address
-  is used
+  direct peer is listed in `TRUSTED_PROXY_IPS`** (exact IPs or CIDR ranges such
+  as `172.16.0.0/12`). When the list is empty (default), forwarded headers are
+  ignored entirely and the socket peer address is used. If unset behind a proxy,
+  every request appears to come from the proxy IP: geo-blocking silently does
+  nothing and all clients share one per-client rate-limit bucket. The production
+  Docker override defaults `TRUSTED_PROXY_IPS` to
+  `172.16.0.0/12,192.168.0.0/16,10.0.0.0/8` so the bundled proxy is trusted
 - The real client is the **right-most** `X-Forwarded-For` hop that is not itself
   a trusted proxy (previously the left-most, spoofable entry). If `X-Forwarded-For`
   is absent or entirely trusted proxies, it falls back to `X-Real-IP`, then the
@@ -158,6 +162,36 @@ single organization.
   Private/reserved and allowlisted IPs are always allowed regardless, so an
   internal or allowlisted operator can still recover if a missing DB would
   otherwise lock everyone out
+
+---
+
+## Host Header Allowlist *(2026-07)*
+
+`TrustedHostMiddleware` rejects any request whose `Host` header is not in the
+allowlist with an HTTP 400, so Host-derived values (emailed links, OAuth
+callbacks) can be trusted rather than reflected from an attacker-controlled
+header.
+
+- **`TRUSTED_HOSTS`** — comma-separated hostnames. Starlette subdomain wildcards
+  such as `*.example.com` are allowed.
+- **Enabled automatically** in `production`/`staging`, or in any environment when
+  `TRUSTED_HOSTS` is set explicitly.
+- **When left empty**, the effective allowlist is derived from the
+  `ALLOWED_ORIGINS` hostnames plus `localhost`/`127.0.0.1` (so health checks keep
+  working).
+
+---
+
+## Database & Redis TLS Verification *(2026-07)*
+
+`DB_SSL` / `REDIS_SSL` enable TLS for the database and Redis connections. If they
+are enabled **without** the corresponding CA path set, the connection is
+encrypted but the server certificate is **not verified** (`CERT_NONE`) — which
+offers no protection against an active man-in-the-middle. Startup emits a
+**WARNING** in this case.
+
+- Set **`DB_SSL_CA`** / **`REDIS_SSL_CA`** to the CA certificate path for full
+  MITM protection (certificate verification).
 
 ---
 

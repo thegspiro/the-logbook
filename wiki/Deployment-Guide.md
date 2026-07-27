@@ -63,6 +63,20 @@ docker compose up -d
 docker compose --profile with-search --profile with-s3 up -d
 ```
 
+> **Production hardening.** The bare `docker compose up -d` commands above run
+> the **development** configuration (uvicorn `--reload`, source bind-mount,
+> backend port published, API docs enabled, no HTTPS enforcement) and skip the
+> startup security gate. For production, layer the production override on every
+> command:
+> `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+> (forces `ENVIRONMENT=production`, disables `--reload` and API docs, enforces
+> HTTPS, enables DB/Redis TLS, and does not publish the backend port). Pin
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
+> bare `docker compose ...` command stays hardened; `install.sh` sets this
+> automatically. In production/staging the app **refuses to start** if required
+> secrets are missing or weak, if `DEBUG` or API docs are enabled, or if HTTPS
+> isn't enforced.
+
 ---
 
 ## Docker Deployment
@@ -193,9 +207,10 @@ REDIS_HOST=your-elasticache-endpoint.cache.amazonaws.com
 REDIS_PORT=6379
 ```
 
-4. Deploy without local database:
+4. Deploy without local database (layer the production override — see the
+   hardening note under [Resource Requirements](#resource-requirements)):
 ```bash
-docker compose -f docker-compose.yml up -d backend frontend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d backend frontend
 ```
 
 #### AWS ECS/Fargate

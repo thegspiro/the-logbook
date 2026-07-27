@@ -2,6 +2,22 @@
 
 Best practices for deploying The Logbook in a production environment.
 
+> **Production hardening — required.** The base `docker-compose.yml` is a
+> **development** configuration (uvicorn `--reload`, source bind-mount, backend
+> port published, API docs enabled, no HTTPS enforcement) and it skips the
+> startup security gate. For production, layer the production override on every
+> command:
+> `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`.
+> The override forces `ENVIRONMENT=production`, disables `--reload`, disables API
+> docs (`ENABLE_DOCS=false`), enforces HTTPS (`SECURITY_ENFORCE_HTTPS=true`),
+> enables DB/Redis TLS, does not publish the backend port (it sits behind the
+> reverse proxy), and trusts the private Docker ranges via `TRUSTED_PROXY_IPS`.
+> So that every bare `docker compose ...` command below (start, logs, restart,
+> update) stays hardened, pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml`
+> in `.env`. `install.sh` sets this automatically. The app **refuses to start**
+> in production/staging if required secrets are missing or weak, if `DEBUG` or
+> API docs are enabled, or if HTTPS isn't enforced.
+
 ---
 
 ## Pre-Production Checklist

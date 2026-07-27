@@ -40,6 +40,30 @@ code inspection during the review.
 > The per-item "Remediation status" table below predates these changes; treat this
 > note and the CHANGELOG as authoritative for current state.
 
+> **Follow-on zero-trust review (2026-07-27):** a separate whole-stack pass
+> ("never trust, always verify") on branch `claude/zero-trust-security-review-cypp6z`
+> confirmed the foundation is strong and closed the remaining implicit-trust gaps.
+> Highlights (see the CHANGELOG for detail):
+> - **Deployment posture (HIGH):** the base compose file hardcoded
+>   `ENVIRONMENT: development`, so the documented `docker compose up -d` path
+>   booted in dev mode and skipped the startup security gate. Production now
+>   layers `docker-compose.prod.yml` (installer pins `COMPOSE_FILE`).
+> - **Host header:** emailed ballot links were built from the client `Host`
+>   (`request.base_url`) — now from `FRONTEND_URL`, plus a new
+>   `TrustedHostMiddleware`/`TRUSTED_HOSTS` allowlist.
+> - **Proxy trust:** empty `TRUSTED_PROXY_IPS` behind the bundled proxy silently
+>   disabled geo-blocking and collapsed rate limiting; CIDR support added and a
+>   safe default set in the prod override.
+> - **WebSocket sessions:** the inventory socket bypassed session revocation
+>   (bare token decode) — now authenticates through `AuthService`.
+> - **Multi-tenant:** shared fail-closed `assert_in_org` helper
+>   (`app/utils/org_scoping.py`) + fixes for confirmed cross-tenant leaks
+>   (elections, apparatus operators, membership-pipeline forms, inventory
+>   category). See [`../module-audit/CROSS-CUTTING.md`](../module-audit/CROSS-CUTTING.md).
+> - **CSV injection:** NFIRS + compliance exports now use the formula-safe writers.
+> - **TLS:** startup warns when `DB_SSL`/`REDIS_SSL` is on without a CA (encrypted
+>   but unverified).
+
 ## Remediation status
 
 **All HIGH, MEDIUM, and LOW findings are remediated** on branch

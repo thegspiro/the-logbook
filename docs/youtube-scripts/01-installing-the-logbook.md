@@ -297,6 +297,28 @@ service names: mysql, redis, backend, frontend.]**
 > for the backend. This health-check chain ensures everything comes up in the
 > right order."
 
+> "One important note before you go live. That plain `docker compose up -d` you
+> just ran? The base compose file is a *development* configuration — great for
+> kicking the tires, but it skips the production security gate. For a real
+> production deployment, you layer the production override on top of the base
+> file:"
+
+**[SCREEN: Show the production override command]**
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+> "That production override runs everything in a hardened posture — no
+> live-reload, the API docs turned off, HTTPS enforced, TLS on the database and
+> Redis connections, the backend port no longer published to the outside, and
+> real client IPs resolved through your trusted proxy. If you took the automated
+> installer path from earlier, you don't have to remember any of this — it
+> deploys with that override already applied and pins a `COMPOSE_FILE` line in
+> your `.env`, so from then on even a bare `docker compose up -d` stays in the
+> production configuration. Manual deployers just need to either add that same
+> `COMPOSE_FILE` line to `.env` or pass both `-f` flags on every command."
+
 ### VERIFY THE SERVICES (12:00 – 13:00)
 
 > "Let's verify everything is running."
@@ -377,6 +399,13 @@ docker compose --profile production up -d
 > "This starts the Nginx container which handles SSL termination and proxies
 > requests to the frontend and backend. You'll need to set up your SSL
 > certificates — Let's Encrypt with Certbot is the easiest free option."
+
+> "And remember the production override we talked about in the manual setup —
+> on an internet-facing box you'll want that hardened posture too. If you
+> installed with the automated installer, your `.env` already pins the
+> `COMPOSE_FILE` so this stays in production mode; if you're doing it by hand,
+> keep passing `-f docker-compose.yml -f docker-compose.prod.yml` alongside the
+> profile flag."
 
 ### UNRAID & NAS (15:00 – 16:00)
 

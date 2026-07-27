@@ -138,6 +138,11 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
+> **Note:** The bare `docker-compose up -d` above runs the **development**
+> configuration. For a production deployment, layer the production override
+> (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`) or
+> pin `COMPOSE_FILE` — see [Production Deployment](#production-deployment) below.
+
 ### Access Application
 
 - **Frontend:** http://localhost:3000
@@ -363,13 +368,23 @@ npm run dev
 
 ### Docker Compose Production
 
-```bash
-# Use production compose file
-docker-compose -f docker-compose.prod.yml up -d
+For production you MUST layer the production override on top of the base file —
+the base `docker-compose.yml` alone is a **development** configuration (uvicorn
+`--reload`, source bind-mount, backend port published, API docs enabled, no
+HTTPS enforcement) and skips the startup security gate.
 
-# With SSL/TLS
-docker-compose -f docker-compose.prod-ssl.yml up -d
+```bash
+# Layer the production override (forces ENVIRONMENT=production, disables --reload
+# and API docs, enforces HTTPS, enables DB/Redis TLS, backend port not published)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
+
+Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
+bare `docker compose ...` command stays hardened; `install.sh` sets this
+automatically. HTTPS/TLS termination itself is handled by a reverse proxy — see
+[SSL/TLS Setup](#ssltls-setup) below. In production/staging the app **refuses to
+start** if required secrets are missing or weak, if `DEBUG` or API docs are
+enabled, or if HTTPS isn't enforced.
 
 ### Environment Configuration
 
