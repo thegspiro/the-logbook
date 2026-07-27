@@ -26,12 +26,16 @@ for _mod_name in ("bcrypt",):
         sys.modules[_mod_name] = stub
         _stubs[_mod_name] = stub
 
-# Also stub transitive DB/model imports that the module pulls in
+# Stub only the transitive DB driver imports the module pulls in. NOTE: do NOT
+# stub `app.models.public_portal` — replacing it with a MagicMock leaves a real
+# ORM model unregistered in SQLAlchemy's shared declarative registry, so a later
+# test module's first mapper configuration fails to resolve string relationships
+# like Organization.relationship("PublicPortalConfig"). conftest imports the real
+# models eagerly; keep them real here too.
 for _mod_name in (
     "aiomysql",
     "redis",
     "redis.asyncio",
-    "app.models.public_portal",
 ):
     if _mod_name not in sys.modules:
         stub = MagicMock()

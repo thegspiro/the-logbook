@@ -8,12 +8,26 @@ It sets up test database, async sessions, and common test data.
 import pytest
 from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import configure_mappers
 
 from app.core.database import async_session_factory, database_manager
 
+# Eagerly register EVERY model and resolve all mappers at import time, before any
+# test module is collected. String-based relationships (e.g.
+# Organization.relationship("PublicPortalConfig")) can only resolve once every
+# referenced class is in the shared declarative registry. Some test modules stub
+# a model submodule in sys.modules to skip heavy imports; if such a module is
+# collected first, the real class never registers and the first mapper
+# configuration in a *later* module fails with "failed to locate a name". Doing
+# it here — like the app does at startup — makes mapper resolution independent of
+# test collection order.
+import app.models  # noqa: E402,F401
+
+configure_mappers()
+
 
 @pytest.fixture(scope="session")
-async def initialize_database():
+async def _initialize_database():
     """
     Initialize database connection for all tests.
     This runs once per test session.
@@ -23,8 +37,8 @@ async def initialize_database():
     await database_manager.disconnect()
 
 
-@pytest.fixture(scope="function")
-async def db_session(initialize_database) -> AsyncGenerator[AsyncSession]:
+@pytest.fixture
+async def db_session(_initialize_database) -> AsyncGenerator[AsyncSession]:
     """
     Create a new database session for each test.
     Uses the app's actual MySQL database.
