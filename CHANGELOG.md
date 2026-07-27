@@ -341,6 +341,10 @@ open decisions that need an owner are collected in
   was completed in two steps. Also: a shift completion report created without a
   linked shift now verifies the named trainee belongs to the department, and the
   report lookup is department-scoped at the query.
+- **Expense-report totals are computed reliably.** Adding a line item now
+  recomputes the report total from the persisted line items directly, fixing a
+  case where the running total could double-count or drift depending on load
+  timing.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged

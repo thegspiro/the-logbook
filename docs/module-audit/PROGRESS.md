@@ -290,8 +290,10 @@ start over at #1.
   cross-member view). 4 flagged: FIN-4 (no SoD on terminal money movement —
   needs finance.disburse tier), FIN-5 (reimbursement/payee records readable by
   any finance.view holder), FIN-6 (record_dues_payment no idempotency + waive
-  overwrite), FIN-7 (unbounded export/in-memory pagination DoS, request-number
-  race, float aggregates, pending-approvals not assignee-filtered). See
+  overwrite), FIN-7 (✅ add_expense_line_item total drift fixed via fresh SUM
+  aggregate; still flagged: request-number race needs unique-constraint
+  migration, module-wide float→Decimal, export/pagination DoS refactor, overspend
+  guard, pending-approvals not assignee-filtered). See
   finance.md. Next: orgs/roles/users.
 - #21 orgs/roles/users ✅ — the privilege-management surface (5 endpoint files +
   4 services + core/permissions); three parallel readers (users+ranks / roles+

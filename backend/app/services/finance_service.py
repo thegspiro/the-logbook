@@ -1287,8 +1287,17 @@ class FinanceService:
         self.db.add(item)
         await self.db.flush()
 
-        # Recalculate total
-        er.total_amount = sum(li.amount for li in er.line_items) + item.amount
+        # Recalculate the total from a fresh aggregate over the persisted line
+        # items rather than the loaded `er.line_items` collection. That
+        # collection may or may not already include the row just added (depending
+        # on whether it was loaded before the flush), so `sum(...) + item.amount`
+        # could double-count or drift. The DB sum is authoritative (FIN-7).
+        total_result = await self.db.execute(
+            select(func.coalesce(func.sum(ExpenseLineItem.amount), 0)).where(
+                ExpenseLineItem.expense_report_id == er_id
+            )
+        )
+        er.total_amount = total_result.scalar_one()
         await self.db.flush()
         await self.db.refresh(item, ["created_at"])
         return item

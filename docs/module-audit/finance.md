@@ -89,17 +89,32 @@ double-credits collections; and recording a payment against a `WAIVED` record
 silently recomputes it to `PAID`/`PARTIAL`, destroying the waive. **Status:**
 flagged — needs an idempotency-key decision + a status-transition guard.
 
-### FIN-7 — LOW/MED (flagged) — Correctness/DoS polish
-- Unbounded transaction export (`generate_export`) and in-memory pagination on
-  every list endpoint (fetch-all then slice) — DoS/bulk-exfil surface on large
-  orgs; push `skip`/`limit` into the queries and cap export range.
-- `add_expense_line_item` recomputes `total_amount` from a possibly-stale loaded
-  collection (drift risk); `_generate_request_number` uses `count()+1` (race →
-  duplicate PR-YYYY-NNNN); no overspend/negative-balance guard on spend posting;
-  float money math in `get_budget_summary`/`get_dues_summary` aggregates.
-- `get_pending_approvals` returns the org-wide pending queue rather than the
-  caller's assigned steps.
-**Status:** all flagged (behavior-change or needs a schema/sequence change).
+### FIN-7 — LOW/MED — partially FIXED — Correctness/DoS polish
+- **✅ `add_expense_line_item` total drift fixed.** It recomputed `total_amount`
+  as `sum(er.line_items) + item.amount`, where `er.line_items` may or may not
+  already include the just-added row (depending on load timing) → double-count /
+  drift. It now recomputes from a fresh `SUM(amount)` aggregate over the
+  persisted line items, which is authoritative.
+- **Flagged (needs a schema/sequence change):** `_generate_request_number` uses
+  `count()+1` (race → duplicate `PR-YYYY-NNNN`). A robust fix needs a unique
+  constraint on the request-number column + retry-on-conflict (or a row-locked
+  per-org sequence) — a migration, deferred.
+- **Flagged (cross-cutting refactor):** float money math in
+  `get_budget_summary`/`get_dues_summary` and throughout the spend-tracking path
+  (`_add_to_spent`, budget comparisons, response payloads). Converting money to
+  `Decimal` end-to-end (with JSON serialization handling) is a module-wide change;
+  a partial conversion would leave the service inconsistent. Deferred as a
+  dedicated task.
+- **Flagged (DoS surface, behavior change):** unbounded transaction export and
+  in-memory pagination (fetch-all-then-slice) on the list endpoints — pushing
+  `skip`/`limit` into the queries and capping the export range is the fix, but it
+  touches many endpoints and changes response envelopes. Deferred.
+- **Flagged (behavior change):** no overspend/negative-balance guard on spend
+  posting; `get_pending_approvals` returns the org-wide queue rather than the
+  caller's assigned steps. Both change established behavior and need an owner
+  decision.
+**Status:** the safe correctness fix (line-item total) applied; the rest remain
+flagged as behavior-change or schema/sequence-change (per original triage).
 
 ## Notes
 - `get_approval_records` / `get_current_pending_step` query `ApprovalStepRecord`
