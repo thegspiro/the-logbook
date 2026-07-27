@@ -17,9 +17,14 @@ creation and org-settings updates; closed multiple cross-tenant write/read paths
 availability bugs (the onboarding factory-reset FK order and the public-API-key
 auth crash); neutralized spreadsheet-formula injection across six exporters and
 an ICS calendar-injection vector; and stopped cross-user cached-PII leakage on
-shared devices. Open items that need an owner decision or a schema migration
-(e.g. the global `security_alerts` table, DB/Redis TLS enforcement in production)
-are tracked in [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
+shared devices. Follow-up hardening (2026-07) migrated field encryption to **AES-256-GCM**,
+made the audit hash chain a **keyed HMAC-SHA256** and gated its rehash recovery
+op behind `AUDIT_ALLOW_CHAIN_REHASH` (fails closed on a keyed mismatch),
+**org-scoped the `security_alerts` table**, and added a configurable
+`GEOIP_FAIL_CLOSED` posture. Open items that still need an owner decision or a
+schema migration (e.g. DB/Redis TLS enforcement in production, a dedicated
+`audit_logs.organization_id` column) are tracked in
+[`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
 
 ### Comprehensive Security Audit & Remediation (2026-03-07)
 
@@ -38,9 +43,9 @@ are tracked in [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
 - **Brute-force protection**: Progressive rate limiting on login with IP-based and per-user lockout, exponential backoff, frontend rate limiting on login/forgot-password pages
 - **IDOR fixes**: Organization-scoped validation on documents and training endpoints prevents cross-org data access
 - **Open redirect prevention**: API response interceptor validates redirect URLs against allowed origins
-- **Security alert persistence**: New `SecurityAlert` database model stores alerts with severity, type, source IP, and resolution status
-- **Audit log export**: New endpoint for exporting audit logs with date range filters
-- **Audit archival**: Scheduled task archives old audit entries while maintaining hash chain integrity; `rehash_chain` endpoint rebuilds the chain
+- **Security alert persistence**: New `SecurityAlert` database model stores alerts with severity, type, source IP, and resolution status *(2026-07: now includes `organization_id` — alerts are org-scoped; an org admin only sees/acknowledges/resolves their own department's alerts)*
+- **Audit log export**: New endpoint for exporting audit logs with date range filters *(2026-07: scoped to the caller's org and redacts `session_id` to a non-reversible fingerprint)*
+- **Audit archival**: Scheduled task archives old audit entries while maintaining hash chain integrity *(2026-07: the `rehash_chain` op is now break-glass — gated by `AUDIT_ALLOW_CHAIN_REHASH`, repairs legacy rows only, and fails closed with 409 on a keyed-row mismatch rather than rebuilding over a tamper)*
 - **Audit deletion logging**: All audit log deletions are themselves logged for accountability
 - **Hardened file logs**: Secure permissions and restricted access paths for file-based log rotation
 - **HIPAA cache exclusions expanded**: `/admin-hours/`, `/facilities/`, `/organizations/`, `/documents/`, `/training/` added to `UNCACHEABLE_PREFIXES`
@@ -75,9 +80,9 @@ are tracked in [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
 ### Core Security Implementations
 
 ✅ **Password Hashing**: Argon2id algorithm (OWASP recommended)
-✅ **Data Encryption**: AES-256 encryption for sensitive data at rest
+✅ **Data Encryption**: AES-256-GCM authenticated encryption for sensitive data at rest (legacy Fernet values still readable)
 ✅ **Transport Security**: TLS 1.3 for data in transit
-✅ **Tamper-Proof Logging**: Blockchain-inspired hash chain for audit logs
+✅ **Tamper-Evident Logging**: Blockchain-inspired keyed HMAC-SHA256 hash chain for audit logs
 ✅ **Multi-Factor Authentication**: TOTP-based 2FA support
 ✅ **Role-Based Access Control**: Granular permission system
 ✅ **Session Management**: Secure token-based authentication with JWT
@@ -248,7 +253,7 @@ The Logbook includes security features designed with HIPAA requirements in mind 
 - ✅ **Unique User Identification**: Each user has a unique identifier
 - ✅ **Emergency Access Procedure**: Admin override capabilities for emergencies
 - ✅ **Automatic Logoff**: Configurable session timeout (default: 15 minutes)
-- ✅ **Encryption and Decryption**: AES-256 for PHI at rest
+- ✅ **Encryption and Decryption**: AES-256-GCM for PHI at rest
 
 #### Audit Controls (§ 164.312(b))
 
@@ -579,7 +584,12 @@ npx lighthouse http://localhost:3000 --only-categories=accessibility --output=ht
 
 ### Encryption at Rest
 
-**Algorithm**: AES-256 (Advanced Encryption Standard)
+**Algorithm**: AES-256-GCM (authenticated encryption). Each value carries a
+random 96-bit nonce and an authentication tag, so a tampered ciphertext fails to
+decrypt (fails closed) rather than returning garbage. Values written before the
+migration used Fernet (AES-128-CBC + HMAC) and remain transparently readable;
+`backend/scripts/reencrypt_to_aesgcm.py` backfills them to GCM (see the
+[backfill runbook](../docs/AES256_GCM_BACKFILL_RUNBOOK.md)).
 
 **What is Encrypted:**
 - User passwords (Argon2id hashing)
@@ -618,15 +628,20 @@ Sensitive fields that can be encrypted:
 
 ### Tamper-Proof Logging System
 
-The Logbook implements a blockchain-inspired hash chain for audit logs:
+The Logbook implements a blockchain-inspired **keyed** hash chain for audit logs:
 
 ```
-Log Entry 1: Hash = SHA256(Data1 + "0000...")
-Log Entry 2: Hash = SHA256(Data2 + Hash1)
-Log Entry 3: Hash = SHA256(Data3 + Hash2)
+Log Entry 1: Hash = HMAC-SHA256(key, Data1 + "0000...")
+Log Entry 2: Hash = HMAC-SHA256(key, Data2 + Hash1)
+Log Entry 3: Hash = HMAC-SHA256(key, Data3 + Hash2)
 ```
 
-This makes it impossible to modify historical logs without detection.
+The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling
+back to `SECRET_KEY`), so forging a valid chain requires the key — not merely
+database write access. Rows written before the keyed upgrade are verified under
+the legacy unkeyed SHA-256 scheme, and a no-downgrade guard rejects a later
+unkeyed row after any keyed row. This makes it impossible to modify historical
+logs without detection.
 
 ### What is Logged
 
@@ -1001,13 +1016,23 @@ Multiple cross-organization IDOR vulnerabilities were identified and fixed:
 - Supports multi-worker environments with synchronized state
 - Warnings logged for untrusted proxy headers
 
-### Geo-Blocking with Database-Driven Rules
+### Geo-Blocking (Platform-Edge Control)
 
-The GeoIP-based country blocking middleware now reads rules from the database:
-- Country block rules stored in `ip_security_rules` table
-- Applied in real-time via the `GeoBlockingMiddleware`
-- IP allowlist exceptions honored (whitelisted IPs bypass country blocks)
-- Admin UI for managing allowed/blocked countries
+GeoIP-based country blocking is a **platform-edge control**: it runs in
+middleware before any tenant/authentication context exists, against one shared
+MaxMind database and one global blocked-country set, so it applies deployment-wide
+rather than per-organization:
+- The blocklist is normally set at deploy time via `BLOCKED_COUNTRIES`. Runtime
+  block/unblock via the API (`POST`/`DELETE /api/v1/ip-security/blocked-countries`,
+  overlaid onto `CountryBlockRule` rows) is **disabled by default** and enabled
+  only when the operator sets `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT=true` — because
+  a change affects every tenant
+- Applied in real-time via the blocking middleware; IP allowlist exceptions are
+  honored (allowlisted IPs bypass country blocks)
+- **Fail-open by default, or fail-closed via `GEOIP_FAIL_CLOSED`**: when set, an
+  IP whose country can't be resolved (including a missing/corrupt MaxMind DB) is
+  blocked; private/reserved and allowlisted IPs are always allowed so an internal
+  operator can recover
 
 ### Scheduled Task Auto-Run
 

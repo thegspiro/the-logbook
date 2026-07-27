@@ -15,14 +15,14 @@ The Logbook includes security features designed with HIPAA (Health Insurance Por
 | Unique user identification | Every user has a unique ID and username |
 | Emergency access procedure | System owner bypass for emergency situations |
 | Automatic logoff | 30-minute inactivity timeout (configurable) |
-| Encryption and decryption | AES-256 encryption for PHI at rest |
+| Encryption and decryption | AES-256-GCM authenticated encryption for PHI at rest (legacy Fernet values still readable) |
 
 ### Audit Controls (§ 164.312(b))
 
 | HIPAA Requirement | Feature |
 |-------------------|---------|
 | Audit log recording | All access to PHI is logged with user, timestamp, and action |
-| Tamper-proof storage | SHA-256 hash chain prevents modification |
+| Tamper-proof storage | Keyed HMAC-SHA256 hash chain prevents modification |
 | Log retention | 7-year retention (2555 days), exceeds 6-year HIPAA minimum |
 | Periodic verification | Daily integrity checkpoints |
 | Export capability | JSON export for compliance reporting |

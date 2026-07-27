@@ -27,7 +27,7 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 | `notification_logs` | In-app and email notification records with action_url, expiry, and `metadata` JSON column for structured context (shift_id, shift_date, checklist_count, etc.) *(updated 2026-03-26)* |
 | `department_messages` | Internal department messages with targeting (roles by id, statuses, or member ids), priority, `is_persistent`, `requires_acknowledgment`, `expires_at`, `deleted_at` (soft delete), and `scheduled_at` (deferred publish) *(updated 2026-07-17)* |
 | `department_message_reads` | Per-user read/acknowledged tracking for department messages (preserved on soft delete as compliance evidence) *(updated 2026-07-17)* |
-| `security_alerts` | Intrusion detection and security event alerts |
+| `security_alerts` | Intrusion detection and security event alerts. `organization_id` scopes each alert to its owning department (nullable for platform-level pre-auth/IP-only alerts); an org admin only sees/acknowledges/resolves their own org's alerts *(updated 2026-07)* |
 
 ---
 
@@ -206,7 +206,7 @@ All data is scoped by `organization_id`. Key constraints:
 
 ## Organization Settings JSON Structure (email_service)
 
-The `organizations.settings` JSON column stores email platform configuration under the `email_service` key. No database migration is needed when adding new email platforms — the JSON structure is flexible. Secret fields are AES-256 encrypted (prefixed with `enc:`).
+The `organizations.settings` JSON column stores email platform configuration under the `email_service` key. No database migration is needed when adding new email platforms — the JSON structure is flexible. Secret fields are AES-256-GCM encrypted (legacy Fernet values still readable).
 
 | Field | Type | Platforms | Description |
 |-------|------|-----------|-------------|

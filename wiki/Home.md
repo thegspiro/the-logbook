@@ -74,7 +74,7 @@ docker-compose up -d
 ### 🔐 Security
 - **[Security Overview](Security-Overview)** - Security policy and compliance
 - **[Authentication](Security-Authentication)** - OAuth, SAML, LDAP, MFA
-- **[Encryption](Security-Encryption)** - AES-256 encryption
+- **[Encryption](Security-Encryption)** - AES-256-GCM encryption
 - **[Audit Logging](Security-Audit-Logging)** - Tamper-proof audit trails
 - **[HIPAA Security Features](Security-HIPAA)** - Security features aligned with HIPAA requirements
 
@@ -115,12 +115,21 @@ docker-compose up -d
 | **Database** | MySQL 8.0+ (MariaDB 10.11+ for ARM) |
 | **Cache** | Redis 7+ |
 | **Authentication** | OAuth 2.0, SAML, LDAP, TOTP MFA |
-| **Encryption** | AES-256, Argon2id |
+| **Encryption** | AES-256-GCM, Argon2id |
 | **Container** | Docker, Docker Compose |
 
 ---
 
 ## 📊 Latest Updates
+
+### July 2026 — Security Audit Remediation & Encryption Upgrade
+
+- **Field encryption upgraded to AES-256-GCM**: at-rest encryption of sensitive fields (PHI, MFA secrets, integration/SSO credentials) now uses AES-256-GCM authenticated encryption — a tampered value fails to decrypt. Legacy Fernet (AES-128-CBC) values remain readable; `backend/scripts/reencrypt_to_aesgcm.py` backfills them (see the [backfill runbook](../docs/AES256_GCM_BACKFILL_RUNBOOK.md))
+- **Audit hash chain is keyed (HMAC-SHA256)** and the rehash recovery op is now break-glass: disabled unless the operator sets `AUDIT_ALLOW_CHAIN_REHASH`, repairs only legacy rows, and fails closed (409) on a keyed-row mismatch. Audit-log **export redacts `session_id`** to a non-reversible fingerprint
+- **Security alerts are per-department**: the `security_alerts` table is now org-scoped, so an org admin only sees/acknowledges/resolves their own department's alerts
+- **Geo-blocking is configurable and platform-scoped**: new `GEOIP_FAIL_CLOSED` blocks IPs with an unresolvable country (incl. a missing MaxMind DB); runtime country block/unblock via the API is gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` (off by default — the blocklist is set at deploy via `BLOCKED_COUNTRIES`)
+- **Public-portal API keys**: IP rate limiting now runs before the (slow) bcrypt verification to remove a CPU-exhaustion vector, and keys carry a selective lookup prefix so a lookup checks a single candidate
+- A rotating, module-by-module tenant-isolation audit closed cross-tenant read/write gaps across modules — see [`docs/module-audit/`](../docs/module-audit/PROGRESS.md) and [`CHANGELOG.md`](../CHANGELOG.md)
 
 ### May 2026 (May 1-28) — OAuth Sign-In, IP/GeoIP Hardening, Compliance Evaluation Period, Shift Follow-Up, Audit Log Admin & Training Exports
 

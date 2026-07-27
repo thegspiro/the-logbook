@@ -34,9 +34,10 @@ silently returning garbage), with a fresh random 96-bit nonce per value.
 
 Values written before the AES-256-GCM migration used **Fernet**
 (AES-128-CBC + HMAC-SHA256); these remain transparently readable, so no data
-migration is required for correctness. `scripts/reencrypt_to_aesgcm.py`
-re-encrypts existing rows to AES-256-GCM as a background step, after which Fernet
-read-support can be retired.
+migration is required for correctness. `backend/scripts/reencrypt_to_aesgcm.py`
+(dry-run by default) re-encrypts existing rows to AES-256-GCM as a background
+step, after which Fernet read-support can be retired. See the operator runbook:
+[`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](../docs/AES256_GCM_BACKFILL_RUNBOOK.md).
 
 ### Configuration
 
@@ -105,7 +106,7 @@ sudo certbot --nginx -d your-domain.com
 
 ## Audit Log Hash Chain
 
-The audit logging system uses a blockchain-inspired SHA-256 hash chain to ensure tamper-proof records.
+The audit logging system uses a blockchain-inspired **keyed HMAC-SHA256** hash chain to ensure tamper-evident records — forging the chain requires the signing key, not merely database write access. (Rows written before the keyed upgrade remain verifiable under the legacy unkeyed SHA-256 scheme.)
 
 ### How It Works
 

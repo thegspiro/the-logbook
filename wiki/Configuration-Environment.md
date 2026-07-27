@@ -158,7 +158,10 @@ These variables are baked into the frontend at build time via Vite.
 | `TRUSTED_PROXY_IPS` | Comma-separated proxy IPs whose forwarded headers are trusted. **Critical when running behind a reverse proxy** *(2026-05-29)* | `""` |
 | `GEOIP_ENABLED` | Enable GeoIP country-based access control | `false` |
 | `GEOIP_DATABASE_PATH` | Path to the MaxMind GeoLite2 country database | — |
-| `BLOCKED_COUNTRIES` | Comma-separated ISO country codes to block (config default; DB `CountryBlockRule` rows override) *(2026-05-29)* | `""` |
+| `BLOCKED_COUNTRIES` | Comma-separated ISO country codes to block. This is the deploy-time source of truth for the platform-wide blocklist *(2026-07)* | `""` |
+| `GEOIP_FAIL_CLOSED` | When `true`, block any IP whose country cannot be resolved (including a missing/corrupt MaxMind DB). Private/reserved and allowlisted IPs are always allowed, so an internal/allowlisted operator can still recover. Default `false` preserves fail-open *(2026-07)* | `false` |
+| `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` | Gate for runtime country block/unblock via the API (`POST`/`DELETE /api/v1/ip-security/blocked-countries`). Off by default because the blocklist is a platform-edge control affecting every tenant — set it at deploy time via `BLOCKED_COUNTRIES`, or enable this to manage it at runtime *(2026-07)* | `false` |
+| `AUDIT_ALLOW_CHAIN_REHASH` | Break-glass gate for the audit-log rehash recovery operation, which rewrites the single cross-organization audit hash chain. Kept off so an ordinary admin cannot trigger it; a server operator enables it only for a one-time legacy-hash repair *(2026-07)* | `false` |
 
 > **`TRUSTED_PROXY_IPS` is security-critical** *(2026-05-29)*: forwarded
 > `X-Forwarded-For` / `X-Real-IP` headers are only trusted when the direct peer

@@ -1840,11 +1840,11 @@ docker-compose up -d
 
 ### Problem: Audit log export returns empty
 
-**Fix:** Pass `start_date` and `end_date` query params. Requires `security.manage` permission.
+**Fix:** Pass `start_date` and `end_date` query params. Requires `audit.export` permission. The export is scoped to your organization and redacts `session_id` to a non-reversible fingerprint (expected — not an error).
 
 ### Problem: Audit integrity check fails after archival
 
-**Fix:** Use the `rehash_chain` endpoint to rebuild the hash chain.
+**Fix:** The `rehash_chain` endpoint is break-glass only — it is disabled unless a server operator sets `AUDIT_ALLOW_CHAIN_REHASH=true`, repairs only legacy (unkeyed) rows, and returns `409` (fail-closed) on a keyed-row mismatch rather than rewriting it. A keyed-row mismatch is a genuine integrity signal to investigate, not something to "fix" by rehashing. For new (keyed HMAC) entries the chain is self-maintaining; archival does not require a rehash.
 
 ---
 

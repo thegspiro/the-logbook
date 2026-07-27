@@ -64,8 +64,8 @@ Complete technology reference for The Logbook.
 ### Backend Capabilities
 - Fully async (asyncio + SQLAlchemy async)
 - Auto-generated OpenAPI documentation
-- Tamper-proof audit logging (SHA-256 hash chain)
-- AES-256 data encryption at rest
+- Tamper-evident audit logging (keyed HMAC-SHA256 hash chain)
+- AES-256-GCM authenticated data encryption at rest
 - Application-level rate limiting (slowapi + Redis)
 - CSRF protection (global middleware)
 - httpOnly cookie-based authentication
@@ -114,9 +114,9 @@ Complete technology reference for The Logbook.
 | Layer | Technology |
 |-------|-----------|
 | Password hashing | Argon2id |
-| Data encryption | AES-256 |
+| Data encryption | AES-256-GCM |
 | Transport encryption | TLS 1.3 |
-| Audit integrity | SHA-256 hash chain |
+| Audit integrity | Keyed HMAC-SHA256 hash chain |
 | Authentication | JWT (access + refresh tokens) |
 | MFA | TOTP (RFC 6238) |
 | Input sanitization | DOMPurify (frontend), Pydantic (backend) |
