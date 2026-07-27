@@ -5,11 +5,12 @@ Exports incident data in NFIRS 5.0 compatible CSV format
 for submission to state fire marshal offices.
 """
 
-import csv
 import io
 from typing import Any
 
 from loguru import logger
+
+from app.utils.csv_export import SafeDictCsvWriter
 
 # NFIRS 5.0 Basic Module fields (subset — most commonly required)
 NFIRS_BASIC_FIELDS = [
@@ -58,7 +59,11 @@ def export_nfirs_data(
         UTF-8 encoded CSV bytes.
     """
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=NFIRS_BASIC_FIELDS)
+    # SafeDictCsvWriter neutralizes formula-injection: member-populated fields
+    # (incident number, station, shift, incident type) are written to a CSV that
+    # a state fire-marshal staffer opens in Excel/Sheets. A value like
+    # "=HYPERLINK(...)" would otherwise execute on their machine.
+    writer = SafeDictCsvWriter(output, fieldnames=NFIRS_BASIC_FIELDS)
     writer.writeheader()
 
     for incident in incidents:
