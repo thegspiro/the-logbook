@@ -785,6 +785,7 @@ class SecurityAuditLogger:
 
         logger.warning(f"[SECURITY AUDIT] {log_entry}")
 
+
 # ============================================
 # Helper Functions
 # ============================================
@@ -812,10 +813,11 @@ def get_client_ip(request: Request) -> str:
     from app.core.config import settings
 
     direct_ip = request.client.host if request.client else "unknown"
-    trusted_proxies = settings.get_trusted_proxy_ips()
 
     # Forwarded headers are only trustworthy if the direct peer is a known proxy.
-    if not trusted_proxies or direct_ip not in trusted_proxies:
+    # is_trusted_proxy supports both exact IPs and CIDR ranges, and returns False
+    # when nothing is configured (secure default).
+    if not settings.is_trusted_proxy(direct_ip):
         return direct_ip
 
     forwarded_for = request.headers.get("X-Forwarded-For")
@@ -825,7 +827,7 @@ def get_client_ip(request: Request) -> str:
         # from the right that is NOT a trusted proxy is the real client. Any
         # client-forged values sit further left and are never reached.
         for hop in reversed(hops):
-            if hop not in trusted_proxies:
+            if not settings.is_trusted_proxy(hop):
                 return hop
 
     # XFF absent or entirely trusted proxies — fall back to X-Real-IP (nginx

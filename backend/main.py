@@ -24,8 +24,8 @@ from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 
 from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
-from app.api.public.forms import router as public_forms_router
 from app.api.public.finance_approvals import router as finance_approvals_router
+from app.api.public.forms import router as public_forms_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
@@ -1902,6 +1902,21 @@ from app.core.security_middleware import (
 )
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Host-header allowlist: reject requests whose Host isn't in the configured
+# allowlist so Host-derived values (request.base_url used for emailed ballot
+# links, OAuth callback fallbacks, etc.) can't be poisoned by a spoofed Host.
+# Only enabled in production/staging or when TRUSTED_HOSTS is set explicitly, so
+# local development (which hits arbitrary hosts/IPs) is unaffected. A "*" result
+# means no concrete host could be derived — skip rather than lock everything out.
+_trusted_hosts = settings.get_trusted_hosts()
+if "*" not in _trusted_hosts and (
+    settings.ENVIRONMENT in ("production", "staging") or settings.TRUSTED_HOSTS
+):
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted_hosts)
+    logger.info(f"TrustedHostMiddleware enabled. Allowed hosts: {_trusted_hosts}")
 
 # Security Monitoring Middleware (intrusion detection, session hijacking, data exfiltration)
 if settings.ENVIRONMENT == "production":
