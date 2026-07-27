@@ -183,6 +183,17 @@ SMTP_FROM_EMAIL=noreply@yourdomain.com
 
 ## HTTPS with Reverse Proxy
 
+> **Required in production.** The Unraid compose runs with
+> `ENVIRONMENT=production`, which enforces a startup security gate: the app
+> refuses to boot unless strong secrets are set, `DEBUG=false`, API docs are
+> disabled, and HTTPS is enforced. So a reverse proxy is not optional here —
+> front the app with one of the options below, set `ALLOWED_ORIGINS` to your
+> `https://` origin, and set `SECURITY_ENFORCE_HTTPS=true`. Two related settings:
+> **API docs (`/docs`) are OFF by default** (enabling them blocks boot), and
+> **leave `TRUSTED_PROXY_IPS` empty** unless you actually add a proxy — the
+> compose publishes the backend port directly, so the connecting peer is the
+> real client, and setting it otherwise lets clients spoof `X-Forwarded-For`.
+
 ### Using Swag
 
 1. Install Swag from Community Apps.

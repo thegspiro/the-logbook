@@ -153,6 +153,26 @@ docker-compose restart
 
 ---
 
+## Security Note
+
+This stack runs in **production posture**, which enforces a startup security
+gate:
+
+- **API docs (`/docs`) are OFF by default** and enabling them blocks boot in
+  production.
+- **HTTPS is required** — the app refuses to start unless strong secrets are
+  set, `DEBUG=false`, docs are disabled, and `SECURITY_ENFORCE_HTTPS=true`. Front
+  the app with an HTTPS reverse proxy (SWAG / Nginx Proxy Manager / Cloudflare
+  Tunnel) and point `ALLOWED_ORIGINS` at your `https://` origin.
+- **Leave `TRUSTED_PROXY_IPS` empty** — the compose publishes the backend port
+  directly, so the connecting peer is the real client. Only set it if you add a
+  reverse proxy.
+
+See the [Security Hardening](./UNRAID-INSTALLATION.md#security-hardening)
+section of the installation guide for full details.
+
+---
+
 ## Common Commands
 
 ```bash
@@ -453,7 +473,7 @@ After installation, verify:
 - [ ] All 4 containers running: `docker-compose ps`
 - [ ] Frontend accessible: `http://YOUR-IP:7880`
 - [ ] Backend healthy: `curl http://localhost:7881/health`
-- [ ] API docs work: `http://YOUR-IP:7881/docs`
+- [ ] API docs are OFF by default (`/docs` disabled in production; see Security Note)
 - [ ] No errors in logs: `docker-compose logs --tail=50`
 - [ ] Can complete onboarding wizard
 - [ ] Database persists after restart

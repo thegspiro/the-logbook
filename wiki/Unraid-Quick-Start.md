@@ -186,6 +186,24 @@ docker-compose restart
 
 ---
 
+## Security Note
+
+This stack runs in **production posture**, so a startup security gate applies:
+
+- **API docs (`/docs`) are OFF by default** — enabling them blocks boot in production.
+- **HTTPS is required in production** — the app refuses to start unless strong
+  secrets are set, `DEBUG=false`, docs are disabled, and
+  `SECURITY_ENFORCE_HTTPS=true`. Front the app with an HTTPS reverse proxy (SWAG /
+  Nginx Proxy Manager / Cloudflare Tunnel) and set `ALLOWED_ORIGINS` to your
+  `https://` origin.
+- **Leave `TRUSTED_PROXY_IPS` empty** — the compose publishes the backend port
+  directly, so the connecting peer is the real client. Only set it when you add a
+  reverse proxy.
+
+See the full [Unraid Deployment Guide](Deployment-Unraid) for details.
+
+---
+
 ## Troubleshooting
 
 See the **[Troubleshooting Guide](Troubleshooting)** for common issues.

@@ -281,6 +281,16 @@ docker exec TheLogbook /app/scripts/backup.sh
 
 ## Security
 
+> **Production posture:** This stack runs with `ENVIRONMENT=production`, which
+> enforces a startup security gate. **API docs (`/docs`) are OFF by default**
+> (enabling them blocks boot), and **HTTPS is required** — the app refuses to
+> start unless strong secrets are set, `DEBUG=false`, docs are disabled, and
+> `SECURITY_ENFORCE_HTTPS=true`, so front it with an HTTPS reverse proxy.
+> **Leave `TRUSTED_PROXY_IPS` empty** unless you add a reverse proxy — the
+> compose publishes the backend port directly, so the connecting peer is the
+> real client. See the
+> [Security Hardening](./UNRAID-INSTALLATION.md#security-hardening) guide.
+
 ### Best Practices
 
 ✅ **Use Strong Passwords** - 20+ characters
