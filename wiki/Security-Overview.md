@@ -50,7 +50,7 @@ schema migration (e.g. DB/Redis TLS enforcement in production, a dedicated
 - **Hardened file logs**: Secure permissions and restricted access paths for file-based log rotation
 - **HIPAA cache exclusions expanded**: `/admin-hours/`, `/facilities/`, `/organizations/`, `/documents/`, `/training/` added to `UNCACHEABLE_PREFIXES`
 - **Shared API client factory**: Module API services use `createApiClient()` with consistent interceptors, eliminating ~300 lines of duplicated security config
-- **Encryption at rest**: AES-256 encryption for sensitive database fields (emergency contacts, medical information, PII) using `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables
+- **Encryption at rest**: AES-256-GCM authenticated encryption for sensitive database fields (emergency contacts, medical information, PII) using `ENCRYPTION_KEY` and `ENCRYPTION_SALT` environment variables (legacy Fernet values still readable)
 - **Docker hardening**: Read-only root filesystems, `no-new-privileges` security option, dropped capabilities, explicit tmpfs mounts
 - **Content Security Policy**: Tightened CSP with strict `script-src` and `style-src` policies; removed `upgrade-insecure-requests` directive
 - **Redis ACL**: Redis now uses ACL-based authentication with restricted command access, bound to container network only

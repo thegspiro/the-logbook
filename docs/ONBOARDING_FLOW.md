@@ -429,7 +429,7 @@ Body: {
 }
 ```
 
-**Data path**: Config is encrypted server-side (AES-256), stored in the onboarding session, and persisted to the organization's `settings.email_service` JSON column on completion. Secret fields (`cloudflare_api_token`, `smtp_password`, etc.) are prefixed with `enc:` before storage.
+**Data path**: Config is encrypted server-side (AES-256-GCM), stored in the onboarding session, and persisted to the organization's `settings.email_service` JSON column on completion. Secret fields (`cloudflare_api_token`, `smtp_password`, etc.) are prefixed with `enc:` before storage.
 
 **Navigation**:
 - Button: "Save & Continue" → `/onboarding/file-storage`
