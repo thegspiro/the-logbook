@@ -169,8 +169,10 @@ docker-compose logs -f frontend
 
 Open your browser and navigate to:
 - **Frontend**: `http://YOUR-UNRAID-IP:7880`
-- **Backend API**: `http://YOUR-UNRAID-IP:7881/docs`
-- **Health Check**: `http://YOUR-UNRAID-IP:7881/health`
+- **Backend health**: `http://YOUR-UNRAID-IP:7881/health`
+- **API docs**: `http://YOUR-UNRAID-IP:7881/docs` — **off by default** (enable
+  with `ENABLE_DOCS=true` only on a trusted network; production blocks startup
+  with docs enabled)
 
 ### 4. Test Onboarding Flow
 

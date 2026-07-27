@@ -20,7 +20,7 @@ This automated script will:
 After installation completes:
 
 **Frontend:** `http://YOUR-UNRAID-IP:7880`
-**Backend API:** `http://YOUR-UNRAID-IP:7881/docs`
+**Backend health:** `http://YOUR-UNRAID-IP:7881/health` (API docs at `/docs` are off by default)
 
 ---
 

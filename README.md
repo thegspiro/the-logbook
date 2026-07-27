@@ -319,7 +319,7 @@ After starting the containers:
 4. Add locations via the Location Setup Wizard (enables kiosk displays)
 5. Set up email notifications (optional)
 
-For API access: `http://localhost:3001/docs`
+For API access: `http://localhost:3001/docs` (development only — API docs are disabled in the production configuration)
 
 See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.com/thegspiro/the-logbook/wiki) for detailed instructions.
 

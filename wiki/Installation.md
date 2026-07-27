@@ -147,7 +147,7 @@ docker-compose logs -f
 
 - **Frontend:** http://localhost:3000
 - **Backend API:** http://localhost:3001
-- **API Docs:** http://localhost:3001/docs
+- **API Docs:** http://localhost:3001/docs _(development only — the production override disables API docs)_
 
 ### Choosing Your Environment File
 

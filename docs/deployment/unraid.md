@@ -115,8 +115,10 @@ docker-compose up -d
 Once the containers are running, open your browser:
 
 - **Frontend:** `http://YOUR-UNRAID-IP:7880`
-- **API Docs:** `http://YOUR-UNRAID-IP:7881/docs`
 - **Health Check:** `http://YOUR-UNRAID-IP:7881/health`
+- **API Docs:** `http://YOUR-UNRAID-IP:7881/docs` — **off by default** (the
+  production security gate blocks startup with docs enabled). Set
+  `ENABLE_DOCS=true` only to view them temporarily on a trusted network.
 
 Complete the onboarding wizard to configure your organization, create the admin account, and enable the modules you need.
 
