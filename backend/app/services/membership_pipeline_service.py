@@ -377,7 +377,7 @@ class MembershipPipelineService:
         # If the form changed, clean up the old form's integration (if no
         # other step still references it).
         if old_form_id and old_form_id != new_form_id:
-            await self._cleanup_orphaned_form_integration(old_form_id)
+            await self._cleanup_orphaned_form_integration(old_form_id, organization_id)
 
         return step
 
@@ -453,7 +453,7 @@ class MembershipPipelineService:
         # If the deleted step referenced a form, remove the auto-created
         # MEMBERSHIP integration — but only if no other step still uses it.
         if form_id:
-            await self._cleanup_orphaned_form_integration(form_id)
+            await self._cleanup_orphaned_form_integration(form_id, organization_id)
 
         return True
 
@@ -2738,11 +2738,20 @@ class MembershipPipelineService:
         )
 
         # ---- Direct path: stamp integration_type on the form ----
-        form_result = await self.db.execute(select(Form).where(Form.id == str(form_id)))
+        # Org-scope the lookup: form_id arrives from client-supplied step config,
+        # so without the org filter an admin could stamp/mutate another org's
+        # form (XC-1 cross-tenant write). Fail closed if it isn't in-org.
+        form_result = await self.db.execute(
+            select(Form).where(
+                Form.id == str(form_id),
+                Form.organization_id == str(organization_id),
+            )
+        )
         form = form_result.scalars().first()
         if form is None:
             logger.warning(
-                f"Cannot set integration_type for form {form_id}: form not found"
+                f"Cannot set integration_type for form {form_id}: "
+                "form not found in organization"
             )
             return
 
@@ -2849,20 +2858,35 @@ class MembershipPipelineService:
             f"with {len(field_mappings)} field mapping(s)"
         )
 
-    async def _cleanup_orphaned_form_integration(self, form_id: str) -> None:
+    async def _cleanup_orphaned_form_integration(
+        self, form_id: str, organization_id: str
+    ) -> None:
         """Remove the MEMBERSHIP_INTEREST FormIntegration for *form_id* if no
-        other pipeline step still references it in its config."""
+        other pipeline step still references it in its config.
+
+        Both queries are org-scoped: form_id comes from client-supplied step
+        config, so an unscoped delete could remove another org's FormIntegration
+        (XC-1 cross-tenant write). The step-usage check is likewise limited to
+        the caller's org.
+        """
         from app.models.forms import FormIntegration, IntegrationTarget
 
-        # Check if any remaining step still references this form_id via a
-        # targeted JSON query (MySQL JSON_UNQUOTE(JSON_EXTRACT(...))).
+        # Check if any remaining step in THIS org still references this form_id
+        # via a targeted JSON query (MySQL JSON_UNQUOTE(JSON_EXTRACT(...))).
+        # Steps are org-scoped through their parent pipeline.
         str_form_id = str(form_id)
         step_count_result = await self.db.execute(
-            select(func.count(MembershipPipelineStep.id)).where(
+            select(func.count(MembershipPipelineStep.id))
+            .join(
+                MembershipPipeline,
+                MembershipPipelineStep.pipeline_id == MembershipPipeline.id,
+            )
+            .where(
                 func.json_unquote(
                     func.json_extract(MembershipPipelineStep.config, "$.form_id")
                 )
-                == str_form_id
+                == str_form_id,
+                MembershipPipeline.organization_id == str(organization_id),
             )
         )
         if (step_count_result.scalar() or 0) > 0:
@@ -2872,6 +2896,7 @@ class MembershipPipelineService:
             select(FormIntegration).where(
                 and_(
                     FormIntegration.form_id == str(form_id),
+                    FormIntegration.organization_id == str(organization_id),
                     FormIntegration.target_module == IntegrationTarget.MEMBERSHIP,
                 )
             )

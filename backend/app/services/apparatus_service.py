@@ -31,7 +31,9 @@ from app.models.apparatus import (
     ApparatusStatus,
     ApparatusStatusHistory,
     ApparatusType,
+    EvocLevel,
 )
+from app.models.user import User
 from app.schemas.apparatus import (
     ApparatusArchive,
     ApparatusCreate,
@@ -56,6 +58,7 @@ from app.schemas.apparatus import (
     ApparatusTypeUpdate,
     ApparatusUpdate,
 )
+from app.utils.org_scoping import assert_in_org
 
 
 class ApparatusService:
@@ -1360,6 +1363,33 @@ class ApparatusService:
         created_by: str,
     ) -> ApparatusOperator:
         """Create operator certification"""
+        # Validate every client-supplied FK belongs to the caller's org before
+        # storing it (XC-1). Without this, a foreign user_id/apparatus_id would
+        # be stored on the org-stamped row and the foreign user's PII would be
+        # returned by list_operators' eager-loaded `user` relationship.
+        await assert_in_org(
+            self.db,
+            Apparatus,
+            operator_data.apparatus_id,
+            organization_id,
+            label="apparatus",
+        )
+        await assert_in_org(
+            self.db,
+            User,
+            operator_data.user_id,
+            organization_id,
+            label="member",
+        )
+        await assert_in_org(
+            self.db,
+            EvocLevel,
+            getattr(operator_data, "evoc_level_id", None),
+            organization_id,
+            allow_none=True,
+            label="EVOC level",
+        )
+
         # Check if already exists within this organization
         result = await self.db.execute(
             select(ApparatusOperator)
