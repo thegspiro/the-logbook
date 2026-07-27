@@ -166,11 +166,9 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@example.com}
 
-      # Modules
-      MODULE_TRAINING_ENABLED: ${MODULE_TRAINING_ENABLED:-true}
-      MODULE_COMPLIANCE_ENABLED: ${MODULE_COMPLIANCE_ENABLED:-true}
-      MODULE_SCHEDULING_ENABLED: ${MODULE_SCHEDULING_ENABLED:-true}
-      MODULE_ELECTIONS_ENABLED: ${MODULE_ELECTIONS_ENABLED:-true}
+      # Modules are enabled per organization at runtime via the organization's
+      # settings (enabled_modules) — there are no MODULE_*_ENABLED deployment
+      # flags (they gated nothing; all API routers register unconditionally).
 
       # Monitoring
       # API docs (/docs, /redoc, /openapi.json) OFF by default — in production

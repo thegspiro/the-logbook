@@ -162,25 +162,8 @@ def main():
     config["TZ"] = get_user_input("Timezone", default="America/New_York")
     print()
 
-    # Modules
-    print("🔧 Modules (true/false):")
-    config["MODULE_TRAINING_ENABLED"] = get_user_input(
-        "Enable Training module",
-        default="true"
-    )
-    config["MODULE_COMPLIANCE_ENABLED"] = get_user_input(
-        "Enable Compliance module",
-        default="true"
-    )
-    config["MODULE_SCHEDULING_ENABLED"] = get_user_input(
-        "Enable Scheduling module",
-        default="true"
-    )
-    config["MODULE_ELECTIONS_ENABLED"] = get_user_input(
-        "Enable Elections module",
-        default="true"
-    )
-    print()
+    # Modules are enabled per organization at runtime (organization settings →
+    # enabled_modules); there are no MODULE_*_ENABLED deployment flags to prompt for.
 
     # Email configuration
     print("📧 Email Configuration (optional):")

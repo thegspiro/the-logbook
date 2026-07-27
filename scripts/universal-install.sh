@@ -419,12 +419,10 @@ IS_ARM=$IS_ARM
 TZ=${TZ:-UTC}
 
 # ============================================
-# MODULES (Enable/disable as needed)
+# MODULES
 # ============================================
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
+# Modules are enabled per organization at runtime (organization settings →
+# enabled_modules); there are no MODULE_*_ENABLED deployment flags.
 
 # ============================================
 # OPTIONAL SERVICES (Profile: $PROFILE)

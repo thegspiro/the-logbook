@@ -130,11 +130,8 @@ services:
       BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * *}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
 
-      # Module Toggles
-      MODULE_TRAINING_ENABLED: ${MODULE_TRAINING_ENABLED:-true}
-      MODULE_COMPLIANCE_ENABLED: ${MODULE_COMPLIANCE_ENABLED:-true}
-      MODULE_SCHEDULING_ENABLED: ${MODULE_SCHEDULING_ENABLED:-true}
-      MODULE_ELECTIONS_ENABLED: ${MODULE_ELECTIONS_ENABLED:-true}
+      # Modules are enabled per organization at runtime (organization settings →
+      # enabled_modules); there are no MODULE_*_ENABLED deployment flags.
 
       # Misc
       # API docs OFF by default — production blocks startup if enabled.
