@@ -115,8 +115,10 @@ docker-compose up -d
 Once the containers are running, open your browser:
 
 - **Frontend:** `http://YOUR-UNRAID-IP:7880`
-- **API Docs:** `http://YOUR-UNRAID-IP:7881/docs`
 - **Health Check:** `http://YOUR-UNRAID-IP:7881/health`
+- **API Docs:** `http://YOUR-UNRAID-IP:7881/docs` — **off by default** (the
+  production security gate blocks startup with docs enabled). Set
+  `ENABLE_DOCS=true` only to view them temporarily on a trusted network.
 
 Complete the onboarding wizard to configure your organization, create the admin account, and enable the modules you need.
 
@@ -144,14 +146,7 @@ To change ports, edit `FRONTEND_PORT` and `BACKEND_PORT` in `.env` and update `A
 
 ### Modules
 
-Enable or disable features in `.env`:
-
-```bash
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-```
+Modules are enabled or disabled per organization from inside the app, under Organization/Admin Settings > Modules (`enabled_modules`) — not through `.env`. All API routers register unconditionally, so there are no deployment-level module flags to set here.
 
 ### Email Notifications
 
@@ -182,6 +177,17 @@ SMTP_FROM_EMAIL=noreply@yourdomain.com
 ---
 
 ## HTTPS with Reverse Proxy
+
+> **Required in production.** The Unraid compose runs with
+> `ENVIRONMENT=production`, which enforces a startup security gate: the app
+> refuses to boot unless strong secrets are set, `DEBUG=false`, API docs are
+> disabled, and HTTPS is enforced. So a reverse proxy is not optional here —
+> front the app with one of the options below, set `ALLOWED_ORIGINS` to your
+> `https://` origin, and set `SECURITY_ENFORCE_HTTPS=true`. Two related settings:
+> **API docs (`/docs`) are OFF by default** (enabling them blocks boot), and
+> **leave `TRUSTED_PROXY_IPS` empty** unless you actually add a proxy — the
+> compose publishes the backend port directly, so the connecting peer is the
+> real client, and setting it otherwise lets clients spoof `X-Forwarded-For`.
 
 ### Using Swag
 

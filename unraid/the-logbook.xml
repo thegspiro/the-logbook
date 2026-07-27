@@ -69,11 +69,8 @@
   <Config Name="Backup Schedule" Target="BACKUP_SCHEDULE" Default="0 2 * * *" Mode="" Description="Backup schedule (cron format - default: 2 AM daily)" Type="Variable" Display="advanced" Required="false" Mask="false">0 2 * * *</Config>
   <Config Name="Backup Retention Days" Target="BACKUP_RETENTION_DAYS" Default="30" Mode="" Description="Number of days to keep backups" Type="Variable" Display="advanced" Required="false" Mask="false">30</Config>
 
-  <!-- Module Configuration -->
-  <Config Name="Training Module" Target="MODULE_TRAINING_ENABLED" Default="true" Mode="" Description="Enable training module" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
-  <Config Name="Compliance Module" Target="MODULE_COMPLIANCE_ENABLED" Default="true" Mode="" Description="Enable compliance module" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
-  <Config Name="Scheduling Module" Target="MODULE_SCHEDULING_ENABLED" Default="true" Mode="" Description="Enable scheduling module" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
-  <Config Name="Elections Module" Target="MODULE_ELECTIONS_ENABLED" Default="true" Mode="" Description="Enable elections module" Type="Variable" Display="advanced" Required="false" Mask="false">true</Config>
+  <!-- Modules are enabled per organization inside the app (organization
+       settings → enabled_modules); there are no MODULE_*_ENABLED variables. -->
 
   <!-- User and Group IDs -->
   <Config Name="PUID" Target="PUID" Default="99" Mode="" Description="User ID for file permissions" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>

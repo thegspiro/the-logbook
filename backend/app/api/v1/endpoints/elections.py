@@ -18,11 +18,12 @@ from sqlalchemy.orm import selectinload
 
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security_middleware import check_rate_limit
 from app.core.utils import safe_error_detail
 from app.models.election import Candidate, Election, ElectionStatus, Vote
-from app.models.event import EventRSVP, RSVPStatus
+from app.models.event import Event, EventRSVP, RSVPStatus
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import User
 from app.schemas.election import (
@@ -72,6 +73,7 @@ from app.schemas.election import (
     VoterOverrideRecord,
 )
 from app.services.election_service import ElectionService
+from app.utils.org_scoping import assert_in_org
 
 router = APIRouter()
 
@@ -98,10 +100,30 @@ def _ballot_vote_rate_limit(
 async def _load_meeting_for_election(db: AsyncSession, election: Election) -> None:
     """Eagerly load the meeting relationship if not already loaded."""
     if election.meeting_id and not election.meeting:
+        # Defense-in-depth: org-scope the meeting fetch so a stale/foreign
+        # meeting_id can never surface another org's meeting in the response.
         result = await db.execute(
-            select(Meeting).where(Meeting.id == election.meeting_id)
+            select(Meeting).where(
+                Meeting.id == election.meeting_id,
+                Meeting.organization_id == str(election.organization_id),
+            )
         )
         election.meeting = result.scalar_one_or_none()
+
+
+async def _validate_election_links(
+    db: AsyncSession, organization_id, meeting_id, event_id
+) -> None:
+    """Reject a client-supplied meeting_id/event_id that isn't in the caller's org.
+
+    Without this, an admin could point their election at another org's meeting
+    or event id and read that org's attendee roster back through the
+    import-attendees and election-detail endpoints (XC-1 cross-tenant leak).
+    """
+    if meeting_id:
+        await assert_in_org(db, Meeting, meeting_id, organization_id, label="meeting")
+    if event_id:
+        await assert_in_org(db, Event, event_id, organization_id, label="event")
 
 
 async def _build_election_response(
@@ -182,7 +204,8 @@ async def list_elections(
     if meeting_ids:
         meetings_result = await db.execute(
             select(Meeting.id, Meeting.title, Meeting.meeting_date).where(
-                Meeting.id.in_(meeting_ids)
+                Meeting.id.in_(meeting_ids),
+                Meeting.organization_id == str(current_user.organization_id),
             )
         )
         for mid, mtitle, mdate in meetings_result.all():
@@ -232,6 +255,19 @@ async def create_election(
     import secrets as _secrets
 
     election_data = election.model_dump()
+    # Validate client-supplied meeting/event links belong to the caller's org
+    # before storing them (XC-1).
+    try:
+        await _validate_election_links(
+            db,
+            current_user.organization_id,
+            election_data.get("meeting_id"),
+            election_data.get("event_id"),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     # Convert UUID objects to strings for JSON-serializable storage
     if election_data.get("eligible_voters"):
         election_data["eligible_voters"] = [
@@ -779,6 +815,22 @@ async def update_election(
         "quorum_type",
         "quorum_value",
     }
+    # Validate a re-pointed meeting/event link is in-org before applying it,
+    # so an admin can't repoint their election at another org's meeting/event
+    # id and read that org's roster back (XC-1).
+    if update_data.get("meeting_id") or update_data.get("event_id"):
+        try:
+            await _validate_election_links(
+                db,
+                election.organization_id,
+                update_data.get("meeting_id"),
+                update_data.get("event_id"),
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+            )
+
     for field, value in update_data.items():
         if field in ALLOWED_ELECTION_UPDATE_FIELDS:
             setattr(election, field, value)
@@ -1073,6 +1125,22 @@ async def create_candidate(
                     f"Valid positions: {', '.join(election.positions)}"
                 ),
             )
+
+    # Validate a client-supplied member id belongs to the caller's org before
+    # storing it as the candidate's user_id (XC-1). None is allowed (write-in).
+    try:
+        await assert_in_org(
+            db,
+            User,
+            candidate.user_id,
+            current_user.organization_id,
+            allow_none=True,
+            label="member",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     new_candidate = Candidate(
         id=uuid4(),
@@ -1477,11 +1545,12 @@ async def send_ballot_emails(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    # Build base ballot URL pointing to the frontend ballot page
-    # The token will be appended by the service: /ballot?token=xxx
-    base_url = str(request.base_url).rstrip("/")
-    # Strip /api/v1 prefix if present to get the frontend origin
-    frontend_origin = base_url.replace("/api/v1", "").replace("/api", "")
+    # Build base ballot URL pointing to the frontend ballot page.
+    # SEC: use the server-configured FRONTEND_URL, NOT request.base_url — the
+    # latter derives from the client-controlled Host header, so a spoofed Host
+    # would send members ballot links (with voting tokens) to an attacker's
+    # domain. The token is appended by the service: /ballot?token=xxx
+    frontend_origin = settings.FRONTEND_URL.rstrip("/")
     base_ballot_url = (
         f"{frontend_origin}/ballot" if email_data.include_ballot_link else None
     )
@@ -1900,6 +1969,19 @@ async def import_meeting_attendees(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Election is not linked to a meeting or event",
+        )
+
+    # Defense-in-depth: an election created before FK validation existed could
+    # still carry a foreign meeting_id/event_id. Refuse to read attendees from a
+    # source that isn't in the caller's org.
+    try:
+        await _validate_election_links(
+            db, election.organization_id, election.meeting_id, election.event_id
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Linked meeting or event is not accessible",
         )
 
     source_attendees: list[tuple[str, str]] = []
@@ -2533,10 +2615,10 @@ async def send_test_ballot(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    # Build base ballot URL
-    base_url = str(request.base_url).rstrip("/")
-    frontend_origin = base_url.replace("/api/v1", "").replace("/api", "")
-    base_ballot_url = f"{frontend_origin}/ballot"
+    # Build base ballot URL from the server-configured FRONTEND_URL, not the
+    # client-controlled Host header (see note above — prevents ballot-link
+    # phishing via a spoofed Host).
+    base_ballot_url = f"{settings.FRONTEND_URL.rstrip('/')}/ballot"
 
     service = ElectionService(db)
     try:

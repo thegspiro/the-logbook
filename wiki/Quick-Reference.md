@@ -20,6 +20,16 @@ cp .env.example .env
 docker-compose up -d
 ```
 
+> **Production hardening.** The bare `docker compose ...` commands throughout
+> this reference run the **development** configuration (uvicorn `--reload`,
+> backend port published, API docs enabled, no HTTPS enforcement) and skip the
+> startup security gate. For production, pin
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` (or pass
+> `-f docker-compose.yml -f docker-compose.prod.yml` on every command) so all the
+> commands below stay hardened; `install.sh` sets this automatically. In
+> production the app **refuses to start** if required secrets are missing or
+> weak, if `DEBUG` or API docs are enabled, or if HTTPS isn't enforced.
+
 ---
 
 ## 📦 Docker Commands
@@ -425,12 +435,11 @@ TZ=America/New_York
 ```
 
 ### Modules
-```bash
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-```
+
+There are no `MODULE_*_ENABLED` environment variables. Module availability is
+controlled **per organization** inside the app (Organization/Admin Settings →
+Modules), stored in the organization's `enabled_modules` setting. See
+[Module Configuration](Configuration-Modules).
 
 ---
 

@@ -192,6 +192,17 @@ setup_environment() {
     sed -i "s|ENVIRONMENT=.*|ENVIRONMENT=production|" "$SCRIPT_DIR/.env"
     sed -i "s|DEBUG=.*|DEBUG=false|" "$SCRIPT_DIR/.env"
 
+    # Pin the production compose override in .env so that every bare
+    # `docker compose ...` invocation (this installer AND the management
+    # commands in the docs — logs/restart/down/update) automatically layers
+    # docker-compose.prod.yml. Without this, a plain `docker compose up -d`
+    # would silently apply the base file's development posture.
+    if ! grep -q '^COMPOSE_FILE=' "$SCRIPT_DIR/.env"; then
+        echo "COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml" >> "$SCRIPT_DIR/.env"
+    else
+        sed -i "s|^COMPOSE_FILE=.*|COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml|" "$SCRIPT_DIR/.env"
+    fi
+
     print_success "Environment configured with secure secrets"
     print_warning "Please review and update .env file with your specific settings"
 }
@@ -206,11 +217,19 @@ docker_deployment() {
     print_info "Building and starting containers..."
     cd "$SCRIPT_DIR"
 
+    # setup_environment writes ENVIRONMENT=production to .env, so deploy with the
+    # production override layered on top of the base file. Without it the base
+    # file's development posture (uvicorn --reload, published backend port, docs
+    # enabled, no HTTPS/TLS enforcement) would apply and the startup security
+    # gate would be skipped. The override disables --reload/docs and enforces
+    # HTTPS/TLS for a hardened install.
+    local COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
+
     # Build images
-    docker compose build
+    docker compose $COMPOSE_FILES build
 
     # Start services
-    docker compose up -d
+    docker compose $COMPOSE_FILES up -d
 
     print_success "Docker containers started"
 
@@ -220,11 +239,12 @@ docker_deployment() {
 
     # Run database migrations
     print_info "Running database migrations..."
-    docker compose exec -T backend alembic upgrade head
+    docker compose $COMPOSE_FILES exec -T backend alembic upgrade head
 
     print_success "Installation complete!"
     print_info "Access the application at: http://localhost:3000"
-    print_info "Backend API at: http://localhost:3001"
+    print_info "(The backend sits behind the frontend/reverse proxy and is not"
+    print_info " published to the host in the production configuration.)"
 
     print_warning "\nIMPORTANT: Please complete the following steps:"
     print_info "1. Review and update .env file with your organization settings"

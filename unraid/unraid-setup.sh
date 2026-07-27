@@ -300,14 +300,13 @@ BACKUP_ENABLED=true
 BACKUP_SCHEDULE=0 2 * * *
 BACKUP_RETENTION_DAYS=30
 
-# Module Configuration
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
+# Modules are enabled per organization at runtime (organization settings →
+# enabled_modules); there are no MODULE_*_ENABLED deployment flags.
 
 # Monitoring & Logging
-ENABLE_DOCS=true
+# API docs OFF by default — production blocks startup if enabled; enable only
+# on a trusted network.
+ENABLE_DOCS=false
 LOG_LEVEL=INFO
 SENTRY_ENABLED=false
 EOF

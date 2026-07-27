@@ -38,6 +38,12 @@ echo "REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '=+/' | cut -c1-25)"
 | `TZ` | Timezone | `America/New_York` |
 | `LOG_LEVEL` | Logging verbosity | `INFO` |
 
+> **`COMPOSE_FILE`** *(2026-07)*: production installs (via `install.sh`) pin
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so that
+> bare `docker compose` commands automatically layer the production override
+> (which forces `ENVIRONMENT: production`). The base `docker-compose.yml` is a
+> development configuration, so `.env.example` defaults `ENVIRONMENT=development`.
+
 ---
 
 ## Port Configuration
@@ -129,17 +135,11 @@ These variables are baked into the frontend at build time via Vite.
 
 ## Module Toggles
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MODULE_TRAINING_ENABLED` | Training module | `true` |
-| `MODULE_COMPLIANCE_ENABLED` | Compliance module | `true` |
-| `MODULE_SCHEDULING_ENABLED` | Scheduling module | `true` |
-| `MODULE_ELECTIONS_ENABLED` | Elections module | `true` |
-| `MODULE_EVENTS_ENABLED` | Events module | `true` |
-| `MODULE_INVENTORY_ENABLED` | Inventory module | `true` |
-| `MODULE_FACILITIES_ENABLED` | Facilities module | `false` |
-| `MODULE_APPARATUS_ENABLED` | Apparatus module | `false` |
-| `MODULE_ADMIN_HOURS_ENABLED` | Admin hours tracking module | `false` |
+There are **no** deployment-level `MODULE_*_ENABLED` environment variables. The
+backend never reads them and all API routers register unconditionally. Module
+availability is controlled **per organization** at runtime via the
+organization's settings (`enabled_modules`), configured inside the app
+(Organization/Admin Settings → Modules). See [Module Configuration](Configuration-Modules).
 
 ---
 
@@ -155,7 +155,8 @@ These variables are baked into the frontend at build time via Vite.
 | `JWT_REFRESH_TOKEN_EXPIRE` | Refresh token lifetime (days) | `7` |
 | `RATE_LIMIT_PER_MINUTE` | API rate limit | `60` |
 | `IP_LOGGING_ENABLED` | Log client IPs for security monitoring | `true` |
-| `TRUSTED_PROXY_IPS` | Comma-separated proxy IPs whose forwarded headers are trusted. **Critical when running behind a reverse proxy** *(2026-05-29)* | `""` |
+| `TRUSTED_HOSTS` | Comma-separated allowlist of `Host` header values enforced by `TrustedHostMiddleware`; a spoofed `Host` is rejected with HTTP 400, making Host-derived values (emailed links, OAuth callbacks) safe to trust. Starlette subdomain wildcards (`*.example.com`) are allowed. Enabled automatically in production/staging, or in any environment when set explicitly. When empty, the allowlist is derived from the `ALLOWED_ORIGINS` hostnames plus `localhost`/`127.0.0.1` *(2026-07)* | `""` |
+| `TRUSTED_PROXY_IPS` | Comma-separated proxy IPs (or CIDR ranges, e.g. `172.16.0.0/12`) whose forwarded headers are trusted. **Critical when running behind a reverse proxy** *(2026-05-29)* | `""` |
 | `GEOIP_ENABLED` | Enable GeoIP country-based access control | `false` |
 | `GEOIP_DATABASE_PATH` | Path to the MaxMind GeoLite2 country database | — |
 | `BLOCKED_COUNTRIES` | Comma-separated ISO country codes to block. This is the deploy-time source of truth for the platform-wide blocklist *(2026-07)* | `""` |

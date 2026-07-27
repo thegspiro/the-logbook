@@ -116,7 +116,13 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      ENVIRONMENT: development
+      # This base file is a DEVELOPMENT configuration (uvicorn --reload, source
+      # bind-mount, backend port published). ENVIRONMENT defaults to development
+      # but honors the .env value so it is not silently overridden. For a
+      # hardened production deployment, layer the prod override on top:
+      #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+      # (the override also disables --reload/docs and enforces HTTPS/TLS).
+      ENVIRONMENT: ${ENVIRONMENT:-development}
       PORT: ${BACKEND_PORT:-3001}
 
       # Database - MySQL

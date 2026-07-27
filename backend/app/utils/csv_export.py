@@ -9,7 +9,7 @@ to an export must be neutralized.
 """
 
 import csv
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping, Sequence
 
 # Characters that make spreadsheet applications interpret a cell as a formula
 _FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
@@ -41,5 +41,28 @@ class SafeCsvWriter:
         self._writer.writerow([csv_safe_cell(cell) for cell in row])
 
     def writerows(self, rows: Iterable[Iterable[Any]]) -> None:
+        for row in rows:
+            self.writerow(row)
+
+
+class SafeDictCsvWriter:
+    """Drop-in replacement for ``csv.DictWriter`` that sanitizes every cell.
+
+    Same reasoning as ``SafeCsvWriter`` — use this for any dict-keyed CSV that
+    leaves the system (e.g. NFIRS state submissions), never a bare
+    ``csv.DictWriter``. Field names (the header) come from the caller and are
+    trusted; every data value is neutralized against formula injection.
+    """
+
+    def __init__(self, output, fieldnames: Sequence[str], **kwargs: Any):
+        self._writer = csv.DictWriter(output, fieldnames=fieldnames, **kwargs)
+
+    def writeheader(self) -> None:
+        self._writer.writeheader()
+
+    def writerow(self, row: Mapping[str, Any]) -> None:
+        self._writer.writerow({k: csv_safe_cell(v) for k, v in row.items()})
+
+    def writerows(self, rows: Iterable[Mapping[str, Any]]) -> None:
         for row in rows:
             self.writerow(row)

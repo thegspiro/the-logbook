@@ -27,7 +27,7 @@ The Grants & Fundraising module manages the complete lifecycle of fire departmen
 
 ## Grants & Fundraising Overview
 
-Navigate to **Grants & Fundraising** in the sidebar. The module requires the `MODULE_GRANTS_ENABLED` feature flag.
+Navigate to **Grants & Fundraising** in the sidebar. The module must be enabled for your organization in Organization/Admin Settings > Modules (`enabled_modules`).
 
 | URL | Page | Permission |
 |-----|------|------------|

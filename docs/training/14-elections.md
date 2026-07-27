@@ -195,6 +195,8 @@ When you click **Send Ballots**, the system:
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the ballot send confirmation showing "42 ballots sent, 3 skipped" with a list of skipped members and reasons (e.g., "No email address", "Ineligible tier")._
 
+> **Hint:** Ballot links are built from the server-configured `FRONTEND_URL`, not the address of the request that triggers the send. Your administrator should set `FRONTEND_URL` to the department's real public site URL (e.g. `https://app.yourdept.org`) so members receive working ballot links — if it is misconfigured, the emailed link points to the wrong host even though the send still reports success.
+
 ### Edge Cases
 
 | Scenario | Behavior |
@@ -483,6 +485,7 @@ Sarah generates the election report and emails it to the department.
 | Issue | Solution |
 |-------|----------|
 | Member says they didn't receive ballot email | Check the send report for skipped members. Verify email address is on file. Re-send ballot to individual member. |
+| Ballot email link points to the wrong site or won't load | The emailed link is built from the server's `FRONTEND_URL` setting, not the request URL. Have your administrator set `FRONTEND_URL` to the real public site URL and re-send the ballots. |
 | Voter gets "Token expired" error | Token expires after 7 days. Secretary can re-send the ballot email. |
 | Election closed accidentally | Use **Rollback** to reopen (requires `elections.manage`). Leadership receives notification. |
 | Candidate wants to withdraw | Remove candidate from ballot (only if no votes cast). If votes exist, mark as "declined" instead. |

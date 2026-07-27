@@ -394,6 +394,12 @@ ENVIRONMENT=production
 DEBUG=false
 BACKEND_WORKERS=$BACKEND_WORKERS
 
+# Pin the production compose override so every bare \`docker compose ...\` command
+# in this directory (start, update, logs, restart) layers docker-compose.prod.yml
+# on top of the development base file — hardened posture (no --reload, docs off,
+# HTTPS/TLS enforced, backend port unpublished, trusted-proxy IPs set).
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+
 # ============================================
 # NETWORK
 # ============================================
@@ -413,12 +419,10 @@ IS_ARM=$IS_ARM
 TZ=${TZ:-UTC}
 
 # ============================================
-# MODULES (Enable/disable as needed)
+# MODULES
 # ============================================
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
+# Modules are enabled per organization at runtime (organization settings →
+# enabled_modules); there are no MODULE_*_ENABLED deployment flags.
 
 # ============================================
 # OPTIONAL SERVICES (Profile: $PROFILE)
@@ -436,7 +440,10 @@ EOF
 # ============================================
 
 select_compose_file() {
-    COMPOSE_FILE="docker-compose.yml"
+    # The production override is pinned via COMPOSE_FILE in the generated .env
+    # (see create_env_file), so bare `docker compose` commands run from the
+    # install dir automatically layer docker-compose.prod.yml on the base file.
+    COMPOSE_FILE="docker-compose.yml:docker-compose.prod.yml"
     COMPOSE_PROFILES=""
 
     # Use ARM-optimized images if on ARM

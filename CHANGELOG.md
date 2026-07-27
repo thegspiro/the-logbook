@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: zero-trust review — deployment posture, host/proxy trust, WebSocket sessions, cross-tenant FKs (2026-07-27)
+
+A zero-trust pass over the whole stack ("never trust, always verify"): nothing
+trusted by network location, client header, session state, or internal origin.
+All items below are fixed on branch `claude/zero-trust-security-review-cypp6z`.
+
+**Deployment posture (highest impact)**
+
+- **Production deployments now run in production posture.** The base
+  `docker-compose.yml` is a development configuration, and it hardcoded
+  `ENVIRONMENT: development`, silently overriding `.env` — so every documented
+  `docker compose up -d` path booted in development mode and skipped the startup
+  security gate (API docs public, HTTPS not enforced, auth-cookie `Secure` flag
+  off, DB/Redis plaintext, `/health/detailed` exposed). The base file now honors
+  `.env` (`${ENVIRONMENT:-development}`); production layers
+  `docker-compose.prod.yml`. `install.sh` deploys with the override and pins
+  `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so bare
+  `docker compose` management commands stay hardened. `.env.example` now defaults
+  `ENVIRONMENT=development`.
+
+**Network trust (stop trusting client-supplied headers)**
+
+- **Host-header allowlist added.** Emailed ballot links were built from
+  `request.base_url` (the client-controlled `Host`), so a spoofed `Host` could
+  send members ballot links — with live voting tokens — pointing at an
+  attacker's domain. Ballot links are now built from `settings.FRONTEND_URL`, and
+  a new `TrustedHostMiddleware` (`TRUSTED_HOSTS`) rejects spoofed `Host` headers
+  (HTTP 400), making all Host-derived values safe to trust.
+- **Reverse-proxy trust fixed by default.** Behind the bundled proxy with the
+  empty `TRUSTED_PROXY_IPS` default, every request appeared to originate from the
+  proxy's container IP: geo-blocking silently did nothing and all clients shared
+  one rate-limit bucket (a global login DoS). `TRUSTED_PROXY_IPS` now accepts
+  CIDR ranges, and the production override defaults it to the private Docker
+  ranges so the bundled proxy is trusted and real client IPs resolve from
+  `X-Forwarded-For`.
+
+**Assume-breach: revocable sessions**
+
+- **Inventory WebSocket honors session revocation.** The socket authenticated
+  with a bare token decode, skipping the token-type and server-side session
+  checks every HTTP request enforces, so a logged-out / password-changed /
+  refresh token kept streaming org events until expiry. It now authenticates
+  through `AuthService.get_user_from_token` (token-type + `UserSession` store +
+  idle timeout).
+
+**Multi-tenant isolation (continuation of the module audit)**
+
+- **Shared `assert_in_org` helper.** The audit's recurring XC-1 pattern
+  (client-supplied FK ids stored without an in-org check) was previously fixed
+  with per-service ad-hoc checkers; a single fail-closed
+  [`assert_in_org`/`is_in_org`](backend/app/utils/org_scoping.py) helper now
+  exists so new create/update paths validate FKs uniformly.
+- **Cross-tenant leaks closed:** elections (`meeting_id`/`event_id` were
+  client-settable and re-pointed reads leaked another org's attendee roster +
+  meeting metadata; candidate `user_id` now validated), apparatus operators (a
+  foreign `user_id` leaked member PII via the eager-loaded `user`), membership
+  pipeline (a step's foreign `form_id` could mutate/delete another org's form),
+  and inventory (a foreign `category_id` failed *open* and leaked the category
+  name on export — now fails closed).
+
+**Injection**
+
+- **CSV/formula-injection closed in two more exporters.** The NFIRS state
+  submission and the annual compliance export wrote member-influenced free-text
+  cells with a raw CSV writer, so a value like `=HYPERLINK(...)` executed when a
+  recipient opened the file. Both now use the formula-safe writers; a new
+  `SafeDictCsvWriter` covers the dict-based NFIRS export.
+
+**TLS**
+
+- **DB/Redis TLS verification warning.** `DB_SSL`/`REDIS_SSL` without a CA
+  (`DB_SSL_CA`/`REDIS_SSL_CA`) encrypt but do not verify the server certificate
+  (CERT_NONE) — no protection against an active man-in-the-middle. Startup now
+  warns; set the CA path for full protection.
+
+### Removed: dead `MODULE_*_ENABLED` deployment flags (2026-07-27)
+
+Removed the `MODULE_TRAINING_ENABLED` / `MODULE_COMPLIANCE_ENABLED` /
+`MODULE_SCHEDULING_ENABLED` / `MODULE_ELECTIONS_ENABLED` (etc.) environment
+variables from the Docker composes, installers (`universal-install.sh`,
+`setup-env.py`, `unraid-setup.sh`), the Unraid Community Apps template, and the
+documentation. The backend never read them — all API routers register
+unconditionally — so they only misled operators into thinking they toggled
+features. Module availability is controlled **per organization** at runtime via
+the organization's settings (`enabled_modules`).
+
 ### Security: multi-tenant isolation audit — cross-tenant write/read fixes across modules (2026-07-25)
 
 A rotating, module-by-module security audit (see

@@ -137,6 +137,22 @@ services:
       # CORS - Update with your Unraid IP
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://192.168.1.10:7880,http://unraid.local:7880}
 
+      # Host-header allowlist (rejects spoofed Host with 400). Leave empty to
+      # derive it from ALLOWED_ORIGINS' hostnames + localhost; set explicitly if
+      # you reach the app on a different hostname.
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
+      # This compose PUBLISHES the backend port directly (no bundled reverse
+      # proxy), so the connecting peer IS the real client — leave TRUSTED_PROXY_IPS
+      # EMPTY. Only set it (to the proxy's IP/CIDR) if you front the app with a
+      # reverse proxy such as SWAG / Nginx Proxy Manager; otherwise clients could
+      # spoof X-Forwarded-For to bypass geo-blocking / rate limiting.
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      # ENVIRONMENT defaults to production (below), and in production the app
+      # REFUSES to start unless HTTPS is enforced. On a trusted LAN over plain
+      # HTTP you must front the app with an HTTPS reverse proxy and set this true;
+      # see the Unraid installation guide's security section.
+      SECURITY_ENFORCE_HTTPS: ${SECURITY_ENFORCE_HTTPS:-false}
+
       # File Storage
       STORAGE_TYPE: ${STORAGE_TYPE:-local}
       UPLOAD_DIR: /app/uploads
@@ -150,14 +166,15 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-noreply@example.com}
 
-      # Modules
-      MODULE_TRAINING_ENABLED: ${MODULE_TRAINING_ENABLED:-true}
-      MODULE_COMPLIANCE_ENABLED: ${MODULE_COMPLIANCE_ENABLED:-true}
-      MODULE_SCHEDULING_ENABLED: ${MODULE_SCHEDULING_ENABLED:-true}
-      MODULE_ELECTIONS_ENABLED: ${MODULE_ELECTIONS_ENABLED:-true}
+      # Modules are enabled per organization at runtime via the organization's
+      # settings (enabled_modules) — there are no MODULE_*_ENABLED deployment
+      # flags (they gated nothing; all API routers register unconditionally).
 
       # Monitoring
-      ENABLE_DOCS: ${ENABLE_DOCS:-true}
+      # API docs (/docs, /redoc, /openapi.json) OFF by default — in production
+      # the security gate blocks startup if they are enabled (they expose the
+      # full API surface for enumeration). Only enable on a trusted network.
+      ENABLE_DOCS: ${ENABLE_DOCS:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       SENTRY_ENABLED: ${SENTRY_ENABLED:-false}
 

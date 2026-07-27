@@ -169,8 +169,10 @@ docker-compose logs -f frontend
 
 Open your browser and navigate to:
 - **Frontend**: `http://YOUR-UNRAID-IP:7880`
-- **Backend API**: `http://YOUR-UNRAID-IP:7881/docs`
-- **Health Check**: `http://YOUR-UNRAID-IP:7881/health`
+- **Backend health**: `http://YOUR-UNRAID-IP:7881/health`
+- **API docs**: `http://YOUR-UNRAID-IP:7881/docs` — **off by default** (enable
+  with `ENABLE_DOCS=true` only on a trusted network; production blocks startup
+  with docs enabled)
 
 ### 4. Test Onboarding Flow
 
@@ -283,6 +285,16 @@ docker-compose up -d
 ---
 
 ## Security Best Practices
+
+> **Production posture:** The Unraid compose runs with
+> `ENVIRONMENT=production`, which enforces a startup security gate. **API docs
+> (`/docs`) are OFF by default** — enabling them blocks boot. **HTTPS is
+> required in production**: the app refuses to start unless strong secrets are
+> set, `DEBUG=false`, docs are disabled, and `SECURITY_ENFORCE_HTTPS=true`, so
+> front it with an HTTPS reverse proxy (see below) and point `ALLOWED_ORIGINS`
+> at your `https://` origin. **Leave `TRUSTED_PROXY_IPS` empty** unless you add
+> a reverse proxy — the compose publishes the backend port directly, so the
+> connecting peer is the real client.
 
 ### 1. Keep Keys Secure
 - **Never commit .env files to git**

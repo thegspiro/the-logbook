@@ -96,7 +96,10 @@ GET    /api/v1/grants/reports/summary         # Financial summary report
 
 ## Module Flag
 
-Enable via `MODULE_GRANTS_ENABLED=true` in environment or Settings > Organization > Modules.
+Enable this module per organization via **Settings > Organization > Modules**
+(stored in the organization's `enabled_modules` setting). There is no
+`MODULE_GRANTS_ENABLED` environment variable — module availability is controlled
+at runtime per organization, not via deployment-level flags.
 
 ---
 

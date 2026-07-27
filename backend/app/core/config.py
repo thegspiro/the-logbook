@@ -306,11 +306,25 @@ class Settings(BaseSettings):
                     "WARNING: DB_SSL should be enabled in production to encrypt "
                     "database traffic and prevent man-in-the-middle attacks"
                 )
+            elif not self.DB_SSL_CA:
+                warnings.append(
+                    "WARNING: DB_SSL is enabled but DB_SSL_CA is not set — the "
+                    "connection is encrypted but the server certificate is NOT "
+                    "verified (CERT_NONE), so it is not protected against an "
+                    "active man-in-the-middle. Set DB_SSL_CA to the CA certificate."
+                )
 
             if not self.REDIS_SSL:
                 warnings.append(
                     "WARNING: REDIS_SSL should be enabled in production to encrypt "
                     "Redis traffic and prevent man-in-the-middle attacks"
+                )
+            elif not self.REDIS_SSL_CA:
+                warnings.append(
+                    "WARNING: REDIS_SSL is enabled but REDIS_SSL_CA is not set — "
+                    "the connection is encrypted but the server certificate is NOT "
+                    "verified (CERT_NONE). Set REDIS_SSL_CA to the CA certificate "
+                    "for man-in-the-middle protection."
                 )
 
             if self.DEBUG:
@@ -366,10 +380,44 @@ class Settings(BaseSettings):
         return warnings
 
     def get_trusted_proxy_ips(self) -> set:
-        """Get trusted proxy IPs as a set."""
+        """Get trusted proxy IPs as a set (raw entries; may include CIDRs)."""
         if not self.TRUSTED_PROXY_IPS:
             return set()
         return {ip.strip() for ip in self.TRUSTED_PROXY_IPS.split(",") if ip.strip()}
+
+    def get_trusted_proxy_networks(self) -> list:
+        """Parsed TRUSTED_PROXY_IPS entries as ip_network objects.
+
+        Each entry may be a bare address (treated as a /32 or /128) or a CIDR
+        range (e.g. ``172.16.0.0/12``). CIDR support lets a containerized
+        deployment trust the private network its reverse proxy sits on without
+        pinning the proxy's dynamically-assigned IP.
+        """
+        import ipaddress
+
+        networks = []
+        for entry in self.get_trusted_proxy_ips():
+            try:
+                networks.append(ipaddress.ip_network(entry, strict=False))
+            except ValueError:
+                logger.warning(f"Ignoring invalid TRUSTED_PROXY_IPS entry: {entry!r}")
+        return networks
+
+    def is_trusted_proxy(self, ip: str) -> bool:
+        """Whether *ip* is a configured trusted proxy (exact IP or CIDR match).
+
+        Returns False when nothing is configured — the secure default that makes
+        forwarded headers untrusted unless a proxy is explicitly declared.
+        """
+        import ipaddress
+
+        if not ip or ip == "unknown":
+            return False
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return any(addr in net for net in self.get_trusted_proxy_networks())
 
     # ============================================
     # GeoIP and Country Blocking
@@ -446,6 +494,54 @@ class Settings(BaseSettings):
                 "This allows any origin to make credentialed requests."
             )
         return origins
+
+    # SEC: Host-header allowlist for TrustedHostMiddleware. When left empty,
+    # the effective allowlist is derived from ALLOWED_ORIGINS' hostnames (plus
+    # localhost for health checks) — see get_trusted_hosts(). Set explicitly
+    # (comma-separated hostnames; Starlette subdomain wildcards like
+    # "*.example.com" are allowed) to override. A spoofed Host → 400, which makes
+    # request.base_url and other Host-derived values safe to trust.
+    TRUSTED_HOSTS: list[str] | str = []
+
+    @field_validator("TRUSTED_HOSTS", mode="before")
+    @classmethod
+    def parse_trusted_hosts(cls, v):
+        """Parse TRUSTED_HOSTS from a comma-separated string or list."""
+        if isinstance(v, str):
+            return [h.strip() for h in v.split(",") if h.strip()]
+        return v
+
+    def get_trusted_hosts(self) -> list[str]:
+        """Effective Host-header allowlist for TrustedHostMiddleware.
+
+        Explicit TRUSTED_HOSTS wins. Otherwise derive from ALLOWED_ORIGINS'
+        hostnames so a correctly-configured deployment gets Host validation for
+        free, and always include localhost/127.0.0.1 so Docker/LB health checks
+        against the loopback interface keep working. Returns ["*"] (disabled) if
+        no concrete host can be determined, so we never accidentally lock every
+        request out.
+        """
+        from urllib.parse import urlparse
+
+        if self.TRUSTED_HOSTS:
+            hosts = list(self.TRUSTED_HOSTS)
+        else:
+            origins = (
+                self.ALLOWED_ORIGINS
+                if isinstance(self.ALLOWED_ORIGINS, list)
+                else [self.ALLOWED_ORIGINS]
+            )
+            if "*" in origins:
+                return ["*"]
+            hosts = []
+            for origin in origins:
+                hostname = urlparse(str(origin)).hostname
+                if hostname:
+                    hosts.append(hostname)
+        # Health checks hit the loopback interface directly.
+        hosts.extend(["localhost", "127.0.0.1"])
+        deduped = sorted(set(hosts))
+        return deduped or ["*"]
 
     # ============================================
     # File Storage

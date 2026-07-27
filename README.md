@@ -234,8 +234,10 @@ curl -fsSL https://get.docker.com | sh
 git clone https://github.com/thegspiro/the-logbook.git /opt/the-logbook
 cd /opt/the-logbook
 cp .env.example .env
-# Edit .env with your settings
-docker compose up -d
+# Edit .env with your settings (set strong secrets + ENVIRONMENT=production)
+# Layer the production override so the deployment is hardened (no --reload,
+# docs disabled, HTTPS/TLS enforced) instead of the base development posture:
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 Access: `http://YOUR-LXC-IP:3000`
@@ -252,8 +254,9 @@ sudo mkdir -p /volume1/docker/the-logbook
 cd /volume1/docker/the-logbook
 sudo git clone https://github.com/thegspiro/the-logbook.git .
 sudo cp .env.example .env
-# Edit .env with your settings
-sudo docker compose up -d
+# Edit .env with your settings (set strong secrets + ENVIRONMENT=production)
+# Layer the production override for a hardened deployment:
+sudo docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 Access: `http://YOUR-NAS-IP:3000`
@@ -316,7 +319,7 @@ After starting the containers:
 4. Add locations via the Location Setup Wizard (enables kiosk displays)
 5. Set up email notifications (optional)
 
-For API access: `http://localhost:3001/docs`
+For API access: `http://localhost:3001/docs` (development only — API docs are disabled in the production configuration)
 
 See the [Onboarding Guide](ONBOARDING.md) or the [project Wiki](https://github.com/thegspiro/the-logbook/wiki) for detailed instructions.
 

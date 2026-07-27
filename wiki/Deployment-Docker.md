@@ -34,6 +34,20 @@ curl http://localhost:3001/health
 
 Access the application at `http://localhost:3000`
 
+> **Development vs. production.** The base `docker-compose.yml` shown above is a
+> **development** configuration (uvicorn `--reload`, source bind-mount, backend
+> port published, API docs enabled, no HTTPS enforcement) and it skips the
+> startup security gate. It's fine for local evaluation. For a real deployment,
+> layer the production override on every command:
+> `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+> (forces `ENVIRONMENT=production`, disables `--reload` and API docs, enforces
+> HTTPS, enables DB/Redis TLS, and does not publish the backend port). Pin
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
+> bare `docker compose ...` command below stays hardened; `install.sh` sets this
+> automatically. In production/staging the app **refuses to start** if required
+> secrets are missing or weak, if `DEBUG` or API docs are enabled, or if HTTPS
+> isn't enforced.
+
 ---
 
 ## Configuration

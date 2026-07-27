@@ -14,21 +14,12 @@ The onboarding wizard includes a **Module Selection** step where you choose whic
 
 Navigate to **Settings > Modules** to enable or disable modules at any time. Changes take effect immediately.
 
-### Via Environment Variables
-
-Set module toggles in your `.env` file:
-
-```bash
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-MODULE_EVENTS_ENABLED=true
-MODULE_INVENTORY_ENABLED=true
-MODULE_FACILITIES_ENABLED=false
-MODULE_APPARATUS_ENABLED=false
-MODULE_ADMIN_HOURS_ENABLED=false
-```
+> **Module availability is per-organization, not per-deployment.** It is stored in
+> the organization's settings (`enabled_modules`) and configured entirely inside
+> the app (Organization/Admin Settings → Modules). There are **no**
+> deployment-level `MODULE_*_ENABLED` environment variables — the backend never
+> reads them and all API routers register unconditionally. In a multi-tenant
+> install each organization controls its own enabled modules independently.
 
 ---
 

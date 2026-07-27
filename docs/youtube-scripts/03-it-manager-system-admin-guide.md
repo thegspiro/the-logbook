@@ -548,6 +548,15 @@ docker compose up -d --build
 > "Pull the latest code, stop the services, rebuild and restart. The backend
 > will automatically run any new database migrations on startup."
 
+> "One thing to be aware of on a production box: these bare `docker compose`
+> commands only stay in the hardened production configuration if your
+> deployment is pinned to it. If you installed with the automated installer, it
+> already set a `COMPOSE_FILE` line in your `.env` that includes
+> `docker-compose.prod.yml`, so a plain `docker compose up -d --build` keeps the
+> production posture — you're fine. If you deployed manually without that line,
+> add `-f docker-compose.yml -f docker-compose.prod.yml` to these commands, or
+> you'll quietly rebuild in development mode and skip the startup security gate."
+
 **[CALLOUT: "Always back up your database before updating"]**
 
 > "Before any update, I recommend backing up your database."

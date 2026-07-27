@@ -369,7 +369,11 @@ class InventoryService:
             return None
         category = await self.get_category_by_id(cat_id, organization_id)
         if not category:
-            return None
+            # Fail closed: a category_id that isn't in the caller's org must be
+            # rejected, not silently accepted. Otherwise a foreign category_id
+            # persists on the org-stamped item (XC-1) and its name leaks back
+            # through the eager-loaded `category` relationship on export.
+            return "Invalid category"
         if category.requires_serial_number and not item_data.get("serial_number"):
             return f"Category '{category.name}' requires a serial number"
         if category.requires_maintenance and not item_data.get(

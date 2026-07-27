@@ -99,12 +99,24 @@ sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}|" .
 LXC_IP=$(hostname -I | awk '{print $1}')
 sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=http://${LXC_IP}:3000|" .env
 
-# Start the application
-docker compose up -d
+# Start the application (production — see the note below)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Verify all containers are running
 docker compose ps
 ```
+
+> **Production hardening.** The base `docker-compose.yml` alone is a
+> **development** configuration (uvicorn `--reload`, backend port published, API
+> docs enabled, no HTTPS enforcement) and skips the startup security gate. For
+> production, layer the production override as shown above (it forces
+> `ENVIRONMENT=production`, disables `--reload` and API docs, enforces HTTPS,
+> enables DB/Redis TLS, and does not publish the backend port). Pin
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
+> later `docker compose ...` command stays hardened. In production the app
+> **refuses to start** if required secrets are missing or weak, if `DEBUG` or API
+> docs are enabled, or if HTTPS isn't enforced — terminate TLS at the reverse
+> proxy (see [Reverse Proxy Setup](#reverse-proxy-setup)).
 
 ### Step 4: Access The Logbook
 

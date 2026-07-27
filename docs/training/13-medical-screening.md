@@ -25,7 +25,7 @@ Medical Screening is a standalone module accessible from the sidebar. It integra
 
 **Route:** `/medical-screening`
 
-**Feature Flag:** `MODULE_MEDICAL_SCREENING_ENABLED` must be set to `true` in the environment configuration. When disabled, the Medical Screening sidebar item and all related API endpoints are inaccessible.
+**Availability:** Medical Screening must be enabled for your organization in Organization/Admin Settings > Modules (`enabled_modules`). When it is not enabled, the Medical Screening sidebar item is hidden from navigation.
 
 The Medical Screening page uses a **three-tab layout**:
 
@@ -576,7 +576,7 @@ Captain Alvarez immediately contacts FF Odom (3 days remaining) and schedules he
 
 | Issue | Solution |
 |-------|----------|
-| Medical Screening does not appear in the sidebar | Verify that `MODULE_MEDICAL_SCREENING_ENABLED=true` is set in your environment configuration. Restart the backend if the flag was just added. |
+| Medical Screening does not appear in the sidebar | Verify that Medical Screening is enabled for your organization in Organization/Admin Settings > Modules (`enabled_modules`). |
 | "Permission denied" when viewing records | Your role needs the `medical_screening.view` permission. Contact your administrator to assign it. |
 | "Permission denied" when creating records or requirements | Your role needs the `medical_screening.manage` permission. Contact your administrator to assign it. |
 | Member shows non-compliant but they have a passing record | Check the record's `expiration_date` — it may have passed, and the grace period may also have elapsed. Also verify the record's status is one of Passed, Completed, or Waived (Scheduled and Pending Review do not count toward compliance). |

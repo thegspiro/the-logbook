@@ -4,6 +4,34 @@
 
 The Logbook is designed with security as a core principle, implementing industry-standard security practices with features aligned to HIPAA requirements, Section 508 accessibility, and general security best practices. Note: HIPAA compliance requires external review and cannot be self-declared.
 
+### Zero-Trust Review (2026-07-27)
+
+A whole-stack zero-trust pass ("never trust, always verify" — nothing trusted by
+network location, client header, session state, or internal origin) confirmed a
+strong foundation and closed the remaining implicit-trust gaps:
+
+- **Deployment posture:** the base `docker-compose.yml` is a *development*
+  config and had hardcoded `ENVIRONMENT: development`, so the documented
+  `docker compose up -d` path booted in dev mode and skipped the startup
+  security gate. Production now layers `docker-compose.prod.yml` (the installer
+  pins `COMPOSE_FILE` in `.env`); the base file honors `.env`.
+- **Host header:** emailed ballot links were built from the client-controlled
+  `Host` — now from `FRONTEND_URL`, plus a `TrustedHostMiddleware`
+  (`TRUSTED_HOSTS`) that rejects spoofed `Host` headers.
+- **Reverse-proxy trust:** `TRUSTED_PROXY_IPS` now supports CIDR ranges and the
+  production override sets a safe default, so geo-blocking and per-client rate
+  limiting work behind the bundled proxy (previously silently disabled).
+- **Revocable sessions:** the inventory WebSocket now authenticates through
+  `AuthService` (token-type + server-side session store), so logout /
+  password-change / refresh-rotation revoke it immediately.
+- **Multi-tenant isolation:** a shared fail-closed `assert_in_org` helper plus
+  fixes for confirmed cross-tenant leaks (elections meeting/event/candidate,
+  apparatus operators, membership-pipeline forms, inventory category).
+- **Injection:** the NFIRS and annual-compliance CSV exporters now use the
+  formula-safe writers.
+- **TLS:** startup warns when `DB_SSL`/`REDIS_SSL` is enabled without a CA
+  (encrypted but the server certificate is unverified).
+
 ### Module-by-Module Security Audit (2026-07)
 
 A rotating, module-by-module security audit covered all 27 modules/domains

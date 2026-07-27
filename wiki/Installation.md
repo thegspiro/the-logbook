@@ -138,11 +138,16 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
+> **Note:** The bare `docker-compose up -d` above runs the **development**
+> configuration. For a production deployment, layer the production override
+> (`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`) or
+> pin `COMPOSE_FILE` — see [Production Deployment](#production-deployment) below.
+
 ### Access Application
 
 - **Frontend:** http://localhost:3000
 - **Backend API:** http://localhost:3001
-- **API Docs:** http://localhost:3001/docs
+- **API Docs:** http://localhost:3001/docs _(development only — the production override disables API docs)_
 
 ### Choosing Your Environment File
 
@@ -363,13 +368,23 @@ npm run dev
 
 ### Docker Compose Production
 
-```bash
-# Use production compose file
-docker-compose -f docker-compose.prod.yml up -d
+For production you MUST layer the production override on top of the base file —
+the base `docker-compose.yml` alone is a **development** configuration (uvicorn
+`--reload`, source bind-mount, backend port published, API docs enabled, no
+HTTPS enforcement) and skips the startup security gate.
 
-# With SSL/TLS
-docker-compose -f docker-compose.prod-ssl.yml up -d
+```bash
+# Layer the production override (forces ENVIRONMENT=production, disables --reload
+# and API docs, enforces HTTPS, enables DB/Redis TLS, backend port not published)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
+
+Pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
+bare `docker compose ...` command stays hardened; `install.sh` sets this
+automatically. HTTPS/TLS termination itself is handled by a reverse proxy — see
+[SSL/TLS Setup](#ssltls-setup) below. In production/staging the app **refuses to
+start** if required secrets are missing or weak, if `DEBUG` or API docs are
+enabled, or if HTTPS isn't enforced.
 
 ### Environment Configuration
 
@@ -443,15 +458,11 @@ Navigate to your frontend URL and complete the setup wizard:
 
 ### 2. Configure Modules
 
-Enable/disable modules based on your needs:
-
-```bash
-# In .env file
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-```
+Enable/disable modules based on your needs. Module availability is controlled
+**per organization** inside the app — Organization/Admin Settings → Modules
+(also configurable during onboarding) — and stored in the organization's
+`enabled_modules` setting. There are no `MODULE_*_ENABLED` environment variables
+to set in `.env`.
 
 **[→ Module Configuration](Configuration-Modules)**
 

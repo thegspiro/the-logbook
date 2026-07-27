@@ -50,6 +50,32 @@ referenced row is missing or out-of-org, used by create/update service methods.
 The forms `_entity_in_org` (forms_service.py) is a working local instance of
 exactly this — promote it to a shared util. Roll out per-module with tests.
 
+**✅ UPDATE (2026-07-27, zero-trust review):** the shared helper now exists at
+[`app/utils/org_scoping.py`](../../backend/app/utils/org_scoping.py) —
+`assert_in_org` (raises `ValueError` → 400, fails **closed**) and `is_in_org`
+(boolean). It is wired into the create/update paths that had **confirmed
+cross-tenant impact**, which were also fixed in the same pass:
+- **Elections** — `meeting_id`/`event_id` were client-settable and applied via a
+  blind setattr, so re-pointing an election at another org's meeting/event id
+  leaked that org's attendee roster + meeting metadata through the
+  import-attendees and detail endpoints. Now validated in-org on create/update,
+  with the meeting reads org-scoped and the import source re-validated. Candidate
+  `user_id` is also validated.
+- **Apparatus operators** — `create_operator` stored a foreign `user_id`, whose
+  PII then leaked via `list_operators`' eager-loaded `user`. `apparatus_id` /
+  `user_id` / `evoc_level_id` are now validated in-org.
+- **Membership pipeline** — a step's client-supplied `form_id` reached an
+  unscoped `Form` lookup that could stamp/mutate (and the cleanup could delete)
+  another org's form. The lookup and cleanup are now org-scoped.
+- **Inventory** — `_validate_category_requirements` failed **open** on a foreign
+  `category_id` (silently accepted), which then leaked the category name on
+  export. It now fails closed.
+
+The remaining XC-1 tail — the many create/update methods that store a client FK
+with only *mis-attribution* risk (org-stamped, no direct read-back) — is a
+mechanical sweep now that the shared helper exists; prioritize any that
+eager-load the FK into a response.
+
 ## XC-2 — Sensitive reads gated by a permission broader than intended
 **Seen in:** membership-pipeline (MP-1 — applicant PII / background-check
 document downloads reachable with generic `members.view` roster permission —

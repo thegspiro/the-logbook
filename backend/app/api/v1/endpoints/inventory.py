@@ -2110,9 +2110,7 @@ async def get_members_inventory_summary(
 # ============================================
 
 
-@router.get(
-    "/impact-planner/options", response_model=ImpactPlannerOptionsResponse
-)
+@router.get("/impact-planner/options", response_model=ImpactPlannerOptionsResponse)
 async def get_impact_planner_options(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
@@ -2133,9 +2131,7 @@ async def get_impact_planner_options(
     )
 
 
-@router.get(
-    "/impact-planner/plans", response_model=list[ImpactPlanResponse]
-)
+@router.get("/impact-planner/plans", response_model=list[ImpactPlanResponse])
 async def list_impact_plans(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
@@ -2181,9 +2177,7 @@ async def create_impact_plan(
     return plan
 
 
-@router.patch(
-    "/impact-planner/plans/{plan_id}", response_model=ImpactPlanResponse
-)
+@router.patch("/impact-planner/plans/{plan_id}", response_model=ImpactPlanResponse)
 async def update_impact_plan(
     plan_id: UUID,
     payload: ImpactPlanUpdate,
@@ -2206,9 +2200,7 @@ async def update_impact_plan(
         data=data,
     )
     if error:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=error
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=error)
     await db.commit()
     return plan
 
@@ -2229,9 +2221,7 @@ async def delete_impact_plan(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
-    deleted = await service.delete_impact_plan(
-        plan_id, current_user.organization_id
-    )
+    deleted = await service.delete_impact_plan(plan_id, current_user.organization_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Impact plan not found"
@@ -2347,9 +2337,7 @@ async def create_reorder_from_impact_plan(
     return result
 
 
-@router.post(
-    "/impact-planner/issue", response_model=ImpactPlannerIssueResponse
-)
+@router.post("/impact-planner/issue", response_model=ImpactPlannerIssueResponse)
 async def bulk_issue_from_impact_plan(
     payload: ImpactPlannerIssueRequest,
     db: AsyncSession = Depends(get_db),
@@ -2507,12 +2495,8 @@ async def export_impact_plan_pdf(
             detail=safe_error_detail(e),
         )
 
-    headers = {
-        "Content-Disposition": "attachment; filename=impact-plan.pdf"
-    }
-    return StreamingResponse(
-        pdf_buf, media_type="application/pdf", headers=headers
-    )
+    headers = {"Content-Disposition": "attachment; filename=impact-plan.pdf"}
+    return StreamingResponse(pdf_buf, media_type="application/pdf", headers=headers)
 
 
 @router.get("/users/{user_id}/inventory", response_model=UserInventoryResponse)
@@ -3122,9 +3106,7 @@ async def create_equipment_request(
 
                 pos_result = await db.execute(
                     select(Position.slug)
-                    .join(
-                        user_positions, Position.id == user_positions.c.position_id
-                    )
+                    .join(user_positions, Position.id == user_positions.c.position_id)
                     .where(
                         user_positions.c.user_id == str(current_user.id),
                         Position.slug.in_(restricted_positions),
@@ -4203,34 +4185,23 @@ async def inventory_websocket(
         await websocket.close(code=4001, reason="Missing token")
         return
 
-    # Validate JWT and verify the user session is still active
+    # Authenticate through AuthService so the socket honors the SAME checks as
+    # every HTTP request: token type must be "access" (a refresh token can't be
+    # used here), a matching server-side UserSession must exist (so logout /
+    # password-change / refresh-rotation immediately revoke the socket), and the
+    # session's expiry / idle-timeout are enforced. A bare decode_token() would
+    # accept any signed, unexpired token — including revoked or refresh tokens.
     try:
-        from app.core.security import decode_token
-
-        payload = decode_token(token)
-        org_id = payload.get("org_id")
-        user_id = payload.get("sub")
-        if not org_id:
-            await websocket.close(code=4003, reason="Invalid token")
-            return
-
-        # Verify user is still active (not revoked/deactivated)
         from app.core.database import async_session_factory
-        from app.models.user import User as UserModel
+        from app.services.auth_service import AuthService
 
         async with async_session_factory() as db:
-            result = await db.execute(
-                select(UserModel).where(
-                    UserModel.id == user_id,
-                    UserModel.organization_id == org_id,
-                    UserModel.is_active.is_(True),
-                    UserModel.deleted_at.is_(None),
-                )
-            )
-            user = result.scalar_one_or_none()
+            auth_service = AuthService(db)
+            user = await auth_service.get_user_from_token(token)
             if not user:
                 await websocket.close(code=4001, reason="Invalid or revoked session")
                 return
+            org_id = user.organization_id
     except Exception:
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
@@ -5607,13 +5578,9 @@ async def list_expiring_lots(
     today = _date.today()
     result: list[ExpiringLotResponse] = []
     for lot, item_name in rows:
-        days_until = (
-            (lot.expiration_date - today).days if lot.expiration_date else None
-        )
+        days_until = (lot.expiration_date - today).days if lot.expiration_date else None
         result.append(
-            ExpiringLotResponse.model_validate(
-                lot, from_attributes=True
-            ).model_copy(
+            ExpiringLotResponse.model_validate(lot, from_attributes=True).model_copy(
                 update={"item_name": item_name, "days_until_expiration": days_until}
             )
         )

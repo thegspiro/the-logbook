@@ -6,7 +6,6 @@ annual compliance reports with CSV export, and record completeness
 evaluation (NFPA 1401).
 """
 
-import csv
 import io
 from datetime import date
 from typing import Dict, List, Optional
@@ -26,22 +25,9 @@ from app.services.compliance_officer_service import (
     ISOReadinessService,
     RecordCompletenessService,
 )
+from app.utils.csv_export import SafeCsvWriter
 
 router = APIRouter()
-
-
-def _csv_safe(value: object) -> str:
-    """Neutralize CSV/spreadsheet formula injection.
-
-    A member-controlled cell (e.g. their name) that begins with =, +, -, @, or a
-    leading control char is executed as a formula when the officer opens the
-    export in Excel/Sheets. Prefix such values with an apostrophe so they render
-    as literal text. Normal names are unchanged.
-    """
-    text = "" if value is None else str(value)
-    if text and text[0] in ("=", "+", "-", "@", "\t", "\r"):
-        return "'" + text
-    return text
 
 
 # =============================================================================
@@ -183,7 +169,9 @@ async def export_annual_report(
         )
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        # SafeCsvWriter neutralizes formula injection on every cell (member
+        # name/status are member-controlled and land in an officer's export).
+        writer = SafeCsvWriter(output)
         writer.writerow(
             [
                 "Name",
@@ -202,7 +190,7 @@ async def export_annual_report(
         for member in members:
             writer.writerow(
                 [
-                    _csv_safe(member.get("name", "")),
+                    member.get("name", ""),
                     member.get("compliance_pct", 0),
                     member.get("hours_completed", 0),
                     member.get("admin_hours_approved", 0),
@@ -210,7 +198,7 @@ async def export_annual_report(
                     member.get("requirements_met", 0),
                     member.get("requirements_total", 0),
                     member.get("expired_certifications", 0),
-                    _csv_safe(member.get("status", "")),
+                    member.get("status", ""),
                 ]
             )
 

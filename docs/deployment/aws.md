@@ -109,12 +109,24 @@ sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=https://logbook.yourdomain.com|" .
 sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
 sed -i "s|^DEBUG=.*|DEBUG=false|" .env
 
-# Start the application
-docker compose up -d
+# Start the application (production override layered on the base file)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 # Verify all containers are running and healthy
 docker compose ps
 ```
+
+> **Production hardening.** Step 3 set `ENVIRONMENT=production`, so you must layer
+> the production override — the base `docker-compose.yml` alone is a development
+> configuration (uvicorn `--reload`, backend port published, API docs enabled, no
+> HTTPS enforcement) and skips the startup security gate. The override forces
+> `ENVIRONMENT=production`, disables `--reload` and API docs, enforces HTTPS,
+> enables DB/Redis TLS, and does not publish the backend port. Pin
+> `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so every
+> later `docker compose ...` command stays hardened. In production the app
+> **refuses to start** if required secrets are missing or weak, if `DEBUG` or API
+> docs are enabled, or if HTTPS isn't enforced — TLS is terminated at the Nginx
+> reverse proxy set up in the next step.
 
 ### Step 4: Set Up Nginx Reverse Proxy
 
@@ -281,11 +293,12 @@ sed -i "s|^ENVIRONMENT=.*|ENVIRONMENT=production|" .env
 sed -i "s|^DEBUG=.*|DEBUG=false|" .env
 sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=https://logbook.yourdomain.com|" .env
 
-# Start WITHOUT local database and Redis (only backend + frontend)
-docker compose up -d backend frontend
+# Start WITHOUT local database and Redis (only backend + frontend), with the
+# production override layered on the base file (see the hardening note in Method 1)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d backend frontend
 ```
 
-> **Note**: When using RDS and ElastiCache, you don't start the `mysql` or `redis` containers — the application connects to the managed AWS services directly.
+> **Note**: When using RDS and ElastiCache, you don't start the `mysql` or `redis` containers — the application connects to the managed AWS services directly. As in Method 1, pin `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` in `.env` so the override is applied on every later `docker compose ...` command.
 
 ### Step 6: Set Up Nginx and SSL
 

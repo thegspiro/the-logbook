@@ -8,11 +8,12 @@ Complete guide for installing The Logbook on Unraid using Community Applications
 2. [Quick Installation](#quick-installation)
 3. [Detailed Setup](#detailed-setup)
 4. [Configuration](#configuration)
-5. [Port Conflicts](#port-conflicts)
-6. [Database Setup](#database-setup)
-7. [Troubleshooting](#troubleshooting)
-8. [Backup Configuration](#backup-configuration)
-9. [Updates](#updates)
+5. [Security Hardening](#security-hardening)
+6. [Port Conflicts](#port-conflicts)
+7. [Database Setup](#database-setup)
+8. [Troubleshooting](#troubleshooting)
+9. [Backup Configuration](#backup-configuration)
+10. [Updates](#updates)
 
 ---
 
@@ -282,13 +283,87 @@ BACKUP_ENABLED=true
 BACKUP_SCHEDULE=0 2 * * *      # Daily at 2 AM
 BACKUP_RETENTION_DAYS=30
 
-# Modules (Enable/Disable features)
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-MODULE_FUNDRAISING_ENABLED=false
+# Modules are enabled per organization inside the app (Organization/Admin
+# Settings > Modules); there are no MODULE_*_ENABLED environment variables.
 ```
+
+---
+
+## Security Hardening
+
+The Unraid compose files run in **production posture** (`ENVIRONMENT=production`).
+This section covers the security behavior you need to know before your stack
+will boot and run safely.
+
+### Production security gate (the app refuses to boot unless hardened)
+
+On startup the backend runs a security gate. In production it **refuses to
+start** unless ALL of the following are true:
+
+- Strong, non-default secrets are set: `SECRET_KEY`, `ENCRYPTION_KEY`,
+  `ENCRYPTION_SALT`, `DB_PASSWORD`, `REDIS_PASSWORD`
+- `DEBUG=false`
+- API docs are disabled (`ENABLE_DOCS=false`)
+- HTTPS is enforced (`SECURITY_ENFORCE_HTTPS=true`)
+
+**A plain-HTTP LAN install will not boot in production posture.** This is not a
+new requirement — it is the existing production gate, now documented clearly.
+
+### HTTPS reverse proxy is required (production)
+
+Because HTTPS is enforced, you must front The Logbook with an HTTPS reverse
+proxy. On Unraid the common choices are **SWAG**, **Nginx Proxy Manager**, or a
+**Cloudflare Tunnel** (see [SSL/HTTPS Setup](#sslhttps-setup-with-reverse-proxy)
+below for the proxy config). Once your proxy is in place:
+
+1. Set `ALLOWED_ORIGINS` to your `https://` origin (e.g.
+   `https://logbook.yourdomain.com`).
+2. Set `SECURITY_ENFORCE_HTTPS=true`.
+
+### API docs are OFF by default
+
+`ENABLE_DOCS` now defaults to `false`, and the production gate **blocks boot**
+if docs are enabled. Leave it disabled. Set `ENABLE_DOCS=true` only to view
+`/docs` temporarily on a trusted network — expect the app to refuse to start in
+production until you set it back to `false`.
+
+### Reverse proxy and client IP (`TRUSTED_PROXY_IPS`)
+
+The Unraid compose **publishes the backend port directly** — there is no bundled
+reverse proxy — so the connecting peer IS the real client. **Leave
+`TRUSTED_PROXY_IPS` empty.** Only set it (to your proxy's IP or CIDR, e.g.
+`172.16.0.0/12`) if you place a reverse proxy in front of the app. If you set it
+without a real proxy, clients could spoof the `X-Forwarded-For` header to bypass
+geo-blocking and rate limiting.
+
+### Host-header allowlist (`TRUSTED_HOSTS`)
+
+`TRUSTED_HOSTS` is a Host-header allowlist. If left empty, it is derived
+automatically from the hostnames in `ALLOWED_ORIGINS` plus localhost. A request
+carrying a spoofed or unknown `Host` header is rejected with HTTP 400. Set it
+explicitly only if you need to allow additional hostnames.
+
+### Emailed links (`FRONTEND_URL`)
+
+Set `FRONTEND_URL` to your real, externally reachable site URL. Emailed links
+(for example, election ballot links) are now built from `FRONTEND_URL` rather
+than from the incoming request URL, so leaving it unset or wrong produces
+broken links in emails.
+
+### Database / Redis TLS (`DB_SSL` / `REDIS_SSL`)
+
+If you enable `DB_SSL` or `REDIS_SSL`, also set the matching CA path
+(`DB_SSL_CA` / `REDIS_SSL_CA`). Without the CA, the connection is encrypted but
+the server certificate is **not verified** (the app logs a startup warning).
+
+### Applied automatically — no action needed
+
+These hardening changes are on by default and require no configuration:
+
+- Cross-tenant foreign-key validation
+- Host-header hardening
+- The inventory WebSocket now honors session revocation
+- CSV exports are formula-injection-safe
 
 ---
 
