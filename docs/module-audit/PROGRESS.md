@@ -317,9 +317,10 @@ start over at #1.
   UUID-vs-str self-exclusion bug + email_verified not reset on change; both
   fixed). Flagged: ORU-7 (role-edit ceiling on current perms / last-admin
   lockout / member-role mass-escalate), ORU-8 (with-roles + GET /settings expose
-  PII/infra config broader than the privacy gate), ORU-9 (member_status state
-  machine, membership-id row lock/loop cap, audit-history org filter,
-  perm-name reconcile, shallow settings merge). See orgs-roles-users.md. Next:
+  PII/infra config broader than the privacy gate), ORU-9 (✅ membership-id row
+  lock FOR UPDATE + loop cap, ✅ users.edit perm-name reconcile, ✅ deep-merge
+  settings; deferred: member_status state machine, audit-history org filter —
+  blocked on audit_logs org column). See orgs-roles-users.md. Next:
   compliance/skills.
 - #22 compliance/skills ✅ — PHI-adjacent compliance + skills-testing (3 endpoint
   files + 4 services); three parallel readers (skills / compliance-officer /

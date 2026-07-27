@@ -995,8 +995,12 @@ async def update_user_profile(
         )
         perm_user = perm_result.scalar_one()
         user_permissions = _collect_user_permissions(perm_user)
+        # Use the catalog permission "users.edit" (there is no "users.update"
+        # permission, so the old string never matched a granted permission and
+        # silently blocked legitimate users.edit holders). Matches the sibling
+        # admin-update path above. (ORU-9)
         if not _has_permission(
-            "users.update", user_permissions
+            "users.edit", user_permissions
         ) and not _has_permission("members.manage", user_permissions):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

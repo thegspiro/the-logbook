@@ -127,20 +127,28 @@ last-admin guard, which changes today's allowed admin workflow.
 **Status:** flagged — gating these behind `settings.manage` / a PII schema split
 is a product decision on who may see full PII/infra config.
 
-### ORU-9 — LOW (flagged) — Correctness/robustness polish
-- `member_status` transitions have no state machine (any-to-any by a
-  `members.manage` holder — lifecycle/approval bypass, no permission grant).
-  (roles #5)
-- Membership-ID generation has no row lock (TOCTOU on the JSON counter → duplicate
-  IDs under concurrent member creation) and an uncapped collision `while` loop.
-  (orgs #6/#7)
-- Member audit-history query not org-filtered on the log rows (target user is
-  pre-verified in-org; defense-in-depth only). (users #6)
-- `users.edit` vs `users.update` permission-name inconsistency between the two
-  self/admin update paths — reconcile against the catalog. (users #5)
-- Top-level `PATCH /settings` merge is shallow (a partial sub-section replaces the
-  whole section — data-loss risk, not a security hole). (orgs #9)
-**Status:** flagged.
+### ORU-9 — LOW — mostly FIXED — Correctness/robustness polish
+- **✅ Membership-ID generation hardened.** `generate_next_membership_id` now
+  locks the org row `FOR UPDATE` before reading/incrementing the JSON counter,
+  so two concurrent member creations can't read the same `next_number` and mint
+  duplicate IDs (TOCTOU); the collision-retry `while` loop is now capped
+  (raises after 100k attempts instead of spinning forever). (orgs #6/#7)
+- **✅ `users.edit`/`users.update` reconciled.** The admin self/other update path
+  checked the non-existent permission `"users.update"` (never granted, so it
+  silently fell through to `members.manage` only); it now checks `"users.edit"`,
+  matching the catalog and the sibling update path. (users #5)
+- **✅ `PATCH /settings` deep-merges.** `update_organization_settings` now merges
+  nested sections key-by-key (`_deep_merge_settings`) instead of a shallow
+  `{**a, **b}` that replaced a whole section when a partial PATCH touched one
+  sub-key — closing the data-loss risk. (orgs #9)
+- **Deferred:** `member_status` transitions have no state machine (any-to-any by
+  a `members.manage` holder) — a lifecycle-model/product decision, no permission
+  grant. (roles #5) The member audit-history query isn't org-filtered on the log
+  rows, but the target user is pre-verified in-org and `audit_logs` has no
+  `organization_id` column — blocked on the same deferred audit-log org-column as
+  SEC-9 (defense-in-depth only). (users #6)
+**Status:** correctness/robustness items fixed; two items deferred (design /
+blocked on the audit-log org column).
 
 ## Notes
 - Large-file caveat: `users.py` (1,774 L) and `member_status.py` (911 L) were

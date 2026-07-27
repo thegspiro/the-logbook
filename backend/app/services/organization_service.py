@@ -28,6 +28,24 @@ from app.schemas.organization import (
 )
 
 
+def _deep_merge_settings(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge ``updates`` into ``base`` (returns a new dict).
+
+    A shallow ``{**base, **updates}`` merge replaces a whole nested section when
+    a partial PATCH touches only one of its sub-keys — dropping the section's
+    other keys (ORU-9 data-loss risk). This merges dict-valued sections key by
+    key; a non-dict value (including an explicit null/list) still replaces.
+    """
+    result = dict(base)
+    for key, value in updates.items():
+        existing = result.get(key)
+        if isinstance(value, dict) and isinstance(existing, dict):
+            result[key] = _deep_merge_settings(existing, value)
+        else:
+            result[key] = value
+    return result
+
+
 class OrganizationService:
     """Service for organization-related business logic"""
 
@@ -296,8 +314,9 @@ class OrganizationService:
                     if val == "••••••••":
                         incoming[field] = existing.get(field)
 
-        # Update with new settings (merge dictionaries)
-        updated_settings = {**current_settings, **settings_update}
+        # Deep-merge so a partial PATCH of one sub-key doesn't wipe the rest of
+        # its section (ORU-9). A shallow {**a, **b} would replace whole sections.
+        updated_settings = _deep_merge_settings(current_settings, settings_update)
 
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)
@@ -408,7 +427,15 @@ class OrganizationService:
         formats the ID, then atomically increments next_number.
         Returns None if auto-generation is disabled.
         """
-        org = await self.get_organization(organization_id)
+        # Lock the org row FOR UPDATE so two concurrent member creations can't
+        # both read the same next_number and mint duplicate membership IDs
+        # (TOCTOU on the JSON counter). The lock is released at commit/rollback.
+        result = await self.db.execute(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        org = result.scalar_one_or_none()
         if not org:
             return None
 
@@ -425,7 +452,10 @@ class OrganizationService:
         membership_id = f"{prefix}{str(next_number).zfill(4)}"
 
         # Verify this number isn't already in use (active members only).
-        # If it is, keep incrementing until we find an unused one.
+        # If it is, keep incrementing until we find an unused one — but cap the
+        # search so a pathological/dense ID space can't spin forever.
+        max_attempts = 100_000
+        attempts = 0
         while True:
             result = await self.db.execute(
                 select(func.count())
@@ -439,6 +469,12 @@ class OrganizationService:
             count = result.scalar() or 0
             if count == 0:
                 break
+            attempts += 1
+            if attempts >= max_attempts:
+                raise ValueError(
+                    "Unable to generate a unique membership ID after "
+                    f"{max_attempts} attempts"
+                )
             next_number += 1
             membership_id = f"{prefix}{str(next_number).zfill(4)}"
 

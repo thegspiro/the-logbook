@@ -345,6 +345,13 @@ open decisions that need an owner are collected in
   recomputes the report total from the persisted line items directly, fixing a
   case where the running total could double-count or drift depending on load
   timing.
+- **Membership IDs are now collision-safe under concurrency.** Auto-generated
+  membership numbers are minted under a row lock, so two members created at the
+  same instant can no longer receive the same ID, and the uniqueness retry is
+  bounded. Separately, partial saves of organization settings no longer wipe the
+  rest of a settings section (nested settings now merge), and an admin-update
+  permission check that referenced a non-existent permission name now uses the
+  correct one so "edit users" grants work as intended.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged
