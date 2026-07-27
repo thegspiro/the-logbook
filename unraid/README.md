@@ -156,9 +156,11 @@ ENCRYPTION_KEY=generate_with_openssl
 REDIS_HOST=192.168.1.10
 EMAIL_ENABLED=true
 SMTP_HOST=smtp.gmail.com
-MODULE_TRAINING_ENABLED=true
 BACKUP_ENABLED=true
 ```
+
+> Modules are enabled per organization in-app (Organization/Admin Settings >
+> Modules) — there are no `MODULE_*_ENABLED` environment variables.
 
 📖 **[Full Configuration Guide →](./UNRAID-INSTALLATION.md#configuration)**
 

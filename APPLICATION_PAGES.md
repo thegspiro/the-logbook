@@ -372,7 +372,7 @@ The Scheduling Settings page uses a tabbed sub-navigation:
 |-----|------|------------|
 | `/medical-screening` | Medical Screening | `medical_screening.view` |
 
-> Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Feature flag: `MODULE_MEDICAL_SCREENING_ENABLED`.
+> Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Availability is controlled per organization via the `enabled_modules` setting in Organization/Admin Settings.
 
 ---
 

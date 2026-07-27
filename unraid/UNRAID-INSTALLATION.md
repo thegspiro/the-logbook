@@ -283,12 +283,8 @@ BACKUP_ENABLED=true
 BACKUP_SCHEDULE=0 2 * * *      # Daily at 2 AM
 BACKUP_RETENTION_DAYS=30
 
-# Modules (Enable/Disable features)
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-MODULE_FUNDRAISING_ENABLED=false
+# Modules are enabled per organization inside the app (Organization/Admin
+# Settings > Modules); there are no MODULE_*_ENABLED environment variables.
 ```
 
 ---

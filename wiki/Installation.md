@@ -458,15 +458,11 @@ Navigate to your frontend URL and complete the setup wizard:
 
 ### 2. Configure Modules
 
-Enable/disable modules based on your needs:
-
-```bash
-# In .env file
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-```
+Enable/disable modules based on your needs. Module availability is controlled
+**per organization** inside the app — Organization/Admin Settings → Modules
+(also configurable during onboarding) — and stored in the organization's
+`enabled_modules` setting. There are no `MODULE_*_ENABLED` environment variables
+to set in `.env`.
 
 **[→ Module Configuration](Configuration-Modules)**
 

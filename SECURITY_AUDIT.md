@@ -181,7 +181,7 @@
 **File:** `backend/app/core/config.py:125`
 **Issue:** `VOTE_SIGNING_KEY: str = ""` with a comment stating it falls back to `SECRET_KEY`. This means vote integrity signatures use the same key as JWT signing. If `SECRET_KEY` is rotated for any reason (security incident, scheduled rotation), all existing vote signatures become unverifiable, potentially casting doubt on election integrity.
 **Severity:** Low
-**Remediation:** Require `VOTE_SIGNING_KEY` to be set when the elections module is enabled (`MODULE_ELECTIONS_ENABLED=True`). Add startup validation for this.
+**Remediation:** Require `VOTE_SIGNING_KEY` to be set explicitly rather than falling back to `SECRET_KEY`. Add startup validation for this. (Note: there is no `MODULE_ELECTIONS_ENABLED` deployment flag — module availability is controlled per organization via the `enabled_modules` setting, and the elections router registers unconditionally.)
 
 ### 22. Rate Limiter Falls Back to In-Memory When Redis Unavailable
 

@@ -135,17 +135,11 @@ These variables are baked into the frontend at build time via Vite.
 
 ## Module Toggles
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MODULE_TRAINING_ENABLED` | Training module | `true` |
-| `MODULE_COMPLIANCE_ENABLED` | Compliance module | `true` |
-| `MODULE_SCHEDULING_ENABLED` | Scheduling module | `true` |
-| `MODULE_ELECTIONS_ENABLED` | Elections module | `true` |
-| `MODULE_EVENTS_ENABLED` | Events module | `true` |
-| `MODULE_INVENTORY_ENABLED` | Inventory module | `true` |
-| `MODULE_FACILITIES_ENABLED` | Facilities module | `false` |
-| `MODULE_APPARATUS_ENABLED` | Apparatus module | `false` |
-| `MODULE_ADMIN_HOURS_ENABLED` | Admin hours tracking module | `false` |
+There are **no** deployment-level `MODULE_*_ENABLED` environment variables. The
+backend never reads them and all API routers register unconditionally. Module
+availability is controlled **per organization** at runtime via the
+organization's settings (`enabled_modules`), configured inside the app
+(Organization/Admin Settings → Modules). See [Module Configuration](Configuration-Modules).
 
 ---
 

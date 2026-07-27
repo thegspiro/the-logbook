@@ -143,7 +143,7 @@ The platform has significant groundwork for this module:
 - `fundraising.manage` — Manage fundraising activities
 - Role assignments: `treasurer`, `fundraising_chair`
 
-**Feature flag**: `MODULE_FUNDRAISING_ENABLED = False` (ready to toggle)
+**Availability**: Controlled per organization at runtime via the organization's `enabled_modules` setting (Organization/Admin Settings); the API routers register unconditionally.
 
 **Module definition** (`types/modules.ts`):
 - Listed as optional module with `comingSoon: true`

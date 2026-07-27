@@ -2,7 +2,7 @@
 
 > **Status**: Phase 1 (Foundation & Budget Tracking), Phase 1B (Approval Chains), Phase 2 (Purchase Requests), Phase 3 (Expense Reports & Check Requests), and Phase 4 (Dues & Assessments) are **implemented** as of 2026-03-12. Phase 5 (Dashboard, Reports & QuickBooks Export) is planned.
 >
-> **Feature Flag**: `MODULE_FINANCE_ENABLED` (default: `false`)
+> **Availability**: Controlled per organization at runtime via the organization's settings (`enabled_modules`), configured in Organization/Admin Settings. The API routers register unconditionally.
 >
 > **Permissions**: `finance.view`, `finance.manage`, `finance.approve`, `finance.configure_approvals`
 
@@ -55,7 +55,7 @@ Enums:
 
 **Register in:** `backend/app/api/v1/api.py` — `api_router.include_router(finance.router, prefix="/finance", tags=["finance"])`
 
-**Feature flag:** `MODULE_FINANCE_ENABLED: bool = False` in `backend/app/core/config.py`
+**Availability:** Module visibility is controlled per organization via the organization's `enabled_modules` setting (Organization/Admin Settings), not a deployment env var. The router registers unconditionally.
 
 **Permissions** (add to `backend/app/core/permissions.py`):
 - New category: `FINANCE = "finance"`
@@ -469,7 +469,6 @@ These optional FK columns on `purchase_requests` and `expense_line_items` enable
 ### Modified Files
 | File | Change |
 |------|--------|
-| `backend/app/core/config.py` | Add `MODULE_FINANCE_ENABLED: bool = False` |
 | `backend/app/core/permissions.py` | Add `FINANCE` category + `finance.view`, `finance.manage`, `finance.approve` |
 | `backend/app/api/v1/api.py` | Register finance router |
 | `backend/app/models/__init__.py` | Import finance models |

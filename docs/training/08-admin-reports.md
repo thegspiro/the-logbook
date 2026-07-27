@@ -937,7 +937,7 @@ Profiles allow different compliance standards for different groups:
 | Onboarding redirects to /login after Step 7 | Fixed in March 2026 — system owner creation now sets httpOnly auth cookies. Pull latest backend code and restart. |
 | Events Settings page layout changed | As of 2026-03-04, the Events Settings page uses a sidebar + content panel layout matching Organization Settings, replacing the previous collapsible sections. |
 | Reports page only shows basic views | As of 2026-03-04, the Reports module has been expanded into a dedicated feature module with 12 report types. Pull latest to access the full reports experience. |
-| Medical Screening module not visible | Enable `MODULE_MEDICAL_SCREENING_ENABLED` in **Settings > Modules** or via environment variable. *(added 2026-03-13)* |
+| Medical Screening module not visible | Enable Medical Screening for your organization in **Organization/Admin Settings > Modules** (`enabled_modules`). *(added 2026-03-13)* |
 | Compliance shows 0% with requirements defined | Verify screening records exist for the member and that the requirement is active. Check that the member's role matches the requirement's `applies_to_roles` configuration. |
 | Compliance report generation fails | Check the error message in the report list. Common causes: no compliance config defined (use **Initialize** first), or SMTP not configured for email delivery. |
 | Scheduled emails not sending | Verify SMTP is configured in Settings > Email. Check that the background email scheduler is running (polls every 60 seconds). For Gmail, use STARTTLS on port 587 with an app password. *(fixed 2026-03-13)* |

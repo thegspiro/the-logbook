@@ -146,14 +146,7 @@ To change ports, edit `FRONTEND_PORT` and `BACKEND_PORT` in `.env` and update `A
 
 ### Modules
 
-Enable or disable features in `.env`:
-
-```bash
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-```
+Modules are enabled or disabled per organization from inside the app, under Organization/Admin Settings > Modules (`enabled_modules`) — not through `.env`. All API routers register unconditionally, so there are no deployment-level module flags to set here.
 
 ### Email Notifications
 

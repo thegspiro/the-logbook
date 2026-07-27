@@ -208,13 +208,9 @@ When a prospective member is converted to a full member:
 
 ## Configuration
 
-### Feature Flag
+### Module Availability
 
-```
-MODULE_MEDICAL_SCREENING_ENABLED=true
-```
-
-Enable in **Settings > Organization > Modules** or via environment variable.
+Module availability is controlled per organization at runtime via the organization's `enabled_modules` setting. Enable it in **Organization/Admin Settings > Modules**. There is no deployment-level environment flag; the API routers register unconditionally.
 
 ---
 
@@ -236,7 +232,7 @@ Enable in **Settings > Organization > Modules** or via environment variable.
 
 | Issue | Cause | Fix |
 |-------|-------|-----|
-| Module not visible in navigation | Feature flag not enabled | Enable `MODULE_MEDICAL_SCREENING_ENABLED` in Settings > Modules |
+| Module not visible in navigation | Module not enabled for the organization | Enable Medical Screening in Organization/Admin Settings > Modules (`enabled_modules`) |
 | Compliance shows 0% | No requirements defined | Create at least one active screening requirement |
 | Prospect screening missing after conversion | Records need re-linking | Verify `user_id` is set on the converted member's screening records |
 | Expiration dates not calculating | Missing `frequency_months` or `completed_date` | Ensure both are set for recurring screenings |

@@ -903,10 +903,11 @@ Frontend:
   Navigation items gated by checkPermission() + isModuleOn()
 ```
 
-### Module Feature Flag Flow
+### Module Availability Flow
 
 ```
-Backend: MODULE_*_ENABLED env vars → config.py → module_settings table
+Backend: per-org enabled_modules stored in organization settings (no MODULE_*_ENABLED
+  env vars — those were removed; all API routers register unconditionally)
 Frontend: organizationService.getEnabledModules() → GET /organization/modules
   → Navigation components check isModuleOn(key) to show/hide menu items
   → Routes are always registered (accessible by URL) but hidden from navigation

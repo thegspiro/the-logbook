@@ -268,12 +268,13 @@ python3 -c "import secrets; print(secrets.token_hex(16))"
 > "**Timezone** — set `TZ` to your IANA timezone. For example,
 > `America/New_York`, `America/Chicago`, or `America/Los_Angeles`."
 
-> "**Module toggles** — these are the feature flags. Everything is enabled by
-> default, but you can disable modules you don't need. For instance, if your
-> department doesn't run elections through the platform, set
-> `MODULE_ELECTIONS_ENABLED=false`."
+> "**Modules** — you don't turn these on or off here in the environment file.
+> Once you're up and running, you'll enable or disable modules for your
+> department right inside the app, under Organization Settings, in the Modules
+> section. So if your department doesn't run elections through the platform,
+> you'll just switch Elections off there — no env file editing, no restart."
 
-**[CALLOUT: Show a few module toggle lines highlighted]**
+**[CALLOUT: Note that modules are managed in-app under Organization Settings > Modules]**
 
 ### START THE SERVICES (11:00 – 12:00)
 

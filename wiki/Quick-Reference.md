@@ -435,12 +435,11 @@ TZ=America/New_York
 ```
 
 ### Modules
-```bash
-MODULE_TRAINING_ENABLED=true
-MODULE_COMPLIANCE_ENABLED=true
-MODULE_SCHEDULING_ENABLED=true
-MODULE_ELECTIONS_ENABLED=true
-```
+
+There are no `MODULE_*_ENABLED` environment variables. Module availability is
+controlled **per organization** inside the app (Organization/Admin Settings →
+Modules), stored in the organization's `enabled_modules` setting. See
+[Module Configuration](Configuration-Modules).
 
 ---
 
