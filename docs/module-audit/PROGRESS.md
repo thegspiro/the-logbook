@@ -132,7 +132,8 @@ start over at #1.
   invalid/foreign folder_id — now 404s). 3 flagged: DOC-4 get_summary aggregates
   ignore folder ACL, DOC-5 folder ACL is per-folder not hierarchical (confirm
   intent), DOC-6 write-path FK/enum validation gaps (leadership-gated, XC-1).
-  delete_folder still orphans subtree files (flagged). See documents.md.
+  delete_folder subtree file orphaning now ✅ FIXED (walks subtree, removes
+  backing files after cascade). See documents.md.
 - #9 membership pipeline ✅ — sensitive applicant PII module; tenant isolation
   solid (XC-3 absent), file upload/download is a model implementation (magic-byte
   MIME, UUID names, realpath download guard). **3 fixes applied:** MP-2 (MED:

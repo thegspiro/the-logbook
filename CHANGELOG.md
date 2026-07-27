@@ -352,6 +352,12 @@ open decisions that need an owner are collected in
   rest of a settings section (nested settings now merge), and an admin-update
   permission check that referenced a non-existent permission name now uses the
   correct one so "edit users" grants work as intended.
+- **Deleting a document folder now removes its files too.** Previously, deleting
+  a folder removed the folder and its documents from the database but left the
+  underlying uploaded files on disk. Folder deletion now cleans up the backing
+  files for every document in the folder and its sub-folders, matching how
+  single-document deletion already worked — so sensitive uploads aren't left
+  behind.
 
 Aside from the tightened prospective-member access above, no user-facing feature
 changes. Full per-module findings, including lower-severity items left as flagged

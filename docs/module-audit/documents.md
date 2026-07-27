@@ -37,9 +37,11 @@ potentially sensitive upload — persisted on disk indefinitely.
 **Fix:** capture `file_path` before the row delete and `os.remove` it
 best-effort (via `asyncio.to_thread`) after the commit; a missing file logs a
 warning rather than erroring.
-**Still flagged:** `delete_folder` cascades DB rows only and likewise orphans
-the files of every document in the folder subtree — a bigger change (must
-enumerate descendant documents' paths) left for deliberate work.
+**✅ Also fixed:** `delete_folder` used to cascade DB rows only, orphaning the
+files of every document in the folder subtree. It now walks the folder subtree
+(the folder + all descendants via `parent_id`, org-scoped), collects the backing
+file paths before the cascade delete, and `os.remove`s them best-effort after the
+commit — same pattern as `delete_document`.
 
 ### DOC-2 — LOW (ACL fail-open) — `can_access_document` returned True on a missing folder — ✅ FIXED
 When a document referenced a `folder_id` whose folder row couldn't be resolved,
