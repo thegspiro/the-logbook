@@ -9,6 +9,8 @@ interface used by the documents API endpoint (using direct returns
 and HTTPException-style error handling rather than tuple returns).
 """
 
+import asyncio
+import os
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import UUID
@@ -190,7 +192,9 @@ class DocumentsService:
             return True
         folder = await self.get_folder_by_id(document.folder_id, organization_id)
         if folder is None:
-            return True
+            # Fail closed: a document that references a folder we can't resolve
+            # must not become readable by falling through the ACL.
+            return False
         return self.can_access_folder(folder, user)
 
     async def accessible_folder_ids(
@@ -229,13 +233,56 @@ class DocumentsService:
         return folder
 
     async def delete_folder(self, folder_id: UUID, organization_id: UUID) -> bool:
-        """Delete a folder and all its documents. Returns False if not found."""
+        """Delete a folder, its subtree, and all their documents.
+
+        Returns False if not found. The ORM cascade removes the descendant
+        folder + document rows, but that would leave every document's backing
+        file orphaned on disk (potentially sensitive uploads) — so we gather the
+        subtree's file paths first and remove them after the delete, mirroring
+        ``delete_document`` (DOC-1 continuation).
+        """
         folder = await self.get_folder_by_id(folder_id, organization_id)
         if not folder:
             return False
 
+        # Walk the folder subtree (this folder + all descendants via parent_id),
+        # org-scoped, so we can collect the backing file paths before the cascade
+        # delete removes the document rows.
+        subtree_ids = {str(folder_id)}
+        frontier = {str(folder_id)}
+        while frontier:
+            child_rows = await self.db.execute(
+                select(DocumentFolder.id).where(
+                    DocumentFolder.organization_id == str(organization_id),
+                    DocumentFolder.parent_id.in_(frontier),
+                )
+            )
+            children = {row[0] for row in child_rows.all()}
+            new_ids = children - subtree_ids
+            subtree_ids |= new_ids
+            frontier = new_ids
+
+        file_rows = await self.db.execute(
+            select(Document.file_path).where(
+                Document.organization_id == str(organization_id),
+                Document.folder_id.in_(subtree_ids),
+            )
+        )
+        file_paths = [row[0] for row in file_rows.all() if row[0]]
+
         await self.db.delete(folder)
         await self.db.commit()
+
+        # Best-effort file cleanup — a missing file is not an error, and the DB
+        # rows are already gone.
+        for file_path in file_paths:
+            try:
+                await asyncio.to_thread(os.remove, file_path)
+            except OSError:
+                logger.warning(
+                    "Could not remove backing file for a document in deleted "
+                    f"folder {folder_id}: {file_path}"
+                )
         return True
 
     # ============================================
@@ -345,8 +392,21 @@ class DocumentsService:
         if not document:
             return False
 
+        file_path = document.file_path
         await self.db.delete(document)
         await self.db.commit()
+
+        # Remove the backing file so a delete doesn't leave the (potentially
+        # sensitive) upload orphaned on disk. Best-effort — a missing file is
+        # not an error, and the DB row is already gone.
+        if file_path:
+            try:
+                await asyncio.to_thread(os.remove, file_path)
+            except OSError:
+                logger.warning(
+                    f"Could not remove backing file for deleted document "
+                    f"{document_id}: {file_path}"
+                )
         return True
 
     # ============================================

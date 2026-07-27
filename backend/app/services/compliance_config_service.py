@@ -4,6 +4,7 @@ Compliance Requirements Configuration Service
 Manages compliance configuration, profiles, and report generation/storage.
 """
 
+import html
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -13,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.admin_hours import AdminHoursCategory
 from app.models.compliance_config import (
     ComplianceConfig,
     ComplianceProfile,
@@ -20,7 +22,7 @@ from app.models.compliance_config import (
     ReportStatus,
 )
 from app.models.training import TrainingRequirement
-from app.models.user import Organization
+from app.models.user import Organization, Position
 from app.services.compliance_officer_service import AnnualComplianceReportService
 from app.services.email_service import EmailService
 
@@ -67,6 +69,53 @@ class ComplianceConfigService:
         # Re-fetch with profiles
         return await self.get_config(organization_id)  # type: ignore[return-value]
 
+    async def _validate_profile_fks(
+        self, organization_id: str, data: Dict[str, Any]
+    ) -> None:
+        """Reject compliance-profile FK ids that don't belong to the caller's
+        org before they are stored.
+
+        A profile stores client-supplied requirement ids, role (position) ids,
+        and admin-hours category ids that drive every member's compliance
+        evaluation. An unvalidated foreign/garbage id silently corrupts that
+        math (a member measured against a requirement that doesn't exist in-org
+        drops out or mis-flags) and is a latent cross-tenant disclosure vector
+        if a downstream renderer resolves the id without an org filter. Only
+        keys present in ``data`` are checked (update passes partial dumps).
+        """
+
+        async def _all_in_org(model: Any, ids: List[Any]) -> None:
+            wanted = {str(i) for i in ids if i}
+            if not wanted:
+                return
+            result = await self.db.execute(
+                select(model.id).where(
+                    model.id.in_(list(wanted)),
+                    model.organization_id == organization_id,
+                )
+            )
+            found = {str(r) for r in result.scalars().all()}
+            if wanted - found:
+                raise ValueError(
+                    f"One or more {model.__name__} ids are not in this organization"
+                )
+
+        if "required_requirement_ids" in data or "optional_requirement_ids" in data:
+            await _all_in_org(
+                TrainingRequirement,
+                (data.get("required_requirement_ids") or [])
+                + (data.get("optional_requirement_ids") or []),
+            )
+        if "role_ids" in data:
+            await _all_in_org(Position, data.get("role_ids") or [])
+        if "admin_hours_requirements" in data:
+            cat_ids = [
+                item.get("category_id")
+                for item in (data.get("admin_hours_requirements") or [])
+                if isinstance(item, dict) and item.get("category_id")
+            ]
+            await _all_in_org(AdminHoursCategory, cat_ids)
+
     async def create_profile(
         self,
         organization_id: str,
@@ -79,6 +128,7 @@ class ComplianceConfigService:
                 "Compliance configuration must be set up before creating profiles"
             )
 
+        await self._validate_profile_fks(organization_id, data)
         profile = ComplianceProfile(config_id=config.id, **data)
         self.db.add(profile)
         await self.db.flush()
@@ -104,6 +154,7 @@ class ComplianceConfigService:
         if not profile:
             raise ValueError("Profile not found")
 
+        await self._validate_profile_fks(organization_id, data)
         for key, value in data.items():
             if hasattr(profile, key) and value is not None:
                 setattr(profile, key, value)
@@ -174,6 +225,12 @@ class ComplianceReportService:
         additional_recipients: Optional[List[str]] = None,
     ) -> ComplianceReport:
         """Generate and store a compliance report."""
+        # Constrain report_type to the known set rather than accepting a
+        # free-form string (it is persisted and interpolated into the report
+        # email) (CS-9).
+        if report_type not in ("monthly", "annual"):
+            raise ValueError("report_type must be 'monthly' or 'annual'")
+
         # Build period label
         if report_type == "monthly" and month:
             period_label = datetime(year, month, 1).strftime("%B %Y")
@@ -288,12 +345,18 @@ class ComplianceReportService:
         total_members = summary.get("total_members", 0)
         compliant_members = summary.get("fully_compliant_members", 0)
 
-        org_name = org.name if org else "Your Organization"
+        # Escape attacker-influenceable text before interpolating into the email
+        # HTML. org.name is user-controlled, and report_type/period_label flow
+        # from the report request — an unescaped value would be HTML/script
+        # injection in the recipient's mail client (CS-9).
+        org_name = html.escape(org.name if org else "Your Organization")
+        report_type_label = html.escape(str(report.report_type or ""))
+        period_label = html.escape(str(report.period_label or ""))
 
         html_body = f"""
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #1a1a2e;">Compliance Report — {report.period_label}</h2>
-            <p>The {report.report_type} compliance report for <strong>{org_name}</strong>
+            <h2 style="color: #1a1a2e;">Compliance Report — {period_label}</h2>
+            <p>The {report_type_label} compliance report for <strong>{org_name}</strong>
                has been generated.</p>
 
             <div style="background: #f8f9fa; border-radius: 8px; padding: 20px;

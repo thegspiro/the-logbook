@@ -25,6 +25,7 @@ from starlette.middleware.cors import CORSMiddleware as _StarletteCORSMiddleware
 from app.api.public.calendar import router as public_calendar_router
 from app.api.public.display import router as public_display_router
 from app.api.public.forms import router as public_forms_router
+from app.api.public.finance_approvals import router as finance_approvals_router
 from app.api.public.integrations_webhook import router as integrations_webhook_router
 from app.api.public.portal import router as public_portal_router
 from app.api.public.salesforce_webhook import router as sf_webhook_router
@@ -1295,7 +1296,8 @@ def validate_security_configuration():
 
         # SEC: Block startup in production AND staging when critical security
         # issues exist.  In development, only block if SECURITY_BLOCK_INSECURE_DEFAULTS
-        # is explicitly True (it defaults to True, but can be overridden for local dev).
+        # is explicitly True (it defaults to False, so a dev box with default
+        # secrets is NOT self-protecting — set the flag to opt in).
         critical_warnings = [w for w in warnings if "CRITICAL" in w]
         if critical_warnings and settings.ENVIRONMENT in ("production", "staging"):
             raise RuntimeError(
@@ -1415,6 +1417,7 @@ async def lifespan(app: FastAPI):
                     geoip_db_path=settings.GEOIP_DATABASE_PATH,
                     blocked_countries=blocked_countries,
                     enabled=True,
+                    fail_closed=settings.GEOIP_FAIL_CLOSED,
                 )
 
                 # Overlay dynamic country rules managed via the
@@ -1893,6 +1896,7 @@ class CORSMiddleware(_StarletteCORSMiddleware):
 from app.core.security_middleware import (
     IPBlockingMiddleware,
     IPLoggingMiddleware,
+    RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware,
     SecurityMonitoringMiddleware,
 )
@@ -1931,6 +1935,12 @@ app.add_middleware(
 
 # Compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Request body size ceiling — added last so it is the OUTERMOST middleware and
+# rejects oversized bodies before any inner layer buffers them (memory DoS).
+app.add_middleware(
+    RequestSizeLimitMiddleware, max_body_size=settings.MAX_REQUEST_BODY_SIZE
+)
 
 
 # ============================================
@@ -2058,6 +2068,10 @@ app.include_router(sf_webhook_router, prefix="/api")
 # Include Documenso & Cal.com inbound webhooks
 # (no auth — uses /api/public/v1/webhooks/{documenso,calcom})
 app.include_router(integrations_webhook_router, prefix="/api")
+
+# Include public finance approval endpoints (external approvers act via an
+# emailed token link — /api/public/v1/finance/approvals/{token})
+app.include_router(finance_approvals_router, prefix="/api")
 
 
 # Health check endpoint

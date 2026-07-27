@@ -16,8 +16,6 @@ import type {
   DuesSummary,
   ExpenseLineItem,
   ExpenseReport,
-  ExportLog,
-  ExportMapping,
   FinanceDashboard,
   FiscalYear,
   MemberDues,
@@ -610,51 +608,6 @@ export const duesService = {
 // Export
 // =============================================================================
 
-export const exportService = {
-  async listMappings(): Promise<ExportMapping[]> {
-    const response = await api.get<ExportMapping[]>(
-      '/finance/export/mappings',
-    );
-    return response.data;
-  },
-
-  async createMapping(
-    data: Partial<ExportMapping>,
-  ): Promise<ExportMapping> {
-    const response = await api.post<ExportMapping>(
-      '/finance/export/mappings',
-      data,
-    );
-    return response.data;
-  },
-
-  async updateMapping(
-    id: string,
-    data: Partial<ExportMapping>,
-  ): Promise<ExportMapping> {
-    const response = await api.put<ExportMapping>(
-      `/finance/export/mappings/${id}`,
-      data,
-    );
-    return response.data;
-  },
-
-  async generateExport(data: {
-    dateRangeStart: string;
-    dateRangeEnd: string;
-    fileFormat?: string;
-  }): Promise<Blob> {
-    const response = await api.post('/finance/export/transactions', data, {
-      responseType: 'blob',
-    });
-    return response.data as Blob;
-  },
-
-  async listLogs(): Promise<ExportLog[]> {
-    const response = await api.get<ExportLog[]>('/finance/export/logs');
-    return response.data;
-  },
-};
 
 // =============================================================================
 // Dashboard

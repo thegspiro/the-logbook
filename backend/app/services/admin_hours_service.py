@@ -5,7 +5,6 @@ Business logic for admin hours tracking, including QR-based clock-in/clock-out,
 manual entry, and approval workflows.
 """
 
-import csv
 import io
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
@@ -22,8 +21,13 @@ from app.models.admin_hours import (
     AdminHoursEntryStatus,
     EventHourMapping,
 )
+from app.utils.csv_export import SafeCsvWriter
 from app.models.event import Event
 from app.models.user import Organization, User
+
+# A single manual admin-hours entry cannot span more than a day — bounds the
+# absurd-duration self-credit vector on client-supplied times.
+MAX_MANUAL_ENTRY_MINUTES = 24 * 60
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -229,6 +233,11 @@ class AdminHoursService:
         entry.status = self._determine_post_clockout_status(
             category, entry.duration_minutes
         )
+        # Stamp an approval timestamp on auto-approval so the audit trail isn't
+        # left with an APPROVED entry that has no approved_at (approved_by stays
+        # None to denote a system/auto approval).
+        if entry.status == AdminHoursEntryStatus.APPROVED:
+            entry.approved_at = now
 
         await self.db.flush()
         await self.db.refresh(entry, ["created_at", "updated_at"])
@@ -420,16 +429,22 @@ class AdminHoursService:
         if clock_out_at <= clock_in_at:
             raise ValueError("Clock-out time must be after clock-in time")
 
-        # Prevent future entries
+        # Prevent future entries — both ends must be at or before now (the times
+        # are client-supplied, unlike a server-timed clock-out).
         now = datetime.now(timezone.utc)
         if clock_in_at > now:
             raise ValueError("Clock-in time cannot be in the future")
+        if clock_out_at > now:
+            raise ValueError("Clock-out time cannot be in the future")
 
         duration = clock_out_at - clock_in_at
         duration_minutes = int(duration.total_seconds() / 60)
 
         if duration_minutes < 1:
             raise ValueError("Duration must be at least 1 minute")
+        # Sanity cap: a single admin-hours entry can't span more than a day.
+        if duration_minutes > MAX_MANUAL_ENTRY_MINUTES:
+            raise ValueError("A single entry cannot exceed 24 hours")
 
         # Check for overlapping entries
         overlap = await self._check_overlap(user_id, clock_in_at, clock_out_at)
@@ -439,7 +454,11 @@ class AdminHoursService:
                 "Please adjust the times."
             )
 
-        status = self._determine_post_clockout_status(category, duration_minutes)
+        # Manual entries carry fully client-supplied times, so they always
+        # require officer review — never auto-approve them (that would let a
+        # member self-credit fabricated/backdated time). Auto-approval remains
+        # only for server-timed clock-outs.
+        status = AdminHoursEntryStatus.PENDING
 
         entry = AdminHoursEntry(
             organization_id=organization_id,
@@ -938,7 +957,9 @@ class AdminHoursService:
         rows = result.all()
 
         output = io.StringIO()
-        writer = csv.writer(output)
+        # SafeCsvWriter neutralizes spreadsheet formula injection in free-text
+        # cells (member names, notes).
+        writer = SafeCsvWriter(output)
         writer.writerow(
             [
                 "Member",
@@ -1005,13 +1026,18 @@ class AdminHoursService:
     # Stale Session Enforcement
     # =========================================================================
 
-    async def auto_close_stale_sessions(self) -> int:
+    async def auto_close_stale_sessions(
+        self, organization_id: Optional[str] = None
+    ) -> int:
         """Auto-close sessions that exceeded their category's max_hours_per_session.
 
+        Pass ``organization_id`` to scope to a single tenant (the per-org
+        endpoint does this so an officer can't close/mutate other tenants'
+        active sessions); the global scheduled task omits it to sweep all orgs.
         Returns the number of sessions auto-closed.
         """
         now = datetime.now(timezone.utc)
-        result = await self.db.execute(
+        query = (
             select(AdminHoursEntry, AdminHoursCategory.max_hours_per_session)
             .join(
                 AdminHoursCategory,
@@ -1022,6 +1048,11 @@ class AdminHoursService:
                 AdminHoursCategory.max_hours_per_session.isnot(None),
             )
         )
+        if organization_id is not None:
+            query = query.where(
+                AdminHoursEntry.organization_id == organization_id
+            )
+        result = await self.db.execute(query)
         rows = result.all()
         closed = 0
 

@@ -81,7 +81,7 @@ Response:
 |--------|-------------|
 | `/api/public/v1/forms/{slug}` | Public form access |
 | `/api/public/v1/forms/{slug}/submit` | Public form submission (rate-limited) |
-| `/api/public/portal/*` | Public portal endpoints (API key required) |
+| `/api/public/portal/*` | Public portal endpoints (`X-API-Key` required). IP rate limit runs before bcrypt; keys use a selective 16-char lookup prefix (`logbook_`+8), legacy keys self-heal on next use |
 | `/health` | Health check |
 | `/health/db` | Database health |
 | `/health/redis` | Redis health |
@@ -91,9 +91,12 @@ Response:
 | Prefix | Description |
 |--------|-------------|
 | `/api/v1/security/status` | Security dashboard |
-| `/api/v1/security/alerts` | Security alerts |
+| `/api/v1/security/alerts` | Security alerts (org-scoped — caller sees/acks/resolves only their own org's alerts) |
 | `/api/v1/security/audit-log/integrity` | Audit log verification |
+| `/api/v1/security/audit-log/export` | Audit log export (org-scoped; redacts `session_id` to a fingerprint) |
+| `/api/v1/security/audit-log/rehash` | Break-glass legacy-hash repair (gated by `AUDIT_ALLOW_CHAIN_REHASH`; fails closed on keyed mismatch) |
 | `/api/v1/security/intrusion-detection/status` | IDS status |
+| `/api/v1/ip-security/blocked-countries` | List / add / remove country blocks (add/remove gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`) |
 
 ---
 

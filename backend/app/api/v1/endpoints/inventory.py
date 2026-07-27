@@ -528,10 +528,11 @@ async def export_items_csv(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Export inventory items as CSV."""
-    import csv
     import io
 
     from starlette.responses import StreamingResponse
+
+    from app.utils.csv_export import SafeCsvWriter
 
     service = InventoryService(db)
     status_enum = None
@@ -551,7 +552,8 @@ async def export_items_csv(
     )
 
     output = io.StringIO()
-    writer = csv.writer(output)
+    # SafeCsvWriter neutralizes spreadsheet formula injection in free-text cells.
+    writer = SafeCsvWriter(output)
     writer.writerow(
         [
             "Name",
@@ -624,13 +626,14 @@ async def download_import_template(
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """Download a sample CSV template for inventory import."""
-    import csv
     import io
 
     from starlette.responses import StreamingResponse
 
+    from app.utils.csv_export import SafeCsvWriter
+
     output = io.StringIO()
-    writer = csv.writer(output)
+    writer = SafeCsvWriter(output)
     writer.writerow(
         [
             "Name",
@@ -3074,60 +3077,70 @@ async def create_equipment_request(
     """
     # --- Rank & position access check ---
     if request_data.item_id:
+        # Scope the lookup to the caller's org: a referenced item_id must belong
+        # to the requester's organization, otherwise the restriction logic would
+        # run against a foreign item and a cross-tenant item_id would be stored.
         item_result = await db.execute(
             select(
                 InventoryItem.min_rank_order, InventoryItem.restricted_to_positions
-            ).where(InventoryItem.id == str(request_data.item_id))
+            ).where(
+                InventoryItem.id == str(request_data.item_id),
+                InventoryItem.organization_id == str(current_user.organization_id),
+            )
         )
         row = item_result.one_or_none()
-        if row:
-            min_rank, restricted_positions = row
-            has_rank_restriction = min_rank is not None
-            has_position_restriction = bool(restricted_positions)
+        if row is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Referenced item not found",
+            )
+        min_rank, restricted_positions = row
+        has_rank_restriction = min_rank is not None
+        has_position_restriction = bool(restricted_positions)
 
-            if has_rank_restriction or has_position_restriction:
-                # Check rank qualification
-                passes_rank = False
-                if has_rank_restriction and current_user.rank:
-                    rank_result = await db.execute(
-                        select(OperationalRank.sort_order).where(
-                            OperationalRank.organization_id
-                            == str(current_user.organization_id),
-                            OperationalRank.rank_code == current_user.rank,
-                        )
+        if has_rank_restriction or has_position_restriction:
+            # Check rank qualification
+            passes_rank = False
+            if has_rank_restriction and current_user.rank:
+                rank_result = await db.execute(
+                    select(OperationalRank.sort_order).where(
+                        OperationalRank.organization_id
+                        == str(current_user.organization_id),
+                        OperationalRank.rank_code == current_user.rank,
                     )
-                    user_sort = rank_result.scalar_one_or_none()
-                    if user_sort is not None and user_sort <= min_rank:
-                        passes_rank = True
-                elif not has_rank_restriction:
+                )
+                user_sort = rank_result.scalar_one_or_none()
+                if user_sort is not None and user_sort <= min_rank:
                     passes_rank = True
+            elif not has_rank_restriction:
+                passes_rank = True
 
-                # Check position qualification
-                passes_position = False
-                if has_position_restriction:
-                    from app.models.user import Position, user_positions
+            # Check position qualification
+            passes_position = False
+            if has_position_restriction:
+                from app.models.user import Position, user_positions
 
-                    pos_result = await db.execute(
-                        select(Position.slug)
-                        .join(
-                            user_positions, Position.id == user_positions.c.position_id
-                        )
-                        .where(
-                            user_positions.c.user_id == str(current_user.id),
-                            Position.slug.in_(restricted_positions),
-                        )
+                pos_result = await db.execute(
+                    select(Position.slug)
+                    .join(
+                        user_positions, Position.id == user_positions.c.position_id
                     )
-                    if pos_result.first() is not None:
-                        passes_position = True
-                elif not has_position_restriction:
+                    .where(
+                        user_positions.c.user_id == str(current_user.id),
+                        Position.slug.in_(restricted_positions),
+                    )
+                )
+                if pos_result.first() is not None:
                     passes_position = True
+            elif not has_position_restriction:
+                passes_position = True
 
-                # Either qualifier grants access (OR logic)
-                if not passes_rank and not passes_position:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="This item is restricted based on rank or position requirements",
-                    )
+            # Either qualifier grants access (OR logic)
+            if not passes_rank and not passes_position:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This item is restricted based on rank or position requirements",
+                )
 
     req = EquipmentRequest(
         id=generate_uuid(),
@@ -4222,7 +4235,9 @@ async def inventory_websocket(
         await websocket.close(code=4001, reason="Invalid or expired token")
         return
 
-    await ws_manager.connect(websocket, org_id)
+    if not await ws_manager.connect(websocket, org_id):
+        # Org is at its connection cap; connect() already closed the socket.
+        return
     try:
         while True:
             # Keep alive — clients can send pings or we just wait

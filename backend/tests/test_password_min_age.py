@@ -59,6 +59,14 @@ def _recent_user(**kw):
 def _service():
     db = MagicMock()
     db.commit = AsyncMock()
+    # The min-age gate calls _has_password_history, which does
+    # `await db.execute(...)` then `.first()`. Return an awaitable result whose
+    # .first() is truthy so the user is treated as having prior password history
+    # (a precondition for the age gate; the forced-change test short-circuits
+    # before this call, so it is unaffected).
+    history_result = MagicMock()
+    history_result.first.return_value = ("existing-history-id",)
+    db.execute = AsyncMock(return_value=history_result)
     svc = AuthService(db)
     # Session revocation hits the DB; not under test here.
     svc._revoke_all_user_sessions = AsyncMock(return_value=0)
@@ -66,7 +74,8 @@ def _service():
 
 
 @pytest.mark.unit
-async def test_forced_change_bypasses_minimum_age(_patched_helpers):
+@pytest.mark.usefixtures("_patched_helpers")
+async def test_forced_change_bypasses_minimum_age():
     """must_change_password=True must skip the minimum-age block."""
     user = _recent_user(must_change_password=True)
     svc = _service()
@@ -84,7 +93,8 @@ async def test_forced_change_bypasses_minimum_age(_patched_helpers):
 
 
 @pytest.mark.unit
-async def test_normal_change_still_enforces_minimum_age(_patched_helpers):
+@pytest.mark.usefixtures("_patched_helpers")
+async def test_normal_change_still_enforces_minimum_age():
     """A non-forced change within the window is still rejected."""
     user = _recent_user(must_change_password=False)
     svc = _service()

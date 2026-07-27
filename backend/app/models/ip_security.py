@@ -36,7 +36,10 @@ class IPExceptionType(str, enum.Enum):
     """Type of IP exception"""
 
     ALLOWLIST = "allowlist"  # Explicitly allowed (bypasses geo-blocking)
-    BLOCKLIST = "blocklist"  # Explicitly blocked (regardless of country)
+    # Reserved for a future "explicitly blocked IP" feature. No code path
+    # creates or enforces a BLOCKLIST exception yet; kept as a stable enum/DB
+    # value so the eventual feature does not require an enum-column migration.
+    BLOCKLIST = "blocklist"
 
 
 class IPExceptionApprovalStatus(str, enum.Enum):

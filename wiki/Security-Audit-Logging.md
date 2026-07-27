@@ -13,7 +13,7 @@ Every significant action in the system is recorded in the audit log with:
 - **When** — Timestamp (UTC)
 - **Where** — IP address and user agent
 - **Details** — Specific changes (old value → new value)
-- **Hash** — SHA-256 hash linking to the previous entry
+- **Hash** — Keyed HMAC-SHA256 hash linking to the previous entry (legacy pre-upgrade rows use unkeyed SHA-256)
 
 ---
 
@@ -46,13 +46,14 @@ Every significant action in the system is recorded in the audit log with:
 ### How It Works
 
 ```
-Entry[n].hash = SHA-256(Entry[n].data + Entry[n-1].hash)
+Entry[n].hash = HMAC-SHA256(signing_key, Entry[n].data + Entry[n-1].hash)
 ```
 
 1. Each entry's hash incorporates the previous entry's hash
 2. Modifying any entry invalidates all subsequent hashes
-3. Periodic checkpoints create verified anchors in the chain
-4. The chain is verified on demand via API
+3. The hash is **keyed** with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling back to `SECRET_KEY`), so forging a valid chain requires the key, not just DB write access. Rows written before this upgrade are verified under the legacy unkeyed SHA-256 scheme, and a no-downgrade guard rejects a later unkeyed row after any keyed row
+4. Periodic checkpoints create verified anchors in the chain
+5. The chain is verified on demand via API
 
 ### Verifying the Chain
 
@@ -80,6 +81,30 @@ curl http://YOUR-IP:3001/api/v1/security/audit-log/integrity
 ### Hash Chain Reliability Fix *(2026-04-11)*
 
 A `_build_hash_data()` helper was extracted in `core/audit.py` to prevent drift between hash verification, creation, and rehashing operations. Previously, the hash chain could report false "compromised" results if the field ordering differed between when an entry was created and when it was verified. The helper ensures consistent field ordering across all hash operations.
+
+### Rehash / Chain Recovery — Break-Glass Only *(2026-07)*
+
+`POST /api/v1/security/audit-log/rehash` is a **recovery** tool for the legacy
+hash-computation bug, not a routine operation. Because the audit hash chain is a
+single, cross-organization chain, it is now gated:
+
+- **Disabled by default.** It returns `403` unless a server operator sets
+  `AUDIT_ALLOW_CHAIN_REHASH=true`. An ordinary admin holding `audit.export`
+  cannot trigger a platform-wide chain rewrite.
+- **Repairs legacy rows only.** It only recomputes rows written under the legacy
+  unkeyed scheme. It never rewrites a keyed (HMAC) row.
+- **Fails closed.** If a keyed row's stored hash doesn't match, rehash returns
+  `409` and refuses to overwrite it — a keyed mismatch is a genuine integrity
+  signal (tamper or bug), not something to launder into a valid chain.
+
+### Audit Log Export — `session_id` Redaction *(2026-07)*
+
+`GET /api/v1/security/audit-log/export` is scoped to the caller's organization
+and returns the full chain values for offline integrity verification. The raw
+`session_id` is **redacted to a non-reversible SHA-256 fingerprint** — an
+`audit.export` holder can still correlate events by session within an export
+without receiving the live session identifier. `session_id` is not part of the
+hash chain, so redacting it does not affect integrity verification.
 
 ---
 

@@ -9,9 +9,9 @@ The Logbook uses multi-layer encryption to protect data at rest, in transit, and
 | Layer | Algorithm | Purpose |
 |-------|-----------|---------|
 | **Passwords** | Argon2id | Password hashing (irreversible) |
-| **Data at rest** | AES-256 | Encrypt sensitive database fields |
+| **Data at rest** | AES-256-GCM | Authenticated encryption of sensitive database fields (legacy Fernet values still readable) |
 | **Data in transit** | TLS 1.3 | HTTPS for all client-server communication |
-| **Audit log integrity** | SHA-256 hash chain | Tamper-proof audit trail |
+| **Audit log integrity** | HMAC-SHA256 keyed hash chain | Tamper-evident audit trail |
 
 ---
 
@@ -25,9 +25,19 @@ Passwords are hashed using Argon2id, the OWASP-recommended algorithm. Argon2id i
 
 ---
 
-## AES-256 Encryption at Rest
+## Authenticated Encryption at Rest (AES-256-GCM)
 
-Sensitive fields in the database are encrypted using AES-256 before storage.
+Sensitive fields in the database are encrypted using **AES-256-GCM** before
+storage — authenticated encryption that provides both confidentiality and
+integrity in one pass (a tampered ciphertext fails to decrypt rather than
+silently returning garbage), with a fresh random 96-bit nonce per value.
+
+Values written before the AES-256-GCM migration used **Fernet**
+(AES-128-CBC + HMAC-SHA256); these remain transparently readable, so no data
+migration is required for correctness. `backend/scripts/reencrypt_to_aesgcm.py`
+(dry-run by default) re-encrypts existing rows to AES-256-GCM as a background
+step, after which Fernet read-support can be retired. See the operator runbook:
+[`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](../docs/AES256_GCM_BACKFILL_RUNBOOK.md).
 
 ### Configuration
 
@@ -45,7 +55,7 @@ ENCRYPTION_SALT=<32-character hex string>  # openssl rand -hex 16
 - MFA secrets
 - Backup encryption keys
 
-> **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256 encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
+> **Email credentials at rest:** All email platform secrets — `smtp_password`, `google_client_secret`, `google_app_password`, `microsoft_client_secret`, and `cloudflare_api_token` — are AES-256-GCM encrypted before being stored in the organization settings JSON column. They are prefixed with `enc:` to prevent double-encryption and are redacted to `••••••••` in all API responses.
 
 ### Key Rotation
 
@@ -96,7 +106,7 @@ sudo certbot --nginx -d your-domain.com
 
 ## Audit Log Hash Chain
 
-The audit logging system uses a blockchain-inspired SHA-256 hash chain to ensure tamper-proof records.
+The audit logging system uses a blockchain-inspired **keyed HMAC-SHA256** hash chain to ensure tamper-evident records — forging the chain requires the signing key, not merely database write access. (Rows written before the keyed upgrade remain verifiable under the legacy unkeyed SHA-256 scheme.)
 
 ### How It Works
 

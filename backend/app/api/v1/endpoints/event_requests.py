@@ -188,10 +188,17 @@ async def _send_request_notification(
                 subject = DEFAULT_EVENT_REQUEST_STATUS_SUBJECT
                 rendered_html = DEFAULT_EVENT_REQUEST_STATUS_HTML
                 rendered_text = DEFAULT_EVENT_REQUEST_STATUS_TEXT
+                # organization_logo_img is trusted, pre-built HTML; every other
+                # value (incl. the public-supplied contact_name) is escaped
+                # before it lands in the HTML body.
+                raw_html_keys = {"organization_logo_img"}
                 for key, val in context.items():
                     pattern = r"\{\{\s*" + re.escape(key) + r"\s*\}\}"
+                    html_val = (
+                        str(val) if key in raw_html_keys else _html.escape(str(val))
+                    )
                     subject = re.sub(pattern, str(val), subject)
-                    rendered_html = re.sub(pattern, str(val), rendered_html)
+                    rendered_html = re.sub(pattern, html_val, rendered_html)
                     rendered_text = re.sub(pattern, str(val), rendered_text)
                 html_body = f"<!DOCTYPE html><html><head><style>{DEFAULT_CSS}</style></head><body>{rendered_html}</body></html>"
                 text_body = rendered_text

@@ -6,11 +6,12 @@ Supports creating reusable evaluation templates, running test sessions,
 and tracking pass/fail results for fire department skills assessments.
 """
 
+import html
 from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, require_permission
@@ -219,6 +220,16 @@ async def get_template(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill template not found"
         )
+
+    # Mirror the list route's visibility model: a non-officer may fetch a
+    # template by id only if it's visible to all members (not officers_only /
+    # assigned_only). 404 so restricted templates aren't confirmed to exist.
+    if not _user_has_officer_role(current_user):
+        if (template.visibility or "all_members") != "all_members":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Skill template not found",
+            )
 
     return template
 
@@ -521,6 +532,16 @@ async def list_tests(
         SkillTest.organization_id == current_user.organization_id
     )
 
+    # Skills-test rows carry PHI-adjacent data (pass/fail, scores, examiner
+    # notes). A non-officer may only see tests they are party to — the same
+    # officer-vs-member split the template list applies. Officers
+    # (training.manage / officer role) keep the full org view.
+    if not _user_has_officer_role(current_user):
+        uid = str(current_user.id)
+        query = query.where(
+            or_(SkillTest.candidate_id == uid, SkillTest.examiner_id == uid)
+        )
+
     if not include_practice:
         query = query.where(SkillTest.is_practice == False)  # noqa: E712
 
@@ -712,6 +733,17 @@ async def get_test(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
         )
+
+    # A non-officer may only read a test they are party to (candidate or
+    # examiner). The full detail exposes examiner notes + per-criterion scores,
+    # so this is PHI-adjacent. 404 (not 403) so the record's existence isn't
+    # confirmed to an unrelated member.
+    if not _user_has_officer_role(current_user):
+        uid = str(current_user.id)
+        if test.candidate_id != uid and test.examiner_id != uid:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Skill test not found"
+            )
 
     # Fetch related entities for display names
     template = None
@@ -1173,14 +1205,14 @@ async def email_test_results(
 
             criteria_html += (
                 f'<tr><td style="padding:4px 8px;border-bottom:1px solid #eee;">'
-                f"{label}</td>"
+                f"{html.escape(str(label))}</td>"
                 f'<td style="padding:4px 8px;border-bottom:1px solid #eee;'
                 f'text-align:center;font-weight:bold;">{badge}</td></tr>'
             )
 
         if criteria_html:
             sections_html += (
-                f'<h3 style="margin:16px 0 8px;">{section_name}</h3>'
+                f'<h3 style="margin:16px 0 8px;">{html.escape(str(section_name))}</h3>'
                 f'<table style="width:100%;border-collapse:collapse;">'
                 f"{criteria_html}</table>"
             )
@@ -1194,11 +1226,11 @@ async def email_test_results(
       <h2 style="color:#333;">Skills Test Results — {test_type}</h2>
       <table style="width:100%;margin-bottom:16px;">
         <tr><td style="padding:4px 0;color:#666;">Template:</td>
-            <td style="padding:4px 0;font-weight:bold;">{template_name}</td></tr>
+            <td style="padding:4px 0;font-weight:bold;">{html.escape(str(template_name))}</td></tr>
         <tr><td style="padding:4px 0;color:#666;">Candidate:</td>
-            <td style="padding:4px 0;font-weight:bold;">{candidate_name}</td></tr>
+            <td style="padding:4px 0;font-weight:bold;">{html.escape(str(candidate_name))}</td></tr>
         <tr><td style="padding:4px 0;color:#666;">Examiner:</td>
-            <td style="padding:4px 0;font-weight:bold;">{examiner_name}</td></tr>
+            <td style="padding:4px 0;font-weight:bold;">{html.escape(str(examiner_name))}</td></tr>
         <tr><td style="padding:4px 0;color:#666;">Result:</td>
             <td style="padding:4px 0;font-weight:bold;">{result_text}</td></tr>
         <tr><td style="padding:4px 0;color:#666;">Score:</td>

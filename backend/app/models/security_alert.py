@@ -68,6 +68,12 @@ class SecurityAlertRecord(Base):
     source_ip = Column(String(45))
     user_id = Column(String(36), index=True)
 
+    # Tenant that the alert belongs to, so an org admin only sees (and can only
+    # acknowledge/resolve) their own org's alerts. Nullable: pre-auth / IP-only
+    # alerts (e.g. brute force against the login page) have no owning tenant and
+    # are platform-level, not shown in any single org's view.
+    organization_id = Column(String(36), index=True, nullable=True)
+
     details = Column(JSON, nullable=False, default=dict)
 
     acknowledged = Column(Boolean, nullable=False, default=False)
@@ -85,6 +91,7 @@ class SecurityAlertRecord(Base):
     __table_args__ = (
         Index("idx_security_alert_timestamp", "timestamp"),
         Index("idx_security_alert_type_level", "alert_type", "threat_level"),
+        Index("idx_security_alert_org_timestamp", "organization_id", "timestamp"),
     )
 
     def __repr__(self):

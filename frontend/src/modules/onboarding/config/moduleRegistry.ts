@@ -400,30 +400,6 @@ export const getModuleById = (id: string): ModuleDefinition | undefined => {
   return MODULE_REGISTRY.find((m) => m.id === id);
 };
 
-/**
- * Get modules grouped by priority
- */
-export const getModulesByPriority = () => ({
-  essential: MODULE_REGISTRY.filter((m) => m.priority === 'essential'),
-  recommended: MODULE_REGISTRY.filter((m) => m.priority === 'recommended'),
-  optional: MODULE_REGISTRY.filter((m) => m.priority === 'optional'),
-});
-
-/**
- * Get modules grouped by category
- */
-export const getModulesByCategory = () => {
-  const categories: Record<string, ModuleDefinition[]> = {};
-  MODULE_REGISTRY.forEach((module) => {
-    const existing = categories[module.category];
-    if (existing) {
-      existing.push(module);
-    } else {
-      categories[module.category] = [module];
-    }
-  });
-  return categories;
-};
 
 /**
  * Get only user-facing modules (excludes system modules)
@@ -433,29 +409,4 @@ export const getUserFacingModules = (): ModuleDefinition[] => {
   return MODULE_REGISTRY.filter((m) => m.category !== 'System');
 };
 
-/**
- * Get modules that have configurable permissions
- * Use this for PositionSetup and ModuleConfigTemplate pages
- */
-export const getConfigurableModules = (): ModuleDefinition[] => {
-  return MODULE_REGISTRY;
-};
 
-/**
- * Get a map of module IDs to their permission config
- * Useful for initializing position permissions
- */
-export const getModulePermissionMap = (): Record<string, { view: boolean; manage: boolean }> => {
-  const map: Record<string, { view: boolean; manage: boolean }> = {};
-  MODULE_REGISTRY.forEach((module) => {
-    map[module.id] = { view: true, manage: false };
-  });
-  return map;
-};
-
-/**
- * Get all unique module IDs
- */
-export const getAllModuleIds = (): string[] => {
-  return MODULE_REGISTRY.map((m) => m.id);
-};

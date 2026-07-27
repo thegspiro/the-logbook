@@ -28,6 +28,24 @@ from app.schemas.organization import (
 )
 
 
+def _deep_merge_settings(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Recursively merge ``updates`` into ``base`` (returns a new dict).
+
+    A shallow ``{**base, **updates}`` merge replaces a whole nested section when
+    a partial PATCH touches only one of its sub-keys — dropping the section's
+    other keys (ORU-9 data-loss risk). This merges dict-valued sections key by
+    key; a non-dict value (including an explicit null/list) still replaces.
+    """
+    result = dict(base)
+    for key, value in updates.items():
+        existing = result.get(key)
+        if isinstance(value, dict) and isinstance(existing, dict):
+            result[key] = _deep_merge_settings(existing, value)
+        else:
+            result[key] = value
+    return result
+
+
 class OrganizationService:
     """Service for organization-related business logic"""
 
@@ -106,8 +124,18 @@ class OrganizationService:
             # dual-writes during onboarding.
 
         # ── Migration from OnboardingStatus ──
-        onboarding_result = await self.db.execute(select(OnboardingStatus).limit(1))
-        onboarding = onboarding_result.scalar_one_or_none()
+        # Must be scoped to THIS org — an unfiltered `select(OnboardingStatus)
+        # .limit(1)` would seed one org's enabled_modules from an arbitrary
+        # other org's onboarding row (and then persist it below). When `org`
+        # isn't available we cannot scope it safely, so fall through to defaults.
+        onboarding = None
+        if org is not None:
+            onboarding_result = await self.db.execute(
+                select(OnboardingStatus).where(
+                    OnboardingStatus.organization_id == str(org.id)
+                )
+            )
+            onboarding = onboarding_result.scalars().first()
 
         if onboarding and onboarding.enabled_modules:
             enabled_list = onboarding.enabled_modules
@@ -274,7 +302,11 @@ class OrganizationService:
 
         # SEC: If the update contains redacted placeholder values ('••••••••'),
         # preserve the existing encrypted values instead of overwriting them.
-        for section_key in ("email_service", "file_storage"):
+        # "auth" must be included: GET /settings redacts SSO client secrets to
+        # '••••••••', so a full-settings round-trip that saves the auth section
+        # back would otherwise persist the literal bullet string (encrypt skips
+        # it), silently destroying the real SSO client secret and breaking login.
+        for section_key in ("email_service", "file_storage", "auth"):
             incoming = settings_update.get(section_key)
             existing = current_settings.get(section_key)
             if isinstance(incoming, dict) and isinstance(existing, dict):
@@ -282,8 +314,9 @@ class OrganizationService:
                     if val == "••••••••":
                         incoming[field] = existing.get(field)
 
-        # Update with new settings (merge dictionaries)
-        updated_settings = {**current_settings, **settings_update}
+        # Deep-merge so a partial PATCH of one sub-key doesn't wipe the rest of
+        # its section (ORU-9). A shallow {**a, **b} would replace whole sections.
+        updated_settings = _deep_merge_settings(current_settings, settings_update)
 
         # SEC: Encrypt secret fields before persisting to the database
         updated_settings = encrypt_settings_secrets(updated_settings)
@@ -294,10 +327,6 @@ class OrganizationService:
 
         # Return updated settings
         return await self.get_organization_settings(organization_id)
-
-    def check_contact_info_enabled(self, settings: OrganizationSettings) -> bool:
-        """Check if contact information display is enabled"""
-        return settings.contact_info_visibility.enabled
 
     async def get_enabled_modules(
         self, organization_id: UUID
@@ -398,7 +427,15 @@ class OrganizationService:
         formats the ID, then atomically increments next_number.
         Returns None if auto-generation is disabled.
         """
-        org = await self.get_organization(organization_id)
+        # Lock the org row FOR UPDATE so two concurrent member creations can't
+        # both read the same next_number and mint duplicate membership IDs
+        # (TOCTOU on the JSON counter). The lock is released at commit/rollback.
+        result = await self.db.execute(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        org = result.scalar_one_or_none()
         if not org:
             return None
 
@@ -415,7 +452,10 @@ class OrganizationService:
         membership_id = f"{prefix}{str(next_number).zfill(4)}"
 
         # Verify this number isn't already in use (active members only).
-        # If it is, keep incrementing until we find an unused one.
+        # If it is, keep incrementing until we find an unused one — but cap the
+        # search so a pathological/dense ID space can't spin forever.
+        max_attempts = 100_000
+        attempts = 0
         while True:
             result = await self.db.execute(
                 select(func.count())
@@ -429,6 +469,12 @@ class OrganizationService:
             count = result.scalar() or 0
             if count == 0:
                 break
+            attempts += 1
+            if attempts >= max_attempts:
+                raise ValueError(
+                    "Unable to generate a unique membership ID after "
+                    f"{max_attempts} attempts"
+                )
             next_number += 1
             membership_id = f"{prefix}{str(next_number).zfill(4)}"
 
@@ -437,26 +483,5 @@ class OrganizationService:
         settings_dict["membership_id"] = mid
         org.settings = settings_dict
         await self.db.flush()
-
-        return membership_id
-
-    async def assign_next_membership_number(
-        self,
-        organization_id: UUID,
-        user: "User",
-    ) -> Optional[str]:
-        """
-        Assign a membership number to a user if they don't already have one
-        and auto-generation is enabled.
-
-        Skips assignment if the user already has a membership_number set.
-        Returns the assigned number, or None if no assignment was made.
-        """
-        if user.membership_number:
-            return user.membership_number
-
-        membership_id = await self.generate_next_membership_id(organization_id)
-        if membership_id:
-            user.membership_number = membership_id
 
         return membership_id

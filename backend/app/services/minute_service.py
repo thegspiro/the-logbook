@@ -80,12 +80,22 @@ class MinuteService:
         ):
             minutes_dict["footer_config"] = data.footer_config.model_dump()
 
-        # If a template_id is provided but no sections, populate from template
-        if minutes_dict.get("template_id") and not minutes_dict.get("sections"):
+        # Validate any client-supplied template_id belongs to the caller's org
+        # *whenever* it is present — not only when populating sections from it.
+        # Otherwise a foreign template_id is persisted and later eager-loaded by
+        # get_minutes (template FK join, no org filter), leaking another org's
+        # header/footer config into the response and the published document.
+        template = None
+        if minutes_dict.get("template_id"):
             template = await self._get_template(
                 minutes_dict["template_id"], organization_id
             )
-            if template and template.sections:
+            if template is None:
+                raise ValueError("Invalid template")
+
+        # If a template is provided but no sections, populate from template
+        if template and not minutes_dict.get("sections"):
+            if template.sections:
                 minutes_dict["sections"] = [
                     {
                         "order": s["order"],
@@ -180,10 +190,19 @@ class MinuteService:
         return result.scalar_one_or_none()
 
     async def get_minutes(
-        self, minutes_id: str, organization_id: UUID
+        self,
+        minutes_id: str,
+        organization_id: UUID,
+        restricted: bool = False,
     ) -> Optional[MeetingMinutes]:
-        """Get a single meeting minutes record with all relationships"""
-        result = await self.db.execute(
+        """Get a single meeting minutes record with all relationships.
+
+        ``restricted=True`` (a caller without ``minutes.manage``) limits the
+        result to approved, non-executive minutes — unpublished drafts and
+        closed executive-session minutes return None (→ 404) so their existence
+        isn't revealed. Internal/manage callers use the default (see all).
+        """
+        query = (
             select(MeetingMinutes)
             .where(MeetingMinutes.id == minutes_id)
             .where(MeetingMinutes.organization_id == str(organization_id))
@@ -193,6 +212,12 @@ class MinuteService:
                 selectinload(MeetingMinutes.template),
             )
         )
+        if restricted:
+            query = query.where(
+                MeetingMinutes.status == MinutesStatus.APPROVED.value,
+                MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+            )
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def list_minutes(
@@ -203,8 +228,14 @@ class MinuteService:
         search: Optional[str] = None,
         skip: int = 0,
         limit: int = 50,
+        restricted: bool = False,
     ) -> List[MeetingMinutes]:
-        """List meeting minutes with filtering"""
+        """List meeting minutes with filtering.
+
+        ``restricted=True`` (a caller without ``minutes.manage``) confines the
+        listing to approved, non-executive minutes regardless of the requested
+        status/meeting-type filters.
+        """
         query = (
             select(MeetingMinutes)
             .where(MeetingMinutes.organization_id == str(organization_id))
@@ -217,7 +248,14 @@ class MinuteService:
         if meeting_type:
             query = query.where(MeetingMinutes.meeting_type == meeting_type)
 
-        if status:
+        if restricted:
+            # Members see only ratified, non-executive minutes; a requested
+            # status filter cannot widen this.
+            query = query.where(
+                MeetingMinutes.status == MinutesStatus.APPROVED.value,
+                MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+            )
+        elif status:
             query = query.where(MeetingMinutes.status == status)
 
         if search:
@@ -227,12 +265,12 @@ class MinuteService:
             search_term = f"%{safe_search}%"
             query = query.where(
                 or_(
-                    MeetingMinutes.title.ilike(search_term),
-                    MeetingMinutes.notes.ilike(search_term),
-                    MeetingMinutes.old_business.ilike(search_term),
-                    MeetingMinutes.new_business.ilike(search_term),
-                    MeetingMinutes.agenda.ilike(search_term),
-                    MeetingMinutes.announcements.ilike(search_term),
+                    MeetingMinutes.title.ilike(search_term, escape="\\"),
+                    MeetingMinutes.notes.ilike(search_term, escape="\\"),
+                    MeetingMinutes.old_business.ilike(search_term, escape="\\"),
+                    MeetingMinutes.new_business.ilike(search_term, escape="\\"),
+                    MeetingMinutes.agenda.ilike(search_term, escape="\\"),
+                    MeetingMinutes.announcements.ilike(search_term, escape="\\"),
                 )
             )
 
@@ -585,11 +623,23 @@ class MinuteService:
     # Stats & Search
     # ============================================
 
-    async def get_stats(self, organization_id: UUID) -> dict:
-        """Get aggregate stats for the minutes dashboard"""
+    async def get_stats(
+        self, organization_id: UUID, restricted: bool = False
+    ) -> dict:
+        """Get aggregate stats for the minutes dashboard.
+
+        ``restricted=True`` (a caller without ``minutes.manage``) counts only
+        approved, non-executive minutes, so dashboard totals match what the
+        viewer can actually open.
+        """
         base = select(func.count(MeetingMinutes.id)).where(
             MeetingMinutes.organization_id == str(organization_id)
         )
+        if restricted:
+            base = base.where(
+                MeetingMinutes.status == MinutesStatus.APPROVED.value,
+                MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+            )
 
         total_result = await self.db.execute(base)
         total = total_result.scalar() or 0
@@ -603,7 +653,7 @@ class MinuteService:
         this_month = this_month_result.scalar() or 0
 
         # Open action items
-        open_items_result = await self.db.execute(
+        open_items_query = (
             select(func.count(ActionItem.id))
             .join(MeetingMinutes, ActionItem.minutes_id == MeetingMinutes.id)
             .where(MeetingMinutes.organization_id == str(organization_id))
@@ -617,6 +667,12 @@ class MinuteService:
                 )
             )
         )
+        if restricted:
+            open_items_query = open_items_query.where(
+                MeetingMinutes.status == MinutesStatus.APPROVED.value,
+                MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+            )
+        open_items_result = await self.db.execute(open_items_query)
         open_items = open_items_result.scalar() or 0
 
         # Pending approval
@@ -633,9 +689,18 @@ class MinuteService:
         }
 
     async def search_minutes(
-        self, organization_id: UUID, query: str, limit: int = 20
+        self,
+        organization_id: UUID,
+        query: str,
+        limit: int = 20,
+        restricted: bool = False,
     ) -> List[dict]:
-        """Full-text search across meeting minutes content"""
+        """Full-text search across meeting minutes content.
+
+        ``restricted=True`` (a caller without ``minutes.manage``) confines
+        matches to approved, non-executive minutes so unpublished drafts and
+        executive-session snippets aren't surfaced to plain viewers.
+        """
         safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         search_term = f"%{safe_query}%"
 
@@ -662,10 +727,15 @@ class MinuteService:
             stmt = (
                 select(MeetingMinutes)
                 .where(MeetingMinutes.organization_id == str(organization_id))
-                .where(field.ilike(search_term))
+                .where(field.ilike(search_term, escape="\\"))
                 .order_by(MeetingMinutes.meeting_date.desc())
                 .limit(limit - len(results))
             )
+            if restricted:
+                stmt = stmt.where(
+                    MeetingMinutes.status == MinutesStatus.APPROVED.value,
+                    MeetingMinutes.meeting_type != MinutesMeetingType.EXECUTIVE.value,
+                )
 
             res = await self.db.execute(stmt)
             for row in res.scalars().all():

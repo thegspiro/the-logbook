@@ -7,10 +7,7 @@ import { PasswordStrength } from '../types';
 import { MAX_AVATAR_SIZE } from '../../../constants/config';
 import {
   isValidEmailSecure,
-  isValidUsernameSecure,
-  isValidHostSecure,
   isValidPhone,
-  sanitizeInput,
 } from './security';
 
 /**
@@ -37,12 +34,6 @@ export const isValidEmail = (email: string): boolean => {
   return isValidEmailSecure(email);
 };
 
-/**
- * Validate username format (secure version with length limits)
- */
-export const isValidUsername = (username: string): boolean => {
-  return isValidUsernameSecure(username);
-};
 
 /**
  * Validate image file
@@ -107,12 +98,6 @@ export const isValidPort = (port: number): boolean => {
   return Number.isInteger(port) && port >= 1 && port <= 65535;
 };
 
-/**
- * Validate SMTP host (secure version)
- */
-export const isValidHost = (host: string): boolean => {
-  return isValidHostSecure(host);
-};
 
 /**
  * Validate phone number
@@ -121,9 +106,3 @@ export const isValidPhoneNumber = (phone: string): boolean => {
   return isValidPhone(phone);
 };
 
-/**
- * Sanitize text input
- */
-export const sanitizeTextInput = (input: string): string => {
-  return sanitizeInput(input);
-};

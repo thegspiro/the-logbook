@@ -76,22 +76,6 @@ class ElectionService:
     # Election CRUD helpers
     # ------------------------------------------------------------------
 
-    async def list_elections(
-        self,
-        organization_id,
-        status_filter: Optional[str] = None,
-    ) -> List[Election]:
-        """List elections for an organization, optionally filtered by status."""
-        query = select(Election).where(Election.organization_id == str(organization_id))
-
-        if status_filter:
-            status_enum = ElectionStatus(status_filter)
-            query = query.where(Election.status == status_enum)
-
-        query = query.order_by(Election.start_date.desc())
-        result = await self.db.execute(query)
-        return list(result.scalars().all())
-
     async def get_election(
         self,
         election_id,
@@ -861,10 +845,16 @@ class ElectionService:
 
         Returns: (Vote object, error message)
         """
-        # Check eligibility
+        # Check eligibility. This gate is authoritative: check_voter_eligibility
+        # enforces election status, the open/close window, restricted
+        # eligible-voter lists, and membership-tier/attendance rules. Skipping it
+        # would let any authenticated member vote in a draft/closed election,
+        # outside the voting window, or without being on the eligible list.
         eligibility = await self.check_voter_eligibility(
             user_id, election_id, organization_id
         )
+        if not eligibility.is_eligible:
+            return None, eligibility.reason or "You are not eligible to vote"
 
         # Get election for further checks
         result = await self.db.execute(
@@ -3036,17 +3026,6 @@ Best regards,
             "proxy_voting_enabled": enabled,
             "authorizations": election.proxy_authorizations or [],
         }
-
-    def _get_active_proxy_authorizations_for_user(
-        self, proxy_user_id: str, election: Election
-    ) -> List[Dict]:
-        """Return all active (non-revoked) proxy authorizations where this user is the proxy."""
-        auths = election.proxy_authorizations or []
-        return [
-            a
-            for a in auths
-            if a.get("proxy_user_id") == proxy_user_id and not a.get("revoked_at")
-        ]
 
     async def cast_proxy_vote(
         self,

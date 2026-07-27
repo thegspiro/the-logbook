@@ -8,7 +8,7 @@ attendance tracking, and calendar views.
 from datetime import date, timedelta
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -79,6 +79,10 @@ from app.schemas.scheduling import (
     SwapRequestStatus,
     TimeOffStatus,
 )
+from app.services.integration_services.notification_dispatch import (
+    notify_entity_created,
+    notify_summary,
+)
 from app.services.scheduling_service import SchedulingService
 from app.services.shift_eligibility_service import ShiftEligibilityService
 
@@ -87,6 +91,11 @@ router = APIRouter()
 # Maximum span for the open-shifts lookup window (about a year), so a caller
 # cannot request an arbitrarily wide date range.
 MAX_OPEN_SHIFTS_DAYS = 366
+
+# Maximum span for a single pattern-generation request. Generation WRITES a
+# shift (+ assignments) per day in one transaction, so an unbounded range is a
+# DoS (memory/DB exhaustion). About a year, matching the read-window cap.
+MAX_GENERATION_DAYS = 366
 
 
 def _safe_detail(prefix: str, error: str | None) -> str:
@@ -315,6 +324,7 @@ async def list_shifts(
 )
 async def create_shift(
     shift: ShiftCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
@@ -329,6 +339,21 @@ async def create_shift(
             status_code=400,
             detail=_safe_detail("Unable to create shift.", error),
         )
+    # Notify the org's chat integrations about the new shift (background).
+    platoon = getattr(result, "platoon", None)
+    start_time = getattr(result, "start_time", None)
+    end_time = getattr(result, "end_time", None)
+    background_tasks.add_task(
+        notify_entity_created,
+        str(current_user.organization_id),
+        "shift",
+        {
+            "type": f"Platoon {platoon}" if platoon else "Shift",
+            "start_time": start_time.isoformat() if start_time else "",
+            "end_time": end_time.isoformat() if end_time else "",
+            "crew": [],
+        },
+    )
     enriched = await _enrich_shifts(service, current_user.organization_id, [result])
     return enriched[0]
 
@@ -1223,10 +1248,23 @@ async def delete_pattern(
 async def generate_shifts_from_pattern(
     pattern_id: UUID,
     request: GenerateShiftsRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Generate shifts from a pattern for a date range"""
+    if request.end_date < request.start_date:
+        raise HTTPException(
+            status_code=400, detail="End date must be on or after start date."
+        )
+    if (request.end_date - request.start_date).days > MAX_GENERATION_DAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Date range too large — generate at most "
+                f"{MAX_GENERATION_DAYS} days at a time."
+            ),
+        )
     service = SchedulingService(db)
     result, error = await service.generate_shifts_from_pattern(
         pattern_id,
@@ -1238,6 +1276,14 @@ async def generate_shifts_from_pattern(
     if error:
         raise HTTPException(
             status_code=400, detail=_safe_detail("Unable to generate shifts.", error)
+        )
+    # Bulk create → one summary notification, not one per generated shift.
+    if result:
+        background_tasks.add_task(
+            notify_summary,
+            str(current_user.organization_id),
+            "🚒 Shifts published",
+            f"{len(result)} shift(s) were published to the schedule.",
         )
     enriched = await _enrich_shifts(service, current_user.organization_id, result)
     return {"shifts_created": len(result), "shifts": enriched}
@@ -1888,7 +1934,11 @@ async def signup_for_shift(
         "position": signup.position.value,
     }
     result, error = await service.create_assignment(
-        current_user.organization_id, shift_id, assignment_data, current_user.id
+        current_user.organization_id,
+        shift_id,
+        assignment_data,
+        current_user.id,
+        self_signup=True,
     )
     if error:
         raise HTTPException(

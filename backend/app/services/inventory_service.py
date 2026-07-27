@@ -85,11 +85,6 @@ _REQUIRES_ASSIGNED_USER = {ItemStatus.ASSIGNED}
 _MIN_BAR_WIDTH_INCH = 0.0075
 
 
-def _sanitize_barcode_value(raw: str) -> str:
-    """Strip non-ASCII characters that Code128 cannot encode."""
-    return "".join(ch for ch in raw if ord(ch) < 128)
-
-
 # Inventory barcode scheme — a single rule used everywhere: a human-readable
 # sequential number per organization, ``<prefix><zero-padded number>`` with a
 # 6-digit minimum (e.g. INV-000001, INV-000002, ...). The prefix (default
@@ -3112,11 +3107,11 @@ class InventoryService:
                         if i.issued_at
                         else i.created_at.isoformat()
                     ),
-                    "summary": f"Issued {i.quantity} to {user_name}",
+                    "summary": f"Issued {i.quantity_issued} to {user_name}",
                     "details": {
                         "user_name": user_name,
-                        "quantity": i.quantity,
-                        "reason": i.reason,
+                        "quantity": i.quantity_issued,
+                        "reason": i.issue_reason,
                         "is_returned": i.is_returned,
                     },
                 }
@@ -3127,10 +3122,10 @@ class InventoryService:
                         "type": "issuance_return",
                         "id": f"{i.id}_return",
                         "date": i.returned_at.isoformat(),
-                        "summary": f"{user_name} returned {i.quantity}",
+                        "summary": f"{user_name} returned {i.quantity_issued}",
                         "details": {
                             "user_name": user_name,
-                            "quantity": i.quantity,
+                            "quantity": i.quantity_issued,
                             "return_condition": self._enum_value(i.return_condition),
                             "return_notes": i.return_notes,
                         },

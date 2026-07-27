@@ -103,5 +103,32 @@ class TestBruteForce:
         assert alert.details["failed_attempts"] == 3
 
 
+class TestReportPrivilegeEscalation:
+    """The convenience wrapper wired into the role/permission grant ceilings."""
+
+    async def test_reports_and_commits_on_blocked_attempt(self):
+        from app.services import security_monitoring
+
+        db = _db()
+        db.commit = AsyncMock()
+        await security_monitoring.report_privilege_escalation_attempt(
+            db, "user-1", "role:abc", "1.2.3.4"
+        )
+        # detect_privilege_escalation fires (action "modify_permissions" is
+        # suspicious), so the flushed alert is committed to survive the caller's
+        # subsequent 403 rollback.
+        db.commit.assert_awaited()
+
+    async def test_never_raises_when_monitoring_fails(self):
+        from app.services import security_monitoring
+
+        db = _db()
+        db.commit = AsyncMock(side_effect=RuntimeError("boom"))
+        # Security monitoring must never break the request it observes.
+        await security_monitoring.report_privilege_escalation_attempt(
+            db, "user-1", "role:abc", None
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

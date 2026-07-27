@@ -14,7 +14,12 @@ deleted after processing.
 import csv
 import io
 from typing import Any
+# xml.etree.ElementTree is used only for the Element TYPE in annotations. All
+# actual PARSING of untrusted XML goes through defusedxml (below) to block XXE
+# and entity-expansion (billion-laughs) attacks.
 from xml.etree import ElementTree
+
+import defusedxml.ElementTree as safe_etree
 
 from loguru import logger
 
@@ -82,7 +87,7 @@ def parse_nemsis_xml(file_content: bytes) -> list[dict[str, Any]]:
     Returns:
         List of validated record dicts.
     """
-    root = ElementTree.fromstring(file_content)
+    root = safe_etree.fromstring(file_content)
     records: list[dict[str, Any]] = []
 
     # Handle both namespaced and non-namespaced XML

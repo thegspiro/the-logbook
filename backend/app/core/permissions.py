@@ -280,10 +280,13 @@ FUNDRAISING_MANAGE = Permission(
 # Audit
 AUDIT_VIEW = Permission("audit.view", "View audit logs", PermissionCategory.AUDIT)
 AUDIT_EXPORT = Permission("audit.export", "Export audit logs", PermissionCategory.AUDIT)
-# Destructive log management (clearing error/audit logs) is anti-forensics
-# sensitive and must be gated more strongly than read/export.
+# Diagnostic error-log management (clearing the ErrorLog table). NOTE: this
+# does NOT grant deletion of the tamper-evident AuditLog trail, which is
+# append-only by design (no deletion path exists; entries are checkpointed and
+# retained per HIPAA_AUDIT_RETENTION_DAYS, never purged). Kept anti-forensics
+# sensitive and gated more strongly than read/export.
 AUDIT_MANAGE = Permission(
-    "audit.manage", "Manage and delete audit/error logs", PermissionCategory.AUDIT
+    "audit.manage", "Manage and clear diagnostic error logs", PermissionCategory.AUDIT
 )
 
 # Events

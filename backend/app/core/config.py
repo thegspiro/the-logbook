@@ -135,6 +135,9 @@ class Settings(BaseSettings):
         30  # Short-lived access tokens (use refresh flow)
     )
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Grace window during which a just-rotated refresh token is still accepted,
+    # so concurrent legitimate refreshes don't trip replay detection. Keep short.
+    REFRESH_ROTATION_GRACE_SECONDS: int = 30
 
     # Password Policy
     PASSWORD_MIN_LENGTH: int = 12
@@ -170,12 +173,23 @@ class Settings(BaseSettings):
     # or password". Friendlier — it stops users hammering a disguised lock — but
     # it confirms the account exists. Set False for strict anti-enumeration
     # (SEC-14) on internet-facing deployments.
-    ACCOUNT_LOCKOUT_REVEAL: bool = True
+    # Default False (strict anti-enumeration): a locked account returns the same
+    # generic "incorrect username or password" as a wrong password, never
+    # confirming the account exists. Set True to instead tell users about the
+    # temporary lock (friendlier, but reveals account existence — SEC-14).
+    ACCOUNT_LOCKOUT_REVEAL: bool = False
 
     # Vote signing key — used for HMAC-SHA256 vote integrity signatures.
     # Falls back to SECRET_KEY if not set.  A dedicated key is recommended so
     # that rotating SECRET_KEY does not invalidate existing vote signatures.
     VOTE_SIGNING_KEY: str = ""
+
+    # Audit-log signing key — keys the HMAC-SHA256 tamper-evidence hash chain.
+    # Falls back to SECRET_KEY if not set. A DEDICATED key stored outside the
+    # application database is strongly recommended: it means an attacker who can
+    # only write audit rows (SQL access) cannot forge a valid chain, since they
+    # do not possess the key. Store it in a secrets manager / HSM, not the DB.
+    AUDIT_LOG_SIGNING_KEY: str = ""
 
     # Encryption - CRITICAL: Must be set via ENCRYPTION_KEY env var
     ENCRYPTION_KEY: str = ""
@@ -193,6 +207,10 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_PER_MINUTE: int = 60
+    # Per-form/day ceiling on unauthenticated public form submissions (bounds
+    # DB flooding and integration/email abuse from a distributed spam flood).
+    # 0 disables the cap.
+    PUBLIC_FORM_DAILY_LIMIT: int = 500
 
     # Trusted proxy IPs for X-Forwarded-For validation
     TRUSTED_PROXY_IPS: str = ""  # Comma-separated list of trusted proxy IPs
@@ -210,6 +228,14 @@ class Settings(BaseSettings):
     # issues are detected (missing secrets, etc.).  Production and staging
     # ALWAYS block regardless of this flag.  Set to False for local dev only.
     SECURITY_BLOCK_INSECURE_DEFAULTS: bool = False
+    # SEC: Break-glass gate for the audit-chain rehash tool. Rehash rewrites the
+    # single, cross-organization audit hash chain, so it must not be reachable by
+    # an ordinary org admin who merely holds `audit.export`. It stays disabled
+    # until a server operator (who controls the environment — the de-facto
+    # platform administrator) sets this True to perform a one-time legacy-hash
+    # repair, then turns it back off. Even when enabled, rehash can only repair
+    # legacy (unkeyed) rows — it never rewrites keyed rows (see rehash_chain).
+    AUDIT_ALLOW_CHAIN_REHASH: bool = False
 
     def validate_security_config(self) -> list[str]:
         """
@@ -245,11 +271,14 @@ class Settings(BaseSettings):
                 'Generate one with: python3 -c "import secrets; print(secrets.token_urlsafe(64))"'
             )
 
-        if not self.ENCRYPTION_KEY or any(
-            p in self.ENCRYPTION_KEY for p in _insecure_patterns
+        if (
+            not self.ENCRYPTION_KEY
+            or any(p in self.ENCRYPTION_KEY for p in _insecure_patterns)
+            or len(self.ENCRYPTION_KEY) < 32
         ):
             warnings.append(
-                "CRITICAL: ENCRYPTION_KEY must be set to a secure random value. "
+                "CRITICAL: ENCRYPTION_KEY must be set to a secure random value "
+                "(min 32 chars). "
                 'Generate one with: python3 -c "import secrets; print(secrets.token_hex(32))"'
             )
 
@@ -285,7 +314,10 @@ class Settings(BaseSettings):
                 )
 
             if self.DEBUG:
-                warnings.append("WARNING: DEBUG mode should be disabled in production")
+                warnings.append(
+                    "CRITICAL: DEBUG mode must be disabled in production — it can "
+                    "expose stack traces and internal details to clients"
+                )
 
             if self.DB_ECHO:
                 warnings.append(
@@ -295,7 +327,9 @@ class Settings(BaseSettings):
 
             if self.ENABLE_DOCS:
                 warnings.append(
-                    "WARNING: API documentation should be disabled in production"
+                    "CRITICAL: API documentation (ENABLE_DOCS) must be disabled in "
+                    "production — /docs, /redoc, and /openapi.json expose the full "
+                    "API surface for enumeration"
                 )
 
             if not self.VOTE_SIGNING_KEY:
@@ -337,16 +371,31 @@ class Settings(BaseSettings):
             return set()
         return {ip.strip() for ip in self.TRUSTED_PROXY_IPS.split(",") if ip.strip()}
 
-    def is_production_ready(self) -> bool:
-        """Check if configuration is production-ready (no CRITICAL warnings)."""
-        warnings = self.validate_security_config() + self.validate_cors_config()
-        return not any("CRITICAL" in w for w in warnings)
-
     # ============================================
     # GeoIP and Country Blocking
     # ============================================
     GEOIP_ENABLED: bool = True  # Enable geo-blocking
     GEOIP_DATABASE_PATH: str = "./data/GeoLite2-Country.mmdb"  # MaxMind database path
+
+    # SEC: When True, geo-blocking fails CLOSED — an IP whose country cannot be
+    # resolved (missing/corrupt MaxMind DB, address-not-found, lookup error) is
+    # BLOCKED rather than allowed. Default False preserves fail-open (a lookup
+    # gap does not lock users out). Private/reserved IPs and allowlisted IPs are
+    # ALWAYS permitted regardless of this flag, so a LAN/allowlisted operator can
+    # still recover if a missing DB would otherwise block everyone. Enabling this
+    # is a deliberate posture choice for security-sensitive deployments that
+    # accept blocking legitimate but unresolvable IPs.
+    GEOIP_FAIL_CLOSED: bool = False
+
+    # SEC: Country-block rules are a PLATFORM-EDGE control — geo-blocking runs in
+    # middleware before any tenant/auth context exists, against one shared
+    # MaxMind DB and one global blocked-country set, so a rule added by any org
+    # admin affects EVERY tenant. Runtime management via the
+    # /ip-security/blocked-countries API is therefore disabled by default; the
+    # platform operator sets the blocklist at deploy time via BLOCKED_COUNTRIES.
+    # Set this True only if a single deployment intends its admins to manage the
+    # shared blocklist at runtime.
+    GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT: bool = False
 
     # Blocked countries (ISO 3166-1 alpha-2 codes, comma-separated)
     # Default: High-risk nations commonly blocked in security-sensitive applications
@@ -404,6 +453,12 @@ class Settings(BaseSettings):
     STORAGE_TYPE: str = "local"  # local, s3, azure, gcs
     UPLOAD_DIR: str = "./uploads"
     MAX_FILE_SIZE: int = 52428800  # 50 MB
+
+    # Hard ceiling on any request body, enforced at the ASGI edge before the
+    # body is buffered into memory (memory-exhaustion DoS backstop, independent
+    # of nginx's client_max_body_size). Sized above MAX_FILE_SIZE to leave room
+    # for multipart-upload envelope overhead.
+    MAX_REQUEST_BODY_SIZE: int = 62914560  # 60 MB
 
     # AWS S3
     AWS_ACCESS_KEY_ID: str | None = None
@@ -531,7 +586,11 @@ class Settings(BaseSettings):
     # ============================================
     # Development
     # ============================================
-    ENABLE_DOCS: bool = True  # OpenAPI/Swagger docs
+    # OpenAPI/Swagger docs. On by default for development convenience, but
+    # enabling them in production is a CRITICAL misconfiguration that blocks
+    # startup (they expose the full API surface). Production must set
+    # ENABLE_DOCS=false (the production compose override does this).
+    ENABLE_DOCS: bool = True
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = (
         "text"  # "text" for human-readable, "json" for structured JSON logging

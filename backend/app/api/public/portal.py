@@ -178,8 +178,8 @@ async def get_organization_info(
     start_time = time.time()
 
     try:
-        # Validate IP rate limit
-        await validate_ip_rate_limit(request)
+        # IP rate limiting runs inside authenticate_api_key (PP-4), ahead of the
+        # bcrypt verification, so it is not repeated here.
 
         # Get config and check if enabled
         result = await db.execute(
@@ -284,8 +284,8 @@ async def get_organization_stats(
     start_time = time.time()
 
     try:
-        # Validate IP rate limit
-        await validate_ip_rate_limit(request)
+        # IP rate limiting runs inside authenticate_api_key (PP-4), ahead of the
+        # bcrypt verification, so it is not repeated here.
 
         # Get config and check if enabled
         result = await db.execute(
@@ -383,8 +383,8 @@ async def get_public_events(
     start_time = time.time()
 
     try:
-        # Validate IP rate limit
-        await validate_ip_rate_limit(request)
+        # IP rate limiting runs inside authenticate_api_key (PP-4), ahead of the
+        # bcrypt verification, so it is not repeated here.
 
         # Get config and check if enabled
         result = await db.execute(

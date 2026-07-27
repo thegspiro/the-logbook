@@ -11,7 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import PaginationParams, require_permission
+from app.api.dependencies import (
+    PaginationParams,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
@@ -1196,6 +1200,13 @@ async def list_member_dues(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
 ):
+    # Member dues balances are individual financial records. `finance.view`
+    # (roster-level read) must not expose one member's dues to another; only a
+    # dues manager (`finance.manage`, the permission that records/waives
+    # payments) may query across members. Everyone else is confined to their
+    # own dues regardless of the requested user_id.
+    if not user_has_permission(current_user, "finance.manage"):
+        user_id = str(current_user.id)
     service = FinanceService(db)
     results = await service.list_member_dues(
         str(current_user.organization_id), schedule_id, user_id, status

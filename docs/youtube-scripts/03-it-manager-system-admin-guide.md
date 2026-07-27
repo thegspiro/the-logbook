@@ -284,10 +284,19 @@ and events.view permissions]**
 **[SCREEN: Show the IP security dashboard with allowlist/blocklist]**
 
 > "You can create allowlists — only these IPs can access the system. Or
-> blocklists — these IPs are denied. You can also set up geofencing rules if
-> you want to restrict access to specific geographic regions."
+> blocklists — these IPs are denied. You can also restrict access by geographic
+> region."
 
 **[CALLOUT: "Use IP allowlisting for admin access from station networks only"]**
+
+> "One note on the geographic (country) blocking: for security, the blocked-
+> country list is normally set once at deploy time — your operator configures it
+> with the `BLOCKED_COUNTRIES` setting — and the in-app add/remove controls are
+> off by default. If you want to manage blocked countries from inside the app,
+> your operator enables the `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` setting. This
+> is because country blocking applies to the whole deployment, not just one
+> department. Your IP allowlists and blocklists are unaffected — you manage
+> those in the app as usual."
 
 ### SESSION & PASSWORD POLICIES (16:30 – 17:30)
 

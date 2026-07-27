@@ -117,7 +117,17 @@ class DatabaseManager:
                 logger.warning(f"Database connection attempt {attempt} timed out")
             except Exception as e:
                 last_exception = e
-                logger.warning(f"Database connection attempt {attempt} failed: {e}")
+                # Some async-driver exceptions embed the connection DSN (which
+                # carries DB_PASSWORD). Log the exception type plus a message
+                # scrubbed of the password so credentials never reach the logs.
+                detail = str(e)
+                db_password = getattr(settings, "DB_PASSWORD", "") or ""
+                if db_password:
+                    detail = detail.replace(db_password, "***")
+                logger.warning(
+                    f"Database connection attempt {attempt} failed: "
+                    f"{type(e).__name__}: {detail}"
+                )
 
             # Clean up failed engine
             if self.engine:

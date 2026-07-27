@@ -79,7 +79,7 @@ class TestPasswordHashing:
         """hash_password should raise ValueError for a password that fails validation."""
         from app.core.security import hash_password
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError, match="Password"):
             hash_password("short")
 
     @pytest.mark.unit
@@ -383,12 +383,48 @@ class TestEncryption:
 
     @pytest.mark.unit
     def test_different_encryptions_for_same_plaintext(self):
-        """Fernet uses random IV, so encrypting the same text twice gives different ciphertexts."""
+        """AES-256-GCM uses a random nonce, so encrypting the same text twice gives different ciphertexts."""
         from app.core.security import encrypt_data
 
         c1 = encrypt_data("hello")
         c2 = encrypt_data("hello")
         assert c1 != c2
+
+    @pytest.mark.unit
+    def test_new_ciphertext_uses_aesgcm_marker(self):
+        """New values are AES-256-GCM, version-marked (not a legacy Fernet token)."""
+        from app.core.security import encrypt_data, _GCM_PREFIX
+
+        ct = encrypt_data("Sensitive patient data")
+        assert ct.startswith(_GCM_PREFIX)
+        assert not ct.startswith("gAAAA")  # not a Fernet token
+
+    @pytest.mark.unit
+    def test_legacy_fernet_still_decrypts(self):
+        """Backward compatibility: a value written by the legacy Fernet cipher
+        (before the GCM migration) is still readable via decrypt_data."""
+        from cryptography.fernet import Fernet
+        from app.core.security import decrypt_data, get_encryption_key
+
+        legacy_token = Fernet(get_encryption_key()).encrypt(b"legacy secret").decode()
+        assert not legacy_token.startswith("$gcm1$")
+        assert decrypt_data(legacy_token) == "legacy secret"
+
+    @pytest.mark.unit
+    def test_tampered_gcm_fails_closed(self):
+        """A tampered AES-256-GCM ciphertext must raise (never return unverified
+        bytes) — GCM's authentication tag makes this fail closed."""
+        from app.core.security import encrypt_data, decrypt_data, _GCM_PREFIX
+
+        from cryptography.exceptions import InvalidTag
+
+        ct = encrypt_data("do not tamper")
+        # Flip a character in the base64 body (after the marker).
+        body = ct[len(_GCM_PREFIX):]
+        flipped = ("A" if body[-2] != "A" else "B") + body[-1]
+        tampered = _GCM_PREFIX + body[:-2] + flipped
+        with pytest.raises(InvalidTag):
+            decrypt_data(tampered)
 
 
 # ---------------------------------------------------------------------------
@@ -654,7 +690,9 @@ class TestEncryptionEdgeCases:
         from app.core.security import decrypt_data
         from cryptography.fernet import InvalidToken
 
-        with pytest.raises(Exception):
+        # Not $gcm1$-marked, so it takes the legacy Fernet path, which rejects a
+        # non-token with InvalidToken.
+        with pytest.raises(InvalidToken):
             decrypt_data("this-is-not-valid-ciphertext")
 
 

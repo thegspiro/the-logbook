@@ -7,6 +7,418 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: multi-tenant isolation audit — cross-tenant write/read fixes across modules (2026-07-25)
+
+A rotating, module-by-module security audit (see
+[`docs/module-audit/`](docs/module-audit/PROGRESS.md)) following the July
+red-team review. Each module was checked for tenant-isolation (IDOR/BOLA), broken
+access control, injection, and correctness. The fixes below are all applied;
+open decisions that need an owner are collected in
+[`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md).
+
+**Cross-tenant writes closed (highest impact)**
+
+- **Elections — voting eligibility is now enforced.** `cast_vote` computed voter
+  eligibility but never checked the result, so any authenticated member could
+  vote in a draft/closed election, outside the voting window, or while not on a
+  restricted eligible-voter list. The eligibility gate is now enforced (the proxy
+  and token voting paths already enforced it).
+- **Elections — candidate edits/deletes are org-scoped.** `update_candidate` /
+  `delete_candidate` fetched the target by path id without an organization check,
+  so an admin in one department could edit or delete another department's
+  candidates. Both now verify the election belongs to the caller's organization.
+- **Equipment check — apparatus deficiency flag can no longer be flipped across
+  departments.** A standalone check accepted a caller-supplied `apparatus_id` and
+  toggled that apparatus's out-of-service/deficiency state with no org check;
+  this could mark another department's apparatus deficient or clear a real
+  deficiency. The update is now org-scoped and the id is validated on submit.
+- **Equipment check — template item data can no longer be overwritten across
+  departments;** the ready-stock lot **swap now requires a manage permission**
+  (it previously required only being logged in); and template cloning now
+  validates the target apparatus is in-org.
+- **Meetings/Minutes — cross-department template leak closed.** Creating minutes
+  with a foreign `template_id` alongside custom sections persisted that id and
+  leaked another department's header/footer template config into the response and
+  the published document. The template is now validated in-org.
+- **Membership pipeline — foreign FK validation.** Creating a prospect with a
+  foreign `pipeline_id` leaked another department's pipeline step configuration
+  in the response; creating a leave of absence didn't verify the member belonged
+  to the department. Both are now validated in-org.
+- **Forms — public-submission integrations validate their targets.** A public
+  equipment-assignment form could assign an in-department item to a
+  submitter-supplied member from **another** department, and an event-registration
+  form could RSVP against another department's event. Both integration processors
+  now verify the referenced member/item/event belongs to the form's department
+  before writing.
+- **Grants/Fundraising — donation and expenditure totals can no longer be
+  corrupted across departments.** Recording a donation or grant expenditure with
+  a campaign / donor / budget-line id belonging to **another** department silently
+  overwrote that department's campaign progress, donor lifetime-giving, or budget
+  spend. Those references are now validated in-department before the totals
+  recompute (which is itself now department-scoped). Also fixed: a donation saved
+  without an explicit payment status was omitted from campaign/donor totals until
+  a later edit. A grant application referencing a funding `opportunity_id` from
+  another department (which leaked that opportunity's fields and drove task
+  generation) is now validated in-department as well.
+- **Admin Hours — manual time entries now always require officer approval, and
+  the stale-session cleanup stays within your department.** A manually entered
+  time record (member-supplied start/end times) previously auto-approved itself
+  for categories that don't require approval — letting a member self-credit
+  fabricated or backdated compliance hours; manual entries now always start
+  Pending review, with a future-time check and a 24-hour cap. The "close stale
+  clock-ins" action was also scoping across all departments and now affects only
+  the caller's department (the nightly cleanup job is unchanged).
+- **Training/Reports — a few screens that could show more than they should are
+  tightened.** The "expiring certifications" member view returned the whole
+  department's certification records (numbers, scores) to any member; it now
+  shows a member only their own (officers still see everyone). Creating a
+  training record now always verifies the member belongs to your department, and
+  an external-provider user-mapping screen no longer reveals another department's
+  member name/email. A department-overview report count was also inadvertently
+  tallying meeting action items across all departments and is now scoped to yours.
+- **Events — a location from another department can no longer be attached to an
+  event.** Creating or updating an event with a `location_id` belonging to
+  **another** department disclosed that location's details and silently defeated
+  its room double-booking check; the location is now validated in-department. The
+  public event-request notification email now escapes the submitter-supplied
+  contact name (HTML-injection hardening), and an RSVP-series lookup that fetched
+  its anchor event without a department filter (a cross-department existence
+  oracle) is now scoped.
+- **Member creation can no longer be used to escalate privileges.** Creating a
+  member (`POST /users`) assigned the requested roles without the privilege
+  ceiling that the role-assignment endpoints already enforce, so a user with only
+  the "create member" permission could create an account with a password they
+  chose, attach a full-access ("System Owner"/wildcard) role, and log in as it —
+  taking over the whole department. Member creation now enforces the same ceiling:
+  you can only grant roles whose permissions are a subset of your own.
+- **A contact-visibility secretary can no longer rewrite authentication/SSO and
+  server secrets.** The full organization-settings update (`PATCH /settings`)
+  accepted the narrow "manage contact visibility" secretary permission, but its
+  body covers the auth/SSO provider, SMTP, file-storage, and module configuration
+  — so that secretary could inject an attacker-controlled OAuth client secret or
+  overwrite mail/storage credentials. That permission has been removed from the
+  full-settings route; it still works on its dedicated contact-info endpoint.
+- **Finance — a budget in another department can no longer be corrupted.**
+  Recording a purchase request, check request, or expense line item against a
+  `budget_id` belonging to **another** department previously incremented that
+  department's encumbered/spent totals on approval or payment (its budget was
+  never read back, so the corruption was silent). The budget update helpers are
+  now department-scoped, and a purchase/check/expense/budget that references a
+  budget, category, or fiscal year from another department is now rejected with
+  a clear error at save time instead of being stored.
+- **Scheduling — self-signup can no longer make a member the shift officer.**
+  Signing up for an "officer" position on an open shift previously ran the
+  manager-only auto-promotion logic and set the member as the shift's officer,
+  granting crew-wide authority over that shift; open-shift self-signup now skips
+  that promotion. Self-signup also now re-checks shift state, so a member can no
+  longer add themselves to a cancelled, finalized, or past-dated shift. The
+  shift-officer assignment is validated in-department on shift create/update (a
+  foreign user id can no longer be attached to a shift or minted an apparatus
+  assignment), and the member-hours report no longer joins member names/emails
+  without a department filter. Generating shifts from a recurring pattern is now
+  bounded to a maximum date range (≈ one year per call) so a single request can
+  no longer materialize an unbounded number of shifts (denial-of-service).
+
+**Data protection & correctness**
+
+- **Field encryption upgraded to AES-256-GCM.** Sensitive data at rest (PHI,
+  MFA secrets, integration/email/SSO credentials, evaluation notes) is now
+  encrypted with AES-256-GCM authenticated encryption — a stronger cipher than
+  the previous Fernet (AES-128-CBC + HMAC), and one where a tampered value fails
+  to decrypt (fails closed) rather than being read back. Existing encrypted data
+  written under the old scheme remains readable, so the upgrade needs no downtime
+  or data migration for correctness; a maintenance script
+  (`backend/scripts/reencrypt_to_aesgcm.py`, dry-run by default) re-encrypts
+  older rows to AES-256-GCM as a background step.
+- **Cached data no longer leaks between users on a shared device.** The in-memory
+  API response cache was only cleared when the logout request to the server
+  succeeded, so on a shared station a failed/expired logout could leave one
+  member's cached pages (dashboard, action items, training records) visible to
+  the next person who signed in on the same tab. The cache is now cleared
+  unconditionally on logout, at the start of every new sign-in, and when a token
+  refresh fails during onboarding (which previously skipped the reload that
+  clears it). Several more member-identifying endpoints (training compliance/
+  certification lists, skills-test results, event attendance history, notification
+  delivery logs, scheduled-email recipients) were also added to the never-cache
+  list.
+- **Public portal / integrations hardened.** The public-API key check no longer
+  crashes once a second API key exists (every key shared a constant lookup
+  prefix, which made the query return multiple rows and error out — it now
+  verifies each candidate). The public calendar (`.ics`) feed now escapes lone
+  carriage returns and the timezone header, closing a calendar-spoofing
+  injection where a stray control character in an event title/notes could inject
+  extra calendar entries. The public location-display code is validated against
+  an explicit ASCII pattern instead of a looser Unicode check.
+- **Onboarding / first-run setup hardened.** The factory reset could FK-fail (and
+  never complete) once a headquarters location had been created, because it
+  deleted users before the location that references them — it now removes the
+  location and facility first. During in-progress setup, a leaked/replayed
+  onboarding session can no longer create a second department or a second
+  full-access owner (both are now rejected), and the module/notification/role
+  configuration steps refuse to run once setup is complete. The first-run
+  `/start` and `/system-owner` endpoints are now rate-limited, the database
+  connectivity check no longer returns the raw driver error, and default
+  meeting-minutes templates no longer share a mutable sections list across
+  departments.
+- **Core infrastructure hardened.** Five more CSV exports (equipment-check
+  reports, inventory, finance transactions, admin-hours) now run through the
+  formula-injection-safe writer, so a member whose name/notes start with
+  `=`/`+`/`-`/`@` can no longer execute a formula on a responder's machine when
+  the export is opened. Database connection errors no longer risk logging the DB
+  password; a single department can no longer exhaust a worker by opening
+  unlimited live WebSocket connections (now capped per department); encrypted
+  fields that fail to decrypt for a real reason (wrong/rotated key) now surface
+  the error instead of silently returning ciphertext; JWTs without an expiry are
+  rejected; and a security-notification email now escapes its message. (An
+  inaccurate "AES-256" label was also corrected — the field encryption is Fernet
+  / AES-128-CBC with an HMAC integrity tag.)
+- **Security tooling hardened.** The in-memory security-monitoring trackers
+  (login attempts, API calls, sessions) now enforce their size cap on every
+  update instead of relying on a throttled sweep, so a credential-stuffing burst
+  from many IPs/accounts can no longer grow them without bound. The audit-log
+  integrity check now detects removal of entries from the **start** of the chain
+  (it anchors the first entry to the genesis hash), closing a gap where a
+  head-truncated chain still reported "verified." The client error-report
+  endpoint now caps the size of each troubleshooting step (previously only the
+  number of steps was limited, so a member could balloon rows), the audit-log
+  search escapes wildcard characters, and an error-type longer than the column
+  allows is now rejected cleanly instead of erroring on insert.
+- **Compliance exports and configuration are hardened.** Compliance profiles now
+  reject requirement, role, and admin-hours-category ids that belong to another
+  department (previously stored unvalidated, silently skewing a member's
+  compliance math). The annual compliance CSV export now neutralizes
+  spreadsheet-formula injection (a member whose name starts with `=`/`+`/`-`/`@`
+  can no longer run a formula on the officer's machine when the export is opened).
+  A member with no applicable requirements is now correctly counted as compliant
+  instead of "at risk" (which also understated the department's overall
+  percentage). Skills-result emails now escape member/template names, and the
+  compliance config rejects an at-risk threshold set above the compliant
+  threshold.
+- **Organization settings — SSO client secrets are no longer silently destroyed
+  or echoed back.** Saving the full settings back through `PATCH /settings` after
+  reading them (where secrets come back redacted as bullets) previously persisted
+  the bullet placeholder over the real SSO client secret, breaking login; the
+  redacted-placeholder preservation now covers the auth section too. Separately,
+  `PATCH /settings/auth` now redacts secrets in its response instead of echoing
+  them in plaintext, matching the email/file-storage endpoints.
+- **Module enablement no longer bleeds across departments.** A migration/safety-net
+  path resolved a department's enabled modules from an unscoped onboarding record
+  and could seed one department's module list from another's; the lookup is now
+  scoped to the department (and skipped when it can't be scoped safely).
+- **Self-service email changes reset verification** — updating your own email no
+  longer keeps the previous "verified" flag, and a self-save no longer falsely
+  reports the address as already in use.
+- **Documents — deleting a document now removes the file from disk** (previously
+  the database row was deleted but the potentially sensitive upload was left
+  behind), and two access-control checks that failed *open* now fail *closed*
+  (an unresolved folder no longer grants access; an unknown/foreign upload folder
+  is now rejected).
+- **Inventory — item history no longer errors** for items with pool issuances (a
+  wrong column name raised a 500), and equipment requests validate the referenced
+  item is in-department.
+- **Facilities — a maintenance record without a type returns a clean validation
+  error** instead of a 500, and ~dead no-op code paths were removed.
+- **Leaves of absence — the edit endpoint now validates the date range** (start
+  ≤ end), matching the create endpoint.
+- **Email hardening — LIKE-search wildcards and an HTML email field are now
+  properly escaped** in several modules (meetings/minutes, inventory,
+  equipment-check, messaging test-email, grants donor/opportunity search, events
+  request-notification email).
+- **Smaller correctness/validation fixes:** manually-approved clock-outs now
+  stamp their approval timestamp (previously left blank — a gap in the approval
+  audit trail); numeric report filters (`year`, expiring-soon days) are coerced
+  safely so a bad value returns a clean error instead of a 500; and multi-select
+  form answers are validated against the field's defined options.
+- **Integrations SSRF hardening — outbound chat/Cal.com calls re-validate the
+  destination at send time.** The Slack/Discord/Teams notification senders and
+  the Cal.com client now re-check the target URL immediately before dispatch
+  (fail-closed), matching the generic-webhook path — closing a DNS-rebinding
+  window where a webhook host validated at save time could later resolve to an
+  internal address. The OAuth connect redirect also now URL-encodes its status
+  parameter.
+
+**Access control**
+
+- **Prospective-member records now require the prospective-members permission.**
+  The applicant read/detail/**document-download** routes (background checks, IDs,
+  DOB/address) previously also accepted the generic "View member list"
+  (`members.view`) permission, so any member with roster access could pull them
+  via the API. They now require `prospective_members.view`/`.manage` (the
+  permission the UI already required to open those pages). Election officers keep
+  access to applicant **election packages** through `elections.view`/`.manage`.
+- **Skills-test scores and evaluator notes are no longer visible to every
+  member.** The skills-test list and detail views returned every member's test
+  records — pass/fail, scores, and free-text examiner notes — to any logged-in
+  member, and let them target a specific member by id. A non-officer is now
+  confined to tests they took or evaluated; officers (training managers) keep the
+  full view, matching how the module already restricts test templates. The
+  fetch-a-template-by-id route now applies the same officer-only visibility the
+  template list uses.
+- **Member dues balances are no longer visible to everyone with finance read
+  access.** The dues list (`GET /finance/dues`) accepted a `user_id` filter with
+  no self-scoping, so any member holding the broad `finance.view` permission
+  could read any other member's dues balance and delinquency status. Non-managers
+  are now confined to their own dues; only a dues manager (`finance.manage`, the
+  permission that records and waives payments) can query across members. Members
+  still see their own dues.
+- **Marking an org-wide notification read now requires the manage permission.**
+  `POST /notifications/logs/{id}/read` performed an org-wide write but was gated
+  only by `notifications.view` (while the sibling "read all" already required
+  `.manage`); it now requires `notifications.manage` to match.
+- **Unpublished and executive-session minutes are no longer visible to all
+  members.** Meeting-minutes lists, detail, search, and dashboard stats now show
+  a member (holding only `minutes.view`) just the **approved, non-executive**
+  minutes; drafts, submitted/rejected minutes, and closed executive-session
+  minutes remain visible only to those with `minutes.manage` (the secretaries/
+  officers who already draft and approve them). No new permission or UI change
+  required.
+- **Security alerts are now scoped to the owning department.** Security-monitoring
+  alerts (brute-force, session-hijack, data-exfiltration, etc.) were stored in a
+  single global table with no owning tenant, so an admin in one department could
+  read **every** department's alerts — including source IPs, user ids, and prior/
+  current IPs and session ids — and could **acknowledge or resolve (suppress)**
+  another department's live security incidents. The alert table now carries an
+  `organization_id` (backfilled from each alert's user), populated when the alert
+  is raised; the alert list, security-status dashboard, and acknowledge/resolve
+  actions are all confined to the caller's department, and the status dashboard
+  no longer reports another tenant's external data-transfer destinations.
+  Platform-level pre-auth alerts (e.g. brute-force against the login page, which
+  have no owning department) are not shown in any single department's view.
+- **Audit-log tamper-evidence hardened against laundering.** The audit hash
+  chain has a recovery tool that recomputes hashes to repair a historical
+  computation bug. It previously recomputed **every** row's hash from the row's
+  current contents — so anyone with direct database write access could edit a
+  tamper-evident (keyed) entry and then run the recovery tool to "bless" the
+  edited data with a fresh valid hash, laundering the tamper. The tool now only
+  repairs the older legacy entries it was meant to fix; for a keyed entry it
+  refuses to overwrite the stored hash and instead reports the mismatch as a
+  genuine integrity signal to investigate. And because the audit chain spans all
+  departments, the recompute operation is now a break-glass action disabled by
+  default — it must be explicitly enabled by a server operator
+  (`AUDIT_ALLOW_CHAIN_REHASH`) rather than being triggerable by any department
+  admin with audit-export access. Read-only integrity verification and snapshot
+  creation are unchanged.
+- **Geo-blocking can now fail closed, and country rules are platform-scoped.**
+  Country-based access blocking is enforced at the network edge, before any
+  department context exists, using one shared geolocation database and one
+  global blocked-country list. Two hardening changes: (1) a new
+  `GEOIP_FAIL_CLOSED` option (off by default) blocks any address whose country
+  can't be determined — including when the geolocation database is missing or
+  corrupt, which previously disabled blocking silently across the whole app;
+  internal/LAN and explicitly allowlisted addresses are still let through so an
+  operator can always recover. (2) Because the blocked-country list applies to
+  every department at once, changing it at runtime through the admin API is now
+  disabled by default (`GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT`) — the list is set
+  at deploy time via `BLOCKED_COUNTRIES` — so one department's admin can no
+  longer alter the shared blocklist for all tenants. Viewing the rules and
+  blocked-attempt logs is unchanged.
+- **Public-portal API auth hardened against a CPU-exhaustion DoS.** Public API
+  key verification uses bcrypt, which is deliberately slow. The per-IP rate
+  limit previously ran *after* that verification, and because every key shared
+  the same lookup prefix, one unauthenticated request forced a bcrypt check
+  against every key in the system — so a flood of bogus-but-well-formed keys
+  could burn CPU with nothing throttling it. IP rate limiting now runs first,
+  before any database lookup or bcrypt work, and new API keys carry a selective
+  lookup prefix so verification checks a single candidate instead of all keys.
+  Existing keys upgrade to the selective prefix automatically the next time
+  they're used — no re-issue needed. No change to how integrators authenticate.
+- **Audit-log export no longer includes raw session identifiers.** The
+  compliance/backup export replaced each entry's raw `session_id` with a
+  non-reversible fingerprint — investigators can still group events by session,
+  but the live identifier is no longer handed to everyone with export access.
+  Integrity verification is unaffected (session id was never part of the tamper-
+  evidence hash). Also removed a dead internal allowlist helper.
+- **Public-portal request handling made lighter per request.** Authenticated
+  public API calls no longer write to the database on every single request (the
+  key's "last used" timestamp now updates at most once a minute), and the
+  per-request anomaly check uses one fewer database query. No behavior change for
+  integrators.
+- **Equipment checks: completing an incomplete check now re-applies the
+  auto-fail rule.** When an initial apparatus check is submitted, expired items
+  and items found below their required quantity are automatically marked failed.
+  Finishing a previously-incomplete check now applies that same rule, so a
+  safety-critical shortfall can no longer be recorded as passing just because it
+  was completed in two steps. Also: a shift completion report created without a
+  linked shift now verifies the named trainee belongs to the department, and the
+  report lookup is department-scoped at the query.
+- **Expense-report totals are computed reliably.** Adding a line item now
+  recomputes the report total from the persisted line items directly, fixing a
+  case where the running total could double-count or drift depending on load
+  timing.
+- **Membership IDs are now collision-safe under concurrency.** Auto-generated
+  membership numbers are minted under a row lock, so two members created at the
+  same instant can no longer receive the same ID, and the uniqueness retry is
+  bounded. Separately, partial saves of organization settings no longer wipe the
+  rest of a settings section (nested settings now merge), and an admin-update
+  permission check that referenced a non-existent permission name now uses the
+  correct one so "edit users" grants work as intended.
+- **Deleting a document folder now removes its files too.** Previously, deleting
+  a folder removed the folder and its documents from the database but left the
+  underlying uploaded files on disk. Folder deletion now cleans up the backing
+  files for every document in the folder and its sub-folders, matching how
+  single-document deletion already worked — so sensitive uploads aren't left
+  behind.
+- **Compliance report emails are safe against injected content.** The report
+  email now escapes the organization name, report type, and period label before
+  putting them in the HTML body, so a crafted organization name can't inject
+  markup into the recipient's mail client. The report type is also restricted to
+  the known values (monthly/annual).
+
+Aside from the tightened prospective-member access above, no user-facing feature
+changes. Full per-module findings, including lower-severity items left as flagged
+open decisions, are in [`docs/module-audit/`](docs/module-audit/PROGRESS.md).
+
+### Integrations & Finance: chat notifications, security detectors, and external approvals (2026-07-22)
+
+Built out three capabilities that were previously scaffolding:
+
+- **Chat notifications (Slack / Discord / Teams)** — when shifts or training
+  records are created, the department's configured chat integrations now receive
+  a formatted notification. Bulk operations (generating shifts from a pattern,
+  recording training for a group) send a single batched summary rather than one
+  message per row, so a chat channel can't be flooded.
+- **Security event detectors wired in** — repeated failed logins now raise a
+  brute-force signal, and attempts to grant a role/permission the actor doesn't
+  hold themselves raise a privilege-escalation signal, both recorded to the
+  security-monitoring log for review.
+- **External-approver finance flow** — a purchase/expense approval can be sent to
+  an approver by email with a one-time token link; the approver reviews and
+  approves/denies on a public page (`/finance/approvals/:token`) without needing a
+  Logbook account. Tokens are single-purpose and the page never exposes more than
+  the item under review.
+
+### Security: red-team review and full remediation (2026-07-21)
+
+An adversarial, application-wide security review (backend, frontend, middleware,
+public/webhook surface, deployment) followed by remediation of every HIGH,
+MEDIUM, and LOW finding. Full findings and the remediation matrix are in
+[`docs/security/RED_TEAM_REVIEW_2026-07.md`](docs/security/RED_TEAM_REVIEW_2026-07.md).
+
+**HIGH**
+
+- **Cross-tenant audit-log disclosure closed** — the security-monitoring audit
+  endpoints are now scoped to the caller's organization.
+- **Role/permission grant ceiling enforced** — a user can no longer grant a role
+  or permission they don't themselves hold (privilege-escalation ceiling).
+- **Rate-limiter DoS fixed** — the limiter keys on the real client IP
+  (proxy-aware) instead of a spoofable value.
+- **MFA hardened** — TOTP replay is blocked (last-used timestep) and repeated
+  failures lock out (brute-force protection).
+- **Audit hash-chain keyed** — the tamper-evident audit chain is now HMAC-keyed
+  with a versioned, no-downgrade guard.
+
+**MEDIUM / LOW** — PII/roster responses excluded from the client cache; XXE
+(defusedxml), PDF/ReportLab markup injection, and a raw SQL fragment fixed;
+auth hardening (Secure cookies, login-enumeration resistance, hashed MFA recovery
+codes, OAuth warning); config/deploy hardening (docs/debug off in prod, request
+body cap, production compose); CSRF no-cookie gap and distributed public-route
+rate limiting; refresh-token rotation grace; SSRF send-time re-validation
+(DNS-rebinding); webhook replay protection; public-form daily cap.
+
+**Dead-code cleanup** — removed 88 verified-unused items (unimported frontend
+files/modules, 39 dead exports, 36 backend functions), each confirmed with
+`tsc`/ESLint (frontend) and import-resolution + `pytest --collect-only` (backend).
+
 ### Department Messaging: reliable delivery, acknowledgment tracking, and scheduling (2026-07-17)
 
 A pass over the internal Department Messages feature so announcements reliably

@@ -4,6 +4,16 @@
 **Scope:** Full-stack security review of The Logbook application
 **Auditor:** Automated analysis via Claude Code
 
+> **Status (2026-07):** This is a point-in-time snapshot from 2026-03-07 and is
+> retained as history. The issues it identified have since been remediated and
+> superseded by later work — a July red-team review
+> ([`docs/security/RED_TEAM_REVIEW_2026-07.md`](docs/security/RED_TEAM_REVIEW_2026-07.md))
+> and a rotating module-by-module tenant-isolation audit
+> ([`docs/module-audit/PROGRESS.md`](docs/module-audit/PROGRESS.md)). For current
+> security posture and open items, see those documents,
+> [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md), and the
+> [`CHANGELOG.md`](CHANGELOG.md).
+
 ---
 
 ## Summary

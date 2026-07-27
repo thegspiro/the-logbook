@@ -10,6 +10,7 @@ Provides endpoints for:
 - Data exfiltration monitoring
 """
 
+import hashlib
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -23,6 +24,7 @@ from app.core.audit import (
     log_audit_event,
     verify_audit_log_integrity,
 )
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.utils import safe_error_detail
 from app.models.audit import AuditLog
@@ -30,6 +32,20 @@ from app.models.user import User
 from app.services.security_monitoring import AlertType, ThreatLevel, security_monitor
 
 router = APIRouter()
+
+
+def _fingerprint_session_id(session_id: str | None) -> str | None:
+    """Return a non-reversible fingerprint of a session id for the audit export.
+
+    The raw session id is a live-ish session correlation credential; dumping it
+    to every `audit.export` holder is needless exposure (SEC-9). A truncated
+    SHA-256 lets an investigator still group events by session within an export
+    without leaking the actual identifier. session_id is not part of the audit
+    hash chain, so replacing it here does not affect offline integrity checks.
+    """
+    if not session_id:
+        return None
+    return "sha256:" + hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:16]
 
 
 @router.get("/status")
@@ -47,7 +63,9 @@ async def get_security_status(
         - Recent alert counts by severity and type
         - Security metrics and thresholds
     """
-    status = await security_monitor.get_security_status(db)
+    status = await security_monitor.get_security_status(
+        db, str(current_user.organization_id)
+    )
 
     await log_audit_event(
         db=db,
@@ -102,6 +120,7 @@ async def get_security_alerts(
             )
 
     alerts = await security_monitor.get_recent_alerts(
+        str(current_user.organization_id),
         limit=limit,
         threat_level=threat_level_enum,
         alert_type=alert_type_enum,
@@ -122,7 +141,7 @@ async def acknowledge_alert(
     Acknowledge a security alert
     """
     success = await security_monitor.acknowledge_alert(
-        alert_id, db, username=current_user.username
+        alert_id, str(current_user.organization_id), db, username=current_user.username
     )
 
     if not success:
@@ -158,7 +177,7 @@ async def resolve_alert(
     Mark a security alert as resolved
     """
     success = await security_monitor.resolve_alert(
-        alert_id, db, username=current_user.username
+        alert_id, str(current_user.organization_id), db, username=current_user.username
     )
 
     if not success:
@@ -291,12 +310,25 @@ async def rehash_audit_chain(
     """
     Recompute the audit log hash chain
 
-    This is a recovery operation that recalculates all hashes in the chain
-    without modifying the underlying log data. Use when hash chain integrity
-    verification fails due to a bug in hash computation (not tampering).
+    This is a recovery operation that repairs legacy (unkeyed) hashes in the
+    single, cross-organization audit chain. Use when integrity verification
+    fails due to the historical hash-computation bug (not tampering). Keyed
+    rows are never rewritten — a keyed mismatch fails closed.
 
-    Requires audit.export permission. The operation is itself audit-logged.
+    Break-glass only: because it rewrites the shared cross-org chain, it stays
+    disabled (403) until a server operator sets ``AUDIT_ALLOW_CHAIN_REHASH``.
+    Requires audit.export permission and is itself audit-logged.
     """
+    if not settings.AUDIT_ALLOW_CHAIN_REHASH:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Audit-chain rehash is disabled. It rewrites the shared "
+                "cross-organization audit chain and must be enabled by a "
+                "server operator (AUDIT_ALLOW_CHAIN_REHASH) as a break-glass "
+                "recovery step."
+            ),
+        )
     try:
         count = await audit_logger.rehash_chain(db)
 
@@ -319,12 +351,16 @@ async def rehash_audit_chain(
             "status": "completed",
             "entries_rehashed": count,
             "message": (
-                f"Rehashed {count} audit log entries"
+                f"Rehashed {count} legacy audit log entries"
                 if count > 0
                 else "All hashes are already correct"
             ),
         }
 
+    except ValueError as e:
+        # rehash_chain fails closed on a keyed-row mismatch (a real integrity
+        # signal it refuses to launder) — surface it as a conflict, not a 500.
+        raise HTTPException(status_code=409, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
@@ -347,8 +383,28 @@ async def get_audit_log_entries(
     Returns paginated audit log entries for administrator review.
     All queries are themselves audit-logged.
     """
-    query = select(AuditLog).order_by(AuditLog.id.desc())
-    count_query = select(func.count()).select_from(AuditLog)
+    # Tenant isolation: AuditLog has no organization_id column, so scope by the
+    # set of user IDs belonging to the caller's organization (mirrors the
+    # canonical audit_logs.py endpoint). Without this, any org's leadership
+    # could read every organization's audit trail. System-level entries
+    # (user_id IS NULL, e.g. scheduled jobs) are intentionally excluded from the
+    # org-scoped view.
+    org_user_ids = (
+        select(User.id)
+        .where(User.organization_id == str(current_user.organization_id))
+        .scalar_subquery()
+    )
+
+    query = (
+        select(AuditLog)
+        .where(AuditLog.user_id.in_(org_user_ids))
+        .order_by(AuditLog.id.desc())
+    )
+    count_query = (
+        select(func.count())
+        .select_from(AuditLog)
+        .where(AuditLog.user_id.in_(org_user_ids))
+    )
 
     if event_type:
         query = query.where(AuditLog.event_type == event_type)
@@ -432,7 +488,20 @@ async def export_audit_logs(
     Returns audit log entries with full hash chain data for
     offline integrity verification. Requires audit.export permission.
     """
-    query = select(AuditLog).order_by(AuditLog.id)
+    # Tenant isolation: scope the export to the caller's organization (see the
+    # entries handler above). Exporting the full cross-tenant audit trail would
+    # leak every organization's usernames, IPs, and event payloads.
+    org_user_ids = (
+        select(User.id)
+        .where(User.organization_id == str(current_user.organization_id))
+        .scalar_subquery()
+    )
+
+    query = (
+        select(AuditLog)
+        .where(AuditLog.user_id.in_(org_user_ids))
+        .order_by(AuditLog.id)
+    )
 
     if event_type:
         query = query.where(AuditLog.event_type == event_type)
@@ -486,7 +555,7 @@ async def export_audit_logs(
                 ),
                 "user_id": log.user_id,
                 "username": log.username,
-                "session_id": log.session_id,
+                "session_id": _fingerprint_session_id(log.session_id),
                 "ip_address": log.ip_address,
                 "user_agent": log.user_agent,
                 "event_data": log.event_data,
@@ -513,7 +582,9 @@ async def get_intrusion_detection_status(
     - Brute force detection status
     - Session hijacking detection status
     """
-    status = await security_monitor.get_security_status(db)
+    status = await security_monitor.get_security_status(
+        db, str(current_user.organization_id)
+    )
 
     return {
         "monitoring_active": True,
@@ -539,15 +610,19 @@ async def get_data_exfiltration_status(
     - Large data transfer alerts
     - Bulk access patterns
     """
-    status = await security_monitor.get_security_status(db)
+    status = await security_monitor.get_security_status(
+        db, str(current_user.organization_id)
+    )
 
     # Get exfiltration-related alerts
     exfil_alerts = await security_monitor.get_recent_alerts(
+        str(current_user.organization_id),
         limit=20,
         alert_type=AlertType.DATA_EXFILTRATION,
         db=db,
     )
     external_alerts = await security_monitor.get_recent_alerts(
+        str(current_user.organization_id),
         limit=20,
         alert_type=AlertType.EXTERNAL_DATA_TRANSFER,
         db=db,
@@ -582,7 +657,9 @@ async def trigger_manual_security_check(
     integrity_result = await verify_audit_log_integrity(db)
 
     # Get current security status
-    status = await security_monitor.get_security_status(db)
+    status = await security_monitor.get_security_status(
+        db, str(current_user.organization_id)
+    )
 
     # Log the manual check
     await log_audit_event(

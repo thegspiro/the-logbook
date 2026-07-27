@@ -77,8 +77,9 @@ require MFA for the whole department from **Settings → Authentication**
 - **Pending token:** `create_mfa_pending_token` in `core/security.py`
   (`type: mfa_pending`, short TTL).
 - **Storage:** `User.mfa_enabled`, `User.mfa_secret`, `User.mfa_backup_codes`
-  — secret and codes encrypted at rest (Fernet via `encrypt_data` /
-  `decrypt_data`). No migration was required.
+  — secret and codes encrypted at rest via `encrypt_data` / `decrypt_data`
+  (now **AES-256-GCM**; values written under the legacy Fernet scheme still
+  decrypt). No migration was required.
 - **Schemas:** `MFASetup`, `MFAVerify`, `MFALogin`, `MFAPolicy` in
   `schemas/auth.py`.
 - **Audit:** `mfa_enabled` / `mfa_disabled` /

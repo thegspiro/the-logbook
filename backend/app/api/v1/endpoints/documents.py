@@ -215,7 +215,13 @@ async def upload_document(
         folder = await service.get_folder_by_id(
             UUID(folder_id), current_user.organization_id
         )
-        if folder and not service.can_access_folder(folder, current_user):
+        # Fail closed: a nonexistent or out-of-org folder must be rejected, not
+        # silently accepted (which previously stored an unvalidated folder_id).
+        if folder is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Folder not found"
+            )
+        if not service.can_access_folder(folder, current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to upload to this folder",

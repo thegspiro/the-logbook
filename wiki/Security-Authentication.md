@@ -202,6 +202,25 @@ can have MFA reset by an administrator (Members admin → **Reset MFA**, or
 
 ---
 
+## Public Portal API Keys
+
+Read-only public-portal endpoints (`/api/public/portal/*`) authenticate with an
+API key sent in the `X-API-Key` header (not the session cookie / JWT used for
+the app):
+
+- **IP rate limit before bcrypt.** Key verification uses bcrypt (deliberately
+  slow); the per-IP rate limit now runs *before* the database lookup and bcrypt
+  step, so an unauthenticated flood of well-formed keys can't burn CPU.
+- **Selective lookup prefix.** Keys are `logbook_<random>`; the stored lookup
+  prefix is the first 16 chars (`logbook_` + 8 key chars), so a lookup returns a
+  single candidate to verify instead of every key in the system. Keys issued
+  before this change stored only the constant `logbook_` prefix and **self-heal**
+  to the selective prefix on their next successful use — no re-issue needed.
+- Keys are hashed (bcrypt) at rest; only the short prefix is stored in plaintext,
+  for identification.
+
+---
+
 ## Session Management
 
 | Feature | Details |

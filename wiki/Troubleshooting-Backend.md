@@ -300,19 +300,21 @@ Security alerts are now persisted to a `security_alerts` table (migration `20260
 - Alert acknowledgement and resolution workflow
 - Integration with the Security Monitoring dashboard
 
-**If alerts are missing**: Run `alembic upgrade head` to create the new table.
+Alerts are **org-scoped** (`security_alerts.organization_id`, migration `20260728_0001`): an org admin only sees, acknowledges, and resolves their own department's alerts. User-less pre-auth / IP-only alerts (e.g. brute force against the login page) have no owning org and are platform-level.
+
+**If alerts are missing**: Run `alembic upgrade head` to create/upgrade the table.
 
 ### Audit Log Export
 
-A new endpoint allows exporting audit logs with date range filters:
+An endpoint exports audit logs with date range filters, scoped to the caller's organization:
 ```
 GET /api/v1/security/audit-log/export?start_date=2026-01-01&end_date=2026-02-28
 ```
-Requires `security.manage` permission.
+Requires `audit.export` permission. The export **redacts `session_id`** to a non-reversible SHA-256 fingerprint (the raw session identifier is not returned); this does not affect offline integrity verification, since `session_id` is not part of the hash chain.
 
-### Audit Archival
+### Audit Archival & Chain Rehash
 
-A scheduled task archives old audit log entries to cold storage while maintaining hash chain integrity. After archival, use the `rehash_chain` endpoint to rebuild the hash chain.
+A scheduled task archives old audit log entries to cold storage while maintaining hash chain integrity. The `rehash_chain` endpoint is a **break-glass recovery tool**, not a routine step: it is disabled (`403`) unless the operator sets `AUDIT_ALLOW_CHAIN_REHASH=true`, only repairs legacy (unkeyed) rows, and **fails closed** (`409`) on a keyed-row mismatch rather than overwriting it. Do not run it as part of normal archival — the keyed HMAC chain is self-maintaining for new entries.
 
 ### Audit Deletion Logging
 

@@ -11,7 +11,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import require_permission
+from app.api.dependencies import (
+    _collect_user_permissions,
+    _has_permission,
+    require_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
@@ -65,6 +69,11 @@ async def list_minutes(
     **Authentication required**
     **Requires permission: minutes.view**
     """
+    # Callers without minutes.manage see only approved, non-executive minutes;
+    # managers (secretaries/officers) see drafts and executive-session minutes.
+    can_manage = _has_permission(
+        "minutes.manage", _collect_user_permissions(current_user)
+    )
     service = MinuteService(db)
     minutes_list = await service.list_minutes(
         organization_id=current_user.organization_id,
@@ -73,6 +82,7 @@ async def list_minutes(
         search=search,
         skip=skip,
         limit=min(limit, 100),
+        restricted=not can_manage,
     )
 
     return [
@@ -113,8 +123,13 @@ async def get_minutes_stats(
     **Authentication required**
     **Requires permission: minutes.view**
     """
+    can_manage = _has_permission(
+        "minutes.manage", _collect_user_permissions(current_user)
+    )
     service = MinuteService(db)
-    return await service.get_stats(current_user.organization_id)
+    return await service.get_stats(
+        current_user.organization_id, restricted=not can_manage
+    )
 
 
 @router.get("/search", response_model=list[MinutesSearchResult])
@@ -136,11 +151,15 @@ async def search_minutes(
             detail="Search query must be at least 2 characters",
         )
 
+    can_manage = _has_permission(
+        "minutes.manage", _collect_user_permissions(current_user)
+    )
     service = MinuteService(db)
     return await service.search_minutes(
         organization_id=current_user.organization_id,
         query=q.strip(),
         limit=min(limit, 50),
+        restricted=not can_manage,
     )
 
 
@@ -156,9 +175,14 @@ async def get_minutes(
     **Authentication required**
     **Requires permission: minutes.view**
     """
+    can_manage = _has_permission(
+        "minutes.manage", _collect_user_permissions(current_user)
+    )
     service = MinuteService(db)
     minutes = ensure_found(
-        await service.get_minutes(minutes_id, current_user.organization_id),
+        await service.get_minutes(
+            minutes_id, current_user.organization_id, restricted=not can_manage
+        ),
         "Meeting minutes",
     )
 

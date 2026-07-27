@@ -146,6 +146,78 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 
+async def public_rate_limit(
+    key: str,
+    max_requests: int,
+    window_seconds: int,
+    lockout_seconds: int = 0,
+) -> tuple[bool, str | None]:
+    """Distributed rate-limit for PUBLIC (unauthenticated) routes.
+
+    Public forms, webhooks, and portal/display/calendar endpoints previously
+    used only the per-process in-memory ``rate_limiter``, so behind multiple
+    uvicorn workers/containers the effective limit was multiplied by process
+    count and reset on restart. This helper uses the Redis-backed sliding-window
+    limiter (shared across all processes) and only falls back to the in-memory
+    limiter when Redis is unavailable — degraded but still protective.
+
+    Returns ``(is_limited, reason)`` to match ``RateLimiter.is_rate_limited``.
+    """
+    from app.core.cache import cache_manager
+    from app.core.security import is_rate_limited as redis_rate_limited
+
+    if cache_manager.is_connected and cache_manager.redis_client:
+        try:
+            limited = await redis_rate_limited(
+                key=f"public:{key}",
+                limit=max_requests,
+                window_seconds=window_seconds,
+                fail_closed=False,
+            )
+            return limited, ("rate_limited" if limited else None)
+        except Exception:
+            pass  # Redis error — degrade to the in-memory limiter below.
+
+    return rate_limiter.is_rate_limited(
+        key=key,
+        max_requests=max_requests,
+        window_seconds=window_seconds,
+        lockout_seconds=lockout_seconds,
+    )
+
+
+async def daily_cap_exceeded(scope: str, limit: int) -> bool:
+    """Return True if *scope* has hit its per-UTC-day count *limit*.
+
+    A total (all-IPs) ceiling for unauthenticated resources that trigger
+    expensive side effects — e.g. public form submissions that create
+    membership-pipeline prospects and send email. Per-IP rate limiting alone
+    doesn't stop a distributed flood; this bounds the daily blast radius.
+
+    Backed by an atomic Redis INCR with a ~26h expiry. Fails OPEN when Redis is
+    unavailable (availability over the cap) — the per-IP limiter still applies.
+    """
+    from datetime import datetime, timezone
+
+    from loguru import logger
+
+    from app.core.cache import cache_manager
+
+    if limit <= 0 or not (cache_manager.is_connected and cache_manager.redis_client):
+        return False
+
+    day = datetime.now(timezone.utc).strftime("%Y%m%d")
+    key = f"daily_cap:{scope}:{day}"
+    try:
+        count = await cache_manager.redis_client.incr(key)
+        if count == 1:
+            await cache_manager.redis_client.expire(key, 93600)  # ~26h
+        return count > limit
+    except Exception as exc:
+        logger.warning("Daily-cap check failed (allowing): {}", exc)
+        return False
+
+
 # ============================================
 # CSRF Protection
 # ============================================
@@ -318,6 +390,71 @@ class InputSanitizer:
 # ============================================
 
 
+class RequestSizeLimitMiddleware:
+    """Reject oversized request bodies to prevent memory-exhaustion DoS.
+
+    Pure ASGI (see the module note on avoiding BaseHTTPMiddleware). Enforces a
+    hard body-size ceiling two ways:
+    1. Fast path — reject up front with 413 when the declared Content-Length
+       exceeds the cap, before any body is read.
+    2. Slow path — wrap ``receive`` and count streamed bytes, signalling
+       disconnect once the cap is passed, so a client that omits or lies about
+       Content-Length (chunked upload) still cannot force unbounded buffering.
+    """
+
+    def __init__(self, app: ASGIApp, max_body_size: int) -> None:
+        self.app = app
+        self.max_body_size = max_body_size
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        for name, value in scope.get("headers") or []:
+            if name == b"content-length":
+                try:
+                    declared = int(value)
+                except ValueError:
+                    break
+                if declared > self.max_body_size:
+                    await self._send_413(send)
+                    return
+                break
+
+        received = 0
+
+        async def limited_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b"") or b"")
+                if received > self.max_body_size:
+                    # Body exceeded the cap despite the header check (missing or
+                    # dishonest Content-Length). Signal disconnect so the app
+                    # stops consuming the oversized body.
+                    return {"type": "http.disconnect"}
+            return message
+
+        await self.app(scope, limited_receive, send)
+
+    @staticmethod
+    async def _send_413(send: Send) -> None:
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 413,
+                "headers": [(b"content-type", b"application/json")],
+            }
+        )
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b'{"detail":"Request body too large"}',
+            }
+        )
+
+
 class SecurityHeadersMiddleware:
     """
     Add security headers to all responses.
@@ -411,7 +548,13 @@ async def check_rate_limit(
     Usage:
         @router.post("/endpoint", dependencies=[Depends(check_rate_limit)])
     """
-    client_ip = request.client.host if request.client else "unknown"
+    # Use the proxy-aware client IP so that, behind a reverse proxy (nginx,
+    # Docker, load balancer), each real client gets its own bucket. Keying on
+    # request.client.host would collapse every client to the proxy's IP —
+    # letting 5 failed logins from any one client trip the shared bucket and
+    # lock out everyone (global DoS). get_client_ip() only trusts forwarded
+    # headers from configured TRUSTED_PROXY_IPS, so it is not spoofable.
+    client_ip = get_client_ip(request)
 
     # Try Redis-backed sliding-window rate limiting first
     try:
@@ -578,15 +721,20 @@ async def verify_csrf_token(request: HTTPConnection) -> None:
     cookie_token = request.cookies.get("csrf_token")
 
     if not cookie_token:
-        # No CSRF cookie yet — allow (first request after login).
-        # The login response sets the csrf_token cookie for subsequent
-        # requests.  This means the very first state-changing request
-        # after login is NOT protected by the double-submit check.
-        # This is an accepted tradeoff because:
-        #   1. SameSite=Strict on auth cookies is the primary CSRF defence.
-        #   2. A browser that blocks cookies entirely cannot authenticate.
-        #   3. The window is limited to the single request before the
-        #      cookie is set.
+        # No CSRF cookie. The login/refresh response sets the csrf_token cookie
+        # together with the auth cookies, so an authenticated (cookie-bearing)
+        # caller should always have it. Distinguish the two cases:
+        #   - Cookie-authenticated request (access_token cookie present) but no
+        #     csrf_token cookie: anomalous (stripped cookie / cross-site attempt)
+        #     — reject, rather than silently skipping the double-submit check.
+        #   - No session cookie at all (unauthenticated, or a Bearer-token API
+        #     client whose header is not auto-sent by browsers and so is not
+        #     CSRF-exploitable): nothing to protect — allow.
+        if request.cookies.get("access_token"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Missing CSRF token",
+            )
         return
 
     if not request_token or not CSRFProtection.validate_token(
@@ -636,66 +784,6 @@ class SecurityAuditLogger:
         from loguru import logger
 
         logger.warning(f"[SECURITY AUDIT] {log_entry}")
-
-    @staticmethod
-    async def log_failed_login(
-        username: str, ip_address: str, user_agent: str | None, reason: str
-    ) -> None:
-        """Log failed login attempt"""
-        await SecurityAuditLogger.log_event(
-            event_type="FAILED_LOGIN",
-            user_id=None,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            details={"username": username, "reason": reason},
-            severity="WARNING",
-        )
-
-    @staticmethod
-    async def log_successful_login(
-        user_id: str, username: str, ip_address: str, user_agent: str | None
-    ) -> None:
-        """Log successful login"""
-        await SecurityAuditLogger.log_event(
-            event_type="SUCCESSFUL_LOGIN",
-            user_id=user_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            details={"username": username},
-            severity="INFO",
-        )
-
-    @staticmethod
-    async def log_password_change(
-        user_id: str, ip_address: str, user_agent: str | None
-    ) -> None:
-        """Log password change"""
-        await SecurityAuditLogger.log_event(
-            event_type="PASSWORD_CHANGE",
-            user_id=user_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            details={},
-            severity="INFO",
-        )
-
-    @staticmethod
-    async def log_suspicious_activity(
-        user_id: str | None,
-        ip_address: str,
-        user_agent: str | None,
-        description: str,
-    ) -> None:
-        """Log suspicious activity"""
-        await SecurityAuditLogger.log_event(
-            event_type="SUSPICIOUS_ACTIVITY",
-            user_id=user_id,
-            ip_address=ip_address,
-            user_agent=user_agent,
-            details={"description": description},
-            severity="CRITICAL",
-        )
-
 
 # ============================================
 # Helper Functions
@@ -1251,84 +1339,3 @@ class SecurityMonitoringMiddleware:
 # ============================================
 # Periodic Security Check Task
 # ============================================
-
-
-async def run_periodic_security_checks() -> dict[str, Any]:
-    """
-    Run periodic security checks.
-
-    Should be called by a scheduler (e.g., APScheduler, Celery) every hour.
-
-    Returns:
-        Dictionary with check results
-    """
-    from loguru import logger
-
-    from app.core.audit import audit_logger, verify_audit_log_integrity
-    from app.core.database import async_session_factory
-    from app.services.security_monitoring import security_monitor
-
-    results = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "checks": {},
-    }
-
-    try:
-        async with async_session_factory() as db:
-            # 1. Verify audit log integrity
-            logger.info("Running scheduled audit log integrity check...")
-            integrity = await verify_audit_log_integrity(db)
-            results["checks"]["log_integrity"] = {
-                "verified": integrity["verified"],
-                "entries_checked": integrity["total_checked"],
-                "errors": len(integrity.get("errors", [])),
-            }
-
-            if not integrity["verified"]:
-                logger.critical(
-                    f"SCHEDULED CHECK FAILED: Audit log tampering detected! "
-                    f"{len(integrity.get('errors', []))} errors found"
-                )
-
-            # 2. Get security status
-            logger.info("Running scheduled security status check...")
-            status = await security_monitor.get_security_status(db)
-            results["checks"]["security_status"] = {
-                "status": status["status"],
-                "alerts_last_hour": status["alerts"]["total_last_hour"],
-                "failed_logins": status["metrics"]["failed_logins_last_hour"],
-            }
-
-            # 3. Create periodic checkpoint if enough logs
-            # SEC: Use text() wrapper for raw SQL to prevent injection risks
-            from sqlalchemy import text
-
-            log_status = await db.execute(
-                text(
-                    "SELECT MIN(id), MAX(id), COUNT(*) FROM audit_logs WHERE created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)"
-                )
-            )
-            row = log_status.fetchone()
-            if row and row[2] > 100:  # At least 100 logs
-                try:
-                    checkpoint = await audit_logger.create_checkpoint(
-                        db, row[0], row[1]
-                    )
-                    results["checks"]["checkpoint_created"] = {
-                        "id": checkpoint.id,
-                        "entries": checkpoint.total_entries,
-                    }
-                    logger.info(f"Created hourly checkpoint: {checkpoint.id}")
-                except Exception as e:
-                    logger.warning(f"Could not create checkpoint: {e}")
-
-            results["overall_status"] = (
-                "healthy" if integrity["verified"] else "critical"
-            )
-
-    except Exception as e:
-        logger.error(f"Periodic security check failed: {e}")
-        results["error"] = str(e)
-        results["overall_status"] = "error"
-
-    return results

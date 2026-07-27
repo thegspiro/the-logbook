@@ -19,6 +19,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHash, VerificationError, VerifyMismatchError
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from loguru import logger
 
@@ -339,8 +340,14 @@ def generate_temporary_password(length: int = 16) -> str:
 
 
 # ============================================
-# Data Encryption (AES-256)
+# Data Encryption (AES-256-GCM)
 # ============================================
+#
+# New ciphertext uses AES-256-GCM (AEAD: confidentiality + integrity in one
+# pass), marked with a version prefix. Values written by the previous scheme
+# (Fernet = AES-128-CBC + HMAC-SHA256) remain readable, so NO re-encryption is
+# required for correctness — `scripts/reencrypt_to_aesgcm.py` migrates existing
+# rows to GCM in the background, after which Fernet read support can be removed.
 
 
 def get_encryption_salt() -> bytes:
@@ -372,81 +379,116 @@ def get_encryption_salt() -> bytes:
     return salt.encode()
 
 
-def get_encryption_key() -> bytes:
+def _derive_key_bytes() -> bytes:
+    """Derive the raw 32-byte data-encryption key from settings.
+
+    PBKDF2-HMAC-SHA256 over ENCRYPTION_KEY with the installation-specific salt.
+    Both the AES-256-GCM cipher (raw 32 bytes) and the legacy Fernet cipher
+    (base64 form) derive from this single function, so a value written under
+    either scheme decrypts with the same configured key.
     """
-    Get or derive encryption key from settings.
-
-    SECURITY: Uses PBKDF2 with installation-specific salt to derive
-    a secure encryption key from the configured ENCRYPTION_KEY.
-
-    Returns:
-        32-byte encryption key for AES-256
-    """
-    key = settings.ENCRYPTION_KEY.encode()
-
-    # Always derive key using PBKDF2 with installation-specific salt
-    # This ensures consistent key derivation and adds salt protection
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=get_encryption_salt(),
         iterations=100000,
     )
-    derived_key = kdf.derive(key)
-
-    return base64.urlsafe_b64encode(derived_key)
+    return kdf.derive(settings.ENCRYPTION_KEY.encode())
 
 
-# Lazy-initialized Fernet cipher. Avoids crashing at import time if
-# ENCRYPTION_KEY is not yet configured (e.g. during testing or initial setup).
+def get_encryption_key() -> bytes:
+    """
+    Get or derive the base64-encoded encryption key used by the legacy Fernet
+    cipher (retained to decrypt data written before the AES-256-GCM migration).
+
+    Returns:
+        url-safe base64 of the 32-byte derived key (Fernet key format)
+    """
+    return base64.urlsafe_b64encode(_derive_key_bytes())
+
+
+# Lazy-initialized ciphers. Avoids crashing at import time if ENCRYPTION_KEY is
+# not yet configured (e.g. during testing or initial setup).
 _cipher: Fernet | None = None
+_aesgcm: AESGCM | None = None
+
+# Version marker prepended to AES-256-GCM ciphertext. The `$` characters are not
+# valid url-safe base64, so a marked value can never collide with a legacy Fernet
+# token (which is base64 and starts with `gAAAAA`).
+_GCM_PREFIX = "$gcm1$"
+# GCM nonce length: 96 bits is the NIST-recommended size for a random nonce.
+_GCM_NONCE_BYTES = 12
 
 
 def _get_cipher() -> Fernet:
+    """Legacy Fernet cipher — used only to DECRYPT pre-migration ciphertext."""
     global _cipher
     if _cipher is None:
         _cipher = Fernet(get_encryption_key())
     return _cipher
 
 
+def _get_aesgcm() -> AESGCM:
+    global _aesgcm
+    if _aesgcm is None:
+        _aesgcm = AESGCM(_derive_key_bytes())
+    return _aesgcm
+
+
 def encrypt_data(data: str) -> str:
     """
-    Encrypt sensitive data using AES-256
+    Encrypt sensitive data using AES-256-GCM (authenticated encryption).
 
-    HIPAA Compliance: All PHI (Protected Health Information) must be
-    encrypted at rest using AES-256 or equivalent encryption.
+    HIPAA Compliance: PHI is encrypted at rest with AES-256 in GCM mode, which
+    provides both confidentiality and integrity (a tampered ciphertext fails to
+    decrypt). A fresh random 96-bit nonce is generated per call. The output is
+    version-marked so it can be told apart from legacy Fernet ciphertext on read.
 
     Args:
         data: Plain text data to encrypt
 
     Returns:
-        Encrypted data as base64 string
+        Version-marked, base64-encoded ciphertext (nonce ‖ ciphertext ‖ tag)
     """
     if not data:
         return ""
 
-    encrypted = _get_cipher().encrypt(data.encode())
-    return encrypted.decode()
+    nonce = secrets.token_bytes(_GCM_NONCE_BYTES)
+    ciphertext = _get_aesgcm().encrypt(nonce, data.encode(), None)
+    return _GCM_PREFIX + base64.urlsafe_b64encode(nonce + ciphertext).decode()
 
 
 def decrypt_data(encrypted_data: str) -> str:
     """
-    Decrypt data encrypted with encrypt_data()
+    Decrypt data produced by encrypt_data().
+
+    Dispatches on the version marker: AES-256-GCM for new values, and the legacy
+    Fernet cipher for values written before the GCM migration (kept readable so
+    no re-encryption is required for correctness).
 
     Args:
-        encrypted_data: Encrypted data as base64 string
+        encrypted_data: Version-marked GCM ciphertext, or a legacy Fernet token
 
     Returns:
         Decrypted plain text data
 
     Raises:
-        cryptography.fernet.InvalidToken: If data is corrupted or key is wrong
+        cryptography.exceptions.InvalidTag: GCM auth/integrity failure (tamper or
+            wrong key) — fail closed, never return unverified plaintext.
+        cryptography.fernet.InvalidToken: legacy value is not a valid Fernet
+            token (e.g. legacy plaintext) — callers may treat this as a
+            backward-compat passthrough.
     """
     if not encrypted_data:
         return ""
 
-    decrypted = _get_cipher().decrypt(encrypted_data.encode())
-    return decrypted.decode()
+    if encrypted_data.startswith(_GCM_PREFIX):
+        raw = base64.urlsafe_b64decode(encrypted_data[len(_GCM_PREFIX):])
+        nonce, ciphertext = raw[:_GCM_NONCE_BYTES], raw[_GCM_NONCE_BYTES:]
+        return _get_aesgcm().decrypt(nonce, ciphertext, None).decode()
+
+    # Legacy Fernet (AES-128-CBC + HMAC) ciphertext written before the migration.
+    return _get_cipher().decrypt(encrypted_data.encode()).decode()
 
 
 # ============================================
@@ -549,7 +591,15 @@ def decode_token(token: str) -> dict[str, Any]:
     # SEC: Hardcode accepted algorithms to prevent algorithm confusion attacks.
     # Never allow "none" or asymmetric algorithms when using symmetric signing.
     _ALLOWED_ALGORITHMS = ["HS256"]
-    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=_ALLOWED_ALGORITHMS)
+    # SEC: Require an expiry claim so a token minted without `exp` (which would
+    # otherwise never expire) is rejected. Every issuer in this codebase sets
+    # exp, so this only closes the malformed/forged-without-exp case.
+    payload = jwt.decode(
+        token,
+        settings.SECRET_KEY,
+        algorithms=_ALLOWED_ALGORITHMS,
+        options={"require": ["exp"]},
+    )
     return payload
 
 
@@ -746,44 +796,3 @@ async def is_rate_limited(
             logger.warning("Rate limiting fail-closed on error, denying request")
             return True
         return False
-
-
-def is_rate_limited_sync(key: str, limit: int, window_seconds: int) -> bool:
-    """
-    Synchronous version of rate limiting check.
-
-    Note: This is a fallback for synchronous contexts. Prefer the async
-    version when possible for better performance.
-
-    Fails closed: if the async check cannot be run (e.g. inside an
-    already-running event loop or when no loop exists), the request
-    is denied rather than allowed.
-
-    Args:
-        key: Unique key to track (e.g., IP address, user ID)
-        limit: Maximum number of requests allowed in the window
-        window_seconds: Time window in seconds
-
-    Returns:
-        True if rate limit exceeded, False otherwise
-    """
-    import asyncio
-
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If we're in an async context, we can't use run_until_complete.
-            # Fail closed: deny the request to prevent bypass.
-            logger.warning(
-                "is_rate_limited_sync called inside running event loop; "
-                "failing closed (denying request)"
-            )
-            return True
-        return loop.run_until_complete(is_rate_limited(key, limit, window_seconds))
-    except RuntimeError:
-        # No event loop available — fail closed
-        logger.warning(
-            "is_rate_limited_sync: no event loop available; "
-            "failing closed (denying request)"
-        )
-        return True

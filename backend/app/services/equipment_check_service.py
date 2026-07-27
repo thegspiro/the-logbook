@@ -162,12 +162,18 @@ class EquipmentCheckService:
         if not source:
             return None
 
-        # Look up apparatus to get name
+        # Look up apparatus (org-scoped) to get the name and to reject cloning
+        # onto another org's apparatus id.
         result = await self.db.execute(
-            select(Apparatus).where(Apparatus.id == target_apparatus_id)
+            select(Apparatus).where(
+                Apparatus.id == target_apparatus_id,
+                Apparatus.organization_id == organization_id,
+            )
         )
         apparatus = result.scalars().first()
-        apparatus_name = apparatus.name if apparatus else ""
+        if apparatus is None:
+            raise ValueError("Target apparatus not found")
+        apparatus_name = apparatus.name or ""
 
         clone_name = (
             f"{apparatus_name} - {source.name}" if apparatus_name else source.name
@@ -368,43 +374,6 @@ class EquipmentCheckService:
     # Checklist Resolution for Shifts
     # ------------------------------------------------------------------
 
-    async def get_checklists_for_shift(
-        self,
-        shift_id: str,
-        user_id: str,
-        organization_id: str,
-    ) -> List[Dict[str, Any]]:
-        """
-        Resolve all applicable checklist templates for a shift and user.
-
-        1. Find the shift's apparatus_id
-        2. Look for apparatus-specific templates, fall back to type templates
-        3. Filter by user's assigned position on this shift
-        4. Return templates with completion status
-        """
-        # Get the shift
-        result = await self.db.execute(
-            select(Shift).where(
-                Shift.id == shift_id,
-                Shift.organization_id == organization_id,
-            )
-        )
-        shift = result.scalars().first()
-        if not shift:
-            raise ValueError("Shift not found")
-
-        # Get user's position on this shift
-        result = await self.db.execute(
-            select(ShiftAssignment).where(
-                ShiftAssignment.shift_id == shift_id,
-                ShiftAssignment.user_id == user_id,
-            )
-        )
-        assignment = result.scalars().first()
-        user_position = assignment.position if assignment else None
-
-        return await self._checklists_for_shift(shift, organization_id, user_position)
-
     async def _checklists_for_shift(
         self,
         shift: Shift,
@@ -414,8 +383,7 @@ class EquipmentCheckService:
     ) -> List[Dict[str, Any]]:
         """Build checklist entries for an already-loaded shift.
 
-        Shared by ``get_checklists_for_shift`` (one shift) and
-        ``get_my_checklists`` (many shifts) so the latter does not re-fetch the
+        Used by ``get_my_checklists`` (many shifts) so it does not re-fetch the
         shift/assignment it already holds. Pass ``existing_checks`` (keyed by
         template_id) to reuse a batch-loaded check map instead of querying the
         checks per shift.
@@ -597,13 +565,20 @@ class EquipmentCheckService:
     async def _update_apparatus_deficiency(
         self,
         apparatus_id: Optional[str],
+        organization_id: str,
         overall_status: str,
     ) -> None:
         """Update the deficiency flag on an apparatus after a check."""
         if not apparatus_id:
             return
+        # Scope to the caller's org: apparatus_id can be client-supplied
+        # (standalone checks), and this mutates safety state (has_deficiency),
+        # so a foreign id must never match.
         apparatus_result = await self.db.execute(
-            select(Apparatus).where(Apparatus.id == apparatus_id)
+            select(Apparatus).where(
+                Apparatus.id == apparatus_id,
+                Apparatus.organization_id == organization_id,
+            )
         )
         apparatus = apparatus_result.scalars().first()
         if not apparatus:
@@ -619,16 +594,32 @@ class EquipmentCheckService:
     async def _load_template_items_map(
         self,
         items_data: List[Dict[str, Any]],
+        organization_id: str,
     ) -> Dict[str, CheckTemplateItem]:
-        """Load CheckTemplateItem records referenced by the submitted items."""
+        """Load CheckTemplateItem records referenced by the submitted items.
+
+        Scoped to the caller's org via the compartment→template join:
+        _create_check_items writes serial/lot numbers back onto these rows, so
+        a foreign template_item_id must never resolve to a loaded record.
+        """
         template_item_ids = [
             i.get("template_item_id") for i in items_data if i.get("template_item_id")
         ]
         template_items_map: Dict[str, CheckTemplateItem] = {}
         if template_item_ids:
             tmpl_result = await self.db.execute(
-                select(CheckTemplateItem).where(
-                    CheckTemplateItem.id.in_(template_item_ids)
+                select(CheckTemplateItem)
+                .join(
+                    CheckTemplateCompartment,
+                    CheckTemplateItem.compartment_id == CheckTemplateCompartment.id,
+                )
+                .join(
+                    EquipmentCheckTemplate,
+                    CheckTemplateCompartment.template_id == EquipmentCheckTemplate.id,
+                )
+                .where(
+                    CheckTemplateItem.id.in_(template_item_ids),
+                    EquipmentCheckTemplate.organization_id == organization_id,
                 )
             )
             for ti in tmpl_result.scalars().all():
@@ -728,10 +719,14 @@ class EquipmentCheckService:
                     f"Items do not belong to template: " f"{', '.join(invalid)}"
                 )
 
-        template_items_map = await self._load_template_items_map(items_data)
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
         await self._create_check_items(check.id, items_data, template_items_map)
 
-        await self._update_apparatus_deficiency(shift.apparatus_id, overall_status)
+        await self._update_apparatus_deficiency(
+            shift.apparatus_id, organization_id, overall_status
+        )
 
         # Collect failed item details for notifications
         critical_items: List[Dict[str, Any]] = []
@@ -798,6 +793,17 @@ class EquipmentCheckService:
             raise ValueError("Template not found")
 
         apparatus_id = data.get("apparatus_id") or template.apparatus_id
+        # A client-supplied apparatus_id must belong to the caller's org — the
+        # template's own apparatus_id is already org-scoped.
+        if data.get("apparatus_id"):
+            appt_result = await self.db.execute(
+                select(Apparatus.id).where(
+                    Apparatus.id == apparatus_id,
+                    Apparatus.organization_id == organization_id,
+                )
+            )
+            if appt_result.scalar_one_or_none() is None:
+                raise ValueError("Apparatus not found")
 
         items_data = data.pop("items", [])
 
@@ -828,10 +834,14 @@ class EquipmentCheckService:
         self.db.add(check)
         await self.db.flush()
 
-        template_items_map = await self._load_template_items_map(items_data)
+        template_items_map = await self._load_template_items_map(
+            items_data, organization_id
+        )
         await self._create_check_items(check.id, items_data, template_items_map)
 
-        await self._update_apparatus_deficiency(apparatus_id, overall_status)
+        await self._update_apparatus_deficiency(
+            apparatus_id, organization_id, overall_status
+        )
 
         try:
             await self.db.commit()
@@ -900,6 +910,20 @@ class EquipmentCheckService:
                 existing.is_expired = item_data.get("is_expired", existing.is_expired)
 
         all_items = check.items
+        # Re-apply the same auto-fail rule the initial submit uses
+        # (_compute_check_status): an expired item, or one found below its
+        # required quantity, is forced to "fail" so completing an incomplete
+        # check can't leave a safety-critical shortfall marked as passing and
+        # under-count failed_items/overall_status (EC-10). Keeps the two write
+        # paths consistent.
+        for item in all_items:
+            if item.is_expired:
+                item.status = "fail"
+            req_qty = item.required_quantity
+            found_qty = item.quantity_found
+            if req_qty is not None and found_qty is not None and found_qty < req_qty:
+                item.status = "fail"
+
         total = len(all_items)
         completed = sum(1 for i in all_items if i.status != "not_checked")
         failed = sum(1 for i in all_items if i.status == "fail")
@@ -1196,33 +1220,6 @@ class EquipmentCheckService:
     # ------------------------------------------------------------------
     # Expiration Handling
     # ------------------------------------------------------------------
-
-    async def get_expiring_items(
-        self, organization_id: str, days_ahead: int = 30
-    ) -> List[CheckTemplateItem]:
-        """Get items approaching expiration within N days."""
-        result = await self.db.execute(
-            select(CheckTemplateItem)
-            .join(
-                CheckTemplateCompartment,
-                CheckTemplateCompartment.id == CheckTemplateItem.compartment_id,
-            )
-            .join(
-                EquipmentCheckTemplate,
-                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
-            )
-            .where(
-                EquipmentCheckTemplate.organization_id == organization_id,
-                CheckTemplateItem.has_expiration.is_(True),
-                CheckTemplateItem.expiration_date.isnot(None),
-                CheckTemplateItem.expiration_date
-                <= func.date_add(
-                    func.current_date(),
-                    func.text(f"INTERVAL {days_ahead} DAY"),
-                ),
-            )
-        )
-        return list(result.scalars().all())
 
     async def get_supply_overview(
         self, organization_id: str, days_ahead: int = 30
@@ -2004,8 +2001,13 @@ class EquipmentCheckService:
         if apparatus_id:
             base_q = base_q.where(ShiftEquipmentCheck.apparatus_id == apparatus_id)
         if item_name:
+            # Escape LIKE wildcards so a literal % or _ in the filter doesn't
+            # act as a wildcard (declare the escape char so it's honored).
+            safe_item = (
+                item_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            )
             base_q = base_q.where(
-                ShiftEquipmentCheckItem.item_name.ilike(f"%{item_name}%")
+                ShiftEquipmentCheckItem.item_name.ilike(f"%{safe_item}%", escape="\\")
             )
 
         # Count

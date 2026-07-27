@@ -41,7 +41,7 @@ def generate_ical_feed(
         "VERSION:2.0",
         "PRODID:-//The Logbook//EN",
         f"X-WR-CALNAME:{_escape_ics(org_name)} Events",
-        f"X-WR-TIMEZONE:{timezone_name}",
+        f"X-WR-TIMEZONE:{_escape_ics(timezone_name)}",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
     ]
@@ -84,11 +84,20 @@ def _event_to_vevent(event: dict[str, Any]) -> list[str]:
 
 
 def _escape_ics(text: str) -> str:
-    """Escape special characters per RFC 5545."""
+    """Escape special characters per RFC 5545.
+
+    All line breaks (CRLF, lone CR, lone LF) are folded to the escaped ``\\n``
+    sequence. A bare ``\\r`` must not survive: RFC 5545 lines are CRLF-delimited
+    and many parsers treat a lone CR as a line break, so an unescaped CR in a
+    field value (e.g. an event title/description/location) could inject arbitrary
+    ICS properties or events (calendar spoofing).
+    """
     return (
         text.replace("\\", "\\\\")
         .replace(";", "\\;")
         .replace(",", "\\,")
+        .replace("\r\n", "\\n")
+        .replace("\r", "\\n")
         .replace("\n", "\\n")
     )
 
@@ -101,7 +110,9 @@ def _format_ics_datetime(dt: Any) -> str:
             parsed = datetime.fromisoformat(dt.replace("Z", "+00:00"))
             return parsed.strftime("%Y%m%dT%H%M%SZ")
         except (ValueError, AttributeError):
-            return dt
+            # Never echo an unparseable string straight into DTSTART/DTEND — it
+            # would be an ICS-injection sink. Escape it so it can't break out.
+            return _escape_ics(dt)
     if isinstance(dt, datetime):
         return dt.strftime("%Y%m%dT%H%M%SZ")
     return str(dt)

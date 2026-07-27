@@ -422,6 +422,27 @@ describe('apiCache', () => {
       expect(isCacheable('/roles/')).toBe(true);
       expect(isCacheable('/roles/list')).toBe(true);
     });
+
+    it('returns false for per-user authorization data', () => {
+      expect(isCacheable('/roles/user/123/permissions')).toBe(false);
+      expect(isCacheable('/roles/admin-access/check')).toBe(false);
+    });
+
+    it('returns false for facility occupant/access-key PII', () => {
+      expect(isCacheable('/facilities/occupants')).toBe(false);
+      expect(isCacheable('/facilities/access-keys')).toBe(false);
+    });
+
+    it('excludes event roster sub-resources but still caches event list/detail', () => {
+      // Parent paths remain cacheable...
+      expect(isCacheable('/events')).toBe(true);
+      expect(isCacheable('/events/123')).toBe(true);
+      // ...but PII sub-resources (id mid-path) are not.
+      expect(isCacheable('/events/123/rsvps')).toBe(false);
+      expect(isCacheable('/events/123/eligible-members')).toBe(false);
+      expect(isCacheable('/events/123/external-attendees')).toBe(false);
+      expect(isCacheable('/events/123/check-in-monitoring')).toBe(false);
+    });
   });
 
   // ---- clearCache ----

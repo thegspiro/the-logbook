@@ -584,6 +584,80 @@ expect(mockGetTemplates).toHaveBeenCalledWith(undefined);
 
 **Rule:** Never use bare `toHaveBeenCalledWith()`. Use `toHaveBeenCalled()` if you don't care about arguments, or specify the expected arguments explicitly. The ESLint rule `vitest/prefer-called-with` enforces this at `error` level.
 
+### 14. Multi-Tenant Isolation: Every By-Id Query and FK Must Be Org-Scoped
+
+This is the dominant class of finding in the 2026-07 security audit (see
+`docs/module-audit/`). Three distinct sub-rules, all about `organization_id`:
+
+**14a — Every by-id read/update/delete filters `organization_id`.** A query that
+fetches a row by its primary key (or any client-supplied id) MUST also filter
+`organization_id == caller's org`, or resolve the row through a parent that was
+already org-scoped. A bare `select(Model).where(Model.id == x)` on a
+client-supplied id is an IDOR / cross-tenant leak.
+
+```python
+# WRONG — any org can read/mutate this row by guessing/knowing the id
+result = await db.execute(select(Candidate).where(Candidate.id == candidate_id))
+
+# CORRECT — scope to the caller's org (or resolve via an org-scoped parent)
+result = await db.execute(
+    select(Candidate).where(
+        Candidate.id == candidate_id,
+        Candidate.organization_id == organization_id,
+    )
+)
+```
+
+**14b — `require_permission(...)` does NOT scope the object (XC-3).** A permission
+dependency only asserts the caller holds the permission *in their own org*. An
+admin update/delete that then fetches the target by a path/body id without an org
+filter lets an org-A admin mutate an org-B row. Always resolve the target through
+an org-scoped fetch (e.g. `get_election(id, current_user.organization_id)`)
+before mutating it — the permission check is not enough.
+
+**14c — Validate client-supplied FK ids belong to the org on create/update
+(XC-1).** When a create/update stores a client-supplied foreign key
+(`user_id`, `category_id`, `apparatus_id`, `template_id`, `pipeline_id`,
+`assignee_id`, …), verify that referenced row is in the caller's org before
+storing it. Even when the write is org-stamped (so it can't be *read*
+cross-tenant), an unvalidated FK persists a dangling/mis-attributed reference —
+and in some cases (e.g. an eager-loaded template relationship with no org filter
+on the join) it leaks the other org's data back in the response. Prefer a shared
+`assert_in_org(db, Model, id, org_id)` helper over ad-hoc checks.
+
+**Rule:** When writing or reviewing any endpoint/service that takes an id or FK
+from the client: (1) org-scope every by-id query, (2) resolve mutation targets
+through an org-scoped fetch even behind `require_permission`, (3) validate
+client-supplied FK ids are in-org before persisting them. Also fail *closed* in
+access-control helpers — if a referenced folder/parent can't be resolved, deny,
+don't grant.
+
+### 15. CSV / Spreadsheet Exports: Always Use `SafeCsvWriter`, Never Raw `csv.writer`
+
+Exported CSVs are opened in Excel / Google Sheets, which **execute** any cell
+whose value begins with `=`, `+`, `-`, `@` (or a leading tab/CR) as a formula.
+Free-text fields written to an export — member names, notes, item descriptions,
+memos — are attacker-influenceable, so a member named `=cmd|…` runs a formula on
+whatever staff member opens the export (formula/CSV injection). The
+2026-07 module audit found this live in six separate exporters that used raw
+`csv.writer`.
+
+```python
+# WRONG — a cell starting with = / + / - / @ executes in Excel/Sheets
+import csv
+writer = csv.writer(output)
+
+# CORRECT — SafeCsvWriter neutralizes every cell (drop-in, same interface)
+from app.utils.csv_export import SafeCsvWriter
+writer = SafeCsvWriter(output)
+```
+
+**Rule:** Any CSV that leaves the system (member exports, compliance reports,
+finance/QuickBooks exports, audit hand-offs) MUST be written with
+`SafeCsvWriter` from `app/utils/csv_export.py` — never bare `csv.writer`. It
+prefixes formula-trigger cells with a `'`, transparent to the reader. The same
+applies to any other spreadsheet-bound output.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.

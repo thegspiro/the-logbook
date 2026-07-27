@@ -27,6 +27,7 @@ from app.core.audit import log_audit_event, verify_audit_log_integrity
 from app.core.constants import AUDIT_EVENT_LOGIN_FAILED
 from app.models.audit import AuditLog
 from app.models.security_alert import SecurityAlertRecord
+from app.models.user import User
 
 
 class ThreatLevel(str, Enum):
@@ -156,12 +157,47 @@ class SecurityMonitoringService:
 
         self._last_eviction: float = 0.0
 
+    def _enforce_key_caps(self) -> None:
+        """Hard-cap each tracking dict at ``_MAX_TRACKING_KEYS``.
+
+        The time-based sweep below is throttled to once/60s and only drops keys
+        older than the window, so a burst of many distinct attacker-controlled
+        keys (source IPs / user ids during credential stuffing) could grow these
+        dicts without bound *between* sweeps — the cap constant existed but was
+        never enforced (pitfall #9). This runs on every call, unthrottled, and
+        evicts the least-recently-active keys first.
+        """
+
+        def _last_ts(entries: list) -> datetime:
+            if not entries:
+                return datetime.min.replace(tzinfo=timezone.utc)
+            last = entries[-1]
+            return last[1] if isinstance(last, tuple) else last
+
+        for tracker in (
+            self._api_calls,
+            self._login_attempts,
+            self._session_ips,
+            self._data_transfers,
+        ):
+            overflow = len(tracker) - self._MAX_TRACKING_KEYS
+            if overflow > 0:
+                for key in sorted(tracker, key=lambda k: _last_ts(tracker[k]))[
+                    :overflow
+                ]:
+                    del tracker[key]
+
     def _evict_stale_tracking_keys(self) -> None:
         """Remove stale keys from in-memory tracking dicts to bound memory.
 
-        Runs at most once per 60 seconds to avoid overhead.
+        The hard key cap runs every call; the (more expensive) time-based sweep
+        runs at most once per 60 seconds.
         """
         import time as _time
+
+        # Unthrottled — a within-60s burst must not be able to grow the dicts
+        # past the cap.
+        self._enforce_key_caps()
 
         now = _time.monotonic()
         if now - self._last_eviction < 60:
@@ -226,6 +262,16 @@ class SecurityMonitoringService:
                 else:
                     serializable_details[k] = v
 
+            # Attribute the alert to the owning tenant so it is only visible to
+            # (and acknowledgeable by) that org. Derived from the alert's user;
+            # user-less alerts (pre-auth / IP-only) stay NULL = platform-level.
+            organization_id = None
+            if alert.user_id:
+                org_result = await db.execute(
+                    select(User.organization_id).where(User.id == alert.user_id)
+                )
+                organization_id = org_result.scalar_one_or_none()
+
             record = SecurityAlertRecord(
                 id=alert.id,
                 alert_type=DBAlertType(alert.alert_type.value),
@@ -234,6 +280,7 @@ class SecurityMonitoringService:
                 description=alert.description,
                 source_ip=alert.source_ip,
                 user_id=alert.user_id,
+                organization_id=organization_id,
                 details=serializable_details,
                 acknowledged=alert.acknowledged,
                 resolved=alert.resolved,
@@ -367,6 +414,13 @@ class SecurityMonitoringService:
         """
         Detect brute force login attempts
         """
+        # Brute-force / credential-stuffing is exactly the burst that fills
+        # _login_attempts (keyed by attacker-controlled ip + user id), so bound
+        # it here too — _check_rate_limit isn't always on this path. Only the
+        # hard cap (not the time-based sweep) so this stays cheap on the hot
+        # login path.
+        self._enforce_key_caps()
+
         if success:
             # Clear attempts on successful login
             self._login_attempts[ip] = []
@@ -746,25 +800,32 @@ class SecurityMonitoringService:
     async def get_security_status(
         self,
         db: AsyncSession,
+        organization_id: str,
     ) -> Dict[str, Any]:
         """
-        Get current security status and metrics
+        Get current security status and metrics for one organization.
+
+        All DB-backed alert/audit counts are scoped to ``organization_id`` so an
+        org admin never sees another tenant's incident volume or failed-login
+        rate. (The in-memory process metrics below are platform-wide counters,
+        not per-tenant data.)
         """
         now = datetime.now(timezone.utc)
         hour_ago = now - timedelta(hours=1)
+        org_alert = SecurityAlertRecord.organization_id == organization_id
 
-        # Count recent alerts from DB
+        # Count recent alerts from DB (org-scoped)
         recent_count_result = await db.execute(
             select(func.count(SecurityAlertRecord.id)).where(
-                SecurityAlertRecord.timestamp > hour_ago
+                SecurityAlertRecord.timestamp > hour_ago, org_alert
             )
         )
         total_last_hour = recent_count_result.scalar() or 0
 
-        # Alerts by severity from DB
+        # Alerts by severity from DB (org-scoped)
         severity_result = await db.execute(
             select(SecurityAlertRecord.threat_level, func.count())
-            .where(SecurityAlertRecord.timestamp > hour_ago)
+            .where(SecurityAlertRecord.timestamp > hour_ago, org_alert)
             .group_by(SecurityAlertRecord.threat_level)
         )
         alerts_by_severity = {
@@ -772,10 +833,10 @@ class SecurityMonitoringService:
             for level, count in severity_result.all()
         }
 
-        # Alerts by type from DB
+        # Alerts by type from DB (org-scoped)
         type_result = await db.execute(
             select(SecurityAlertRecord.alert_type, func.count())
-            .where(SecurityAlertRecord.timestamp > hour_ago)
+            .where(SecurityAlertRecord.timestamp > hour_ago, org_alert)
             .group_by(SecurityAlertRecord.alert_type)
         )
         alerts_by_type = {
@@ -783,10 +844,11 @@ class SecurityMonitoringService:
             for atype, count in type_result.all()
         }
 
-        # Unacknowledged count from DB
+        # Unacknowledged count from DB (org-scoped)
         unack_result = await db.execute(
             select(func.count(SecurityAlertRecord.id)).where(
-                SecurityAlertRecord.acknowledged == False  # noqa: E712
+                SecurityAlertRecord.acknowledged == False,  # noqa: E712
+                org_alert,
             )
         )
         unacknowledged = unack_result.scalar() or 0
@@ -794,16 +856,21 @@ class SecurityMonitoringService:
         # Verify log integrity
         integrity_result = await self.verify_log_integrity(db)
 
-        # Get failed login stats from audit log
+        # Failed-login stats from the audit log. AuditLog has no organization_id
+        # column, so scope to this org's users (mirrors the audit-log endpoints).
+        org_user_ids = select(User.id).where(User.organization_id == organization_id)
         failed_logins_result = await db.execute(
             select(func.count(AuditLog.id))
             .where(AuditLog.event_type == AUDIT_EVENT_LOGIN_FAILED)
             .where(AuditLog.timestamp > hour_ago)
+            .where(AuditLog.user_id.in_(org_user_ids))
         )
         failed_logins_hour = failed_logins_result.scalar() or 0
 
-        # Get external endpoints detected
-        external_endpoints = list(self._external_endpoints)[:10]
+        # NOTE: the in-memory trackers below are process-global counters, not
+        # per-tenant. We expose only counts, never the external-endpoint URLs
+        # (which are another tenant's data-exfil destinations).
+        external_endpoints_count = len(self._external_endpoints)
 
         return {
             "status": (
@@ -831,7 +898,7 @@ class SecurityMonitoringService:
                     if len(calls) > self.thresholds.api_calls_per_minute
                 ),
                 "tracked_sessions": len(self._session_ips),
-                "external_endpoints_detected": external_endpoints,
+                "external_endpoints_detected": external_endpoints_count,
             },
             "thresholds": {
                 "failed_logins_per_hour": self.thresholds.failed_logins_per_hour,
@@ -842,21 +909,26 @@ class SecurityMonitoringService:
 
     async def get_recent_alerts(
         self,
+        organization_id: str,
         limit: int = 50,
         threat_level: Optional[ThreatLevel] = None,
         alert_type: Optional[AlertType] = None,
         db: Optional[AsyncSession] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Get recent security alerts from the database.
-        Falls back to in-memory list if no db session is provided.
+        Get recent security alerts for one organization from the database.
+
+        Scoped to ``organization_id`` — an org only ever sees its own alerts;
+        platform-level (user-less) alerts are not returned here.
         """
         if db is not None:
             from app.models.security_alert import AlertType as DBAlertType
             from app.models.security_alert import ThreatLevel as DBThreatLevel
 
-            query = select(SecurityAlertRecord).order_by(
-                SecurityAlertRecord.timestamp.desc()
+            query = (
+                select(SecurityAlertRecord)
+                .where(SecurityAlertRecord.organization_id == organization_id)
+                .order_by(SecurityAlertRecord.timestamp.desc())
             )
             if threat_level:
                 query = query.where(
@@ -896,44 +968,29 @@ class SecurityMonitoringService:
                 for r in records
             ]
 
-        # Fallback to in-memory list
-        alerts = self.alerts.copy()
-
-        if threat_level:
-            alerts = [a for a in alerts if a.threat_level == threat_level]
-
-        if alert_type:
-            alerts = [a for a in alerts if a.alert_type == alert_type]
-
-        alerts.sort(key=lambda a: a.timestamp, reverse=True)
-
-        return [
-            {
-                "id": a.id,
-                "alert_type": a.alert_type.value,
-                "threat_level": a.threat_level.value,
-                "timestamp": a.timestamp.isoformat(),
-                "description": a.description,
-                "source_ip": a.source_ip,
-                "user_id": a.user_id,
-                "details": a.details,
-                "acknowledged": a.acknowledged,
-                "resolved": a.resolved,
-            }
-            for a in alerts[:limit]
-        ]
+        # No db session: the in-memory alert list carries no organization_id, so
+        # it cannot be safely tenant-scoped. Return nothing rather than risk
+        # leaking another org's alerts. (Real callers always pass a db session.)
+        return []
 
     async def acknowledge_alert(
         self,
         alert_id: str,
+        organization_id: str,
         db: AsyncSession,
         username: Optional[str] = None,
     ) -> bool:
         """
-        Acknowledge a security alert (persisted to DB)
+        Acknowledge a security alert (persisted to DB).
+
+        Scoped to ``organization_id`` so an admin can only acknowledge their own
+        org's alerts — not suppress another tenant's incidents.
         """
         result = await db.execute(
-            select(SecurityAlertRecord).where(SecurityAlertRecord.id == alert_id)
+            select(SecurityAlertRecord).where(
+                SecurityAlertRecord.id == alert_id,
+                SecurityAlertRecord.organization_id == organization_id,
+            )
         )
         record = result.scalar_one_or_none()
         if record:
@@ -952,14 +1009,21 @@ class SecurityMonitoringService:
     async def resolve_alert(
         self,
         alert_id: str,
+        organization_id: str,
         db: AsyncSession,
         username: Optional[str] = None,
     ) -> bool:
         """
-        Mark a security alert as resolved (persisted to DB)
+        Mark a security alert as resolved (persisted to DB).
+
+        Scoped to ``organization_id`` so an admin can only resolve their own
+        org's alerts.
         """
         result = await db.execute(
-            select(SecurityAlertRecord).where(SecurityAlertRecord.id == alert_id)
+            select(SecurityAlertRecord).where(
+                SecurityAlertRecord.id == alert_id,
+                SecurityAlertRecord.organization_id == organization_id,
+            )
         )
         record = result.scalar_one_or_none()
         if record:
@@ -978,3 +1042,32 @@ class SecurityMonitoringService:
 
 # Global instance
 security_monitor = SecurityMonitoringService()
+
+
+async def report_privilege_escalation_attempt(
+    db: AsyncSession,
+    user_id: str,
+    target_resource: str,
+    ip_address: Optional[str] = None,
+) -> None:
+    """Record a BLOCKED privilege-escalation attempt (best-effort).
+
+    Called from the role/permission-grant ceiling checks when a caller is denied
+    for trying to grant permissions beyond their own authority. Fires a CRITICAL
+    alert and commits it so the record survives the 403 the caller is about to
+    raise — ``_add_alert`` only flushes, and the raise would otherwise roll the
+    session back. Never propagates: security monitoring must not break the
+    request it observes.
+    """
+    try:
+        alert = await security_monitor.detect_privilege_escalation(
+            db,
+            user_id=user_id,
+            action="modify_permissions",
+            target_resource=target_resource,
+            ip_address=ip_address,
+        )
+        if alert is not None:
+            await db.commit()
+    except Exception as exc:
+        logger.warning("Privilege-escalation reporting failed: {}", exc)

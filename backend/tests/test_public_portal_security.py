@@ -9,7 +9,6 @@ Covers:
 
 import sys
 import pytest
-from collections import defaultdict
 from datetime import datetime, timezone
 from types import ModuleType
 from unittest.mock import MagicMock
@@ -27,12 +26,16 @@ for _mod_name in ("bcrypt",):
         sys.modules[_mod_name] = stub
         _stubs[_mod_name] = stub
 
-# Also stub transitive DB/model imports that the module pulls in
+# Stub only the transitive DB driver imports the module pulls in. NOTE: do NOT
+# stub `app.models.public_portal` — replacing it with a MagicMock leaves a real
+# ORM model unregistered in SQLAlchemy's shared declarative registry, so a later
+# test module's first mapper configuration fails to resolve string relationships
+# like Organization.relationship("PublicPortalConfig"). conftest imports the real
+# models eagerly; keep them real here too.
 for _mod_name in (
     "aiomysql",
     "redis",
     "redis.asyncio",
-    "app.models.public_portal",
 ):
     if _mod_name not in sys.modules:
         stub = MagicMock()
@@ -40,17 +43,23 @@ for _mod_name in (
         _stubs[_mod_name] = stub
 
 from app.core.public_portal_security import (
+    authenticate_api_key,
     check_ip_rate_limit,
     cleanup_rate_limit_cache,
+    generate_api_key,
     ip_rate_limit_cache,
     rate_limit_cache,
+    _last_used_is_stale,
+    _LAST_USED_THROTTLE_SECONDS,
     _MAX_RATE_LIMIT_KEYS,
     _MAX_IP_RATE_LIMIT_KEYS,
 )
+from datetime import timedelta
+from fastapi import HTTPException
 
 
 @pytest.fixture(autouse=True)
-def clear_caches():
+def _clear_caches():
     """Clear global caches before and after each test."""
     rate_limit_cache.clear()
     ip_rate_limit_cache.clear()
@@ -187,3 +196,79 @@ class TestCheckIpRateLimit:
 
         is_allowed, count, limit = await check_ip_rate_limit("9.9.9.9", limit=100)
         assert is_allowed is False
+
+
+# ---------------------------------------------------------------------------
+# PP-4: IP rate limit ahead of bcrypt; selective key prefix
+# ---------------------------------------------------------------------------
+
+
+class TestAuthenticateApiKeyDoSHardening:
+
+    @pytest.mark.unit
+    async def test_ip_rate_limit_runs_before_db_and_bcrypt(self):
+        """An over-limit IP is rejected before any DB lookup / bcrypt verify."""
+        now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+        ip_rate_limit_cache["1.2.3.4"][int(now.timestamp())] = 100  # at limit
+
+        class _ExplodingDB:
+            async def execute(self, *args, **kwargs):
+                raise AssertionError(
+                    "DB/bcrypt was reached before the IP rate limit (PP-4)"
+                )
+
+        request = MagicMock()
+        request.client.host = "1.2.3.4"
+
+        with pytest.raises(HTTPException) as exc:
+            await authenticate_api_key(
+                request, api_key="logbook_" + "a" * 40, db=_ExplodingDB()
+            )
+        assert exc.value.status_code == 429
+
+
+class TestLastUsedThrottle:
+
+    @pytest.mark.unit
+    def test_missing_is_stale(self):
+        assert _last_used_is_stale(None, datetime.now(timezone.utc)) is True
+        assert _last_used_is_stale("", datetime.now(timezone.utc)) is True
+
+    @pytest.mark.unit
+    def test_recent_is_not_stale(self):
+        now = datetime.now(timezone.utc)
+        recent = (now - timedelta(seconds=5)).isoformat()
+        assert _last_used_is_stale(recent, now) is False
+
+    @pytest.mark.unit
+    def test_old_is_stale(self):
+        now = datetime.now(timezone.utc)
+        old = (now - timedelta(seconds=_LAST_USED_THROTTLE_SECONDS + 5)).isoformat()
+        assert _last_used_is_stale(old, now) is True
+
+    @pytest.mark.unit
+    def test_malformed_is_stale(self):
+        assert _last_used_is_stale("not-a-timestamp", datetime.now(timezone.utc)) is True
+
+    @pytest.mark.unit
+    def test_naive_timestamp_treated_as_utc(self):
+        now = datetime.now(timezone.utc)
+        naive_recent = now.replace(tzinfo=None).isoformat()
+        # Must not raise on naive/aware subtraction; recent → not stale.
+        assert _last_used_is_stale(naive_recent, now) is False
+
+
+class TestGenerateApiKeyPrefix:
+
+    @pytest.mark.unit
+    def test_prefix_is_selective_not_constant_marker(self):
+        """The stored prefix must be selective (16 chars), not the "logbook_"."""
+        key1, prefix1 = generate_api_key()
+        key2, prefix2 = generate_api_key()
+
+        assert prefix1 == key1[:16]
+        assert len(prefix1) == 16
+        # The old non-selective 8-char marker forced a bcrypt scan of every key.
+        assert prefix1 != "logbook_"
+        # Selective: two distinct keys get distinct prefixes.
+        assert prefix1 != prefix2

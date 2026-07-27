@@ -73,6 +73,15 @@ class EventService:
         # Check for location double-booking
         if event_data.location_id:
             location_service = LocationService(self.db)
+            # Validate the client-supplied location belongs to the caller's org
+            # first: without this, a foreign location_id is stored (leaking that
+            # org's location via the eager-loaded relationship) and the
+            # double-booking guard — scoped to this org — never sees the other
+            # org's real bookings for that room.
+            if not await location_service.get_location(
+                event_data.location_id, str(organization_id)
+            ):
+                raise ValueError("Location not found")
             overlapping = await location_service.check_overlapping_events(
                 location_id=event_data.location_id,
                 organization_id=str(organization_id),
@@ -292,6 +301,12 @@ class EventService:
         check_location_id = update_data.get("location_id", event.location_id)
         if check_location_id:
             location_service = LocationService(self.db)
+            # Validate a newly-set location belongs to the caller's org (the
+            # existing location was validated at create time).
+            if update_data.get("location_id") and not await location_service.get_location(
+                update_data["location_id"], str(organization_id)
+            ):
+                raise ValueError("Location not found")
             overlapping = await location_service.check_overlapping_events(
                 location_id=check_location_id,
                 organization_id=str(organization_id),
@@ -1042,15 +1057,6 @@ class EventService:
 
         await self.db.commit()
         return rsvp_count
-
-    async def get_rsvp(self, event_id: UUID, user_id: UUID) -> Optional[EventRSVP]:
-        """Get a user's RSVP for an event"""
-        result = await self.db.execute(
-            select(EventRSVP)
-            .where(EventRSVP.event_id == str(event_id))
-            .where(EventRSVP.user_id == str(user_id))
-        )
-        return result.scalar_one_or_none()
 
     async def list_event_rsvps(
         self,

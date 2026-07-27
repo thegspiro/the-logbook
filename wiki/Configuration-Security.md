@@ -65,9 +65,9 @@ The Logbook supports multiple authentication methods:
 | Layer | Algorithm | Details |
 |-------|-----------|---------|
 | **Passwords** | Argon2id | OWASP-recommended, memory-hard |
-| **Data at rest** | AES-256 | Sensitive fields encrypted in database |
+| **Data at rest** | AES-256-GCM | Authenticated encryption of sensitive fields; a tampered value fails to decrypt (fails closed). Values written under the legacy Fernet (AES-128-CBC) scheme still decrypt; `backend/scripts/reencrypt_to_aesgcm.py` backfills them (see [`docs/AES256_GCM_BACKFILL_RUNBOOK.md`](../docs/AES256_GCM_BACKFILL_RUNBOOK.md)) |
 | **Data in transit** | TLS 1.3 | HTTPS required in production |
-| **Audit logs** | SHA-256 hash chain | Tamper-proof blockchain-inspired chain |
+| **Audit logs** | Keyed HMAC-SHA256 hash chain | Tamper-evident chain keyed with the signing key, so forging it requires the key, not just DB write access (legacy pre-upgrade rows remain unkeyed SHA-256 for verification) |
 
 ---
 
@@ -133,16 +133,31 @@ headers can no longer be spoofed:
 
 ### GeoIP Country Blocking
 
-- Database `CountryBlockRule` rows are the **source of truth** for blocked
-  countries and take precedence over the `BLOCKED_COUNTRIES` config default. An
-  explicit unblock rule overrides a config-level default block
-- `sync_blocked_countries_to_geoip()` reconciles DB rules into the running GeoIP
-  service at startup and on every rule change
+Country blocking is a **platform-edge control**: it runs in middleware before any
+tenant/authentication context exists, against one shared MaxMind database and one
+global blocked-country set, so it applies to the whole deployment rather than to a
+single organization.
+
+- **Deploy-time source of truth:** the blocked-country list is normally set once
+  at deploy via `BLOCKED_COUNTRIES`. Runtime management via the API
+  (`POST`/`DELETE /api/v1/ip-security/blocked-countries`) is **disabled by
+  default** and only available when the operator sets
+  `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT=true` — because a runtime change affects
+  every tenant, not just the admin's own org
+- When runtime management is enabled, `CountryBlockRule` rows overlay the config
+  defaults; `sync_blocked_countries_to_geoip()` reconciles them into the running
+  GeoIP service at startup and on every rule change
 - **Multi-worker sync:** `core/geoip_sync.py` publishes a Redis `geoip:invalidate`
   message on rule changes; each worker's `GeoIPInvalidationListener` re-syncs from
   the DB. If Redis is down, the publish is a no-op and changes apply on the next
   restart
-- **Fail-open:** if a request's country cannot be determined, it is allowed
+- **Fail-open vs fail-closed (configurable):** by default, if a request's country
+  cannot be determined it is **allowed** (fail-open). Set `GEOIP_FAIL_CLOSED=true`
+  to instead **block** any unresolved-country IP — including when the MaxMind DB
+  is missing or corrupt, which otherwise silently disables geo-blocking.
+  Private/reserved and allowlisted IPs are always allowed regardless, so an
+  internal or allowlisted operator can still recover if a missing DB would
+  otherwise lock everyone out
 
 ---
 
@@ -152,7 +167,8 @@ headers can no longer be spoofed:
 # Check security status
 curl http://YOUR-IP:3001/api/v1/security/status
 
-# View security alerts
+# View security alerts (scoped to the caller's organization — an org admin
+# only sees, acknowledges, and resolves their own org's alerts)
 curl http://YOUR-IP:3001/api/v1/security/alerts
 
 # Verify audit log integrity

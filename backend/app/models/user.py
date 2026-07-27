@@ -308,17 +308,24 @@ class User(Base):
     mfa_enabled = Column(Boolean, default=False)
     _mfa_secret_encrypted = Column("mfa_secret", String(255))
     _mfa_backup_codes_encrypted = Column("mfa_backup_codes", JSON)
+    # Highest TOTP time-step (unix_time // period) already accepted at login.
+    # A code whose step is <= this value is rejected as a replay, so a captured
+    # or shoulder-surfed code cannot be reused within its ±30s validity window.
+    mfa_last_timestep = Column(Integer, nullable=True)
 
     @property
     def mfa_secret(self) -> str | None:
         if not self._mfa_secret_encrypted:
             return None
         try:
+            from cryptography.fernet import InvalidToken
+
             from app.core.security import decrypt_data
 
             return decrypt_data(self._mfa_secret_encrypted)
-        except Exception:
-            # Fallback for pre-encryption plaintext values
+        except InvalidToken:
+            # Fallback for legacy pre-encryption plaintext values only; a real
+            # error (missing key, bug) propagates instead of being masked.
             return self._mfa_secret_encrypted
 
     @mfa_secret.setter
@@ -343,10 +350,13 @@ class User(Base):
             and len(raw[0]) > 40
         ):
             try:
+                from cryptography.fernet import InvalidToken
+
                 from app.core.security import decrypt_data
 
                 return [decrypt_data(c) for c in raw]
-            except Exception:
+            except InvalidToken:
+                # Legacy pre-encryption plaintext codes only.
                 return raw
         return raw
 
@@ -687,6 +697,11 @@ class Session(Base):
 
     token = Column(String(512), nullable=False, unique=True, index=True)
     refresh_token = Column(String(512))
+    # The immediately-previous refresh token, honored for a short grace window
+    # after rotation so two concurrent legitimate refreshes (multi-tab, app
+    # boot, network retry) don't look like token theft and trigger a mass logout.
+    previous_refresh_token = Column(String(512), nullable=True, index=True)
+    previous_refresh_expires_at = Column(DateTime(timezone=True), nullable=True)
     ip_address = Column(String(45))
     user_agent = Column(Text)
     geo_location = Column(JSON)

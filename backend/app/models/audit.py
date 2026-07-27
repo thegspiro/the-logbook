@@ -75,6 +75,10 @@ class AuditLog(Base):
     # Integrity Chain (Blockchain-inspired)
     previous_hash = Column(String(64), nullable=False)
     current_hash = Column(String(64), nullable=False, index=True)
+    # Hash algorithm version: NULL/1 = legacy unkeyed SHA-256, 2 = keyed
+    # HMAC-SHA256. Stored per-row so pre-upgrade entries still verify under
+    # their original scheme while all new entries are forgery-resistant.
+    hash_version = Column(Integer, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

@@ -16,6 +16,7 @@ from typing import Any
 from loguru import logger
 
 from app.services.integration_services.base import create_integration_client
+from app.utils.url_validator import assert_outbound_url_safe
 
 # Default Cal.com Cloud API base. Self-hosted orgs override this with their
 # own https://<host>/api/v1 in the integration config.
@@ -88,11 +89,17 @@ class CalcomService:
         )
         self.api_key: str = credentials.get("api_key", "")
 
+    def _assert_base_url_safe(self) -> None:
+        # SSRF: api_base_url is client-supplied — re-validate at send time
+        # (defends against DNS-rebinding). Raises ValueError on an unsafe host.
+        assert_outbound_url_safe(self.api_base_url)
+
     async def test_connection(self) -> str:
         """Verify the API key by fetching the authenticated user."""
         if not self.api_key:
             raise Exception("No Cal.com API key configured")
 
+        self._assert_base_url_safe()
         async with create_integration_client() as client:
             response = await client.get(
                 f"{self.api_base_url}/me",
@@ -119,6 +126,7 @@ class CalcomService:
 
     async def list_bookings(self) -> list[dict[str, Any]]:
         """Fetch bookings and return them mapped to Logbook event dicts."""
+        self._assert_base_url_safe()
         async with create_integration_client() as client:
             response = await client.get(
                 f"{self.api_base_url}/bookings",

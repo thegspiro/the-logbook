@@ -417,6 +417,15 @@ class OnboardingService:
                 "Slug must contain only letters, numbers, hyphens, and underscores"
             )
 
+        # Single-instance onboarding provisions exactly ONE organization. Reject
+        # a second org outright: a leaked/replayed in-progress session could
+        # otherwise create several (each with its own default roles), and
+        # downstream "first active org" logic would silently pick one and strand
+        # the rest.
+        any_org = await self.db.execute(select(Organization.id).limit(1))
+        if any_org.scalar_one_or_none() is not None:
+            raise ValueError("An organization has already been created")
+
         # Check if organization already exists
         result = await self.db.execute(
             select(Organization).where(Organization.slug == slug)
@@ -867,6 +876,14 @@ class OnboardingService:
         Returns:
             Created User object
         """
+        # The System Owner is the FIRST user created during onboarding. Refuse to
+        # mint a second wildcard-permission owner: without this, a leaked/replayed
+        # in-progress session could call /system-owner repeatedly (distinct
+        # emails) and create several full-access "*" accounts.
+        existing_user = await self.db.execute(select(User.id).limit(1))
+        if existing_user.scalar_one_or_none() is not None:
+            raise ValueError("A system owner has already been created")
+
         # Use AuthService to create user with proper password hashing
         auth_service = AuthService(self.db)
 
@@ -1052,9 +1069,12 @@ class OnboardingService:
                 "charset": settings.DB_CHARSET,
             }
         except Exception as e:
+            # Log the real error server-side but return a generic message — the
+            # raw driver exception can embed the DSN / internal host details.
+            logger.error("Database connectivity check failed: {}", e)
             return {
                 "connected": False,
-                "error": str(e),
+                "error": "Could not connect to the database. Check server logs.",
                 "database": settings.DB_NAME,
                 "host": settings.DB_HOST,
                 "port": settings.DB_PORT,

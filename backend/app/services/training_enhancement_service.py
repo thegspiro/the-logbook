@@ -14,7 +14,6 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
-    CompetencyLevel,
     CompetencyMatrix,
     InstructorQualification,
     MemberCompetency,
@@ -22,7 +21,6 @@ from app.models.training import (
     RecertificationPathway,
     RenewalTask,
     RenewalTaskStatus,
-    SkillCheckoff,
     TrainingCategory,
     TrainingEffectivenessEvaluation,
     TrainingRecord,
@@ -246,101 +244,6 @@ class CompetencyService:
             .order_by(MemberCompetency.updated_at.desc())
         )
         return result.scalars().all()
-
-    async def update_competency_from_checkoff(
-        self, checkoff: SkillCheckoff, organization_id: str
-    ) -> Optional[MemberCompetency]:
-        """
-        Update a member's competency level based on a skill checkoff result.
-        Called after a skill evaluation is recorded.
-        """
-        # Find or create MemberCompetency
-        result = await self.db.execute(
-            select(MemberCompetency)
-            .where(MemberCompetency.user_id == checkoff.user_id)
-            .where(MemberCompetency.skill_evaluation_id == checkoff.skill_evaluation_id)
-            .where(MemberCompetency.organization_id == organization_id)
-        )
-        competency = result.scalar_one_or_none()
-
-        if not competency:
-            competency = MemberCompetency(
-                organization_id=organization_id,
-                user_id=checkoff.user_id,
-                skill_evaluation_id=checkoff.skill_evaluation_id,
-            )
-            self.db.add(competency)
-
-        # Update based on checkoff
-        competency.previous_level = competency.current_level
-        competency.last_evaluated_at = datetime.now(timezone.utc)
-        competency.last_evaluator_id = checkoff.evaluator_id
-        competency.evaluation_count = (competency.evaluation_count or 0) + 1
-        competency.last_score = checkoff.score
-
-        # Determine new level based on score
-        if checkoff.score is not None:
-            if checkoff.score >= 95:
-                competency.current_level = CompetencyLevel.EXPERT
-            elif checkoff.score >= 85:
-                competency.current_level = CompetencyLevel.PROFICIENT
-            elif checkoff.score >= 75:
-                competency.current_level = CompetencyLevel.COMPETENT
-            elif checkoff.score >= 60:
-                competency.current_level = CompetencyLevel.ADVANCED_BEGINNER
-            else:
-                competency.current_level = CompetencyLevel.NOVICE
-        elif checkoff.status == "passed":
-            # If no score but passed, advance one level (up to competent)
-            levels = list(CompetencyLevel)
-            current_idx = levels.index(competency.current_level)
-            if current_idx < levels.index(CompetencyLevel.COMPETENT):
-                competency.current_level = levels[current_idx + 1]
-
-        # Update score history
-        history = competency.score_history or []
-        history.append(
-            {
-                "date": datetime.now(timezone.utc).isoformat(),
-                "score": checkoff.score,
-                "level": competency.current_level.value,
-            }
-        )
-        # Keep last 10 entries
-        competency.score_history = history[-10:]
-
-        # Calculate next evaluation due
-        if competency.decay_months:
-            competency.next_evaluation_due = date.today() + timedelta(
-                days=competency.decay_months * 30
-            )
-
-        await self.db.flush()
-        return competency
-
-    async def check_skill_decay(self, organization_id: str) -> int:
-        """
-        Check for skills that need re-evaluation due to decay.
-        Returns number of members notified.
-        """
-        today = date.today()
-        warning_window = today + timedelta(days=30)
-
-        result = await self.db.execute(
-            select(MemberCompetency)
-            .where(MemberCompetency.organization_id == organization_id)
-            .where(MemberCompetency.next_evaluation_due.isnot(None))
-            .where(MemberCompetency.next_evaluation_due <= warning_window)
-            .where(MemberCompetency.decay_warning_sent == False)  # noqa: E712
-        )
-        decaying = result.scalars().all()
-
-        for comp in decaying:
-            comp.decay_warning_sent = True
-            # Actual notification would be sent via NotificationsService
-
-        await self.db.flush()
-        return len(decaying)
 
 
 class InstructorQualificationService:

@@ -194,7 +194,7 @@ GET /api/v1/onboarding/system-info
     "password_min_length": 12,
     "mfa_available": true,
     "session_timeout_minutes": 480,
-    "encryption": "AES-256",
+    "encryption": "AES-256-GCM",
     "password_hashing": "Argon2id"
   },
   "features": {

@@ -10,7 +10,16 @@ import io
 from datetime import date, datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -53,6 +62,10 @@ from app.schemas.training import (
     TrainingRequirementResponse,
     TrainingRequirementUpdate,
     UserTrainingStats,
+)
+from app.services.integration_services.notification_dispatch import (
+    notify_entity_created,
+    notify_summary,
 )
 from app.services.training_compliance import (
     _load_compliance_config,
@@ -260,6 +273,7 @@ async def list_records(
 )
 async def create_record(
     record: TrainingRecordCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -280,7 +294,8 @@ async def create_record(
     ):
         course_result = await db.execute(
             select(TrainingCourse).where(
-                TrainingCourse.id == str(record_data["course_id"])
+                TrainingCourse.id == str(record_data["course_id"]),
+                TrainingCourse.organization_id == str(current_user.organization_id),
             )
         )
         course = course_result.scalar_one_or_none()
@@ -293,22 +308,23 @@ async def create_record(
             day = min(comp.day, calendar.monthrange(year, month)[1])
             record_data["expiration_date"] = date(year, month, day)
 
-    # Auto-populate rank/station from member's current profile if not explicitly set.
-    # SECURITY: Validate user belongs to the current user's organization.
-    if not record_data.get("rank_at_completion") or not record_data.get(
-        "station_at_completion"
-    ):
-        member_result = await db.execute(
-            select(User)
-            .where(User.id == str(record_data["user_id"]))
-            .where(User.organization_id == str(current_user.organization_id))
-        )
-        member = member_result.scalar_one_or_none()
-        if member:
-            if not record_data.get("rank_at_completion"):
-                record_data["rank_at_completion"] = member.rank
-            if not record_data.get("station_at_completion"):
-                record_data["station_at_completion"] = member.station
+    # SECURITY: the client-supplied user_id must belong to the caller's org.
+    # Validate unconditionally (previously this only ran when rank/station were
+    # omitted, so a record could be attributed to an arbitrary/foreign user by
+    # supplying both fields). Reuse the fetched member to auto-populate
+    # rank/station when not explicitly set.
+    member_result = await db.execute(
+        select(User)
+        .where(User.id == str(record_data["user_id"]))
+        .where(User.organization_id == str(current_user.organization_id))
+    )
+    member = member_result.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if not record_data.get("rank_at_completion"):
+        record_data["rank_at_completion"] = member.rank
+    if not record_data.get("station_at_completion"):
+        record_data["station_at_completion"] = member.station
 
     # Check for potential duplicates and include warning in response
     dupes = await _check_duplicate_records(
@@ -341,6 +357,22 @@ async def create_record(
         },
         user_id=str(current_user.id),
         username=current_user.username,
+    )
+
+    # Notify the org's chat integrations about the recorded training (background).
+    notify_member = await db.get(User, str(new_record.user_id))
+    member_name = (
+        getattr(notify_member, "full_name", None) if notify_member else None
+    ) or "A member"
+    background_tasks.add_task(
+        notify_entity_created,
+        str(current_user.organization_id),
+        "training",
+        {
+            "member_name": member_name,
+            "course_name": new_record.course_name,
+            "hours": new_record.hours_completed,
+        },
     )
 
     response = TrainingRecordResponse.model_validate(new_record)
@@ -398,6 +430,7 @@ async def _check_duplicate_records(
 )
 async def create_records_bulk(
     payload: BulkTrainingRecordCreate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("training.manage")),
 ):
@@ -525,6 +558,14 @@ async def create_records_bulk(
             },
             user_id=str(current_user.id),
             username=current_user.username,
+        )
+
+        # Bulk create → one summary notification, not one per record.
+        background_tasks.add_task(
+            notify_summary,
+            org_id,
+            "🎓 Training recorded",
+            f"{created} training record(s) were added.",
         )
 
     return BulkTrainingRecordResult(
@@ -1170,11 +1211,17 @@ async def get_expiring_certifications(
     """
     Get certifications expiring within the specified timeframe
 
-    **Authentication required**
+    **Authentication required** — non-officers see only their own certifications;
+    `training.manage` holders see the whole organization.
     """
+    is_officer = _has_permission(
+        "training.manage", _collect_user_permissions(current_user)
+    )
     training_service = TrainingService(db)
     expiring = await training_service.get_expiring_certifications(
-        organization_id=current_user.organization_id, days_ahead=days_ahead
+        organization_id=current_user.organization_id,
+        days_ahead=days_ahead,
+        user_id=None if is_officer else current_user.id,
     )
     return expiring
 

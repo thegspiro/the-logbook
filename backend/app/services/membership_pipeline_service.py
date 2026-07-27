@@ -712,6 +712,14 @@ class MembershipPipelineService:
 
         pipeline_id = data.get("pipeline_id")
 
+        # Validate a client-supplied pipeline_id belongs to the caller's org.
+        # An unvalidated foreign id would seed current_step_id / step_progress
+        # from another org's pipeline and leak its step names/config back in the
+        # prospect response.
+        if pipeline_id:
+            if await self.get_pipeline(pipeline_id, organization_id) is None:
+                raise ValueError("Invalid pipeline")
+
         # Use org default pipeline if none specified
         if not pipeline_id:
             default_pipeline = await self._get_default_pipeline(organization_id)

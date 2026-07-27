@@ -429,7 +429,7 @@ Body: {
 }
 ```
 
-**Data path**: Config is encrypted server-side (AES-256), stored in the onboarding session, and persisted to the organization's `settings.email_service` JSON column on completion. Secret fields (`cloudflare_api_token`, `smtp_password`, etc.) are prefixed with `enc:` before storage.
+**Data path**: Config is encrypted server-side (AES-256-GCM), stored in the onboarding session, and persisted to the organization's `settings.email_service` JSON column on completion. Secret fields (`cloudflare_api_token`, `smtp_password`, etc.) are prefixed with `enc:` before storage.
 
 **Navigation**:
 - Button: "Save & Continue" → `/onboarding/file-storage`
@@ -973,7 +973,7 @@ The following middleware and security features affect onboarding:
 - **Email Test Timeout**: SMTP connection tests have a 30-second timeout to prevent indefinite hangs if a mail server is unreachable or firewalled.
 
 **Data Protection:**
-- **Sensitive Data Encryption**: Email passwords, API keys, and file storage credentials submitted during onboarding are encrypted (AES-256 via Fernet) before being stored in the session database. Only the platform type is stored in plain text.
+- **Sensitive Data Encryption**: Email passwords, API keys, and file storage credentials submitted during onboarding are encrypted with **AES-256-GCM** authenticated encryption before being stored in the session database (values written under the legacy Fernet scheme remain readable). Only the platform type is stored in plain text.
 - **No Passwords in Logs**: Temporary passwords are never written to application logs. The `users.py` endpoint only logs that a welcome email was requested.
 - **Sanitized Error Responses**: API 500 errors return generic messages (`"Please check the server logs"`) instead of raw exception strings. This prevents leaking database schema, SQL queries, or internal paths to clients.
 - **Health Endpoint Sanitized**: The `/health` endpoint reports service status (`"connected"`, `"disconnected"`, `"error"`) without exposing raw error messages or infrastructure details.

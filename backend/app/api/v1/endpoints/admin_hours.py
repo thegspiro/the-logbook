@@ -772,7 +772,9 @@ async def close_stale_sessions(
     """Manually trigger auto-close of stale sessions that exceeded max hours."""
     service = AdminHoursService(db)
     try:
-        count = await service.auto_close_stale_sessions()
+        count = await service.auto_close_stale_sessions(
+            organization_id=str(current_user.organization_id)
+        )
         return {"closed_count": count}
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))

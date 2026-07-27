@@ -92,8 +92,9 @@ class PublicPortalAPIKey(Base):
     """
     API keys for accessing the public portal.
 
-    Keys are hashed before storage. Only the prefix (first 8 chars)
-    is stored in plaintext for identification purposes.
+    Keys are hashed (bcrypt) before storage. Only a short selective prefix
+    (first 16 chars: "logbook_" + 8 key chars) is stored in plaintext, both for
+    identification and to make authentication lookups return a single candidate.
     """
 
     __tablename__ = "public_portal_api_keys"
@@ -114,8 +115,11 @@ class PublicPortalAPIKey(Base):
     # API key (hashed with bcrypt)
     key_hash = Column(String(255), nullable=False, unique=True, index=True)
 
-    # First 8 characters of the key (for identification)
-    key_prefix = Column(String(8), nullable=False)
+    # Selective lookup prefix (first 16 chars: "logbook_" + 8 key chars) so a
+    # by-prefix lookup returns a single candidate rather than every key. Legacy
+    # keys created before this change stored only the constant "logbook_" (8
+    # chars); they are self-healed to the 16-char selective prefix on next use.
+    key_prefix = Column(String(20), nullable=False)
 
     # Friendly name for this API key
     name = Column(String(100), nullable=False)

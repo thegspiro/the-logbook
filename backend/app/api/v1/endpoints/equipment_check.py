@@ -953,14 +953,16 @@ async def export_csv(
     current_user: User = Depends(require_permission("equipment_check.view")),
 ):
     """Export report data as CSV."""
-    import csv
     import io
 
     from starlette.responses import StreamingResponse
 
+    from app.utils.csv_export import SafeCsvWriter
+
     service = EquipmentCheckService(db)
     output = io.StringIO()
-    writer = csv.writer(output)
+    # SafeCsvWriter neutralizes spreadsheet formula injection in free-text cells.
+    writer = SafeCsvWriter(output)
 
     if report_type == "compliance":
         data = await service.get_compliance_report(
@@ -1258,7 +1260,9 @@ async def swap_item_lot(
     template_item_id: str,
     data: LotSwapRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_permission("equipment_check.manage", "inventory.manage")
+    ),
 ):
     """Swap a ready-stock lot onto the apparatus for a checklist item.
 

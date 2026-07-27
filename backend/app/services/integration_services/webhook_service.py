@@ -14,6 +14,7 @@ from typing import Any
 from loguru import logger
 
 from app.services.integration_services.base import create_integration_client
+from app.utils.url_validator import assert_outbound_url_safe
 
 # Retry config
 MAX_RETRIES = 3
@@ -90,6 +91,14 @@ async def send_webhook(
     }
     if secret:
         headers["X-Webhook-Signature"] = f"sha256={_sign_payload(body, secret)}"
+
+    # SSRF: re-validate the destination at send time (defends against
+    # DNS-rebinding since validation happened at config-save time). Fail closed.
+    try:
+        assert_outbound_url_safe(url)
+    except ValueError as exc:
+        logger.warning("Blocked outbound webhook to unsafe URL {}: {}", url, exc)
+        return False
 
     for attempt in range(MAX_RETRIES):
         try:

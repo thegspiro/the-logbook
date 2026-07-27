@@ -188,9 +188,15 @@ async def mark_all_logs_read(
 async def mark_notification_read(
     log_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("notifications.view")),
+    current_user: User = Depends(require_permission("notifications.manage")),
 ):
-    """Mark a notification as read"""
+    """Mark any organization notification log as read (admin log view).
+
+    Requires ``notifications.manage`` — this is an org-wide write over any
+    recipient's log, so it matches the ``/logs/read-all`` gate rather than the
+    read-only ``notifications.view``. Members mark their own notifications via
+    the ``/my/{log_id}/read`` route (recipient-scoped).
+    """
     service = NotificationsService(db)
     result, error = await service.mark_as_read(log_id, current_user.organization_id)
     if error:

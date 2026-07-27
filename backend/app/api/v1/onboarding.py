@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from loguru import logger
 from pydantic import BaseModel, EmailStr, Field, validator
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user
@@ -675,7 +676,11 @@ async def get_onboarding_status(db: AsyncSession = Depends(get_db)):
         )
 
 
-@router.post("/start", response_model=StartSessionResponse)
+@router.post(
+    "/start",
+    response_model=StartSessionResponse,
+    dependencies=[Depends(check_rate_limit)],
+)
 async def start_onboarding(
     request: Request, response: Response, db: AsyncSession = Depends(get_db)
 ):
@@ -898,7 +903,7 @@ async def create_organization(
         )
 
 
-@router.post("/system-owner")
+@router.post("/system-owner", dependencies=[Depends(check_rate_limit)])
 async def create_system_owner(
     request: Request, user_data: SystemOwnerCreate, db: AsyncSession = Depends(get_db)
 ):
@@ -1027,6 +1032,14 @@ async def configure_modules(
 
     service = OnboardingService(db)
 
+    # Reject once onboarding is complete — a still-valid session must not be
+    # replayable to mutate org settings after setup.
+    if not await service.needs_onboarding():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+        )
+
     try:
         result = await service.configure_modules(modules.enabled_modules)
         return {"message": "Modules configured successfully", "modules": result}
@@ -1050,6 +1063,12 @@ async def configure_notifications(
     await validate_session(request, db)
 
     service = OnboardingService(db)
+
+    if not await service.needs_onboarding():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+        )
 
     onboarding_status = await service.get_onboarding_status()
     if onboarding_status:
@@ -1078,10 +1097,19 @@ async def complete_onboarding(
     # Validate session
     session = await validate_session(request, db)
 
+    service = OnboardingService(db)
+
+    # Reject replay after completion before re-persisting session data. The
+    # service also latches on is_completed, but guarding here avoids re-writing
+    # org settings from a stale session.
+    if not await service.needs_onboarding():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+        )
+
     # Persist session-collected data into Organization.settings before completion
     await _persist_session_data_to_org(session, db)
-
-    service = OnboardingService(db)
 
     try:
         onboarding_status = await service.complete_onboarding(notes=request_data.notes)
@@ -1181,7 +1209,7 @@ async def mark_checklist_item_complete(
     response_model=EmailTestResponse,
     dependencies=[Depends(check_rate_limit)],
 )
-async def test_email_configuration(
+async def verify_email_configuration(
     request: EmailTestRequest, raw_request: Request, db: AsyncSession = Depends(get_db)
 ):
     """
@@ -1646,6 +1674,16 @@ async def save_session_roles(
     # Validate session
     session = await validate_session(request, db)
 
+    # Reject once onboarding is complete — the sibling mutations guard on this,
+    # but roles/positions did not, so a still-valid session could rewrite org
+    # roles after setup with no authenticated-user or permission check.
+    guard_service = OnboardingService(db)
+    if not await guard_service.needs_onboarding():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+        )
+
     # Get organization from session data
     organization_id = None
     if session.data and "department" in session.data:
@@ -1883,6 +1921,8 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
         OnboardingChecklistItem,
         OnboardingSessionModel,
     )
+    from app.models.facilities import Facility
+    from app.models.location import Location
     from app.models.user import Organization, Role, User
 
     try:
@@ -1911,23 +1951,34 @@ async def reset_onboarding(request: Request, db: AsyncSession = Depends(get_db))
         # 3. Delete onboarding status
         await db.execute(OnboardingStatus.__table__.delete())
 
-        # 4. Delete user_positions associations (junction table for user-role/position mapping)
+        # 4. Delete the HQ location and facility created during org setup BEFORE
+        #    users. Location.created_by -> users.id has no ON DELETE rule (i.e.
+        #    RESTRICT), so deleting users while a Location references one would
+        #    FK-fail and abort the whole reset. These are otherwise only removed
+        #    via the organizations CASCADE (step 8), which runs too late.
+        await db.execute(Location.__table__.delete())
+        await db.execute(Facility.__table__.delete())
+
+        # 5. Delete user_positions associations (junction table for user-role/position mapping)
         try:
             from sqlalchemy import text
 
             await db.execute(text("DELETE FROM user_positions"))
-        except Exception as e:
+        except (ProgrammingError, OperationalError) as e:
+            # Only tolerate a genuinely-missing table (MySQL raises
+            # ProgrammingError, SQLite OperationalError); any other failure must
+            # abort the reset rather than proceed to delete users and FK-fail.
             logger.warning(
                 f"Could not delete user_positions (table may not exist yet): {e}"
             )
 
-        # 5. Delete users
+        # 6. Delete users
         await db.execute(User.__table__.delete())
 
-        # 6. Delete roles
+        # 7. Delete roles
         await db.execute(Role.__table__.delete())
 
-        # 7. Delete organizations
+        # 8. Delete organizations
         await db.execute(Organization.__table__.delete())
 
         # Commit all deletions

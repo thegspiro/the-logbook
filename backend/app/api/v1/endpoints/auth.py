@@ -58,6 +58,7 @@ from app.schemas.auth import (
 from app.schemas.organization import AuthSettings
 from app.services import mfa_service
 from app.services.auth_service import RESET_TOKEN_EXPIRY_MINUTES, AuthService
+from app.services.security_monitoring import security_monitor
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -73,11 +74,15 @@ def _set_auth_cookies(
 
     # SEC: Determine the Secure flag for auth cookies.
     # 1. Explicit override via COOKIE_SECURE env var always wins.
-    # 2. Auto-detect: if ANY allowed origin uses plain http://, the browser
-    #    would silently discard Secure cookies, so we must disable it.
-    #    This covers localhost dev, LAN IPs, and any other HTTP-only setup.
+    # 2. In production/staging, ALWAYS use Secure — a stray http:// origin in
+    #    ALLOWED_ORIGINS (e.g. a legacy LAN/admin host) must never silently
+    #    downgrade session cookies to cleartext (SSL-strip / MITM exposure).
+    # 3. Otherwise (development) auto-detect: if ANY allowed origin uses plain
+    #    http://, the browser would discard Secure cookies, so disable it.
     if settings.COOKIE_SECURE is not None:
         use_secure = settings.COOKIE_SECURE
+    elif settings.ENVIRONMENT in ("production", "staging"):
+        use_secure = True
     else:
         origins = (
             settings.ALLOWED_ORIGINS
@@ -286,6 +291,9 @@ def _cookies_secure() -> bool:
     """Mirror _set_auth_cookies' Secure-flag detection for the state cookie."""
     if settings.COOKIE_SECURE is not None:
         return settings.COOKIE_SECURE
+    # Never downgrade to cleartext cookies in prod/staging (see _set_auth_cookies).
+    if settings.ENVIRONMENT in ("production", "staging"):
+        return True
     origins = (
         settings.ALLOWED_ORIGINS
         if isinstance(settings.ALLOWED_ORIGINS, list)
@@ -595,7 +603,23 @@ async def login(
             detail="Service temporarily unavailable. Please try again in a few moments.",
         )
 
+    login_ip = get_client_ip(request)
+
     if not user:
+        # Feed the failed attempt to brute-force detection. It fires a HIGH
+        # alert once the per-IP/per-user hourly threshold is crossed. Best-effort
+        # and must never break the login response. Because the alert row is only
+        # flushed (not committed) and this handler then raises (rolling back the
+        # session), commit when an alert actually fired so it persists — mirroring
+        # authenticate_user's failed-attempt commit.
+        try:
+            alert = await security_monitor.detect_brute_force(
+                db, ip=login_ip, user_id=None, success=False
+            )
+            if alert is not None:
+                await db.commit()
+        except Exception:
+            logger.debug("brute-force detection failed on login failure")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=auth_error or "Incorrect username or password",
@@ -608,6 +632,14 @@ async def login(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive. Please contact an administrator.",
         )
+
+    # Correct password: clear the brute-force counters for this IP/user.
+    try:
+        await security_monitor.detect_brute_force(
+            db, ip=login_ip, user_id=str(user.id), success=True
+        )
+    except Exception:
+        logger.debug("brute-force counter reset failed on login success")
 
     # If MFA is enabled, password alone is not enough: issue a short-lived
     # challenge token and require the second factor before any session cookie.
@@ -678,29 +710,60 @@ async def mfa_login(
     if payload.get("type") != "mfa_pending" or not payload.get("sub"):
         raise invalid
 
+    from datetime import datetime, timedelta, timezone
+
     result = await db.execute(select(User).where(User.id == str(payload["sub"])))
     user = result.scalar_one_or_none()
     if not user or not user.mfa_enabled or not user.is_active:
         raise invalid
 
+    # Per-user brute-force protection: the second factor shares the account's
+    # failed-login counter/lockout so that guessing TOTP codes is throttled and
+    # eventually locks the account. Previously only the password step enforced
+    # lockout, leaving MFA guessable at the per-IP rate limit alone. A generic
+    # error is returned for the locked state so it does not confirm the account.
+    now = datetime.now(timezone.utc)
+    locked_until = user.locked_until
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if locked_until and locked_until > now:
+        raise invalid
+
     verified = False
-    if data.code and mfa_service.verify_totp(user.mfa_secret, data.code):
-        verified = True
-    elif data.recovery_code:
-        target = mfa_service.normalize_recovery_code(data.recovery_code)
+    matched_timestep: int | None = None
+    if data.code:
+        matched_timestep = mfa_service.verify_totp_get_timestep(
+            user.mfa_secret, data.code, last_timestep=user.mfa_last_timestep
+        )
+        verified = matched_timestep is not None
+    if not verified and data.recovery_code:
         codes = user.mfa_backup_codes or []
-        remaining = [
-            c for c in codes if mfa_service.normalize_recovery_code(c) != target
-        ]
-        if len(remaining) != len(codes):
+        matched = mfa_service.find_matching_recovery_code(data.recovery_code, codes)
+        if matched is not None:
             verified = True
-            user.mfa_backup_codes = remaining  # consume the used code
-            await db.commit()
+            # Consume the used code (single-use).
+            user.mfa_backup_codes = [c for c in codes if c != matched]
 
     if not verified:
+        # Count the failed second factor toward the account lockout, mirroring
+        # the password-step logic in AuthService.authenticate_user.
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        if user.failed_login_attempts >= settings.MAX_LOGIN_ATTEMPTS:
+            user.locked_until = now + timedelta(
+                minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
+            )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid verification code"
         )
+
+    # Success: record the consumed TOTP step (replay prevention) and clear the
+    # failure counter/lock.
+    if matched_timestep is not None:
+        user.mfa_last_timestep = matched_timestep
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    await db.commit()
 
     access_token, refresh_token = await AuthService(db).create_user_tokens(
         user=user,
@@ -761,7 +824,10 @@ async def mfa_verify_setup(
 
     recovery_codes = mfa_service.generate_recovery_codes()
     current_user.mfa_enabled = True
-    current_user.mfa_backup_codes = recovery_codes
+    # Store only hashes at rest; the plaintext is shown to the user exactly once.
+    current_user.mfa_backup_codes = [
+        mfa_service.hash_recovery_code(c) for c in recovery_codes
+    ]
     await db.commit()
 
     await log_audit_event(
@@ -859,7 +925,10 @@ async def mfa_regenerate_recovery_codes(
         raise HTTPException(status_code=400, detail="Invalid verification code")
 
     recovery_codes = mfa_service.generate_recovery_codes()
-    current_user.mfa_backup_codes = recovery_codes
+    # Store only hashes at rest; the plaintext is shown to the user exactly once.
+    current_user.mfa_backup_codes = [
+        mfa_service.hash_recovery_code(c) for c in recovery_codes
+    ]
     await db.commit()
 
     await log_audit_event(

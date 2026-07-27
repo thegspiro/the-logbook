@@ -155,25 +155,6 @@ class ExternalTrainingSyncService:
         else:
             return False, f"Unexpected response: {response.status_code}"
 
-    async def _test_target_solutions_connection(
-        self, provider: ExternalTrainingProvider
-    ) -> Tuple[bool, str]:
-        """Test Target Solutions API connection"""
-        if not provider.api_base_url or not provider.api_key:
-            return False, "API base URL and API key are required"
-
-        headers = self._get_auth_headers(provider)
-        test_url = f"{provider.api_base_url.rstrip('/')}/api/health"
-
-        response = await self.http_client.get(test_url, headers=headers)
-
-        if response.status_code == 200:
-            return True, "Connection successful"
-        elif response.status_code == 401:
-            return False, "Authentication failed - check API key"
-        else:
-            return False, f"Unexpected response: {response.status_code}"
-
     async def _test_lexipol_connection(
         self, provider: ExternalTrainingProvider
     ) -> Tuple[bool, str]:
@@ -738,49 +719,6 @@ class ExternalTrainingSyncService:
             "raw_data": record,
         }
 
-    async def _fetch_target_solutions_records(
-        self,
-        provider: ExternalTrainingProvider,
-        from_date: date,
-        to_date: date,
-    ) -> List[Dict[str, Any]]:
-        """Fetch records from Target Solutions API"""
-        headers = self._get_auth_headers(provider)
-        config = provider.config or {}
-
-        records_endpoint = config.get(
-            "records_endpoint", "/api/v2/training/completions"
-        )
-        url = f"{provider.api_base_url.rstrip('/')}{records_endpoint}"
-
-        params = {
-            "fromDate": from_date.isoformat(),
-            "toDate": to_date.isoformat(),
-            "limit": 100,
-            "offset": 0,
-        }
-
-        all_records = []
-
-        while True:
-            response = await self.http_client.get(url, headers=headers, params=params)
-            response.raise_for_status()
-
-            data = response.json()
-            records = data.get("items", data.get("data", []))
-
-            if not records:
-                break
-
-            for record in records:
-                all_records.append(self._normalize_target_solutions_record(record))
-
-            if len(records) < params["limit"]:
-                break
-            params["offset"] += params["limit"]
-
-        return all_records
-
     def _normalize_target_solutions_record(
         self, record: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -1344,78 +1282,6 @@ class ExternalTrainingSyncService:
 
         return training_record
 
-    async def bulk_import_records(
-        self,
-        provider_id: str,
-        import_ids: Optional[List[str]] = None,
-        import_all_pending: bool = False,
-    ) -> Dict[str, int]:
-        """
-        Bulk import multiple external training records.
-
-        Args:
-            provider_id: Provider ID
-            import_ids: Specific import IDs to process
-            import_all_pending: Import all pending records for the provider
-
-        Returns:
-            Dict with counts: imported, failed, skipped
-        """
-        query = select(ExternalTrainingImport).where(
-            ExternalTrainingImport.provider_id == str(provider_id)
-        )
-
-        if import_ids:
-            query = query.where(ExternalTrainingImport.id.in_(import_ids))
-        elif import_all_pending:
-            query = query.where(ExternalTrainingImport.import_status == "pending")
-            # Only import records that have a user mapping
-            query = query.where(ExternalTrainingImport.user_id.isnot(None))
-
-        result = await self.db.execute(query)
-        imports = result.scalars().all()
-
-        imported = 0
-        failed = 0
-        skipped = 0
-        created_records = []
-
-        for import_record in imports:
-            if import_record.import_status == "imported":
-                skipped += 1
-                continue
-
-            if not import_record.user_id:
-                import_record.import_status = "skipped"
-                import_record.import_error = "No user mapping"
-                skipped += 1
-                continue
-
-            try:
-                record = await self.import_single_record(import_record)
-                if record is not None:
-                    created_records.append(record)
-                imported += 1
-            except Exception as e:
-                import_record.import_status = "failed"
-                import_record.import_error = str(e)
-                failed += 1
-
-        await self.db.commit()
-
-        # Feed the newly-imported records into any pipeline requirement they
-        # satisfy by category, so a synced course (e.g. from Vector Solutions)
-        # advances a member's active training-program progress the same way an
-        # in-app training session would. Best-effort and post-commit: the records
-        # are already saved, and the pipeline updater commits independently.
-        await self._feed_imported_records_to_pipelines(created_records)
-
-        return {
-            "imported": imported,
-            "failed": failed,
-            "skipped": skipped,
-        }
-
     async def _feed_imported_records_to_pipelines(self, records: list) -> None:
         """Advance category-linked pipeline requirements for each imported record.
         A failure on one record is logged and never blocks the rest."""
@@ -1444,80 +1310,3 @@ class ExternalTrainingSyncService:
     # ==========================================
     # Mapping Management
     # ==========================================
-
-    async def get_unmapped_users(self, provider_id: str) -> List[ExternalUserMapping]:
-        """Get all unmapped users for a provider"""
-        result = await self.db.execute(
-            select(ExternalUserMapping)
-            .where(ExternalUserMapping.provider_id == str(provider_id))
-            .where(ExternalUserMapping.is_mapped == False)  # noqa: E712
-        )
-        return result.scalars().all()
-
-    async def get_unmapped_categories(
-        self, provider_id: str
-    ) -> List[ExternalCategoryMapping]:
-        """Get all unmapped categories for a provider"""
-        result = await self.db.execute(
-            select(ExternalCategoryMapping)
-            .where(ExternalCategoryMapping.provider_id == str(provider_id))
-            .where(ExternalCategoryMapping.is_mapped == False)  # noqa: E712
-        )
-        return result.scalars().all()
-
-    async def map_user(
-        self,
-        mapping_id: str,
-        internal_user_id: str,
-        mapped_by: Optional[str] = None,
-    ) -> ExternalUserMapping:
-        """Map an external user to an internal user"""
-        result = await self.db.execute(
-            select(ExternalUserMapping).where(ExternalUserMapping.id == str(mapping_id))
-        )
-        mapping = result.scalar_one_or_none()
-
-        if not mapping:
-            raise ValueError("User mapping not found")
-
-        mapping.internal_user_id = internal_user_id
-        mapping.is_mapped = True
-        mapping.auto_mapped = False
-        mapping.mapped_by = mapped_by
-
-        # Update any pending imports with this user
-        await self.db.execute(
-            ExternalTrainingImport.__table__.update()
-            .where(ExternalTrainingImport.provider_id == mapping.provider_id)
-            .where(ExternalTrainingImport.external_user_id == mapping.external_user_id)
-            .where(ExternalTrainingImport.user_id.is_(None))
-            .values(user_id=internal_user_id)
-        )
-
-        await self.db.commit()
-        return mapping
-
-    async def map_category(
-        self,
-        mapping_id: str,
-        internal_category_id: str,
-        mapped_by: Optional[str] = None,
-    ) -> ExternalCategoryMapping:
-        """Map an external category to an internal category"""
-        result = await self.db.execute(
-            select(ExternalCategoryMapping).where(
-                ExternalCategoryMapping.id == str(mapping_id)
-            )
-        )
-        mapping = result.scalar_one_or_none()
-
-        if not mapping:
-            raise ValueError("Category mapping not found")
-
-        mapping.internal_category_id = internal_category_id
-        mapping.is_mapped = True
-        mapping.auto_mapped = False
-        mapping.mapped_by = mapped_by
-
-        await self.db.commit()
-        return mapping

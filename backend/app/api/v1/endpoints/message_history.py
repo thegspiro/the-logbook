@@ -6,6 +6,7 @@ Provides:
 - POST /message-history/test-email — send a test email to verify configuration
 """
 
+import html
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -204,7 +205,9 @@ async def send_test_email(
 
 def _build_test_html(organization: Organization | None) -> str:
     """Build a simple HTML test email body."""
-    org_name = organization.name if organization else "The Logbook"
+    # Escape the org name — it is interpolated into HTML below. Mirrors the
+    # escaping the department-message email path already applies.
+    org_name = html.escape(organization.name if organization else "The Logbook")
     return f"""\
 <html>
 <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">

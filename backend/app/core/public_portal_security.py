@@ -67,9 +67,34 @@ def verify_api_key(api_key: str, key_hash: str) -> bool:
         return False
 
 
+_SELECTIVE_PREFIX_LEN = 16  # "logbook_" (8) + 8 key chars ≈ 48 bits — selective
+_LEGACY_PREFIX_LEN = 8  # constant "logbook_" stored by keys created before PP-4
+# Only refresh a key's last_used_at at most once per this window, so a busy key
+# does not force a row write + commit on every single GET (PP-7).
+_LAST_USED_THROTTLE_SECONDS = 60
+
+
+def _last_used_is_stale(stored_iso: str | None, now: datetime) -> bool:
+    """True if last_used_at is missing or older than the throttle window."""
+    if not stored_iso:
+        return True
+    try:
+        prev = datetime.fromisoformat(stored_iso)
+    except (ValueError, TypeError):
+        return True
+    if prev.tzinfo is None:
+        prev = prev.replace(tzinfo=timezone.utc)
+    return (now - prev).total_seconds() >= _LAST_USED_THROTTLE_SECONDS
+
+
 def generate_api_key() -> tuple[str, str]:
     """
-    Generate a new API key and its prefix.
+    Generate a new API key and its selective lookup prefix.
+
+    The prefix is the first 16 chars ("logbook_" + 8 random key chars) so a
+    by-prefix lookup during authentication returns a single candidate instead of
+    every key in the system (the old 8-char "logbook_" prefix was non-selective
+    and forced a bcrypt verify against every key per request — a CPU-DoS surface).
 
     Returns:
         Tuple of (full_api_key, key_prefix)
@@ -78,7 +103,7 @@ def generate_api_key() -> tuple[str, str]:
     import secrets
 
     api_key = f"logbook_{secrets.token_urlsafe(32)}"
-    key_prefix = api_key[:8]
+    key_prefix = api_key[:_SELECTIVE_PREFIX_LEN]
     return api_key, key_prefix
 
 
@@ -267,17 +292,25 @@ async def detect_anomalies(
     Returns:
         Tuple of (is_suspicious, reason)
     """
-    # Check for rapid requests from same IP (last minute)
+    # Both last-minute signals (request volume and distinct-endpoint spread)
+    # share the same IP + time window, so fetch them in ONE round-trip rather
+    # than two separate COUNT queries per request (this runs on every public
+    # request, so query count matters — PP-7).
     one_minute_ago = datetime.now(timezone.utc) - timedelta(minutes=1)
     result = await db.execute(
-        select(func.count(PublicPortalAccessLog.id)).where(
+        select(
+            func.count(PublicPortalAccessLog.id),
+            func.count(func.distinct(PublicPortalAccessLog.endpoint)),
+        ).where(
             and_(
                 PublicPortalAccessLog.ip_address == ip_address,
                 PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat(),
             )
         )
     )
-    requests_last_minute = result.scalar() or 0
+    requests_last_minute, unique_endpoints = result.one()
+    requests_last_minute = requests_last_minute or 0
+    unique_endpoints = unique_endpoints or 0
 
     if requests_last_minute > 60:  # More than 1 request per second
         return True, f"Rapid requests: {requests_last_minute} in last minute"
@@ -298,17 +331,6 @@ async def detect_anomalies(
     if failed_auth_attempts > 5:
         return True, f"Multiple failed auth attempts: {failed_auth_attempts}"
 
-    # Check for suspicious patterns: accessing many different endpoints rapidly
-    result = await db.execute(
-        select(func.count(func.distinct(PublicPortalAccessLog.endpoint))).where(
-            and_(
-                PublicPortalAccessLog.ip_address == ip_address,
-                PublicPortalAccessLog.timestamp >= one_minute_ago.isoformat(),
-            )
-        )
-    )
-    unique_endpoints = result.scalar() or 0
-
     if unique_endpoints > 10:
         return True, f"Scanning behavior: {unique_endpoints} different endpoints"
 
@@ -316,7 +338,9 @@ async def detect_anomalies(
 
 
 async def authenticate_api_key(
-    api_key: str | None = Depends(api_key_header), db: AsyncSession = Depends(get_db)
+    request: Request,
+    api_key: str | None = Depends(api_key_header),
+    db: AsyncSession = Depends(get_db),
 ) -> PublicPortalAPIKey:
     """
     Authenticate an API key for public portal access.
@@ -325,6 +349,7 @@ async def authenticate_api_key(
     checks rate limits, and logs access attempts.
 
     Args:
+        request: The incoming request (for IP rate limiting)
         api_key: The API key from the X-API-Key header
         db: Database session
 
@@ -334,28 +359,37 @@ async def authenticate_api_key(
     Raises:
         HTTPException: If authentication fails
     """
+    # SEC (PP-4): throttle by client IP BEFORE any expensive work. bcrypt
+    # verification is deliberately slow, so running it ahead of the IP limit let
+    # an unauthenticated flood of well-formed keys burn CPU per request. The IP
+    # limit now gates the DB lookup + bcrypt entirely.
+    await validate_ip_rate_limit(request)
+
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key required. Include X-API-Key header.",
         )
 
-    # Extract key prefix for lookup
-    key_prefix = api_key[:8] if len(api_key) >= 8 else api_key
-
-    # Find API key by prefix (fast lookup)
+    # Look up candidates by the selective 16-char prefix (one row for keys issued
+    # after PP-4) OR the legacy constant "logbook_" prefix (keys issued before).
+    # Iterating + constant-time verifying each avoids the MultipleResultsFound
+    # 500 that scalar_one_or_none() raised once a second key existed; the
+    # selective prefix keeps that candidate set at one row for modern keys.
+    selective_prefix = api_key[:_SELECTIVE_PREFIX_LEN]
+    legacy_prefix = api_key[:_LEGACY_PREFIX_LEN] if len(api_key) >= 8 else api_key
     result = await db.execute(
-        select(PublicPortalAPIKey).where(PublicPortalAPIKey.key_prefix == key_prefix)
+        select(PublicPortalAPIKey).where(
+            PublicPortalAPIKey.key_prefix.in_({selective_prefix, legacy_prefix})
+        )
     )
-    api_key_obj = result.scalar_one_or_none()
+    api_key_obj = None
+    for candidate in result.scalars().all():
+        if verify_api_key(api_key, candidate.key_hash):
+            api_key_obj = candidate
+            break
 
     if not api_key_obj:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
-        )
-
-    # Verify the full key hash
-    if not verify_api_key(api_key, api_key_obj.key_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key"
         )
@@ -389,9 +423,24 @@ async def authenticate_api_key(
             },
         )
 
-    # Update last used timestamp
-    api_key_obj.last_used_at = datetime.now(timezone.utc).isoformat()
-    await db.commit()
+    # Update last_used_at, but throttled: writing (and committing) on every GET
+    # is write amplification + row contention on a hot key. Only refresh when the
+    # stored value is missing or older than the throttle window (PP-7).
+    now = datetime.now(timezone.utc)
+    needs_commit = False
+    if _last_used_is_stale(api_key_obj.last_used_at, now):
+        api_key_obj.last_used_at = now.isoformat()
+        needs_commit = True
+
+    # Self-heal legacy keys: upgrade the non-selective "logbook_" prefix to the
+    # selective 16-char prefix (we have the plaintext here) so subsequent lookups
+    # for this key hit a single row instead of scanning every legacy key.
+    if len(api_key) >= _SELECTIVE_PREFIX_LEN and api_key_obj.key_prefix != selective_prefix:
+        api_key_obj.key_prefix = selective_prefix
+        needs_commit = True
+
+    if needs_commit:
+        await db.commit()
 
     return api_key_obj
 

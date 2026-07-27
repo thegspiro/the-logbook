@@ -99,16 +99,45 @@ def validate_integration_url(url: str, *, allow_known_only: bool = False) -> str
             )
 
     # 5. Resolve hostname and check for private IPs
-    try:
-        resolved = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC)
-        for family, _type, _proto, _canonname, sockaddr in resolved:
-            ip_str = sockaddr[0]
-            if _is_private_ip(ip_str):
-                raise ValueError(
-                    f"URL resolves to a private/internal IP address ({ip_str}). "
-                    "Integration URLs must point to public endpoints."
-                )
-    except socket.gaierror:
-        raise ValueError(f"Could not resolve hostname '{hostname}'")
+    _assert_hostname_resolves_public(hostname)
 
     return url.strip()
+
+
+def _assert_hostname_resolves_public(hostname: str) -> None:
+    """Resolve *hostname* and reject if ANY address is private/internal."""
+    try:
+        resolved = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC)
+    except socket.gaierror:
+        raise ValueError(f"Could not resolve hostname '{hostname}'")
+    for _family, _type, _proto, _canonname, sockaddr in resolved:
+        ip_str = sockaddr[0]
+        if _is_private_ip(ip_str):
+            raise ValueError(
+                f"URL resolves to a private/internal IP address ({ip_str}). "
+                "Integration URLs must point to public endpoints."
+            )
+
+
+def assert_outbound_url_safe(url: str) -> None:
+    """Re-validate a stored URL at REQUEST time, immediately before dispatch.
+
+    validate_integration_url() runs at config-save time, but the hostname is
+    re-resolved when the request is actually sent — a DNS-rebinding (TOCTOU)
+    attacker can point a domain at a public IP during validation and flip it to
+    169.254.169.254 / 127.0.0.1 / an internal host before the send. Calling this
+    right before the outbound request re-runs the scheme, metadata-host, and
+    resolved-IP checks, shrinking the rebinding window to the interval between
+    this resolve and the connection (versus save-time-to-send). Raises ValueError
+    on any violation so callers fail closed.
+    """
+    parsed = urlparse((url or "").strip())
+    is_dev = getattr(settings, "ENVIRONMENT", "production") == "development"
+    if parsed.scheme != "https" and not (parsed.scheme == "http" and is_dev):
+        raise ValueError("Outbound URL must use HTTPS")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Outbound URL must contain a valid hostname")
+    if hostname in BLOCKED_HOSTNAMES:
+        raise ValueError(f"Outbound URL hostname '{hostname}' is not allowed")
+    _assert_hostname_resolves_public(hostname)

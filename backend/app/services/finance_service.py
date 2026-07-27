@@ -6,7 +6,7 @@ expense reports, check requests, dues, approval chains,
 and QuickBooks export.
 """
 
-import csv
+import html
 import io
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -17,6 +17,9 @@ from loguru import logger
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+from app.core.config import settings
+from app.utils.csv_export import SafeCsvWriter
 
 from app.models.finance import (
     ApprovalChain,
@@ -215,6 +218,7 @@ class FinanceService:
         return result.scalar_one_or_none()
 
     async def create_budget(self, org_id: str, created_by: str, **kwargs) -> Budget:
+        await self._validate_finance_fks(org_id, kwargs)
         budget = Budget(organization_id=org_id, created_by=created_by, **kwargs)
         self.db.add(budget)
         await self.db.flush()
@@ -225,6 +229,7 @@ class FinanceService:
         budget = await self.get_budget(budget_id, org_id)
         if not budget:
             raise ValueError("Budget not found")
+        await self._validate_finance_fks(org_id, kwargs)
         for key, value in kwargs.items():
             if value is not None:
                 setattr(budget, key, value)
@@ -453,6 +458,7 @@ class FinanceService:
     ) -> list[ApprovalStepRecord]:
         """Create step records for an entity going through an approval chain"""
         records = []
+        email_targets: list[tuple[ApprovalStepRecord, ApprovalChainStep]] = []
         for step in chain.steps:
             status = ApprovalStepStatus.PENDING
 
@@ -484,12 +490,57 @@ class FinanceService:
             ):
                 record.approval_token = secrets.token_urlsafe(32)
                 record.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+                if status == ApprovalStepStatus.PENDING:
+                    email_targets.append((record, step))
 
             self.db.add(record)
             records.append(record)
 
         await self.db.flush()
+
+        # Email each external approver their token link (best-effort — a mail
+        # failure must not roll back the records the entity depends on).
+        for record, step in email_targets:
+            await self.send_approval_request_email(record, step)
+
         return records
+
+    async def send_approval_request_email(
+        self, record: ApprovalStepRecord, step: ApprovalChainStep
+    ) -> bool:
+        """Email an external ("email" approver-type) approver a token link.
+
+        The link points at the frontend approval page, which reads the token and
+        calls the public approve/deny endpoints. Best-effort: returns False and
+        logs on any problem rather than raising into the caller's transaction.
+        Sends nothing when email delivery is disabled platform-wide.
+        """
+        approver_email = (step.approver_value or "").strip()
+        token = record.approval_token
+        if not approver_email or not token:
+            return False
+
+        link = f"{settings.FRONTEND_URL.rstrip('/')}/finance/approvals/{token}"
+        safe_step = html.escape(step.name or "Approval")
+        html_body = (
+            "<p>An approval is awaiting your response in The Logbook.</p>"
+            f"<p><strong>Step:</strong> {safe_step}</p>"
+            f'<p><a href="{link}">Review and respond</a></p>'
+            "<p>This link expires in 7 days and can be used once.</p>"
+        )
+        try:
+            from app.services.email_service import EmailService
+
+            sent, _failed = await EmailService().send_email(
+                to_emails=[approver_email],
+                subject="Approval requested — The Logbook",
+                html_body=html_body,
+                template_type="finance_approval_request",
+            )
+            return sent > 0
+        except Exception as exc:
+            logger.warning("Approval request email to {} failed: {}", approver_email, exc)
+            return False
 
     async def get_approval_records(
         self, entity_type: ApprovalEntityType, entity_id: str
@@ -782,7 +833,9 @@ class FinanceService:
                 # Encumber budget
                 if entity.budget_id:
                     await self._encumber_budget(
-                        entity.budget_id, float(entity.estimated_amount)
+                        entity.budget_id,
+                        float(entity.estimated_amount),
+                        entity.organization_id,
                     )
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
             result = await self.db.execute(
@@ -972,6 +1025,7 @@ class FinanceService:
     async def create_purchase_request(
         self, org_id: str, requested_by: str, **kwargs
     ) -> PurchaseRequest:
+        await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         request_number = await self._generate_request_number(
             org_id, "PR", fiscal_year_id
@@ -999,6 +1053,7 @@ class FinanceService:
             PurchaseRequestStatus.SUBMITTED,
         ):
             raise ValueError("Cannot edit a purchase request in this status")
+        await self._validate_finance_fks(org_id, kwargs)
         for key, value in kwargs.items():
             if value is not None:
                 setattr(pr, key, value)
@@ -1100,8 +1155,10 @@ class FinanceService:
         # Move from encumbered to spent
         if pr.budget_id:
             amount = float(pr.actual_amount or pr.estimated_amount)
-            await self._release_encumbrance(pr.budget_id, float(pr.estimated_amount))
-            await self._add_to_spent(pr.budget_id, amount)
+            await self._release_encumbrance(
+                pr.budget_id, float(pr.estimated_amount), org_id
+            )
+            await self._add_to_spent(pr.budget_id, amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
@@ -1120,7 +1177,9 @@ class FinanceService:
             PurchaseRequestStatus.ORDERED,
             PurchaseRequestStatus.RECEIVED,
         ):
-            await self._release_encumbrance(pr.budget_id, float(pr.estimated_amount))
+            await self._release_encumbrance(
+                pr.budget_id, float(pr.estimated_amount), org_id
+            )
 
         pr.status = PurchaseRequestStatus.CANCELLED
         await self.db.flush()
@@ -1167,6 +1226,9 @@ class FinanceService:
         line_items: Optional[list] = None,
         **kwargs,
     ) -> ExpenseReport:
+        await self._validate_finance_fks(org_id, kwargs)
+        for item_data in line_items or []:
+            await self._validate_finance_fks(org_id, item_data)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         report_number = await self._generate_request_number(
             org_id, "ER", fiscal_year_id
@@ -1204,6 +1266,7 @@ class FinanceService:
             ExpenseReportStatus.SUBMITTED,
         ):
             raise ValueError("Cannot edit an expense report in this status")
+        await self._validate_finance_fks(org_id, kwargs)
         for key, value in kwargs.items():
             if value is not None:
                 setattr(er, key, value)
@@ -1219,12 +1282,22 @@ class FinanceService:
             raise ValueError("Expense report not found")
         if er.status not in (ExpenseReportStatus.DRAFT,):
             raise ValueError("Can only add items to draft reports")
+        await self._validate_finance_fks(org_id, kwargs)
         item = ExpenseLineItem(expense_report_id=er_id, **kwargs)
         self.db.add(item)
         await self.db.flush()
 
-        # Recalculate total
-        er.total_amount = sum(li.amount for li in er.line_items) + item.amount
+        # Recalculate the total from a fresh aggregate over the persisted line
+        # items rather than the loaded `er.line_items` collection. That
+        # collection may or may not already include the row just added (depending
+        # on whether it was loaded before the flush), so `sum(...) + item.amount`
+        # could double-count or drift. The DB sum is authoritative (FIN-7).
+        total_result = await self.db.execute(
+            select(func.coalesce(func.sum(ExpenseLineItem.amount), 0)).where(
+                ExpenseLineItem.expense_report_id == er_id
+            )
+        )
+        er.total_amount = total_result.scalar_one()
         await self.db.flush()
         await self.db.refresh(item, ["created_at"])
         return item
@@ -1285,7 +1358,7 @@ class FinanceService:
         # Add to spent for each line item's budget
         for item in er.line_items:
             if item.budget_id:
-                await self._add_to_spent(item.budget_id, float(item.amount))
+                await self._add_to_spent(item.budget_id, float(item.amount), org_id)
 
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
@@ -1321,6 +1394,7 @@ class FinanceService:
     async def create_check_request(
         self, org_id: str, requested_by: str, **kwargs
     ) -> CheckRequest:
+        await self._validate_finance_fks(org_id, kwargs)
         fiscal_year_id = kwargs.get("fiscal_year_id", "")
         request_number = await self._generate_request_number(
             org_id, "CK", fiscal_year_id
@@ -1347,6 +1421,7 @@ class FinanceService:
             CheckRequestStatus.SUBMITTED,
         ):
             raise ValueError("Cannot edit a check request in this status")
+        await self._validate_finance_fks(org_id, kwargs)
         for key, value in kwargs.items():
             if value is not None:
                 setattr(cr, key, value)
@@ -1417,7 +1492,7 @@ class FinanceService:
         cr.check_date = check_date or datetime.now(timezone.utc)
 
         if cr.budget_id:
-            await self._add_to_spent(cr.budget_id, float(cr.amount))
+            await self._add_to_spent(cr.budget_id, float(cr.amount), org_id)
 
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
@@ -1714,9 +1789,10 @@ class FinanceService:
         )
         ers = list(er_result.scalars().unique().all())
 
-        # Build CSV
+        # Build CSV. SafeCsvWriter neutralizes spreadsheet formula injection in
+        # free-text cells (names, memos).
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = SafeCsvWriter(output)
         writer.writerow(
             ["Date", "Type", "Num", "Name", "Memo", "Account", "Debit", "Credit"]
         )
@@ -1857,15 +1933,36 @@ class FinanceService:
     # Budget Helpers
     # ========================================
 
-    async def _encumber_budget(self, budget_id: str, amount: float) -> None:
-        result = await self.db.execute(select(Budget).where(Budget.id == budget_id))
+    # These helpers mutate a Budget's running totals. The budget_id ultimately
+    # originates from a client-supplied FK on the referencing PR/CR/expense, so
+    # every fetch is org-scoped to the referencing record's organization — a
+    # foreign budget_id can never encumber or spend against another tenant's
+    # budget (it becomes a no-op instead). Callers pass the referencing record's
+    # organization_id, which is always the caller's own org (records are
+    # org-stamped on create).
+    async def _encumber_budget(
+        self, budget_id: str, amount: float, org_id: str
+    ) -> None:
+        result = await self.db.execute(
+            select(Budget).where(
+                Budget.id == budget_id,
+                Budget.organization_id == org_id,
+            )
+        )
         budget = result.scalar_one_or_none()
         if budget:
             budget.amount_encumbered = budget.amount_encumbered + Decimal(str(amount))
             await self.db.flush()
 
-    async def _release_encumbrance(self, budget_id: str, amount: float) -> None:
-        result = await self.db.execute(select(Budget).where(Budget.id == budget_id))
+    async def _release_encumbrance(
+        self, budget_id: str, amount: float, org_id: str
+    ) -> None:
+        result = await self.db.execute(
+            select(Budget).where(
+                Budget.id == budget_id,
+                Budget.organization_id == org_id,
+            )
+        )
         budget = result.scalar_one_or_none()
         if budget:
             budget.amount_encumbered = max(
@@ -1874,9 +1971,40 @@ class FinanceService:
             )
             await self.db.flush()
 
-    async def _add_to_spent(self, budget_id: str, amount: float) -> None:
-        result = await self.db.execute(select(Budget).where(Budget.id == budget_id))
+    async def _add_to_spent(
+        self, budget_id: str, amount: float, org_id: str
+    ) -> None:
+        result = await self.db.execute(
+            select(Budget).where(
+                Budget.id == budget_id,
+                Budget.organization_id == org_id,
+            )
+        )
         budget = result.scalar_one_or_none()
         if budget:
             budget.amount_spent = budget.amount_spent + Decimal(str(amount))
             await self.db.flush()
+
+    async def _validate_finance_fks(self, org_id: str, data: dict) -> None:
+        """Reject client-supplied budget/category/fiscal-year FKs that don't
+        belong to the caller's org before they are persisted on a
+        budget/PR/CR/expense record.
+
+        Two reasons this must fail closed at write time: (1) a foreign
+        ``budget_id`` would otherwise be silently ignored by the org-scoped
+        budget write-helpers on approval/payment (encumbrance/spend never
+        recorded, so the PR looks approved but the budget is untouched), and
+        (2) a foreign ``category_id``/``fiscal_year_id`` would leave a dangling
+        cross-tenant reference that skews category/fiscal-year rollups. Only
+        keys actually present in ``data`` are checked (update paths pass
+        ``exclude_none`` dumps), so this never rejects an omitted field.
+        """
+        budget_id = data.get("budget_id")
+        if budget_id and not await self.get_budget(budget_id, org_id):
+            raise ValueError("Budget not found")
+        category_id = data.get("category_id")
+        if category_id and not await self.get_budget_category(category_id, org_id):
+            raise ValueError("Budget category not found")
+        fiscal_year_id = data.get("fiscal_year_id")
+        if fiscal_year_id and not await self.get_fiscal_year(fiscal_year_id, org_id):
+            raise ValueError("Fiscal year not found")

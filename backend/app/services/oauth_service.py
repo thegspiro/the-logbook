@@ -179,12 +179,21 @@ class GoogleOAuthService:
             return None, "unverified_email"
 
         # Domain allowlist enforcement (defense-in-depth; also hinted via `hd`).
+        # Unlike Microsoft (which is tenant-bound via `tid`), Google has no
+        # inherent org boundary, so an empty allowlist means ANY Google-verified
+        # email matching a local account is accepted. Warn operators to set one.
         allowed_domains = settings.get_google_allowed_domains()
         if allowed_domains:
             domain = email.rsplit("@", 1)[-1]
             if domain not in allowed_domains:
                 logger.warning(f"Google login blocked: domain '{domain}' not allowed")
                 return None, "domain_not_allowed"
+        else:
+            logger.warning(
+                "Google OAuth has no GOOGLE_ALLOWED_DOMAINS configured; any "
+                "Google-verified email matching a local account will be linked. "
+                "Set GOOGLE_ALLOWED_DOMAINS to restrict sign-in to your domain(s)."
+            )
 
         return await _link_existing_user(self.db, email, idinfo.get("sub"), "google")
 

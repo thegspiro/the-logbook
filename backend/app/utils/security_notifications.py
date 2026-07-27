@@ -11,6 +11,7 @@ is returned, on its own database session. Both are fire-and-forget: a
 notification failure must never block the security action itself.
 """
 
+from html import escape as html_escape
 from typing import Any, Optional
 
 from fastapi import BackgroundTasks
@@ -76,7 +77,7 @@ async def _send_security_email(
                 select(Organization).where(Organization.id == str(organization_id))
             )
             org = org_result.scalar_one_or_none()
-            html = wrap_email_body(org, subject, f"<p>{message}</p>")
+            html = wrap_email_body(org, subject, f"<p>{html_escape(message)}</p>")
             email_svc = EmailService(organization=org)
             await email_svc.send_email(
                 to_emails=[to_email],
