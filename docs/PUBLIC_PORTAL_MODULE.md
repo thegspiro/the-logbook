@@ -179,8 +179,8 @@ GET /api/v1/public-portal/usage-stats
 ```sql
 - id: UUID (PK)
 - organization_id: UUID (FK)
-- key_hash: VARCHAR(255) (hashed API key)
-- key_prefix: VARCHAR(8) (first 8 chars for identification)
+- key_hash: VARCHAR(255) (bcrypt-hashed API key)
+- key_prefix: VARCHAR(20) (selective lookup prefix: first 16 chars, "logbook_" + 8 key chars, so a lookup returns a single candidate; legacy 8-char "logbook_" prefixes self-heal on next use — migration 20260729_0001)
 - name: VARCHAR(100) (friendly name)
 - rate_limit_override: INTEGER (NULL for default)
 - expires_at: TIMESTAMP (NULL for no expiration)

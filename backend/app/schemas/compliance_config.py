@@ -206,7 +206,7 @@ class ComplianceReportGenerate(BaseModel):
 
     report_type: str = Field(
         ...,
-        description="monthly or yearly",
+        description="monthly or annual",
     )
     year: int = Field(..., ge=2020, le=2100)
     month: Optional[int] = Field(None, ge=1, le=12)

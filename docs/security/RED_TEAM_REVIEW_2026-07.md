@@ -19,6 +19,27 @@ code inspection during the review.
 > bypass and an equipment-check cross-department apparatus write); see the CHANGELOG
 > and [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md).
 
+> **Post-review remediation (2026-07-29):** items noted below have advanced since
+> the review date. In particular:
+> - **Crypto (L-tier "Verified strong"):** field encryption migrated from Fernet
+>   (AES-128-CBC) to **AES-256-GCM** (authenticated, fails closed); "Fernet" is now
+>   the legacy read path only. Backfill: `backend/scripts/reencrypt_to_aesgcm.py`
+>   (runbook `docs/AES256_GCM_BACKFILL_RUNBOOK.md`).
+> - **L9 geo-block fail-open:** now configurable — `GEOIP_FAIL_CLOSED=true` blocks
+>   IPs with an unresolvable country (private/allowlisted still allowed).
+> - **Audit chain (H4 follow-up):** the `rehash_chain` op is now break-glass
+>   (`AUDIT_ALLOW_CHAIN_REHASH`, default off), repairs legacy rows only, and fails
+>   closed (409) on a keyed-row mismatch; audit **export redacts `session_id`** to
+>   a non-reversible fingerprint; `security_alerts` is now org-scoped
+>   (migration `20260728_0001`).
+> - **Duplicate Alembic revision `20260720_0001`:** resolved by renumbering the
+>   former duplicate to `20260720_0004` and relinearizing the chain (single head
+>   `20260729_0001`).
+> - **Public-portal API key CPU-DoS:** IP rate limit now runs before bcrypt; keys
+>   carry a selective lookup prefix.
+> The per-item "Remediation status" table below predates these changes; treat this
+> note and the CHANGELOG as authoritative for current state.
+
 ## Remediation status
 
 **All HIGH, MEDIUM, and LOW findings are remediated** on branch

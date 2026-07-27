@@ -318,9 +318,22 @@ MYSQL_ROOT_PASSWORD=another-secure-password
 
 # Security Keys (CHANGE THESE!)
 SECRET_KEY=generate-with-openssl-rand-hex-32
-ENCRYPTION_KEY=generate-with-openssl-rand-hex-32
+ENCRYPTION_KEY=generate-with-openssl-rand-hex-32   # feeds AES-256-GCM field encryption
 ENCRYPTION_SALT=generate-with-openssl-rand-hex-16
+
+# Geo-blocking (optional; platform-wide, applies before auth)
+# GEOIP_ENABLED=true
+# BLOCKED_COUNTRIES=KP,IR,SY,CU,RU,BY   # deploy-time source of truth for the blocklist
+# GEOIP_FAIL_CLOSED=false               # true = block IPs with an unresolvable country (private/allowlisted still allowed)
+# GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT=false  # true = allow runtime block/unblock via the admin API
+
+# Audit-log break-glass (leave off in normal operation)
+# AUDIT_ALLOW_CHAIN_REHASH=false        # true only for a one-time legacy-hash chain repair by an operator
 ```
+
+> The three security-posture flags above default to the secure/backward-compatible
+> value, so a standard deployment needs none of them. See `.env.example.full` and
+> [Configuration → Security](../wiki/Configuration-Security.md) for the full list.
 
 ### Generating Secure Secrets
 

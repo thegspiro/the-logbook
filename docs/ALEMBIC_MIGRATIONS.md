@@ -16,13 +16,25 @@
 
 ## Current Head
 
-> **Update (2026-07-16):** The two 2026-05 heads have since been merged and the
-> chain is **linear again with a single head**. The current head is
-> **`20260722_0001`** (`20260722_0001_add_shift_pass_down_notes.py`). Recent
-> scheduling migrations, in order: `20260720_0001` (shift training-slot fields +
-> shift lifecycle status) → `20260721_0001` (`users.calendar_feed_token`) →
-> `20260722_0001` (`shifts.pass_down_notes`). New migrations should set
-> `down_revision = "20260722_0001"`.
+> **Update (2026-07-29):** The chain is **linear with a single head**. The
+> current head is **`20260729_0001`**
+> (`20260729_0001_widen_public_portal_api_key_prefix.py`). **New migrations must
+> set `down_revision = "20260729_0001"`.**
+>
+> Recent migrations, in order: `20260720_0001` (shift training-slot fields +
+> shift lifecycle status) → `20260720_0002` (backfill department-message role
+> ids) → `20260720_0003` (department-message `scheduled_at`) → `20260720_0004`
+> (department-message `deleted_at`) → `20260721_0001` (`users.calendar_feed_token`)
+> → `20260722_0001` (`shifts.pass_down_notes`) → … → `20260725_0001` (MFA
+> last-timestep) → `20260726_0001` (audit-log `hash_version`) → `20260727_0001`
+> (session refresh grace) → `20260728_0001` (`security_alerts.organization_id`) →
+> `20260729_0001` (widen `public_portal_api_keys.key_prefix`).
+>
+> **Note on `20260720_0001`:** a duplicate revision id (two files both claimed
+> `20260720_0001`) once made the chain unrunnable. It was resolved by keeping
+> `20260720_0001` = `add_training_positions_and_shift_status` and renumbering the
+> former duplicate to **`20260720_0004_add_department_message_deleted_at.py`**;
+> the chain was relinearized (single root, single head).
 
 > **Note (2026-05-29):** The full "Full Revision Chain" table below is stale and
 > ends at `20260223_0300`; roughly 75 additional migrations exist on disk between

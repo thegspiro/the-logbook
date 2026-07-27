@@ -252,7 +252,7 @@ Regular testing should include:
 
 ### Encryption at Rest
 
-**Algorithm**: AES-256-GCM (authenticated encryption — confidentiality plus an integrity tag, fresh random 96-bit nonce per value). Data written before the AES-256-GCM migration used Fernet (AES-128-CBC + HMAC-SHA256) and remains readable; `scripts/reencrypt_to_aesgcm.py` re-encrypts it to AES-256-GCM.
+**Algorithm**: AES-256-GCM (authenticated encryption — confidentiality plus an integrity tag, fresh random 96-bit nonce per value). Data written before the AES-256-GCM migration used Fernet (AES-128-CBC + HMAC-SHA256) and remains readable; `backend/scripts/reencrypt_to_aesgcm.py` (dry-run by default) re-encrypts it to AES-256-GCM — see the operator runbook `docs/AES256_GCM_BACKFILL_RUNBOOK.md`.
 
 **What is Encrypted:**
 - User passwords (Argon2id hashing)
@@ -297,15 +297,15 @@ Sensitive fields that can be encrypted:
 
 ### Tamper-Proof Logging System
 
-The Logbook implements a blockchain-inspired hash chain for audit logs:
+The Logbook implements a blockchain-inspired **keyed** hash chain for audit logs:
 
 ```
-Log Entry 1: Hash = SHA256(Data1 + "0000...")
-Log Entry 2: Hash = SHA256(Data2 + Hash1)
-Log Entry 3: Hash = SHA256(Data3 + Hash2)
+Log Entry 1: Hash = HMAC-SHA256(key, Data1 + "0000...")
+Log Entry 2: Hash = HMAC-SHA256(key, Data2 + Hash1)
+Log Entry 3: Hash = HMAC-SHA256(key, Data3 + Hash2)
 ```
 
-This makes it impossible to modify historical logs without detection.
+The chain is keyed with the audit signing key (`AUDIT_LOG_SIGNING_KEY`, falling back to `SECRET_KEY`), so forging it requires the key, not merely database write access. Pre-upgrade rows verify under the legacy unkeyed SHA-256 scheme. The `rehash_chain` recovery op is break-glass (gated by `AUDIT_ALLOW_CHAIN_REHASH`), repairs only legacy rows, and fails closed on a keyed-row mismatch. This makes it impossible to modify historical logs without detection.
 
 ### What is Logged
 

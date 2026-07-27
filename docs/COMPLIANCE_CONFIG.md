@@ -115,7 +115,7 @@ Profiles allow different compliance standards for different groups within the or
 | Type | Description |
 |------|-------------|
 | `monthly` | Monthly compliance snapshot |
-| `yearly` | Annual compliance summary |
+| `annual` | Annual compliance summary |
 
 ### Report Statuses
 
@@ -194,7 +194,7 @@ Each report stores:
 |--------|------|-------------|
 | `id` | `String(36)` | UUID primary key |
 | `organization_id` | `String(36)` | FK to organizations |
-| `report_type` | `String(50)` | monthly or yearly |
+| `report_type` | `String(50)` | monthly or annual (validated server-side) |
 | `period_label` | `String(50)` | Human-readable period label |
 | `status` | `ReportStatus` | PENDING, GENERATING, COMPLETED, FAILED |
 | `report_data` | `JSON` | Full compliance data |
