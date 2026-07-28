@@ -479,10 +479,17 @@ show the Runoff Chain timeline.]**
 
 **[SCREEN: Open the runoff, members vote, close it, winner declared]**
 
-> "Review the runoff's dates — it defaults to opening about an hour out —
-> adjust for your meeting, open it, and run the same cycle. Ballots, votes,
-> close, results. On a meeting night a runoff adds about ten minutes, not a
-> second meeting."
+> "And the runoff carries the original's full rule set — quorum, position
+> eligibility, the meeting link, your overrides — with a fresh anonymity
+> salt of its own. Running it at the meeting is one click: opening an
+> election *starts* it, even if its scheduled start was later — so open the
+> runoff and the room can vote immediately. Want a defined window instead?
+> Edit Dates on the draft lets you set, say, a fifteen-minute floor vote.
+> Ballots, votes, close, results. On a meeting night a runoff adds about
+> ten minutes, not a second meeting."
+
+**[SCREEN: Show the Edit Dates modal on the draft runoff — Start Now +
+15 Min quick buttons — then Open Election]**
 
 **[CALLOUT: "Runoffs are evaluated on every close — early closes included"]**
 

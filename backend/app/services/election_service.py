@@ -2195,10 +2195,20 @@ class ElectionService:
             # Default to top 2
             advancing_candidates = sorted_candidates[:2]
 
-        # Create runoff election
+        # Create runoff election. The runoff must inherit the parent's full
+        # rule set — a runoff round with looser rules than round one would
+        # decide the race under different (weaker) conditions:
+        #   - quorum: a quorum-required election's runoff needs the same bar
+        #   - position_eligibility: position-level voter-type restrictions
+        #   - meeting/event link + attendees: the electorate context
+        #   - voter_overrides: members granted eligibility for this race
+        # The anonymity salt is generated FRESH (never copied): salts are
+        # strictly per-election, and the parent's salt is destroyed at close.
+        # Without a salt of its own, an anonymous runoff's voter hashes would
+        # be keyed with "" and be pre-computable from user ids (SEC-12).
         runoff_start = datetime.now(timezone.utc) + timedelta(
             hours=1
-        )  # Start 1 hour from now
+        )  # Default; open_election clamps a future start to "now" on open
         runoff_end = runoff_start + timedelta(days=1)  # 1 day duration by default
 
         runoff_election = Election(
@@ -2210,17 +2220,26 @@ class ElectionService:
             description=f"Runoff election for {election.title}. No candidate received the required votes in the previous round.",
             election_type=election.election_type,
             positions=election.positions,
+            position_eligibility=copy.deepcopy(election.position_eligibility),
             start_date=runoff_start,
             end_date=runoff_end,
             anonymous_voting=election.anonymous_voting,
+            voter_anonymity_salt=secrets.token_hex(32),
             allow_write_ins=False,  # No write-ins in runoffs
             max_votes_per_position=election.max_votes_per_position,
             results_visible_immediately=election.results_visible_immediately,
             eligible_voters=election.eligible_voters,
+            voter_overrides=copy.deepcopy(election.voter_overrides),
+            meeting_id=election.meeting_id,
+            event_id=election.event_id,
+            meeting_date=election.meeting_date,
+            attendees=copy.deepcopy(election.attendees),
             voting_method=election.voting_method,
             victory_condition=election.victory_condition,
             victory_threshold=election.victory_threshold,
             victory_percentage=election.victory_percentage,
+            quorum_type=election.quorum_type,
+            quorum_value=election.quorum_value,
             enable_runoffs=election.enable_runoffs,
             runoff_type=election.runoff_type,
             max_runoff_rounds=election.max_runoff_rounds,
@@ -2464,12 +2483,33 @@ class ElectionService:
                 "Election must have at least one accepted candidate or ballot item",
             )
 
+        now = datetime.now(timezone.utc)
+        end = self._ensure_utc(election.end_date)
+        if end and end <= now:
+            return (
+                None,
+                "Election end date has already passed — update the dates "
+                "before opening",
+            )
+
+        # Opening the election is the declaration that voting starts now.
+        # Every vote path rejects votes before start_date, and auto-created
+        # runoffs default to a start one hour out — without this clamp, a
+        # runoff opened at the meeting would bounce every vote with
+        # "Election has not started yet" until the scheduled start.
+        start = self._ensure_utc(election.start_date)
+        start_adjusted = False
+        if start and start > now:
+            election.start_date = now
+            start_adjusted = True
+
         election.status = ElectionStatus.OPEN
         await self.db.commit()
         await self.db.refresh(election)
 
         logger.info(
-            f"Election opened | election={election_id} title={election.title!r}"
+            f"Election opened | election={election_id} title={election.title!r} "
+            f"start_adjusted={start_adjusted}"
         )
         await self._audit(
             "election_opened",
@@ -2477,6 +2517,8 @@ class ElectionService:
                 "election_id": str(election_id),
                 "title": election.title,
                 "candidate_count": candidate_count,
+                # True when a future start_date was clamped to the open time
+                "start_adjusted_to_open_time": start_adjusted,
             },
         )
 

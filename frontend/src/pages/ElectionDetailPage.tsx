@@ -34,6 +34,7 @@ import SendBallotEmailsModal from '../components/election-detail/SendBallotEmail
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
 import DeleteElectionModal from '../components/election-detail/DeleteElectionModal';
 import ExtendElectionModal from '../components/election-detail/ExtendElectionModal';
+import EditDatesModal from '../components/election-detail/EditDatesModal';
 import BallotPreviewModal from '../components/election-detail/BallotPreviewModal';
 import RollbackElectionModal from '../components/election-detail/RollbackElectionModal';
 
@@ -46,6 +47,8 @@ export const ElectionDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   // Modal visibility state
   const [showExtendModal, setShowExtendModal] = useState(false);
+  const [showEditDatesModal, setShowEditDatesModal] = useState(false);
+  const [editDatesError, setEditDatesError] = useState<string | null>(null);
   const [extendError, setExtendError] = useState<string | null>(null);
   const [showRollbackModal, setShowRollbackModal] = useState(false);
   const [rollbackError, setRollbackError] = useState<string | null>(null);
@@ -271,6 +274,24 @@ export const ElectionDetailPage: React.FC = () => {
       setShowExtendModal(false);
     } catch (err: unknown) {
       setExtendError(getErrorMessage(err, 'Failed to extend election'));
+    }
+  };
+
+  /** Updates a draft election's voting window (start + end). */
+  const handleEditDates = async (newStartDate: string, newEndDate: string) => {
+    if (!electionId || !newStartDate || !newEndDate) return;
+
+    try {
+      setEditDatesError(null);
+      const updated = await electionService.updateElection(electionId, {
+        start_date: localToUTC(newStartDate, tz),
+        end_date: localToUTC(newEndDate, tz),
+      });
+      setElection(updated);
+      setShowEditDatesModal(false);
+      toast.success('Voting window updated');
+    } catch (err: unknown) {
+      setEditDatesError(getErrorMessage(err, 'Failed to update voting window'));
     }
   };
 
@@ -887,12 +908,22 @@ export const ElectionDetailPage: React.FC = () => {
                 )}
 
                 {election.status === ElectionStatus.DRAFT && (
-                  <button
-                    onClick={() => { void handleOpenElection(); }}
-                    className="btn-success rounded-md text-sm"
-                  >
-                    Open Election
-                  </button>
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowEditDatesModal(true);
+                      }}
+                      className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 text-sm"
+                    >
+                      Edit Dates
+                    </button>
+                    <button
+                      onClick={() => { void handleOpenElection(); }}
+                      className="btn-success rounded-md text-sm"
+                    >
+                      Open Election
+                    </button>
+                  </>
                 )}
 
                 {election.status === ElectionStatus.OPEN && (
@@ -1499,6 +1530,17 @@ export const ElectionDetailPage: React.FC = () => {
           error={extendError}
           onSubmit={(newEndDate) => { void handleExtendElection(newEndDate); }}
           onClose={() => { setShowExtendModal(false); setExtendError(null); }}
+          timezone={tz}
+        />
+      )}
+
+      {showEditDatesModal && election && (
+        <EditDatesModal
+          currentStartDate={election.start_date}
+          currentEndDate={election.end_date}
+          error={editDatesError}
+          onSubmit={(newStartDate, newEndDate) => { void handleEditDates(newStartDate, newEndDate); }}
+          onClose={() => { setShowEditDatesModal(false); setEditDatesError(null); }}
           timezone={tz}
         />
       )}

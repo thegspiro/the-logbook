@@ -60,6 +60,22 @@ ELEC-4, ELEC-8, ELEC-9). Migration `20260730_0001` adds
   election page for non-managers fixed; exact candidate↔ballot-item matching;
   `GET /elections` list excluded from the API cache.
 
+**Follow-up (practical-workflow review, 2026-07-28)**
+
+- **Runoffs inherit the parent's full rule set** — quorum, position
+  eligibility, meeting/event link, attendees, and voter overrides were all
+  dropped when the runoff was auto-created, and anonymous runoffs got **no
+  anonymity salt** (voter hashes keyed with an empty string — pre-computable,
+  defeating SEC-12 for every runoff round). Runoffs now inherit the rules and
+  generate a fresh salt of their own.
+- **Same-meeting runoffs actually work** — `open_election` now clamps a
+  future `start_date` to the open time (previously a runoff opened at the
+  meeting rejected every vote with "Election has not started yet" for an
+  hour, and the UI had no way to edit a draft's dates) and refuses to open an
+  election whose end date already passed. New **Edit Dates** modal on draft
+  elections (start + end, Start Now, 15-min/30-min/1-hour/1-day quick
+  durations).
+
 **Docs** — full documentation sweep to match actual behavior: elections wiki
 page (correct endpoint paths, 2026-07-28 improvements section), training guide
 (voting-method tables, token expiry, double-vote semantics, rollback guard,

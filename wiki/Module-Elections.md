@@ -159,6 +159,9 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 | Ranked-choice voter submits ranks 1–3 | All recorded atomically; duplicate rank or candidate rejected |
 | Reopen closed anonymous election with votes | Refused — create a new election instead |
 | Positionless token vote after an unrelated positioned vote | No longer blocked (filter previously degraded to a no-op) |
+| Runoff created from a quorum/position-restricted election | Inherits quorum, position eligibility, meeting/event link, attendees, and overrides — with a **fresh** anonymity salt of its own |
+| Runoff opened at the meeting (default start is +1h) | Opening clamps a future start to "now" — voting works immediately; draft dates are also editable via the new **Edit Dates** modal |
+| Opening an election whose end date already passed | Refused — update the dates first |
 
 ---
 

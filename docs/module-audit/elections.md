@@ -202,6 +202,30 @@ the same change unless marked deferred. Migration `20260730_0001` adds
   coincidence). (e) `UNCACHEABLE_PREFIXES` used `'/elections/'` so the list
   endpoint `GET /elections` was cached; now `'/elections'`.
 
+### Follow-up fixes (practical-workflow review, 2026-07-28)
+
+- **R-11 — MEDIUM — Runoffs didn't inherit the parent's rule set.**
+  `_check_and_create_runoff` built the child election by hand and omitted:
+  the **anonymity salt** (anonymous runoffs hashed voters with an empty key —
+  pre-computable from user ids, defeating SEC-12 for every runoff round),
+  **quorum** (a quorum-required election's runoff had none),
+  **position_eligibility** (position-level voter-type limits vanished in the
+  deciding round), and the meeting/event link, attendees, and voter
+  overrides (electorate context lost). Fixed: runoffs now inherit
+  quorum/eligibility/links/overrides and generate a **fresh** salt (never
+  the parent's — that one is destroyed at close).
+- **R-12 — MEDIUM — Same-meeting runoffs were practically impossible.**
+  Runoffs default to `start = now + 1h`; every vote path rejects votes
+  before `start_date`; and the UI had no way to edit a draft election's
+  dates ("Extend Time" is open-status, end-date-only). Opening the runoff at
+  the meeting meant an hour of "Election has not started yet". Fixed twice
+  over: `open_election` now clamps a future `start_date` to the open time
+  (opening *is* the declaration that voting starts; audited as
+  `start_adjusted_to_open_time`) and refuses to open an election whose
+  `end_date` already passed; and the detail page has an **Edit Dates**
+  modal for draft elections (start + end, quarter-hour granularity,
+  15-min/30-min/1-hour/1-day quick durations).
+
 ### Open / deferred
 
 - **R-D1 — ELEC-5 remains:** voting tokens are stored in plaintext at rest

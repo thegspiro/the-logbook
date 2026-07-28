@@ -720,3 +720,138 @@ class TestRollbackGuard(TestElectionSetup):
         assert rb_err is None, f"Rollback with zero votes should work: {rb_err}"
         assert election is not None
         assert election.status.value == "open"
+
+
+# ── TestRunoffInheritance & Open Clamp ────────────────────────────────
+
+
+class TestRunoffInheritance(TestElectionSetup):
+    async def test_runoff_inherits_rules_with_fresh_salt(
+        self, db_session: AsyncSession, setup_election
+    ):
+        """A runoff must carry the parent's quorum and position eligibility,
+        and get its OWN anonymity salt (never none, never the parent's —
+        the parent's salt is destroyed at close and an empty salt would make
+        voter hashes pre-computable)."""
+        from sqlalchemy import text
+
+        data = await setup_election
+        await db_session.execute(
+            text(
+                "UPDATE elections SET enable_runoffs = 1, "
+                "victory_condition = 'majority', "
+                "quorum_type = 'percentage', quorum_value = 51, "
+                "position_eligibility = "
+                '\'{"Chief": {"voter_types": ["operational"]}}\' '
+                "WHERE id = :id"
+            ),
+            {"id": data["election_id"]},
+        )
+        await db_session.flush()
+        svc = ElectionService(db_session)
+
+        # 1-1 tie with 'majority' -> runoff
+        for uid, cid in [
+            (data["user1_id"], data["candidate_a_id"]),
+            (data["user2_id"], data["candidate_b_id"]),
+        ]:
+            _, err = await svc.cast_vote(
+                user_id=uuid.UUID(uid),
+                election_id=uuid.UUID(data["election_id"]),
+                candidate_id=uuid.UUID(cid),
+                position="Chief",
+                organization_id=uuid.UUID(data["org_id"]),
+            )
+            assert err is None
+
+        _, close_err = await svc.close_election(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        assert close_err is None
+
+        runoff_row = await db_session.execute(
+            text(
+                "SELECT voter_anonymity_salt, quorum_type, quorum_value, "
+                "position_eligibility, anonymous_voting "
+                "FROM elections WHERE parent_election_id = :id"
+            ),
+            {"id": data["election_id"]},
+        )
+        runoff = runoff_row.one()
+
+        assert runoff.voter_anonymity_salt, "Runoff must have its own salt"
+        assert (
+            runoff.voter_anonymity_salt != data["salt"]
+        ), "Runoff salt must not be a copy of the parent's"
+        assert runoff.quorum_type == "percentage"
+        assert runoff.quorum_value == 51
+        assert runoff.position_eligibility is not None
+        assert "operational" in str(runoff.position_eligibility)
+
+
+class TestOpenElectionStartClamp(TestElectionSetup):
+    async def test_open_clamps_future_start_so_voting_works_immediately(
+        self, db_session: AsyncSession, setup_election
+    ):
+        """Opening is the declaration that voting starts now. A future
+        start_date (e.g. the runoff default of now+1h) must be clamped on
+        open, or every vote bounces with 'Election has not started yet'."""
+        from sqlalchemy import text
+
+        data = await setup_election
+        future_start = datetime.now(timezone.utc) + timedelta(hours=1)
+        await db_session.execute(
+            text(
+                "UPDATE elections SET status = 'draft', start_date = :start "
+                "WHERE id = :id"
+            ),
+            {"start": future_start, "id": data["election_id"]},
+        )
+        await db_session.flush()
+        svc = ElectionService(db_session)
+
+        opened, err = await svc.open_election(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        assert err is None
+        assert opened is not None
+
+        vote, vote_err = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+        )
+        assert (
+            vote_err is None
+        ), f"Vote should succeed immediately after open: {vote_err}"
+        assert vote is not None
+
+    async def test_open_rejects_election_whose_end_has_passed(
+        self, db_session: AsyncSession, setup_election
+    ):
+        from sqlalchemy import text
+
+        data = await setup_election
+        past = datetime.now(timezone.utc) - timedelta(days=2)
+        await db_session.execute(
+            text(
+                "UPDATE elections SET status = 'draft', "
+                "start_date = :start, end_date = :end WHERE id = :id"
+            ),
+            {
+                "start": past,
+                "end": past + timedelta(days=1),
+                "id": data["election_id"],
+            },
+        )
+        await db_session.flush()
+        svc = ElectionService(db_session)
+
+        opened, err = await svc.open_election(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        assert opened is None
+        assert err is not None
+        assert "end date" in err.lower()
