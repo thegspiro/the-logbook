@@ -304,9 +304,7 @@ class FundraisingService:
         if campaign:
             campaign.current_amount = total
 
-    async def _update_donor_stats(
-        self, donor_id: str, organization_id: str
-    ) -> None:
+    async def _update_donor_stats(self, donor_id: str, organization_id: str) -> None:
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(Donation.amount), 0),

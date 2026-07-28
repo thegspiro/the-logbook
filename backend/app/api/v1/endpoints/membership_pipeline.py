@@ -80,9 +80,7 @@ async def list_pipelines(
     include_templates: bool = Query(True, description="Include template pipelines"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -165,9 +163,7 @@ async def get_pipeline(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -396,9 +392,7 @@ async def list_steps(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -556,9 +550,7 @@ async def get_kanban_board(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -589,9 +581,7 @@ async def get_pipeline_stats(
     pipeline_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -671,9 +661,7 @@ async def list_prospects(
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -847,9 +835,7 @@ async def get_prospect(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -1064,9 +1050,7 @@ async def get_prospect_activity(
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -1133,9 +1117,7 @@ async def list_prospect_documents(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -1253,9 +1235,7 @@ async def download_prospect_document(
     document_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """
@@ -1569,9 +1549,7 @@ async def list_interviews(
     prospect_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission(
-            "prospective_members.view", "prospective_members.manage"
-        )
+        require_permission("prospective_members.view", "prospective_members.manage")
     ),
 ):
     """

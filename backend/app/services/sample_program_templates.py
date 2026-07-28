@@ -610,7 +610,9 @@ NEW_MEMBER_ORIENTATION = ProgramBuildRequest(
                     name="Department-specific policy acknowledgment",
                     description="Placeholder — swap in your department's specific policies or training.",
                     requirement_type="checklist",
-                    checklist_items=["Department-specific policy reviewed and acknowledged"],
+                    checklist_items=[
+                        "Department-specific policy reviewed and acknowledged"
+                    ],
                     sort_order=3,
                 ),
             ],

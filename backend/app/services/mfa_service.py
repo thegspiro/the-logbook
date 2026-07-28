@@ -26,9 +26,7 @@ def generate_secret() -> str:
 
 def provisioning_uri(secret: str, account_name: str, issuer: str) -> str:
     """Build the otpauth:// URI an authenticator app encodes as a QR code."""
-    return pyotp.TOTP(secret).provisioning_uri(
-        name=account_name, issuer_name=issuer
-    )
+    return pyotp.TOTP(secret).provisioning_uri(name=account_name, issuer_name=issuer)
 
 
 def verify_totp(secret: str, code: str) -> bool:
@@ -101,9 +99,7 @@ def hash_recovery_code(code: str) -> str:
     return hashlib.sha256(normalize_recovery_code(code).encode()).hexdigest()
 
 
-def find_matching_recovery_code(
-    candidate: str, stored_codes: list[str]
-) -> str | None:
+def find_matching_recovery_code(candidate: str, stored_codes: list[str]) -> str | None:
     """Return the stored entry matching *candidate*, or None, in constant time.
 
     Compares against every stored entry without early-exit to avoid leaking, via

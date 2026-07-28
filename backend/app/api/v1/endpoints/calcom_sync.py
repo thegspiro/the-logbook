@@ -46,9 +46,7 @@ async def list_calcom_bookings(
     current_user: User = Depends(require_permission("integrations.manage")),
 ):
     """Return upcoming Cal.com bookings mapped to Logbook event shape."""
-    integration = await _get_calcom_integration(
-        db, str(current_user.organization_id)
-    )
+    integration = await _get_calcom_integration(db, str(current_user.organization_id))
     api_key = integration.get_secret("api_key")
     if not api_key:
         raise HTTPException(

@@ -178,9 +178,11 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
 
     # Org requires MFA and this user hasn't enrolled yet → frontend should
     # route them into setup (also enforced server-side in get_current_user).
-    mfa_required = bool(
-        ((org.settings or {}).get("security") or {}).get("mfa_required", False)
-    ) if org else False
+    mfa_required = (
+        bool(((org.settings or {}).get("security") or {}).get("mfa_required", False))
+        if org
+        else False
+    )
     mfa_enrollment_required = mfa_required and not bool(user.mfa_enabled)
 
     return CurrentUser(
@@ -802,7 +804,9 @@ async def mfa_setup(
     await db.commit()
 
     uri = mfa_service.provisioning_uri(
-        secret, account_name=current_user.email or current_user.username, issuer=_MFA_ISSUER
+        secret,
+        account_name=current_user.email or current_user.username,
+        issuer=_MFA_ISSUER,
     )
     return {"secret": secret, "qr_code_url": uri}
 
@@ -1277,13 +1281,10 @@ async def forgot_password(
         recipient_email = user.email
         recipient_first_name = user.first_name or user.username
         recipient_full_name = (
-            f"{user.first_name or ''} {user.last_name or ''}".strip()
-            or user.username
+            f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username
         )
         it_team = org_settings.get("it_team", {})
-        it_emails = [
-            m["email"] for m in it_team.get("members", []) if m.get("email")
-        ]
+        it_emails = [m["email"] for m in it_team.get("members", []) if m.get("email")]
 
         async def _send_reset():
             try:

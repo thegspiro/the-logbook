@@ -260,9 +260,7 @@ class SalesforceService:
             )
             raise Exception(f"Failed to create {sobject} in Salesforce")
 
-        raise Exception(
-            f"Failed to create {sobject}: too many unknown-field retries"
-        )
+        raise Exception(f"Failed to create {sobject}: too many unknown-field retries")
 
     async def update_record(
         self, sobject: str, record_id: str, fields: dict[str, Any]
@@ -319,9 +317,7 @@ class SalesforceService:
         described = await self.describe_sobject(sobject)
         fields = described.get("fields", [])
         return {
-            f.get("name", "")
-            for f in fields
-            if isinstance(f, dict) and f.get("name")
+            f.get("name", "") for f in fields if isinstance(f, dict) and f.get("name")
         }
 
     async def get_record(self, sobject: str, record_id: str) -> dict[str, Any]:

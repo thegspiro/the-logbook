@@ -498,9 +498,7 @@ async def export_audit_logs(
     )
 
     query = (
-        select(AuditLog)
-        .where(AuditLog.user_id.in_(org_user_ids))
-        .order_by(AuditLog.id)
+        select(AuditLog).where(AuditLog.user_id.in_(org_user_ids)).order_by(AuditLog.id)
     )
 
     if event_type:

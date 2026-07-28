@@ -145,9 +145,10 @@ class ElectionBase(BaseModel):
         default=None,
         description="Optional link to a calendar event (e.g. business meeting)",
     )
-    attendees: Optional[List[Dict[str, Any]]] = Field(
-        default=None, description="Meeting attendees checked in for voting"
-    )
+    # NOTE: attendees is deliberately NOT accepted here. Attendance feeds
+    # require_attendance voting eligibility, so check-ins must go through the
+    # POST /{id}/attendees endpoint (which validates the user and audits the
+    # check-in) — never through raw create/update payloads.
     start_date: datetime
     end_date: datetime
     anonymous_voting: bool = Field(default=True)
@@ -357,6 +358,30 @@ class ElectionListResponse(UTCResponseBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class BallotElectionResponse(UTCResponseBase):
+    """Minimal election view for anonymous token voters.
+
+    SECURITY: the public GET /elections/ballot endpoint must never expose
+    roster/PII fields (attendees, eligible_voters, email_recipients,
+    created_by, ...) to a token holder — only what the voting page needs.
+    """
+
+    id: UUID
+    title: str
+    description: Optional[str] = None
+    election_type: str = "general"
+    meeting_date: Optional[datetime] = None
+    start_date: datetime
+    end_date: datetime
+    status: str
+    positions: Optional[List[str]] = None
+    ballot_items: Optional[List[BallotItem]] = None
+    allow_write_ins: bool = False
+    voting_method: str = "simple_majority"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # Candidate Schemas
 
 
@@ -519,13 +544,25 @@ class VoterEligibility(BaseModel):
     reason: Optional[str] = Field(None, description="Reason if not eligible")
 
 
+class BulkVoteItem(BaseModel):
+    """A single vote within a bulk submission"""
+
+    candidate_id: UUID
+    position: Optional[str] = Field(None, max_length=100)
+    vote_rank: Optional[int] = Field(
+        None, ge=1, description="Rank for ranked-choice voting (1 = first choice)"
+    )
+
+
 class BulkVoteCreate(BaseModel):
-    """Schema for casting multiple votes at once (for multi-position elections)"""
+    """Schema for casting multiple votes atomically.
+
+    Used for multi-position ballots, and for approval / ranked-choice
+    elections where a voter legitimately submits several votes at once.
+    """
 
     election_id: UUID
-    votes: List[Dict[str, UUID]] = Field(
-        ..., description="List of {position: candidate_id} mappings"
-    )
+    votes: List[BulkVoteItem] = Field(..., min_length=1)
 
 
 class EmailBallot(BaseModel):
@@ -699,6 +736,9 @@ class BallotSubmissionResponse(BaseModel):
     votes_cast: int
     abstentions: int
     message: str
+    # Receipts the voter can keep to verify their votes were recorded
+    # (via GET /{election_id}/verify-receipt) without revealing content
+    receipt_hashes: List[str] = []
 
 
 # Proxy Voting Schemas

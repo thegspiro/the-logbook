@@ -435,7 +435,10 @@ async def authenticate_api_key(
     # Self-heal legacy keys: upgrade the non-selective "logbook_" prefix to the
     # selective 16-char prefix (we have the plaintext here) so subsequent lookups
     # for this key hit a single row instead of scanning every legacy key.
-    if len(api_key) >= _SELECTIVE_PREFIX_LEN and api_key_obj.key_prefix != selective_prefix:
+    if (
+        len(api_key) >= _SELECTIVE_PREFIX_LEN
+        and api_key_obj.key_prefix != selective_prefix
+    ):
         api_key_obj.key_prefix = selective_prefix
         needs_commit = True
 

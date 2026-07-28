@@ -57,25 +57,38 @@ org-B candidate given the two UUIDs. `create_candidate` does it correctly via
 ownership check (404 on miss) at the top of both endpoints before the candidate
 fetch.
 
-### ELEC-3 — MEDIUM — Vote-dedup hash breaks approval / multi-vote-per-position
-`_compute_vote_dedup_hash = SHA256(election_id:voter:position)` **excludes
+### ELEC-3 — MEDIUM — Vote-dedup hash breaks approval / multi-vote-per-position — ✅ FIXED
+`_compute_vote_dedup_hash = SHA256(election_id:voter:position)` **excluded
 `candidate_id`** and the column is UNIQUE. For `voting_method="approval"` or
 `max_votes_per_position > 1`, a voter's legitimate second vote for the same
-position collides → `IntegrityError` → rejected. So `max_votes_per_position`
-can never exceed 1 in practice; approval voting is silently broken.
-**Status:** flagged — the fix is conditional (include `candidate_id` in the
-hash for approval/multi-vote elections, keep excluding it for single-vote) and
-must not weaken single-vote dedup, so it needs design + tests. Not auto-applied.
+position collided → `IntegrityError` → rejected. The app-level checks in
+`cast_vote` (blanket "already voted for this position") and the non-positional
+short-circuit in `check_voter_eligibility` also blocked the second vote, so
+approval and ranked-choice voting were broken at both layers.
+**Fix (2026-07 review):** `_compute_vote_dedup_hash` takes an optional
+`discriminator` — `rank:<n>` for ranked choice, `cand:<id>` for
+approval/multi-vote, `""` for single-vote (byte-identical to the legacy hash,
+so existing rows keep their protection). `cast_vote`'s duplicate checks are now
+method-aware (duplicate rank / duplicate candidate rejected;
+`max_votes_per_position` honored), and the eligibility short-circuit only
+applies to single-vote methods. The authenticated bulk endpoint was reworked to
+a typed `BulkVoteItem` payload and true atomicity (`cast_vote(commit=False)` +
+one commit; the old savepoint was broken because `cast_vote` committed
+internally), and `ElectionBallot.tsx` now submits ranked/approval votes through
+it in one call instead of a non-atomic sequential loop.
 
-### ELEC-4 — MEDIUM — `rollback_election` (CLOSED→OPEN) enables double-voting
-`close_election` destroys `voter_anonymity_salt`, but `rollback_election` can
+### ELEC-4 — MEDIUM — `rollback_election` (CLOSED→OPEN) enables double-voting — ✅ FIXED (guard)
+`close_election` destroys `voter_anonymity_salt`, but `rollback_election` could
 reopen a closed election. After reopen the salt is `None`, so `_generate_voter_hash`
 yields a *different* hash than the original votes — a voter who already voted is
 no longer matched by `has_voted`, and their new `vote_dedup_hash` differs, so
-they can vote **again**. Same salt loss makes `get_non_voters`/roster mis-report
-everyone as a non-voter post-close.
-**Status:** flagged — needs a design decision (preserve the salt, or forbid
-rollback once the salt is destroyed). Behavior change; not auto-applied.
+they could vote **again**.
+**Fix (2026-07 review):** CLOSED→OPEN rollback is now refused for anonymous
+elections whose salt is destroyed **and** that have recorded votes (clear error
+directs the admin to create a new election). Rollback with zero votes still
+works. This is a deliberate behavior change: the refused case is exactly the
+unsafe one. The alternative (retaining the salt post-close) would weaken
+SEC-12 and was rejected.
 
 ### ELEC-5 — MEDIUM — Voting tokens stored/compared in plaintext (contradicts "hashed" docs)
 `_generate_voting_token` stores the raw `token_urlsafe(64)` and
@@ -101,19 +114,116 @@ IP/user-agent for anonymous elections and treating forensics as break-glass.
 `Candidate(..., **candidate.model_dump())` persists `user_id` with no in-org
 check. Same low-severity pattern tracked in CROSS-CUTTING XC-1.
 
-### ELEC-8 — LOW — `verify_vote_receipt` is unusable (receipt never returned)
-`_compute_receipt_hash` stores a receipt, but no voting response returns it
-(`cast_vote_with_token`/`submit_ballot_with_token` omit it), so the public
-`GET /{election_id}/verify-receipt` can never be satisfied. The endpoint itself
-is safe (unguessable receipt, returns only `voted_at`+`position`, no identity).
-**Status:** flagged — feature completion (return `receipt_hash` to the voter +
-schema/frontend change), not a bug fix.
+### ELEC-8 — LOW — `verify_vote_receipt` is unusable (receipt never returned) — ✅ FIXED
+`_compute_receipt_hash` stored a receipt, but no voting response returned it,
+so the public `GET /{election_id}/verify-receipt` could never be satisfied.
+**Fix (2026-07 review):** `submit_ballot_with_token` returns `receipt_hashes`
+(added to `BallotSubmissionResponse`) and the single token-vote response now
+includes `receipt_hash`. The frontend receipt block in `BallotVotingPage`
+renders them; verify-receipt is now usable end-to-end.
 
-### ELEC-9 — LOW / dead code — unreachable max-votes branch in `cast_vote_with_token`
-The function returns early whenever `existing_votes` is non-empty, so the later
-`position_votes` filter is always empty and its branch is dead. Harmless, but
-tied to the ELEC-3 multi-vote design gap — left in place until ELEC-3 is
-resolved (removing it in isolation would obscure that gap).
+### ELEC-9 — LOW / dead code — unreachable max-votes branch in `cast_vote_with_token` — ✅ FIXED
+Removed together with the ELEC-3 rework; the same change also fixed the
+`position=None` filter degrading to a no-op (see R-8 below).
+
+## 2026-07 follow-up review (R-findings)
+
+A second full review of the elections feature (creation, ballots, runoffs,
+results, eligibility) found the following beyond ELEC-1…ELEC-9. All fixed in
+the same change unless marked deferred. Migration `20260730_0001` adds
+`voting_tokens.is_test` and `voting_tokens.eligible_item_ids`.
+
+### Fixed
+
+- **R-1 — HIGH — Token ballots never enforced per-item eligibility.**
+  `eligible_voter_types` / `require_attendance` were only checked at
+  email-send time; any token holder could vote on restricted items (e.g.
+  life-member-only bylaw votes) by POSTing their ids. Tokens carry no user
+  identity (only a one-way `voter_hash`), so the eligible item set is now
+  snapshotted on the token at send time (`eligible_item_ids`) and enforced in
+  `submit_ballot_with_token` (non-abstain votes on ineligible items rejected);
+  `GET /ballot` also filters the returned items. `NULL` = legacy token,
+  unrestricted — fail-open is time-bounded by token expiry. The authenticated
+  path had a sibling hole: `cast_vote` called `check_voter_eligibility`
+  without `position`, so per-position/per-item checks never fired — it now
+  passes the position.
+- **R-2 — HIGH — Public `GET /ballot` leaked the member roster.** It returned
+  the full `ElectionResponse` — `attendees` (names + who checked them in),
+  `eligible_voters`, `email_recipients`, `created_by` — to any token holder.
+  Now returns the minimal `BallotElectionResponse` (only what the voting page
+  renders).
+- **R-3 — HIGH — "Test ballots" cast real, counted votes.** `Vote.is_test`
+  was never set anywhere; `send-test-ballot` issued a normal token, so test
+  votes counted in results and consumed the manager's dedup slot.
+  `VotingToken.is_test` is now threaded from `send-test-ballot` through
+  `send_ballot_emails` → `_generate_voting_token`; both token vote paths stamp
+  `Vote.is_test` and namespace the dedup input (`test:<hash>`) so a test vote
+  never blocks the member's real one.
+- **R-4 — HIGH — Early close silently skipped runoffs.**
+  `_check_and_create_runoff` called `get_election_results` without
+  `_internal_bypass_visibility=True`; the visibility gate requires
+  `now > end_date`, so closing before the scheduled end (the normal
+  end-of-meeting flow) returned `None` and no runoff was created. Bypass flag
+  added.
+- **R-5 — MEDIUM — `attendees` was client-settable at creation.**
+  `ElectionBase.attendees` flowed into `Election(**data)` unvalidated,
+  letting a manager fabricate check-ins that feed `require_attendance`
+  eligibility. Removed from the create/update schema; check-ins must go
+  through the audited `POST /{id}/attendees` / import endpoints.
+- **R-6 — MEDIUM — Turnout/quorum denominator counted non-voting tiers.**
+  Results/stats fell back to *all* active users, so a percentage quorum could
+  fail even when 100 % of actually-eligible members voted. New
+  `_count_eligible_voters()` excludes tiers with `voting_eligible: false`
+  (adding back secretary-override members). Election-level only — per-item
+  role/attendance rules are deliberately not modeled in turnout.
+- **R-7 — MEDIUM — `preview-ballot` disagreed with the real ballot.** It
+  compared raw `membership_type` strings (missing the operational/regular/
+  life category semantics of `_user_has_role_type`), ignored voter overrides,
+  and only checked attendance when `attendees` was non-empty (fail-open).
+  Preview and the real filter now share one source of truth
+  (`annotate_ballot_items_for_user`, from which
+  `_get_eligible_ballot_items_for_user` is derived).
+- **R-8 — MEDIUM — `cast_vote_with_token` no-op filter over-blocked.**
+  `.where(Vote.position == position if position else True)` degraded to a
+  no-op for positionless votes, so *any* prior vote blocked submission. Now
+  matches `Vote.position IS NULL` for positionless votes.
+- **R-9 — LOW — Missing `is_test` filters.** Runoff advancement tally,
+  `get_election_stats`, and `get_non_voters` counted test votes (results/
+  roster already filtered). Filters added; forensics stays inclusive by
+  design (investigative view).
+- **R-10 — LOW — Frontend fixes.** (a) Non-managers opening an election saw a
+  highlighted tab with **no panel** — `ElectionWorkflowTabs` now syncs its
+  corrected tab back to the parent. (b) `/elections/settings` route had no
+  `ProtectedRoute requiredPermission="elections.manage"` gate (backend was
+  gated). (c) Candidate↔ballot-item fallback matching used
+  `title.includes(position)` — "Chief" matched "Assistant Chief"; now exact
+  match only. (d) `ElectionBallot` compared `voting_method` against
+  `VoteType.APPROVAL` instead of `VotingMethod.APPROVAL` (worked by string
+  coincidence). (e) `UNCACHEABLE_PREFIXES` used `'/elections/'` so the list
+  endpoint `GET /elections` was cached; now `'/elections'`.
+
+### Open / deferred
+
+- **R-D1 — ELEC-5 remains:** voting tokens are stored in plaintext at rest
+  (512-bit entropy is the guessing defense). Fix requires storing a SHA-256
+  and an in-flight-token compatibility decision. Docstrings claiming tokens
+  are "hashed" were corrected in this change.
+- **R-D2 — ELEC-6 remains:** forensics exposes `ip_vote_distribution` and
+  per-hour timelines to any `elections.manage` holder — enough to correlate
+  voters with anonymous ballots in a small department. Treat forensics as
+  break-glass; recommend threshold-only exposure in a follow-up.
+- **R-D3 — Ballot token in GET query/path:** `GET /elections/ballot?token=`
+  and `GET /elections/ballot/{token}/candidates` put the live credential in
+  server/proxy logs and browser history, contradicting the POST-body
+  rationale on the vote endpoints. The emailed link itself is `?token=`, so a
+  full fix needs a redeem-and-store flow.
+- **R-D4 — `position_eligibility` unenforced on the token path** for
+  positional (non-ballot-item) elections — R-1 covers ballot-item elections
+  only. Mirroring the fix needs eligible positions persisted on the token.
+- **R-D5 — Token single-vote limitation:** `cast_vote_with_token` still
+  allows only one vote per position, so approval/ranked voting via the
+  single-vote token endpoint is not supported (the bulk ballot path and the
+  authenticated path are). Acceptable: the ballot UI uses the bulk path.
 
 ## Notes
 - `check_eligibility` and the vote endpoints use bare `get_current_user`; they

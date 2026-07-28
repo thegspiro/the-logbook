@@ -1049,9 +1049,7 @@ class AdminHoursService:
             )
         )
         if organization_id is not None:
-            query = query.where(
-                AdminHoursEntry.organization_id == organization_id
-            )
+            query = query.where(AdminHoursEntry.organization_id == organization_id)
         result = await self.db.execute(query)
         rows = result.all()
         closed = 0

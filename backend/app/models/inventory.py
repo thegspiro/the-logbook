@@ -1142,9 +1142,7 @@ class InventoryNotificationQueue(Base):
     # Circuit-breaker fields: track delivery attempts so a persistently
     # failing email destination (e.g. expired SMTP creds) eventually stops
     # retrying instead of looping forever and spamming the logs.
-    attempt_count = Column(
-        Integer, nullable=False, default=0, server_default="0"
-    )
+    attempt_count = Column(Integer, nullable=False, default=0, server_default="0")
     last_attempt_at = Column(DateTime(timezone=True))
 
     # Timestamps

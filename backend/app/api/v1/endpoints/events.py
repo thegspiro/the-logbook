@@ -1275,7 +1275,7 @@ async def create_or_update_rsvp(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "warning_type": "phase_gate",
-                    "message": error[len(PHASE_GATE_PREFIX):],
+                    "message": error[len(PHASE_GATE_PREFIX) :],
                 },
             )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
@@ -1959,7 +1959,7 @@ async def self_check_in(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={
                     "warning_type": "phase_gate",
-                    "message": error[len(PHASE_GATE_PREFIX):],
+                    "message": error[len(PHASE_GATE_PREFIX) :],
                 },
             )
         # Special case: already checked in - return success with message

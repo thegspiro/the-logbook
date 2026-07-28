@@ -366,9 +366,7 @@ class SchedulingService:
         a second round-trip.
         """
         program_ids = {
-            str(d["training_program_id"])
-            for d in dicts
-            if d.get("training_program_id")
+            str(d["training_program_id"]) for d in dicts if d.get("training_program_id")
         }
         evaluator_ids = [
             str(d["training_evaluator_id"])
@@ -571,9 +569,7 @@ class SchedulingService:
         """Create a new shift"""
         try:
             officer_id = shift_data.get("shift_officer_id")
-            if officer_id and not await self._user_in_org(
-                officer_id, organization_id
-            ):
+            if officer_id and not await self._user_in_org(officer_id, organization_id):
                 return None, "Shift officer not found"
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
@@ -765,9 +761,9 @@ class SchedulingService:
         )
         if apparatus_id:
             query = query.where(Shift.apparatus_id == apparatus_id)
-        query = query.order_by(
-            Shift.shift_date.asc(), Shift.start_time.asc()
-        ).limit(max_candidates)
+        query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc()).limit(
+            max_candidates
+        )
         result = await self.db.execute(query)
         candidates = list(result.scalars().all())
         return await self.filter_shifts_with_open_positions(
@@ -867,12 +863,16 @@ class SchedulingService:
         horizon_end = today + timedelta(weeks=weeks)
 
         patterns = (
-            await self.db.execute(
-                select(ShiftPattern)
-                .where(ShiftPattern.organization_id == str(organization_id))
-                .where(ShiftPattern.is_active.is_(True))
+            (
+                await self.db.execute(
+                    select(ShiftPattern)
+                    .where(ShiftPattern.organization_id == str(organization_id))
+                    .where(ShiftPattern.is_active.is_(True))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         total = 0
         for pattern in patterns:
@@ -942,9 +942,7 @@ class SchedulingService:
         )
         return result.scalar_one_or_none() is not None
 
-    async def _program_in_org(
-        self, program_id: str, organization_id: UUID
-    ) -> bool:
+    async def _program_in_org(self, program_id: str, organization_id: UUID) -> bool:
         """Return True if training_program_id belongs to the given org."""
         if not program_id:
             return False
@@ -1357,9 +1355,7 @@ class SchedulingService:
         # to all members) are exempt.
         org = (
             await self.db.execute(
-                select(Organization).where(
-                    Organization.id == str(organization_id)
-                )
+                select(Organization).where(Organization.id == str(organization_id))
             )
         ).scalar_one_or_none()
         restrict = bool(
@@ -2394,9 +2390,7 @@ class SchedulingService:
                 return []
             org = (
                 await self.db.execute(
-                    select(Organization).where(
-                        Organization.id == str(organization_id)
-                    )
+                    select(Organization).where(Organization.id == str(organization_id))
                 )
             ).scalar_one_or_none()
             if not org:
@@ -4537,10 +4531,7 @@ class SchedulingService:
             1
             for s in summaries
             if s.get("check_timing") == "end_of_shift"
-            and (
-                not s.get("is_completed")
-                or s.get("overall_status") == "incomplete"
-            )
+            and (not s.get("is_completed") or s.get("overall_status") == "incomplete")
         )
 
     async def finalize_shift(
@@ -4752,9 +4743,7 @@ class SchedulingService:
             return None
         return {
             "shift_id": prev.id,
-            "shift_date": (
-                prev.shift_date.isoformat() if prev.shift_date else None
-            ),
+            "shift_date": (prev.shift_date.isoformat() if prev.shift_date else None),
             "pass_down_notes": prev.pass_down_notes,
         }
 
@@ -4821,9 +4810,7 @@ class SchedulingService:
         )
         enrollments_by_user: Dict[str, list] = {}
         for uid, eid, pid in enrollment_result.all():
-            enrollments_by_user.setdefault(str(uid), []).append(
-                (str(eid), str(pid))
-            )
+            enrollments_by_user.setdefault(str(uid), []).append((str(eid), str(pid)))
 
         # A member gets a draft if they hold a training slot or have an active
         # enrollment. Deduped so a member who is both is reported once.

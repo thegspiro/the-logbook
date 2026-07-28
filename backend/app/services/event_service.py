@@ -303,7 +303,9 @@ class EventService:
             location_service = LocationService(self.db)
             # Validate a newly-set location belongs to the caller's org (the
             # existing location was validated at create time).
-            if update_data.get("location_id") and not await location_service.get_location(
+            if update_data.get(
+                "location_id"
+            ) and not await location_service.get_location(
                 update_data["location_id"], str(organization_id)
             ):
                 raise ValueError("Location not found")

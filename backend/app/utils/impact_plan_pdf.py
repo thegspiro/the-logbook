@@ -57,9 +57,7 @@ def _existing_status(member: Dict[str, Any]) -> str:
     return "Needs item"
 
 
-def render_impact_plan_pdf(
-    data: Dict[str, Any], meta: Dict[str, Any]
-) -> BytesIO:
+def render_impact_plan_pdf(data: Dict[str, Any], meta: Dict[str, Any]) -> BytesIO:
     """Render the analysis *data* into a PDF, returning a BytesIO at pos 0.
 
     *meta* carries presentation context resolved by the service:
@@ -83,16 +81,19 @@ def render_impact_plan_pdf(
         "PlanTitle", parent=styles["Title"], fontSize=18, spaceAfter=2
     )
     sub_style = ParagraphStyle(
-        "PlanSub", parent=styles["Normal"], fontSize=9,
+        "PlanSub",
+        parent=styles["Normal"],
+        fontSize=9,
         textColor=colors.HexColor("#6b7280"),
     )
     section_style = ParagraphStyle(
-        "Section", parent=styles["Heading2"], fontSize=12, spaceBefore=14,
+        "Section",
+        parent=styles["Heading2"],
+        fontSize=12,
+        spaceBefore=14,
         spaceAfter=6,
     )
-    cell_style = ParagraphStyle(
-        "Cell", parent=styles["Normal"], fontSize=8, leading=10
-    )
+    cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=10)
 
     show_size = bool(meta.get("show_size"))
     show_existing = bool(meta.get("show_existing"))
@@ -157,16 +158,12 @@ def render_impact_plan_pdf(
             if data.get("cost_estimated"):
                 row += [_money(b.get("unit_cost")), _money(b.get("estimated_cost"))]
             rows.append(row)
-        widths = [1.0 * inch] + [
-            0.9 * inch for _ in range(len(header) - 1)
-        ]
+        widths = [1.0 * inch] + [0.9 * inch for _ in range(len(header) - 1)]
         story.append(_styled_table(rows, widths))
 
     # ---- Members ----
     members = data.get("members") or []
-    story.append(
-        Paragraph(f"Impacted Members ({len(members)})", section_style)
-    )
+    story.append(Paragraph(f"Impacted Members ({len(members)})", section_style))
     header = ["Member", "ID", "Rank", "Station"]
     if show_size:
         header.append("Size")
@@ -193,8 +190,12 @@ def render_impact_plan_pdf(
 
     # Distribute width across the visible columns.
     base_widths = {
-        "Member": 1.5 * inch, "ID": 0.7 * inch, "Rank": 1.0 * inch,
-        "Station": 0.9 * inch, "Size": 0.7 * inch, "Existing": 0.8 * inch,
+        "Member": 1.5 * inch,
+        "ID": 0.7 * inch,
+        "Rank": 1.0 * inch,
+        "Station": 0.9 * inch,
+        "Size": 0.7 * inch,
+        "Existing": 0.8 * inch,
         "Contact": 1.9 * inch,
     }
     widths = [base_widths[col] for col in header]

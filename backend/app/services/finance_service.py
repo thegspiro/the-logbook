@@ -539,7 +539,9 @@ class FinanceService:
             )
             return sent > 0
         except Exception as exc:
-            logger.warning("Approval request email to {} failed: {}", approver_email, exc)
+            logger.warning(
+                "Approval request email to {} failed: {}", approver_email, exc
+            )
             return False
 
     async def get_approval_records(
@@ -1971,9 +1973,7 @@ class FinanceService:
             )
             await self.db.flush()
 
-    async def _add_to_spent(
-        self, budget_id: str, amount: float, org_id: str
-    ) -> None:
+    async def _add_to_spent(self, budget_id: str, amount: float, org_id: str) -> None:
         result = await self.db.execute(
             select(Budget).where(
                 Budget.id == budget_id,

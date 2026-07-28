@@ -14,6 +14,7 @@ deleted after processing.
 import csv
 import io
 from typing import Any
+
 # xml.etree.ElementTree is used only for the Element TYPE in annotations. All
 # actual PARSING of untrusted XML goes through defusedxml (below) to block XXE
 # and entity-expansion (billion-laughs) attacks.

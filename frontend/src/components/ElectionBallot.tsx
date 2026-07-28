@@ -16,7 +16,7 @@ import type {
   VotingMethod,
 } from '../types/election';
 import { getErrorMessage } from '../utils/errorHandling';
-import { VoteType, VotingMethod as VM } from '../constants/enums';
+import { VotingMethod as VM } from '../constants/enums';
 
 interface ElectionBallotProps {
   electionId: string;
@@ -143,31 +143,31 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
           return;
         }
 
-        // Submit ranked votes sequentially
-        for (let i = 0; i < ranked.length; i++) {
-          const voteData: VoteCreate = {
-            election_id: electionId,
-            candidate_id: ranked[i] as string,
+        // Submit all ranked votes atomically — a sequential per-rank loop
+        // could leave a partial ballot recorded if one call failed mid-way
+        await electionService.bulkCastVotes(
+          electionId,
+          ranked.map((candidateId, i) => ({
+            candidate_id: candidateId,
             position: actualPosition,
             vote_rank: i + 1,
-          };
-          await electionService.castVote(electionId, voteData);
-        }
-      } else if (votingMethod === VoteType.APPROVAL) {
+          }))
+        );
+      } else if (votingMethod === VM.APPROVAL) {
         const approved = approvals[position];
         if (!approved || approved.size === 0) {
           setError('Please approve at least one candidate');
           return;
         }
 
-        for (const candidateId of approved) {
-          const voteData: VoteCreate = {
-            election_id: electionId,
+        // Submit all approvals atomically (same partial-ballot concern)
+        await electionService.bulkCastVotes(
+          electionId,
+          [...approved].map((candidateId) => ({
             candidate_id: candidateId,
             position: actualPosition,
-          };
-          await electionService.castVote(electionId, voteData);
-        }
+          }))
+        );
       } else {
         // Simple majority or supermajority
         const candidateId = selectedCandidates[position];
@@ -245,7 +245,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
     switch (votingMethod) {
       case VM.RANKED_CHOICE:
         return 'Rank candidates in order of preference (click to add ranking)';
-      case VoteType.APPROVAL:
+      case VM.APPROVAL:
         return 'Select all candidates you approve of';
       case VM.SUPERMAJORITY:
         return 'Select one candidate';
@@ -363,7 +363,7 @@ export const ElectionBallot: React.FC<ElectionBallotProps> = ({
                   )}
 
                   {/* Approval Voting: Checkboxes */}
-                  {votingMethod === VoteType.APPROVAL && (
+                  {votingMethod === VM.APPROVAL && (
                     <div className="space-y-2" role="group" aria-label={`Approval voting candidates${position !== '_default' ? ` for ${position}` : ''}`}>
                       {positionCandidates.map((candidate) => {
                         const isApproved = (approvals[position] || new Set()).has(candidate.id);

@@ -11,6 +11,7 @@
 
 import React, { Suspense } from 'react';
 import { Route } from 'react-router-dom';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const ElectionsPage = lazyWithRetry(() => import('../../pages/ElectionsPage'));
@@ -38,9 +39,11 @@ export const getElectionsRoutes = () => (
     <Route
       path="/elections/settings"
       element={
-        <Suspense fallback={null}>
-          <ElectionsSettingsPage />
-        </Suspense>
+        <ProtectedRoute requiredPermission="elections.manage">
+          <Suspense fallback={null}>
+            <ElectionsSettingsPage />
+          </Suspense>
+        </ProtectedRoute>
       }
     />
     <Route

@@ -311,9 +311,7 @@ class NotificationsService:
                 .where(NotificationLog.organization_id == str(organization_id))
             )
             if user_id is not None:
-                query = query.where(
-                    NotificationLog.recipient_id == str(user_id)
-                )
+                query = query.where(NotificationLog.recipient_id == str(user_id))
             result = await self.db.execute(query)
             log = result.scalar_one_or_none()
             if not log:

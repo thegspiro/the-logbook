@@ -28,7 +28,9 @@ from app.schemas.organization import (
 )
 
 
-def _deep_merge_settings(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+def _deep_merge_settings(
+    base: Dict[str, Any], updates: Dict[str, Any]
+) -> Dict[str, Any]:
     """Recursively merge ``updates`` into ``base`` (returns a new dict).
 
     A shallow ``{**base, **updates}`` merge replaces a whole nested section when

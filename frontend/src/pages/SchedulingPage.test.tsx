@@ -18,6 +18,7 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getTemplates: vi.fn().mockResolvedValue([]),
     getWeekCalendar: vi.fn().mockResolvedValue([]),
     getMonthCalendar: vi.fn().mockResolvedValue([]),
+    getSupplyExpiringItems: vi.fn().mockResolvedValue({ total: 0, items: [] }),
   },
 }));
 

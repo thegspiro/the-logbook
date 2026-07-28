@@ -91,12 +91,8 @@ async def _send_property_return_email(
 
             items = report_data.get("items", [])
             total_val = report_data.get("total_value", 0.0)
-            items_html = build_items_list_html(
-                items, total_val, include_condition=True
-            )
-            items_text = build_items_list_text(
-                items, total_val, include_condition=True
-            )
+            items_html = build_items_list_html(items, total_val, include_condition=True)
+            items_text = build_items_list_text(items, total_val, include_condition=True)
 
             context = {
                 "member_name": report_data["member_name"],
@@ -166,9 +162,7 @@ async def _send_property_return_email(
                 cc_emails=cc_emails if cc_emails else None,
             )
     except Exception as e:
-        logger.error(
-            f"Failed to send property return email to {member_email}: {e}"
-        )
+        logger.error(f"Failed to send property return email to {member_email}: {e}")
 
 
 @router.patch("/{user_id}/status", response_model=MemberStatusChangeResponse)

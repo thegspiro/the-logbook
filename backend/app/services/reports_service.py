@@ -600,9 +600,7 @@ class ReportsService:
     ) -> Dict[str, Any]:
         """Generate an annual training report with hours, completions, shift reports, and member breakdown."""
         # Default to current year if no dates provided
-        year = _safe_int(
-            (filters or {}).get("year"), datetime.now(timezone.utc).year
-        )
+        year = _safe_int((filters or {}).get("year"), datetime.now(timezone.utc).year)
         if not start_date:
             start_date = date(year, 1, 1)
         if not end_date:

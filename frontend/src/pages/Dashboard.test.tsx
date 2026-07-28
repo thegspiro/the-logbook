@@ -245,8 +245,15 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: /confirm/i }));
 
       await waitFor(() => {
-        expect(mockGetMyShifts).toHaveBeenCalled();
-        expect(mockGetOpenShifts).toHaveBeenCalled();
+        expect(mockGetMyShifts).toHaveBeenCalledWith(
+          expect.objectContaining({ limit: 5 })
+        );
+        expect(mockGetOpenShifts).toHaveBeenCalledWith(
+          expect.objectContaining({
+            start_date: expect.any(String) as string,
+            end_date: expect.any(String) as string,
+          })
+        );
       });
     });
 

@@ -282,7 +282,10 @@ describe('electionService', () => {
   // --- bulkCastVotes ---
   describe('bulkCastVotes', () => {
     it('should POST bulk votes to /elections/:id/vote/bulk', async () => {
-      const votes = [{ Chief: 'c1' }];
+      const votes = [
+        { candidate_id: 'c1', position: 'Chief' },
+        { candidate_id: 'c2', position: 'Chief' },
+      ];
       const response = [{ id: 'v1', election_id: 'el1', candidate_id: 'c1', voted_at: '2026-01-01' }];
       mockPost.mockResolvedValueOnce({ data: response });
 
@@ -290,6 +293,18 @@ describe('electionService', () => {
 
       expect(mockPost).toHaveBeenCalledWith('/elections/el1/vote/bulk', { election_id: 'el1', votes });
       expect(result).toEqual(response);
+    });
+
+    it('should include vote_rank for ranked-choice bulk votes', async () => {
+      const votes = [
+        { candidate_id: 'c1', position: 'Chief', vote_rank: 1 },
+        { candidate_id: 'c2', position: 'Chief', vote_rank: 2 },
+      ];
+      mockPost.mockResolvedValueOnce({ data: [] });
+
+      await electionService.bulkCastVotes('el1', votes);
+
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/vote/bulk', { election_id: 'el1', votes });
     });
   });
 
