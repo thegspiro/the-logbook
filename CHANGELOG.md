@@ -73,7 +73,9 @@ flow with close-and-publish, added receipts and eligibility roster),
 section), `Security-Audit-Logging` wiki (actual election audit events),
 `ALEMBIC_MIGRATIONS.md` (26 missing rows appended; head now `20260730_0001`),
 training README release note; `KNOWN_LIMITATIONS.md` rows for ELEC-3/ELEC-4
-marked resolved.
+marked resolved. New **Script 12 — "Creating, Running & Auditing Elections"**
+(full-lifecycle YouTube deep-dive incl. integrity/forensics) with edge-case
+shorts pack 12a–12j; registered in the series overview.
 
 ### Security: zero-trust review — deployment posture, host/proxy trust, WebSocket sessions, cross-tenant FKs (2026-07-27)
 

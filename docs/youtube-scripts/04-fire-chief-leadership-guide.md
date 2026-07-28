@@ -250,6 +250,11 @@ RSVP list and check-in status]**
 
 ## CHAPTER 5: Running Elections (14:00 – 18:00)
 
+> **Producer note:** this chapter is the overview. The canonical elections
+> deep-dive — including eligibility, proxies, runoffs, and auditing — is
+> **Script 12** (with its edge-case shorts pack 12a–12j). Keep this chapter
+> high-level and point viewers to Script 12 in the end card.
+
 ### CREATING AN ELECTION (14:00 – 15:30)
 
 **[SCREEN: Navigate to Elections (ElectionsPage)]**

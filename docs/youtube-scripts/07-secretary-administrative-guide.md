@@ -306,6 +306,9 @@ member who arrived late, excusing an absence.]**
 
 ### ELECTION ADMINISTRATION (14:00 – 15:00)
 
+> **Producer note:** overview only — the full elections lifecycle, including
+> auditing and forensics, is **Script 12**. Reference it in the end card.
+
 > "As Secretary, you often administer elections. The process is the same as we
 > covered in the Chief's guide: create the election, define offices and
 > candidates, open voting, close it, and publish the results."
