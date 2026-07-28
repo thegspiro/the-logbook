@@ -36,10 +36,8 @@ describe('Tooltip', () => {
       </Tooltip>
     );
     const btn = screen.getByText('edit');
-    act(() => {
-      fireEvent.touchStart(btn.parentElement as HTMLElement);
-      fireEvent.click(btn);
-    });
+    fireEvent.touchStart(btn.parentElement as HTMLElement);
+    fireEvent.click(btn);
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 

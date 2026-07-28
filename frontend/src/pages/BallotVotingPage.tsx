@@ -19,7 +19,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { electionService } from '../services/api';
 import type {
-  Election,
+  BallotElection,
   BallotItem,
   Candidate,
   BallotItemVote,
@@ -41,7 +41,7 @@ export const BallotVotingPage: React.FC = () => {
   const tz = useTimezone();
   const token = searchParams.get('token') || '';
 
-  const [election, setElection] = useState<Election | null>(null);
+  const [election, setElection] = useState<BallotElection | null>(null);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,17 +173,19 @@ export const BallotVotingPage: React.FC = () => {
   };
 
   /**
-   * Returns accepted candidates for a ballot item. Matches by position field,
-   * falling back to title-based matching for items without an explicit position.
+   * Returns accepted candidates for a ballot item, matched by exact position.
+   * Substring matching against the item title is deliberately avoided — a
+   * position named "Chief" would match an item titled "Assistant Chief
+   * Election" and surface candidates under the wrong item. For legacy items
+   * without a position, the backend derives position from the item title, so
+   * an exact title match is the correct fallback.
    */
   const getCandidatesForItem = (item: BallotItem): Candidate[] => {
     if (item.position) {
       return candidates.filter((c) => c.position === item.position && !c.is_write_in);
     }
-    // Fallback for ballot items without a position field: match candidates
-    // whose position appears in the ballot item title (e.g. "Election for Chief")
     return candidates.filter(
-      (c) => c.position && item.title.includes(c.position) && !c.is_write_in,
+      (c) => c.position != null && (c.position === item.title || c.position === item.id) && !c.is_write_in,
     );
   };
 

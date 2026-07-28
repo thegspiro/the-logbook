@@ -6,10 +6,12 @@ import api from './apiClient';
 import type {
   Attendee,
   AttendeeCheckInResponse,
+  BallotElection,
   BallotItemVote,
   BallotPreview,
   BallotSubmissionResponse,
   BallotTemplate,
+  BulkVoteItem,
   Candidate,
   CandidateCreate,
   CandidateUpdate,
@@ -195,9 +197,10 @@ export const electionService = {
   },
 
   /**
-   * Cast votes in bulk
+   * Cast votes atomically in bulk (approval / ranked-choice / multi-position).
+   * Either every vote is recorded or none are.
    */
-  async bulkCastVotes(electionId: string, votes: Array<Record<string, string>>): Promise<Vote[]> {
+  async bulkCastVotes(electionId: string, votes: BulkVoteItem[]): Promise<Vote[]> {
     const response = await api.post<Vote[]>(`/elections/${electionId}/vote/bulk`, { election_id: electionId, votes });
     return response.data;
   },
@@ -242,10 +245,11 @@ export const electionService = {
   },
 
   /**
-   * Get ballot by voting token (public/anonymous access)
+   * Get ballot by voting token (public/anonymous access).
+   * Returns the minimal BallotElection view — no roster/PII fields.
    */
-  async getBallotByToken(token: string): Promise<Election> {
-    const response = await api.get<Election>('/elections/ballot', { params: { token } });
+  async getBallotByToken(token: string): Promise<BallotElection> {
+    const response = await api.get<BallotElection>('/elections/ballot', { params: { token } });
     return response.data;
   },
 

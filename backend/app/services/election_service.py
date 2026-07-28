@@ -199,7 +199,7 @@ class ElectionService:
         html_parts.append("</ul>")
         return "\n".join(html_parts), "\n".join(text_parts)
 
-    async def _get_eligible_ballot_items_for_user(
+    async def annotate_ballot_items_for_user(
         self,
         user: "User",
         election: Election,
@@ -207,12 +207,13 @@ class ElectionService:
         organization: Optional["Organization"] = None,
     ) -> List[Dict]:
         """
-        Return the subset of election.ballot_items that the user is eligible
-        to vote on, based on their member class, role, and attendance.
+        Annotate every ballot item with this user's eligibility and, when
+        ineligible, a human-readable reason.
 
-        Each returned dict is the original ballot item with an added
-        ``_eligible`` flag and ``_reason`` (only set when ineligible).
-        Items where the user is eligible are returned as-is.
+        This is the single source of truth for per-item eligibility —
+        the real ballot filter (_get_eligible_ballot_items_for_user) and the
+        secretary's preview-ballot endpoint both derive from it, so the
+        preview can never disagree with what the member actually receives.
         """
         ballot_items = election.ballot_items or []
         if not ballot_items:
@@ -235,9 +236,11 @@ class ElectionService:
 
         # Check if tier is voting-eligible at all
         tier_voting_eligible = True
+        tier_name = member_tier_id
         if tier_def:
             benefits = tier_def.get("benefits", {})
             tier_voting_eligible = benefits.get("voting_eligible", True)
+            tier_name = tier_def.get("name", member_tier_id)
 
         # Secretary override check
         has_override = False
@@ -246,30 +249,63 @@ class ElectionService:
                 o.get("user_id") == str(user.id) for o in election.voter_overrides
             )
 
-        eligible_items: List[Dict] = []
+        annotated_items: List[Dict] = []
         for item in ballot_items:
-            # If user has secretary override, skip eligibility checks
+            eligible = True
+            reason = None
+
+            # A secretary override grants eligibility for every item
             if has_override:
-                eligible_items.append(item)
-                continue
+                pass
+            elif not tier_voting_eligible:
+                eligible = False
+                reason = f"Membership tier '{tier_name}' is not eligible to vote"
+            else:
+                eligible_types = item.get("eligible_voter_types", ["all"])
+                if not await self._user_has_role_type(user, eligible_types):
+                    member_type = getattr(user, "membership_type", None) or "active"
+                    eligible = False
+                    reason = (
+                        f"Requires voter type(s): {', '.join(eligible_types)}; "
+                        f"member has: {member_type}"
+                    )
+                elif item.get(
+                    "require_attendance", False
+                ) and not self._is_user_attending(str(user.id), election):
+                    eligible = False
+                    reason = "Member must be checked in as present at the meeting"
 
-            # Check tier voting eligibility
-            if not tier_voting_eligible:
-                continue
+            annotated_items.append(
+                {
+                    **item,
+                    "eligibility": {"eligible": eligible, "reason": reason},
+                }
+            )
 
-            # Check per-item voter type eligibility
-            eligible_types = item.get("eligible_voter_types", ["all"])
-            if not await self._user_has_role_type(user, eligible_types):
-                continue
+        return annotated_items
 
-            # Check attendance requirement for this item
-            if item.get("require_attendance", False):
-                if not self._is_user_attending(str(user.id), election):
-                    continue
+    async def _get_eligible_ballot_items_for_user(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+        organization: Optional["Organization"] = None,
+    ) -> List[Dict]:
+        """
+        Return the subset of election.ballot_items that the user is eligible
+        to vote on, based on their member class, role, and attendance.
 
-            eligible_items.append(item)
-
-        return eligible_items
+        Derived from annotate_ballot_items_for_user so the filter and the
+        secretary preview always agree.
+        """
+        annotated = await self.annotate_ballot_items_for_user(
+            user, election, organization_id, organization
+        )
+        return [
+            {k: v for k, v in item.items() if k != "eligibility"}
+            for item in annotated
+            if item["eligibility"]["eligible"]
+        ]
 
     async def _get_ineligibility_reason_for_user(
         self,
@@ -811,8 +847,15 @@ class ElectionService:
         # If all positions are voted or no positions defined, check if they've voted at all
         has_voted = len(existing_votes) > 0
 
-        # For non-positional elections, only one vote total
-        if not all_positions and has_voted:
+        # For non-positional single-vote elections, only one vote total.
+        # Approval, ranked-choice, and multi-vote elections legitimately
+        # record several votes per voter; their duplicate rules are enforced
+        # per-candidate/per-rank in cast_vote.
+        single_vote_method = (
+            election.voting_method not in ("approval", "ranked_choice")
+            and (election.max_votes_per_position or 1) <= 1
+        )
+        if not all_positions and has_voted and single_vote_method:
             return VoterEligibility(
                 is_eligible=False,
                 has_voted=True,
@@ -839,19 +882,27 @@ class ElectionService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         vote_rank: Optional[int] = None,
+        commit: bool = True,
     ) -> Tuple[Optional[Vote], Optional[str]]:
         """
         Cast a vote for a candidate
+
+        When ``commit`` is False the vote is flushed but not committed and any
+        IntegrityError propagates — the caller owns the transaction (used by
+        the bulk endpoint for all-or-nothing multi-vote submission).
 
         Returns: (Vote object, error message)
         """
         # Check eligibility. This gate is authoritative: check_voter_eligibility
         # enforces election status, the open/close window, restricted
-        # eligible-voter lists, and membership-tier/attendance rules. Skipping it
-        # would let any authenticated member vote in a draft/closed election,
-        # outside the voting window, or without being on the eligible list.
+        # eligible-voter lists, membership-tier/attendance rules, and — because
+        # position is passed — per-position and per-ballot-item voter-type and
+        # attendance restrictions. Skipping it would let any authenticated
+        # member vote in a draft/closed election, outside the voting window,
+        # without being on the eligible list, or on items restricted to other
+        # member classes.
         eligibility = await self.check_voter_eligibility(
-            user_id, election_id, organization_id
+            user_id, election_id, organization_id, position=position
         )
         if not eligibility.is_eligible:
             return None, eligibility.reason or "You are not eligible to vote"
@@ -873,14 +924,6 @@ class ElectionService:
         if election.voting_method != "ranked_choice" and vote_rank is not None:
             return None, "vote_rank is not applicable for this voting method"
 
-        # Check if specific position has been voted for
-        if position and position in eligibility.positions_voted:
-            return None, f"You have already voted for {position}"
-
-        # For single-position elections, check if they've voted at all
-        if not election.positions and eligibility.has_voted:
-            return None, "You have already voted in this election"
-
         # Verify candidate exists and belongs to this election
         candidate_result = await self.db.execute(
             select(Candidate)
@@ -900,15 +943,36 @@ class ElectionService:
         if position and candidate.position != position:
             return None, "Candidate is not running for this position"
 
-        # Check max votes per position
-        if position:
-            position_votes = [
-                v
-                for v in await self._get_user_votes(user_id, election_id, election)
-                if v.position == position
-            ]
-            if len(position_votes) >= election.max_votes_per_position:
-                return None, f"Maximum votes for {position} reached"
+        # Method-aware duplicate and limit checks. Approval voting records one
+        # vote per approved candidate and ranked choice one vote per rank, so
+        # a blanket "already voted for this position" rule would reject every
+        # legitimate second vote (module-audit ELEC-3).
+        existing_votes = await self._get_user_votes(user_id, election_id, election)
+        position_votes = [v for v in existing_votes if v.position == position]
+
+        if election.voting_method == "ranked_choice":
+            if any(v.vote_rank == vote_rank for v in position_votes):
+                return None, (
+                    f"You have already cast a rank-{vote_rank} vote"
+                    + (f" for {position}" if position else "")
+                )
+            if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
+                return None, "You have already ranked this candidate"
+        elif election.voting_method == "approval":
+            if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
+                return None, "You have already voted for this candidate"
+        else:
+            max_votes = election.max_votes_per_position or 1
+            if any(str(v.candidate_id) == str(candidate_id) for v in position_votes):
+                return None, "You have already voted for this candidate"
+            if len(position_votes) >= max_votes:
+                if position:
+                    if max_votes == 1:
+                        return None, f"You have already voted for {position}"
+                    return None, f"Maximum votes for {position} reached"
+                if max_votes == 1:
+                    return None, "You have already voted in this election"
+                return None, "Maximum votes for this election reached"
 
         # Compute voter identity for hashing
         voter_hash = (
@@ -933,7 +997,12 @@ class ElectionService:
             voted_at=datetime.now(timezone.utc),
             # MySQL-compatible dedup hash for DB-level double-vote prevention
             vote_dedup_hash=self._compute_vote_dedup_hash(
-                election_id, voter_id_or_hash, position
+                election_id,
+                voter_id_or_hash,
+                position,
+                discriminator=self._dedup_discriminator(
+                    election, candidate_id, vote_rank
+                ),
             ),
         )
 
@@ -957,6 +1026,25 @@ class ElectionService:
 
         # SECURITY: Database-level unique constraint on vote_dedup_hash
         # prevents double-voting even if race condition bypasses application checks
+        if not commit:
+            # Caller owns the transaction (bulk voting): flush so the unique
+            # constraint fires now, but let IntegrityError propagate so the
+            # caller can roll back the whole batch.
+            await self.db.flush()
+            await self._audit(
+                "vote_cast",
+                {
+                    "election_id": str(election_id),
+                    "vote_id": str(vote.id),
+                    "position": position,
+                    "anonymous": election.anonymous_voting,
+                    "bulk": True,
+                },
+                user_id=str(user_id),
+                ip_address=ip_address,
+            )
+            return vote, None
+
         try:
             await self.db.commit()
             await self.db.refresh(vote)
@@ -1054,17 +1142,43 @@ class ElectionService:
 
     @staticmethod
     def _compute_vote_dedup_hash(
-        election_id: UUID, voter_id_or_hash: str, position: Optional[str]
+        election_id: UUID,
+        voter_id_or_hash: str,
+        position: Optional[str],
+        discriminator: str = "",
     ) -> str:
         """Compute a MySQL-compatible dedup hash for double-vote prevention.
 
-        Returns SHA256(election_id:voter_id_or_hash:position) which is stored
-        in a UNIQUE column to enforce one-vote-per-voter-per-position at the
+        Returns SHA256(election_id:voter_id_or_hash:position[:discriminator])
+        which is stored in a UNIQUE column to enforce vote uniqueness at the
         database level.
+
+        The discriminator widens the uniqueness scope for methods that
+        legitimately record several votes per position (ELEC-3): ranked
+        choice passes ``rank:<n>`` (one vote per rank), approval/multi-vote
+        passes ``cand:<id>`` (one vote per candidate). Single-vote elections
+        pass "" — byte-identical to the legacy hash, so existing rows keep
+        their protection unchanged.
         """
         pos_key = position or "__NO_POS__"
         data = f"{election_id}:{voter_id_or_hash}:{pos_key}"
+        if discriminator:
+            data += f":{discriminator}"
         return hashlib.sha256(data.encode()).hexdigest()
+
+    @staticmethod
+    def _dedup_discriminator(
+        election: Election, candidate_id, vote_rank: Optional[int]
+    ) -> str:
+        """Pick the dedup-hash discriminator for this election's voting method."""
+        if election.voting_method == "ranked_choice":
+            return f"rank:{vote_rank}"
+        if (
+            election.voting_method == "approval"
+            or (election.max_votes_per_position or 1) > 1
+        ):
+            return f"cand:{candidate_id}"
+        return ""
 
     def _compute_chain_hash(
         self, previous_chain_hash: Optional[str], vote_signature: str
@@ -1453,6 +1567,67 @@ class ElectionService:
             "voting_timeline": voting_timeline,
         }
 
+    async def _count_eligible_voters(
+        self, election: Election, organization_id: UUID
+    ) -> int:
+        """Count voters eligible for this election (turnout/quorum denominator).
+
+        Uses the explicit ``eligible_voters`` list when set. Otherwise counts
+        active org members, excluding membership tiers whose benefits mark
+        them not ``voting_eligible`` — counting non-voting tiers (social,
+        junior, ...) would let a percentage quorum fail even when every
+        actually-eligible member voted. Members of excluded tiers who hold a
+        secretary voter override are added back.
+
+        This is deliberately election-level only: per-ballot-item role or
+        attendance restrictions are not modeled here, since turnout is
+        reported for the election as a whole.
+        """
+        if election.eligible_voters:
+            return len(election.eligible_voters)
+
+        org_result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = org_result.scalar_one_or_none()
+        tiers = (((org.settings or {}).get("membership_tiers", {}) if org else {})).get(
+            "tiers", []
+        )
+        ineligible_tier_ids = {
+            t.get("id")
+            for t in tiers
+            if not t.get("benefits", {}).get("voting_eligible", True)
+        }
+
+        counts_result = await self.db.execute(
+            select(User.membership_type, func.count(User.id))
+            .where(User.organization_id == str(organization_id))
+            .where(User.is_active == True)  # noqa: E712
+            .group_by(User.membership_type)
+        )
+        total = 0
+        for member_type, count in counts_result.all():
+            if (member_type or "active") not in ineligible_tier_ids:
+                total += count
+
+        # Secretary overrides restore eligibility for members of excluded tiers
+        override_ids = {
+            o.get("user_id")
+            for o in (election.voter_overrides or [])
+            if o.get("user_id")
+        }
+        if override_ids and ineligible_tier_ids:
+            override_count = await self.db.execute(
+                select(func.count(User.id))
+                .where(User.id.in_(list(override_ids)))
+                .where(User.organization_id == str(organization_id))
+                .where(User.is_active == True)  # noqa: E712
+                .where(User.membership_type.in_(list(ineligible_tier_ids)))
+            )
+            total += override_count.scalar() or 0
+
+        return total
+
     async def get_election_results(
         self,
         election_id: UUID,
@@ -1519,17 +1694,8 @@ class ElectionService:
         )
         candidates = candidates_result.scalars().all()
 
-        # Count total eligible voters
-        if election.eligible_voters:
-            total_eligible = len(election.eligible_voters)
-        else:
-            # Count all active users in organization
-            users_result = await self.db.execute(
-                select(func.count(User.id))
-                .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)  # noqa: E712
-            )
-            total_eligible = users_result.scalar() or 0
+        # Count total eligible voters (excludes non-voting membership tiers)
+        total_eligible = await self._count_eligible_voters(election, organization_id)
 
         # Count unique voters
         if election.anonymous_voting:
@@ -1838,11 +2004,12 @@ class ElectionService:
         if not election:
             return None
 
-        # Get all active (non-deleted) votes
+        # Get all active (non-deleted, non-test) votes
         votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
+            .where(Vote.is_test == False)  # noqa: E712
         )
         all_votes = votes_result.scalars().all()
 
@@ -1852,16 +2019,8 @@ class ElectionService:
         )
         total_candidates = len(candidates_result.scalars().all())
 
-        # Count eligible voters
-        if election.eligible_voters:
-            total_eligible = len(election.eligible_voters)
-        else:
-            users_result = await self.db.execute(
-                select(func.count(User.id))
-                .where(User.organization_id == str(organization_id))
-                .where(User.is_active == True)  # noqa: E712
-            )
-            total_eligible = users_result.scalar() or 0
+        # Count eligible voters (excludes non-voting membership tiers)
+        total_eligible = await self._count_eligible_voters(election, organization_id)
 
         # Count unique voters
         if election.anonymous_voting:
@@ -1927,11 +2086,12 @@ class ElectionService:
             )
         eligible_users = users_result.scalars().all()
 
-        # Get all voter hashes / voter IDs who have voted
+        # Get all voter hashes / voter IDs who have voted (test votes don't count)
         votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == str(election_id))
             .where(Vote.deleted_at.is_(None))
+            .where(Vote.is_test == False)  # noqa: E712
         )
         votes = votes_result.scalars().all()
 
@@ -1968,8 +2128,13 @@ class ElectionService:
         self, election: Election, organization_id: UUID
     ) -> Optional[Election]:
         """Check if a runoff is needed and create it if so"""
-        # Get results to check if there's a winner
-        results = await self.get_election_results(election.id, organization_id)
+        # Get results to check if there's a winner. Bypass the results-visibility
+        # gate: closing an election early (before end_date, e.g. at the end of a
+        # meeting) is the normal flow, and without the bypass get_election_results
+        # returns None and the runoff would be silently skipped.
+        results = await self.get_election_results(
+            election.id, organization_id, _internal_bypass_visibility=True
+        )
 
         if not results:
             return None
@@ -2007,6 +2172,7 @@ class ElectionService:
             select(Vote.candidate_id, func.count(Vote.id))
             .where(Vote.election_id == election.id)
             .where(Vote.deleted_at.is_(None))
+            .where(Vote.is_test == False)  # noqa: E712
             .group_by(Vote.candidate_id)
         )
         candidate_vote_counts = dict(vote_counts_result.all())
@@ -2344,7 +2510,30 @@ class ElectionService:
         to_status = None
 
         if election.status == ElectionStatus.CLOSED:
-            # Rollback from closed to open
+            # Rollback from closed to open.
+            # SECURITY (module-audit ELEC-4): close_election destroys the
+            # per-election anonymity salt. Reopening after that would make
+            # _generate_voter_hash produce hashes that no longer match the
+            # recorded votes, so every prior voter could vote a second time
+            # (both the app checks and the dedup hash would miss them).
+            # Refuse the rollback in that case — a new election is the safe path.
+            if election.anonymous_voting and election.voter_anonymity_salt is None:
+                votes_count_result = await self.db.execute(
+                    select(func.count(Vote.id))
+                    .where(Vote.election_id == str(election_id))
+                    .where(Vote.deleted_at.is_(None))
+                )
+                if (votes_count_result.scalar() or 0) > 0:
+                    return (
+                        None,
+                        0,
+                        (
+                            "Cannot reopen this election: its anonymity salt was "
+                            "destroyed when it closed, so members who already voted "
+                            "could vote again undetected. Create a new election "
+                            "instead."
+                        ),
+                    )
             to_status = "open"
             new_status = ElectionStatus.OPEN
         elif election.status == ElectionStatus.OPEN:
@@ -2774,6 +2963,8 @@ Best regards,
         organization_id: UUID,
         election_end_date: datetime,
         anonymity_salt: str = "",
+        is_test: bool = False,
+        eligible_item_ids: Optional[List[str]] = None,
     ) -> VotingToken:
         """
         Generate a secure voting token for a user-election pair
@@ -2784,6 +2975,10 @@ Best regards,
             organization_id: Organization ID for tenant isolation
             election_end_date: Election end date (token expires after this)
             anonymity_salt: Per-election salt for voter anonymity
+            is_test: Mark this token as a test ballot — votes cast with it
+                are flagged is_test and excluded from real results
+            eligible_item_ids: Ballot items this voter may vote on, snapshotted
+                at send time (None = unrestricted / positional election)
 
         Returns:
             VotingToken instance
@@ -2808,6 +3003,8 @@ Best regards,
             created_at=datetime.now(timezone.utc),
             expires_at=expires_at,
             used=False,
+            is_test=is_test,
+            eligible_item_ids=eligible_item_ids,
         )
 
         self.db.add(voting_token)
@@ -3136,7 +3333,12 @@ Best regards,
             proxy_authorization_id=proxy_authorization_id,
             proxy_delegating_user_id=str(delegating_user_id),
             vote_dedup_hash=self._compute_vote_dedup_hash(
-                election_id, voter_id_or_hash, position
+                election_id,
+                voter_id_or_hash,
+                position,
+                discriminator=self._dedup_discriminator(
+                    election, candidate_id, vote_rank
+                ),
             ),
         )
         vote.vote_signature = self._sign_vote(vote)
@@ -3206,12 +3408,17 @@ Best regards,
         subject: Optional[str] = None,
         message: Optional[str] = None,
         base_ballot_url: Optional[str] = None,
+        is_test: bool = False,
     ) -> Tuple[int, int, int, List[Dict]]:
         """
-        Send ballot notification emails to eligible voters with unique hashed links.
+        Send ballot notification emails to eligible voters with unique voting links.
 
         Members with zero eligible ballot items are skipped (not sent
         an empty ballot). A per-member reason is included in ``skipped_details``.
+
+        When ``is_test`` is True the issued tokens are flagged as test ballots:
+        votes cast with them are stored with is_test=True and excluded from
+        results, stats, and rosters.
 
         Returns: (recipients_count, failed_count, skipped_count, skipped_details)
         """
@@ -3391,13 +3598,22 @@ Best regards,
             # Build ballot items lists for the email
             items_html, items_text = self._build_ballot_items_lists(eligible_items)
 
-            # Generate unique voting token for this voter
+            # Generate unique voting token for this voter. For ballot-item
+            # elections the recipient's eligible item ids are snapshotted on
+            # the token so per-item eligibility can be enforced at submission
+            # time (the token itself carries no user identity).
             voting_token = await self._generate_voting_token(
                 user_id=recipient.id,
                 election_id=election_id,
                 organization_id=organization_id,
                 election_end_date=election.end_date,
                 anonymity_salt=election.voter_anonymity_salt or "",
+                is_test=is_test,
+                eligible_item_ids=(
+                    [str(item.get("id")) for item in eligible_items if item.get("id")]
+                    if election.ballot_items
+                    else None
+                ),
             )
 
             # Build unique ballot URL with token
@@ -4077,13 +4293,16 @@ Best regards,
         if position and candidate.position != position:
             return None, "Candidate is not running for this position"
 
-        # Check if this token has already voted for this position
+        # Check if this token has already voted for this position.
+        # For a positionless vote, match only other positionless votes —
+        # `Vote.position == None if position is None` would otherwise degrade
+        # to a no-op filter and any prior vote (for any position) would block.
         existing_votes_result = await self.db.execute(
             select(Vote)
             .where(Vote.election_id == election.id)
             .where(Vote.voter_hash == voting_token.voter_hash)
             .where(Vote.deleted_at.is_(None))
-            .where(Vote.position == position if position else True)
+            .where(Vote.position == position if position else Vote.position.is_(None))
         )
         existing_votes = existing_votes_result.scalars().all()
 
@@ -4094,13 +4313,14 @@ Best regards,
                 else "You have already voted"
             )
 
-        # Check max votes per position
-        if position:
-            position_votes = [v for v in existing_votes if v.position == position]
-            if len(position_votes) >= election.max_votes_per_position:
-                return None, f"Maximum votes for {position} reached"
-
-        # Create the vote with security hashes
+        # Create the vote with security hashes. Test-ballot tokens produce
+        # is_test votes (excluded from results) and use a namespaced dedup
+        # input so a test vote never blocks the same member's real vote.
+        dedup_voter = (
+            f"test:{voting_token.voter_hash}"
+            if voting_token.is_test
+            else voting_token.voter_hash
+        )
         vote = Vote(
             election_id=election.id,
             candidate_id=candidate_id,
@@ -4110,8 +4330,9 @@ Best regards,
             ip_address=ip_address,
             user_agent=user_agent,
             voted_at=datetime.now(timezone.utc),
+            is_test=voting_token.is_test,
             vote_dedup_hash=self._compute_vote_dedup_hash(
-                election.id, voting_token.voter_hash, position
+                election.id, dedup_voter, position
             ),
         )
 
@@ -4228,6 +4449,17 @@ Best regards,
         # Build a lookup of ballot items by ID
         item_map = {item.get("id"): item for item in ballot_items}
 
+        # Per-item eligibility snapshotted on the token at send time.
+        # None = legacy token (issued before this column existed) — no
+        # restriction; a list restricts non-abstain votes to those items.
+        # SECURITY: without this check any token holder could vote on items
+        # restricted to other member classes by POSTing their ids.
+        allowed_item_ids = (
+            set(voting_token.eligible_item_ids)
+            if voting_token.eligible_item_ids is not None
+            else None
+        )
+
         # Get all accepted candidates for this election
         candidate_result = await self.db.execute(
             select(Candidate)
@@ -4255,6 +4487,15 @@ Best regards,
             if choice == "abstain":
                 abstentions += 1
                 continue
+
+            # Enforce per-item eligibility (voter types / attendance were
+            # evaluated when the ballot was issued and snapshotted on the token)
+            if allowed_item_ids is not None and ballot_item_id not in allowed_item_ids:
+                return (
+                    None,
+                    "You are not eligible to vote on: "
+                    f"{ballot_item.get('title', ballot_item_id)}",
+                )
 
             # Determine the position for this vote (use ballot item id as position)
             position = ballot_item.get("position") or ballot_item_id
@@ -4359,7 +4600,14 @@ Best regards,
             if write_in_name and choice == "write_in":
                 write_in_candidate.name = html.escape(write_in_name.strip())
 
-            # Create the vote with security hashes
+            # Create the vote with security hashes. Test-ballot tokens produce
+            # is_test votes and a namespaced dedup input so a test submission
+            # never blocks the same member's real ballot.
+            dedup_voter = (
+                f"test:{voting_token.voter_hash}"
+                if voting_token.is_test
+                else voting_token.voter_hash
+            )
             vote = Vote(
                 election_id=election.id,
                 candidate_id=candidate_id,
@@ -4369,8 +4617,9 @@ Best regards,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 voted_at=datetime.now(timezone.utc),
+                is_test=voting_token.is_test,
                 vote_dedup_hash=self._compute_vote_dedup_hash(
-                    election.id, voting_token.voter_hash, position
+                    election.id, dedup_voter, position
                 ),
             )
             vote.vote_signature = self._sign_vote(vote)
@@ -4427,6 +4676,9 @@ Best regards,
             "votes_cast": len(created_votes),
             "abstentions": abstentions,
             "message": f"Ballot submitted successfully. {len(created_votes)} vote(s) cast, {abstentions} abstention(s).",
+            # Receipts let the voter verify their votes were recorded via the
+            # public verify-receipt endpoint without revealing vote content.
+            "receipt_hashes": [v.receipt_hash for v in created_votes],
         }, None
 
     # ------------------------------------------------------------------

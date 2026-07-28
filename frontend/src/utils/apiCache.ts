@@ -65,7 +65,7 @@ const UNCACHEABLE_PREFIXES = [
   '/scheduling/',     // member shift assignments and availability
   '/errors/',         // error logs may contain user context and tracebacks
   '/organization/',   // org settings including auth config, API keys
-  '/elections/',      // voter lists, ballots, election results
+  '/elections',       // voter lists, ballots, election results (no trailing slash so the list endpoint GET /elections is covered too)
   '/minutes-records/', // meeting minutes with potentially sensitive discussions
   '/forms/',          // form submissions may contain PII
   '/inventory/users/',       // member-specific inventory, issuances & history (PII)

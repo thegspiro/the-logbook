@@ -161,7 +161,7 @@ describe('InventoryBarcodePrintPage', () => {
     const user = userEvent.setup();
     renderPage('?ids=it-1');
     await screen.findAllByText('Thermal Camera');
-    await waitFor(() => expect(mockGetLabelPreset).toHaveBeenCalled());
+    await waitFor(() => expect(mockGetLabelPreset).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByRole('button', { name: 'PDF' }));
     await waitFor(() => expect(mockGenerateLabels).toHaveBeenCalledTimes(1));

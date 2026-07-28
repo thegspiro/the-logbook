@@ -51,6 +51,10 @@ ALLOWLISTED_PUBLIC = {
     ("elections.py", "cast_vote_with_token"),
     ("elections.py", "submit_ballot_with_token"),
     ("elections.py", "verify_vote_receipt"),
+    # OAuth redirect target: unauthenticated by design — identity comes from
+    # the signed `state` token issued by the authorize endpoint plus the
+    # double-submitted nonce cookie (see salesforce_oauth_callback docstring).
+    ("salesforce_sync.py", "salesforce_oauth_callback"),
 }
 
 BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

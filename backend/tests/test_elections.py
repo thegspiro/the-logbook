@@ -15,7 +15,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.models.election import Candidate, Election, ElectionStatus, Vote
+from app.models.election import Election, ElectionStatus, Vote
 
 # ---------------------------------------------------------------------------
 # Helpers — lightweight stubs that don't require a real DB session
@@ -228,6 +228,63 @@ class TestVoteDedupHash:
         h1 = ElectionService._compute_vote_dedup_hash(uuid4(), "voter1", "Chief")
         h2 = ElectionService._compute_vote_dedup_hash(uuid4(), "voter1", "Chief")
         assert h1 != h2
+
+    def test_empty_discriminator_matches_legacy_hash(self):
+        """Single-vote elections must keep the exact pre-ELEC-3 hash so
+        existing vote rows retain their double-vote protection."""
+        from app.services.election_service import ElectionService
+
+        eid = uuid4()
+        legacy = hashlib.sha256(f"{eid}:voter1:Chief".encode()).hexdigest()
+        assert (
+            ElectionService._compute_vote_dedup_hash(eid, "voter1", "Chief") == legacy
+        )
+        assert (
+            ElectionService._compute_vote_dedup_hash(
+                eid, "voter1", "Chief", discriminator=""
+            )
+            == legacy
+        )
+
+    def test_discriminator_widens_uniqueness(self):
+        """Ranked/approval discriminators must produce distinct hashes so a
+        voter's legitimate second vote doesn't collide (ELEC-3)."""
+        from app.services.election_service import ElectionService
+
+        eid = uuid4()
+        base = ElectionService._compute_vote_dedup_hash(eid, "voter1", "Chief")
+        rank1 = ElectionService._compute_vote_dedup_hash(
+            eid, "voter1", "Chief", discriminator="rank:1"
+        )
+        rank2 = ElectionService._compute_vote_dedup_hash(
+            eid, "voter1", "Chief", discriminator="rank:2"
+        )
+        cand_a = ElectionService._compute_vote_dedup_hash(
+            eid, "voter1", "Chief", discriminator="cand:a"
+        )
+        cand_b = ElectionService._compute_vote_dedup_hash(
+            eid, "voter1", "Chief", discriminator="cand:b"
+        )
+        assert len({base, rank1, rank2, cand_a, cand_b}) == 5
+
+    def test_dedup_discriminator_selection(self):
+        """_dedup_discriminator maps voting method -> discriminator shape."""
+        from app.services.election_service import ElectionService
+
+        ranked = SimpleNamespace(
+            voting_method="ranked_choice", max_votes_per_position=1
+        )
+        approval = SimpleNamespace(voting_method="approval", max_votes_per_position=1)
+        multi = SimpleNamespace(
+            voting_method="simple_majority", max_votes_per_position=3
+        )
+        single = SimpleNamespace(
+            voting_method="simple_majority", max_votes_per_position=1
+        )
+        assert ElectionService._dedup_discriminator(ranked, "cid", 2) == "rank:2"
+        assert ElectionService._dedup_discriminator(approval, "cid", None) == "cand:cid"
+        assert ElectionService._dedup_discriminator(multi, "cid", None) == "cand:cid"
+        assert ElectionService._dedup_discriminator(single, "cid", None) == ""
 
 
 # ===================================================================
@@ -783,3 +840,131 @@ class TestVerifyIntegrityChain:
         r1 = service._compute_chain_hash(None, sig2)
         r2 = service._compute_chain_hash(r1, sig1)
         assert r2 != c2, "Reordering votes must produce different chain"
+
+
+# ===================================================================
+# 12. Security-fix schema guarantees (2026-07 elections review)
+# ===================================================================
+
+
+class TestBallotElectionResponseSchema:
+    """The public token-ballot endpoint must never leak roster/PII fields."""
+
+    ROSTER_FIELDS = {
+        "attendees",
+        "eligible_voters",
+        "email_recipients",
+        "created_by",
+        "organization_id",
+        "voter_overrides",
+        "proxy_authorizations",
+    }
+
+    def test_excludes_roster_and_pii_fields(self):
+        from app.schemas.election import BallotElectionResponse
+
+        leaked = self.ROSTER_FIELDS & set(BallotElectionResponse.model_fields)
+        assert not leaked, f"BallotElectionResponse leaks roster fields: {leaked}"
+
+    def test_includes_fields_the_voting_page_needs(self):
+        from app.schemas.election import BallotElectionResponse
+
+        needed = {
+            "id",
+            "title",
+            "description",
+            "meeting_date",
+            "ballot_items",
+            "allow_write_ins",
+            "voting_method",
+            "status",
+        }
+        assert needed <= set(BallotElectionResponse.model_fields)
+
+
+class TestElectionCreateRejectsAttendees:
+    """Attendance feeds require_attendance eligibility, so check-ins must go
+    through the audited POST /{id}/attendees endpoint — never raw create."""
+
+    def test_attendees_not_a_create_field(self):
+        from app.schemas.election import ElectionBase, ElectionCreate
+
+        assert "attendees" not in ElectionBase.model_fields
+        assert "attendees" not in ElectionCreate.model_fields
+
+    def test_attendees_ignored_in_payload(self):
+        from datetime import datetime, timedelta, timezone
+
+        from app.schemas.election import ElectionCreate
+
+        now = datetime.now(timezone.utc)
+        election = ElectionCreate(
+            title="Test",
+            start_date=now,
+            end_date=now + timedelta(days=1),
+            attendees=[{"user_id": "fake", "name": "Forged"}],
+        )
+        assert "attendees" not in election.model_dump()
+
+
+class TestBallotSubmissionResponseReceipts:
+    """Voters must receive their receipt hashes or verify-receipt is unusable
+    (module-audit ELEC-8)."""
+
+    def test_receipt_hashes_field_defaults_empty(self):
+        from app.schemas.election import BallotSubmissionResponse
+
+        resp = BallotSubmissionResponse(
+            success=True, votes_cast=2, abstentions=1, message="ok"
+        )
+        assert resp.receipt_hashes == []
+
+    def test_receipt_hashes_round_trip(self):
+        from app.schemas.election import BallotSubmissionResponse
+
+        resp = BallotSubmissionResponse(
+            success=True,
+            votes_cast=2,
+            abstentions=0,
+            message="ok",
+            receipt_hashes=["abc", "def"],
+        )
+        assert resp.receipt_hashes == ["abc", "def"]
+
+
+class TestBulkVoteCreateSchema:
+    """Bulk payload must express ranks and multiple candidates per position
+    (ELEC-3 / approval + ranked-choice support)."""
+
+    def test_ranked_choice_payload(self):
+        from app.schemas.election import BulkVoteCreate
+
+        payload = BulkVoteCreate(
+            election_id=uuid4(),
+            votes=[
+                {"candidate_id": str(uuid4()), "position": "Chief", "vote_rank": 1},
+                {"candidate_id": str(uuid4()), "position": "Chief", "vote_rank": 2},
+            ],
+        )
+        assert payload.votes[0].vote_rank == 1
+        assert payload.votes[1].vote_rank == 2
+
+    def test_approval_payload_same_position(self):
+        from app.schemas.election import BulkVoteCreate
+
+        payload = BulkVoteCreate(
+            election_id=uuid4(),
+            votes=[
+                {"candidate_id": str(uuid4()), "position": "Board"},
+                {"candidate_id": str(uuid4()), "position": "Board"},
+            ],
+        )
+        assert len(payload.votes) == 2
+
+    def test_empty_votes_rejected(self):
+        import pydantic
+
+        from app.schemas.election import BulkVoteCreate
+
+        with pytest.raises(pydantic.ValidationError):
+            BulkVoteCreate(election_id=uuid4(), votes=[])

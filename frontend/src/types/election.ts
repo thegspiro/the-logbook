@@ -90,6 +90,26 @@ export interface Election {
   voter_turnout_percentage?: number;
 }
 
+/**
+ * Minimal election view returned by the public token-ballot endpoint
+ * (GET /elections/ballot). Deliberately excludes roster/PII fields
+ * (attendees, eligible_voters, email_recipients, created_by, ...).
+ */
+export interface BallotElection {
+  id: string;
+  title: string;
+  description?: string;
+  election_type: string;
+  meeting_date?: string;
+  start_date: string;
+  end_date: string;
+  status: ElectionStatus;
+  positions?: string[];
+  ballot_items?: BallotItem[];
+  allow_write_ins: boolean;
+  voting_method: VotingMethod;
+}
+
 export interface ElectionListItem {
   id: string;
   title: string;
@@ -200,6 +220,7 @@ export interface Vote {
   election_id: string;
   candidate_id: string;
   position?: string;
+  receipt_hash?: string;
   vote_rank?: number; // For ranked-choice voting (1 = first choice)
   voted_at: string;
   voter_id?: string;
@@ -210,6 +231,13 @@ export interface VoteCreate {
   candidate_id: string;
   position?: string | undefined;
   vote_rank?: number; // For ranked-choice voting (1 = first choice)
+}
+
+/** One vote in an atomic bulk submission (approval / ranked-choice / multi-position). */
+export interface BulkVoteItem {
+  candidate_id: string;
+  position?: string | undefined;
+  vote_rank?: number | undefined;
 }
 
 export interface VoteIntegrityResult {

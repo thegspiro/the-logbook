@@ -142,7 +142,8 @@ describe('eventService', () => {
 
       const result = await eventService.createOrUpdateRSVP('e1', rsvpData as never);
 
-      expect(mockPost).toHaveBeenCalledWith('/events/e1/rsvp', rsvpData);
+      // Third arg is the axios config: undefined unless override=true
+      expect(mockPost).toHaveBeenCalledWith('/events/e1/rsvp', rsvpData, undefined);
       expect(result).toEqual(rsvp);
     });
   });
@@ -230,7 +231,8 @@ describe('eventService', () => {
 
       const result = await eventService.selfCheckIn('e1');
 
-      expect(mockPost).toHaveBeenCalledWith('/events/e1/self-check-in', { is_checkout: false });
+      // Third arg is the axios config: undefined unless override=true
+      expect(mockPost).toHaveBeenCalledWith('/events/e1/self-check-in', { is_checkout: false }, undefined);
       expect(result).toEqual(rsvp);
     });
 
@@ -239,7 +241,7 @@ describe('eventService', () => {
 
       await eventService.selfCheckIn('e1', true);
 
-      expect(mockPost).toHaveBeenCalledWith('/events/e1/self-check-in', { is_checkout: true });
+      expect(mockPost).toHaveBeenCalledWith('/events/e1/self-check-in', { is_checkout: true }, undefined);
     });
   });
 

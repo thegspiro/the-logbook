@@ -9,7 +9,7 @@
  * in draft, "Results" tab only shows when results are available.
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   ClipboardList,
   Users,
@@ -107,6 +107,16 @@ export const ElectionWorkflowTabs: React.FC<ElectionWorkflowTabsProps> = ({
 
   // Auto-select first visible tab if active tab is hidden
   const validActiveTab = tabs.find((t) => t.id === activeTab) ? activeTab : (tabs[0]?.id ?? 'ballot');
+
+  // Sync the corrected tab back to the parent: the parent renders the panels
+  // off its own activeTab state, so without this a non-manager (whose visible
+  // tab set excludes the parent's default 'ballot') would see a highlighted
+  // tab with no panel rendered beneath it.
+  useEffect(() => {
+    if (validActiveTab !== activeTab) {
+      onTabChange(validActiveTab);
+    }
+  }, [validActiveTab, activeTab, onTabChange]);
 
   return (
     <div className="mb-6">

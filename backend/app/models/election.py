@@ -263,7 +263,9 @@ class VotingToken(Base):
     """
     Voting token model for secure anonymous ballot access
 
-    Each eligible voter receives a unique hashed token via email to access their ballot.
+    Each eligible voter receives a unique high-entropy token via email to access
+    their ballot. The token is stored as issued (not hashed at rest — see
+    module-audit ELEC-5); its 512-bit entropy is the guessing defense.
     The token ensures anonymous voting while preventing duplicate votes.
     """
 
@@ -292,6 +294,16 @@ class VotingToken(Base):
     # Usage tracking
     used = Column(Boolean, nullable=False, default=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Test-ballot flag — votes cast with a test token are marked is_test
+    # and excluded from results/stats/rosters
+    is_test = Column(Boolean, nullable=False, default=False)
+
+    # Ballot items this voter was eligible for when the token was issued.
+    # Eligibility cannot be recomputed at submission time because the token
+    # stores only a one-way voter_hash, so it is snapshotted here at send
+    # time. NULL = legacy token or positional election (no per-item limit).
+    eligible_item_ids = Column(JSON, nullable=True)
 
     # Access tracking
     first_accessed_at = Column(DateTime(timezone=True), nullable=True)

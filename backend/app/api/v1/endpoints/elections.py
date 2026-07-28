@@ -13,6 +13,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,6 +31,7 @@ from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
     AttendeeListResponse,
+    BallotElectionResponse,
     BallotPreviewResponse,
     BallotSubmission,
     BallotSubmissionResponse,
@@ -336,7 +338,7 @@ async def get_ballot_templates(
 # ============================================
 
 
-@router.get("/ballot", response_model=ElectionResponse)
+@router.get("/ballot", response_model=BallotElectionResponse)
 async def get_ballot_by_token(
     token: str,
     db: AsyncSession = Depends(get_db),
@@ -346,7 +348,12 @@ async def get_ballot_by_token(
     Get ballot information using a voting token
 
     This endpoint is public (no authentication required) and uses the
-    secure hashed token from the email link.
+    high-entropy token from the email link.
+
+    SECURITY: returns only the minimal ballot view (BallotElectionResponse).
+    The full ElectionResponse would leak the member roster — attendees,
+    eligible_voters, email_recipients — to any token holder. Ballot items
+    are filtered to the ones this voter is eligible for.
 
     **No authentication required**
     """
@@ -356,7 +363,13 @@ async def get_ballot_by_token(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
-    return election
+    response = BallotElectionResponse.model_validate(election)
+    if voting_token.eligible_item_ids is not None and response.ballot_items is not None:
+        allowed = set(voting_token.eligible_item_ids)
+        response.ballot_items = [
+            item for item in response.ballot_items if item.id in allowed
+        ]
+    return response
 
 
 @router.get("/ballot/{token}/candidates", response_model=list[CandidateResponse])
@@ -406,7 +419,7 @@ async def cast_vote_with_token(
     Cast a vote using a voting token
 
     This endpoint is public (no authentication required) and uses the
-    secure hashed token to cast anonymous votes.
+    high-entropy token to cast anonymous votes.
 
     The token must be provided in the request body (not as a query parameter)
     to avoid leaking it in server/proxy logs and browser history.
@@ -426,7 +439,8 @@ async def cast_vote_with_token(
     if error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
-    # Return vote without revealing voter information
+    # Return vote without revealing voter information. The receipt hash lets
+    # the voter verify their vote was recorded via GET /{id}/verify-receipt.
     return VoteResponse(
         id=vote.id,
         election_id=vote.election_id,
@@ -434,6 +448,7 @@ async def cast_vote_with_token(
         position=vote.position,
         voted_at=vote.voted_at,
         voter_id=None,  # Never reveal voter ID for anonymous voting
+        receipt_hash=vote.receipt_hash,
     )
 
 
@@ -1403,43 +1418,48 @@ async def cast_bulk_votes(
 
     service = ElectionService(db)
     votes = []
-    errors = []
 
-    # Use savepoint so we can roll back all votes if any fail
-    savepoint = await db.begin_nested()
-
+    # All-or-nothing: cast_vote(commit=False) flushes each vote inside the
+    # request's transaction without committing (a savepoint would not work
+    # here — cast_vote's own commit would end the outer transaction), and a
+    # single commit at the end makes the whole ballot atomic.
     try:
-        for vote_data in bulk_vote.votes:
-            position = list(vote_data.keys())[0]
-            candidate_id = vote_data[position]
-
+        for vote_item in bulk_vote.votes:
             vote, error = await service.cast_vote(
                 user_id=current_user.id,
                 election_id=election_id,
-                candidate_id=candidate_id,
-                position=position,
+                candidate_id=vote_item.candidate_id,
+                position=vote_item.position,
                 organization_id=current_user.organization_id,
                 ip_address=request.client.host if request.client else None,
                 user_agent=request.headers.get("user-agent"),
+                vote_rank=vote_item.vote_rank,
+                commit=False,
             )
 
             if error:
-                errors.append(f"{position}: {error}")
-            elif vote:
-                votes.append(vote)
+                await db.rollback()
+                label = vote_item.position or str(vote_item.candidate_id)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"{label}: {error} — no votes were recorded",
+                )
+            votes.append(vote)
 
-        if errors:
-            # Roll back all votes from this batch
-            await savepoint.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="; ".join(errors)
-            )
-
-        await savepoint.commit()
+        await db.commit()
     except HTTPException:
         raise
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Database integrity check: duplicate vote detected — "
+                "no votes were recorded"
+            ),
+        )
     except Exception as e:
-        await savepoint.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=safe_error_detail(
@@ -2630,6 +2650,9 @@ async def send_test_ballot(
                 subject=f"[TEST] Ballot: {election.title}",
                 message="This is a TEST ballot. Votes cast will not count toward real results.",
                 base_ballot_url=base_ballot_url,
+                # Flag the issued token as a test ballot so votes cast with it
+                # are stored is_test=True and excluded from real results.
+                is_test=True,
             )
         )
     except ValueError as e:
@@ -2684,11 +2707,13 @@ async def preview_ballot_for_user(
             status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
         )
 
-    # Verify target user exists in same org
+    # Verify target user exists in same org (roles eager-loaded for the
+    # voter-type checks in annotate_ballot_items_for_user)
     user_result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == current_user.organization_id)
+        .options(selectinload(User.roles))
     )
     target_user = user_result.scalar_one_or_none()
 
@@ -2717,44 +2742,22 @@ async def preview_ballot_for_user(
     )
     candidates = candidates_result.scalars().all()
 
-    # Annotate each ballot item with eligibility
+    # Annotate each ballot item with eligibility using the same logic that
+    # filters the real ballot (voter-type categories via _user_has_role_type,
+    # tier voting rules, secretary overrides, fail-closed attendance) — a
+    # hand-rolled comparison here previously disagreed with what
+    # send_ballot_emails actually sent (raw membership_type matching,
+    # overrides ignored, attendance only checked when attendees was non-empty).
     ballot_items = election.ballot_items or []
-    annotated_items = []
-    eligible_count = 0
-
-    for item in ballot_items:
-        item_eligible = True
-        reason = None
-
-        # Check item-specific eligibility (eligible_voter_types)
-        eligible_types = item.get("eligible_voter_types", ["all"])
-        if "all" not in eligible_types:
-            user_type = getattr(target_user, "membership_type", None) or "regular"
-            if user_type not in eligible_types:
-                item_eligible = False
-                reason = (
-                    f"{user_type.capitalize()} members are not eligible for this item"
-                )
-
-        # Check attendance requirement
-        if item.get("require_attendance") and election.attendees:
-            attendee_ids = [a.get("user_id") for a in (election.attendees or [])]
-            if str(user_id) not in attendee_ids:
-                item_eligible = False
-                reason = "Member must be checked in as present at the meeting"
-
-        if item_eligible:
-            eligible_count += 1
-
-        annotated_items.append(
-            {
-                **item,
-                "eligibility": {
-                    "eligible": item_eligible,
-                    "reason": reason,
-                },
-            }
+    try:
+        annotated_items = await service.annotate_ballot_items_for_user(
+            target_user, election, str(current_user.organization_id)
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))
+    eligible_count = sum(
+        1 for item in annotated_items if item["eligibility"]["eligible"]
+    )
 
     return {
         "election_id": str(election_id),

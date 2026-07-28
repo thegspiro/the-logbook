@@ -160,9 +160,7 @@ class TestElectionSetup:
 class TestVoteCasting(TestElectionSetup):
     """Core voting flow: cast, chain linking, dedup, and has_user_voted."""
 
-    async def test_cast_vote_success(
-        self, db_session: AsyncSession, setup_election
-    ):
+    async def test_cast_vote_success(self, db_session: AsyncSession, setup_election):
         data = await setup_election
         svc = ElectionService(db_session)
 
@@ -220,9 +218,7 @@ class TestVoteCasting(TestElectionSetup):
         svc = ElectionService(db_session)
 
         # Need the Election ORM object for anonymous-voting hash lookup
-        election = await svc.get_election(
-            data["election_id"], data["org_id"]
-        )
+        election = await svc.get_election(data["election_id"], data["org_id"])
 
         before = await svc.has_user_voted(
             uuid.UUID(data["user3_id"]),
@@ -241,9 +237,7 @@ class TestVoteCasting(TestElectionSetup):
         assert err is None
 
         # Re-fetch election so the object is current after the commit
-        election = await svc.get_election(
-            data["election_id"], data["org_id"]
-        )
+        election = await svc.get_election(data["election_id"], data["org_id"])
         after = await svc.has_user_voted(
             uuid.UUID(data["user3_id"]),
             uuid.UUID(data["election_id"]),
@@ -383,9 +377,7 @@ class TestVoteIntegrity(TestElectionSetup):
         assert integrity["tampered_votes"] == 0
         assert integrity["chain_verified"] is True
 
-    async def test_vote_forensics(
-        self, db_session: AsyncSession, setup_election
-    ):
+    async def test_vote_forensics(self, db_session: AsyncSession, setup_election):
         data = await setup_election
         svc = ElectionService(db_session)
 
@@ -413,3 +405,318 @@ class TestVoteIntegrity(TestElectionSetup):
         assert forensics["vote_integrity"]["integrity_status"] == "PASS"
         assert forensics["vote_integrity"]["chain_verified"] is True
         assert forensics["vote_integrity"]["total_votes"] == 3
+
+
+# ── TestMultiVoteMethods (ELEC-3) ─────────────────────────────────────
+
+
+class TestMultiVoteMethods(TestElectionSetup):
+    """Approval and ranked-choice elections legitimately record several
+    votes per voter; the dedup hash and app checks must allow them while
+    still rejecting true duplicates (module-audit ELEC-3)."""
+
+    async def _set_method(self, db_session, election_id: str, method: str):
+        from sqlalchemy import text
+
+        await db_session.execute(
+            text("UPDATE elections SET voting_method = :m WHERE id = :id"),
+            {"m": method, "id": election_id},
+        )
+        await db_session.flush()
+
+    async def test_approval_two_candidates_same_position(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = await setup_election
+        await self._set_method(db_session, data["election_id"], "approval")
+        svc = ElectionService(db_session)
+
+        for cid in [data["candidate_a_id"], data["candidate_b_id"]]:
+            vote, err = await svc.cast_vote(
+                user_id=uuid.UUID(data["user1_id"]),
+                election_id=uuid.UUID(data["election_id"]),
+                candidate_id=uuid.UUID(cid),
+                position="Chief",
+                organization_id=uuid.UUID(data["org_id"]),
+            )
+            assert err is None, f"Approval vote for {cid} failed: {err}"
+            assert vote is not None
+
+    async def test_approval_duplicate_candidate_rejected(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = await setup_election
+        await self._set_method(db_session, data["election_id"], "approval")
+        svc = ElectionService(db_session)
+
+        _, err1 = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+        )
+        assert err1 is None
+
+        vote2, err2 = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+        )
+        assert vote2 is None
+        assert err2 is not None
+
+    async def test_ranked_choice_multiple_ranks(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = await setup_election
+        await self._set_method(db_session, data["election_id"], "ranked_choice")
+        svc = ElectionService(db_session)
+
+        for rank, cid in [
+            (1, data["candidate_a_id"]),
+            (2, data["candidate_b_id"]),
+        ]:
+            vote, err = await svc.cast_vote(
+                user_id=uuid.UUID(data["user1_id"]),
+                election_id=uuid.UUID(data["election_id"]),
+                candidate_id=uuid.UUID(cid),
+                position="Chief",
+                organization_id=uuid.UUID(data["org_id"]),
+                vote_rank=rank,
+            )
+            assert err is None, f"Rank {rank} vote failed: {err}"
+            assert vote is not None
+
+    async def test_ranked_choice_duplicate_rank_rejected(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = await setup_election
+        await self._set_method(db_session, data["election_id"], "ranked_choice")
+        svc = ElectionService(db_session)
+
+        _, err1 = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+            vote_rank=1,
+        )
+        assert err1 is None
+
+        vote2, err2 = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_b_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+            vote_rank=1,
+        )
+        assert vote2 is None
+        assert err2 is not None
+        assert "rank" in err2.lower()
+
+    async def test_ranked_choice_duplicate_candidate_rejected(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = await setup_election
+        await self._set_method(db_session, data["election_id"], "ranked_choice")
+        svc = ElectionService(db_session)
+
+        _, err1 = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+            vote_rank=1,
+        )
+        assert err1 is None
+
+        vote2, err2 = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+            vote_rank=2,
+        )
+        assert vote2 is None
+        assert err2 is not None
+
+
+# ── TestRunoffCreation (B4) ───────────────────────────────────────────
+
+
+class TestRunoffCreation(TestElectionSetup):
+    async def test_early_close_still_creates_runoff(
+        self, db_session: AsyncSession, setup_election
+    ):
+        """Closing before end_date (the normal way to end a meeting vote)
+        must still evaluate runoff conditions — the results-visibility gate
+        previously returned None and the runoff was silently skipped."""
+        from sqlalchemy import text
+
+        data = await setup_election
+        await db_session.execute(
+            text(
+                "UPDATE elections SET enable_runoffs = 1, "
+                "victory_condition = 'majority' WHERE id = :id"
+            ),
+            {"id": data["election_id"]},
+        )
+        await db_session.flush()
+        svc = ElectionService(db_session)
+
+        # 1-1 tie with 'majority' → no winner → runoff required
+        for uid, cid in [
+            (data["user1_id"], data["candidate_a_id"]),
+            (data["user2_id"], data["candidate_b_id"]),
+        ]:
+            _, err = await svc.cast_vote(
+                user_id=uuid.UUID(uid),
+                election_id=uuid.UUID(data["election_id"]),
+                candidate_id=uuid.UUID(cid),
+                position="Chief",
+                organization_id=uuid.UUID(data["org_id"]),
+            )
+            assert err is None
+
+        # end_date is tomorrow — this is an early close
+        closed, close_err = await svc.close_election(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+        )
+        assert close_err is None
+        assert closed is not None
+
+        runoff_row = await db_session.execute(
+            text(
+                "SELECT COUNT(*) FROM elections "
+                "WHERE parent_election_id = :id AND is_runoff = 1"
+            ),
+            {"id": data["election_id"]},
+        )
+        assert (
+            runoff_row.scalar() or 0
+        ) == 1, "Early close must still create the runoff election"
+
+
+# ── TestResultsVisibilityGate ─────────────────────────────────────────
+
+
+class TestResultsVisibilityGate(TestElectionSetup):
+    async def test_results_hidden_before_end_date_without_bypass(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = await setup_election
+        svc = ElectionService(db_session)
+
+        _, err = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+        )
+        assert err is None
+
+        closed, close_err = await svc.close_election(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+        )
+        assert close_err is None
+
+        # Closed but end_date still in the future and results not flagged
+        # visible: the public results call must stay gated...
+        hidden = await svc.get_election_results(
+            uuid.UUID(data["election_id"]), uuid.UUID(data["org_id"])
+        )
+        assert hidden is None
+
+        # ...while internal consumers (runoff check, report email) can read
+        visible = await svc.get_election_results(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+            _internal_bypass_visibility=True,
+        )
+        assert visible is not None
+
+    async def test_results_org_scoped(self, db_session: AsyncSession, setup_election):
+        data = await setup_election
+        svc = ElectionService(db_session)
+
+        foreign = await svc.get_election_results(
+            uuid.UUID(data["election_id"]),
+            uuid.uuid4(),
+            _internal_bypass_visibility=True,
+        )
+        assert foreign is None, "Foreign org must never read results"
+
+
+# ── TestRollbackGuard (ELEC-4) ────────────────────────────────────────
+
+
+class TestRollbackGuard(TestElectionSetup):
+    async def test_rollback_refused_after_salt_destroyed_with_votes(
+        self, db_session: AsyncSession, setup_election
+    ):
+        """Reopening a closed anonymous election whose salt was destroyed
+        would let prior voters vote again (their hashes no longer match)."""
+        data = await setup_election
+        svc = ElectionService(db_session)
+
+        _, err = await svc.cast_vote(
+            user_id=uuid.UUID(data["user1_id"]),
+            election_id=uuid.UUID(data["election_id"]),
+            candidate_id=uuid.UUID(data["candidate_a_id"]),
+            position="Chief",
+            organization_id=uuid.UUID(data["org_id"]),
+        )
+        assert err is None
+
+        closed, close_err = await svc.close_election(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+        )
+        assert close_err is None
+        assert (
+            closed.voter_anonymity_salt is None
+        ), "close_election should destroy the anonymity salt"
+
+        election, notifications, rb_err = await svc.rollback_election(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+            performed_by=uuid.UUID(data["user1_id"]),
+            reason="Trying to reopen",
+        )
+
+        assert election is None
+        assert rb_err is not None
+        assert "anonymity salt" in rb_err
+
+    async def test_rollback_allowed_when_no_votes(
+        self, db_session: AsyncSession, setup_election
+    ):
+        data = await setup_election
+        svc = ElectionService(db_session)
+
+        closed, close_err = await svc.close_election(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+        )
+        assert close_err is None
+
+        election, notifications, rb_err = await svc.rollback_election(
+            uuid.UUID(data["election_id"]),
+            uuid.UUID(data["org_id"]),
+            performed_by=uuid.UUID(data["user1_id"]),
+            reason="No votes cast yet",
+        )
+
+        assert rb_err is None, f"Rollback with zero votes should work: {rb_err}"
+        assert election is not None
+        assert election.status.value == "open"
