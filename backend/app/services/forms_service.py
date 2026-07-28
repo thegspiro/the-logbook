@@ -248,8 +248,7 @@ class FormsService:
                         return {}, f"Invalid option for '{field.label}'"
 
             if (
-                field_type
-                in (FieldType.CHECKBOX.value, FieldType.MULTISELECT.value)
+                field_type in (FieldType.CHECKBOX.value, FieldType.MULTISELECT.value)
                 and str_value.strip()
             ):
                 # Validate each comma-separated value against allowed options
@@ -2077,9 +2076,7 @@ class FormsService:
                     select(EventRSVP)
                     .where(EventRSVP.event_id == str(event_id))
                     .where(EventRSVP.user_id == str(submission.submitted_by))
-                    .where(
-                        EventRSVP.organization_id == str(submission.organization_id)
-                    )
+                    .where(EventRSVP.organization_id == str(submission.organization_id))
                 )
                 existing_rsvp = existing_result.scalar_one_or_none()
 

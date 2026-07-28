@@ -425,9 +425,7 @@ class SalesforceSyncService:
         ).lower()
         return direction in ("pull", "both")
 
-    async def _find_user_for_inbound(
-        self, lb_fields: dict[str, Any]
-    ) -> Optional[User]:
+    async def _find_user_for_inbound(self, lb_fields: dict[str, Any]) -> Optional[User]:
         """Match an inbound Salesforce Contact to an existing Logbook user.
 
         Resolution mirrors the outbound path: the Logbook external ID first,
@@ -840,38 +838,50 @@ async def push_org_to_salesforce(
 
     if "members" in sync_types:
         rows = (
-            await db.execute(
-                select(User).where(
-                    User.organization_id == organization_id,
-                    User.deleted_at.is_(None),
+            (
+                await db.execute(
+                    select(User).where(
+                        User.organization_id == organization_id,
+                        User.deleted_at.is_(None),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         results["members"] = await sync_service.sync_all_members_to_salesforce(
             [user_to_member_dict(u) for u in rows]
         )
 
     if "training" in sync_types:
         rows = (
-            await db.execute(
-                select(TrainingRecord).where(
-                    TrainingRecord.organization_id == organization_id
+            (
+                await db.execute(
+                    select(TrainingRecord).where(
+                        TrainingRecord.organization_id == organization_id
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         results["training"] = await sync_service.sync_all_training_to_salesforce(
             [training_record_to_dict(r) for r in rows]
         )
 
     if "events" in sync_types:
         rows = (
-            await db.execute(
-                select(Event).where(
-                    Event.organization_id == organization_id,
-                    Event.is_cancelled.is_(False),
+            (
+                await db.execute(
+                    select(Event).where(
+                        Event.organization_id == organization_id,
+                        Event.is_cancelled.is_(False),
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         synced = 0
         failed = 0
         for event in rows:

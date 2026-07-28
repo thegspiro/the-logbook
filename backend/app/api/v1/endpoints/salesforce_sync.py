@@ -483,9 +483,7 @@ async def salesforce_oauth_authorize(
             integration, state=state, redirect_uri=redirect_uri
         )
     except SalesforceOAuthError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     redirect = RedirectResponse(url=authorize_url, status_code=status.HTTP_302_FOUND)
     redirect.set_cookie(

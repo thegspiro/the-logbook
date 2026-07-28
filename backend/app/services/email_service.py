@@ -640,9 +640,7 @@ class EmailService:
         max_retries = 3
         concurrency = asyncio.Semaphore(5)
 
-        async def _send_one(
-            client: "httpx.AsyncClient", to_email: str
-        ) -> bool:
+        async def _send_one(client: "httpx.AsyncClient", to_email: str) -> bool:
             payload: Dict[str, Any] = {
                 "to": [to_email],
                 "from": from_field,
@@ -662,15 +660,13 @@ class EmailService:
             async with concurrency:
                 for attempt in range(max_retries + 1):
                     try:
-                        resp = await client.post(
-                            url, headers=headers, json=payload
-                        )
+                        resp = await client.post(url, headers=headers, json=payload)
                         if resp.status_code in (200, 201, 202):
                             return True
 
                         retryable = resp.status_code == 429 or resp.status_code >= 500
                         if retryable and attempt < max_retries:
-                            delay = 2 ** attempt
+                            delay = 2**attempt
                             logger.warning(
                                 "Cloudflare API {} for {}, retrying in {}s "
                                 "(attempt {}/{})",
@@ -693,7 +689,7 @@ class EmailService:
                         return False
                     except Exception as e:
                         if attempt < max_retries:
-                            await asyncio.sleep(2 ** attempt)
+                            await asyncio.sleep(2**attempt)
                             continue
                         logger.error(
                             "Cloudflare email send failed to={}: {}",
@@ -778,11 +774,15 @@ class EmailService:
         """
         if not messages:
             return []
-        email_enabled = settings.EMAIL_ENABLED or self._use_cloudflare or (
-            self.organization
-            and (self.organization.settings or {})
-            .get("email_service", {})
-            .get("enabled")
+        email_enabled = (
+            settings.EMAIL_ENABLED
+            or self._use_cloudflare
+            or (
+                self.organization
+                and (self.organization.settings or {})
+                .get("email_service", {})
+                .get("enabled")
+            )
         )
         if not email_enabled:
             logger.info("Email disabled. Would batch-send {} messages.", len(messages))
@@ -827,11 +827,15 @@ class EmailService:
         Returns:
             Tuple of (success_count, failure_count)
         """
-        email_enabled = settings.EMAIL_ENABLED or self._use_cloudflare or (
-            self.organization
-            and (self.organization.settings or {})
-            .get("email_service", {})
-            .get("enabled")
+        email_enabled = (
+            settings.EMAIL_ENABLED
+            or self._use_cloudflare
+            or (
+                self.organization
+                and (self.organization.settings or {})
+                .get("email_service", {})
+                .get("enabled")
+            )
         )
         if not email_enabled:
             logger.info(
@@ -878,9 +882,7 @@ class EmailService:
                     part.set_payload(f.read())
                 encoders.encode_base64(part)
                 filename = _sanitize_header(os.path.basename(resolved))
-                part.add_header(
-                    "Content-Disposition", "attachment", filename=filename
-                )
+                part.add_header("Content-Disposition", "attachment", filename=filename)
                 attachment_parts.append(part)
 
             # Build one MIME message per recipient
@@ -935,9 +937,7 @@ class EmailService:
             # Send through a single SMTP connection when possible
             if len(batch) == 1:
                 try:
-                    await asyncio.to_thread(
-                        self._smtp_send, batch[0][0], batch[0][1]
-                    )
+                    await asyncio.to_thread(self._smtp_send, batch[0][0], batch[0][1])
                     results = [True]
                 except Exception as e:
                     logger.error(

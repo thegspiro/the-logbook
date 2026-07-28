@@ -44,7 +44,9 @@ async def list_audit_logs(
     event_category: str | None = Query(None, max_length=50),
     severity: str | None = Query(None, pattern="^(info|warning|critical)$"),
     user_id: str | None = Query(None, max_length=36),
-    search: str | None = Query(None, max_length=200, description="Username or event-type substring"),
+    search: str | None = Query(
+        None, max_length=200, description="Username or event-type substring"
+    ),
     start_date: datetime | None = Query(None),
     end_date: datetime | None = Query(None),
     skip: int = Query(0, ge=0),
@@ -58,7 +60,9 @@ async def list_audit_logs(
     start_date, end_date. Pagination via skip/limit.
     """
     org_user_ids = (
-        select(User.id).where(User.organization_id == str(current_user.organization_id)).scalar_subquery()
+        select(User.id)
+        .where(User.organization_id == str(current_user.organization_id))
+        .scalar_subquery()
     )
 
     filters: list[Any] = [AuditLog.user_id.in_(org_user_ids)]
@@ -88,11 +92,17 @@ async def list_audit_logs(
 
     where_clause = and_(*filters)
 
-    count_result = await db.execute(select(func.count()).select_from(AuditLog).where(where_clause))
+    count_result = await db.execute(
+        select(func.count()).select_from(AuditLog).where(where_clause)
+    )
     total = count_result.scalar() or 0
 
     result = await db.execute(
-        select(AuditLog).where(where_clause).order_by(AuditLog.timestamp.desc()).offset(skip).limit(limit)
+        select(AuditLog)
+        .where(where_clause)
+        .order_by(AuditLog.timestamp.desc())
+        .offset(skip)
+        .limit(limit)
     )
     entries = result.scalars().all()
 
@@ -111,11 +121,15 @@ async def audit_log_stats(
 ) -> dict[str, Any]:
     """High-level counts for an admin overview card."""
     org_user_ids = (
-        select(User.id).where(User.organization_id == str(current_user.organization_id)).scalar_subquery()
+        select(User.id)
+        .where(User.organization_id == str(current_user.organization_id))
+        .scalar_subquery()
     )
     base_filter = AuditLog.user_id.in_(org_user_ids)
 
-    total_result = await db.execute(select(func.count()).select_from(AuditLog).where(base_filter))
+    total_result = await db.execute(
+        select(func.count()).select_from(AuditLog).where(base_filter)
+    )
     total = total_result.scalar() or 0
 
     severity_result = await db.execute(
@@ -152,10 +166,14 @@ async def get_audit_log_entry(
 ) -> dict[str, Any]:
     """Fetch a single audit log entry. Org-scoped."""
     org_user_ids = (
-        select(User.id).where(User.organization_id == str(current_user.organization_id)).scalar_subquery()
+        select(User.id)
+        .where(User.organization_id == str(current_user.organization_id))
+        .scalar_subquery()
     )
     result = await db.execute(
-        select(AuditLog).where(and_(AuditLog.id == log_id, AuditLog.user_id.in_(org_user_ids)))
+        select(AuditLog).where(
+            and_(AuditLog.id == log_id, AuditLog.user_id.in_(org_user_ids))
+        )
     )
     entry = result.scalar_one_or_none()
     if not entry:

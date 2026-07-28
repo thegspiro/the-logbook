@@ -107,9 +107,7 @@ def _safe_detail(prefix: str, error: str | None) -> str:
 
 def _is_shift_officer(shift, user: User) -> bool:
     """True if ``user`` is the named on-duty officer of ``shift``."""
-    return bool(
-        shift.shift_officer_id and str(shift.shift_officer_id) == str(user.id)
-    )
+    return bool(shift.shift_officer_id and str(shift.shift_officer_id) == str(user.id))
 
 
 async def _authorize_shift_management(
@@ -188,17 +186,13 @@ async def _authorize_assignment_management(
         assignment_id, current_user.organization_id
     )
     if assignment is None:
-        raise HTTPException(
-            status_code=404, detail="Shift assignment not found"
-        )
+        raise HTTPException(status_code=404, detail="Shift assignment not found")
     if not user_has_permission(current_user, "scheduling.assign"):
         shift = await service.get_shift_by_id(
             assignment.shift_id, current_user.organization_id
         )
         if not (shift and _is_shift_officer(shift, current_user)):
-            raise HTTPException(
-                status_code=403, detail="Insufficient permissions"
-            )
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
     return assignment
 
 
@@ -573,9 +567,7 @@ async def reopen_shift(
     await _authorize_shift_management(
         service, current_user, shift_id, "scheduling.manage"
     )
-    shift, error = await service.reopen_shift(
-        shift_id, current_user.organization_id
-    )
+    shift, error = await service.reopen_shift(shift_id, current_user.organization_id)
     if not shift:
         raise HTTPException(
             status_code=400,
@@ -607,9 +599,7 @@ async def get_shift_handoff(
     """Return the previous crew's pass-down for this shift (same apparatus),
     or null when there is none."""
     service = SchedulingService(db)
-    return await service.get_previous_pass_down(
-        shift_id, current_user.organization_id
-    )
+    return await service.get_previous_pass_down(shift_id, current_user.organization_id)
 
 
 @router.post("/shifts/{shift_id}/cancel", response_model=ShiftResponse)
@@ -861,9 +851,7 @@ async def get_my_attendance_history(
     for entry in enriched:
         shift = shift_by_attendance.get(entry["id"])
         if shift is not None:
-            entry["shift_date"] = (
-                str(shift.shift_date) if shift.shift_date else None
-            )
+            entry["shift_date"] = str(shift.shift_date) if shift.shift_date else None
             entry["shift_start_time"] = (
                 shift.start_time.isoformat() if shift.start_time else None
             )
@@ -2333,9 +2321,7 @@ async def update_scheduling_feature_settings(
                 else None
             ),
             hours_window_days=(
-                data.hours_window_days
-                if "hours_window_days" in fields_set
-                else None
+                data.hours_window_days if "hours_window_days" in fields_set else None
             ),
             auto_generate_enabled=(
                 data.auto_generate_enabled

@@ -359,9 +359,7 @@ class AuthService:
                 )
                 grace_session = grace_result.scalar_one_or_none()
                 grace_expiry = (
-                    grace_session.previous_refresh_expires_at
-                    if grace_session
-                    else None
+                    grace_session.previous_refresh_expires_at if grace_session else None
                 )
                 if grace_expiry and grace_expiry.tzinfo is None:
                     grace_expiry = grace_expiry.replace(tzinfo=timezone.utc)

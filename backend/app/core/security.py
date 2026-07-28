@@ -483,7 +483,7 @@ def decrypt_data(encrypted_data: str) -> str:
         return ""
 
     if encrypted_data.startswith(_GCM_PREFIX):
-        raw = base64.urlsafe_b64decode(encrypted_data[len(_GCM_PREFIX):])
+        raw = base64.urlsafe_b64decode(encrypted_data[len(_GCM_PREFIX) :])
         nonce, ciphertext = raw[:_GCM_NONCE_BYTES], raw[_GCM_NONCE_BYTES:]
         return _get_aesgcm().decrypt(nonce, ciphertext, None).decode()
 

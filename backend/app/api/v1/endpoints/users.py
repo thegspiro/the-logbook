@@ -999,9 +999,9 @@ async def update_user_profile(
         # permission, so the old string never matched a granted permission and
         # silently blocked legitimate users.edit holders). Matches the sibling
         # admin-update path above. (ORU-9)
-        if not _has_permission(
-            "users.edit", user_permissions
-        ) and not _has_permission("members.manage", user_permissions):
+        if not _has_permission("users.edit", user_permissions) and not _has_permission(
+            "members.manage", user_permissions
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You do not have permission to update this user's profile",

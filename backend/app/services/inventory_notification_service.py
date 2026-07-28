@@ -239,9 +239,9 @@ class InventoryNotificationService:
                 else:
                     # Email failed. Bump the attempt counter on every record so
                     # a chronically failing destination eventually stops looping.
-                    max_attempts = max(
-                        (rec.attempt_count or 0) for rec in member_records
-                    ) + 1
+                    max_attempts = (
+                        max((rec.attempt_count or 0) for rec in member_records) + 1
+                    )
                     for rec in member_records:
                         rec.attempt_count = (rec.attempt_count or 0) + 1
                         rec.last_attempt_at = now

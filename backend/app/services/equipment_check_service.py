@@ -1278,7 +1278,7 @@ class EquipmentCheckService:
             item_names = {iid: name for iid, name in nres.all()}
 
         items: List[Dict[str, Any]] = []
-        for (item, comp, tmpl) in rows:
+        for item, comp, tmpl in rows:
             exp = item.expiration_date
             lots = lots_by_item.get(item.inventory_item_id or "", [])
             items.append(
@@ -2134,15 +2134,11 @@ class EquipmentCheckService:
 
         # Resolve each check's shift date in one query (avoids a per-item
         # Shift lookup when building the history records below).
-        shift_ids = {
-            str(c.shift_id) for c in checks_map.values() if c.shift_id
-        }
+        shift_ids = {str(c.shift_id) for c in checks_map.values() if c.shift_id}
         shift_date_map: Dict[str, date] = {}
         if shift_ids:
             sdq = await self.db.execute(
-                select(Shift.id, Shift.shift_date).where(
-                    Shift.id.in_(list(shift_ids))
-                )
+                select(Shift.id, Shift.shift_date).where(Shift.id.in_(list(shift_ids)))
             )
             for sid, sdate in sdq.all():
                 shift_date_map[str(sid)] = sdate

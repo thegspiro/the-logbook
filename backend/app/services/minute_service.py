@@ -623,9 +623,7 @@ class MinuteService:
     # Stats & Search
     # ============================================
 
-    async def get_stats(
-        self, organization_id: UUID, restricted: bool = False
-    ) -> dict:
+    async def get_stats(self, organization_id: UUID, restricted: bool = False) -> dict:
         """Get aggregate stats for the minutes dashboard.
 
         ``restricted=True`` (a caller without ``minutes.manage``) counts only

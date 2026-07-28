@@ -167,9 +167,7 @@ async def get_current_user(
     # it up. The org lookup is skipped entirely for already-enrolled users.
     if not getattr(user, "mfa_enabled", False):
         org_row = await db.execute(
-            select(Organization.settings).where(
-                Organization.id == user.organization_id
-            )
+            select(Organization.settings).where(Organization.id == user.organization_id)
         )
         org_settings = org_row.scalar_one_or_none() or {}
         if (org_settings.get("security") or {}).get("mfa_required"):

@@ -78,9 +78,7 @@ class ShiftEligibilityService:
         sched = self._get_scheduling_settings(org)
         return bool(sched.get("platoons_enabled", False))
 
-    async def get_platoon_overview(
-        self, organization_id: str
-    ) -> List[Dict[str, Any]]:
+    async def get_platoon_overview(self, organization_id: str) -> List[Dict[str, Any]]:
         """Group active members by platoon for the department-wide overview.
 
         Returns one group per named platoon (alphabetical) followed by the
@@ -306,9 +304,7 @@ class ShiftEligibilityService:
         """Return the org's auto shift-generation config."""
         sched = self._get_scheduling_settings(org)
         return {
-            "auto_generate_enabled": bool(
-                sched.get("auto_generate_enabled", False)
-            ),
+            "auto_generate_enabled": bool(sched.get("auto_generate_enabled", False)),
             "auto_generate_weeks": sched.get("auto_generate_weeks", 4),
         }
 

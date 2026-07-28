@@ -3833,9 +3833,7 @@ class InventoryService:
             )
         )
 
-    async def list_lots(
-        self, item_id: str, organization_id: str
-    ) -> List[InventoryLot]:
+    async def list_lots(self, item_id: str, organization_id: str) -> List[InventoryLot]:
         """List all stock lots for an item, soonest-to-expire first."""
         result = await self.db.execute(
             select(InventoryLot)
@@ -4692,9 +4690,7 @@ class InventoryService:
         today = date.today()
 
         def _record(uid, name, condition, ret_date, retired_by_age):
-            cond_val = (
-                condition.value if hasattr(condition, "value") else condition
-            )
+            cond_val = condition.value if hasattr(condition, "value") else condition
             worn = cond_val in self._WORN_CONDITION_VALUES
             expired = bool(retired_by_age) or (
                 ret_date is not None and ret_date <= today
@@ -4776,13 +4772,17 @@ class InventoryService:
         :meth:`_normalize_size_key`.
         """
         items = (
-            await self.db.execute(
-                select(InventoryItem)
-                .where(InventoryItem.organization_id == organization_id)
-                .where(InventoryItem.category_id == category_id)
-                .where(InventoryItem.status != ItemStatus.RETIRED)
+            (
+                await self.db.execute(
+                    select(InventoryItem)
+                    .where(InventoryItem.organization_id == organization_id)
+                    .where(InventoryItem.category_id == category_id)
+                    .where(InventoryItem.status != ItemStatus.RETIRED)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         stock: Dict[str, int] = {}
         cost_sums: Dict[str, float] = {}
@@ -4827,14 +4827,18 @@ class InventoryService:
         are assigned through a different flow.
         """
         items = (
-            await self.db.execute(
-                select(InventoryItem)
-                .where(InventoryItem.organization_id == organization_id)
-                .where(InventoryItem.category_id == category_id)
-                .where(InventoryItem.status != ItemStatus.RETIRED)
-                .where(InventoryItem.tracking_type == TrackingType.POOL)
+            (
+                await self.db.execute(
+                    select(InventoryItem)
+                    .where(InventoryItem.organization_id == organization_id)
+                    .where(InventoryItem.category_id == category_id)
+                    .where(InventoryItem.status != ItemStatus.RETIRED)
+                    .where(InventoryItem.tracking_type == TrackingType.POOL)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         by_size: Dict[str, List[Dict[str, Any]]] = {}
         for item in items:
@@ -4894,13 +4898,17 @@ class InventoryService:
             return set()
 
         allowances = (
-            await self.db.execute(
-                select(IssuanceAllowance)
-                .where(IssuanceAllowance.organization_id == organization_id)
-                .where(IssuanceAllowance.category_id == category_id)
-                .where(IssuanceAllowance.is_active.is_(True))
+            (
+                await self.db.execute(
+                    select(IssuanceAllowance)
+                    .where(IssuanceAllowance.organization_id == organization_id)
+                    .where(IssuanceAllowance.category_id == category_id)
+                    .where(IssuanceAllowance.is_active.is_(True))
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if not allowances:
             return set()
 
@@ -4908,8 +4916,9 @@ class InventoryService:
         pos_map: Dict[str, set] = {}
         for uid, pid in (
             await self.db.execute(
-                select(user_positions.c.user_id, user_positions.c.position_id)
-                .where(user_positions.c.user_id.in_(user_ids))
+                select(user_positions.c.user_id, user_positions.c.position_id).where(
+                    user_positions.c.user_id.in_(user_ids)
+                )
             )
         ).all():
             pos_map.setdefault(uid, set()).add(pid)
@@ -5018,12 +5027,8 @@ class InventoryService:
         replacement_aware = bool(filters.get("replacement_aware"))
         allowance_aware = bool(filters.get("allowance_aware"))
 
-        related_category_id = (
-            str(related_category_id) if related_category_id else None
-        )
-        stock_category_id = (
-            str(stock_category_id) if stock_category_id else None
-        )
+        related_category_id = str(related_category_id) if related_category_id else None
+        stock_category_id = str(stock_category_id) if stock_category_id else None
 
         query = (
             select(User)
@@ -5056,12 +5061,16 @@ class InventoryService:
         size_map: Dict[str, MemberSizePreferences] = {}
         if size_field and user_ids:
             prefs_rows = (
-                await self.db.execute(
-                    select(MemberSizePreferences).where(
-                        MemberSizePreferences.user_id.in_(user_ids)
+                (
+                    await self.db.execute(
+                        select(MemberSizePreferences).where(
+                            MemberSizePreferences.user_id.in_(user_ids)
+                        )
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
             size_map = {p.user_id: p for p in prefs_rows}
 
         # Members who already hold an active item in the related category —
@@ -5153,9 +5162,7 @@ class InventoryService:
 
             if size_field:
                 bucket_key = needed_size or "Unknown"
-                bucket = size_buckets.setdefault(
-                    bucket_key, {"total": 0, "needing": 0}
-                )
+                bucket = size_buckets.setdefault(bucket_key, {"total": 0, "needing": 0})
                 bucket["total"] += 1
                 if not has_related:
                     bucket["needing"] += 1
@@ -5241,9 +5248,7 @@ class InventoryService:
         """
         org_id = str(organization_id)
 
-        analysis = await self.analyze_impact(
-            org_id, filters, include_contact=False
-        )
+        analysis = await self.analyze_impact(org_id, filters, include_contact=False)
         if not analysis["stock_checked"]:
             raise ValueError(
                 "Select a size field and a stock category before "
@@ -5359,8 +5364,11 @@ class InventoryService:
             size = member.get("needed_size")
             if not size:
                 skipped.append(
-                    {"user_id": member["user_id"], "name": name,
-                     "reason": "No size on file"}
+                    {
+                        "user_id": member["user_id"],
+                        "name": name,
+                        "reason": "No size on file",
+                    }
                 )
                 continue
 
@@ -5368,8 +5376,11 @@ class InventoryService:
             chosen = next((c for c in candidates if c["remaining"] > 0), None)
             if chosen is None:
                 skipped.append(
-                    {"user_id": member["user_id"], "name": name,
-                     "reason": f"No {size} stock available"}
+                    {
+                        "user_id": member["user_id"],
+                        "name": name,
+                        "reason": f"No {size} stock available",
+                    }
                 )
                 continue
 
@@ -5383,8 +5394,7 @@ class InventoryService:
             )
             if error:
                 skipped.append(
-                    {"user_id": member["user_id"], "name": name,
-                     "reason": error}
+                    {"user_id": member["user_id"], "name": name, "reason": error}
                 )
                 continue
 
@@ -5405,9 +5415,7 @@ class InventoryService:
             "skipped": skipped,
         }
 
-    async def list_impact_plans(
-        self, organization_id
-    ) -> List[InventoryImpactPlan]:
+    async def list_impact_plans(self, organization_id) -> List[InventoryImpactPlan]:
         """List the organization's saved impact-planner scenarios."""
         rows = await self.db.execute(
             select(InventoryImpactPlan)
@@ -5477,9 +5485,7 @@ class InventoryService:
         org_id = str(organization_id)
         size_field = filters.get("size_field")
         if not size_field:
-            raise ValueError(
-                "Select a size field to identify members missing sizes."
-            )
+            raise ValueError("Select a size field to identify members missing sizes.")
 
         analysis = await self.analyze_impact(org_id, filters)
         size_label = self._SIZE_FIELD_LABELS.get(size_field, "equipment")
@@ -5571,9 +5577,7 @@ class InventoryService:
         }
         return render_impact_plan_pdf(data, meta)
 
-    async def get_impact_planner_options(
-        self, organization_id
-    ) -> Dict[str, Any]:
+    async def get_impact_planner_options(self, organization_id) -> Dict[str, Any]:
         """Return the selectable filter options for the impact planner.
 
         Centralises the distinct ranks, stations, positions, and categories
@@ -5585,9 +5589,7 @@ class InventoryService:
         def _humanize(value: str) -> str:
             return value.replace("_", " ").title()
 
-        statuses = [
-            {"value": s.value, "label": _humanize(s.value)} for s in UserStatus
-        ]
+        statuses = [{"value": s.value, "label": _humanize(s.value)} for s in UserStatus]
         membership_types = [
             {"value": m.value, "label": _humanize(m.value)} for m in MembershipType
         ]
@@ -5595,27 +5597,35 @@ class InventoryService:
         # Ranks: prefer the org's configured operational ranks (code →
         # display name); fall back to any free-text rank values still in use.
         rank_rows = (
-            await self.db.execute(
-                select(OperationalRank)
-                .where(OperationalRank.organization_id == org_id)
-                .where(OperationalRank.is_active == True)  # noqa: E712
-                .order_by(OperationalRank.sort_order, OperationalRank.display_name)
+            (
+                await self.db.execute(
+                    select(OperationalRank)
+                    .where(OperationalRank.organization_id == org_id)
+                    .where(OperationalRank.is_active == True)  # noqa: E712
+                    .order_by(OperationalRank.sort_order, OperationalRank.display_name)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         ranks = [
             {"value": r.rank_code, "label": r.display_name or _humanize(r.rank_code)}
             for r in rank_rows
         ]
         known_rank_codes = {r["value"] for r in ranks}
         distinct_ranks = (
-            await self.db.execute(
-                select(User.rank)
-                .where(User.organization_id == org_id)
-                .where(User.deleted_at.is_(None))
-                .where(User.rank.isnot(None))
-                .distinct()
+            (
+                await self.db.execute(
+                    select(User.rank)
+                    .where(User.organization_id == org_id)
+                    .where(User.deleted_at.is_(None))
+                    .where(User.rank.isnot(None))
+                    .distinct()
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         for code in distinct_ranks:
             if code and code not in known_rank_codes:
                 ranks.append({"value": code, "label": _humanize(code)})
@@ -5632,35 +5642,43 @@ class InventoryService:
                     .distinct()
                     .order_by(User.station)
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
             if s
         ]
 
         position_rows = (
-            await self.db.execute(
-                select(Position)
-                .where(Position.organization_id == org_id)
-                .order_by(Position.name)
+            (
+                await self.db.execute(
+                    select(Position)
+                    .where(Position.organization_id == org_id)
+                    .order_by(Position.name)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         positions = [{"id": p.id, "name": p.name} for p in position_rows]
 
         category_rows = (
-            await self.db.execute(
-                select(InventoryCategory)
-                .where(InventoryCategory.organization_id == org_id)
-                .where(InventoryCategory.active == True)  # noqa: E712
-                .order_by(InventoryCategory.name)
+            (
+                await self.db.execute(
+                    select(InventoryCategory)
+                    .where(InventoryCategory.organization_id == org_id)
+                    .where(InventoryCategory.active == True)  # noqa: E712
+                    .order_by(InventoryCategory.name)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         categories = [
             {
                 "id": c.id,
                 "name": c.name,
                 "item_type": (
-                    c.item_type.value
-                    if hasattr(c.item_type, "value")
-                    else c.item_type
+                    c.item_type.value if hasattr(c.item_type, "value") else c.item_type
                 ),
             }
             for c in category_rows

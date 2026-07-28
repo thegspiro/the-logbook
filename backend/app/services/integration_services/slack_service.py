@@ -34,7 +34,9 @@ async def send_slack_notification(
     try:
         assert_outbound_url_safe(webhook_url)
     except ValueError as exc:
-        logger.warning("Blocked outbound Slack webhook to unsafe URL {}: {}", webhook_url, exc)
+        logger.warning(
+            "Blocked outbound Slack webhook to unsafe URL {}: {}", webhook_url, exc
+        )
         return False
 
     payload: dict[str, Any] = {"text": text}
