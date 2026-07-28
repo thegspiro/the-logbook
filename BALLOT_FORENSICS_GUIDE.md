@@ -1,6 +1,6 @@
 # Ballot Forensics Guide
 
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-07-28
 **Audience:** Election administrators, system auditors, organization leadership
 
 ---
@@ -20,8 +20,10 @@ This guide explains how to investigate a disputed election using The Logbook's b
 | **Election Stats** | `GET /elections/{id}/stats` | Ballot counts and turnout |
 | **Election Results** | `GET /elections/{id}/results` | Candidate vote counts |
 | **Soft-Delete Vote** | `DELETE /elections/{id}/votes/{vote_id}` | Remove vote with reason |
+| **Receipt Verification** | `GET /elections/{id}/verify-receipt?receipt=` | Confirm a voter's receipt maps to a recorded vote |
 
-All endpoints require `elections.manage` permission.
+All endpoints require `elections.manage` permission, except receipt verification,
+which is public (rate-limited) so voters can check their own receipts.
 
 ---
 
@@ -63,7 +65,10 @@ In the forensics report, look at the `vote_integrity` section:
 - **PASS** — All vote signatures are valid. No database-level tampering detected.
 - **FAIL** — One or more votes have been modified after casting. The `tampered_vote_ids` array identifies exactly which votes were altered.
 
-**How it works:** Each vote is signed with `HMAC-SHA256(vote_id:election_id:candidate_id:voter_hash:position:voted_at, VOTE_SIGNING_KEY)`. If any field is changed in the database, the signature won't match.
+**How it works:** Each vote is signed with
+`HMAC-SHA256(vote_id:election_id:candidate_id:voter_hash:position:vote_rank:is_proxy_vote:proxy_delegating_user_id:voted_at, VOTE_SIGNING_KEY)`.
+If any of these fields is changed in the database — including a rank change on a
+ranked-choice vote or converting a proxy vote — the signature won't match.
 
 ### Step 3: Review Anomaly Detection
 
@@ -183,6 +188,13 @@ Every status rollback requires a reason and is emailed to all leadership members
 - Did the rollback extend the voting window unfairly?
 - Were additional votes cast during the reopened window?
 
+**Guard (since 2026-07):** a closed **anonymous** election that already has
+recorded votes cannot be rolled back to open. The anonymity salt is destroyed at
+close, so reopening would let members who already voted vote a second time
+undetected — the system refuses the rollback and directs the admin to create a
+new election. If you see a CLOSED→OPEN rollback on an anonymous election with
+votes in older history, treat it as a red flag for exactly this reason.
+
 ### Step 8: Examine Token Usage (Anonymous Voting)
 
 ```json
@@ -206,6 +218,16 @@ Check for:
 - **Tokens never used** — Did all eligible voters receive their tokens?
 - **High access counts** — A token accessed many times but not used may indicate someone struggling with the system (or attempting unauthorized access)
 - **Token usage timing** — Were tokens used before the election opened? (should be impossible)
+
+**Notes on token data (since 2026-07):**
+- Tokens issued via **"send test ballot"** are flagged `is_test`; votes cast with
+  them are stored `is_test` and excluded from results, stats, and rosters. When
+  reconciling counts, remember test votes appear in the raw `votes` table but
+  not in any tally.
+- Each token stores the **ballot items its voter was eligible for** at issue
+  time (`eligible_item_ids`), and submissions are validated against that
+  snapshot — so a vote on a restricted item cannot appear even from a valid
+  token. A `NULL` snapshot means a legacy token issued before this feature.
 
 ---
 
@@ -322,6 +344,24 @@ For anonymous elections:
   "vote_id": "..."
 }
 ```
+
+### `GET /elections/{id}/verify-receipt?receipt=...`
+
+**Permission:** Public (rate-limited)
+
+Voters receive their receipt hash(es) when they submit a ballot. This endpoint
+confirms a receipt maps to a recorded vote without revealing its content:
+
+```json
+{
+  "valid": true,
+  "voted_at": "2026-02-10T09:15:00Z",
+  "position": "Chief"
+}
+```
+
+Useful in disputes: a voter who saved their receipt can prove their vote was
+recorded (or expose that it wasn't) without anyone learning who they voted for.
 
 ---
 

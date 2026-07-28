@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security: elections review — ballot eligibility enforcement, roster leak, test ballots, runoffs, multi-vote methods (2026-07-28)
+
+Full security & correctness review of the elections module (findings recorded
+in `docs/module-audit/elections.md`, R-1…R-10; closes audit items ELEC-3,
+ELEC-4, ELEC-8, ELEC-9). Migration `20260730_0001` adds
+`voting_tokens.is_test` and `voting_tokens.eligible_item_ids`.
+
+**Security**
+
+- **Per-ballot-item eligibility is enforced at vote submission.** Restrictions
+  (`eligible_voter_types`, `require_attendance`) were only checked when ballot
+  emails were sent, so any token holder could vote on restricted items (e.g.
+  life-member-only bylaw votes) by POSTing their ids. The eligible item set is
+  now snapshotted on each voting token at issue time and enforced on
+  submission; the public ballot endpoint returns only the voter's eligible
+  items; the authenticated path now runs the same per-position/item checks.
+- **Public `GET /elections/ballot` no longer leaks the member roster.** It
+  returned the full election record — attendee names, eligible-voter list,
+  email recipients, creator — to anyone holding (or forwarded) a ballot link.
+  Now returns a minimal ballot view (`BallotElectionResponse`).
+- **Test ballots no longer cast real votes.** `Vote.is_test` was never set;
+  "send test ballot" issued a normal token whose votes counted in results and
+  consumed the manager's real vote slot. Test tokens are now flagged and their
+  votes excluded from results/stats/rosters with a namespaced dedup input.
+- **Fabricated attendance blocked**: `attendees` removed from the election
+  create schema — check-ins must use the audited attendee endpoints.
+- **Rollback guard**: reopening a closed anonymous election with recorded
+  votes is refused (the salt destroyed at close would otherwise let prior
+  voters vote again undetected).
+- **`/elections/settings` route permission-gated** (`elections.manage`).
+
+**Correctness**
+
+- **Runoffs now trigger on early close** — the runoff check previously hit the
+  results-visibility gate and silently skipped whenever an election was closed
+  before its scheduled end date (the normal end-of-meeting flow).
+- **Approval and ranked-choice voting fixed** — both were rejected at the
+  dedup and app-check layers; votes now carry a method-aware dedup
+  discriminator (legacy hash unchanged for single-vote elections), the
+  authenticated bulk endpoint is truly atomic with a typed payload, and the
+  ballot UI submits approvals/rankings in one atomic call.
+- **Quorum/turnout denominators exclude non-voting membership tiers** (a
+  percentage quorum could fail even at 100% eligible turnout); override
+  members counted back in.
+- **Vote receipts returned to voters** (single + bulk token paths), making
+  the public verify-receipt endpoint usable end-to-end.
+- **Ballot preview and the real ballot now share one eligibility source of
+  truth** (`annotate_ballot_items_for_user`).
+- Positionless token votes no longer blocked by unrelated positioned votes;
+  missing `is_test` filters added to runoff tally/stats/non-voters; blank
+  election page for non-managers fixed; exact candidate↔ballot-item matching;
+  `GET /elections` list excluded from the API cache.
+
+**Docs** — elections wiki page, training guide, and ballot forensics guide
+updated to match actual behavior (correct endpoint paths, token expiry,
+double-vote semantics, rollback guard, receipt verification, early-close
+results visibility); `KNOWN_LIMITATIONS.md` rows for ELEC-3/ELEC-4 marked
+resolved.
+
 ### Security: zero-trust review — deployment posture, host/proxy trust, WebSocket sessions, cross-tenant FKs (2026-07-27)
 
 A zero-trust pass over the whole stack ("never trust, always verify"): nothing

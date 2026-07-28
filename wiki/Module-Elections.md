@@ -10,8 +10,8 @@ The Elections module provides a complete election management system with ranked-
 - **Multiple Election Types** — Officer elections, bylaw votes, membership approvals
 - **Ballot Forensics** — Tamper-proof audit trail for every ballot cast
 - **Election Packages** — Auto-generated from prospective member pipeline stages
-- **Voting Eligibility** — Based on membership type, meeting attendance, and membership tier rules
-- **Secret Ballots** — Encrypted ballots with anonymous vote verification
+- **Voting Eligibility** — Based on membership type, meeting attendance, and membership tier rules — enforced both when ballots are issued and when votes are submitted
+- **Secret Ballots** — Anonymous voting via per-election salted voter hashes (no voter ID stored on votes); voters receive a cryptographic receipt they can verify without revealing their choice
 - **Real-Time Results** — Live tallying with round-by-round breakdowns
 - **Audit Logging** — Complete trail of election creation, voting, and result certification
 - **Meeting Link** — Elections can be linked to formal meeting records for procedural compliance
@@ -27,7 +27,8 @@ The Elections module provides a complete election management system with ranked-
 |-----|------|------------|
 | `/elections` | Elections List | Authenticated |
 | `/elections/:id` | Election Detail | Authenticated |
-| `/ballot` | Ballot Voting | Public (token-based) |
+| `/elections/settings` | Election Settings | `elections.manage` |
+| `/ballot` | Ballot Voting | Public (token-based, rate-limited) |
 
 ---
 
@@ -87,19 +88,77 @@ Beyond membership type, a member may also be restricted by:
 GET    /api/v1/elections                     # List elections
 POST   /api/v1/elections                     # Create election
 GET    /api/v1/elections/{id}                # Get election details
-PATCH  /api/v1/elections/{id}                # Update election
-POST   /api/v1/elections/{id}/vote           # Cast ballot
-GET    /api/v1/elections/{id}/results        # Get results
-POST   /api/v1/elections/{id}/certify        # Certify results
-POST   /api/v1/election-packages             # Create election package
-GET    /api/v1/elections/{id}/voter-overrides  # Get voter overrides
-POST   /api/v1/elections/{id}/voter-overrides  # Grant voter override
-GET    /api/v1/elections/{id}/proxy-votes      # Get proxy authorizations
-POST   /api/v1/elections/{id}/proxy-votes      # Authorize proxy vote
+PATCH  /api/v1/elections/{id}                # Update election (field allowlist varies by status)
+DELETE /api/v1/elections/{id}                # Delete election (reason required)
+POST   /api/v1/elections/{id}/open           # Open voting
+POST   /api/v1/elections/{id}/close          # Close voting (evaluates runoff conditions)
+POST   /api/v1/elections/{id}/rollback       # Roll back status (guarded — see below)
+POST   /api/v1/elections/{id}/vote           # Cast a single vote (authenticated)
+POST   /api/v1/elections/{id}/vote/bulk      # Cast votes atomically (approval/ranked/multi-position)
+GET    /api/v1/elections/{id}/eligibility    # Check current user's eligibility
+GET    /api/v1/elections/{id}/results        # Get results (visibility-gated)
+GET    /api/v1/elections/{id}/stats          # Ballot counts / turnout (manage)
+GET    /api/v1/elections/{id}/non-voters     # Eligible voters who haven't voted (manage)
+POST   /api/v1/elections/{id}/send-ballot    # Email ballots with unique voting tokens
+POST   /api/v1/elections/{id}/send-test-ballot  # Send a test ballot to yourself (votes excluded from results)
+POST   /api/v1/elections/{id}/send-report    # Email election results report
+GET    /api/v1/elections/{id}/preview-ballot # Preview a member's ballot (manage)
+GET    /api/v1/elections/{id}/verify-receipt # Verify a vote receipt (public, rate-limited)
+GET    /api/v1/elections/{id}/integrity      # Verify vote signatures (manage)
+GET    /api/v1/elections/{id}/forensics      # Full forensic report (manage)
+GET    /api/v1/elections/{id}/attendees      # List meeting check-ins
+POST   /api/v1/elections/{id}/attendees      # Check in an attendee (manage)
+POST   /api/v1/elections/{id}/import-meeting-attendees  # Import check-ins from linked meeting/event
+GET    /api/v1/elections/{id}/voter-overrides   # Get voter overrides (manage)
+POST   /api/v1/elections/{id}/voter-overrides   # Grant voter override (manage)
+POST   /api/v1/elections/{id}/proxy-authorizations  # Authorize a proxy (manage)
+GET    /api/v1/elections/{id}/proxy-authorizations  # List proxy authorizations (manage)
+POST   /api/v1/elections/{id}/proxy-vote        # Cast a vote as an authorized proxy
 GET    /api/v1/elections/settings               # Get election settings (proxy voting config)
 PATCH  /api/v1/elections/settings               # Update election settings
 GET    /api/v1/elections/{id}/eligibility-roster  # Full eligibility breakdown for secretary
+
+# Public token-ballot endpoints (no auth, rate-limited)
+GET    /api/v1/elections/ballot?token=       # Load ballot (minimal view, items filtered to eligibility)
+GET    /api/v1/elections/ballot/{token}/candidates  # Candidates for a token ballot
+POST   /api/v1/elections/ballot/vote         # Cast one vote (token in body)
+POST   /api/v1/elections/ballot/vote/bulk    # Submit full ballot atomically (token in body)
 ```
+
+---
+
+## Recent Improvements (2026-07-28)
+
+### Security & Correctness Review — Eligibility Enforcement, Runoffs, Multi-Vote Methods
+
+A full security review of the module (see `docs/module-audit/elections.md`,
+findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
+`voting_tokens.is_test` and `voting_tokens.eligible_item_ids`.
+
+- **Per-item eligibility enforced at vote submission**: Ballot-item restrictions (`eligible_voter_types`, `require_attendance`) were previously checked only when ballot emails were sent — a token holder could vote on restricted items by submitting their ids. The eligible item set is now snapshotted on each voting token at issue time and enforced when the ballot is submitted; the public ballot endpoint also only returns the items the voter may vote on. The authenticated vote path now runs the same per-position/per-item checks
+- **Public ballot response minimized**: `GET /elections/ballot` previously returned the full election record — attendee names, eligible-voter lists, email recipients — to any ballot-link holder. It now returns a minimal ballot view with no roster/PII fields
+- **Test ballots are excluded from results**: "Send test ballot" now issues a flagged token; votes cast with it are stored `is_test`, excluded from results/stats/rosters, and never consume the sender's real vote
+- **Runoffs trigger on early close**: Closing an election before its scheduled end date (the normal end-of-meeting flow) previously skipped runoff creation silently; runoff conditions are now evaluated on every close
+- **Approval & ranked-choice voting fixed**: Both methods were rejected at the vote-dedup layer (any second vote collided) and the UI submitted votes non-atomically. Votes now carry a method-aware dedup discriminator, duplicate rules are per-candidate/per-rank, and the ballot UI submits all approvals/rankings in one atomic bulk call
+- **Rollback guard**: Reopening a closed anonymous election that has votes is refused once the anonymity salt is destroyed (reopening would let prior voters vote again undetected). Rollback with zero votes still works
+- **Quorum counts only voting-eligible members**: Turnout/quorum denominators exclude membership tiers marked not voting-eligible (a percentage quorum could previously fail even with 100% eligible turnout); secretary-override members are counted back in
+- **Vote receipts delivered**: Ballot submission responses now include receipt hashes, making the public `verify-receipt` endpoint usable end-to-end
+- **Ballot preview matches reality**: The secretary's preview-ballot now uses the same eligibility logic as the real ballot filter (shared `annotate_ballot_items_for_user`) instead of a hand-rolled comparison that could disagree
+- **Attendance can't be forged at creation**: `attendees` removed from the election create payload; check-ins must go through the audited attendee endpoints
+- **Frontend fixes**: Non-managers no longer see a blank election detail page; `/elections/settings` route is permission-gated; exact candidate↔ballot-item matching ("Chief" no longer matches "Assistant Chief" items); election list responses excluded from the API cache
+
+### Edge Cases (2026-07-28)
+
+| Scenario | Behavior |
+|----------|----------|
+| Token vote on an item the voter isn't eligible for | Rejected with the item title in the error; abstaining on it is allowed |
+| Legacy token issued before the migration | No item snapshot (`NULL`) — unrestricted, bounded by token expiry |
+| Test ballot vote followed by the sender's real vote | Both succeed; only the real vote counts |
+| Election closed before its end date with no winner | Runoff still created (when runoffs enabled) |
+| Approval voter approves two candidates for one position | Both votes recorded; duplicate candidate rejected |
+| Ranked-choice voter submits ranks 1–3 | All recorded atomically; duplicate rank or candidate rejected |
+| Reopen closed anonymous election with votes | Refused — create a new election instead |
+| Positionless token vote after an unrelated positioned vote | No longer blocked (filter previously degraded to a no-op) |
 
 ---
 

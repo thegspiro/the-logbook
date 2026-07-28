@@ -69,22 +69,25 @@ Key pages:
 
 | Method | Description | Use Case |
 |--------|-------------|----------|
-| **Simple Majority** | Candidate must receive >50% of votes | Officer elections, bylaw amendments |
-| **Plurality** | Candidate with the most votes wins (no majority needed) | Multi-candidate races |
-| **Approval** | Voters approve or reject each candidate | Membership approval votes |
-| **Ranked Choice** | Voters rank candidates; lowest eliminated in rounds | Contested multi-candidate races |
+| **Simple Majority** | Each voter selects one candidate per position | Officer elections, single-choice races |
+| **Ranked Choice** | Voters rank candidates; lowest eliminated in instant-runoff rounds | Contested multi-candidate races |
+| **Approval** | Voters may approve any number of candidates; most approvals wins | Board seats, membership approval votes |
+| **Supermajority** | Single-choice voting counted against a higher victory threshold | Bylaw amendments |
+
+> **Note:** Approval and ranked-choice ballots are submitted atomically — all of a voter's approvals (or rankings) for a position are recorded together, or none are.
 
 ### Victory Conditions
 
 | Condition | Description |
 |-----------|-------------|
-| **Most Votes** | Whoever gets the most votes wins |
+| **Most Votes** | Whoever gets the most votes wins (ties: all tied candidates flagged) |
 | **Majority** | Must receive >50% of total votes cast |
-| **Threshold** | Must reach a configured percentage (e.g., 2/3 majority for bylaws) |
+| **Supermajority** | Must reach the configured percentage (`victory_percentage`, default 67) |
+| **Threshold** | Must reach a configured absolute vote count (`victory_threshold`) |
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Create Election form showing title, description, type selector, date range, voting method dropdown, anonymous toggle, and write-in toggle._
 
-> **Hint:** For bylaw amendments requiring a 2/3 supermajority, set the victory condition to **Threshold** with **victory_percentage = 67**.
+> **Hint:** For bylaw amendments requiring a 2/3 supermajority, set the victory condition to **Supermajority** with **victory_percentage = 67**.
 
 ---
 
@@ -182,14 +185,14 @@ When the election is ready:
 3. If configured, ballot emails are sent to all eligible voters
 4. Voters can now cast their votes via the in-app interface or email ballot link
 
-> **Hint:** Send a **test ballot** to yourself first (`POST /elections/:id/send-test-ballot`) to verify the email rendering and voting link before sending to all members.
+> **Hint:** Send a **test ballot** to yourself first (`POST /elections/:id/send-test-ballot`) to verify the email rendering and voting link before sending to all members. Votes cast from a test ballot are flagged as test votes — they are excluded from results, statistics, and rosters, and they never consume your real vote.
 
 ### Ballot Distribution
 
 When you click **Send Ballots**, the system:
 
 1. Identifies all eligible voters (respecting tier, attendance, and override rules)
-2. Generates a unique voting token per voter
+2. Generates a unique voting token per voter — the token records which ballot items that voter is eligible for, and this is enforced again when the ballot is submitted (a voter cannot vote on restricted items even by crafting the request manually)
 3. Sends an email with a link to the public ballot page (`/ballot?token=...`)
 4. Reports how many ballots were sent and which members were skipped (with reasons)
 
@@ -202,8 +205,9 @@ When you click **Send Ballots**, the system:
 | Scenario | Behavior |
 |----------|----------|
 | Member without email address | Skipped during send; reason logged |
-| Ballot sent to member who already voted | Token still valid; second vote overwrites first (if allowed by config) |
-| Election opened without ballot items | Warning shown; can still open |
+| Ballot sent to member who already voted | Second submission is rejected — votes are never overwritten (double-vote prevention is enforced at the database level) |
+| Member with zero eligible ballot items | Skipped during send (no empty ballot); reason shown in the send summary |
+| Election opened without ballot items or candidates | Cannot open — at least one accepted candidate or one ballot item is required |
 
 ---
 
@@ -213,17 +217,17 @@ When you click **Send Ballots**, the system:
 
 1. Navigate to **Elections** and open the active election
 2. Review each ballot item and the candidates
-3. Select your choice for each position
-4. Click **Submit Vote**
-5. A receipt hash is generated (for verification, without revealing your vote)
+3. Select your choice for each position (or your approvals/rankings for approval and ranked-choice elections)
+4. Click **Submit Vote** — for approval and ranked-choice elections all of your selections for the position are submitted together, atomically
+5. A **receipt hash** is returned with your submission — save it; you can later confirm your vote was recorded via the receipt verification endpoint without revealing who you voted for
 
 ### Email Ballot Voting (Token-Based)
 
 1. Open the ballot email from your department
 2. Click the voting link
-3. The public ballot page loads with your ballot items
+3. The public ballot page loads with your ballot items — you only see the items you are eligible to vote on
 4. Select your choices
-5. Click **Submit** — no login required; the token authenticates you
+5. Click **Submit** — no login required; the token authenticates you. The confirmation screen shows your vote receipts — save them if you want to verify your votes later
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the public ballot page showing the election title, a position ("Fire Chief") with three candidate options as radio buttons, a write-in text field, and a Submit button at the bottom._
 
@@ -235,10 +239,12 @@ For elections with multiple ballot items, votes can be submitted atomically usin
 
 | Scenario | Behavior |
 |----------|----------|
-| Voter tries to vote twice | Depends on config; typically second vote rejected |
-| Token expired | Rate-limited; must request new ballot |
+| Voter tries to vote twice for the same candidate/position | Rejected (enforced at the database level); approval voters may still add approvals for *different* candidates, and ranked-choice voters one vote per rank |
+| Voter tries to vote on a restricted ballot item | Rejected at submission — eligibility is enforced server-side, not just hidden in the UI |
+| Token expired | Tokens expire at the election end date (or after 30 days, whichever is sooner); the secretary can re-send the ballot |
 | Write-in candidate name matches existing candidate | Recorded as separate write-in entry |
 | Ranked choice with incomplete ranking | Only ranked candidates counted; unranked treated as not preferred |
+| One vote in a bulk submission fails | The entire submission is rolled back — no partial ballots |
 
 ---
 
@@ -271,7 +277,7 @@ When enabled for the organization, proxy voting allows one member to vote on beh
 | Scenario | Behavior |
 |----------|----------|
 | Max proxies per person exceeded | Default limit is 1 proxy per holder (configurable) |
-| Delegating member also votes directly | Direct vote takes precedence; proxy vote blocked |
+| Delegating member also votes directly | Whichever vote is cast first stands; the second attempt (proxy or direct) is blocked by double-vote prevention |
 | Proxy authorization revoked after vote cast | Vote stands; revocation prevents future proxy votes only |
 
 ---
@@ -291,12 +297,14 @@ If results are hidden until close:
 
 **Required Permission:** `elections.manage` (to close)
 
-1. Click **Close Election** — voting ends immediately
+1. Click **Close Election** — voting ends immediately. Closing early (before the scheduled end date) is fully supported — runoff conditions are still evaluated and membership-approval results still flow back to the pipeline
 2. Results are calculated and displayed:
-   - Per-position winner (or "No winner" if threshold not met)
+   - Per-position winner (or "No winner" if the victory condition wasn't met)
    - Vote counts per candidate
    - Write-in tally
-   - Turnout statistics
+   - Turnout statistics (turnout counts only voting-eligible members — tiers marked not voting-eligible are excluded from the denominator)
+
+> **Note on early closes:** the results *API* stays gated until the election's scheduled end date has passed. If you close early and want members to see results right away, flip **results visible immediately** on the closed election (the Publish Results panel does this) — internal processes like runoff creation and the emailed report are not affected by the gate.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the election results page showing a position ("Fire Chief") with candidate vote counts in a bar chart, the winner highlighted in green, and turnout statistics (e.g., "38 of 42 eligible voters — 90.5% turnout")._
 
@@ -310,12 +318,12 @@ Navigate to the **Non-Voters** section to see eligible voters who did not partic
 
 ## Runoff Elections
 
-When **Enable Runoffs** is on and no candidate meets the victory condition:
+When **Enable Runoffs** is on and no candidate meets the victory condition at close (including early closes):
 
-1. The system automatically identifies candidates for the runoff (typically top 2)
-2. A **runoff election** is created as a child of the original
-3. The **Runoff Chain** view shows the progression: Original → Runoff 1 → Runoff 2 (if needed)
-4. Each runoff follows the same voting workflow
+1. The system automatically identifies candidates for the runoff — **top two** advance, or **eliminate lowest** drops the last-place candidate, depending on the configured runoff type
+2. A **runoff election** is created as a child of the original, in Draft status, with write-ins disabled
+3. The **Runoff Chain** view shows the progression: Original → Runoff 1 → Runoff 2 (if needed), up to the configured maximum rounds
+4. Each runoff follows the same voting workflow — review it, adjust dates if needed, and open it
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Runoff Chain timeline showing the original election (no majority), Runoff 1 (still no majority), and Runoff 2 (winner determined), connected by arrows._
 
@@ -335,10 +343,11 @@ The elections module includes cryptographic integrity features for audit complia
 
 ### Vote Receipt Verification
 
-Each vote generates a **receipt hash** (HMAC-SHA256) that:
+Each vote generates a cryptographic **receipt hash** that:
+- Is returned to the voter when they submit their ballot (shown on the confirmation screen — voters should save it)
 - Proves the vote was recorded
 - Does NOT reveal which candidate was selected
-- Can be verified by the voter via the receipt verification endpoint
+- Can be verified by anyone holding the receipt via `GET /elections/{id}/verify-receipt?receipt=...` (public, rate-limited — returns only the vote's timestamp and position)
 
 ### Forensics Report
 
@@ -359,7 +368,7 @@ Access the **Forensics** tab on the election detail page for:
 |----------|----------|
 | Vote signature mismatch | Flagged in forensics report; does not auto-delete vote |
 | Secretary deletes a vote | Soft-delete with reason required; audit trail preserved |
-| Election reopened after close | Rollback logged in forensics; leadership notification sent |
+| Election reopened after close | Rollback logged in forensics; leadership notification sent. **Not allowed** for anonymous elections that already have votes — the anonymity salt is destroyed at close, so reopening would let prior voters vote again. Create a new election instead |
 
 ---
 
@@ -486,11 +495,12 @@ Sarah generates the election report and emails it to the department.
 |-------|----------|
 | Member says they didn't receive ballot email | Check the send report for skipped members. Verify email address is on file. Re-send ballot to individual member. |
 | Ballot email link points to the wrong site or won't load | The emailed link is built from the server's `FRONTEND_URL` setting, not the request URL. Have your administrator set `FRONTEND_URL` to the real public site URL and re-send the ballots. |
-| Voter gets "Token expired" error | Token expires after 7 days. Secretary can re-send the ballot email. |
-| Election closed accidentally | Use **Rollback** to reopen (requires `elections.manage`). Leadership receives notification. |
+| Voter gets "Token expired" error | Tokens expire at the election end date (or after 30 days, whichever comes first). Secretary can re-send the ballot email. |
+| Voter gets "not eligible to vote on" an item | Per-item eligibility is enforced at submission. Check the Eligibility Roster; if the member should vote, grant an override and re-send their ballot (the new token picks up their updated eligibility). |
+| Election closed accidentally | Use **Rollback** to reopen (requires `elections.manage`); leadership receives notification. **Exception:** an anonymous election that already has votes cannot be reopened after closing — its anonymity salt was destroyed, so reopening would permit double voting. Create a new election. |
 | Candidate wants to withdraw | Remove candidate from ballot (only if no votes cast). If votes exist, mark as "declined" instead. |
 | Proxy holder can't find proxy vote button | Verify proxy authorization was created. Check that the election is still open. |
-| Results don't show after closing | Check if `results_visible_immediately` is off. Results appear after the secretary publishes them. |
+| Results don't show after closing | If the election was closed *before* its scheduled end date, results stay hidden until that date passes — flip **results visible immediately** on the closed election (Publish Results panel) to show them now. |
 | Vote count doesn't match attendance | Check for proxy votes (counted separately). Check for voter overrides (members not on attendance list). |
 | Forensics shows integrity warning | Run full forensics report. Contact system administrator if vote signatures are invalid. |
 | Runoff not auto-created | Verify **Enable Runoffs** is on in election settings. Check that the victory condition was set correctly. |
