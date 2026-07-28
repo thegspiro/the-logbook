@@ -11,17 +11,18 @@ The Elections module manages department elections, officer nominations, anonymou
 3. [Configuring Ballot Items](#configuring-ballot-items)
 4. [Nominating Candidates](#nominating-candidates)
 5. [Voter Eligibility & Overrides](#voter-eligibility--overrides)
-6. [Opening an Election](#opening-an-election)
-7. [Casting Votes](#casting-votes)
-8. [Proxy Voting](#proxy-voting)
-9. [Monitoring & Results](#monitoring--results)
-10. [Runoff Elections](#runoff-elections)
-11. [Vote Integrity & Forensics](#vote-integrity--forensics)
-12. [Election Settings](#election-settings)
-13. [Meeting Attendance Integration](#meeting-attendance-integration)
-14. [Prospective Member Election Packages](#prospective-member-election-packages)
-15. [Realistic Example: Annual Officer Election](#realistic-example-annual-officer-election)
-16. [Troubleshooting](#troubleshooting)
+6. [The Pre-Meeting Package](#the-pre-meeting-package)
+7. [Opening an Election](#opening-an-election)
+8. [Casting Votes](#casting-votes)
+9. [Proxy Voting](#proxy-voting)
+10. [Monitoring & Results](#monitoring--results)
+11. [Runoff Elections](#runoff-elections)
+12. [Vote Integrity & Forensics](#vote-integrity--forensics)
+13. [Election Settings](#election-settings)
+14. [Meeting Attendance Integration](#meeting-attendance-integration)
+15. [Prospective Member Election Packages](#prospective-member-election-packages)
+16. [Realistic Example: Annual Officer Election](#realistic-example-annual-officer-election)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -171,6 +172,57 @@ When a member is excluded from voting but should be allowed (e.g., absent member
 | Member not on attendance list | Ineligible unless override granted |
 | Override granted, then member's tier changes | Override persists regardless |
 | Bulk override for remote voters | Use bulk override endpoint to add multiple members |
+
+---
+
+## The Pre-Meeting Package
+
+**Required Permission:** `elections.manage`
+
+Before an annual or special meeting, generate a **pre-meeting package** — a
+print-ready PDF the membership or leadership can review ahead of time. From
+the election detail page (draft or open elections), open **Pre-Meeting
+Package** in the Communication section.
+
+The package contains:
+
+- The linked meeting's details and **agenda** (when the election is linked to
+  a meeting record)
+- The election configuration: voting window, voting method, victory
+  condition, quorum requirement, proxy-voting availability, runoff settings
+- A **ballot preview**: every ballot item in order with its eligibility
+  restrictions, plus the nominated candidates and their statements
+- The **voter-eligibility roster**: summary counts and the eligible-voter
+  name list
+
+### Two privacy variants
+
+| Variant | Contents | Intended audience |
+|---------|----------|-------------------|
+| **Member** | Eligible-voter names + counts only | General membership mailing |
+| **Full** | Adds per-member ineligibility reasons and granted overrides | Leadership / board prep |
+
+> **Privacy note:** ineligibility reasons expose individual members'
+> membership tier and attendance shortfalls. Keep the full variant to
+> leadership; the member variant exists precisely so those details aren't
+> broadcast department-wide.
+
+### Sending it
+
+1. Click **Pre-Meeting Package**
+2. Prefill the recipient list from **Leadership** or **All eligible voters** —
+   then edit it freely: remove anyone, or add outside addresses (board
+   counsel, the district office, a member's personal email)
+3. Choose the variant (the full-roster checkbox defaults on for leadership
+   prefills), add an optional message, and send — recipients are **BCC'd**
+   so addresses aren't exposed to each other
+
+### Or just download it
+
+Use the **Preview PDF** links (or `GET /elections/{id}/package-pdf`) to
+download either variant without sending anything — attach it to your own
+email, print it for the meeting, or file it with the minutes. Sends and
+downloads are both audit-logged.
 
 ---
 

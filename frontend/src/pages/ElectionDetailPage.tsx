@@ -35,6 +35,7 @@ import RemindNonVotersModal from '../components/election-detail/RemindNonVotersM
 import DeleteElectionModal from '../components/election-detail/DeleteElectionModal';
 import ExtendElectionModal from '../components/election-detail/ExtendElectionModal';
 import EditDatesModal from '../components/election-detail/EditDatesModal';
+import PreMeetingPackageModal from '../components/election-detail/PreMeetingPackageModal';
 import BallotPreviewModal from '../components/election-detail/BallotPreviewModal';
 import RollbackElectionModal from '../components/election-detail/RollbackElectionModal';
 
@@ -49,6 +50,9 @@ export const ElectionDetailPage: React.FC = () => {
   const [showExtendModal, setShowExtendModal] = useState(false);
   const [showEditDatesModal, setShowEditDatesModal] = useState(false);
   const [editDatesError, setEditDatesError] = useState<string | null>(null);
+  const [showPackageModal, setShowPackageModal] = useState(false);
+  const [isSendingPackage, setIsSendingPackage] = useState(false);
+  const [packageError, setPackageError] = useState<string | null>(null);
   const [extendError, setExtendError] = useState<string | null>(null);
   const [showRollbackModal, setShowRollbackModal] = useState(false);
   const [rollbackError, setRollbackError] = useState<string | null>(null);
@@ -292,6 +296,31 @@ export const ElectionDetailPage: React.FC = () => {
       toast.success('Voting window updated');
     } catch (err: unknown) {
       setEditDatesError(getErrorMessage(err, 'Failed to update voting window'));
+    }
+  };
+
+  /** Emails the pre-meeting package PDF to the secretary-edited list. */
+  const handleSendPackage = async (
+    recipientEmails: string[],
+    message: string,
+    includeFullRoster: boolean
+  ) => {
+    if (!electionId || recipientEmails.length === 0) return;
+
+    try {
+      setIsSendingPackage(true);
+      setPackageError(null);
+      const result = await electionService.sendPreMeetingPackage(electionId, {
+        recipient_emails: recipientEmails,
+        message: message.trim() || undefined,
+        include_full_roster: includeFullRoster,
+      });
+      setShowPackageModal(false);
+      toast.success(result.message);
+    } catch (err: unknown) {
+      setPackageError(getErrorMessage(err, 'Failed to send pre-meeting package'));
+    } finally {
+      setIsSendingPackage(false);
     }
   };
 
@@ -957,26 +986,36 @@ export const ElectionDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Communication Actions */}
-            {election.status === ElectionStatus.OPEN && (
+            {/* Communication Actions — pre-meeting package is available while
+                drafting; ballot emails only once voting is open */}
+            {(election.status === ElectionStatus.DRAFT ||
+              election.status === ElectionStatus.OPEN) && (
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-theme-text-muted mb-2">
                   Communication
                 </h4>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
-                    onClick={() => setShowSendEmailModal(true)}
-                    disabled={!election.ballot_items || election.ballot_items.length === 0}
-                    className="btn-primary text-sm"
-                    title={
-                      !election.ballot_items || election.ballot_items.length === 0
-                        ? 'Add ballot items before sending emails'
-                        : undefined
-                    }
+                    onClick={() => setShowPackageModal(true)}
+                    className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 text-sm"
                   >
-                    {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
+                    Pre-Meeting Package
                   </button>
-                  {election.email_sent && (
+                  {election.status === ElectionStatus.OPEN && (
+                    <button
+                      onClick={() => setShowSendEmailModal(true)}
+                      disabled={!election.ballot_items || election.ballot_items.length === 0}
+                      className="btn-primary text-sm"
+                      title={
+                        !election.ballot_items || election.ballot_items.length === 0
+                          ? 'Add ballot items before sending emails'
+                          : undefined
+                      }
+                    >
+                      {election.email_sent ? 'Resend Ballot Emails' : 'Send Ballot Emails'}
+                    </button>
+                  )}
+                  {election.status === ElectionStatus.OPEN && election.email_sent && (
                     <button
                       onClick={() => { void handleOpenRemindModal(); }}
                       disabled={isLoadingNonVoters}
@@ -985,7 +1024,7 @@ export const ElectionDetailPage: React.FC = () => {
                       {isLoadingNonVoters ? 'Loading...' : 'Remind Non-Voters'}
                     </button>
                   )}
-                  {election.email_sent && (
+                  {election.status === ElectionStatus.OPEN && election.email_sent && (
                     <span className="inline-flex items-center text-xs text-theme-text-muted gap-1">
                       <svg className="h-4 w-4 text-green-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                         <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
@@ -1542,6 +1581,19 @@ export const ElectionDetailPage: React.FC = () => {
           onSubmit={(newStartDate, newEndDate) => { void handleEditDates(newStartDate, newEndDate); }}
           onClose={() => { setShowEditDatesModal(false); setEditDatesError(null); }}
           timezone={tz}
+        />
+      )}
+
+      {showPackageModal && election && electionId && (
+        <PreMeetingPackageModal
+          electionId={electionId}
+          electionTitle={election.title}
+          sending={isSendingPackage}
+          error={packageError}
+          onSubmit={(recipientEmails, message, includeFullRoster) => {
+            void handleSendPackage(recipientEmails, message, includeFullRoster);
+          }}
+          onClose={() => { setShowPackageModal(false); setPackageError(null); }}
         />
       )}
 

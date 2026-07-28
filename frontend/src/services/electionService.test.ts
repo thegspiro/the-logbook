@@ -308,6 +308,55 @@ describe('electionService', () => {
     });
   });
 
+  // --- getPackageRecipients ---
+  describe('getPackageRecipients', () => {
+    it('should GET /elections/:id/package-recipients with mode and unwrap', async () => {
+      const recipients = [{ user_id: 'u1', name: 'Sue', email: 'sue@dept.org' }];
+      mockGet.mockResolvedValueOnce({ data: { recipients } });
+
+      const result = await electionService.getPackageRecipients('el1', 'leadership');
+
+      expect(mockGet).toHaveBeenCalledWith('/elections/el1/package-recipients', {
+        params: { mode: 'leadership' },
+      });
+      expect(result).toEqual(recipients);
+    });
+  });
+
+  // --- downloadPackagePdf ---
+  describe('downloadPackagePdf', () => {
+    it('should GET /elections/:id/package-pdf as a blob', async () => {
+      const blob = new Blob(['%PDF'], { type: 'application/pdf' });
+      mockGet.mockResolvedValueOnce({ data: blob });
+
+      const result = await electionService.downloadPackagePdf('el1', 'full');
+
+      expect(mockGet).toHaveBeenCalledWith('/elections/el1/package-pdf', {
+        params: { variant: 'full' },
+        responseType: 'blob',
+      });
+      expect(result).toBe(blob);
+    });
+  });
+
+  // --- sendPreMeetingPackage ---
+  describe('sendPreMeetingPackage', () => {
+    it('should POST the edited recipient list to /elections/:id/send-package', async () => {
+      const payload = {
+        recipient_emails: ['sue@dept.org', 'counsel@lawfirm.example'],
+        message: 'See attached',
+        include_full_roster: true,
+      };
+      const response = { success: true, message: 'sent', sent_count: 2 };
+      mockPost.mockResolvedValueOnce({ data: response });
+
+      const result = await electionService.sendPreMeetingPackage('el1', payload);
+
+      expect(mockPost).toHaveBeenCalledWith('/elections/el1/send-package', payload);
+      expect(result).toEqual(response);
+    });
+  });
+
   // --- getBallotTemplates ---
   describe('getBallotTemplates', () => {
     it('should GET ballot templates from /elections/templates/ballot-items and unwrap', async () => {

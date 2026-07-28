@@ -64,6 +64,7 @@ services.
 | 12h | Why You Can't Reopen a Closed Election | Script 12 |
 | 12i | Investigating a Disputed Election | Script 12 |
 | 12j | Choosing a Voting Method | Script 12 |
+| 12k | The Pre-Meeting Package | Script 12 |
 
 ---
 

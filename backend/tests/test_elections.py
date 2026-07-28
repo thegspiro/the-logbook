@@ -968,3 +968,41 @@ class TestBulkVoteCreateSchema:
 
         with pytest.raises(pydantic.ValidationError):
             BulkVoteCreate(election_id=uuid4(), votes=[])
+
+
+class TestPreMeetingPackageSchemas:
+    """Pre-meeting package request/response contracts."""
+
+    def test_valid_send_payload(self):
+        from app.schemas.election import PreMeetingPackageSend
+
+        payload = PreMeetingPackageSend(
+            recipient_emails=["sec@dept.org", "counsel@lawfirm.example"],
+            message="See attached",
+            include_full_roster=True,
+        )
+        assert len(payload.recipient_emails) == 2
+        assert payload.include_full_roster is True
+
+    def test_empty_recipient_list_rejected(self):
+        import pydantic
+
+        from app.schemas.election import PreMeetingPackageSend
+
+        with pytest.raises(pydantic.ValidationError):
+            PreMeetingPackageSend(recipient_emails=[])
+
+    def test_invalid_email_rejected(self):
+        import pydantic
+
+        from app.schemas.election import PreMeetingPackageSend
+
+        with pytest.raises(pydantic.ValidationError):
+            PreMeetingPackageSend(recipient_emails=["not-an-email"])
+
+    def test_full_roster_defaults_off(self):
+        """The privacy-sensitive variant must be opt-in."""
+        from app.schemas.election import PreMeetingPackageSend
+
+        payload = PreMeetingPackageSend(recipient_emails=["sec@dept.org"])
+        assert payload.include_full_roster is False

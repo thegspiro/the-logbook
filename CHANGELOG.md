@@ -76,6 +76,29 @@ ELEC-4, ELEC-8, ELEC-9). Migration `20260730_0001` adds
   elections (start + end, Start Now, 15-min/30-min/1-hour/1-day quick
   durations).
 
+**Feature: Pre-Meeting Package (2026-07-28)**
+
+- Secretaries can generate a print-ready **pre-meeting package PDF** for
+  annual/special meetings — linked-meeting details and agenda, election
+  configuration (voting method, victory condition, quorum, proxies,
+  runoffs), full ballot preview with candidates and statements, and the
+  voter-eligibility roster. Two privacy variants: *member* (eligible-voter
+  names + counts) and *full* (adds per-member ineligibility reasons and
+  overrides — leadership detail, not broadcast department-wide).
+- Email flow with a **fully editable recipient list**: prefill from
+  leadership or the eligible-voter roster, remove anyone, add outside
+  addresses; recipients are BCC'd; PDF attached. Or **download-only** —
+  grab either variant from the election page and distribute it yourself.
+- New endpoints (`elections.manage`): `GET /{id}/package-recipients`,
+  `GET /{id}/package-pdf?variant=member|full`, `POST /{id}/send-package`.
+  Sends and downloads audit-logged. New reportlab renderer
+  (`app/utils/pre_meeting_package_pdf.py`), `PreMeetingPackageModal` on the
+  election detail page (available for draft and open elections).
+- Fixed along the way: `get_eligibility_roster` reported **zero eligible
+  voters for positional elections** (no ballot items) — eligibility for
+  those now follows election-level rules (voter list, tier voting rules,
+  overrides), fixing the in-app roster and the package alike.
+
 **Docs** — full documentation sweep to match actual behavior: elections wiki
 page (correct endpoint paths, 2026-07-28 improvements section), training guide
 (voting-method tables, token expiry, double-vote semantics, rollback guard,

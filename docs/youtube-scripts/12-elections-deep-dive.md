@@ -5,7 +5,7 @@
 **Target Audience:** Secretaries, Presidents, Fire Chiefs, election administrators — anyone who runs a department vote
 **Roles Covered:** secretary, president, fire_chief (any role holding `elections.manage`)
 **Chapters:** 13 (each designed as a standalone clip)
-**Companion Content:** Edge-Case Shorts Pack 12a–12j (scripts included at the end of this file)
+**Companion Content:** Edge-Case Shorts Pack 12a–12k (scripts included at the end of this file)
 
 > **Relationship to other scripts:** This supersedes the elections chapters in
 > Script 4 (Chief, Ch. 5) and Script 7 (Secretary, Ch. 6) as the canonical
@@ -299,6 +299,16 @@ eligible (requires: regular; member has: probationary)"]**
 > like everyone else."
 
 **[CALLOUT: "Test votes never count — and never block your real vote"]**
+
+### THE PRE-MEETING PACKAGE (17:55 – 18:00, brief beat — full demo is Short 12k)
+
+**[SCREEN: Click Pre-Meeting Package; flash the generated PDF]**
+
+> "One more prep tool: the Pre-Meeting Package — a printable PDF with the
+> meeting agenda, the full ballot preview, and the eligible-voter list, ready
+> to email out before the meeting or file with the minutes. Two versions: a
+> member version with names and counts, and a leadership version that adds
+> the ineligibility reasons. More in the shorts below."
 
 ### OPEN & SEND (18:00 – 19:30)
 
@@ -890,6 +900,40 @@ timeline chart]**
 > elimination round."
 
 **[CALLOUT: "2 candidates → simple. 3+ → ranked. 'Any of these' → approval. Bylaws → supermajority."]**
+
+---
+
+## SHORT 12k: The Pre-Meeting Package
+
+**Length:** 90 seconds
+**Audience:** Secretaries
+
+**[SCREEN: Election detail page, Communication section — click Pre-Meeting Package]**
+
+> "Annual meeting in two weeks? Send the package. One click builds a
+> print-ready PDF: the meeting agenda, every ballot item with its candidates
+> and statements, the election rules — quorum, voting method, proxies — and
+> the eligible-voter list."
+
+**[SCREEN: The modal — prefill Leadership, remove one chip, add an outside address]**
+
+> "Prefill the recipients from leadership or all eligible voters, then edit
+> freely — drop anyone, add outside addresses like board counsel. Everyone's
+> BCC'd."
+
+**[SCREEN: Toggle the full-roster checkbox; show the two PDF variants side by side]**
+
+> "Two versions: members get names and counts. Leadership's version adds who's
+> *not* eligible and why — tier and attendance details that shouldn't go
+> department-wide."
+
+**[SCREEN: The Preview PDF download links]**
+
+> "Or skip sending entirely — download the PDF and attach it to your own
+> email, print it for the meeting, file it with the minutes. Either way, it's
+> audit-logged."
+
+**[CALLOUT: "One click: agenda + ballot + voter roster, ready to mail"]**
 
 ---
 

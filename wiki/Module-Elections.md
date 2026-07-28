@@ -102,6 +102,9 @@ GET    /api/v1/elections/{id}/non-voters     # Eligible voters who haven't voted
 POST   /api/v1/elections/{id}/send-ballot    # Email ballots with unique voting tokens
 POST   /api/v1/elections/{id}/send-test-ballot  # Send a test ballot to yourself (votes excluded from results)
 POST   /api/v1/elections/{id}/send-report    # Email election results report
+GET    /api/v1/elections/{id}/package-recipients  # Prefill list for the pre-meeting package (manage)
+GET    /api/v1/elections/{id}/package-pdf    # Download pre-meeting package PDF (manage; variant=member|full)
+POST   /api/v1/elections/{id}/send-package   # Email pre-meeting package to an edited address list (manage)
 GET    /api/v1/elections/{id}/preview-ballot # Preview a member's ballot (manage)
 GET    /api/v1/elections/{id}/verify-receipt # Verify a vote receipt (public, rate-limited)
 GET    /api/v1/elections/{id}/integrity      # Verify vote signatures (manage)
@@ -124,6 +127,29 @@ GET    /api/v1/elections/ballot/{token}/candidates  # Candidates for a token bal
 POST   /api/v1/elections/ballot/vote         # Cast one vote (token in body)
 POST   /api/v1/elections/ballot/vote/bulk    # Submit full ballot atomically (token in body)
 ```
+
+---
+
+## Pre-Meeting Package (2026-07-28)
+
+Secretaries can generate and distribute a **pre-meeting package** for annual
+and special meetings — a print-ready PDF containing the linked meeting's
+details and agenda, the election configuration (voting method, victory
+condition, quorum, proxy availability, runoffs), a full ballot preview with
+candidates and statements, and the voter-eligibility roster.
+
+- **Two privacy variants**: the *member* variant lists eligible voters and
+  counts only; the *full* variant (leadership) adds per-member ineligibility
+  reasons and granted overrides. Membership-tier and attendance details are
+  never broadcast to the general membership
+- **Editable recipients**: the send modal prefills from leadership or the
+  eligible-voter roster, and the secretary edits the list freely — remove
+  anyone, add outside addresses (e.g. board counsel). Recipients are BCC'd
+- **Download-only flow**: the PDF can be downloaded directly (no email) and
+  attached to the secretary's own communication or filed with the minutes
+- Available for draft and open elections from the Communication section of
+  the election detail page; sends and downloads are audit-logged
+  (`pre_meeting_package_sent` / `pre_meeting_package_downloaded`)
 
 ---
 

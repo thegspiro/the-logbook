@@ -418,6 +418,29 @@ export interface ElectionReportResponse {
   message: string;
 }
 
+// Pre-meeting package (secretary meeting prep)
+
+/** Which PDF variant: 'member' = names + counts; 'full' = adds ineligibility reasons. */
+export type PackageVariant = 'member' | 'full';
+
+export interface PackageRecipient {
+  user_id: string;
+  name: string;
+  email: string;
+}
+
+export interface PreMeetingPackageSend {
+  recipient_emails: string[];
+  message?: string | undefined;
+  include_full_roster: boolean;
+}
+
+export interface PreMeetingPackageResponse {
+  success: boolean;
+  message: string;
+  sent_count: number;
+}
+
 // Vote receipt verification
 export interface VoteReceiptResponse {
   verified: boolean;
