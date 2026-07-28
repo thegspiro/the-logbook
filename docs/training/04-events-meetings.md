@@ -529,6 +529,10 @@ Each election shows:
 
 Elections can provide a public ballot URL that uses unique tokens, allowing members to vote from any device without logging in. The token is single-use, tied to the member, and records which ballot items that member is eligible for — the eligibility rules are enforced again when the ballot is submitted, and the voter only sees their eligible items.
 
+### Pre-Meeting Package
+
+For annual and special meetings, the secretary can generate a **pre-meeting package** — a print-ready PDF with the meeting agenda, the election configuration, the full ballot preview with candidates, and the voter-eligibility roster — and email it out ahead of the meeting (editable BCC recipient list) or download it to distribute manually. Two privacy variants keep per-member ineligibility reasons restricted to leadership. See [Elections & Voting > The Pre-Meeting Package](./14-elections.md#the-pre-meeting-package).
+
 ---
 
 ## Public Outreach Request Pipeline

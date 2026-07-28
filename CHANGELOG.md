@@ -98,6 +98,9 @@ ELEC-4, ELEC-8, ELEC-9). Migration `20260730_0001` adds
   voters for positional elections** (no ballot items) — eligibility for
   those now follows election-level rules (voter list, tier voting rules,
   overrides), fixing the in-app roster and the package alike.
+- Known limitation (documented in `KNOWN_LIMITATIONS.md`): the Cloudflare
+  email backend drops attachments, so package emails sent through it arrive
+  without the PDF — use the download-only flow there.
 
 **Docs** — full documentation sweep to match actual behavior: elections wiki
 page (correct endpoint paths, 2026-07-28 improvements section), training guide

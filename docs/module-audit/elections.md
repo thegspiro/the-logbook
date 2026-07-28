@@ -226,6 +226,16 @@ the same change unless marked deferred. Migration `20260730_0001` adds
   modal for draft elections (start + end, quarter-hour granularity,
   15-min/30-min/1-hour/1-day quick durations).
 
+- **R-13 — LOW/correctness — Eligibility roster reported zero eligible
+  voters for positional elections.** `get_eligibility_roster` could only
+  accrue eligibility from ballot items, so every member of a
+  candidate/position-only election (no structured ballot items) showed as
+  ineligible — wrong in the in-app roster and in anything derived from it
+  (found while building the pre-meeting package's eligible-voter prefill).
+  Fixed: positional elections now apply election-level rules — restricted
+  voter list, membership-tier `voting_eligible`, secretary overrides — with
+  a tier-based ineligibility reason.
+
 ### Open / deferred
 
 - **R-D1 — ELEC-5 remains:** voting tokens are stored in plaintext at rest

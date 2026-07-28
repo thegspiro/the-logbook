@@ -385,3 +385,5 @@ All election events are logged to the tamper-proof `audit_logs` table with `even
 | `ballot_emails_sent` | Email ballots distributed | Election ID, success/failed counts |
 | `runoff_election_created` | Automatic runoff | Parent and runoff election IDs |
 | `forensics_report_generated` | Forensics report pulled | Election ID |
+| `pre_meeting_package_sent` | Pre-meeting package emailed | Election ID, recipient count, roster variant |
+| `pre_meeting_package_downloaded` | Package PDF downloaded | Election ID, variant |

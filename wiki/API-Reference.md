@@ -235,6 +235,16 @@ POST   /api/v1/elections/{id}/send-report                              # Email e
 GET    /api/v1/elections/{id}/verify-receipt                            # Public vote receipt verification (rate-limited)
 ```
 
+## Election Pre-Meeting Package *(2026-07-28)*
+
+All require `elections.manage`; draft/open elections only.
+
+```
+GET    /api/v1/elections/{id}/package-recipients?mode=                  # Prefill list (leadership | eligible_voters)
+GET    /api/v1/elections/{id}/package-pdf?variant=                      # Download package PDF (member | full)
+POST   /api/v1/elections/{id}/send-package                              # Email package to an edited address list (BCC + PDF attachment)
+```
+
 ## Department Messages *(updated 2026-07-17)*
 
 Admin endpoints require `notifications.manage`. Inbox/read/acknowledge endpoints

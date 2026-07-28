@@ -172,6 +172,8 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 - **Ballot preview matches reality**: The secretary's preview-ballot now uses the same eligibility logic as the real ballot filter (shared `annotate_ballot_items_for_user`) instead of a hand-rolled comparison that could disagree
 - **Attendance can't be forged at creation**: `attendees` removed from the election create payload; check-ins must go through the audited attendee endpoints
 - **Frontend fixes**: Non-managers no longer see a blank election detail page; `/elections/settings` route is permission-gated; exact candidate↔ballot-item matching ("Chief" no longer matches "Assistant Chief" items); election list responses excluded from the API cache
+- **Runoffs inherit the parent's rule set with a fresh salt** *(follow-up)*: auto-created runoffs previously dropped quorum, position eligibility, the meeting/event link, attendees, and voter overrides — and anonymous runoffs had **no anonymity salt** (voter hashes keyed with an empty string were pre-computable from user ids). Runoffs now inherit the rules and generate their own salt
+- **Same-meeting runoffs work in one click** *(follow-up)*: opening an election clamps a future start date to the open time (audited as `start_adjusted_to_open_time`), an election whose end date already passed can't be opened, and draft elections gained an **Edit Dates** modal (Start Now, 15-min/30-min/1-hour/1-day quick durations)
 
 ### Edge Cases (2026-07-28)
 

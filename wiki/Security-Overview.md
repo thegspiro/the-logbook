@@ -52,6 +52,12 @@ the remaining voting-integrity gaps:
   otherwise allow undetected re-voting); runoffs trigger on early closes.
 - **Verifiable votes:** receipt hashes are returned to voters, making the
   public receipt-verification endpoint usable end-to-end.
+- **Runoff anonymity restored (follow-up):** auto-created runoff elections
+  previously had **no anonymity salt** — their voter hashes were keyed with an
+  empty string and thus pre-computable from user ids, defeating ballot
+  secrecy for every runoff round — and dropped the parent's quorum and
+  position-eligibility rules. Runoffs now generate a fresh per-election salt
+  and inherit the parent's full rule set.
 
 Remaining open items (token hashing at rest, forensics IP exposure) are tracked
 in [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).

@@ -332,6 +332,11 @@ tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 > can see the outcome right away — otherwise results stay hidden until the
 > originally scheduled end time."
 
+> "And before the meeting: generate the **Pre-Meeting Package** — a printable
+> PDF with the agenda, the full ballot preview, and the eligible-voter list,
+> ready to email out or file with the minutes. Full walkthrough in the
+> elections deep-dive (Script 12, Short 12k)."
+
 ### COMMUNICATIONS (15:00 – 15:30)
 
 **[SCREEN: Navigate to Communications module]**
