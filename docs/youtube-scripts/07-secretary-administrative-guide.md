@@ -308,17 +308,26 @@ member who arrived late, excusing an absence.]**
 
 > "As Secretary, you often administer elections. The process is the same as we
 > covered in the Chief's guide: create the election, define offices and
-> candidates, open voting, and certify results."
+> candidates, open voting, close it, and publish the results."
 
 **[SCREEN: Quick walkthrough of election admin — focus on the Secretary-specific
-tasks like verifying voter eligibility and certifying results]**
+tasks: the Eligibility Roster, sending a test ballot, and publishing results]**
 
-> "Your specific responsibilities usually include verifying the voter
-> eligibility list is correct, ensuring all candidates meet the qualification
-> requirements, and formally recording the election results in the meeting
-> minutes."
+> "Your specific responsibilities usually include verifying the Eligibility
+> Roster is correct before ballots go out — it shows you exactly who will
+> receive a ballot, who won't, and why, item by item. Grant overrides for
+> members who should vote but got filtered out. And send yourself a test ballot
+> first — test votes are marked as tests and never count toward the real
+> results."
 
-**[SCREEN: Show the voter eligibility list and the results certification page]**
+**[SCREEN: Show the Eligibility Roster and the Publish Results panel]**
+
+> "After closing the election, use the Publish Results panel to make results
+> visible to members and email the results report — then formally record the
+> outcome in the meeting minutes. One thing to know: if you close voting early,
+> say at the end of the meeting, flip 'results visible immediately' so members
+> can see the outcome right away — otherwise results stay hidden until the
+> originally scheduled end time."
 
 ### COMMUNICATIONS (15:00 – 15:30)
 

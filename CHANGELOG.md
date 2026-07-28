@@ -60,11 +60,20 @@ ELEC-4, ELEC-8, ELEC-9). Migration `20260730_0001` adds
   election page for non-managers fixed; exact candidate↔ballot-item matching;
   `GET /elections` list excluded from the API cache.
 
-**Docs** — elections wiki page, training guide, and ballot forensics guide
-updated to match actual behavior (correct endpoint paths, token expiry,
-double-vote semantics, rollback guard, receipt verification, early-close
-results visibility); `KNOWN_LIMITATIONS.md` rows for ELEC-3/ELEC-4 marked
-resolved.
+**Docs** — full documentation sweep to match actual behavior: elections wiki
+page (correct endpoint paths, 2026-07-28 improvements section), training guide
+(voting-method tables, token expiry, double-vote semantics, rollback guard,
+receipt verification, early-close results visibility), events & meetings guide
+(vote-integrity and eligibility tables), ballot forensics guide (signature
+formula, rollback guard, test tokens, receipt reference), YouTube scripts
+(chief/secretary/member/shorts — replaced the nonexistent "certify results"
+flow with close-and-publish, added receipts and eligibility roster),
+`Database-Schema` wiki (real `votes`/`voting_tokens` tables — there is no
+"encrypted `ballots`" table), `Security-Overview` wiki (2026-07-28 review
+section), `Security-Audit-Logging` wiki (actual election audit events),
+`ALEMBIC_MIGRATIONS.md` (26 missing rows appended; head now `20260730_0001`),
+training README release note; `KNOWN_LIMITATIONS.md` rows for ELEC-3/ELEC-4
+marked resolved.
 
 ### Security: zero-trust review — deployment posture, host/proxy trust, WebSocket sessions, cross-tenant FKs (2026-07-27)
 

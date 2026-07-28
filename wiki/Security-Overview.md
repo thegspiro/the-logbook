@@ -32,6 +32,30 @@ strong foundation and closed the remaining implicit-trust gaps:
 - **TLS:** startup warns when `DB_SSL`/`REDIS_SSL` is enabled without a CA
   (encrypted but the server certificate is unverified).
 
+### Elections Security Review (2026-07-28)
+
+A dedicated review of the elections module (findings R-1…R-10 in
+[`docs/module-audit/elections.md`](../docs/module-audit/elections.md)) closed
+the remaining voting-integrity gaps:
+
+- **Eligibility enforced at the ballot box:** per-item voter-type and
+  attendance restrictions are snapshotted on each voting token and enforced
+  when votes are submitted (previously only checked at email-send time — any
+  token holder could vote on restricted items).
+- **Roster leak closed:** the public ballot endpoint no longer returns
+  attendee names, eligible-voter lists, or email recipients to token holders.
+- **Test ballots isolated:** test-ballot votes are flagged and excluded from
+  all tallies, and never consume the sender's real vote.
+- **Double-voting hardening:** approval/ranked-choice voting now works with
+  method-aware dedup (single-vote dedup unchanged); reopening a closed
+  anonymous election with votes is refused (the destroyed anonymity salt would
+  otherwise allow undetected re-voting); runoffs trigger on early closes.
+- **Verifiable votes:** receipt hashes are returned to voters, making the
+  public receipt-verification endpoint usable end-to-end.
+
+Remaining open items (token hashing at rest, forensics IP exposure) are tracked
+in [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
+
 ### Module-by-Module Security Audit (2026-07)
 
 A rotating, module-by-module security audit covered all 27 modules/domains

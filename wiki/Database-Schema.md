@@ -117,10 +117,11 @@ The Logbook uses MySQL 8.0+ (MariaDB 10.11+ for ARM) with SQLAlchemy ORM and Ale
 
 | Table | Description |
 |-------|-------------|
-| `elections` | Election definitions with voting period |
-| `candidates` | Election candidates |
-| `ballots` | Encrypted ballot records |
-| `election_packages` | Auto-generated from prospective member pipeline |
+| `elections` | Election definitions: voting period, method, victory condition, runoff/quorum config, per-election anonymity salt (destroyed at close), rollback history |
+| `candidates` | Election candidates (member-linked or write-in) |
+| `votes` | Vote records: HMAC signature, sequential chain hash, unique dedup hash, voter receipt hash, `is_test` flag, soft-delete audit fields. Anonymous votes store only a salted `voter_hash`, never `voter_id` |
+| `voting_tokens` | Per-voter email ballot tokens: expiry, usage/access tracking, `is_test` flag, and the voter's eligible ballot items snapshotted at issue time (`eligible_item_ids`, migration `20260730_0001`) *(2026-07-28)* |
+| `prospect_election_packages` | Auto-generated from prospective member pipeline |
 
 ### Meeting Minutes & Documents
 

@@ -24,7 +24,7 @@ Every significant action in the system is recorded in the audit log with:
 | **Authentication** | Login, logout, failed login, password change, MFA setup |
 | **User Management** | Create, update, delete, status change, role assignment |
 | **Training** | Record creation, approval, rejection, waiver creation |
-| **Elections** | Election creation, ballot cast, result certification |
+| **Elections** | Election create/update/delete, open/close/rollback, votes cast (auth, token, bulk, proxy), blocked double-vote attempts, ballot emails sent, voter overrides, proxy authorizations, vote soft-deletes, integrity checks, forensics report access |
 | **Events** | Event creation, check-in, attendance modification |
 | **Inventory** | Assignment, checkout, return, clearance |
 | **Settings** | Module toggle, configuration change, role permission change |

@@ -259,9 +259,33 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260610_0002` | `20260610_0001` | `20260610_0002_add_position_settings.py` | Add nullable `positions.settings` JSON column for per-position, per-module UI preferences (e.g. `label_presets` — the label printer a role uses in each module) |
 | `20260613_0001` | `20260610_0002` | `20260613_0001_lowercase_form_category_enum.py` | Lowercase the `form_category` enum values to match the `(str, Enum)` convention |
 | `20260618_0100` | `20260613_0001` | `20260618_0100_add_user_platoon.py` | Add nullable `users.platoon` column (person-level platoon membership for shift rotations) |
-| `20260618_0200` | `20260618_0100` | `20260618_0200_add_shift_platoon.py` | Add nullable `shifts.platoon` column (records the platoon responsible for a generated shift) — **current single head** |
+| `20260618_0200` | `20260618_0100` | `20260618_0200_add_shift_platoon.py` | Add nullable `shifts.platoon` column (records the platoon responsible for a generated shift) |
+| `20260622_0001` | `20260618_0200` | `20260622_0001_create_inventory_impact_plans.py` | Create `inventory_impact_plans` (saved impact-planner scenarios) |
+| `20260702_0001` | `20260622_0001` | `20260702_0001_training_actor_fks_set_null.py` | Training actor FKs switched to `SET NULL` (nullable) |
+| `20260703_0001` | `20260702_0001` | `20260703_0001_drop_dead_columns.py` | Drop dead/unused columns |
+| `20260707_0001` | `20260703_0001` | `20260707_0001_lowercase_screening_and_shift_enums.py` | Lowercase medical-screening and shift enum values |
+| `20260714_0001` | `20260707_0001` | `20260714_0001_add_requirement_link_to_skills_testing.py` | Link skills-testing records to training requirements |
+| `20260715_0001` | `20260714_0001` | `20260715_0001_add_recert_cycle_to_training_programs.py` | Add recertification cycle to training programs |
+| `20260716_0001` | `20260715_0001` | `20260716_0001_add_certification_eligibility_to_sessions.py` | Add certification eligibility to training sessions |
+| `20260717_0001` | `20260716_0001` | `20260717_0001_add_allows_external_credit_to_requirements.py` | Add `allows_external_credit` to training requirements |
+| `20260718_0001` | `20260717_0001` | `20260718_0001_add_enrollment_cycle_and_struggling_tracking.py` | Add enrollment cycle + struggling-member tracking |
+| `20260719_0001` | `20260718_0001` | `20260719_0001_add_requirement_progress_credit_ledger.py` | Add requirement-progress credit ledger |
+| `20260720_0001` | `20260719_0001` | `20260720_0001_add_training_positions_and_shift_status.py` | Add training positions and shift status |
+| `20260720_0002` | `20260720_0001` | `20260720_0002_backfill_department_message_role_ids.py` | Backfill department-message role ids |
+| `20260720_0003` | `20260720_0002` | `20260720_0003_add_department_message_scheduled_at.py` | Add `scheduled_at` to department messages |
+| `20260720_0004` | `20260720_0003` | `20260720_0004_add_department_message_deleted_at.py` | Add `deleted_at` to department messages |
+| `20260721_0001` | `20260720_0004` | `20260721_0001_add_user_calendar_feed_token.py` | Add per-user calendar feed token |
+| `20260722_0001` | `20260721_0001` | `20260722_0001_add_shift_pass_down_notes.py` | Add shift pass-down notes |
+| `20260723_0001` | `20260722_0001` | `20260723_0001_add_compartment_container_type.py` | Add apparatus compartment container type |
+| `20260724_0001` | `20260723_0001` | `20260724_0001_add_inventory_lots_and_check_item_link.py` | Add inventory lots + equipment-check item link |
+| `20260725_0001` | `20260724_0001` | `20260725_0001_add_user_mfa_last_timestep.py` | Add `users.mfa_last_timestep` (TOTP replay guard) |
+| `20260726_0001` | `20260725_0001` | `20260726_0001_add_audit_log_hash_version.py` | Add audit-log hash version (keyed HMAC chain) |
+| `20260727_0001` | `20260726_0001` | `20260727_0001_add_session_refresh_grace.py` | Add session refresh grace period |
+| `20260728_0001` | `20260727_0001` | `20260728_0001_add_security_alert_org_id.py` | Add `organization_id` to security alerts |
+| `20260729_0001` | `20260728_0001` | `20260729_0001_widen_public_portal_api_key_prefix.py` | Widen public-portal API key prefix for selective lookup (PP-4) |
+| `20260730_0001` | `20260729_0001` | `20260730_0001_add_voting_token_test_and_eligibility.py` | Add `is_test` + `eligible_item_ids` to `voting_tokens` (elections security review R-1/R-3) — **current single head** |
 
-> **Single head as of 2026-06-18:** `20260618_0200` is the linear head of the
-> chain (`20260610_0002 → 20260613_0001 → 20260618_0100 → 20260618_0200`), so
-> `alembic upgrade head` is unambiguous. `tests/test_alembic_migrations.py`
-> validates the single-head DAG (it understands merge migrations).
+> **Single head as of 2026-07-28:** `20260730_0001` is the linear head of the
+> chain, so `alembic upgrade head` is unambiguous.
+> `tests/test_alembic_migrations.py` validates the single-head DAG (it
+> understands merge migrations).
