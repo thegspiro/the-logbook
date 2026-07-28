@@ -90,25 +90,31 @@ works. This is a deliberate behavior change: the refused case is exactly the
 unsafe one. The alternative (retaining the salt post-close) would weaken
 SEC-12 and was rejected.
 
-### ELEC-5 — MEDIUM — Voting tokens stored/compared in plaintext (contradicts "hashed" docs)
-`_generate_voting_token` stores the raw `token_urlsafe(64)` and
-`get_ballot_by_token` looks it up with `VotingToken.token == token` — plaintext
-equality, not a hash lookup. Entropy (512-bit) makes guessing impractical, but
-the model + endpoint docstrings claim the token is "hashed," and anyone with
-read access to `voting_tokens` obtains live ballot credentials.
-**Status:** flagged — real fix is to store only a SHA-256 of the token and look
-up by that (migration + code change). Left for deliberate work; the docstrings
-should be corrected in the same change to stop over-claiming.
+### ELEC-5 — MEDIUM — Voting tokens stored/compared in plaintext — ✅ FIXED
+`_generate_voting_token` stored the raw `token_urlsafe(64)` and
+`get_ballot_by_token` looked it up with plaintext equality, so anyone with
+read access to `voting_tokens` obtained live ballot credentials.
+**Fix (2026-07-28):** tokens are now SHA-256 at rest — `_generate_voting_token`
+returns `(VotingToken, raw_token)` with only the hash stored, the emailed link
+carries the raw value, and `get_ballot_by_token` hashes the presented token
+before lookup. Migration `20260731_0001` hashes existing rows in place
+(idempotent hex guard), so in-flight emailed links keep resolving. An unsalted
+hash suffices: 512-bit random tokens have no brute-force/rainbow surface.
+Downgrade is deliberately a no-op (one-way).
 
-### ELEC-6 — MEDIUM — Ballot secrecy holds only against non-DB actors, only after close
-For anonymous elections each `Vote` still stores `voter_hash` (deterministic
-HMAC keyed by a salt in the *same* `elections` row) plus `ip_address` and
-`user_agent`. Until `close_election` nulls the salt, anyone with DB read access
-can recompute every member's hash and map `voter_hash → candidate_id`;
-`get_election_forensics` further exposes per-IP distributions and proxy→delegator
-maps to any `elections.manage` admin.
-**Status:** flagged (documented limitation) — recommend minimizing stored
-IP/user-agent for anonymous elections and treating forensics as break-glass.
+### ELEC-6 — MEDIUM — Ballot secrecy holds only against non-DB actors, only after close — ✅ FIXED (residual noted)
+For anonymous elections each `Vote` stored `voter_hash` plus raw `ip_address`
+and `user_agent` forever, and `get_election_forensics` returned a full per-IP
+vote map — enough to correlate votes to voters in a small department.
+**Fix (2026-07-28):** `close_election` now purges per-vote IP/user-agent for
+anonymous elections at the same moment the salt is destroyed (live
+ballot-stuffing detection is unaffected while voting is open; audited as
+`ip_metadata_purged`), and forensics exposes only the thresholded
+`suspicious_ips` set plus `unique_ip_count` / `ip_metadata_purged` — the full
+`ip_vote_distribution` map is gone from service, schema, and frontend types.
+**Residual:** the tamper-proof audit log still records an IP per `vote_cast*`
+event with the vote id; minimizing that requires an audit-schema decision and
+is tracked in KNOWN_LIMITATIONS.
 
 ### ELEC-7 — LOW — `create_candidate` stores client-supplied `user_id` unvalidated (XC-1)
 `Candidate(..., **candidate.model_dump())` persists `user_id` with no in-org
@@ -238,14 +244,11 @@ the same change unless marked deferred. Migration `20260730_0001` adds
 
 ### Open / deferred
 
-- **R-D1 — ELEC-5 remains:** voting tokens are stored in plaintext at rest
-  (512-bit entropy is the guessing defense). Fix requires storing a SHA-256
-  and an in-flight-token compatibility decision. Docstrings claiming tokens
-  are "hashed" were corrected in this change.
-- **R-D2 — ELEC-6 remains:** forensics exposes `ip_vote_distribution` and
-  per-hour timelines to any `elections.manage` holder — enough to correlate
-  voters with anonymous ballots in a small department. Treat forensics as
-  break-glass; recommend threshold-only exposure in a follow-up.
+- **R-D1 — ELEC-5: ✅ resolved 2026-07-28** (tokens hashed at rest — see the
+  ELEC-5 entry above).
+- **R-D2 — ELEC-6: ✅ resolved 2026-07-28** (IP/user-agent purged at close for
+  anonymous elections; forensics threshold-only — see the ELEC-6 entry above.
+  Residual: per-event IPs in the audit log).
 - **R-D3 — Ballot token in GET query/path:** `GET /elections/ballot?token=`
   and `GET /elections/ballot/{token}/candidates` put the live credential in
   server/proxy logs and browser history, contradicting the POST-body

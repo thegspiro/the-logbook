@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 from loguru import logger
 from sqlalchemy import func, select
+from sqlalchemy import update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -1497,12 +1498,20 @@ class ElectionService:
             ip = v.ip_address or "unknown"
             ip_vote_counts[ip] = ip_vote_counts.get(ip, 0) + 1
 
-        # Flag IPs with suspiciously high vote counts (> 5 from same IP)
+        # Flag IPs with suspiciously high vote counts (> 5 from same IP).
+        # SEC (ELEC-6): only the thresholded suspicious set is exposed — the
+        # full per-IP vote map allowed vote-to-voter correlation in small
+        # departments. For anonymous elections the underlying per-vote
+        # IP/user-agent metadata is purged entirely at close.
         suspicious_ips = {
             ip: count
             for ip, count in ip_vote_counts.items()
             if count > 5 and ip != "unknown"
         }
+        unique_ip_count = sum(1 for ip in ip_vote_counts if ip != "unknown")
+        ip_metadata_purged = (
+            election.anonymous_voting and election.status == ElectionStatus.CLOSED
+        )
 
         # 6. Voting timeline (votes per hour)
         voting_timeline: Dict[str, int] = {}
@@ -1561,7 +1570,8 @@ class ElectionService:
             },
             "anomaly_detection": {
                 "suspicious_ips": suspicious_ips,
-                "ip_vote_distribution": ip_vote_counts,
+                "unique_ip_count": unique_ip_count,
+                "ip_metadata_purged": ip_metadata_purged,
             },
             "proxy_voting": {
                 "authorizations": election.proxy_authorizations or [],
@@ -2309,6 +2319,21 @@ class ElectionService:
         # SEC: Destroy the per-election anonymity salt so voter hashes can
         # never be reversed back to user IDs, even with full DB access.
         election.voter_anonymity_salt = None
+
+        # SEC (ELEC-6): For anonymous elections, purge the per-vote IP and
+        # user-agent metadata at the same moment. During voting they feed the
+        # live ballot-stuffing detection; after close they would let anyone
+        # with DB or forensics access correlate votes to voters in a small
+        # department. The tamper-proof audit log keeps its own event trail.
+        ip_metadata_purged = False
+        if election.anonymous_voting:
+            await self.db.execute(
+                sql_update(Vote)
+                .where(Vote.election_id == str(election_id))
+                .values(ip_address=None, user_agent=None)
+            )
+            ip_metadata_purged = True
+
         await self.db.commit()
         await self.db.refresh(election)
 
@@ -2322,6 +2347,7 @@ class ElectionService:
                 "election_id": str(election_id),
                 "title": election.title,
                 "anonymity_salt_destroyed": True,
+                "ip_metadata_purged": ip_metadata_purged,
             },
         )
 
@@ -3027,10 +3053,14 @@ Best regards,
                 at send time (None = unrestricted / positional election)
 
         Returns:
-            VotingToken instance
+            (VotingToken, raw_token) — the raw token exists only in this
+            return value (for the emailed ballot link); the row stores its
+            SHA-256, so DB read access never yields a live credential
+            (module-audit ELEC-5).
         """
-        # Generate secure random token
-        token = secrets.token_urlsafe(64)
+        # Generate secure random token; store only its hash
+        raw_token = secrets.token_urlsafe(64)
+        token = self._hash_voting_token(raw_token)
 
         # Generate voter hash (same method as used in voting)
         voter_hash = self._generate_voter_hash(user_id, election_id, anonymity_salt)
@@ -3054,7 +3084,16 @@ Best regards,
         )
 
         self.db.add(voting_token)
-        return voting_token
+        return voting_token, raw_token
+
+    @staticmethod
+    def _hash_voting_token(raw_token: str) -> str:
+        """SHA-256 a voting token for at-rest storage / lookup (ELEC-5).
+
+        Tokens are 512-bit random values, so an unsalted hash is sufficient
+        (no feasible brute-force or rainbow-table attack surface).
+        """
+        return hashlib.sha256(raw_token.encode()).hexdigest()
 
     # ------------------------------------------------------------------
     # Proxy voting
@@ -3648,7 +3687,7 @@ Best regards,
             # elections the recipient's eligible item ids are snapshotted on
             # the token so per-item eligibility can be enforced at submission
             # time (the token itself carries no user identity).
-            voting_token = await self._generate_voting_token(
+            voting_token, raw_ballot_token = await self._generate_voting_token(
                 user_id=recipient.id,
                 election_id=election_id,
                 organization_id=organization_id,
@@ -3662,9 +3701,10 @@ Best regards,
                 ),
             )
 
-            # Build unique ballot URL with token
+            # Build unique ballot URL with the RAW token (the row stores only
+            # its hash — the raw value never touches the database)
             ballot_url = (
-                f"{base_ballot_url}?token={voting_token.token}"
+                f"{base_ballot_url}?token={raw_ballot_token}"
                 if base_ballot_url
                 else None
             )
@@ -4643,9 +4683,13 @@ Best regards,
 
         Returns: (Election, VotingToken, error_message)
         """
-        # Find the voting token
+        # Tokens are stored as SHA-256 hashes (ELEC-5) — hash the presented
+        # raw token before lookup. Pre-migration rows were hashed in place
+        # (migration 20260731_0001), so old emailed links keep working.
         result = await self.db.execute(
-            select(VotingToken).where(VotingToken.token == token)
+            select(VotingToken).where(
+                VotingToken.token == self._hash_voting_token(token)
+            )
         )
         voting_token = result.scalar_one_or_none()
 

@@ -383,7 +383,10 @@ export interface ForensicsReport {
   };
   anomaly_detection: {
     suspicious_ips: Record<string, number>;
-    ip_vote_distribution: Record<string, number>;
+    unique_ip_count?: number;
+    // True once an anonymous election closed and per-vote IP/user-agent
+    // metadata was purged (ELEC-6)
+    ip_metadata_purged?: boolean;
   };
   voting_timeline: Record<string, number>;
 }

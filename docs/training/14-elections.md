@@ -412,7 +412,9 @@ Access the **Forensics** tab on the election detail page for:
 - **Integrity Check** — Verifies HMAC-SHA256 signatures on all votes (detects tampering)
 - **Soft-Deleted Votes** — Shows any votes that were manually removed with reason and who removed them
 - **Rollback History** — If the election status was ever rolled back (e.g., reopened after closing)
-- **Anomaly Detection** — Flags unusual patterns (multiple votes from same IP, rapid-fire voting)
+- **Anomaly Detection** — Flags unusual patterns: a thresholded list of IPs with suspiciously many votes (a full per-IP vote map is deliberately not exposed — it could de-anonymize voters in a small department), a distinct-IP count, and rapid-fire voting via the timeline
+
+> **Privacy note:** for anonymous elections, per-vote IP and user-agent data is **erased when the election closes** (at the same moment the anonymity salt is destroyed). Run any IP-based investigation while voting is open — after close that data no longer exists, by design. Voting tokens are also stored only as SHA-256 hashes, so database access never reveals usable ballot links.
 
 > **[SCREENSHOT NEEDED]:** _Screenshot of the Forensics report showing an integrity check summary ("142 votes verified, 0 anomalies"), a soft-deleted votes section (empty), and a voting timeline chart._
 

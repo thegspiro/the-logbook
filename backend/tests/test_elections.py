@@ -1006,3 +1006,33 @@ class TestPreMeetingPackageSchemas:
 
         payload = PreMeetingPackageSend(recipient_emails=["sec@dept.org"])
         assert payload.include_full_roster is False
+
+
+class TestVotingTokenHash:
+    """ELEC-5 — voting tokens are stored as SHA-256 at rest."""
+
+    def test_hash_is_deterministic_sha256_hex(self):
+        from app.services.election_service import ElectionService
+
+        h1 = ElectionService._hash_voting_token("raw-token-value")
+        h2 = ElectionService._hash_voting_token("raw-token-value")
+        assert h1 == h2
+        assert len(h1) == 64
+        assert h1 == hashlib.sha256(b"raw-token-value").hexdigest()
+
+    def test_different_tokens_hash_differently(self):
+        from app.services.election_service import ElectionService
+
+        assert ElectionService._hash_voting_token(
+            "a"
+        ) != ElectionService._hash_voting_token("b")
+
+    def test_migration_guard_skips_already_hashed_values(self):
+        """The in-place migration only rewrites non-hex rows; a raw
+        token_urlsafe(64) value (86 chars, URL-safe base64) must not look
+        like a SHA-256 digest, or the guard would skip it."""
+        import re as _re
+
+        raw = secrets.token_urlsafe(64)
+        looks_hashed = len(raw) == 64 and bool(_re.fullmatch(r"[a-f0-9]+", raw))
+        assert not looks_hashed

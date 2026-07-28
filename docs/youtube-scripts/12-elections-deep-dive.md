@@ -547,11 +547,14 @@ verified, status PASS"]**
 > never physically erased; rollback history; token issuance and usage — who
 > got ballots, which were used, access counts; anomaly detection flagging
 > IPs with unusual vote counts; and an hour-by-hour voting timeline that
-> makes ballot-stuffing bursts jump out. Two context notes: a shared station
-> computer legitimately produces many votes from one IP — read anomalies
-> with judgment. And treat forensics access itself as sensitive: in a small
-> department, IP patterns can narrow down who voted when — which is why
-> pulling this report is itself audit-logged."
+> makes ballot-stuffing bursts jump out. Three context notes: a shared
+> station computer legitimately produces many votes from one IP — read
+> anomalies with judgment. Anomalies show only a *thresholded* suspicious
+> list, never a full per-IP vote map — that map could identify voters in a
+> small department. And for anonymous elections, per-vote IP data is erased
+> the moment the election closes — the same moment the anonymity salt is
+> destroyed — so run IP-based checks while voting is open. Pulling this
+> report is itself audit-logged."
 
 ### RECEIPTS, DISPUTES & THE ROLLBACK RULE (36:00 – 38:00)
 

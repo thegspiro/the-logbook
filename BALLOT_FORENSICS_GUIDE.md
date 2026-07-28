@@ -80,16 +80,15 @@ Check the `anomaly_detection` section:
     "suspicious_ips": {
       "192.168.1.50": 12
     },
-    "ip_vote_distribution": {
-      "192.168.1.50": 12,
-      "10.0.0.5": 3,
-      "10.0.0.8": 2
-    }
+    "unique_ip_count": 7,
+    "ip_metadata_purged": false
   }
 }
 ```
 
 - **`suspicious_ips`** — Any IP address that cast more than 5 votes. In a fire department election, this could be a shared station computer (normal) or could indicate someone voting from the same device multiple times (suspicious).
+- **`unique_ip_count`** — How many distinct IPs cast votes, without listing them. The full per-IP vote map is deliberately **not** exposed (since 2026-07): in a small department it allowed correlating anonymous votes to voters.
+- **`ip_metadata_purged`** — `true` once an anonymous election has closed: per-vote IP/user-agent metadata is erased at close (alongside the anonymity salt), so run IP-based analysis **while voting is open** — after close it is gone by design.
 - **Context matters:** A shared computer at the station will naturally have multiple votes from one IP. But 20+ votes from a home IP is unusual.
 
 ### Step 4: Examine the Voting Timeline
@@ -293,7 +292,9 @@ If you suspect fraud and may need to escalate:
 For anonymous elections:
 - `voter_id` is **never stored** on votes
 - Voters are tracked via `voter_hash` (HMAC-SHA256 of user ID + election-specific salt)
-- The salt (`voter_anonymity_salt`) can be destroyed after the election to make de-anonymization **permanently impossible**
+- The salt (`voter_anonymity_salt`) is destroyed automatically when the election closes, making de-anonymization **permanently impossible**
+- Per-vote **IP addresses and user-agents are purged at close** as well (since 2026-07) — they exist only while voting is open, for live fraud detection
+- Voting tokens are stored as **SHA-256 hashes** (since 2026-07) — database read access never yields a live ballot credential
 - Even with the salt, recovering voter identity requires access to both the salt and user IDs, plus the hashing algorithm
 
 ---

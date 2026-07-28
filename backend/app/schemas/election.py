@@ -976,10 +976,18 @@ class AuditLogSummary(BaseModel):
 
 
 class AnomalyDetection(BaseModel):
-    """Anomaly detection section of forensics report"""
+    """Anomaly detection section of forensics report.
+
+    SEC (ELEC-6): deliberately does NOT expose a full per-IP vote map —
+    only the thresholded suspicious set plus an aggregate count. A full
+    distribution allowed vote-to-voter correlation in small departments.
+    """
 
     suspicious_ips: Dict[str, int] = {}
-    ip_vote_distribution: Dict[str, int] = {}
+    unique_ip_count: int = 0
+    # True once an anonymous election has closed and per-vote IP/user-agent
+    # metadata has been purged (counts above will be empty/"unknown")
+    ip_metadata_purged: bool = False
 
 
 class ProxyVoteRecord(BaseModel):

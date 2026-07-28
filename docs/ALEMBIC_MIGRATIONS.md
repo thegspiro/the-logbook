@@ -283,9 +283,10 @@ a linear run off `20260411_0200`; after `20260502_0004` the chain forks (see
 | `20260727_0001` | `20260726_0001` | `20260727_0001_add_session_refresh_grace.py` | Add session refresh grace period |
 | `20260728_0001` | `20260727_0001` | `20260728_0001_add_security_alert_org_id.py` | Add `organization_id` to security alerts |
 | `20260729_0001` | `20260728_0001` | `20260729_0001_widen_public_portal_api_key_prefix.py` | Widen public-portal API key prefix for selective lookup (PP-4) |
-| `20260730_0001` | `20260729_0001` | `20260730_0001_add_voting_token_test_and_eligibility.py` | Add `is_test` + `eligible_item_ids` to `voting_tokens` (elections security review R-1/R-3) — **current single head** |
+| `20260730_0001` | `20260729_0001` | `20260730_0001_add_voting_token_test_and_eligibility.py` | Add `is_test` + `eligible_item_ids` to `voting_tokens` (elections security review R-1/R-3) |
+| `20260731_0001` | `20260730_0001` | `20260731_0001_hash_voting_tokens_at_rest.py` | Hash voting tokens at rest with SHA-256, in place, idempotent hex guard (ELEC-5); downgrade is a deliberate no-op — **current single head** |
 
-> **Single head as of 2026-07-28:** `20260730_0001` is the linear head of the
+> **Single head as of 2026-07-28:** `20260731_0001` is the linear head of the
 > chain, so `alembic upgrade head` is unambiguous.
 > `tests/test_alembic_migrations.py` validates the single-head DAG (it
 > understands merge migrations).

@@ -174,6 +174,9 @@ findings R-1…R-10) fixed the following. Migration `20260730_0001` adds
 - **Frontend fixes**: Non-managers no longer see a blank election detail page; `/elections/settings` route is permission-gated; exact candidate↔ballot-item matching ("Chief" no longer matches "Assistant Chief" items); election list responses excluded from the API cache
 - **Runoffs inherit the parent's rule set with a fresh salt** *(follow-up)*: auto-created runoffs previously dropped quorum, position eligibility, the meeting/event link, attendees, and voter overrides — and anonymous runoffs had **no anonymity salt** (voter hashes keyed with an empty string were pre-computable from user ids). Runoffs now inherit the rules and generate their own salt
 - **Same-meeting runoffs work in one click** *(follow-up)*: opening an election clamps a future start date to the open time (audited as `start_adjusted_to_open_time`), an election whose end date already passed can't be opened, and draft elections gained an **Edit Dates** modal (Start Now, 15-min/30-min/1-hour/1-day quick durations)
+- **Voting tokens hashed at rest** *(follow-up, ELEC-5)*: only SHA-256 hashes are stored; the raw token exists solely in the emailed ballot link (migration `20260731_0001` hashes existing rows in place — old links keep working)
+- **IP metadata purged at close** *(follow-up, ELEC-6)*: anonymous elections erase per-vote IP/user-agent when closed, and the forensics report returns a thresholded suspicious-IP set (`suspicious_ips`, `unique_ip_count`, `ip_metadata_purged`) instead of the full per-IP vote map
+- **Cloudflare email attachments** *(follow-up)*: the pre-meeting package PDF now attaches on the Cloudflare email backend too (base64 API attachments, 5 MiB cap with skip-and-warn)
 
 ### Edge Cases (2026-07-28)
 

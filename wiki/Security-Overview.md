@@ -59,8 +59,18 @@ the remaining voting-integrity gaps:
   position-eligibility rules. Runoffs now generate a fresh per-election salt
   and inherit the parent's full rule set.
 
-Remaining open items (token hashing at rest, forensics IP exposure) are tracked
-in [`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
+- **Tokens hashed at rest (follow-up):** voting tokens are now stored as
+  SHA-256 — the raw credential exists only in the emailed ballot link, so
+  database read access no longer yields live ballots (in-place migration
+  keeps in-flight links working).
+- **IP metadata purged at close (follow-up):** anonymous elections erase
+  per-vote IP/user-agent when they close (alongside the anonymity salt), and
+  forensics exposes only a thresholded suspicious-IP set instead of the full
+  per-IP vote map. Residual: per-event IPs in the audit log (tracked in
+  KNOWN_LIMITATIONS).
+
+Remaining residual items are tracked in
+[`docs/KNOWN_LIMITATIONS.md`](../docs/KNOWN_LIMITATIONS.md).
 
 ### Module-by-Module Security Audit (2026-07)
 

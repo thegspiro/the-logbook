@@ -76,6 +76,29 @@ ELEC-4, ELEC-8, ELEC-9). Migration `20260730_0001` adds
   elections (start + end, Start Now, 15-min/30-min/1-hour/1-day quick
   durations).
 
+**Security: elections known-limitations resolved (2026-07-28)**
+
+- **Voting tokens hashed at rest (ELEC-5).** Tokens were stored and compared
+  in plaintext — database read access yielded live ballot credentials. Only
+  SHA-256 hashes are stored now; the raw token exists solely in the emailed
+  ballot link, and lookups hash the presented value. Migration
+  `20260731_0001` hashes existing rows in place (idempotent hex guard), so
+  in-flight links keep resolving. Downgrade is a deliberate no-op (one-way).
+- **Anonymous-vote IP metadata purged at close (ELEC-6).** Per-vote
+  IP/user-agent stayed forever and forensics returned a full per-IP vote
+  map — de-anonymizable in a small department. Closing an anonymous
+  election now erases per-vote IP/user-agent alongside the anonymity salt
+  (audited as `ip_metadata_purged`; live ballot-stuffing detection is
+  unaffected while voting is open), and forensics exposes only the
+  thresholded `suspicious_ips` set plus `unique_ip_count` /
+  `ip_metadata_purged`. Residual (documented): the audit log still records
+  an IP per vote event.
+- **Cloudflare email attachments implemented.** The Cloudflare Email
+  Sending API supports base64 attachments (5 MiB total-message cap);
+  `EmailService` now sends them instead of silently dropping — so
+  pre-meeting package emails arrive with their PDF on every backend.
+  Over-budget attachments are skipped with a warning.
+
 **Feature: Pre-Meeting Package (2026-07-28)**
 
 - Secretaries can generate a print-ready **pre-meeting package PDF** for
