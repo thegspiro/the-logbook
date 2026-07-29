@@ -10,9 +10,15 @@ import json
 import uuid
 import zipfile
 
+import pytest
+
 from app.models.training import TrainingCategory
 from app.models.user import Organization, Position
 from app.services.org_template_service import OrgTemplateService
+
+# Uses the real-database db_session fixture — must run in the integration job,
+# not the DB-less unit job (where the connection attempt hangs to timeout).
+pytestmark = [pytest.mark.integration]
 
 
 async def _make_org(db, name: str) -> Organization:

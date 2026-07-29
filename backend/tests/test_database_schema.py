@@ -158,7 +158,7 @@ class TestPrimaryKeys:
                                 f"{table_name}.{col.name}: String({col.type.length}) "
                                 f"too short for UUID (need 36)"
                             )
-        assert not issues, f"UUID PK column size issues:\n" + "\n".join(issues)
+        assert not issues, "UUID PK column size issues:\n" + "\n".join(issues)
 
     def test_auto_increment_pks_are_integer_types(self):
         """Non-UUID PKs should be Integer or BigInteger."""
@@ -196,7 +196,7 @@ class TestForeignKeyIntegrity:
                         )
         assert (
             not broken_fks
-        ), f"Foreign keys referencing non-existent tables:\n" + "\n".join(broken_fks)
+        ), "Foreign keys referencing non-existent tables:\n" + "\n".join(broken_fks)
 
     def test_all_fk_target_columns_exist(self):
         """FK target columns must exist in their respective tables."""
@@ -216,7 +216,7 @@ class TestForeignKeyIntegrity:
                             )
         assert (
             not broken_cols
-        ), f"Foreign keys referencing non-existent columns:\n" + "\n".join(broken_cols)
+        ), "Foreign keys referencing non-existent columns:\n" + "\n".join(broken_cols)
 
     def test_fk_column_types_match_target(self):
         """FK column type should be compatible with the referenced PK type."""
@@ -239,7 +239,7 @@ class TestForeignKeyIntegrity:
                             f"{table_name}.{col.name} ({col_type}) → "
                             f"{target_col.table.name}.{target_col.name} ({target_type})"
                         )
-        assert not mismatches, f"Foreign key type mismatches:\n" + "\n".join(mismatches)
+        assert not mismatches, "Foreign key type mismatches:\n" + "\n".join(mismatches)
 
     def test_fk_columns_have_ondelete(self):
         """Foreign keys should specify an ondelete action (CASCADE or SET NULL)."""
@@ -299,7 +299,7 @@ class TestForeignKeyIntegrity:
                                 f"{table_name}.{col.name}: self-referential FK "
                                 f"must be nullable to allow root records"
                             )
-        assert not issues, f"Non-nullable self-referential FKs:\n" + "\n".join(issues)
+        assert not issues, "Non-nullable self-referential FKs:\n" + "\n".join(issues)
 
     def test_no_circular_mandatory_fks(self):
         """
@@ -333,9 +333,10 @@ class TestForeignKeyIntegrity:
                 ):
                     circular.append(f"{table_a} ↔ {table_b}")
 
-        assert not circular, (
-            f"Circular mandatory FK dependencies (would prevent inserts):\n"
-            + "\n".join(circular)
+        assert (
+            not circular
+        ), "Circular mandatory FK dependencies (would prevent inserts):\n" + "\n".join(
+            circular
         )
 
 
@@ -364,7 +365,7 @@ class TestRelationshipConsistency:
                     )
         assert (
             not broken
-        ), f"Relationships pointing to unregistered tables:\n" + "\n".join(broken)
+        ), "Relationships pointing to unregistered tables:\n" + "\n".join(broken)
 
     def test_back_populates_are_symmetric(self):
         """If relationship A→B has back_populates='x', then B must have relationship 'x' pointing back to A."""
@@ -392,9 +393,9 @@ class TestRelationshipConsistency:
                         f"{table_name}.{rel_name} back_populates='{bp}' "
                         f"but {target_cls.__name__} has no '{bp}' relationship"
                     )
-        assert (
-            not asymmetric
-        ), f"Asymmetric back_populates relationships:\n" + "\n".join(asymmetric)
+        assert not asymmetric, "Asymmetric back_populates relationships:\n" + "\n".join(
+            asymmetric
+        )
 
 
 # ===========================================================================
@@ -432,7 +433,7 @@ class TestColumnConstraints:
                     col = table.columns[col_name]
                     if col.nullable:
                         issues.append(f"{table_name}.{col_name} should be NOT NULL")
-        assert not issues, f"Required columns that are nullable:\n" + "\n".join(issues)
+        assert not issues, "Required columns that are nullable:\n" + "\n".join(issues)
 
     def test_organization_id_fks_are_not_nullable(self):
         """
@@ -454,6 +455,9 @@ class TestColumnConstraints:
             "onboarding_checklist",
             "evoc_levels",
             "message_history",
+            # Pre-auth / IP-only alerts (e.g. login brute force) are
+            # platform-level with no owning tenant — see SecurityAlertRecord.
+            "security_alerts",
         }
         for table_name, table in _tables.items():
             if "organization_id" in table.columns:
@@ -461,7 +465,7 @@ class TestColumnConstraints:
                 if col.nullable and table_name not in nullable_ok:
                     issues.append(f"{table_name}.organization_id is nullable")
         assert not issues, (
-            f"Org-scoped tables with nullable organization_id (multi-tenancy leak risk):\n"
+            "Org-scoped tables with nullable organization_id (multi-tenancy leak risk):\n"
             + "\n".join(issues)
         )
 
@@ -532,7 +536,7 @@ class TestColumnConstraints:
                     missing_timestamp.append(table_name)
         assert (
             not missing_timestamp
-        ), f"Tables missing any timestamp column:\n" + "\n".join(missing_timestamp)
+        ), "Tables missing any timestamp column:\n" + "\n".join(missing_timestamp)
 
 
 # ===========================================================================
@@ -622,7 +626,7 @@ class TestIndexCoverage:
 
         assert (
             not unindexed
-        ), f"Critical parent-child FK columns without indexes:\n" + "\n".join(unindexed)
+        ), "Critical parent-child FK columns without indexes:\n" + "\n".join(unindexed)
 
     def test_organization_id_is_indexed(self):
         """Organization_id columns must be indexed for multi-tenant queries."""
@@ -645,7 +649,7 @@ class TestIndexCoverage:
                 col_indexed = True
             if not col_indexed:
                 unindexed.append(table_name)
-        assert not unindexed, f"Tables with unindexed organization_id:\n" + "\n".join(
+        assert not unindexed, "Tables with unindexed organization_id:\n" + "\n".join(
             unindexed
         )
 
@@ -684,7 +688,7 @@ class TestEnumConsistency:
                 if hasattr(col.type, "enums"):
                     if not col.type.enums:
                         empty_enums.append(f"{table_name}.{col.name}")
-        assert not empty_enums, f"Enum columns with no values defined:\n" + "\n".join(
+        assert not empty_enums, "Enum columns with no values defined:\n" + "\n".join(
             empty_enums
         )
 
@@ -701,7 +705,7 @@ class TestEnumConsistency:
                         duplicates.append(
                             f"{table_name}.{col.name}: duplicates {dupes}"
                         )
-        assert not duplicates, f"Enum columns with duplicate values:\n" + "\n".join(
+        assert not duplicates, "Enum columns with duplicate values:\n" + "\n".join(
             duplicates
         )
 
@@ -728,7 +732,7 @@ class TestEnumConsistency:
                                 f"values={py_values} names={py_names} "
                                 f"but column has {col_values}"
                             )
-        assert not mismatches, f"Python enum / column enum mismatches:\n" + "\n".join(
+        assert not mismatches, "Python enum / column enum mismatches:\n" + "\n".join(
             mismatches
         )
 
@@ -913,7 +917,7 @@ class TestSchemaCrossReferences:
         real_orphans = [t for t in orphaned if len(_tables[t].columns) > 4]
         assert (
             not real_orphans
-        ), f"Orphaned tables (no FK connections to rest of schema):\n" + "\n".join(
+        ), "Orphaned tables (no FK connections to rest of schema):\n" + "\n".join(
             real_orphans
         )
 
@@ -1003,7 +1007,7 @@ class TestNamingConventions:
                 bad_names.append(table_name)
             if "-" in table_name:
                 bad_names.append(f"{table_name} (contains hyphen)")
-        assert not bad_names, f"Table names not in lowercase_snake_case:\n" + "\n".join(
+        assert not bad_names, "Table names not in lowercase_snake_case:\n" + "\n".join(
             bad_names
         )
 
@@ -1016,7 +1020,7 @@ class TestNamingConventions:
                     bad_cols.append(f"{table_name}.{col.name}")
                 if "-" in col.name:
                     bad_cols.append(f"{table_name}.{col.name} (contains hyphen)")
-        assert not bad_cols, f"Column names not in lowercase_snake_case:\n" + "\n".join(
+        assert not bad_cols, "Column names not in lowercase_snake_case:\n" + "\n".join(
             bad_cols
         )
 

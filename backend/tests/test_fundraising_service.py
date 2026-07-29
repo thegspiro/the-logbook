@@ -94,13 +94,13 @@ class TestUpdateCampaignTotal:
     async def test_sets_current_amount_from_sum(self):
         campaign = SimpleNamespace(id="c1", current_amount=0)
         db = _db([_scalar(750), _one(campaign)])
-        await FundraisingService(db)._update_campaign_total("c1")
+        await FundraisingService(db)._update_campaign_total("c1", "org-1")
         assert campaign.current_amount == 750
 
     async def test_missing_campaign_is_noop(self):
         db = _db([_scalar(750), _one(None)])
         # Should not raise even when the campaign row is gone.
-        await FundraisingService(db)._update_campaign_total("c1")
+        await FundraisingService(db)._update_campaign_total("c1", "org-1")
 
 
 class TestUpdateDonorStats:
@@ -114,7 +114,7 @@ class TestUpdateDonorStats:
         )
         row = (500, 3, datetime(2026, 1, 1), datetime(2026, 6, 1))
         db = _db([_row(row), _one(donor)])
-        await FundraisingService(db)._update_donor_stats("d1")
+        await FundraisingService(db)._update_donor_stats("d1", "org-1")
         assert donor.total_donated == 500
         assert donor.donation_count == 3
         assert donor.first_donation_date == date(2026, 1, 1)
@@ -129,14 +129,15 @@ class TestUpdateDonorStats:
             last_donation_date=None,
         )
         db = _db([_row((0, 0, None, None)), _one(donor)])
-        await FundraisingService(db)._update_donor_stats("d1")
+        await FundraisingService(db)._update_donor_stats("d1", "org-1")
         assert donor.first_donation_date is None
         assert donor.last_donation_date is None
 
 
 class TestCreateDonation:
     async def test_completed_donation_rolls_up_aggregates(self):
-        db = _db([])  # create_donation only flushes; helpers are patched
+        # Two _entity_in_org checks (campaign, donor) resolve in-org.
+        db = _db([_one("c1"), _one("d1")])
         svc = FundraisingService(db)
         svc._update_campaign_total = AsyncMock()
         svc._update_donor_stats = AsyncMock()
@@ -150,11 +151,12 @@ class TestCreateDonation:
             },
             "user-1",
         )
-        svc._update_campaign_total.assert_awaited_once_with("c1")
-        svc._update_donor_stats.assert_awaited_once_with("d1")
+        svc._update_campaign_total.assert_awaited_once_with("c1", "org-1")
+        svc._update_donor_stats.assert_awaited_once_with("d1", "org-1")
 
     async def test_pending_donation_does_not_roll_up(self):
-        db = _db([])
+        # Two _entity_in_org checks (campaign, donor) resolve in-org.
+        db = _db([_one("c1"), _one("d1")])
         svc = FundraisingService(db)
         svc._update_campaign_total = AsyncMock()
         svc._update_donor_stats = AsyncMock()
@@ -180,10 +182,11 @@ class TestUpdateDonationReassignment:
         donation = SimpleNamespace(
             id="dn1", organization_id="o", campaign_id="cOLD", donor_id=None
         )
-        svc = FundraisingService(_db([_one(donation)]))
+        # Donation fetch, then the in-org check for the reassigned campaign.
+        svc = FundraisingService(_db([_one(donation), _one("cNEW")]))
         recomputed: list = []
         svc._update_campaign_total = AsyncMock(
-            side_effect=lambda cid: recomputed.append(cid)
+            side_effect=lambda cid, org_id: recomputed.append(cid)
         )
         svc._update_donor_stats = AsyncMock()
 
@@ -196,11 +199,12 @@ class TestUpdateDonationReassignment:
         donation = SimpleNamespace(
             id="dn1", organization_id="o", campaign_id=None, donor_id="dOLD"
         )
-        svc = FundraisingService(_db([_one(donation)]))
+        # Donation fetch, then the in-org check for the reassigned donor.
+        svc = FundraisingService(_db([_one(donation), _one("dNEW")]))
         svc._update_campaign_total = AsyncMock()
         recomputed: list = []
         svc._update_donor_stats = AsyncMock(
-            side_effect=lambda did: recomputed.append(did)
+            side_effect=lambda did, org_id: recomputed.append(did)
         )
 
         await svc.update_donation("dn1", "o", {"donor_id": "dNEW"})

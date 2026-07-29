@@ -42,6 +42,18 @@ def _make_org(org_id=None, timezone_val=None):
     return org
 
 
+def _make_service(mock_db):
+    """EventService with the training phase gate stubbed out.
+
+    The gate has its own dedicated suite (test_event_phase_gate.py); left
+    live here, its extra queries would desync the positional execute()
+    mocks built by _mock_db_returning.
+    """
+    service = EventService(mock_db)
+    service._evaluate_session_phase_warning = AsyncMock(return_value=None)
+    return service
+
+
 def _make_event(org_id=None, **overrides):
     """Create a test Event with sensible defaults."""
     now = datetime.now(timezone.utc)
@@ -117,7 +129,7 @@ class TestQRCheckInTimeValidation:
         org = _make_org(org_id=org_id, timezone_val="America/New_York")
         mock_db = _mock_db_returning(event, org)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         data, error = await service.get_qr_check_in_data(event.id, org_id)
 
         assert error is None
@@ -159,7 +171,7 @@ class TestQRCheckInTimeValidation:
         org = _make_org(org_id=org_id)
         mock_db = _mock_db_returning(event, org)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         data, error = await service.get_qr_check_in_data(event.id, org_id)
 
         assert error is None
@@ -181,7 +193,7 @@ class TestQRCheckInTimeValidation:
         )
         mock_db = _mock_db_returning(event)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         data, error = await service.get_qr_check_in_data(event.id, org_id)
 
         assert error == "Event has been cancelled"
@@ -193,7 +205,7 @@ class TestQRCheckInTimeValidation:
         org_id = uuid4()
         mock_db = _mock_db_returning(None)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         data, error = await service.get_qr_check_in_data(uuid4(), org_id)
 
         assert error is not None
@@ -217,7 +229,7 @@ class TestSelfCheckIn:
         org = _make_org(org_id=org_id)
         mock_db = _mock_db_returning(event, user, org, None)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert error is None
@@ -255,7 +267,7 @@ class TestSelfCheckIn:
         org = _make_org(org_id=org_id)
         mock_db = _mock_db_returning(event, user, org, existing_rsvp)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert error == "ALREADY_CHECKED_IN"
@@ -279,7 +291,7 @@ class TestSelfCheckIn:
         org = _make_org(org_id=org_id)
         mock_db = _mock_db_returning(event, user, org)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert "Check-in is not available yet" in error
@@ -305,7 +317,7 @@ class TestSelfCheckIn:
         org = _make_org(org_id=org_id)
         mock_db = _mock_db_returning(event, user, org, None)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert error is None
@@ -340,7 +352,7 @@ class TestSelfCheckIn:
         org = _make_org(org_id=org_id)
         mock_db = _mock_db_returning(event, user, org)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert "Check-in has closed for this event" in error
@@ -363,7 +375,7 @@ class TestSelfCheckIn:
         user = _make_user(org_id=org_id)
         mock_db = _mock_db_returning(event)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         rsvp, error, notice = await service.self_check_in(event.id, user.id, org_id)
 
         assert error == "Event has been cancelled"
@@ -381,7 +393,7 @@ class TestSelfCheckIn:
         )
         mock_db = _mock_db_returning(event, None)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         rsvp, error, notice = await service.self_check_in(event.id, uuid4(), org_id)
 
         assert error == "User not found in organization"
@@ -393,7 +405,7 @@ class TestSelfCheckIn:
         org_id = uuid4()
         mock_db = _mock_db_returning(None)
 
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         rsvp, error, notice = await service.self_check_in(uuid4(), uuid4(), org_id)
 
         assert error is not None
@@ -423,7 +435,7 @@ class TestCheckInWindowConsistency:
 
         # QR data should report is_valid=False (outside 30-min window)
         mock_db = _mock_db_returning(event, org)
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         data, error = await service.get_qr_check_in_data(event.id, org_id)
 
         assert error is None
@@ -451,7 +463,7 @@ class TestCheckInWindowConsistency:
         org = _make_org(org_id=org_id)
 
         mock_db = _mock_db_returning(event, org)
-        service = EventService(mock_db)
+        service = _make_service(mock_db)
         data, error = await service.get_qr_check_in_data(event.id, org_id)
 
         assert error is None

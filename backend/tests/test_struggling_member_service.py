@@ -35,6 +35,11 @@ def _enrollment(**kw):
         progress_percentage=kw.get("progress", 10.0),
         target_completion_date=kw.get("target"),
         enrolled_at=kw.get("enrolled_at"),
+        # Pace is measured from the current recert cycle when one is active;
+        # default None falls back to enrolled_at (the common case here).
+        cycle_started_at=kw.get("cycle_started_at"),
+        # Alert-throttle timestamp; None = never alerted (no cooldown).
+        struggling_alert_sent_at=kw.get("struggling_alert_sent_at"),
         deadline_warning_sent=kw.get("warn_sent", False),
         deadline_warning_sent_at=kw.get("warn_sent_at"),
     )
@@ -62,8 +67,10 @@ class TestDetectAndNotify:
                 _scalars(in_progress or []),
                 _one(user),
                 _one(program),
+                _scalars([]),  # _get_training_officers roster
             ]
         )
+        db.commit = AsyncMock()
         return db
 
     async def test_flags_approaching_deadline(self):
@@ -112,7 +119,11 @@ class TestDetectAndNotify:
     async def test_healthy_enrollment_not_flagged(self):
         enrollment = _enrollment(target=date.today() + timedelta(days=120), progress=80)
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_scalars([enrollment]), _scalars([])])
+        db.execute = AsyncMock(
+            # Enrollments, per-enrollment progress, then the officers roster
+            # (queried even when nobody is flagged).
+            side_effect=[_scalars([enrollment]), _scalars([]), _scalars([])]
+        )
         out = await StrugglingMemberService(db).detect_and_notify("org")
         assert out["members_flagged"] == 0
 
