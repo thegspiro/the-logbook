@@ -29,6 +29,7 @@ import type {
   EmailBallotResponse,
   ForensicsReport,
   ImportMeetingAttendeesResponse,
+  ManualBallotBatch,
   PackageRecipient,
   PackageVariant,
   PreMeetingPackageResponse,
@@ -434,11 +435,50 @@ export const electionService = {
       notes?: string | undefined;
       allow_over_count?: boolean | undefined;
     },
-  ): Promise<{ recorded: number; batch_id?: string; message: string }> {
-    const response = await api.post<{ recorded: number; batch_id?: string; message: string }>(
+  ): Promise<{
+    recorded: number;
+    batch_id?: string;
+    status?: string;
+    attestations_required?: number;
+    message: string;
+  }> {
+    const response = await api.post<{
+      recorded: number;
+      batch_id?: string;
+      status?: string;
+      attestations_required?: number;
+      message: string;
+    }>(`/elections/${electionId}/manual-ballots`, payload);
+    return response.data;
+  },
+
+  /**
+   * List paper-ballot batches with their attestation trail.
+   */
+  async getManualBallotBatches(
+    electionId: string,
+  ): Promise<{ batches: ManualBallotBatch[] }> {
+    const response = await api.get<{ batches: ManualBallotBatch[] }>(
       `/elections/${electionId}/manual-ballots`,
-      payload,
     );
+    return response.data;
+  },
+
+  /**
+   * Attest that a paper-ballot batch matches the physical count. The
+   * recording officer cannot attest their own batch; once the required
+   * number of officers have attested, the batch's votes count in results.
+   */
+  async attestManualBallots(
+    electionId: string,
+    batchId: string,
+  ): Promise<{ attestations: number; required: number; status: string; message: string }> {
+    const response = await api.post<{
+      attestations: number;
+      required: number;
+      status: string;
+      message: string;
+    }>(`/elections/${electionId}/manual-ballots/${batchId}/attest`);
     return response.data;
   },
 

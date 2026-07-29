@@ -93,11 +93,27 @@ in the UI):
 - `paper_ballots_enabled` — officer paper-tally entry
 - `reminders_enabled` — manual and automatic non-voter reminders
 - `auto_open_enabled` — scheduled opening of flagged drafts
+- `paper_ballot_attestations_required` — officers (besides the recorder)
+  who must confirm each paper batch before it counts (0–3, default **2**)
 
 Not toggleable by design: automatic closing at `end_date` and the
 nomination-deadline auto-close. Closing finalizes results and runs the
 anonymous-election IP/salt purge — a privacy guarantee, not a
 convenience — and an in-flight nomination phase must always be closeable.
+
+### Paper-Ballot Attestation (2026-07-29)
+
+With attestations required (the default is 2 — e.g. the secretary records,
+the President and Chief or their designees validate), a recorded batch
+starts **pending**: its votes are signed and chained immediately but
+excluded from results and stats. Officers with `elections.manage` attest
+via the batch panel on the election page; the recorder can never attest
+their own batch and each officer counts once. When the snapshotted
+requirement is met the batch flips to **confirmed** and its ballots count.
+A disputed batch is voided with a reason (the existing correction path).
+Attestation is only possible while voting is open — a batch still pending
+at close stays out of the certified results and the close writes a warning
+`election_manual_ballots_unattested_at_close` audit event.
 
 ## Lifecycle Automation (2026-07-29)
 
@@ -150,6 +166,8 @@ POST   /api/v1/elections/{id}/nominations    # Nominate a member or yourself (an
 POST   /api/v1/elections/{id}/nominations/{cid}/accept   # Nominee accepts
 POST   /api/v1/elections/{id}/nominations/{cid}/decline  # Nominee declines (entry removed)
 POST   /api/v1/elections/{id}/manual-ballots # Record in-room paper-ballot tally (manage; plausibility-guarded)
+GET    /api/v1/elections/{id}/manual-ballots # List paper batches with attestation trail (manage)
+POST   /api/v1/elections/{id}/manual-ballots/{batch}/attest # Attest a batch's count (manage; not the recorder)
 POST   /api/v1/elections/{id}/manual-ballots/{batch}/void # Void a mis-keyed paper batch (manage)
 GET    /api/v1/elections/{id}/non-voters     # Eligible voters who haven't voted (manage)
 POST   /api/v1/elections/{id}/remind-non-voters # Reminder ballot email (fresh link) to non-voters only (manage)

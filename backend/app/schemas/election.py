@@ -499,6 +499,57 @@ class ManualBallotsResponse(BaseModel):
 
     recorded: int
     batch_id: Optional[str] = None
+    # 'pending' until the required officer attestations are in;
+    # 'confirmed' immediately when the org has attestations disabled.
+    status: str = "confirmed"
+    attestations_required: int = 0
+    message: str
+
+
+class ManualBallotAttestationInfo(BaseModel):
+    """One officer's attestation of a paper-tally batch."""
+
+    user_id: Optional[str] = None
+    name: Optional[str] = None
+    attested_at: Optional[datetime] = None
+
+
+class ManualBallotBatchTotal(BaseModel):
+    """Recorded count for one candidate within a batch."""
+
+    candidate_id: str
+    candidate_name: str
+    position: Optional[str] = None
+    count: int
+
+
+class ManualBallotBatchInfo(BaseModel):
+    """One paper-tally batch with its attestation trail."""
+
+    batch_id: str
+    status: str  # pending | confirmed | voided
+    recorded_by: Optional[str] = None
+    recorded_by_name: Optional[str] = None
+    recorded_at: Optional[datetime] = None
+    notes: Optional[str] = None
+    required_attestations: int = 0
+    attestations: List[ManualBallotAttestationInfo] = []
+    totals: List[ManualBallotBatchTotal] = []
+    total_ballots: int = 0
+
+
+class ManualBallotBatchListResponse(BaseModel):
+    """All paper-tally batches for an election."""
+
+    batches: List[ManualBallotBatchInfo]
+
+
+class AttestManualBallotsResponse(BaseModel):
+    """Result of attesting a paper-ballot batch."""
+
+    attestations: int
+    required: int
+    status: str
     message: str
 
 
@@ -1032,6 +1083,9 @@ class ElectionSettingsResponse(BaseModel):
     paper_ballots_enabled: Optional[bool] = True
     reminders_enabled: Optional[bool] = True
     auto_open_enabled: Optional[bool] = True
+    # Officers (other than the recorder) who must attest a paper-ballot
+    # batch before its votes count. 0 disables attestation.
+    paper_ballot_attestations_required: Optional[int] = 2
     security: Optional[Dict[str, Any]] = None
 
 

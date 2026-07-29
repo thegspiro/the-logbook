@@ -28,7 +28,15 @@ from sqlalchemy.orm import selectinload
 from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.core.constants import LEADERSHIP_ROLE_SLUGS
-from app.models.election import Candidate, Election, ElectionStatus, Vote, VotingToken
+from app.models.election import (
+    Candidate,
+    Election,
+    ElectionStatus,
+    ManualBallotAttestation,
+    ManualBallotBatch,
+    Vote,
+    VotingToken,
+)
 from app.models.membership_pipeline import ProspectElectionPackage
 from app.models.user import Organization, User
 from app.schemas.election import (
@@ -74,6 +82,11 @@ class ElectionService:
         "auto_open_enabled": True,
     }
 
+    # Officers (other than the recorder) who must confirm a paper-ballot
+    # batch before its votes count. 0 disables attestation entirely.
+    PAPER_ATTESTATIONS_DEFAULT = 2
+    PAPER_ATTESTATIONS_MAX = 3
+
     async def get_feature_flags(self, organization_id: UUID) -> Dict[str, bool]:
         """Resolve the org's election feature toggles (missing keys = ON)."""
         result = await self.db.execute(
@@ -87,6 +100,50 @@ class ElectionService:
             key: bool(features.get(key, default))
             for key, default in self.FEATURE_DEFAULTS.items()
         }
+
+    async def get_required_attestations(self, organization_id: UUID) -> int:
+        """How many officers must attest a paper-ballot batch (0 = off)."""
+        result = await self.db.execute(
+            select(Organization).where(Organization.id == str(organization_id))
+        )
+        org = result.scalar_one_or_none()
+        features = ((org.settings or {}) if org else {}).get("election_features", {})
+        if not isinstance(features, dict):
+            features = {}
+        try:
+            required = int(
+                features.get(
+                    "paper_ballot_attestations_required",
+                    self.PAPER_ATTESTATIONS_DEFAULT,
+                )
+            )
+        except (TypeError, ValueError):
+            required = self.PAPER_ATTESTATIONS_DEFAULT
+        return max(0, min(required, self.PAPER_ATTESTATIONS_MAX))
+
+    async def _exclude_unattested(self, election_id: UUID, votes: List) -> List:
+        """Drop manual votes whose batch is still awaiting attestations.
+
+        Pending batches are recorded and chained but unconfirmed claims —
+        they must not move results or stats until the required officers
+        attest them. Batches with no batch row (recorded before the
+        attestation feature existed) count as confirmed.
+        """
+        batch_ids = {getattr(v, "manual_batch_id", None) for v in votes}
+        batch_ids.discard(None)
+        if not batch_ids:
+            return list(votes)
+        result = await self.db.execute(
+            select(ManualBallotBatch.id).where(
+                ManualBallotBatch.election_id == str(election_id),
+                ManualBallotBatch.id.in_(batch_ids),
+                ManualBallotBatch.status == "pending",
+            )
+        )
+        pending = {row[0] for row in result.all()}
+        if not pending:
+            return list(votes)
+        return [v for v in votes if getattr(v, "manual_batch_id", None) not in pending]
 
     # ------------------------------------------------------------------
     # Audit helpers
@@ -1784,7 +1841,9 @@ class ElectionService:
             .where(Vote.deleted_at.is_(None))
             .where(Vote.is_test == False)  # noqa: E712
         )
-        all_votes = votes_result.scalars().all()
+        all_votes = await self._exclude_unattested(
+            election_id, votes_result.scalars().all()
+        )
 
         # Get all candidates
         candidates_result = await self.db.execute(
@@ -2109,7 +2168,9 @@ class ElectionService:
             .where(Vote.deleted_at.is_(None))
             .where(Vote.is_test == False)  # noqa: E712
         )
-        all_votes = votes_result.scalars().all()
+        all_votes = await self._exclude_unattested(
+            election_id, votes_result.scalars().all()
+        )
 
         # Get all candidates
         candidates_result = await self.db.execute(
@@ -2933,6 +2994,24 @@ class ElectionService:
 
         batch_id = str(uuid4())
         now = datetime.now(timezone.utc).replace(microsecond=0)
+
+        # Attestation: when the org requires N officer confirmations, the
+        # batch starts pending and its votes stay out of results/stats
+        # until N distinct officers (other than the recorder) attest it.
+        required_attestations = await self.get_required_attestations(organization_id)
+        batch = ManualBallotBatch(
+            id=batch_id,
+            election_id=str(election_id),
+            organization_id=str(organization_id),
+            recorded_by=str(recorded_by),
+            notes=notes,
+            status="pending" if required_attestations > 0 else "confirmed",
+            required_attestations=required_attestations,
+            created_at=now,
+            confirmed_at=None if required_attestations > 0 else now,
+        )
+        self.db.add(batch)
+
         recorded = 0
         breakdown = []
         for entry in entries:
@@ -2990,11 +3069,217 @@ class ElectionService:
                 "breakdown": breakdown,
                 "notes": notes,
                 "over_count_override": allow_over_count,
+                "required_attestations": required_attestations,
+                "batch_status": (
+                    "pending" if required_attestations > 0 else "confirmed"
+                ),
             },
             severity="warning" if allow_over_count else "info",
             user_id=str(recorded_by),
         )
         return recorded, batch_id, None
+
+    async def attest_manual_ballot_batch(
+        self,
+        election_id: UUID,
+        organization_id: UUID,
+        batch_id: str,
+        attested_by: str,
+    ) -> Tuple[Optional[Dict], Optional[str]]:
+        """Record one officer's confirmation of a paper-tally batch.
+
+        The recording officer can never attest their own batch, and each
+        officer counts once. When the batch's snapshotted requirement is
+        met it flips to confirmed and its votes start counting in results.
+        Attestation is only possible while voting is open — a batch still
+        pending at close stays excluded from the certified results and is
+        flagged in the audit log by close_election.
+
+        Returns: ({attestations, required, status}, error)
+        """
+        # FOR UPDATE serializes concurrent attesters so the confirm
+        # transition happens exactly once.
+        result = await self.db.execute(
+            select(ManualBallotBatch)
+            .where(ManualBallotBatch.id == batch_id)
+            .where(ManualBallotBatch.election_id == str(election_id))
+            .where(ManualBallotBatch.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        batch = result.scalar_one_or_none()
+        if not batch:
+            return None, "Paper-ballot batch not found"
+        if batch.status == "voided":
+            return None, "This batch has been voided and cannot be attested"
+        if batch.status == "confirmed":
+            return None, "This batch is already fully attested"
+
+        election_result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+        )
+        election = election_result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+        if election.status != ElectionStatus.OPEN:
+            return (
+                None,
+                "Attestations can only be added while voting is open",
+            )
+
+        if batch.recorded_by and str(attested_by) == str(batch.recorded_by):
+            return (
+                None,
+                "The recording officer cannot attest their own batch — "
+                "a different officer must confirm the count",
+            )
+
+        existing = await self.db.execute(
+            select(func.count(ManualBallotAttestation.id)).where(
+                ManualBallotAttestation.batch_id == batch.id,
+                ManualBallotAttestation.attested_by == str(attested_by),
+            )
+        )
+        if (existing.scalar() or 0) > 0:
+            return None, "You have already attested this batch"
+
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        self.db.add(
+            ManualBallotAttestation(
+                id=str(uuid4()),
+                batch_id=batch.id,
+                organization_id=str(organization_id),
+                attested_by=str(attested_by),
+                attested_at=now,
+            )
+        )
+        await self.db.flush()
+
+        count_result = await self.db.execute(
+            select(func.count(ManualBallotAttestation.id)).where(
+                ManualBallotAttestation.batch_id == batch.id
+            )
+        )
+        attestation_count = count_result.scalar() or 0
+        required = batch.required_attestations or 0
+        confirmed = attestation_count >= required
+        if confirmed:
+            batch.status = "confirmed"
+            batch.confirmed_at = now
+        await self.db.commit()
+
+        logger.info(
+            f"Manual ballot batch attested | election={election_id} "
+            f"batch={batch_id} attestations={attestation_count}/{required} "
+            f"by={attested_by} confirmed={confirmed}"
+        )
+        await self._audit(
+            "election_manual_ballots_attested",
+            {
+                "election_id": str(election_id),
+                "batch_id": batch_id,
+                "attestations": attestation_count,
+                "required": required,
+                "confirmed": confirmed,
+            },
+            user_id=str(attested_by),
+        )
+        return (
+            {
+                "attestations": attestation_count,
+                "required": required,
+                "status": "confirmed" if confirmed else "pending",
+            },
+            None,
+        )
+
+    async def list_manual_ballot_batches(
+        self, election_id: UUID, organization_id: UUID
+    ) -> List[Dict]:
+        """All paper-tally batches for an election, newest first.
+
+        Each entry carries the recorded totals per candidate (as keyed in,
+        regardless of later voiding — the batch status conveys that), the
+        recorder, and the attestation trail.
+        """
+        batches_result = await self.db.execute(
+            select(ManualBallotBatch)
+            .where(ManualBallotBatch.election_id == str(election_id))
+            .where(ManualBallotBatch.organization_id == str(organization_id))
+            .options(selectinload(ManualBallotBatch.attestations))
+            .order_by(ManualBallotBatch.created_at.desc())
+        )
+        batches = list(batches_result.scalars().all())
+        if not batches:
+            return []
+
+        totals_result = await self.db.execute(
+            select(
+                Vote.manual_batch_id,
+                Candidate.id,
+                Candidate.name,
+                Candidate.position,
+                func.count(Vote.id),
+            )
+            .join(Candidate, Vote.candidate_id == Candidate.id)
+            .where(Vote.election_id == str(election_id))
+            .where(Vote.is_manual == True)  # noqa: E712
+            .where(Vote.manual_batch_id.in_([b.id for b in batches]))
+            .group_by(Vote.manual_batch_id, Candidate.id)
+        )
+        totals_by_batch: Dict[str, List[Dict]] = {}
+        for b_id, cand_id, cand_name, position, count in totals_result.all():
+            totals_by_batch.setdefault(b_id, []).append(
+                {
+                    "candidate_id": cand_id,
+                    "candidate_name": cand_name,
+                    "position": position,
+                    "count": count,
+                }
+            )
+
+        user_ids = {b.recorded_by for b in batches if b.recorded_by}
+        for b in batches:
+            user_ids.update(a.attested_by for a in b.attestations if a.attested_by)
+        names: Dict[str, str] = {}
+        if user_ids:
+            users_result = await self.db.execute(
+                select(User.id, User.first_name, User.last_name).where(
+                    User.id.in_(list(user_ids))
+                )
+            )
+            for uid, first, last in users_result.all():
+                names[uid] = f"{first or ''} {last or ''}".strip() or uid
+
+        out = []
+        for b in batches:
+            totals = totals_by_batch.get(b.id, [])
+            out.append(
+                {
+                    "batch_id": b.id,
+                    "status": b.status,
+                    "recorded_by": b.recorded_by,
+                    "recorded_by_name": names.get(b.recorded_by or ""),
+                    "recorded_at": b.created_at,
+                    "notes": b.notes,
+                    "required_attestations": b.required_attestations or 0,
+                    "attestations": [
+                        {
+                            "user_id": a.attested_by,
+                            "name": names.get(a.attested_by or ""),
+                            "attested_at": a.attested_at,
+                        }
+                        for a in sorted(
+                            b.attestations,
+                            key=lambda a: (a.attested_at is None, a.attested_at),
+                        )
+                    ],
+                    "totals": totals,
+                    "total_ballots": sum(t["count"] for t in totals),
+                }
+            )
+        return out
 
     async def void_manual_ballot_batch(
         self,
@@ -3029,6 +3314,17 @@ class ElectionService:
             vote.deleted_at = now
             vote.deleted_by = str(deleted_by)
             vote.deletion_reason = reason
+
+        # Mirror the void on the batch row (absent for batches recorded
+        # before the attestation feature existed).
+        batch_result = await self.db.execute(
+            select(ManualBallotBatch)
+            .where(ManualBallotBatch.id == batch_id)
+            .where(ManualBallotBatch.organization_id == str(organization_id))
+        )
+        batch = batch_result.scalar_one_or_none()
+        if batch is not None:
+            batch.status = "voided"
         await self.db.commit()
 
         logger.warning(
@@ -3397,6 +3693,35 @@ class ElectionService:
                 "ip_metadata_purged": ip_metadata_purged,
             },
         )
+
+        # Paper-ballot batches that never received their required officer
+        # attestations stay excluded from the certified results — flag them
+        # so the discrepancy is visible in the audit trail.
+        pending_result = await self.db.execute(
+            select(ManualBallotBatch.id).where(
+                ManualBallotBatch.election_id == str(election_id),
+                ManualBallotBatch.status == "pending",
+            )
+        )
+        pending_batch_ids = [row[0] for row in pending_result.all()]
+        if pending_batch_ids:
+            logger.warning(
+                f"Election closed with unattested paper-ballot batches | "
+                f"election={election_id} batches={pending_batch_ids}"
+            )
+            await self._audit(
+                "election_manual_ballots_unattested_at_close",
+                {
+                    "election_id": str(election_id),
+                    "batch_ids": pending_batch_ids,
+                    "detail": (
+                        "These paper-ballot batches never received the "
+                        "required attestations and are excluded from the "
+                        "certified results"
+                    ),
+                },
+                severity="warning",
+            )
 
         # Check if runoffs are enabled and if we should create one
         if (

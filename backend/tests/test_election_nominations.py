@@ -530,6 +530,18 @@ class TestManualBallots(TestNominationSetup):
         )
         svc = ElectionService(db_session)
 
+        # Attestation off for this test — it is about results counting;
+        # the pending-until-attested behavior is covered by TestAttestations.
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :org"),
+            {
+                "s": '{"election_features": '
+                '{"paper_ballot_attestations_required": 0}}',
+                "org": org_id,
+            },
+        )
+        await db_session.flush()
+
         _n, _batch, err = await svc.record_manual_ballots(
             election_id=uuid.UUID(election_id),
             organization_id=uuid.UUID(org_id),
@@ -970,3 +982,338 @@ class TestHardening(TestNominationSetup):
             )
         assert blocked is None
         assert "pending nominations" in err
+
+
+class TestAttestations(TestNominationSetup):
+    """Officer attestation of paper-ballot batches: with the default org
+    setting (2), a recorded batch stays pending — excluded from results and
+    stats — until two officers other than the recorder confirm it."""
+
+    async def _open_election_with_candidate(
+        self, db_session: AsyncSession, org_id: str, creator_id: str
+    ):
+        now = datetime.now(timezone.utc)
+        election_id = await self._insert_election(
+            db_session,
+            org_id,
+            creator_id,
+            status="open",
+            start=now - timedelta(days=1),
+            end=now + timedelta(days=1),
+        )
+        cid = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO candidates "
+                "(id, election_id, name, position, accepted, is_write_in, "
+                "display_order, nomination_date, created_at, updated_at) "
+                "VALUES (:id, :eid, 'Casey Chief', 'Chief', 1, 0, 0, "
+                "NOW(), NOW(), NOW())"
+            ),
+            {"id": cid, "eid": election_id},
+        )
+        await db_session.flush()
+        return election_id, cid
+
+    async def _add_member(
+        self, db_session: AsyncSession, org_id: str, first: str, last: str
+    ) -> str:
+        uid = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO users "
+                "(id, organization_id, username, first_name, last_name, "
+                "email, password_hash, status) "
+                "VALUES (:id, :org, :un, :fn, :ln, :em, 'hashed', 'active')"
+            ),
+            {
+                "id": uid,
+                "org": org_id,
+                "un": f"att-{uid[:8]}",
+                "fn": first,
+                "ln": last,
+                "em": f"att-{uid[:8]}@test.com",
+            },
+        )
+        await db_session.flush()
+        return uid
+
+    async def test_batch_pending_until_required_attestations(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """Default setting (2): votes stay out of stats until two officers
+        other than the recorder attest; then they count."""
+        org_id, user1_id, user2_id = setup_org_and_users
+        user3_id = await self._add_member(db_session, org_id, "Cora", "Cruz")
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        recorded, batch_id, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 2}],
+        )
+        assert err is None, err
+        assert recorded == 2
+
+        stats = await svc.get_election_stats(uuid.UUID(election_id), uuid.UUID(org_id))
+        assert stats.manual_votes == 0
+        assert stats.total_votes_cast == 0
+
+        result1, err = await svc.attest_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            attested_by=user2_id,
+        )
+        assert err is None, err
+        assert result1 == {"attestations": 1, "required": 2, "status": "pending"}
+
+        stats = await svc.get_election_stats(uuid.UUID(election_id), uuid.UUID(org_id))
+        assert stats.manual_votes == 0
+
+        result2, err = await svc.attest_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            attested_by=user3_id,
+        )
+        assert err is None, err
+        assert result2 == {
+            "attestations": 2,
+            "required": 2,
+            "status": "confirmed",
+        }
+
+        stats = await svc.get_election_stats(uuid.UUID(election_id), uuid.UUID(org_id))
+        assert stats.manual_votes == 2
+        assert stats.total_votes_cast == 2
+
+    async def test_recorder_cannot_attest_and_no_duplicates(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, user2_id = setup_org_and_users
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        _r, batch_id, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 1}],
+        )
+        assert err is None, err
+
+        blocked, err = await svc.attest_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            attested_by=user1_id,
+        )
+        assert blocked is None
+        assert "own batch" in err
+
+        ok, err = await svc.attest_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            attested_by=user2_id,
+        )
+        assert err is None, err
+        assert ok["attestations"] == 1
+
+        dup, err = await svc.attest_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            attested_by=user2_id,
+        )
+        assert dup is None
+        assert "already attested" in err
+
+    async def test_setting_zero_disables_attestation(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, _ = setup_org_and_users
+        await db_session.execute(
+            text("UPDATE organizations SET settings = :s WHERE id = :org"),
+            {
+                "s": '{"election_features": '
+                '{"paper_ballot_attestations_required": 0}}',
+                "org": org_id,
+            },
+        )
+        await db_session.flush()
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        recorded, batch_id, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 2}],
+        )
+        assert err is None, err
+        assert recorded == 2
+
+        batches = await svc.list_manual_ballot_batches(
+            uuid.UUID(election_id), uuid.UUID(org_id)
+        )
+        assert len(batches) == 1
+        assert batches[0]["status"] == "confirmed"
+        assert batches[0]["required_attestations"] == 0
+
+        stats = await svc.get_election_stats(uuid.UUID(election_id), uuid.UUID(org_id))
+        assert stats.manual_votes == 2
+
+    async def test_pending_batch_excluded_at_close_and_flagged(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        """A batch never attested is excluded from certified results, the
+        close is flagged in the audit log, and late attestation is refused."""
+        org_id, user1_id, user2_id = setup_org_and_users
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        _r, batch_id, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 2}],
+        )
+        assert err is None, err
+
+        closed, err = await svc.close_election(
+            uuid.UUID(election_id), uuid.UUID(org_id)
+        )
+        assert err is None, err
+        assert closed.status == ElectionStatus.CLOSED
+
+        flagged = (
+            await db_session.execute(
+                text(
+                    "SELECT COUNT(*) FROM audit_logs "
+                    "WHERE event_type = "
+                    "'election_manual_ballots_unattested_at_close'"
+                )
+            )
+        ).scalar()
+        assert flagged >= 1
+
+        results = await svc.get_election_results(
+            uuid.UUID(election_id),
+            uuid.UUID(org_id),
+            _internal_bypass_visibility=True,
+        )
+        assert results is not None
+        chief = [p for p in results.results_by_position if p.position == "Chief"]
+        assert chief
+        assert chief[0].total_votes == 0
+
+        late, err = await svc.attest_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            attested_by=user2_id,
+        )
+        assert late is None
+        assert "open" in err.lower()
+
+    async def test_void_pending_batch_marks_batch_voided(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, user2_id = setup_org_and_users
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        _r, batch_id, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 1}],
+        )
+        assert err is None, err
+
+        voided, err = await svc.void_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            deleted_by=user1_id,
+            reason="Wrong column tallied",
+        )
+        assert err is None
+        assert voided == 1
+
+        batches = await svc.list_manual_ballot_batches(
+            uuid.UUID(election_id), uuid.UUID(org_id)
+        )
+        assert batches[0]["status"] == "voided"
+
+        blocked, err = await svc.attest_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            attested_by=user2_id,
+        )
+        assert blocked is None
+        assert "voided" in err
+
+    async def test_list_batches_shows_attestation_trail(
+        self, db_session: AsyncSession, setup_org_and_users
+    ):
+        org_id, user1_id, user2_id = setup_org_and_users
+        election_id, cid = await self._open_election_with_candidate(
+            db_session, org_id, user1_id
+        )
+        svc = ElectionService(db_session)
+
+        _r, batch_id, err = await svc.record_manual_ballots(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            recorded_by=user1_id,
+            entries=[{"candidate_id": cid, "count": 2}],
+            notes="March meeting box",
+        )
+        assert err is None, err
+
+        _ok, err = await svc.attest_manual_ballot_batch(
+            election_id=uuid.UUID(election_id),
+            organization_id=uuid.UUID(org_id),
+            batch_id=batch_id,
+            attested_by=user2_id,
+        )
+        assert err is None, err
+
+        batches = await svc.list_manual_ballot_batches(
+            uuid.UUID(election_id), uuid.UUID(org_id)
+        )
+        assert len(batches) == 1
+        entry = batches[0]
+        assert entry["batch_id"] == batch_id
+        assert entry["status"] == "pending"
+        assert entry["required_attestations"] == 2
+        assert entry["recorded_by_name"] == "Alice Anderson"
+        assert entry["notes"] == "March meeting box"
+        assert entry["total_ballots"] == 2
+        assert entry["totals"] == [
+            {
+                "candidate_id": cid,
+                "candidate_name": "Casey Chief",
+                "position": "Chief",
+                "count": 2,
+            }
+        ]
+        assert len(entry["attestations"]) == 1
+        assert entry["attestations"][0]["user_id"] == user2_id
+        assert entry["attestations"][0]["name"] == "Bob Baker"

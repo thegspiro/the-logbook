@@ -5,6 +5,7 @@ interface RecordPaperBallotsModalProps {
   candidates: Candidate[];
   recording: boolean;
   error: string | null;
+  attestationsRequired?: number;
   onSubmit: (
     entries: Array<{ candidate_id: string; count: number }>,
     notes: string,
@@ -22,6 +23,7 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
   candidates,
   recording,
   error,
+  attestationsRequired = 0,
   onSubmit,
   onClose,
 }) => {
@@ -63,6 +65,15 @@ const RecordPaperBallotsModal: React.FC<RecordPaperBallotsModalProps> = ({
             Enter the paper-ballot count for each candidate. Each ballot is
             recorded as an individual vote attributed to you and covered by
             integrity verification.
+            {attestationsRequired > 0 && (
+              <>
+                {' '}
+                The batch will not count in results until{' '}
+                {attestationsRequired} other officer
+                {attestationsRequired !== 1 ? 's' : ''} attest
+                {attestationsRequired === 1 ? 's' : ''} the tally.
+              </>
+            )}
           </p>
 
           {error && (

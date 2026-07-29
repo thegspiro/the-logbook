@@ -570,6 +570,36 @@ export interface ElectionSettings {
   paper_ballots_enabled?: boolean;
   reminders_enabled?: boolean;
   auto_open_enabled?: boolean;
+  // Officers (other than the recorder) who must attest a paper-ballot
+  // batch before its votes count. 0 disables attestation. Default 2.
+  paper_ballot_attestations_required?: number;
+}
+
+// Paper-ballot batches (attestation workflow)
+export interface ManualBallotAttestation {
+  user_id?: string | null;
+  name?: string | null;
+  attested_at?: string | null;
+}
+
+export interface ManualBallotBatchTotal {
+  candidate_id: string;
+  candidate_name: string;
+  position?: string | null;
+  count: number;
+}
+
+export interface ManualBallotBatch {
+  batch_id: string;
+  status: 'pending' | 'confirmed' | 'voided';
+  recorded_by?: string | null;
+  recorded_by_name?: string | null;
+  recorded_at?: string | null;
+  notes?: string | null;
+  required_attestations: number;
+  attestations: ManualBallotAttestation[];
+  totals: ManualBallotBatchTotal[];
+  total_ballots: number;
 }
 
 // Ballot Preview (secretary view with eligibility annotations)

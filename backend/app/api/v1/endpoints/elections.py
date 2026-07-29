@@ -32,6 +32,7 @@ from app.schemas.election import (
     AttendeeCheckIn,
     AttendeeCheckInResponse,
     AttendeeListResponse,
+    AttestManualBallotsResponse,
     BallotElectionResponse,
     BallotPreviewResponse,
     BallotSubmission,
@@ -59,6 +60,7 @@ from app.schemas.election import (
     EmailBallotResponse,
     ForensicsResponse,
     ImportMeetingAttendeesResponse,
+    ManualBallotBatchListResponse,
     ManualBallotsRequest,
     ManualBallotsResponse,
     NominationActionResponse,
@@ -540,6 +542,16 @@ class ElectionSettingsUpdate(BaseModel):
     paper_ballots_enabled: Optional[bool] = None
     reminders_enabled: Optional[bool] = None
     auto_open_enabled: Optional[bool] = None
+    paper_ballot_attestations_required: Optional[int] = Field(
+        None,
+        ge=0,
+        le=3,
+        description=(
+            "Officers (other than the recorder) who must attest a "
+            "paper-ballot batch before its votes count. 0 disables "
+            "attestation."
+        ),
+    )
 
 
 @router.get("/settings", response_model=ElectionSettingsResponse)
@@ -594,6 +606,9 @@ async def get_election_settings(
         "paper_ballots_enabled": features.get("paper_ballots_enabled", True),
         "reminders_enabled": features.get("reminders_enabled", True),
         "auto_open_enabled": features.get("auto_open_enabled", True),
+        "paper_ballot_attestations_required": features.get(
+            "paper_ballot_attestations_required", 2
+        ),
         "security": {
             "vote_signing_key_configured": signing_key_configured,
             "anonymity_salt_auto_destroy": True,
@@ -661,6 +676,7 @@ async def update_election_settings(
         "paper_ballots_enabled",
         "reminders_enabled",
         "auto_open_enabled",
+        "paper_ballot_attestations_required",
     ):
         if flag in update_data:
             features[flag] = update_data[flag]
@@ -700,6 +716,9 @@ async def update_election_settings(
         "paper_ballots_enabled": features.get("paper_ballots_enabled", True),
         "reminders_enabled": features.get("reminders_enabled", True),
         "auto_open_enabled": features.get("auto_open_enabled", True),
+        "paper_ballot_attestations_required": features.get(
+            "paper_ballot_attestations_required", 2
+        ),
     }
 
 
@@ -1280,11 +1299,92 @@ async def record_manual_ballots(
             else status.HTTP_400_BAD_REQUEST
         )
         raise HTTPException(status_code=status_code, detail=error)
+    required = await service.get_required_attestations(current_user.organization_id)
+    if required > 0:
+        message = (
+            f"Recorded {recorded} paper ballot(s) — awaiting {required} "
+            f"officer attestation(s) before they count in results"
+        )
+    else:
+        message = f"Recorded {recorded} paper ballot(s)"
     return {
         "recorded": recorded,
         "batch_id": batch_id,
-        "message": f"Recorded {recorded} paper ballot(s)",
+        "status": "pending" if required > 0 else "confirmed",
+        "attestations_required": required,
+        "message": message,
     }
+
+
+@router.get(
+    "/{election_id}/manual-ballots",
+    response_model=ManualBallotBatchListResponse,
+)
+async def list_manual_ballot_batches(
+    election_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    List every paper-ballot batch for an election with its recorded
+    totals, status (pending / confirmed / voided), and attestation trail.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    election = await service.get_election(election_id, current_user.organization_id)
+    if not election:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Election not found"
+        )
+    batches = await service.list_manual_ballot_batches(
+        election_id, current_user.organization_id
+    )
+    return {"batches": batches}
+
+
+@router.post(
+    "/{election_id}/manual-ballots/{batch_id}/attest",
+    response_model=AttestManualBallotsResponse,
+)
+async def attest_manual_ballots(
+    election_id: UUID,
+    batch_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("elections.manage")),
+):
+    """
+    Attest that a paper-ballot batch matches the physical count.
+
+    The recording officer cannot attest their own batch and each officer
+    counts once. When the required number of attestations is reached the
+    batch is confirmed and its votes count in results.
+
+    **Authentication required**
+    **Requires permission: elections.manage**
+    """
+    service = ElectionService(db)
+    result, error = await service.attest_manual_ballot_batch(
+        election_id=election_id,
+        organization_id=current_user.organization_id,
+        batch_id=batch_id,
+        attested_by=str(current_user.id),
+    )
+    if error:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if "not found" in error.lower()
+            else status.HTTP_400_BAD_REQUEST
+        )
+        raise HTTPException(status_code=status_code, detail=error)
+    assert result is not None
+    if result["status"] == "confirmed":
+        message = "Batch fully attested — its ballots now count in results"
+    else:
+        remaining = result["required"] - result["attestations"]
+        message = f"Attestation recorded — {remaining} more needed"
+    return {**result, "message": message}
 
 
 @router.post(

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Elections: paper-ballot attestation (2026-07-29)
+
+**Added**
+
+- **Officer attestation of paper-ballot batches**: with the new org
+  setting `paper_ballot_attestations_required` (default **2**, range
+  0–3, in Election Settings → Features), a recorded paper batch starts
+  **pending** — signed and chained, but excluded from results and stats —
+  until that many officers *other than the recorder* attest that the
+  entered counts match the physical tally
+  (`POST /elections/{id}/manual-ballots/{batch_id}/attest`). The
+  recorder can never attest their own batch and each officer counts
+  once (DB-enforced). Setting the requirement to 0 restores immediate
+  counting. Batches are first-class rows now (migration
+  `20260801_0007`, new single head: `manual_ballot_batches` +
+  `manual_ballot_attestations`), each snapshotting the requirement at
+  record time.
+- **Batch list with attestation trail**:
+  `GET /elections/{id}/manual-ballots` returns every batch with its
+  per-candidate totals, status (pending / confirmed / voided), recorder,
+  and attestations; the election page shows the panel with per-batch
+  Attest / Void actions (replacing the session-local "Void Last Paper
+  Batch" button).
+- **Unattested-at-close flagging**: an election that closes while a
+  batch is still pending keeps that batch out of the certified results
+  and writes a warning `election_manual_ballots_unattested_at_close`
+  audit event listing the batch ids. Attestation is only possible while
+  voting is open.
+
 ### Elections: hardening pass (2026-07-29)
 
 **Added**

@@ -8,7 +8,7 @@ from enum import Enum
 
 from sqlalchemy import JSON, Boolean, Column, DateTime
 from sqlalchemy import Enum as SQLEnum
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -453,4 +453,86 @@ class Vote(Base):
         Index("ix_votes_voter_id", "voter_id"),
         Index("ix_votes_voter_hash", "voter_hash"),
         Index("ix_votes_deleted_at", "deleted_at"),
+    )
+
+
+class ManualBallotBatch(Base):
+    """One paper-tally entry — the set of manual votes sharing a batch id.
+
+    The batch is the unit of officer attestation: when the organization
+    requires N attestations, the batch starts ``pending`` and its votes are
+    excluded from results and stats until N distinct officers (other than
+    the recording officer) confirm the counts. ``voided`` mirrors the
+    soft-deleted votes of a corrected batch.
+    """
+
+    __tablename__ = "manual_ballot_batches"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    election_id = Column(
+        String(36),
+        ForeignKey("elections.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    recorded_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    notes = Column(Text, nullable=True)
+    # 'pending' (awaiting attestations) | 'confirmed' | 'voided'
+    status = Column(String(20), nullable=False, default="pending")
+    # Snapshot of the org's requirement at record time, so changing the
+    # setting later never silently confirms or un-confirms an old batch.
+    required_attestations = Column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    created_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    confirmed_at = Column(DateTime(timezone=True), nullable=True)
+
+    attestations = relationship(
+        "ManualBallotAttestation",
+        back_populates="batch",
+        cascade="all, delete-orphan",
+    )
+
+
+class ManualBallotAttestation(Base):
+    """One officer's confirmation that a paper-tally batch matches the
+    physical count. The unique constraint makes double-attestation by the
+    same officer impossible at the DB level."""
+
+    __tablename__ = "manual_ballot_attestations"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    batch_id = Column(
+        String(36),
+        ForeignKey("manual_ballot_batches.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    attested_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    attested_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    batch = relationship("ManualBallotBatch", back_populates="attestations")
+
+    __table_args__ = (
+        UniqueConstraint("batch_id", "attested_by", name="uq_batch_attester"),
     )

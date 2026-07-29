@@ -4,14 +4,14 @@
  * Shows detailed information about an election including results.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { electionService, eventService, meetingsService } from '../services/api';
 import type { MeetingRecord } from '../services/api';
 import { electionPackageService, applicantService } from '../modules/prospective-members/services/api';
 import type { ElectionPackage } from '../modules/prospective-members/types';
-import type { Election, ForensicsReport, VoteIntegrityResult, Candidate } from '../types/election';
+import type { Election, ForensicsReport, VoteIntegrityResult, Candidate, ManualBallotBatch } from '../types/election';
 import type { EventListItem } from '../types/event';
 import { ElectionResults } from '../components/ElectionResults';
 import { ElectionBallot } from '../components/ElectionBallot';
@@ -34,6 +34,7 @@ import SendBallotEmailsModal from '../components/election-detail/SendBallotEmail
 import RemindNonVotersModal from '../components/election-detail/RemindNonVotersModal';
 import NominationsPanel from '../components/election-detail/NominationsPanel';
 import RecordPaperBallotsModal from '../components/election-detail/RecordPaperBallotsModal';
+import PaperBallotBatchesPanel from '../components/election-detail/PaperBallotBatchesPanel';
 import DeleteElectionModal from '../components/election-detail/DeleteElectionModal';
 import ExtendElectionModal from '../components/election-detail/ExtendElectionModal';
 import EditDatesModal from '../components/election-detail/EditDatesModal';
@@ -108,6 +109,7 @@ export const ElectionDetailPage: React.FC = () => {
     paper_ballots_enabled: true,
     reminders_enabled: true,
     auto_open_enabled: true,
+    paper_ballot_attestations_required: 2,
   });
 
   // Paper-ballot entry state
@@ -115,7 +117,8 @@ export const ElectionDetailPage: React.FC = () => {
   const [isRecordingPaper, setIsRecordingPaper] = useState(false);
   const [paperBallotsError, setPaperBallotsError] = useState<string | null>(null);
   const [paperCandidates, setPaperCandidates] = useState<Candidate[]>([]);
-  const [lastPaperBatchId, setLastPaperBatchId] = useState<string | null>(null);
+  const [paperBatches, setPaperBatches] = useState<ManualBallotBatch[]>([]);
+  const [attestingBatchId, setAttestingBatchId] = useState<string | null>(null);
 
   // Meeting binding state
   const [showMeetingSelector, setShowMeetingSelector] = useState(false);
@@ -139,6 +142,7 @@ export const ElectionDetailPage: React.FC = () => {
           paper_ballots_enabled: s.paper_ballots_enabled ?? true,
           reminders_enabled: s.reminders_enabled ?? true,
           auto_open_enabled: s.auto_open_enabled ?? true,
+          paper_ballot_attestations_required: s.paper_ballot_attestations_required ?? 2,
         });
       } catch {
         // Non-fatal: buttons stay visible; the backend gates enforcement.
@@ -353,9 +357,9 @@ export const ElectionDetailPage: React.FC = () => {
         allow_over_count: allowOverCount || undefined,
       });
       setShowPaperBallotsModal(false);
-      setLastPaperBatchId(result.batch_id ?? null);
       toast.success(result.message);
       await fetchElection();
+      await loadPaperBatches();
     } catch (err: unknown) {
       setPaperBallotsError(getErrorMessage(err, 'Failed to record paper ballots'));
     } finally {
@@ -363,8 +367,37 @@ export const ElectionDetailPage: React.FC = () => {
     }
   };
 
-  const handleVoidLastPaperBatch = async () => {
-    if (!electionId || !lastPaperBatchId) return;
+  const loadPaperBatches = useCallback(async () => {
+    if (!electionId || !canManage) return;
+    try {
+      const result = await electionService.getManualBallotBatches(electionId);
+      setPaperBatches(result.batches);
+    } catch {
+      // Non-fatal: the panel simply stays hidden.
+    }
+  }, [electionId, canManage]);
+
+  useEffect(() => {
+    void loadPaperBatches();
+  }, [loadPaperBatches]);
+
+  const handleAttestPaperBatch = async (batchId: string) => {
+    if (!electionId) return;
+    try {
+      setAttestingBatchId(batchId);
+      const result = await electionService.attestManualBallots(electionId, batchId);
+      toast.success(result.message);
+      await loadPaperBatches();
+      await fetchElection();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to attest paper ballots'));
+    } finally {
+      setAttestingBatchId(null);
+    }
+  };
+
+  const handleVoidPaperBatch = async (batchId: string) => {
+    if (!electionId) return;
     const reason = window.prompt(
       'Why is this paper-ballot batch being voided? (recorded in the audit log)',
     );
@@ -372,11 +405,11 @@ export const ElectionDetailPage: React.FC = () => {
     try {
       const result = await electionService.voidManualBallots(
         electionId,
-        lastPaperBatchId,
+        batchId,
         reason.trim(),
       );
-      setLastPaperBatchId(null);
       toast.success(result.message);
+      await loadPaperBatches();
       await fetchElection();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to void paper ballots'));
@@ -1105,14 +1138,6 @@ export const ElectionDetailPage: React.FC = () => {
                         Record Paper Ballots
                       </button>
                     )}
-                    {featureFlags.paper_ballots_enabled && lastPaperBatchId && (
-                      <button
-                        onClick={() => { void handleVoidLastPaperBatch(); }}
-                        className="px-4 py-2 border border-red-500/50 text-red-600 dark:text-red-400 rounded-md hover:bg-red-500/10 text-sm"
-                      >
-                        Void Last Paper Batch
-                      </button>
-                    )}
                     <button
                       onClick={() => {
                         setShowExtendModal(true);
@@ -1224,6 +1249,18 @@ export const ElectionDetailPage: React.FC = () => {
           electionId={electionId}
           election={election}
           onUpdate={setElection}
+        />
+      )}
+
+      {/* Paper-ballot batches + attestation trail (secretary) */}
+      {canManage && featureFlags.paper_ballots_enabled && paperBatches.length > 0 && (
+        <PaperBallotBatchesPanel
+          batches={paperBatches}
+          currentUserId={currentUser?.id ?? null}
+          electionOpen={election.status === ElectionStatus.OPEN}
+          attestingBatchId={attestingBatchId}
+          onAttest={(batchId) => { void handleAttestPaperBatch(batchId); }}
+          onVoid={(batchId) => { void handleVoidPaperBatch(batchId); }}
         />
       )}
 
@@ -1715,6 +1752,7 @@ export const ElectionDetailPage: React.FC = () => {
           candidates={paperCandidates}
           recording={isRecordingPaper}
           error={paperBallotsError}
+          attestationsRequired={featureFlags.paper_ballot_attestations_required}
           onSubmit={(entries, notes, allowOverCount) => { void handleRecordPaperBallots(entries, notes, allowOverCount); }}
           onClose={() => { setShowPaperBallotsModal(false); setPaperBallotsError(null); }}
         />

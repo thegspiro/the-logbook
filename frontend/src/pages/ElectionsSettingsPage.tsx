@@ -326,6 +326,32 @@ export const ElectionsSettingsPage: React.FC = () => {
               </label>
             </div>
 
+            <div className="flex items-center gap-3 pl-7">
+              <label
+                htmlFor="paper_ballot_attestations_required"
+                className="text-sm text-theme-text-secondary"
+              >
+                Officers who must confirm each paper batch before it counts
+                (besides the recorder):
+              </label>
+              <select
+                id="paper_ballot_attestations_required"
+                value={settings.paper_ballot_attestations_required ?? 2}
+                onChange={(e) =>
+                  updateField(
+                    'paper_ballot_attestations_required',
+                    parseInt(e.target.value, 10),
+                  )
+                }
+                className="bg-theme-input-bg border border-theme-input-border rounded-md py-1 px-2 text-sm text-theme-text-primary"
+              >
+                <option value={0}>None — counts immediately</option>
+                <option value={1}>1 attestation</option>
+                <option value={2}>2 attestations (recommended)</option>
+                <option value={3}>3 attestations</option>
+              </select>
+            </div>
+
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
