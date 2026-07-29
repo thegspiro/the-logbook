@@ -125,7 +125,7 @@ google-api-python-client==2.159.0
 # ============================================
 # Development & Testing
 # ============================================
-pytest==8.3.4
+pytest==8.4.2
 pytest-asyncio==1.4.0
 pytest-cov==6.0.0
 pytest-randomly==3.16.0
